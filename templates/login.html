@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>EduTrack QR - Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="login-body">
+
+    <section class="login-shell">
+
+        <div class="institutional-header">
+            <div class="stripe yellow"></div>
+            <div class="stripe red"></div>
+            <img src="{{ url_for('static', filename='img/image.png') }}" alt="Escudo colegio">
+            <div class="institutional-title">
+                <h1>Institución Educativa Gabriel Correa Vélez</h1>
+                <p>Sede Principal · EduTrack QR</p>
+            </div>
+        </div>
+
+        <div class="login-layout">
+
+            <div class="login-hero">
+                <h2>Control de ingreso estudiantil</h2>
+                <p>
+                    Plataforma moderna para registrar ingresos con código QR,
+                    reportes por grupos, periodos y control administrativo.
+                </p>
+
+                <div class="hero-info">
+                    <div>
+                        <strong>Horario QR</strong>
+                        <span>6:30 AM - 7:45 AM</span>
+                    </div>
+                    <div>
+                        <strong>Periodo actual</strong>
+                        <span>Periodo 2</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="login-card-modern">
+                <h2>Iniciar sesión</h2>
+                <p>Acceso para rectoría, coordinación, secretaría y soporte.</p>
+
+                <form method="POST">
+                    <input type="text" name="usuario" placeholder="Usuario" required>
+                    <input type="password" name="password" placeholder="Contraseña" required>
+                    <button type="submit">Ingresar</button>
+                </form>
+
+                <div class="login-links">
+                    <a href="/recuperar">¿Olvidaste tu contraseña?</a>
+                    <a href="/legal">Aviso legal</a>
+                    <a href="/cookies">Cookies</a>
+                </div>
+
+                <small>Desarrollado por Sebastián López / StudyTask</small>
+            </div>
+
+        </div>
+
+    </section>
+
+</body>
+</html>

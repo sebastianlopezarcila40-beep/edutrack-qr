@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Usuarios - EduTrack QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="dashboard-body">
+
+<main class="main-panel">
+
+    <header class="topbar">
+        <h1>Gestión de Usuarios</h1>
+        <a href="/dashboard">Volver</a>
+    </header>
+
+    <section class="form-card">
+        <h2>Crear nuevo usuario</h2>
+
+        <form method="POST">
+            <input type="text" name="usuario" placeholder="Usuario" required>
+            <input type="password" name="password" placeholder="Contraseña" required>
+            <input type="email" name="correo" placeholder="Correo para recuperar contraseña" required>
+
+            <select name="rol" required style="width:100%; padding:16px; margin-bottom:16px; border-radius:14px; border:1px solid #d1d5db;">
+                <option value="">Seleccionar rol</option>
+                <option value="Rectoría">Rectoría</option>
+                <option value="Coordinación">Coordinación</option>
+                <option value="Secretaría">Secretaría</option>
+                <option value="Directivo">Directivo</option>
+                <option value="Soporte">Soporte</option>
+            </select>
+
+            <button type="submit">Crear usuario</button>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <h2>Usuarios registrados</h2>
+
+        <table>
+            <tr>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Correo</th>
+                <th>Acción</th>
+            </tr>
+
+            {% for u in usuarios %}
+            <tr>
+                <td>{{ u[1] }}</td>
+                <td>{{ u[2] }}</td>
+                <td>{{ u[3] }}</td>
+                <td>
+                    <a class="danger-link" href="/eliminar_usuario/{{ u[0] }}">Eliminar</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+</main>
+
+</body>
+</html>

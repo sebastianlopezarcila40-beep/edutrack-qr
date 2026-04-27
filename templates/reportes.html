@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reportes - EduTrack QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="dashboard-body">
+
+<main class="main-panel">
+
+    <header class="topbar">
+        <h1>Reportes y estadísticas</h1>
+        <a href="/dashboard">Volver</a>
+    </header>
+
+    <section class="cards-grid">
+        <a href="/exportar_excel_reportes" class="module-card">Exportar reportes Excel</a>
+        <a href="/exportar_pdf" class="module-card">Exportar reporte PDF</a>
+        <a href="/exportar_word" class="module-card">Exportar reporte Word</a>
+    </section>
+
+    <section class="table-card">
+        <h2>Estadísticas por estudiante y grupo</h2>
+
+        <table>
+            <tr>
+                <th>Grupo</th>
+                <th>Estudiante</th>
+                <th>Temprano</th>
+                <th>Tarde</th>
+                <th>Total ingresos</th>
+            </tr>
+
+            {% for e in estadisticas_estudiantes %}
+            <tr>
+                <td>{{ e[0] }}</td>
+                <td>{{ e[1] }} {{ e[2] }}</td>
+                <td class="estado-verde">{{ e[3] }}</td>
+                <td class="estado-amarillo">{{ e[4] }}</td>
+                <td>{{ e[5] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section class="table-card">
+        <h2>Estadísticas por periodo</h2>
+        <p>El colegio trabaja con 3 periodos.</p>
+
+        <table>
+            <tr>
+                <th>Grupo</th>
+                <th>Periodo</th>
+                <th>Temprano</th>
+                <th>Tarde</th>
+                <th>Total</th>
+            </tr>
+
+            {% for p in estadisticas_periodos %}
+            <tr>
+                <td>{{ p[0] }}</td>
+                <td>{{ p[1] }}</td>
+                <td class="estado-verde">{{ p[2] }}</td>
+                <td class="estado-amarillo">{{ p[3] }}</td>
+                <td>{{ p[4] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section class="table-card">
+        <h2>Estadísticas mensuales por grupo</h2>
+
+        <table>
+            <tr>
+                <th>Grupo</th>
+                <th>Mes</th>
+                <th>Temprano</th>
+                <th>Tarde</th>
+                <th>Total</th>
+            </tr>
+
+            {% for m in estadisticas_mensuales %}
+            <tr>
+                <td>{{ m[0] }}</td>
+                <td>{{ m[1] }}</td>
+                <td class="estado-verde">{{ m[2] }}</td>
+                <td class="estado-amarillo">{{ m[3] }}</td>
+                <td>{{ m[4] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section class="table-card">
+        <h2>Ingresos registrados por grupo</h2>
+
+        <table>
+            <tr>
+                <th>Código</th>
+                <th>Estudiante</th>
+                <th>Grupo</th>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Estado</th>
+                <th>Periodo</th>
+            </tr>
+
+            {% for i in ingresos %}
+            <tr>
+                <td>{{ i[0] }}</td>
+                <td>{{ i[1] }} {{ i[2] }}</td>
+                <td>{{ i[3] }}</td>
+                <td>{{ i[5] }}</td>
+                <td>{{ i[6] }}</td>
+
+                {% if i[8] == "Temprano" %}
+                    <td class="estado-verde">{{ i[8] }}</td>
+                {% elif i[8] == "Tarde" %}
+                    <td class="estado-amarillo">{{ i[8] }}</td>
+                {% else %}
+                    <td>{{ i[8] }}</td>
+                {% endif %}
+
+                <td>{{ i[9] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section class="table-card">
+        <h2>No llegaron hoy - {{ hoy }}</h2>
+
+        <table>
+            <tr>
+                <th>Código</th>
+                <th>Estudiante</th>
+                <th>Grupo</th>
+                <th>Director</th>
+                <th>Estado</th>
+            </tr>
+
+            {% for n in no_llegaron %}
+            <tr>
+                <td>{{ n[0] }}</td>
+                <td>{{ n[1] }} {{ n[2] }}</td>
+                <td>{{ n[3] }}</td>
+                <td>{{ n[4] }}</td>
+                <td class="estado-rojo">No llegó</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+</main>
+
+</body>
+</html>

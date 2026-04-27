@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel - EduTrack QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="dashboard-body">
+
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <img src="{{ url_for('static', filename='img/image.png') }}" alt="Logo colegio">
+            <h2>EduTrack QR</h2>
+            <p>Gabriel Correa Vélez</p>
+        </div>
+
+        <nav>
+            <a href="/dashboard">Inicio</a>
+            <a href="/portal" target="_blank">Portal móvil</a>
+            <a href="/scanner">Registro interno</a>
+            <a href="/estudiantes">Estudiantes</a>
+            <a href="/reportes">Reportes</a>
+            <a href="/exportar_estudiantes">Exportar Excel</a>
+            <a href="/usuarios">Usuarios</a>
+            <a href="/soporte">Soporte</a>
+            <a href="/legal">Aviso legal</a>
+            <a href="/cookies">Cookies</a>
+        </nav>
+    </aside>
+
+    <main class="main-panel">
+
+        <header class="topbar">
+            <div>
+                <h1>Panel Administrativo</h1>
+                <p>Institución Educativa Gabriel Correa Vélez - Sede Principal</p>
+            </div>
+
+            <div class="user-box">
+                <span>{{ usuario }}</span>
+                <a href="/logout">Salir</a>
+            </div>
+        </header>
+
+        <section class="hero-panel">
+            <div class="system-card">
+                <img src="{{ url_for('static', filename='img/image.png') }}" alt="Escudo">
+                <h2>EduTrack QR</h2>
+                <p>Administración institucional</p>
+                <small>Portal móvil: /portal</small>
+            </div>
+
+            <div class="reports-zone">
+                <h2>Resumen de ingreso - {{ hoy }}</h2>
+                <p>Periodo actual: <strong>{{ periodo_actual }}</strong></p>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>{{ total_estudiantes }}</h3>
+                        <p>Estudiantes</p>
+                    </div>
+
+                    <div class="stat-card green">
+                        <h3>{{ tempranos_hoy }}</h3>
+                        <p>Temprano</p>
+                    </div>
+
+                    <div class="stat-card yellow">
+                        <h3>{{ tardes_hoy }}</h3>
+                        <p>Tarde</p>
+                    </div>
+
+                    <div class="stat-card red">
+                        <h3>{{ no_llegaron_hoy }}</h3>
+                        <p>No llegó</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="portal-link-box">
+            <div>
+                <h2>Portal móvil de escaneo</h2>
+                <p>Comparte este link en el celular encargado de escanear los carnés.</p>
+            </div>
+            <a href="/portal" target="_blank">Abrir portal</a>
+        </section>
+
+        <section class="periods-bar">
+            <div>
+                <h3>Periodo 1</h3>
+                <p>Enero - Abril</p>
+            </div>
+            <div class="active-period">
+                <h3>Periodo 2</h3>
+                <p>Mayo - Agosto</p>
+            </div>
+            <div>
+                <h3>Periodo 3</h3>
+                <p>Septiembre - Noviembre</p>
+            </div>
+        </section>
+
+        <section class="cards-grid">
+            <a href="/estudiantes" class="module-card">
+                <h3>Estudiantes y QR</h3>
+                <p>Crear estudiantes, descargar QR y eliminar registros.</p>
+            </a>
+
+            <a href="/reportes" class="module-card">
+                <h3>Reportes por grupo</h3>
+                <p>Estadísticas por grado, periodo, mes y estudiante.</p>
+            </a>
+
+            <a href="/scanner" class="module-card">
+                <h3>Registro interno</h3>
+                <p>Registro manual con código: temprano, tarde o no llegó.</p>
+            </a>
+
+            <a href="/usuarios" class="module-card">
+                <h3>Usuarios</h3>
+                <p>Crear usuarios administrativos y soporte.</p>
+            </a>
+        </section>
+
+        <section class="table-card">
+            <h2>Resumen por grupo hoy</h2>
+
+            <table>
+                <tr>
+                    <th>Grupo</th>
+                    <th>Total</th>
+                    <th>Registrados</th>
+                    <th>Temprano</th>
+                    <th>Tarde</th>
+                    <th>No llegó</th>
+                </tr>
+
+                {% for g in grupos_hoy %}
+                <tr>
+                    <td>{{ g[0] }}</td>
+                    <td>{{ g[1] }}</td>
+                    <td>{{ g[2] or 0 }}</td>
+                    <td class="estado-verde">{{ g[3] or 0 }}</td>
+                    <td class="estado-amarillo">{{ g[4] or 0 }}</td>
+                    <td class="estado-rojo">{{ g[1] - (g[2] or 0) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </section>
+
+        <section class="table-card">
+            <h2>Últimos ingresos</h2>
+
+            <table>
+                <tr>
+                    <th>Grupo</th>
+                    <th>Estudiante</th>
+                    <th>Hora</th>
+                    <th>Estado</th>
+                </tr>
+
+                {% for i in ultimos_ingresos %}
+                <tr>
+                    <td>{{ i[0] }}</td>
+                    <td>{{ i[1] }} {{ i[2] }}</td>
+                    <td>{{ i[3] }}</td>
+                    <td>{{ i[4] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </section>
+
+    </main>
+
+</body>
+</html>

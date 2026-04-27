@@ -1,0 +1,9 @@
+flask
+flask_sqlalchemy
+gunicorn
+psycopg2-binary
+qrcode
+pillow
+openpyxl
+reportlab
+python-docx

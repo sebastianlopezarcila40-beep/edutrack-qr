@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Aviso legal - EduTrack QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="simple-page">
+
+    <section class="legal-card">
+        <img src="{{ url_for('static', filename='img/image.png') }}" alt="Escudo">
+        <h1>Aviso legal</h1>
+
+        <p>
+            EduTrack QR es un sistema de control de ingreso estudiantil creado para apoyar
+            los procesos internos de la Institución Educativa Gabriel Correa Vélez - Sede Principal.
+        </p>
+
+        <p>
+            El sistema permite registrar estudiantes, generar códigos QR, controlar ingresos,
+            consultar reportes y administrar usuarios autorizados.
+        </p>
+
+        <p>
+            El acceso está permitido únicamente para personal autorizado por la institución.
+            La información registrada debe ser usada solo con fines escolares y administrativos.
+        </p>
+
+        <h2>Desarrollador</h2>
+        <p>
+            Sistema desarrollado por <strong>Sebastián López / StudyTask</strong>.
+        </p>
+
+        <h2>Seguridad</h2>
+        <p>
+            Cada usuario debe proteger sus credenciales. El sistema registra datos de ingreso
+            como fecha, hora, estado y periodo académico.
+        </p>
+
+        <a href="/dashboard" class="btn-action">Volver</a>
+    </section>
+
+</body>
+</html>

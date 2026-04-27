@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Portal Móvil - EduTrack QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+
+<body class="portal-body">
+
+<section class="portal-card">
+    <img src="{{ url_for('static', filename='img/image.png') }}" class="portal-logo">
+
+    <h1>Portal de Ingreso</h1>
+    <p>Escanea el QR del carné o escribe el código del estudiante.</p>
+
+    {% if escaneo_abierto %}
+        <div class="portal-ok">Cámara habilitada</div>
+        <div id="reader"></div>
+    {% else %}
+        <div class="portal-alert">Cámara cerrada. Puedes registrar manualmente.</div>
+    {% endif %}
+
+    <form method="POST" id="portal-form">
+        <input type="text" name="codigo" id="codigo" placeholder="Código del estudiante" required>
+
+        <select name="estado" required>
+            <option value="Temprano">Temprano</option>
+            <option value="Tarde">Tarde</option>
+            <option value="No llegó">No llegó</option>
+        </select>
+
+        <button type="submit">Guardar ingreso</button>
+    </form>
+
+    {% if mensaje %}
+        <div class="portal-message">{{ mensaje }}</div>
+    {% endif %}
+</section>
+
+{% if escaneo_abierto %}
+<script>
+function onScanSuccess(decodedText) {
+    document.getElementById("codigo").value = decodedText;
+    document.querySelector("select[name='estado']").value = "Temprano";
+    document.getElementById("portal-form").submit();
+}
+
+const scanner = new Html5Qrcode("reader");
+
+Html5Qrcode.getCameras().then(cameras => {
+    if (cameras && cameras.length) {
+        scanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            onScanSuccess
+        );
+    }
+});
+</script>
+{% endif %}
+
+</body>
+</html>

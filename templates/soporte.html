@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Soporte - EduTrack QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-body">
+    <main class="main-panel">
+        <section class="welcome-card">
+            <h2>Área de Soporte Técnico</h2>
+            <p>Usuario soporte: {{ usuario }}</p>
+        </section>
+
+        <section class="cards-grid">
+            <div class="module-card">
+                <h3>Servidor</h3>
+                <p>Activo y funcionando.</p>
+            </div>
+
+            <div class="module-card">
+                <h3>Base de datos</h3>
+                <p>Conectada correctamente.</p>
+            </div>
+
+            <div class="module-card">
+                <h3>QR</h3>
+                <p>Módulo de generación disponible.</p>
+            </div>
+
+            <a href="/dashboard" class="module-card">
+                <h3>Volver</h3>
+                <p>Regresar al panel principal.</p>
+            </a>
+        </section>
+    </main>
+</body>
+</html>

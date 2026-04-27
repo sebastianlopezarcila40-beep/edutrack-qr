@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro Interno - EduTrack QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="portal-body">
+
+<section class="portal-card">
+    <img src="{{ url_for('static', filename='img/image.png') }}" class="portal-logo">
+
+    <h1>Registro interno</h1>
+    <p>Registra ingreso manualmente con el código del estudiante.</p>
+
+    <form method="POST">
+        <input type="text" name="codigo" placeholder="Código del estudiante" required>
+
+        <select name="estado" required>
+            <option value="Temprano">Temprano</option>
+            <option value="Tarde">Tarde</option>
+            <option value="No llegó">No llegó</option>
+        </select>
+
+        <button type="submit">Guardar registro</button>
+    </form>
+
+    {% if mensaje %}
+        <div class="portal-message">{{ mensaje }}</div>
+    {% endif %}
+
+    <a class="portal-back" href="/dashboard">Volver al panel</a>
+</section>
+
+</body>
+</html>

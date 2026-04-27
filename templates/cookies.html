@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Cookies - EduTrack QR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="simple-page">
+
+    <section class="legal-card">
+        <img src="{{ url_for('static', filename='img/image.png') }}" alt="Escudo">
+        <h1>Política de cookies</h1>
+
+        <p>
+            EduTrack QR utiliza cookies técnicas de sesión para permitir el inicio de sesión
+            y mantener activo el acceso mientras el usuario autorizado utiliza la plataforma.
+        </p>
+
+        <p>
+            Estas cookies no se usan para publicidad ni seguimiento externo. Su función principal
+            es mantener la seguridad del sistema y evitar accesos no autorizados.
+        </p>
+
+        <h2>Uso de sesión</h2>
+        <p>
+            Al iniciar sesión, el sistema guarda temporalmente el usuario y rol activo.
+            Al cerrar sesión, esta información se elimina.
+        </p>
+
+        <h2>Recomendación</h2>
+        <p>
+            Cierra sesión al terminar de usar el sistema, especialmente en computadores compartidos.
+        </p>
+
+        <a href="/dashboard" class="btn-action">Volver</a>
+    </section>
+
+</body>
+</html>
