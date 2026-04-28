@@ -5,13 +5,15 @@
     <title>Usuarios - EduTrack QR</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
 <body class="dashboard-body">
 
 <main class="main-panel">
 
     <header class="topbar">
-        <h1>Gestión de Usuarios</h1>
+        <div>
+            <h1>Gestión de usuarios</h1>
+            <p>Crear usuarios por rol institucional.</p>
+        </div>
         <a href="/dashboard">Volver</a>
     </header>
 
@@ -21,16 +23,18 @@
         <form method="POST">
             <input type="text" name="usuario" placeholder="Usuario" required>
             <input type="password" name="password" placeholder="Contraseña" required>
-            <input type="email" name="correo" placeholder="Correo para recuperar contraseña" required>
+            <input type="email" name="correo" placeholder="Correo de recuperación">
 
-            <select name="rol" required style="width:100%; padding:16px; margin-bottom:16px; border-radius:14px; border:1px solid #d1d5db;">
+            <select name="rol" required>
                 <option value="">Seleccionar rol</option>
                 <option value="Rectoría">Rectoría</option>
                 <option value="Coordinación">Coordinación</option>
                 <option value="Secretaría">Secretaría</option>
-                <option value="Directivo">Directivo</option>
+                <option value="Docente">Docente</option>
                 <option value="Soporte">Soporte</option>
             </select>
+
+            <input type="text" name="grupo_docente" placeholder="Grupo docente, ejemplo: 8">
 
             <button type="submit">Crear usuario</button>
         </form>
@@ -44,16 +48,18 @@
                 <th>Usuario</th>
                 <th>Rol</th>
                 <th>Correo</th>
+                <th>Grupo docente</th>
                 <th>Acción</th>
             </tr>
 
             {% for u in usuarios %}
             <tr>
-                <td>{{ u[1] }}</td>
-                <td>{{ u[2] }}</td>
-                <td>{{ u[3] }}</td>
+                <td>{{ u.usuario }}</td>
+                <td>{{ u.rol }}</td>
+                <td>{{ u.correo }}</td>
+                <td>{{ u.grupo_docente }}</td>
                 <td>
-                    <a class="danger-link" href="/eliminar_usuario/{{ u[0] }}">Eliminar</a>
+                    <a class="danger-link" href="/eliminar_usuario/{{ u.id }}">Eliminar</a>
                 </td>
             </tr>
             {% endfor %}

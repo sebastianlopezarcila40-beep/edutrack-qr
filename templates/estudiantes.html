@@ -5,71 +5,75 @@
     <title>Estudiantes - EduTrack QR</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
 <body class="dashboard-body">
 
-    <main class="main-panel">
+<main class="main-panel">
 
-        <header class="topbar">
+    <header class="topbar">
+        <div>
             <h1>Estudiantes y códigos QR</h1>
-            <a href="/dashboard">Volver</a>
-        </header>
+            <p>Crear estudiantes, generar QR y carné estudiantil.</p>
+        </div>
+        <a href="/dashboard">Volver</a>
+    </header>
 
-        <section class="form-card">
-            <h2>Crear estudiante</h2>
+    <section class="form-card">
+        <h2>Crear estudiante</h2>
 
-            <form method="POST">
-                <input type="text" name="codigo" placeholder="Código del estudiante" required>
-                <input type="text" name="nombre" placeholder="Nombres" required>
-                <input type="text" name="apellido" placeholder="Apellidos" required>
-                <input type="text" name="grado" placeholder="Grado" required>
-                <input type="text" name="director" placeholder="Director de grupo" required>
+        <form method="POST">
+            <input type="text" name="codigo" placeholder="Código del estudiante" required>
+            <input type="text" name="nombre" placeholder="Nombres" required>
+            <input type="text" name="apellido" placeholder="Apellidos" required>
+            <input type="text" name="grado" placeholder="Grado" required>
+            <input type="text" name="director" placeholder="Director de grupo" required>
 
-                <button type="submit">Guardar estudiante y generar QR</button>
-            </form>
-        </section>
+            <button type="submit">Guardar estudiante</button>
+        </form>
+    </section>
 
-        <section class="table-card">
-            <h2>Estudiantes registrados</h2>
+    <section class="table-card">
+        <h2>Estudiantes registrados</h2>
 
-            <a href="/exportar_estudiantes" class="btn-action">Exportar Excel</a>
+        <a class="btn-action" href="/exportar_estudiantes">Exportar Excel</a>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Nombres</th>
-                        <th>Apellidos</th>
-                        <th>Grado</th>
-                        <th>Director</th>
-                        <th>QR</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
+        <table>
+            <tr>
+                <th>Código</th>
+                <th>Estudiante</th>
+                <th>Grado</th>
+                <th>Director</th>
+                <th>QR</th>
+                <th>Carné</th>
+                <th>Historial</th>
+                <th>Acción</th>
+            </tr>
 
-                <tbody>
-                    {% for e in estudiantes %}
-                    <tr>
-                        <td>{{ e[1] }}</td>
-                        <td>{{ e[2] }}</td>
-                        <td>{{ e[3] }}</td>
-                        <td>{{ e[4] }}</td>
-                        <td>{{ e[5] }}</td>
-                        <td>
-                            <img class="qr-img" src="{{ url_for('static', filename='qr/' + e[6]) }}">
-                            <br>
-                            <a href="{{ url_for('static', filename='qr/' + e[6]) }}" download>Descargar QR</a>
-                        </td>
-                        <td>
-                            <a class="danger-link" href="/eliminar_estudiante/{{ e[0] }}">Eliminar estudiante y QR</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </section>
+            {% for e in estudiantes %}
+            <tr>
+                <td>{{ e.codigo }}</td>
+                <td>{{ e.nombre }} {{ e.apellido }}</td>
+                <td>{{ e.grado }}</td>
+                <td>{{ e.director }}</td>
+                <td>
+                    <img class="qr-img" src="/qr/{{ e.id }}">
+                    <br>
+                    <a href="/qr_descargar/{{ e.id }}">Descargar</a>
+                </td>
+                <td>
+                    <a href="/carnet/{{ e.id }}">Ver carné</a>
+                </td>
+                <td>
+                    <a href="/historial/{{ e.id }}">Historial</a>
+                </td>
+                <td>
+                    <a class="danger-link" href="/eliminar_estudiante/{{ e.id }}">Eliminar</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </section>
 
-    </main>
+</main>
 
 </body>
 </html>
