@@ -44,7 +44,7 @@ INST_DIRECCION = "Calle 127 # 45-67, Bogotá D.C., Colombia"
 INST_RESOLUCION = "Resolución institucional demo 2026"
 
 SOPORTE_EMAIL = os.getenv("SOPORTE_EMAIL", "studytasksoporte@gmail.com")
-SOPORTE_PASSWORD = os.getenv("SOPORTE_PASSWORD", "")
+SOPORTE_PASSWORD = os.getenv("rbon gbmu gtuh aper", "")
 
 CARTERA_EMAIL = "carteraedutrackqr@gmail.com"
 CARTERA_TELEFONO = "3126285480"
