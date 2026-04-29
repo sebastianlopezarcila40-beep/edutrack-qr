@@ -235,7 +235,7 @@ def shell(content):
     return f"""
     <div class="layout">
       <aside class="sidebar">
-        <img src="/static/img/image.png" alt="Escudo">
+        <img src="/static/img/logo-colegio.png" alt="Escudo">
         <h2>EduTrack QR</h2>
         <p>Gabriel Correa Vélez</p>
         <a href="/dashboard">Inicio</a>
@@ -275,7 +275,7 @@ def login():
     <div class="center">
         <section class="card login-card">
             <div class="hero-logo">
-                <img class="logo" src="/static/img/image.png">
+                <img class="logo" src="/static/img/logo-colegio.png">
                 <h2>EduTrack QR</h2>
                 <p>Institución Educativa Gabriel Correa Vélez</p>
             </div>
@@ -368,7 +368,7 @@ def dashboard():
 
     <section class="grid">
         <div class="hero-logo">
-            <img class="logo" src="/static/img/image.png">
+            <img class="logo" src="/static/img/logo-colegio.png">
             <h2>EduTrack QR</h2>
             <p>Sistema institucional de asistencia</p>
         </div>
@@ -447,7 +447,7 @@ def portal():
     body = f"""
     <div class="center">
         <section class="card portal">
-            <img class="portal-logo logo" src="/static/img/image.png">
+            <img class="portal-logo logo" src="/static/img/logo-colegio.png">
             <h1>Portal de Ingreso</h1>
             <p>Cámara QR habilitada. También puedes escribir el código.</p>
 
@@ -515,7 +515,7 @@ def docente_login():
     body = f"""
     <div class="center">
         <section class="card login-card">
-            <img class="logo" src="/static/img/image.png">
+            <img class="logo" src="/static/img/logo-colegio.png">
 
             <h1>Portal Docente</h1>
             <p>Asistencia en aula.</p>
@@ -789,7 +789,7 @@ def carnet(id):
     <div class="print-wrap">
         <div class="carnet">
             <div class="carnet-head">
-                <img class="logo" src="/static/img/image.png">
+                <img class="logo" src="/static/img/logo-colegio.png">
                 <h3>Institución Educativa Gabriel Correa Vélez</h3>
                 <p>Sede Principal</p>
             </div>
