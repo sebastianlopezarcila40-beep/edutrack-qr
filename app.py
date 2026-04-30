@@ -42,7 +42,7 @@ APP_NAME = "EduTrack QR"
 DESARROLLADOR = "Sebastián López / StudyTask"
 SLOGAN = "Tecnología para una educación moderna y responsable"
 
-INST_NOMBRE = "INSTITUCIÓN EDUCATIVA NOVA FUTURO"
+INST_NOMBRE = "INSTITUCIÓN EDUCATIVA GABRIEL CORREA VÉLEZ"
 INST_SEDE = "PRINCIPAL"
 INST_DANE = "199999999999"
 INST_NIT = "900.999.999-1"
@@ -108,6 +108,8 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 .fieldset legend{font-size:12px;padding:0 8px;color:#111}.classic-grid{display:grid;grid-template-columns:120px 1fr 130px 1fr;gap:7px 10px;align-items:center}.classic-grid label{font-size:12px;text-align:right}.classic-grid input,.classic-grid select,.classic-grid textarea{border:1px solid #aaa;border-radius:0;background:#f4f4f4;height:23px;padding:3px 6px;margin:0;font-size:12px}.classic-grid textarea{height:45px;resize:vertical}.span3{grid-column:2/5}.span-all{grid-column:1/5}.classic-actions{padding:0 18px 15px;display:flex;gap:8px;flex-wrap:wrap}.classic-btn{background:#d8d8d8;color:#111;border:1px solid #777;border-radius:3px;padding:6px 12px;font-size:12px;font-weight:bold;text-decoration:none;display:inline-block}.classic-btn.primary{background:#0b63ce;color:white}.classic-btn.red{background:#cf1717;color:white}.classic-btn.green{background:#16a34a;color:white}.classic-btn.yellow{background:#ffe28a;color:#111}.classic-info{background:#eeeeee;border:1px solid #aaa;padding:8px;font-size:12px}
 .dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.classic-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.classic-stat{border:1px solid #777;background:#eee;padding:10px;text-align:center}.classic-stat h3{font-size:28px;margin:0;color:#111}.classic-stat p{margin:3px 0 0;font-size:12px}.classic-stat.green{background:#d9f99d}.classic-stat.yellow{background:#fef08a}.classic-stat.red{background:#fecaca}.classic-stat.blue{background:#bfdbfe}
 .finance-strip{border:1px solid #333;margin:10px 0;background:#d4d4d4;font-size:14px}.finance-row{display:grid;grid-template-columns:1.7fr 1fr;border-bottom:1px solid #333}.finance-row:last-child{border-bottom:0}.finance-row div{padding:5px;border-right:1px solid #333}.finance-row div:last-child{border-right:0;text-align:right;font-weight:bold}.finance-red{background:#c90000;color:white;font-weight:bold}.finance-yellow{background:#ffd21f;font-weight:bold}.finance-soft{background:#fff1a8}
+
+.modern-hero{background:white;border-radius:24px;border-top:5px solid #facc15;padding:28px;box-shadow:var(--s);display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.modern-hero h1{margin:0;color:#0f172a;font-size:30px}.modern-hero p{margin:8px 0 0;color:#334155}.modern-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.brand-card{background:linear-gradient(135deg,#0f5132,#22c55e);color:white;border-radius:24px;border-bottom:6px solid #facc15;padding:38px;box-shadow:var(--s);text-align:center}.brand-card img{width:84px;height:84px;object-fit:contain;background:white;border-radius:18px;padding:8px}.brand-card h2{font-size:26px;margin:16px 0 8px}.brand-card p{color:#e8fff2}.summary-card,.modern-card{background:white;border-radius:24px;border-top:5px solid #facc15;padding:24px;box-shadow:var(--s)}.summary-card h2,.modern-card h2{margin-top:0;color:#0f172a}.modern-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.modern-stat{background:#f8fafc;border-left:5px solid #15803d;border-radius:18px;padding:18px}.modern-stat h3{font-size:31px;margin:0;color:#0f172a}.modern-stat p{margin:6px 0 0;color:#334155;font-size:13px}.modules-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin:18px 0}.modern-card a{color:#14532d}.client-note{background:#ecfdf5;border:1px solid #bbf7d0;border-radius:18px;padding:16px;margin-top:14px;color:#14532d;font-weight:700}
 .table-card{background:white;border-radius:12px;padding:16px;box-shadow:var(--s);margin-bottom:16px}.table-card h2{color:var(--azul);margin-top:0}table{width:100%;border-collapse:collapse;margin-top:10px}th{background:var(--azul);color:white;padding:10px;font-size:12px}td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px}.estado{padding:5px 9px;border-radius:999px;font-weight:800;font-size:12px}.estado-temprano{background:#dcfce7;color:#047857}.estado-tarde{background:#fef3c7;color:#b45309}.estado-no{background:#fee2e2;color:#b91c1c}.qr-img{width:76px}.danger-link{color:var(--rojo)}
 .footer{margin-top:20px;text-align:center;color:#64748b;font-size:13px}.footer strong{color:var(--azul)}.portal{width:100%;max-width:460px;text-align:center}.portal #reader{max-width:330px;margin:16px auto;border-radius:18px;overflow:hidden}.carnet{width:360px;background:white;border-radius:28px;padding:24px;text-align:center;box-shadow:var(--s);border-top:8px solid var(--azul2)}.carnet-head{background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:22px;padding:18px;border-bottom:6px solid var(--amarillo)}.carnet .qr{width:180px;margin:18px auto}.print-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#eaf2ff;flex-direction:column}.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.contact-card{background:white;border-radius:20px;padding:22px;box-shadow:var(--s);border-top:5px solid var(--azul2)}.contact-icon{width:50px;height:50px;border-radius:15px;background:var(--azul2);color:white;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:12px}.slogan-box{margin-top:25px;background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:24px;padding:26px;text-align:center}
 @media(max-width:1100px){.layout{flex-direction:column}.sidebar{width:100%;height:auto;position:relative;border-right:0;border-bottom:5px solid var(--amarillo)}.header,.dashboard-grid,.classic-grid,.contact-grid{grid-template-columns:1fr}.classic-grid label{text-align:left}.span3,.span-all{grid-column:auto}.classic-stat-grid{grid-template-columns:1fr 1fr}.main{padding:12px}}
@@ -202,7 +204,7 @@ def shell(content):
   <aside class="sidebar">
     <img src="/static/img/logo-colegio.png" alt="Logo">
     <h2>{APP_NAME}</h2>
-    <p>Sistema Inteligente de Asistencia Escolar</p>
+    <p>{INST_NOMBRE}<br>Sede {INST_SEDE}</p>
     <a href="/dashboard" class="active">Inicio</a>
     <a href="/portal" target="_blank">Portal móvil</a>
     <a href="/docente-login">Portal docente</a>
@@ -381,52 +383,119 @@ def validar_pin():
 
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
-    if not requiere_login(): return redirect("/login")
+    if not requiere_login():
+        return redirect("/login")
+
     cfg = config()
     if request.method == "POST":
-        cfg.periodo_actual = request.form.get("periodo_actual", cfg.periodo_actual); cfg.jornada = request.form.get("jornada", cfg.jornada); db.session.commit(); return redirect("/dashboard")
-    grupo = request.args.get("grupo", "TODOS"); periodo = request.args.get("periodo", periodo_actual()); hoy = fecha_hoy()
-    estudiantes = Estudiante.query.all(); estudiantes_grupo = estudiantes if grupo == "TODOS" else [e for e in estudiantes if e.grado == grupo]
+        cfg.periodo_actual = request.form.get("periodo_actual", cfg.periodo_actual)
+        cfg.jornada = request.form.get("jornada", cfg.jornada)
+        db.session.commit()
+        return redirect("/dashboard")
+
+    grupo = request.args.get("grupo", "TODOS")
+    periodo = request.args.get("periodo", periodo_actual())
+    hoy = fecha_hoy()
+
+    estudiantes = Estudiante.query.all()
+    estudiantes_grupo = estudiantes if grupo == "TODOS" else [e for e in estudiantes if e.grado == grupo]
+
     ingresos_query = IngresoPorteria.query.filter_by(fecha=hoy)
-    if periodo != "TODOS": ingresos_query = ingresos_query.filter_by(periodo=periodo)
+    if periodo != "TODOS":
+        ingresos_query = ingresos_query.filter_by(periodo=periodo)
     ingresos = ingresos_query.all()
-    if grupo != "TODOS": ingresos = [i for i in ingresos if i.estudiante.grado == grupo]
+    if grupo != "TODOS":
+        ingresos = [i for i in ingresos if i.estudiante.grado == grupo]
+
     ids_ingreso = {i.estudiante_id for i in ingresos}
-    total = len(estudiantes_grupo); temprano = sum(1 for i in ingresos if i.estado == "Temprano"); tarde = sum(1 for i in ingresos if i.estado == "Tarde"); no_llego = max(total - len(ids_ingreso), 0) + sum(1 for i in ingresos if i.estado == "No llegó")
-    asistencias = AsistenciaClase.query.filter_by(fecha=hoy).all(); docentes = len({a.docente for a in asistencias}); grupos_asistencia = len({a.grupo for a in asistencias})
-    opciones_grupo = '<option value="TODOS">TODOS</option>' + ''.join(f'<option value="{g}" {"selected" if grupo == g else ""}>{g}-01-MAÑANA</option>' for g in grados_disponibles())
-    opciones_periodo = ''.join(f'<option value="{p}" {"selected" if periodo == p else ""}>{p}</option>' for p in ["TODOS", "Periodo 1", "Periodo 2", "Periodo 3"])
-    filas_estudiantes = ''.join(f"""<tr><td>{e.codigo}</td><td>{e.nombre} {e.apellido}</td><td>{e.grado}</td><td>{e.director}</td><td>{estado_badge(next((i.estado for i in ingresos if i.estudiante_id == e.id), 'No llegó'))}</td><td>{next((i.hora for i in ingresos if i.estudiante_id == e.id), '-')}</td></tr>""" for e in estudiantes_grupo[:12])
-    ultimos = IngresoPorteria.query.join(Estudiante).filter(IngresoPorteria.fecha == hoy).order_by(IngresoPorteria.hora.desc()).limit(9).all()
-    filas_ultimos = ''.join(f"<tr><td>{i.estudiante.grado}</td><td>{i.estudiante.nombre} {i.estudiante.apellido}</td><td>{i.hora}</td><td>{estado_badge(i.estado)}</td></tr>" for i in ultimos)
+    total = len(estudiantes_grupo)
+    temprano = sum(1 for i in ingresos if i.estado == "Temprano")
+    tarde = sum(1 for i in ingresos if i.estado == "Tarde")
+    no_llego = max(total - len(ids_ingreso), 0) + sum(1 for i in ingresos if i.estado == "No llegó")
+
+    opciones_grupo = '<option value="TODOS">TODOS</option>' + ''.join(
+        f'<option value="{g}" {"selected" if grupo == g else ""}>{g}-01-MAÑANA</option>'
+        for g in grados_disponibles()
+    )
+    opciones_periodo = ''.join(
+        f'<option value="{p}" {"selected" if periodo == p else ""}>{p}</option>'
+        for p in ["TODOS", "Periodo 1", "Periodo 2", "Periodo 3"]
+    )
+
+    ultimos = IngresoPorteria.query.join(Estudiante).filter(IngresoPorteria.fecha == hoy).order_by(IngresoPorteria.hora.desc()).limit(8).all()
+    filas_ultimos = ''.join(
+        f"<tr><td>{i.estudiante.grado}</td><td>{i.estudiante.nombre} {i.estudiante.apellido}</td><td>{i.hora}</td><td>{estado_badge(i.estado)}</td></tr>"
+        for i in ultimos
+    )
 
     content = f"""
-<div class="classic-window">
-  <div class="classic-title">Panel Administrativo - {APP_NAME}</div>
-  <div class="classic-toolbar"><span class="tool-btn">|&lt;</span><span class="tool-btn">&lt;</span><span class="record-box"><input value="{total}"><small>de {len(estudiantes)}</small></span><span class="tool-btn">&gt;</span><span class="tool-btn">&gt;|</span><span class="tool-btn">+</span><span class="tool-btn">✕</span><span class="tool-btn">💾</span><span class="tool-btn">✎</span><span class="tool-btn">●</span></div>
-  <fieldset class="fieldset"><legend>Datos institucionales</legend>
-    <div class="classic-grid">
-      <label>Institución:</label><input value="{INST_NOMBRE}" readonly><label>Usuario:</label><input value="{session['usuario']} - {session['rol']}" readonly>
-      <label>Sede:</label><input value="{INST_SEDE}" readonly><label>Fecha:</label><input value="{fecha_linda()} {ahora().strftime('%I:%M:%S %p')}" readonly>
-      <label>DANE:</label><input value="{INST_DANE}" readonly><label>NIT:</label><input value="{INST_NIT}" readonly>
-      <label>Dirección:</label><input class="span3" value="{INST_DIRECCION}" readonly>
-    </div>
-  </fieldset>
-  <div class="dashboard-grid">
-    <fieldset class="fieldset"><legend>Configuración manual del sistema</legend>
-      <form method="POST"><div class="classic-grid"><label>Periodo:</label><select name="periodo_actual"><option {"selected" if periodo_actual()=="Periodo 1" else ""}>Periodo 1</option><option {"selected" if periodo_actual()=="Periodo 2" else ""}>Periodo 2</option><option {"selected" if periodo_actual()=="Periodo 3" else ""}>Periodo 3</option></select><label>Jornada:</label><select name="jornada"><option {"selected" if jornada_actual()=="Mañana" else ""}>Mañana</option><option {"selected" if jornada_actual()=="Tarde" else ""}>Tarde</option><option {"selected" if jornada_actual()=="Única" else ""}>Única</option></select></div><br><button class="classic-btn primary">Guardar configuración</button></form>
-    </fieldset>
-    <fieldset class="fieldset"><legend>Filtro de consulta</legend>
-      <form method="GET"><div class="classic-grid"><label>Periodo:</label><select name="periodo">{opciones_periodo}</select><label>Grupo:</label><select name="grupo">{opciones_grupo}</select></div><br><button class="classic-btn primary">Consultar</button></form>
-    </fieldset>
+<section class="modern-hero">
+  <div>
+    <h1>Panel Administrativo</h1>
+    <p><b>{INST_NOMBRE}</b> · Sede {INST_SEDE}</p>
+    <p>Periodo: <b>{periodo_actual()}</b> · Jornada: <b>{jornada_actual()}</b> · Usuario: <b>{session['usuario']}</b></p>
   </div>
-  <fieldset class="fieldset"><legend>Resumen de asistencia</legend>
-    <div class="classic-stat-grid"><div class="classic-stat blue"><h3>{total}</h3><p>Estudiantes</p></div><div class="classic-stat green"><h3>{temprano}</h3><p>Temprano</p></div><div class="classic-stat yellow"><h3>{tarde}</h3><p>Tarde</p></div><div class="classic-stat red"><h3>{no_llego}</h3><p>No llegó</p></div></div>
-  </fieldset>
-  <div class="finance-strip"><div class="finance-row"><div>Docentes con asistencia</div><div class="finance-yellow">{docentes}</div></div><div class="finance-row"><div>Grupos con asistencia</div><div class="finance-soft">{grupos_asistencia}</div></div><div class="finance-row"><div class="finance-red">Portal móvil de escaneo</div><div class="finance-red"><a style="color:white" href="/portal" target="_blank">ABRIR</a></div></div></div>
-  <div class="classic-actions"><a class="classic-btn primary" href="/portal" target="_blank">Portal móvil</a><a class="classic-btn" href="/docente-login">Portal docente</a><a class="classic-btn green" href="/estudiantes">Crear estudiante o QR</a><a class="classic-btn" href="/reportes">Reportes</a><a class="classic-btn" href="/usuarios">Usuarios</a><a class="classic-btn red" href="/logout">Salir</a></div>
-</div>
-<div class="dashboard-grid"><section class="table-card"><h2>Estudiantes del grupo: {grupo}</h2><table><tr><th>Código</th><th>Nombre y apellido</th><th>Grado</th><th>Director</th><th>Estado</th><th>Hora</th></tr>{filas_estudiantes}</table></section><section class="table-card"><h2>Últimos ingresos</h2><table><tr><th>Grupo</th><th>Estudiante</th><th>Hora</th><th>Estado</th></tr>{filas_ultimos}</table></section></div>
+  <a class="btn btn-red" href="/logout">Salir</a>
+</section>
+
+<section class="modern-grid">
+  <div class="brand-card">
+    <img src="/static/img/logo-colegio.png" alt="Logo colegio">
+    <h2>{APP_NAME}</h2>
+    <p>Sistema institucional de asistencia, control QR y reportes escolares.</p>
+    <div class="client-note">Solución moderna para instituciones educativas</div>
+  </div>
+
+  <div class="summary-card">
+    <h2>Resumen de ingreso - {hoy}</h2>
+    <form method="GET">
+      <div class="classic-grid">
+        <label>Periodo:</label><select name="periodo">{opciones_periodo}</select>
+        <label>Grupo:</label><select name="grupo">{opciones_grupo}</select>
+      </div><br>
+      <button>Consultar</button>
+    </form>
+    <div class="modern-stats">
+      <div class="modern-stat"><h3>{total}</h3><p>Estudiantes</p></div>
+      <div class="modern-stat"><h3>{temprano}</h3><p>Temprano</p></div>
+      <div class="modern-stat"><h3>{tarde}</h3><p>Tarde</p></div>
+      <div class="modern-stat"><h3>{no_llego}</h3><p>No llegó</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="modules-grid">
+  <div class="modern-card"><h2>Portal móvil</h2><p>Cámara QR y registro manual para portería.</p><a href="/portal" target="_blank">Abrir portal móvil</a></div>
+  <div class="modern-card"><h2>Portal docente</h2><p>Control de asistencia en aula por grupo.</p><a href="/docente-login">Abrir portal docente</a></div>
+  <div class="modern-card"><h2>Estudiantes y QR</h2><p>Crear estudiantes, generar carnés y descargar códigos QR.</p><a href="/estudiantes">Gestionar estudiantes</a></div>
+  <div class="modern-card"><h2>Reportes institucionales</h2><p>Exportación en Excel, PDF y Word para coordinación.</p><a href="/reportes">Ver reportes</a></div>
+</section>
+
+<section class="modern-card">
+  <h2>Configuración rápida del sistema</h2>
+  <form method="POST">
+    <div class="classic-grid">
+      <label>Periodo actual:</label>
+      <select name="periodo_actual">
+        <option {"selected" if periodo_actual()=="Periodo 1" else ""}>Periodo 1</option>
+        <option {"selected" if periodo_actual()=="Periodo 2" else ""}>Periodo 2</option>
+        <option {"selected" if periodo_actual()=="Periodo 3" else ""}>Periodo 3</option>
+      </select>
+      <label>Jornada:</label>
+      <select name="jornada">
+        <option {"selected" if jornada_actual()=="Mañana" else ""}>Mañana</option>
+        <option {"selected" if jornada_actual()=="Tarde" else ""}>Tarde</option>
+        <option {"selected" if jornada_actual()=="Única" else ""}>Única</option>
+      </select>
+    </div><br>
+    <button>Guardar configuración</button>
+  </form>
+</section>
+
+<section class="table-card">
+  <h2>Últimos ingresos</h2>
+  <table><tr><th>Grupo</th><th>Estudiante</th><th>Hora</th><th>Estado</th></tr>{filas_ultimos}</table>
+</section>
 """
     return page("Dashboard", shell(content))
 
