@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Estudiantes - EduTrack QR</title>
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='img/favicon.jpeg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="dashboard-body">
+
+<main class="main-panel">
+    <header class="topbar">
+        <div>
+            <h1>Estudiantes y códigos QR</h1>
+            <p>Crear estudiantes, generar QR y carné estudiantil.</p>
+        </div>
+        <a href="/dashboard">Volver</a>
+    </header>
+
+    <section class="form-card">
+        <h2>Crear estudiante</h2>
+
+        <form method="POST">
+            <input type="text" name="codigo" placeholder="Código del estudiante" required>
+            <input type="text" name="nombre" placeholder="Nombres" required>
+            <input type="text" name="apellido" placeholder="Apellidos" required>
+            <input type="text" name="grado" placeholder="Grado" required>
+            <input type="text" name="director" placeholder="Director de grupo" required>
+            <button type="submit">Guardar estudiante</button>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <h2>Estudiantes registrados</h2>
+
+        <a class="btn-action" href="/exportar_estudiantes">Exportar Excel</a>
+
+        <table>
+            <tr>
+                <th>Código</th>
+                <th>Estudiante</th>
+                <th>Grado</th>
+                <th>Director</th>
+                <th>QR</th>
+                <th>Carné</th>
+                <th>Historial</th>
+                <th>Acción</th>
+            </tr>
+
+            {% for e in estudiantes %}
+            <tr>
+                <td>{{ e.codigo }}</td>
+                <td>{{ e.nombre }} {{ e.apellido }}</td>
+                <td>{{ e.grado }}</td>
+                <td>{{ e.director }}</td>
+                <td>
+                    <img class="qr-img" src="/qr/{{ e.id }}">
+                    <br>
+                    <a href="/qr_descargar/{{ e.id }}">Descargar</a>
+                </td>
+                <td><a href="/carnet/{{ e.id }}">Ver carné</a></td>
+                <td><a href="/historial/{{ e.id }}">Historial</a></td>
+                <td><a class="danger-link" href="/eliminar_estudiante/{{ e.id }}">Eliminar</a></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <footer class="footer">
+        <strong>EduTrack QR</strong> © 2026 | Tecnología para una educación moderna y responsable
+        <br>Desarrollado por <b>LogixWare</b>
+    </footer>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "basico",
+    "nombre": "Básico",
+    "precio": "149.000",
+    "tag": "Esencial",
+    "items": "Hasta 300 estudiantes|Asistencia|Notas básicas|Soporte laboral"
+  },
+  {
+    "id": "estandar",
+    "nombre": "Estándar",
+    "precio": "249.000",
+    "tag": "Más elegido",
+    "items": "Hasta 800 estudiantes|Notas SIEE|Boletines|Horarios|PQR"
+  },
+  {
+    "id": "premium",
+    "nombre": "Premium",
+    "precio": "399.000",
+    "tag": "Completo",
+    "items": "Ilimitados*|Todo Estándar|Carné QR|SIMAT|Multi-sede"
+  },
+  {
+    "id": "piloto",
+    "nombre": "Prueba piloto",
+    "precio": "0",
+    "tag": "Evaluación",
+    "items": "20-30 días|Inducción|Sin permanencia"
+  }
+]

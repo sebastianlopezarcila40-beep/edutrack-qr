@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Usuarios - EduTrack QR</title>
+
+    <link rel="icon" type="image/jpeg"
+          href="{{ url_for('static', filename='img/favicon.jpeg') }}">
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="dashboard-body">
+
+<main class="main-panel">
+
+    <header class="topbar">
+
+        <div>
+            <h1>Gestión de usuarios</h1>
+            <p>Crear usuarios por rol institucional.</p>
+        </div>
+
+        <a href="/dashboard">Volver</a>
+
+    </header>
+
+    <section class="form-card">
+
+        <h2>Crear nuevo usuario</h2>
+
+        <form method="POST">
+
+            <input type="text"
+                   name="usuario"
+                   placeholder="Usuario"
+                   required>
+
+            <input type="password"
+                   name="password"
+                   placeholder="Contraseña"
+                   required>
+
+            <input type="email"
+                   name="correo"
+                   placeholder="Correo de recuperación">
+
+            <select name="rol" required>
+
+                <option value="">
+                    Seleccionar rol
+                </option>
+
+                <option value="Rectoría">
+                    Rectoría
+                </option>
+
+                <option value="Coordinación">
+                    Coordinación
+                </option>
+
+                <option value="Secretaría">
+                    Secretaría
+                </option>
+
+                <option value="Docente">
+                    Docente
+                </option>
+
+                <option value="Soporte">
+                    Soporte
+                </option>
+
+            </select>
+
+            <input type="text"
+                   name="grupo_docente"
+                   placeholder="Grupo docente">
+
+            <button type="submit">
+                Crear usuario
+            </button>
+
+        </form>
+
+    </section>
+
+    <section class="table-card">
+
+        <h2>Usuarios registrados</h2>
+
+        <table>
+
+            <tr>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Correo</th>
+                <th>Grupo docente</th>
+                <th>Acción</th>
+            </tr>
+
+            {% for u in usuarios %}
+            <tr>
+                <td>{{ u.usuario }}</td>
+                <td>{{ u.rol }}</td>
+                <td>{{ u.correo }}</td>
+                <td>{{ u.grupo_docente }}</td>
+
+                <td>
+                    <a class="danger-link"
+                       href="/eliminar_usuario/{{ u.id }}">
+                        Eliminar
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+
+        </table>
+
+    </section>
+
+    <footer class="footer">
+        EduTrack QR © 2026 | Tecnología para una educación moderna y responsable
+        <br>
+        Desarrollado por LogixWare
+    </footer>
+
+</main>
+
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "banco": "NEQUI ",
+  "tipo_cuenta": "Ahorros",
+  "numero_cuenta": "3122837769",
+  "titular": "PROCSIS ",
+  "nit": "1038062294",
+  "pasarela": "Wompi",
+  "pasarela_public_key": "pub_prod_90fCpZbqj9sO2GKqLmJVQsOqmX1V9MDr",
+  "link_pago": "https://checkout.wompi.co/l/test_za8cDj",
+  "wompi_events_secret": "",
+  "notas": "Solo gerencia modifica datos de recaudo."
+}
