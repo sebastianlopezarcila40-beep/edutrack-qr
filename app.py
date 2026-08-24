@@ -2745,31 +2745,32 @@ def inicializar_bd():
         migrar_columnas()
     except Exception as _mc:
         print("migrar_columnas:", _mc)
-    # Garantizar columnas nuevas de periodos (SQLite no soporta IF NOT EXISTS en versiones viejas)
+    # Garantizar columnas nuevas (periodos y otras) — Postgres + SQLite
     try:
         with db.engine.begin() as conn:
             dialect = (db.engine.dialect.name or "").lower()
-            for col, ddl in (
-                ("num_periodos", "ALTER TABLE configuracion ADD COLUMN num_periodos INTEGER DEFAULT 3"),
-                ("periodos_lista", "ALTER TABLE configuracion ADD COLUMN periodos_lista VARCHAR(120) DEFAULT 'Periodo 1|Periodo 2|Periodo 3'"),
-            ):
+            patches = [
+                ("configuracion", "num_periodos", "INTEGER DEFAULT 3"),
+                ("configuracion", "periodos_lista", "VARCHAR(120) DEFAULT 'Periodo 1|Periodo 2|Periodo 3'"),
+                ("instituciones", "motivo_bloqueo", "VARCHAR(255) DEFAULT ''"),
+                ("instituciones", "fecha_suspension", "VARCHAR(30) DEFAULT ''"),
+            ]
+            for table, col, typedef in patches:
                 try:
                     if dialect == "sqlite":
-                        rows = conn.execute(db.text("PRAGMA table_info(configuracion)")).fetchall()
+                        rows = conn.execute(db.text(f"PRAGMA table_info({table})")).fetchall()
                         names = {r[1] for r in rows}
                         if col not in names:
-                            conn.execute(db.text(ddl))
+                            conn.execute(db.text(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}"))
                     else:
-                        conn.execute(db.text(ddl.replace("ADD COLUMN", "ADD COLUMN IF NOT EXISTS") if "IF NOT EXISTS" not in ddl else ddl))
-                        # postgres style
                         conn.execute(db.text(
-                            f"ALTER TABLE configuracion ADD COLUMN IF NOT EXISTS {col} "
-                            + ("INTEGER DEFAULT 3" if col == "num_periodos" else "VARCHAR(120) DEFAULT 'Periodo 1|Periodo 2|Periodo 3'")
+                            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typedef}"
                         ))
                 except Exception as _c:
-                    pass
+                    print(f"patch {table}.{col}:", _c)
     except Exception as _e:
-        print("ensure num_periodos:", _e)
+        print("ensure schema patches:", _e)
+
     try:
         _migrate_facturas_cobro_columns()
     except Exception as _mig:
@@ -2977,7 +2978,11 @@ def ruta_publica():
 
 @app.before_request
 def before():
-    inicializar_bd()
+    try:
+        inicializar_bd()
+    except Exception as _init_err:
+        # No tumbar el request (login) por fallos de migración/BD
+        print("inicializar_bd error:", _init_err)
     if requiere_login():
         ultimo = session.get("ultimo_movimiento")
         ahora_ts = ahora().timestamp()
@@ -2994,9 +2999,10 @@ def before():
         except Exception:
             pass
     try:
-        cfg = config() if requiere_login() else Configuracion.query.first()
-        if cfg and cfg.modo_mantenimiento and requiere_login() and rol_actual() not in ["Soporte", "Administrador"] and not ruta_publica():
-            return page("Mantenimiento", f"<div class='center'><section class='card login-card'><h1>Sistema en mantenimiento</h1><p>{cfg.mensaje_mantenimiento}</p><a class='btn' href='/logout'>Salir</a></section></div>")
+        if requiere_login():
+            cfg = config()
+            if cfg and cfg.modo_mantenimiento and rol_actual() not in ["Soporte", "Administrador"] and not ruta_publica():
+                return page("Mantenimiento", f"<div class='center'><section class='card login-card'><h1>Sistema en mantenimiento</h1><p>{cfg.mensaje_mantenimiento}</p><a class='btn' href='/logout'>Salir</a></section></div>")
     except Exception:
         pass
 
@@ -16977,7 +16983,7 @@ def _capturar_error_sistema(e):
             ruta=(request.path or "")[:255],
             usuario=session.get("usuario") or "",
             institucion_id=session.get("institucion_id"),
-            traceback="",
+            traceback=(__import__("traceback").format_exc() or "")[:4000],
         ))
         db.session.commit()
     except Exception:
@@ -16985,7 +16991,13 @@ def _capturar_error_sistema(e):
             db.session.rollback()
         except Exception:
             pass
-    # Re-raise para comportamiento normal de Flask
+    # Log visible en Railway
+    try:
+        print("ERROR RUTA", getattr(request, "path", "?"), ":", repr(e))
+        import traceback as _tb
+        _tb.print_exc()
+    except Exception:
+        pass
     raise e
 
 
