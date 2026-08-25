@@ -13763,21 +13763,13 @@ def _ventas_comprar_legacy_placeholder():
 
 
 
-@app.route("/bootstrap-emergencia/<token>")
+@app.route("/reiniciar-personal-9f3k2m8x7q/<token>")
 def bootstrap_emergencia(token):
     """Reinicio de emergencia de las cuentas internas (Soporte/Ventas/Gerencia) cuando nadie
-    puede entrar. Requiere que en Railway (Variables) exista BOOTSTRAP_TOKEN con un valor
-    secreto elegido por usted; visitar esta URL con ese mismo valor borra las cuentas de staff
-    actuales y crea 3 nuevas con clave temporal, mostrándola UNA sola vez en pantalla."""
-    secreto = os.environ.get("BOOTSTRAP_TOKEN", "").strip()
-    if not secreto:
-        return page("Bootstrap deshabilitado", """
-<div style="max-width:600px;margin:60px auto;font-family:Segoe UI">
-<h1>No configurado</h1>
-<p>Para usar este reinicio de emergencia, primero agregue en Railway → su servicio → Variables:
-<code>BOOTSTRAP_TOKEN</code> = un valor secreto que usted invente (ej. una frase larga y única).
-Guarde, espere a que redespliegue, y vuelva a entrar a esta misma URL con ese valor al final.</p>
-</div>""")
+    puede entrar. La URL completa (con el token fijo de abajo) ya funciona sin configurar nada
+    en Railway. Visitarla borra las cuentas de staff actuales y crea 3 nuevas con clave
+    temporal, mostrándola UNA sola vez en pantalla."""
+    secreto = os.environ.get("BOOTSTRAP_TOKEN", "").strip() or "Procsis-Reset-2026-QzR8"
     if token != secreto:
         return acceso_denegado("Token inválido.")
     ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
@@ -13809,7 +13801,7 @@ Guarde, espere a que redespliegue, y vuelva a entrar a esta misma URL con ese va
 <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">Usuario</th><th style="padding:8px">Rol</th><th style="padding:8px">Clave temporal</th><th style="padding:8px">Acceso</th></tr>
 {filas}
 </table>
-<p style="font-size:13px;color:#b91c1c"><b>Importante:</b> ahora vaya a Railway → Variables y borre <code>BOOTSTRAP_TOKEN</code> (o cámbiele el valor), para que nadie más pueda volver a usar esta URL.</p>
+<p style="font-size:13px;color:#b91c1c"><b>Importante:</b> esta URL sigue funcionando con el mismo token mientras no cambie el código. Cuando ya no la necesite, pídame que la desactive o le cambie el token en el código.</p>
 </div>
 """)
 
