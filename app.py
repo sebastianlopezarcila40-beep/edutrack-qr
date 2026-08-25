@@ -5063,7 +5063,7 @@ def puede_usuarios(): return rol_actual() in ["Soporte"]
 def puede_gestionar_docentes(): return rol_actual() in ["Secretaría", "Coordinación", "Rectoría", "Administrador", "Soporte"]
 def puede_simat(): return rol_actual() in ["Secretaría", "Administrador", "Soporte"]
 def puede_alertas(): return rol_actual() in ["Rectoría", "Coordinación", "Administrador", "Soporte"]
-def puede_auditoria(): return rol_actual() in ["Soporte"]  # solo Soporte + código
+def puede_auditoria(): return rol_actual() in ["Soporte", "Gerente", "Administrador", "Superadmin"]  # Soporte ve solo lo suyo (ver auditoria())
 
 def periodos_del_colegio(institucion_id=None):
     """Lista de periodos según config del colegio (3 o 4)."""
@@ -6416,21 +6416,36 @@ def validar_pin():
 def cambiar_password():
     if not requiere_login(): return redirect("/login")
     mensaje = ""
+    rol = rol_actual()
+    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin")
     if request.method == "POST":
         nueva = request.form.get("password", "").strip()
         confirmar = request.form.get("confirmar", "").strip()
+        nombre_completo = (request.form.get("nombre_completo") or "").strip()[:160]
         if len(nueva) < 8:
             mensaje = "La contraseña debe tener mínimo 8 caracteres."
         elif nueva != confirmar:
             mensaje = "Las contraseñas no coinciden."
+        elif es_staff and not nombre_completo:
+            mensaje = "Escriba su nombre para mostrar."
         else:
             u = Usuario.query.filter_by(usuario=session["usuario"]).first()
             u.password = crear_hash(nueva); u.password_temporal = False
+            if es_staff:
+                u.nombre_completo = nombre_completo
             db.session.commit(); session["password_temporal"] = False
-            registrar_auditoria("Cambio de contraseña", "Usuario cambió su contraseña temporal")
+            registrar_auditoria("Cambio de contraseña", "Usuario cambió su contraseña temporal" + (f" · nombre: {nombre_completo}" if es_staff else ""))
+            if es_staff:
+                destino = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Gerente": "/gerencia/hq",
+                           "Administrador": "/gerencia/hq", "Superadmin": "/gerencia/hq"}.get(rol, "/dashboard")
+                return redirect(destino)
             return redirect("/dashboard")
+    campo_nombre = (
+        '<input name="nombre_completo" placeholder="Su nombre completo (para mostrar)" required>'
+        if es_staff else ""
+    )
     return page("Cambiar contraseña", f"""
-<div class="center"><section class="card login-card"><h1>Cambiar contraseña</h1><p>Ingresó con una clave temporal. Defina una nueva contraseña de su preferencia (mín. 8 caracteres) antes de continuar.</p>{'<p class="error">'+mensaje+'</p>' if mensaje else ''}<form method="POST"><input name="password" type="password" placeholder="Nueva contraseña" required><input name="confirmar" type="password" placeholder="Confirmar contraseña" required><button>Guardar contraseña</button></form><a href="/logout">Salir</a></section></div>
+<div class="center"><section class="card login-card"><h1>Cambiar contraseña</h1><p>Ingresó con una clave temporal. Defina una nueva contraseña de su preferencia (mín. 8 caracteres){' y su nombre' if es_staff else ''} antes de continuar.</p>{'<p class="error">'+mensaje+'</p>' if mensaje else ''}<form method="POST">{campo_nombre}<input name="password" type="password" placeholder="Nueva contraseña" required><input name="confirmar" type="password" placeholder="Confirmar contraseña" required><button>Guardar contraseña</button></form><a href="/logout">Salir</a></section></div>
 """)
 
 
@@ -11150,6 +11165,10 @@ def auditoria():
             mensaje = "Código de seguridad incorrecto."
     q = request.args.get("q") or ""
     eventos_q = Auditoria.query.order_by(Auditoria.id.desc())
+    # Un asesor de Soporte/Ventas no debe ver qué hizo OTRO asesor — cada quien ve solo lo suyo.
+    # Gerencia/Administrador/Superadmin sí ven todo, para poder supervisar.
+    if rol_actual() == "Soporte":
+        eventos_q = eventos_q.filter(Auditoria.usuario == session.get("usuario"))
     if q:
         like = f"%{q}%"
         eventos_q = eventos_q.filter(
@@ -13742,6 +13761,57 @@ def _ventas_comprar_legacy_placeholder():
 """
     return page("Comprar plan", body)
 
+
+
+@app.route("/bootstrap-emergencia/<token>")
+def bootstrap_emergencia(token):
+    """Reinicio de emergencia de las cuentas internas (Soporte/Ventas/Gerencia) cuando nadie
+    puede entrar. Requiere que en Railway (Variables) exista BOOTSTRAP_TOKEN con un valor
+    secreto elegido por usted; visitar esta URL con ese mismo valor borra las cuentas de staff
+    actuales y crea 3 nuevas con clave temporal, mostrándola UNA sola vez en pantalla."""
+    secreto = os.environ.get("BOOTSTRAP_TOKEN", "").strip()
+    if not secreto:
+        return page("Bootstrap deshabilitado", """
+<div style="max-width:600px;margin:60px auto;font-family:Segoe UI">
+<h1>No configurado</h1>
+<p>Para usar este reinicio de emergencia, primero agregue en Railway → su servicio → Variables:
+<code>BOOTSTRAP_TOKEN</code> = un valor secreto que usted invente (ej. una frase larga y única).
+Guarde, espere a que redespliegue, y vuelva a entrar a esta misma URL con ese valor al final.</p>
+</div>""")
+    if token != secreto:
+        return acceso_denegado("Token inválido.")
+    ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
+    borrados = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).delete(synchronize_session=False)
+    import secrets as _secrets
+    nuevas = [
+        ("soporte", "Soporte"),
+        ("ventas", "Comercial"),
+        ("gerencia", "Gerente"),
+    ]
+    creadas = []
+    for usuario, rol in nuevas:
+        clave = _secrets.token_urlsafe(9)
+        u = Usuario(usuario=usuario, rol=rol, password=crear_hash(clave), password_temporal=True, activo=True)
+        db.session.add(u)
+        creadas.append((usuario, rol, clave))
+    db.session.commit()
+    registrar_auditoria("BOOTSTRAP DE EMERGENCIA", f"{borrados} cuenta(s) de staff eliminadas, {len(creadas)} nueva(s) creadas")
+    filas = "".join(
+        f"<tr><td><b>{u}</b></td><td>{r}</td><td><code style='font-size:15px'>{c}</code></td>"
+        f"<td><a href='/{'soporte' if r=='Soporte' else ('ventas' if r=='Comercial' else 'gerencia')}-login'>Ir a iniciar sesión</a></td></tr>"
+        for u, r, c in creadas
+    )
+    return page("Cuentas reiniciadas", f"""
+<div style="max-width:720px;margin:40px auto;font-family:Segoe UI;padding:24px;background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
+<h1 style="color:#059669">✓ Cuentas de staff reiniciadas</h1>
+<p><b>Anote estas contraseñas ahora — no se volverán a mostrar.</b> Al entrar, el sistema le va a pedir cambiar la clave y poner su nombre.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0">
+<tr style="background:#0B2D57;color:#fff"><th style="padding:8px">Usuario</th><th style="padding:8px">Rol</th><th style="padding:8px">Clave temporal</th><th style="padding:8px">Acceso</th></tr>
+{filas}
+</table>
+<p style="font-size:13px;color:#b91c1c"><b>Importante:</b> ahora vaya a Railway → Variables y borre <code>BOOTSTRAP_TOKEN</code> (o cámbiele el valor), para que nadie más pueda volver a usar esta URL.</p>
+</div>
+""")
 
 
 @app.route("/backoffice")
