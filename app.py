@@ -686,6 +686,7 @@ class Usuario(db.Model):
     password = db.Column(db.Text, nullable=False)
     rol = db.Column(db.String(60), nullable=False)
     correo = db.Column(db.String(160), default="")
+    nombre_completo = db.Column(db.String(160), default="")  # nombre a mostrar, en vez del usuario de login
     grupo_docente = db.Column(db.String(30), default="")
     grados_clase = db.Column(db.String(200), default="")
     password_temporal = db.Column(db.Boolean, default=False)
@@ -2315,6 +2316,7 @@ def migrar_columnas():
         ("citaciones", "archivo_pdf", "ALTER TABLE citaciones ADD COLUMN archivo_pdf VARCHAR(255) DEFAULT ''"),
         ("citaciones", "archivo_docx", "ALTER TABLE citaciones ADD COLUMN archivo_docx VARCHAR(255) DEFAULT ''"),
         ("usuarios", "correo", "ALTER TABLE usuarios ADD COLUMN correo VARCHAR(160) DEFAULT ''"),
+        ("usuarios", "nombre_completo", "ALTER TABLE usuarios ADD COLUMN nombre_completo VARCHAR(160) DEFAULT ''"),
         ("usuarios", "grupo_docente", "ALTER TABLE usuarios ADD COLUMN grupo_docente VARCHAR(30) DEFAULT ''"),
         ("usuarios", "grados_clase", "ALTER TABLE usuarios ADD COLUMN grados_clase VARCHAR(200) DEFAULT ''"),
         ("usuarios", "password_temporal", "ALTER TABLE usuarios ADD COLUMN password_temporal BOOLEAN DEFAULT 0"),
@@ -2562,6 +2564,24 @@ def migrar_columnas():
                 except Exception as err:
                     print("MIGRACION SQL OMITIDA:", err, "::", str(sql)[:120])
                     db.session.rollback()
+            # comandos_postgres, mantenida a mano aparte de comandos_sqlite, llevaba años quedando
+            # incompleta (columnas nuevas se agregaban solo a comandos_sqlite y se olvidaban acá).
+            # Para que nunca más pase, replicamos TODAS las columnas de comandos_sqlite también
+            # contra PostgreSQL, adaptando la sintaxis (IF NOT EXISTS, BOOLEAN 0/1 → FALSE/TRUE).
+            for tabla, columna, comando in comandos_sqlite:
+                sql2 = comando
+                if "BOOLEAN DEFAULT 0" in sql2:
+                    sql2 = sql2.replace("BOOLEAN DEFAULT 0", "BOOLEAN DEFAULT FALSE")
+                if "BOOLEAN DEFAULT 1" in sql2:
+                    sql2 = sql2.replace("BOOLEAN DEFAULT 1", "BOOLEAN DEFAULT TRUE")
+                if sql2.strip().upper().startswith("ALTER TABLE") and "ADD COLUMN" in sql2.upper() and "IF NOT EXISTS" not in sql2.upper():
+                    sql2 = sql2.replace("ADD COLUMN", "ADD COLUMN IF NOT EXISTS", 1)
+                try:
+                    db.session.execute(text(sql2))
+                    db.session.commit()
+                except Exception as err:
+                    print("MIGRACION SQLITE→PG OMITIDA:", err, "::", str(sql2)[:120])
+                    db.session.rollback()
         else:
             for tabla, columna, comando in comandos_sqlite:
                 try:
@@ -2748,13 +2768,19 @@ def _normalizar_estado_factura(e):
 
 
 
+_migracion_bd_lista = False  # candado: ejecutar migrar_columnas() una sola vez por proceso, no en cada request
+
+
 def inicializar_bd(): 
+    global _migracion_bd_lista
     db.create_all()
     # Migrar columnas ANTES de cualquier query ORM (purga demo, etc.)
-    try:
-        migrar_columnas()
-    except Exception as _mc:
-        print("migrar_columnas:", _mc)
+    if not _migracion_bd_lista:
+        try:
+            migrar_columnas()
+            _migracion_bd_lista = True
+        except Exception as _mc:
+            print("migrar_columnas:", _mc)
     # Garantizar columnas nuevas (periodos y otras) — Postgres + SQLite
     try:
         with db.engine.begin() as conn:
@@ -2766,6 +2792,7 @@ def inicializar_bd():
                 ("instituciones", "fecha_suspension", "VARCHAR(30) DEFAULT ''"),
                 ("configuracion", "horario_grados", "TEXT DEFAULT ''"),
                 ("usuarios", "activo", "BOOLEAN DEFAULT TRUE"),
+                ("usuarios", "nombre_completo", "VARCHAR(160) DEFAULT ''"),
             ]
             for table, col, typedef in patches:
                 try:
@@ -8299,7 +8326,11 @@ def registrar_estudiante():
     mensaje = ""
     if request.method == "POST":
         codigo = request.form.get("codigo", "").strip()
-        if codigo:
+        nombre_chk = request.form.get("nombre", "").strip()
+        apellido_chk = request.form.get("apellido", "").strip()
+        if codigo and not (nombre_chk and apellido_chk):
+            mensaje = "Nombre y apellido son obligatorios, no se guardó el registro."
+        elif codigo:
             iid = institucion_id_actual()
             # codigo es UNIQUE global: buscar siempre por código para no intentar INSERT duplicado
             e = Estudiante.query.filter_by(codigo=codigo).first()
@@ -12533,12 +12564,93 @@ def logout():
 # ============================================================
 
 
+def _usuario_actual_obj():
+    """Objeto Usuario de la sesión actual (staff interno: soporte/ventas/gerencia), o None."""
+    uid = session.get("uid")
+    if not uid:
+        return None
+    try:
+        return Usuario.query.get(int(uid))
+    except Exception:
+        return None
+
+
+def nombre_mostrar_actual():
+    """Nombre a mostrar del usuario logueado: nombre_completo si existe, si no el usuario de login."""
+    u = _usuario_actual_obj()
+    if u and (u.nombre_completo or "").strip():
+        return u.nombre_completo.strip()
+    return session.get("usuario") or ""
+
+
+@app.route("/mi-perfil", methods=["GET", "POST"])
+def mi_perfil():
+    """Cambiar el nombre para mostrar (y opcionalmente el usuario de login) de cuentas internas
+    de Soporte, Ventas y Gerencia — para que documentos y auditoría muestren su nombre real."""
+    if not requiere_login() or rol_actual() not in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"):
+        return redirect("/login")
+    u = _usuario_actual_obj()
+    if not u:
+        return acceso_denegado()
+    mensaje = ""
+    error = ""
+    if request.method == "POST":
+        nombre_completo = (request.form.get("nombre_completo") or "").strip()[:160]
+        nuevo_usuario = (request.form.get("usuario") or "").strip()[:80]
+        u.nombre_completo = nombre_completo
+        if nuevo_usuario and nuevo_usuario != u.usuario:
+            choque = Usuario.query.filter(Usuario.usuario == nuevo_usuario, Usuario.id != u.id).first()
+            if choque:
+                error = f'El usuario de acceso "{nuevo_usuario}" ya lo tiene otra cuenta.'
+            else:
+                anterior = u.usuario
+                u.usuario = nuevo_usuario
+                session["usuario"] = nuevo_usuario
+                registrar_auditoria("Cambio de usuario de acceso", f"{anterior} → {nuevo_usuario}")
+        if not error:
+            db.session.commit()
+            registrar_auditoria("Perfil actualizado", f"{u.usuario}: nombre a mostrar = {nombre_completo or '(vacío)'}")
+            mensaje = "Datos guardados."
+    volver = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Gerente": "/gerencia/hq"}.get(rol_actual(), "/")
+    content = f"""
+<header class="role-hero"><div>
+  <h1>👤 Mi perfil</h1>
+  <p>Su nombre para mostrar aparece en boletines, contratos y auditoría en vez de su usuario de acceso.</p>
+</div>
+<a class="btn" href="{volver}">Volver</a></header>
+{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+{"<div class='msg err'>"+error+"</div>" if error else ""}
+<section class="role-panel">
+  <form method="POST">
+    <label><b>Nombre para mostrar</b> (ej. "Laura Gómez")</label>
+    <input name="nombre_completo" value="{_esc(u.nombre_completo)}" placeholder="Su nombre completo">
+    <label style="margin-top:10px;display:block"><b>Usuario de acceso</b> (con el que inicia sesión)</label>
+    <input name="usuario" value="{_esc(u.usuario)}">
+    <p class="mini-text">Rol: <b>{_esc(u.rol)}</b> · Cambiar el usuario de acceso no borra su historial, solo cambia con qué texto entra al login.</p>
+    <button type="submit" style="margin-top:12px">Guardar</button>
+  </form>
+</section>
+"""
+    return page("Mi perfil", shell(content))
+
+
 def _guard_soporte():
     """True si OK; Response de redirect si no."""
     if not requiere_login():
         return redirect("/soporte-login")
-    if rol_actual() not in ("Soporte", "Administrador", "Superadmin", "Gerente"):
+    rol = rol_actual()
+    if rol not in ("Soporte", "Administrador", "Superadmin", "Gerente"):
         return redirect("/soporte-login")
+    # Soporte (rol exacto, no Admin/Superadmin/Gerente) solo puede resetear claves — el resto
+    # del centro de operaciones queda reservado a roles de mayor confianza.
+    if rol == "Soporte":
+        permitido = (
+            request.path.startswith("/soporte/reset-clave")
+            or request.path.startswith("/soporte_admin")
+            or request.path.startswith("/mi-perfil")
+        )
+        if not permitido:
+            return acceso_denegado("Su cuenta de Soporte solo tiene permiso para restablecer contraseñas.")
     return None
 
 def _guard_gerencia():
@@ -14186,6 +14298,66 @@ def gerencia_reinicio_datos():
 </section>
 """
     return page("Reinicio de datos", content)
+
+
+@app.route("/gerencia/roles", methods=["GET", "POST"])
+def gerencia_roles():
+    """Gestión de roles del personal interno: cambiar el rol (Soporte/Comercial/Gerente/etc.)
+    de cualquier cuenta de staff — no de usuarios de colegios."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
+    mensaje = ""
+    error = ""
+    if request.method == "POST":
+        try:
+            uid = int(request.form.get("user_id") or 0)
+        except Exception:
+            uid = 0
+        u = Usuario.query.get(uid)
+        nuevo_rol = (request.form.get("rol") or "").strip()
+        if not u or u.rol not in ROLES_STAFF:
+            error = "Usuario no encontrado o no es una cuenta de staff."
+        elif nuevo_rol not in ROLES_STAFF:
+            error = "Rol no válido."
+        elif u.usuario == session.get("usuario") and nuevo_rol != u.rol:
+            error = "No puede cambiarse el rol a usted mismo desde aquí — pídaselo a otro Gerente/Superadmin."
+        else:
+            anterior = u.rol
+            u.rol = nuevo_rol
+            db.session.commit()
+            registrar_auditoria("Cambio de rol", f"{u.usuario}: {anterior} → {nuevo_rol} (por {session.get('usuario')})")
+            mensaje = f"{u.usuario} ahora tiene el rol {nuevo_rol}."
+    staff = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).order_by(Usuario.rol.asc(), Usuario.usuario.asc()).all()
+    filas = "".join(
+        f"""<tr><td><b>{_esc(u.usuario)}</b>{' · '+_esc(u.nombre_completo) if u.nombre_completo else ''}</td><td>{_esc(u.rol)}</td>
+        <td><form method="POST" style="display:flex;gap:6px;align-items:center" onsubmit="return confirm('¿Cambiar el rol de {u.usuario}?')">
+          <input type="hidden" name="user_id" value="{u.id}">
+          <select name="rol">{"".join(f'<option value="{r}" {"selected" if r==u.rol else ""}>{r}</option>' for r in ROLES_STAFF)}</select>
+          <button type="submit" class="small-action">Cambiar</button>
+        </form></td></tr>"""
+        for u in staff
+    ) or '<tr><td colspan="3">Sin cuentas de staff</td></tr>'
+    content = f"""
+<header class="role-hero"><div>
+  <h1>🔐 Gestión de roles</h1>
+  <p>Cambie el rol de las cuentas internas (Soporte, Ventas, Gerencia). No afecta usuarios de colegios.</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver</a></header>
+{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+{"<div class='msg err'>"+error+"</div>" if error else ""}
+<section class="role-panel">
+  <div style="overflow-x:auto">
+    <table>
+      <tr><th>Usuario</th><th>Rol actual</th><th>Cambiar a</th></tr>
+      {filas}
+    </table>
+  </div>
+  <p class="mini-text" style="margin-top:10px">Recuerde: el rol <b>Soporte</b> ahora solo puede restablecer contraseñas — para dar acceso completo al centro de operaciones, use Administrador o Superadmin.</p>
+</section>
+"""
+    return page("Gestión de roles", shell(content))
 
 
 def _catalogo_documentos_corp():
@@ -16316,7 +16488,7 @@ def ventas_contrato_digital():
                     codigo=codigo_auto, nombre=colegio[:200], nit=nit[:40],
                     municipio=ciudad[:120], estado="ACTIVA", plan=(plan_nombre or "Basico")[:40],
                     fecha_creacion=fecha_hoy(),
-                    resolucion=(f"Asesor: {session.get('usuario') or ''} · Contrato digital")[:160],
+                    notas=(f"Alta por contrato digital · asesor: {nombre_mostrar_actual()}")[:250],
                 )
                 db.session.add(inst)
                 db.session.flush()
@@ -16706,7 +16878,7 @@ def soporte_periodos_colegio():
 @app.route("/soporte/reset-clave", methods=["GET", "POST"])
 def soporte_reset_clave():
     """Buscar por usuario/cédula y restablecer clave temporal (cédula o Colegio2026*)."""
-    if not requiere_login() or rol_actual() not in ("Soporte", "Administrador", "Gerencia"):
+    if not requiere_login() or rol_actual() not in ("Soporte", "Administrador", "Superadmin", "Gerente"):
         return redirect("/soporte-login")
     msg = err = ""
     resultados = []
@@ -16781,7 +16953,7 @@ def soporte_reset_clave():
 @app.route("/soporte/prorroga", methods=["GET", "POST"])
 def soporte_prorroga():
     """Prórroga extraordinaria de 24h para colegios suspendidos por mora."""
-    if not requiere_login() or rol_actual() not in ("Soporte", "Administrador", "Gerencia"):
+    if not requiere_login() or rol_actual() not in ("Soporte", "Administrador", "Superadmin", "Gerente"):
         return redirect("/soporte-login")
     msg = err = ""
     if request.method == "POST":
@@ -21442,12 +21614,15 @@ def _modulos_por_rol(rol):
         ("Historial de comisiones", "/ventas/comisiones", "#0f766e"),
         ("Propuesta comercial (PDF)", "/ventas/propuesta-pdf", "#b45309"),
         ("Generar contrato digital", "/ventas/contrato-digital", "#7c2d12"),
+        ("👤 Mi perfil", "/mi-perfil", "#334155"),
         ("Instituciones (consulta)", "/tenants", "#64748b"),
     ]
     gerencia = ventas + [
         ("EduTrack HQ", "/gerencia/hq", "#0B2D57"),
         ("Anuncios globales", "/gerencia/anuncios", "#0B2D57"),
         ("Marca global", "/soporte/marca", "#0B2D57"),
+        ("🔐 Gestión de roles", "/gerencia/roles", "#7c2d12"),
+        ("👤 Mi perfil", "/mi-perfil", "#334155"),
         ("Editar planes", "/gerencia/planes", "#0B2D57"),
         ("Feature flags", "/feature_flags", "#7c2d12"),
         ("Equipo Procsis", "/soporte/equipo", "#7c2d12"),
@@ -21497,6 +21672,30 @@ def soporte_admin():
         return _g
     session.pop("institucion_id", None)
     p = plataforma()
+    rol_actual_ = rol_actual()
+    if rol_actual_ == "Soporte":
+        content = f"""
+<section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:22px;padding:22px 24px;margin-bottom:14px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
+  <div style="display:flex;gap:16px;align-items:center">
+    <img src="{logo_plataforma()}" style="width:64px;height:64px;object-fit:contain;background:#fff;border-radius:16px;padding:6px" alt="Procsis">
+    <div>
+      <div style="font-size:12px;opacity:.85;letter-spacing:1px;text-transform:uppercase">Centro de operaciones · soporte técnico</div>
+      <h1 style="margin:4px 0;font-size:24px">{p.empresa or 'Procsis'}</h1>
+      <p style="margin:0;opacity:.9">Operador: <b>{_esc(getattr(_usuario_actual_obj(), 'nombre_completo', None) or session.get('usuario'))}</b></p>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn" href="/mi-perfil" style="background:#334155;color:#fff">👤 Mi perfil</a>
+    <a class="btn btn-red" href="/logout">Salir</a>
+  </div>
+</section>
+<section class="role-panel">
+  <h2>🔑 Restablecer contraseñas</h2>
+  <p class="mini-text">Su cuenta solo tiene permiso para restablecer contraseñas de usuarios de colegios. Cada reset queda registrado con la nota que escriba.</p>
+  <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff;display:inline-block;margin-top:8px">Ir a Resetear contraseñas</a>
+</section>
+"""
+        return page("Soporte", shell_soporte(content))
     total = Institucion.query.count()
     activas = Institucion.query.filter_by(estado="ACTIVA").count()
     suspendidas = Institucion.query.filter_by(estado="SUSPENDIDA").count()
