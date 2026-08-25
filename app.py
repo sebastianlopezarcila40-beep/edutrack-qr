@@ -2764,6 +2764,8 @@ def inicializar_bd():
                 ("configuracion", "periodos_lista", "VARCHAR(120) DEFAULT 'Periodo 1|Periodo 2|Periodo 3'"),
                 ("instituciones", "motivo_bloqueo", "VARCHAR(255) DEFAULT ''"),
                 ("instituciones", "fecha_suspension", "VARCHAR(30) DEFAULT ''"),
+                ("configuracion", "horario_grados", "TEXT DEFAULT ''"),
+                ("usuarios", "activo", "BOOLEAN DEFAULT TRUE"),
             ]
             for table, col, typedef in patches:
                 try:
