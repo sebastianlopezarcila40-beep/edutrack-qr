@@ -2546,11 +2546,21 @@ def migrar_columnas():
     try:
         if "postgresql" in DATABASE_URL:
             for c in comandos_postgres:
+                # Algunas entradas quedaron con formato (tabla, columna, comando) igual que
+                # comandos_sqlite en vez de solo el texto SQL. Normalizamos para que TODAS
+                # se ejecuten de verdad contra PostgreSQL (antes fallaban en silencio con
+                # "text() expects string", dejando columnas reales sin crear en producción).
+                sql = c[-1] if isinstance(c, (tuple, list)) else c
+                # PostgreSQL no acepta 0/1 como DEFAULT de una columna BOOLEAN (sí es válido en SQLite).
+                if "BOOLEAN DEFAULT 0" in sql:
+                    sql = sql.replace("BOOLEAN DEFAULT 0", "BOOLEAN DEFAULT FALSE")
+                if "BOOLEAN DEFAULT 1" in sql:
+                    sql = sql.replace("BOOLEAN DEFAULT 1", "BOOLEAN DEFAULT TRUE")
                 try:
-                    db.session.execute(text(c))
+                    db.session.execute(text(sql))
                     db.session.commit()
                 except Exception as err:
-                    print("MIGRACION SQL OMITIDA:", err, "::", str(c)[:120])
+                    print("MIGRACION SQL OMITIDA:", err, "::", str(sql)[:120])
                     db.session.rollback()
         else:
             for tabla, columna, comando in comandos_sqlite:
@@ -2981,8 +2991,15 @@ def before():
     try:
         inicializar_bd()
     except Exception as _init_err:
-        # No tumbar el request (login) por fallos de migración/BD
+        # No tumbar el request (login) por fallos de migración/BD — pero SÍ hay que
+        # limpiar la transacción abortada, o cualquier query normal de esta misma
+        # petición (ej. el propio /login) también fallará con "current transaction
+        # is aborted, commands ignored until end of transaction block".
         print("inicializar_bd error:", _init_err)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     if requiere_login():
         ultimo = session.get("ultimo_movimiento")
         ahora_ts = ahora().timestamp()
