@@ -13822,9 +13822,10 @@ def ventas_login():
     """Login exclusivo asesores comerciales (rol Comercial o Soporte/Gerente)."""
     error = ""
     if request.method == "POST":
-        if not _recaptcha_ok():
-            error = "Complete la verificacion de seguridad."
-        else:
+        ok_rl, wait_m = _rate_limit_login()
+        if not ok_rl:
+            return _rate_limit_response(wait_m * 60)
+        if True:
             user = login_usuario(request.form.get("usuario"), request.form.get("password"))
             rol = (user.rol or "").strip() if user else ""
             if user and rol in ("Comercial", "Gerente", "Soporte", "Superadmin", "Administrador"):
@@ -13852,8 +13853,10 @@ def ventas_login():
                     except Exception:
                         pass
                     registrar_auditoria("Login ventas", user.usuario)
+                    _rate_limit_ok()
                     return redirect("/ventas/panel")
             else:
+                _rate_limit_fail()
                 error = "Solo personal de Ventas / Gerencia / Soporte."
     _logo_proc = logo_plataforma()
     body = f"""
@@ -13886,7 +13889,6 @@ def ventas_login():
     <input name="usuario" required autocomplete="username">
     <label>Contraseña</label>
     <input name="password" type="password" required autocomplete="current-password">
-    {_captcha_challenge_html()}
     <button type="submit">Entrar a ventas</button>
   </form>
   <p style="margin-top:12px;font-size:12px"><a href="/backoffice">Backoffice</a> · <a href="/ventas">Ver planes (público)</a></p>
@@ -13903,9 +13905,7 @@ def gerencia_login():
         ok_rl, wait_m = _rate_limit_login()
         if not ok_rl:
             return _rate_limit_response(wait_m * 60)
-        if not _recaptcha_ok():
-            error = "Complete la verificacion de seguridad."
-        else:
+        if True:
             user = login_usuario(request.form.get("usuario"), request.form.get("password"))
             rol = (user.rol or "").strip() if user else ""
             if user and rol in ("Gerente", "Superadmin", "Soporte", "Administrador"):
@@ -13959,7 +13959,6 @@ def gerencia_login():
     <input name="usuario" required>
     <label>Contraseña</label>
     <input name="password" type="password" required>
-    {_captcha_challenge_html()}
     <button type="submit">Entrar a gerencia</button>
   </form>
   <p style="margin-top:12px;font-size:12px"><a href="/backoffice">Backoffice</a></p>
