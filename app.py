@@ -960,6 +960,30 @@ class Plataforma(db.Model):
     corp_portafolio_texto = db.Column(db.Text, default="Productos y servicios para la gestión académica y administrativa de instituciones educativas.")
 
 
+class ProductoProcsis(db.Model):
+    """Productos/servicios que Procsis muestra en su página pública (/procsis)."""
+    __tablename__ = "productos_procsis"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(160), nullable=False, default="")
+    descripcion = db.Column(db.Text, default="")
+    estado = db.Column(db.String(30), default="Disponible")  # Disponible | En desarrollo | Próximamente
+    imagen = db.Column(db.String(255), default="")
+    orden = db.Column(db.Integer, default=0)
+    activo = db.Column(db.Boolean, default=True)
+    creado_en = db.Column(db.String(20), default="")
+
+
+class NoticiaProcsis(db.Model):
+    """Noticias/novedades de la empresa mostradas en /procsis."""
+    __tablename__ = "noticias_procsis"
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(200), nullable=False, default="")
+    cuerpo = db.Column(db.Text, default="")
+    imagen = db.Column(db.String(255), default="")
+    fecha = db.Column(db.String(20), default="")
+    activo = db.Column(db.Boolean, default=True)
+
+
 class SolicitudCancelacion(db.Model):
     """Cancelación de servicio: portal colegio, PQR, soporte o gerencia. Cuenta regresiva + corte de facturación."""
     __tablename__ = "solicitudes_cancelacion"
@@ -7431,6 +7455,7 @@ def secretaria_documentos():
   <a class="role-card" href="/secretaria/consolidado-siee"><h3>📊 Consolidado SIEE</h3><p>Libro calificador final: promedio y desempeño nacional de todo el colegio.</p></a>
   <a class="role-card" href="/secretaria/piar"><h3>📈 Reporte PIAR</h3><p>Estudiantes con Plan Individual de Ajustes Razonables (Decreto 1421 de 2017).</p></a>
   <a class="role-card" href="/secretaria/editar-estudiante"><h3>✏️ Editar datos de estudiante</h3><p>Corrige nombre, código, documento, grado y demás datos de un alumno ya matriculado.</p></a>
+  <a class="role-card" href="/secretaria/planilla-grupo"><h3>🗒️ Planilla de asistencia / notas</h3><p>Hoja física por grupo, con el listado real de estudiantes, para cada grado que dicta un docente.</p></a>
 </div>
 """
     return page("Documentos · Secretaría", shell(content))
@@ -7592,6 +7617,160 @@ def secretaria_editar_estudiante(id):
 </section>
 """
     return page("Editar estudiante", shell(content))
+
+
+# ── Planilla de asistencia / notas por grupo (Secretaría y Coordinación) ─────
+
+def _grupos_de_docente(usuario_id, iid):
+    """[(grado, grupo)] únicos donde el docente tiene asignación o dirige grupo, con estudiantes reales."""
+    asigns = AsignacionDocente.query.filter_by(usuario_id=usuario_id, activa=True).all()
+    grados = sorted({(a.grado or "").strip() for a in asigns if (a.grado or "").strip()})
+    if not grados:
+        return []
+    q = Estudiante.query.filter(Estudiante.grado.in_(grados))
+    if iid is not None:
+        q = q.filter(Estudiante.institucion_id == iid)
+    combos = sorted({(e.grado or "", (e.grupo or "").strip()) for e in q.all()})
+    return combos
+
+
+@app.route("/secretaria/planilla-grupo", methods=["GET", "POST"])
+def secretaria_planilla_grupo():
+    g = _guard_secretaria_docs()
+    if g:
+        return g
+    iid = institucion_id_actual()
+    docentes = Usuario.query.filter_by(rol="Docente")
+    if iid is not None:
+        docentes = docentes.filter(Usuario.institucion_id == iid)
+    docentes = docentes.order_by(Usuario.usuario.asc()).all()
+    opciones = "".join(
+        f'<option value="{u.id}">{_esc(u.nombre_completo or u.usuario)}</option>' for u in docentes
+    )
+    content = f"""
+<header class="role-hero"><div>
+  <h1>🗒️ Planilla de asistencia / notas por grupo</h1>
+  <p>Genera la hoja física (para imprimir) con el listado real de estudiantes de cada grupo que dicta un docente.</p>
+</div>
+<a class="btn" href="/secretaria/documentos">Volver</a></header>
+<section class="role-panel">
+  <form method="GET" action="/secretaria/planilla-grupo/generar" target="_blank">
+    <label><b>Docente</b></label>
+    <select name="usuario_id" required>{opciones}</select>
+    <label style="margin-top:10px;display:block"><b>Tipo de planilla</b></label>
+    <select name="tipo">
+      <option value="asistencia">Asistencia (casillas por día)</option>
+      <option value="notas">Notas (columnas en blanco por periodo)</option>
+    </select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+      <div><label><b>Mes</b></label><input name="mes" placeholder="Ej. Enero" required></div>
+      <div><label><b>Año escolar</b></label><input name="anio" value="{ahora().year if hasattr(ahora(),'year') else ''}" required></div>
+    </div>
+    <button type="submit" style="margin-top:14px">Generar planillas (PDF, una hoja por grupo)</button>
+  </form>
+  <p class="mini-text" style="margin-top:8px">Si el docente dicta en varios grados (ej. 6°, 7°, 8°, 9°), se genera automáticamente una hoja distinta por cada grupo real que tenga estudiantes.</p>
+</section>
+"""
+    return page("Planilla por grupo", shell(content))
+
+
+@app.route("/secretaria/planilla-grupo/generar")
+def secretaria_planilla_grupo_generar():
+    g = _guard_secretaria_docs()
+    if g:
+        return g
+    ok_rl, espera = _rate_limit("planilla-grupo", max_veces=15, ventana_seg=60)
+    if not ok_rl:
+        return _rate_limit_response(espera)
+    usuario_id = request.args.get("usuario_id", type=int)
+    tipo = (request.args.get("tipo") or "asistencia").strip()
+    mes = (request.args.get("mes") or "").strip()[:40]
+    anio = (request.args.get("anio") or "").strip()[:10]
+    docente = Usuario.query.get(usuario_id) if usuario_id else None
+    if not docente or docente.rol != "Docente":
+        return page("Planilla", shell("<div class='msg err'>Docente no válido. <a href='/secretaria/planilla-grupo'>Volver</a></div>"))
+    iid = institucion_id_actual()
+    combos = _grupos_de_docente(docente.id, iid)
+    if not combos:
+        return page("Planilla", shell(f"<div class='msg err'>{_esc(docente.nombre_completo or docente.usuario)} no tiene grupos con estudiantes asignados. <a href='/secretaria/planilla-grupo'>Volver</a></div>"))
+    inst = Institucion.query.get(iid) if iid else None
+    nom_inst = (inst.nombre if inst else None) or INST_NOMBRE or "Institución educativa"
+    from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.pdfgen import canvas as _canvas
+    buf = BytesIO()
+    pdf = _canvas.Canvas(buf, pagesize=landscape(letter))
+    w, h = landscape(letter)
+    dias_mes = 31
+    for grado, grupo in combos:
+        q = Estudiante.query.filter(Estudiante.grado == grado)
+        if grupo:
+            q = q.filter(Estudiante.grupo == grupo)
+        else:
+            q = q.filter((Estudiante.grupo == "") | (Estudiante.grupo.is_(None)))
+        if iid is not None:
+            q = q.filter(Estudiante.institucion_id == iid)
+        estudiantes = q.order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc()).all()
+        # --- Encabezado ---
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.drawCentredString(w / 2, h - 30, str(nom_inst)[:90])
+        pdf.setFont("Helvetica-Bold", 11)
+        titulo = "PLANILLA DE ASISTENCIA" if tipo == "asistencia" else "PLANILLA DE NOTAS"
+        pdf.drawCentredString(w / 2, h - 46, titulo)
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(30, h - 66, f"Docente: {(docente.nombre_completo or docente.usuario)}")
+        pdf.drawString(260, h - 66, f"Grado: {grado}" + (f" - {grupo}" if grupo else ""))
+        pdf.drawString(460, h - 66, f"Año escolar: {anio}")
+        pdf.drawString(600, h - 66, f"Mes: {mes}" if tipo == "asistencia" else "")
+        y_tabla = h - 90
+        # --- Columnas ---
+        col_orden_w, col_nombre_w, col_codigo_w = 26, 190, 60
+        x0 = 30
+        x_orden = x0
+        x_nombre = x_orden + col_orden_w
+        x_codigo = x_nombre + col_nombre_w
+        x_grid = x_codigo + col_codigo_w
+        n_cols_grid = dias_mes if tipo == "asistencia" else 8
+        ancho_disp = (w - 30) - x_grid
+        col_w = ancho_disp / n_cols_grid
+        alto_fila = 14
+        alto_encabezado = 16
+        # Encabezado de tabla
+        pdf.setFont("Helvetica-Bold", 7)
+        pdf.rect(x_orden, y_tabla - alto_encabezado, col_orden_w, alto_encabezado)
+        pdf.drawCentredString(x_orden + col_orden_w / 2, y_tabla - alto_encabezado + 5, "N°")
+        pdf.rect(x_nombre, y_tabla - alto_encabezado, col_nombre_w, alto_encabezado)
+        pdf.drawCentredString(x_nombre + col_nombre_w / 2, y_tabla - alto_encabezado + 5, "APELLIDOS Y NOMBRE")
+        pdf.rect(x_codigo, y_tabla - alto_encabezado, col_codigo_w, alto_encabezado)
+        pdf.drawCentredString(x_codigo + col_codigo_w / 2, y_tabla - alto_encabezado + 5, "CÓDIGO")
+        for c in range(n_cols_grid):
+            cx = x_grid + c * col_w
+            pdf.rect(cx, y_tabla - alto_encabezado, col_w, alto_encabezado)
+            etiqueta = str(c + 1) if tipo == "asistencia" else f"P{c+1}" if c < 4 else ""
+            pdf.setFont("Helvetica-Bold", 6)
+            pdf.drawCentredString(cx + col_w / 2, y_tabla - alto_encabezado + 5, etiqueta)
+        y = y_tabla - alto_encabezado
+        pdf.setFont("Helvetica", 7)
+        max_filas = 32
+        for i in range(max_filas):
+            y -= alto_fila
+            if y < 40:
+                break
+            pdf.rect(x_orden, y, col_orden_w, alto_fila)
+            pdf.drawCentredString(x_orden + col_orden_w / 2, y + 4, str(i + 1))
+            pdf.rect(x_nombre, y, col_nombre_w, alto_fila)
+            pdf.rect(x_codigo, y, col_codigo_w, alto_fila)
+            if i < len(estudiantes):
+                e = estudiantes[i]
+                pdf.drawString(x_nombre + 3, y + 4, f"{(e.apellido or '')} {(e.nombre or '')}"[:48])
+                pdf.drawString(x_codigo + 3, y + 4, str(e.codigo or "")[:14])
+            for c in range(n_cols_grid):
+                cx = x_grid + c * col_w
+                pdf.rect(cx, y, col_w, alto_fila)
+        pdf.showPage()
+    pdf.save()
+    buf.seek(0)
+    registrar_auditoria("Planilla de grupo generada", f"{docente.usuario}: {len(combos)} grupo(s) · {tipo}")
+    return send_file(buf, as_attachment=True, download_name=f"planilla_{tipo}_{docente.usuario}.pdf", mimetype="application/pdf")
 
 
 @app.route("/secretaria/certificado", methods=["GET", "POST"])
@@ -14187,6 +14366,7 @@ def gerencia_hq():
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
+        <a class="own" href="/gerencia/procsis-web">🌐 Página web de Procsis</a>
         <a class="own" href="/gerencia/parametros">⚙️ Parámetros dinámicos</a>
         <a class="own" href="/gerencia/facturacion-auto-test">⏱ Facturación auto (5 min)</a>
         <a class="own" href="/gerencia/planes">Aprobar precios y planes</a>
@@ -19145,6 +19325,127 @@ def gerencia_admision_personal():
 </section>
 """
     return page("Admisión de personal", shell(content))
+
+
+@app.route("/gerencia/procsis-web", methods=["GET", "POST"])
+def gerencia_procsis_web():
+    """Administrar los productos y noticias que se muestran en la página pública /procsis."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    mensaje = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "crear_producto":
+            p = ProductoProcsis(
+                nombre=(request.form.get("nombre") or "").strip()[:160],
+                descripcion=(request.form.get("descripcion") or "").strip(),
+                estado=(request.form.get("estado") or "Disponible").strip()[:30],
+                orden=int(request.form.get("orden") or 0),
+                creado_en=fecha_hoy(),
+            )
+            archivo = request.files.get("imagen")
+            if archivo and archivo.filename:
+                up_dir = os.path.join(app.root_path, "static", "uploads", "procsis")
+                os.makedirs(up_dir, exist_ok=True)
+                fname = f"prod_{int(__import__('time').time())}_{archivo.filename}"[:120]
+                archivo.save(os.path.join(up_dir, fname))
+                p.imagen = f"/static/uploads/procsis/{fname}"
+            db.session.add(p)
+            db.session.commit()
+            registrar_auditoria("Producto Procsis creado", p.nombre)
+            mensaje = "Producto agregado."
+        elif accion == "eliminar_producto":
+            pid = request.form.get("id", type=int)
+            pr = ProductoProcsis.query.get(pid) if pid else None
+            if pr:
+                db.session.delete(pr)
+                db.session.commit()
+                mensaje = "Producto eliminado."
+        elif accion == "crear_noticia":
+            n = NoticiaProcsis(
+                titulo=(request.form.get("titulo") or "").strip()[:200],
+                cuerpo=(request.form.get("cuerpo") or "").strip(),
+                fecha=fecha_hoy(),
+            )
+            archivo = request.files.get("imagen")
+            if archivo and archivo.filename:
+                up_dir = os.path.join(app.root_path, "static", "uploads", "procsis")
+                os.makedirs(up_dir, exist_ok=True)
+                fname = f"news_{int(__import__('time').time())}_{archivo.filename}"[:120]
+                archivo.save(os.path.join(up_dir, fname))
+                n.imagen = f"/static/uploads/procsis/{fname}"
+            db.session.add(n)
+            db.session.commit()
+            registrar_auditoria("Noticia Procsis creada", n.titulo)
+            mensaje = "Noticia publicada."
+        elif accion == "eliminar_noticia":
+            nid = request.form.get("id", type=int)
+            no = NoticiaProcsis.query.get(nid) if nid else None
+            if no:
+                db.session.delete(no)
+                db.session.commit()
+                mensaje = "Noticia eliminada."
+    productos = ProductoProcsis.query.order_by(ProductoProcsis.orden.asc(), ProductoProcsis.id.desc()).all()
+    noticias = NoticiaProcsis.query.order_by(NoticiaProcsis.id.desc()).all()
+    filas_prod = "".join(
+        f"""<tr><td>{_esc(p.nombre)}</td><td>{_esc(p.estado)}</td><td>{p.orden}</td>
+        <td>{'✅' if p.activo else '⛔'}</td>
+        <td><form method="POST" onsubmit="return confirm('¿Eliminar {_esc(p.nombre)}?')">
+        <input type="hidden" name="accion" value="eliminar_producto"><input type="hidden" name="id" value="{p.id}">
+        <button type="submit" class="small-action">Eliminar</button></form></td></tr>"""
+        for p in productos
+    ) or '<tr><td colspan="5">Sin productos todavía</td></tr>'
+    filas_noti = "".join(
+        f"""<tr><td>{_esc(n.titulo)}</td><td>{_esc(n.fecha)}</td>
+        <td><form method="POST" onsubmit="return confirm('¿Eliminar esta noticia?')">
+        <input type="hidden" name="accion" value="eliminar_noticia"><input type="hidden" name="id" value="{n.id}">
+        <button type="submit" class="small-action">Eliminar</button></form></td></tr>"""
+        for n in noticias
+    ) or '<tr><td colspan="3">Sin noticias todavía</td></tr>'
+    content = f"""
+<header class="role-hero"><div>
+  <h1>🌐 Página web de Procsis</h1>
+  <p>Administre los productos y noticias que ve el público en <a href="/procsis" target="_blank">/procsis</a>.</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver</a></header>
+{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+<section class="role-panel">
+  <h2>Agregar producto / servicio</h2>
+  <form method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="accion" value="crear_producto">
+    <label><b>Nombre</b></label><input name="nombre" required>
+    <label><b>Descripción</b></label><textarea name="descripcion" rows="3"></textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+      <div><label><b>Estado</b></label>
+        <select name="estado"><option>Disponible</option><option>En desarrollo</option><option>Próximamente</option></select>
+      </div>
+      <div><label><b>Orden</b> (menor = primero)</label><input name="orden" type="number" value="0"></div>
+    </div>
+    <label style="margin-top:8px;display:block"><b>Imagen (opcional)</b></label>
+    <input type="file" name="imagen" accept="image/*">
+    <button type="submit" style="margin-top:10px">Agregar producto</button>
+  </form>
+  <div style="overflow-x:auto;margin-top:14px">
+    <table><tr><th>Nombre</th><th>Estado</th><th>Orden</th><th>Activo</th><th></th></tr>{filas_prod}</table>
+  </div>
+</section>
+<section class="role-panel" style="margin-top:12px">
+  <h2>Publicar noticia</h2>
+  <form method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="accion" value="crear_noticia">
+    <label><b>Título</b></label><input name="titulo" required>
+    <label><b>Contenido</b></label><textarea name="cuerpo" rows="4" required></textarea>
+    <label style="margin-top:8px;display:block"><b>Imagen (opcional)</b></label>
+    <input type="file" name="imagen" accept="image/*">
+    <button type="submit" style="margin-top:10px">Publicar</button>
+  </form>
+  <div style="overflow-x:auto;margin-top:14px">
+    <table><tr><th>Título</th><th>Fecha</th><th></th></tr>{filas_noti}</table>
+  </div>
+</section>
+"""
+    return page("Página web Procsis", shell(content))
 
 
 
@@ -33133,6 +33434,14 @@ def pagina_corporativa_procsis():
         cta_txt = "Solicite una demostración o hable con un asesor comercial."
         foot_txt = "Soluciones digitales para el sector educativo. Plataforma académica multi-institucional."
     try:
+        _productos_pub = ProductoProcsis.query.filter_by(activo=True).order_by(ProductoProcsis.orden.asc()).all()
+    except Exception:
+        _productos_pub = []
+    try:
+        _noticias_pub = NoticiaProcsis.query.filter_by(activo=True).order_by(NoticiaProcsis.id.desc()).limit(6).all()
+    except Exception:
+        _noticias_pub = []
+    try:
         anio = ahora().year
     except Exception:
         anio = 2026
@@ -33307,6 +33616,32 @@ def pagina_corporativa_procsis():
         {link_planes_cta}
         <a href="{wa_link}" target="_blank" rel="noopener">WhatsApp comercial</a>
       </div>
+    </div>
+  </section>
+  <section class="pc-sec" id="productos-procsis">
+    <h2>Nuestros productos</h2>
+    <p class="sub">Lo que estamos construyendo y ofreciendo para instituciones educativas.</p>
+    <div class="pc-grid3">
+      {"".join(
+        f'''<div class="pc-card">
+          {f'<img src="{_esc(p.imagen)}" style="width:100%;border-radius:10px;margin-bottom:10px;max-height:160px;object-fit:cover">' if p.imagen else ''}
+          <span style="display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:{'#dcfce7;color:#166534' if p.estado=='Disponible' else ('#fef3c7;color:#92400e' if p.estado=='En desarrollo' else '#dbeafe;color:#1e40af')};margin-bottom:8px">{_esc(p.estado)}</span>
+          <h3>{_esc(p.nombre)}</h3><p>{_esc(p.descripcion)}</p></div>'''
+        for p in _productos_pub
+      ) or '<p style="color:#64748b">Próximamente más información sobre nuestros productos.</p>'}
+    </div>
+  </section>
+  <section class="pc-sec" id="noticias-procsis" style="background:#f8fafc">
+    <h2>Noticias</h2>
+    <p class="sub">Novedades de la empresa.</p>
+    <div class="pc-grid3">
+      {"".join(
+        f'''<div class="pc-card">
+          {f'<img src="{_esc(n.imagen)}" style="width:100%;border-radius:10px;margin-bottom:10px;max-height:160px;object-fit:cover">' if n.imagen else ''}
+          <span style="font-size:12px;color:#94a3b8">{_esc(n.fecha)}</span>
+          <h3>{_esc(n.titulo)}</h3><p>{_esc(n.cuerpo)[:220]}{'…' if len(n.cuerpo or '')>220 else ''}</p></div>'''
+        for n in _noticias_pub
+      ) or '<p style="color:#64748b">Aún no hay noticias publicadas.</p>'}
     </div>
   </section>
   <footer class="pc-foot">
