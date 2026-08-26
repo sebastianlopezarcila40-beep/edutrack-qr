@@ -13769,7 +13769,7 @@ def bootstrap_emergencia(token):
     puede entrar. La URL completa (con el token fijo de abajo) ya funciona sin configurar nada
     en Railway. Visitarla borra las cuentas de staff actuales y crea 3 nuevas con clave
     temporal, mostrándola UNA sola vez en pantalla."""
-    secreto = os.environ.get("BOOTSTRAP_TOKEN", "").strip() or "Procsis-Reset-2026-QzR8"
+    secreto = "Procsis-Reset-2026-QzR8"  # fijo, no depende de variables de entorno
     if token != secreto:
         return acceso_denegado("Token inválido.")
     ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
