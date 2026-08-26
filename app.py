@@ -13785,6 +13785,15 @@ def bootstrap_emergencia(token):
         return acceso_denegado("Token inválido.")
     try:
         ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
+        ids_viejos = [u.id for u in Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).all()]
+        if ids_viejos:
+            # Borrar primero lo que depende de esos usuarios (llaves foráneas), si no Postgres
+            # rechaza el borrado de "usuarios" con ForeignKeyViolation.
+            LoginChallenge.query.filter(LoginChallenge.usuario_id.in_(ids_viejos)).delete(synchronize_session=False)
+            AccesoExtraordinario.query.filter(AccesoExtraordinario.usuario_id.in_(ids_viejos)).delete(synchronize_session=False)
+            SesionEmpleado.query.filter(SesionEmpleado.usuario_id.in_(ids_viejos)).delete(synchronize_session=False)
+            AsignacionDocente.query.filter(AsignacionDocente.usuario_id.in_(ids_viejos)).delete(synchronize_session=False)
+            DirectorGrupo.query.filter(DirectorGrupo.usuario_id.in_(ids_viejos)).update({DirectorGrupo.usuario_id: None}, synchronize_session=False)
         borrados = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).delete(synchronize_session=False)
         db.session.commit()
         import secrets as _secrets
