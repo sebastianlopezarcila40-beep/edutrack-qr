@@ -5402,6 +5402,7 @@ def _nav_public_html(active=""):
               <a href="/politicas/datos-personales">Política de protección de datos personales</a>
               <a href="/tratamiento-datos">Tratamiento de datos (Ley 1581)</a>
               <a href="/politica-pqr">Política de PQR</a>
+              <a href="/pqr-info">Cómo radicar una PQR</a>
               <a href="/politicas/aviso-privacidad">Aviso de privacidad</a>
             </div>
           </div>
@@ -6233,6 +6234,7 @@ def login():
           <div class="sinai-portals">
             <a href="/familia-login" style="background:#ecfdf5;color:#065f46">Portal familiar · Padres</a>
             <a href="/ayuda">Centro de ayuda</a>
+            <a href="/atencion-directivos">Atención al directivo · PQR</a>
             <a href="/contacto">Contacto</a>
           </div>
         </div>
@@ -10806,11 +10808,183 @@ def contacto():
     <p style="margin:8px 0 0;opacity:.95">{p.slogan or SLOGAN}</p>
     <p style="margin:12px 0 0;font-size:13px;opacity:.8">Desarrollado por <b>{empresa}</b></p>
   </section>
-  <p style="text-align:center;margin-top:16px"><a class="btn" href="/login">Volver al login</a></p>
+  <p style="text-align:center;margin-top:16px"><a class="btn" href="/login">Volver al login</a> <a class="btn" href="/atencion-directivos" style="background:#334155">Atención al directivo · PQR</a></p>
 </div>
 """
     # Página pública: sin sidebar institucional
     return page("Contacto", body)
+
+
+_AYUDA_SECCIONES = [
+    ("proteccion-usuario", "Protección al usuario"),
+    ("pqr", "Cómo radicar una PQR o una solicitud sobre su información"),
+    ("datos-personales", "Tratamiento de datos personales (Ley 1581)"),
+    ("preguntas-frecuentes", "Preguntas frecuentes"),
+    ("canales-contacto", "Canales de atención"),
+]
+
+
+def _ayuda_shell(activo, titulo, cuerpo_html):
+    p = plataforma()
+    empresa = p.empresa or "Procsis"
+    items = "".join(
+        f'<a href="/atencion-directivos/{slug}" class="ay-item{" on" if slug==activo else ""}">{nombre}</a>'
+        for slug, nombre in _AYUDA_SECCIONES
+    )
+    body = f"""
+<style>
+.ay-wrap{{max-width:1150px;margin:24px auto;padding:0 16px;font-family:Segoe UI,Arial,sans-serif;display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}}
+.ay-side{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;width:260px;flex:0 0 260px;overflow:hidden}}
+.ay-side h4{{background:#0B2D57;color:#fff;margin:0;padding:16px;font-size:14px}}
+.ay-item{{display:block;padding:12px 16px;border-top:1px solid #eef2f7;color:#334155;font-size:13.5px;text-decoration:none}}
+.ay-item:hover{{background:#f8fafc}}
+.ay-item.on{{color:#0B2D57;font-weight:700;background:#eff6ff}}
+.ay-content{{flex:1;min-width:280px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:26px}}
+.ay-content h1{{color:#0B2D57;font-size:24px;margin:0 0 6px}}
+.ay-content h2{{color:#0B2D57;font-size:16px;margin:22px 0 6px;border-bottom:1px solid #eef2f7;padding-bottom:6px}}
+.ay-content p{{color:#334155;line-height:1.6;font-size:14.5px}}
+.ay-content li{{color:#334155;line-height:1.6;font-size:14.5px}}
+.ay-crumb{{font-size:12.5px;color:#94a3b8;margin-bottom:10px}}
+.ay-crumb a{{color:#64748b}}
+</style>
+<div class="ay-wrap">
+  <aside class="ay-side">
+    <h4>Centro de ayuda · {_esc(empresa)}</h4>
+    {items}
+  </aside>
+  <main class="ay-content">
+    <div class="ay-crumb"><a href="/atencion-directivos">Inicio</a> » {titulo}</div>
+    <h1>{titulo}</h1>
+    {cuerpo_html}
+  </main>
+</div>
+"""
+    return page(titulo, body)
+
+
+@app.route("/atencion-directivos")
+def centro_ayuda_index():
+    """Portal público de ayuda para directivos, rectores y coordinadores — protección al
+    usuario, PQR, datos personales y canales de atención (estilo centro de ayuda de operador)."""
+    p = plataforma()
+    empresa = p.empresa or "Procsis"
+    cuerpo = f"""
+<p>Bienvenido(a) al centro de ayuda de {_esc(empresa)}, desarrolladores de {APP_NAME}. Aquí encuentra
+información sobre sus derechos como institución cliente, cómo radicar una petición, queja o reclamo (PQR),
+y los canales oficiales de atención.</p>
+<h2>¿Qué puede hacer aquí?</h2>
+<ul>
+  <li><a href="/atencion-directivos/pqr">Radicar una PQR</a> — peticiones, quejas o reclamos sobre el servicio.</li>
+  <li><a href="/atencion-directivos/datos-personales">Conocer cómo tratamos los datos</a> de estudiantes, acudientes y personal.</li>
+  <li><a href="/atencion-directivos/canales-contacto">Ver los canales de atención</a> disponibles.</li>
+</ul>
+"""
+    return _ayuda_shell("", "Centro de ayuda", cuerpo)
+
+
+@app.route("/atencion-directivos/proteccion-usuario")
+def centro_ayuda_proteccion():
+    cuerpo = """
+<p>En Procsis creemos que la confianza de las instituciones educativas que usan EduTrack se construye con
+claridad y respeto por sus derechos como cliente. A continuación resumimos los principios que seguimos:</p>
+<h2>Transparencia en el servicio</h2>
+<p>Los planes, precios y condiciones de EduTrack se informan de forma clara antes de la contratación.
+Cualquier cambio en tarifas o funcionalidades del plan contratado se comunica con anticipación.</p>
+<h2>Continuidad del servicio</h2>
+<p>Si su institución tiene una PQR en trámite relacionada con la facturación, esto no implica la suspensión
+inmediata del servicio mientras la solicitud esté siendo atendida dentro de los plazos informados.</p>
+<h2>Canales de queja siempre disponibles</h2>
+<p>Puede presentar una queja o reclamo en cualquier momento, sin costo, a través de los canales listados en
+<a href="/atencion-directivos/canales-contacto">Canales de atención</a>.</p>
+"""
+    return _ayuda_shell("proteccion-usuario", "Protección al usuario", cuerpo)
+
+
+@app.route("/atencion-directivos/pqr")
+def centro_ayuda_pqr():
+    p = plataforma()
+    tel_s = p.telefono_soporte or SOPORTE_TELEFONO
+    mail_s = p.email_soporte or SOPORTE_EMAIL or "soporte@procsis.com"
+    cuerpo = f"""
+<h2>Presentación de la PQR</h2>
+<p>Como rector, coordinador o directivo de una institución cliente, usted tiene derecho a presentar una
+Peticion, Queja o Reclamo (PQR) en cualquier momento, a través de cualquiera de nuestros canales de atención.</p>
+<p>Si desea presentarla de forma verbal, basta con indicar el nombre de la institución, su nombre completo
+y el motivo de la solicitud. Si prefiere hacerlo por escrito, indique además un correo de contacto para
+la respuesta.</p>
+<h2>Radicado y seguimiento</h2>
+<p>Una vez recibida su PQR, le confirmamos la recepción y le asignamos un número de radicado con el cual
+puede hacer seguimiento al estado de su solicitud.</p>
+<h2>PQR y facturación</h2>
+<p>Presentar una PQR relacionada con un cobro no obliga a suspender el pago de los valores no reclamados,
+ni implica por sí sola la suspensión del servicio mientras la solicitud esté en trámite dentro de los
+plazos aquí informados.</p>
+<h2>Plazo de respuesta</h2>
+<p>Como política de servicio, buscamos responder toda PQR dentro de los <b>15 días hábiles</b> siguientes a su
+radicación, por el mismo medio en que fue presentada (o el que usted indique). Si por la naturaleza de la
+solicitud se requiere más tiempo, se lo informaremos indicando el motivo, con un plazo adicional razonable.</p>
+<h2>¿No está de acuerdo con la respuesta?</h2>
+<p>Puede solicitar que revisemos nuevamente su caso indicando los motivos de su inconformidad; escalaremos
+la solicitud directamente a Gerencia para una segunda revisión.</p>
+<h2>Medios para presentar su PQR</h2>
+<ul>
+  <li>📞 Soporte técnico: <a href="tel:{_esc(tel_s)}">{_esc(tel_s)}</a></li>
+  <li>✉️ Correo: <a href="mailto:{_esc(mail_s)}">{_esc(mail_s)}</a></li>
+  <li>🌐 Formulario de contacto: <a href="/contacto">/contacto</a></li>
+</ul>
+"""
+    return _ayuda_shell("pqr", "Cómo radicar una PQR o una solicitud sobre su información", cuerpo)
+
+
+@app.route("/atencion-directivos/datos-personales")
+def centro_ayuda_datos():
+    cuerpo = """
+<p>EduTrack trata datos personales de estudiantes, acudientes y personal de las instituciones educativas
+conforme a la <b>Ley 1581 de 2012</b> (protección de datos personales) y su decreto reglamentario.</p>
+<h2>¿Qué datos se tratan?</h2>
+<p>Datos académicos (notas, asistencia), datos de identificación (nombre, documento) y datos de contacto de
+acudientes, suministrados directamente por la institución educativa contratante.</p>
+<h2>Finalidad</h2>
+<p>Los datos se usan exclusivamente para la prestación del servicio de gestión académica contratado por la
+institución (EduTrack), y no se venden ni se comparten con terceros para fines comerciales.</p>
+<h2>Sus derechos</h2>
+<p>Como titular o responsable institucional, puede solicitar conocer, actualizar, rectificar o suprimir los
+datos tratados, a través de los <a href="/atencion-directivos/canales-contacto">canales de atención</a>.</p>
+"""
+    return _ayuda_shell("datos-personales", "Tratamiento de datos personales (Ley 1581)", cuerpo)
+
+
+@app.route("/atencion-directivos/preguntas-frecuentes")
+def centro_ayuda_faq():
+    cuerpo = """
+<h2>¿Cómo cambio de plan?</h2>
+<p>Comuníquese con su asesor comercial o a través del formulario de <a href="/contacto">contacto</a>.</p>
+<h2>¿Qué pasa si tengo una factura pendiente?</h2>
+<p>Puede revisar el estado de su cartera desde el panel de Rectoría, o comunicarse con el área de cartera
+listada en <a href="/atencion-directivos/canales-contacto">canales de atención</a>.</p>
+<h2>¿Cómo reporto un problema técnico?</h2>
+<p>Use el canal de soporte técnico — no es necesario radicar una PQR formal para incidencias técnicas del
+día a día, aunque puede hacerlo si lo prefiere.</p>
+"""
+    return _ayuda_shell("preguntas-frecuentes", "Preguntas frecuentes", cuerpo)
+
+
+@app.route("/atencion-directivos/canales-contacto")
+def centro_ayuda_canales():
+    p = plataforma()
+    tel_s = p.telefono_soporte or SOPORTE_TELEFONO
+    mail_s = p.email_soporte or SOPORTE_EMAIL or "soporte@procsis.com"
+    tel_c = p.telefono_cartera or CARTERA_TELEFONO
+    mail_c = p.email_cartera or CARTERA_EMAIL
+    cuerpo = f"""
+<h2>Soporte técnico</h2>
+<p>📞 <a href="tel:{_esc(tel_s)}">{_esc(tel_s)}</a> · ✉️ <a href="mailto:{_esc(mail_s)}">{_esc(mail_s)}</a></p>
+<h2>Cartera y facturación</h2>
+<p>📞 <a href="tel:{_esc(tel_c)}">{_esc(tel_c)}</a> · ✉️ <a href="mailto:{_esc(mail_c)}">{_esc(mail_c)}</a></p>
+<h2>Formulario general</h2>
+<p>🌐 <a href="/contacto">Ir al formulario de contacto</a></p>
+"""
+    return _ayuda_shell("canales-contacto", "Canales de atención", cuerpo)
 
 
 
@@ -12687,7 +12861,7 @@ def politica_pqr():
 .legal-nav a{{margin-right:12px;color:#1d4ed8;font-weight:600;font-size:13px}}
 </style>
 <div class="legal-wrap"><div class="legal-card">
-  <div class="legal-nav"><a href="/tratamiento-datos">Tratamiento de datos</a><a href="/pqr">Portal PQR</a><a href="/legal">Aviso legal</a><a href="/login">Volver</a></div>
+  <div class="legal-nav"><a href="/tratamiento-datos">Tratamiento de datos</a><a href="/pqr">Portal PQR</a><a href="/pqr-info">Cómo radicar una PQR</a><a href="/legal">Aviso legal</a><a href="/login">Volver</a></div>
   <h1>Política de PQR (Peticiones, Quejas y Reclamos)</h1>
   <p><b>{APP_NAME}</b> · {DESARROLLADOR}. Canal formal de atención a la comunidad educativa y usuarios de la plataforma.</p>
   <h2>1. Objeto</h2>
@@ -29441,10 +29615,83 @@ body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f
       <a class="btn-pqr btn-consultar" href="/pqr/consulta">Consultar PQR</a>
     </div>
     <p class="mini">Tiempo estimado de respuesta: aproximadamente 5 días hábiles.</p>
+    <p class="mini"><a href="/pqr-info">Información de interés: cómo radicar una PQR</a></p>
   </div>
 </div></div>
 """
     return page("Gestión PQR OnLine", body)
+
+
+@app.route("/pqr-info")
+def pqr_info():
+    """Información de interés: cómo radicar una PQR ante Procsis / EduTrack (Ley 1480 de 2011)."""
+    try:
+        pp = plataforma()
+        tel = (getattr(pp, "contacto_publico_tel", None) or "—").strip() or "—"
+        email = (getattr(pp, "contacto_publico_email", None) or "contacto@procsis.com").strip()
+        wa_num = "".join(c for c in (getattr(pp, "contacto_whatsapp_ventas", None) or "") if c.isdigit())
+    except Exception:
+        tel, email, wa_num = "—", "contacto@procsis.com", ""
+    wa_texto = f"https://wa.me/{wa_num}" if wa_num else "/contacto"
+    body = f"""
+<style>
+body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;color:#0f172a}}
+.top{{background:linear-gradient(90deg,#0B2D57,#1e40af);color:#fff;padding:14px 20px}}
+.top h1{{margin:0;font-size:18px}}
+.wrap{{max-width:1000px;margin:0 auto;padding:24px 16px;display:grid;grid-template-columns:240px 1fr;gap:24px}}
+.side{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;height:fit-content}}
+.side a{{display:block;padding:8px 6px;color:#1e40af;text-decoration:none;font-size:14px;border-radius:8px}}
+.side a.on{{background:#eff6ff;font-weight:700}}
+.content{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:26px}}
+.content h2{{color:#0B2D57;border-bottom:2px solid #e2e8f0;padding-bottom:8px}}
+.content h3{{color:#1e40af;margin-top:22px}}
+.content p{{line-height:1.6;color:#334155}}
+.canal{{background:#f1f5f9;border-radius:10px;padding:14px;margin-top:10px}}
+@media (max-width:720px){{.wrap{{grid-template-columns:1fr}}}}
+</style>
+<div class="top"><h1>Procsis · Atención al usuario</h1></div>
+<div class="wrap">
+  <nav class="side">
+    <a href="/pqr" >Radicar / consultar PQR</a>
+    <a class="on" href="/pqr-info">Información de interés</a>
+    <a href="/procsis">Sobre Procsis</a>
+    <a href="/contacto">Contacto</a>
+  </nav>
+  <div class="content">
+    <h2>Cómo radicar una PQR o una solicitud sobre su información</h2>
+
+    <h3>Presentación de la PQR</h3>
+    <p>Usted tiene derecho a presentar peticiones, quejas, reclamos o recursos (PQR) ante Procsis en cualquier momento,
+    por cualquiera de nuestros canales de atención. Para radicarla por escrito, indique su nombre completo,
+    número de identificación (o NIT de la institución), un correo de contacto y el motivo de su solicitud.</p>
+
+    <h3>La PQR y el pago del servicio</h3>
+    <p>Usted no está obligado a ponerse al día con su factura como condición para que le recibamos, atendamos y
+    respondamos una PQR relacionada con la facturación, siempre que el reclamo se presente dentro del plazo de
+    pago oportuno indicado en el recibo. Cuenta con seis (6) meses desde el vencimiento de esa factura para
+    presentar peticiones o reclamos asociados a ella.</p>
+
+    <h3>Trámite y respuesta</h3>
+    <p>Procsis dará respuesta a su PQR dentro de los quince (15) días hábiles siguientes a su radicación, por el
+    mismo medio en que fue presentada (salvo que usted indique otro). Si se requiere practicar pruebas, se le
+    informará y el plazo podrá extenderse quince (15) días hábiles adicionales. Si la respuesta no llega dentro
+    del término, y la ley así lo prevé para el caso, se entenderá resuelta a su favor (silencio administrativo positivo).</p>
+    <p>Si no está de acuerdo con la decisión, puede interponer los recursos de reposición y, en subsidio, de
+    apelación, dentro de los diez (10) días siguientes a la notificación. El recurso de reposición lo resuelve
+    Procsis; el de apelación, la Superintendencia de Industria y Comercio (SIC).</p>
+
+    <h3>Canales de atención</h3>
+    <div class="canal"><b>📞 Teléfono / línea de atención:</b> {_esc(tel)}</div>
+    <div class="canal"><b>✉️ Correo:</b> {_esc(email)}</div>
+    <div class="canal"><b>💬 WhatsApp:</b> <a href="{wa_texto}" target="_blank" rel="noopener">Escribir por WhatsApp</a></div>
+    <div class="canal"><b>🌐 En línea:</b> <a href="/pqr/crear">Radicar PQR</a> · <a href="/pqr/consulta">Consultar el estado de una PQR</a></div>
+
+    <p style="margin-top:20px;font-size:13px;color:#94a3b8">Información general de orientación al usuario, con base en el
+    Estatuto del Consumidor (Ley 1480 de 2011). No sustituye la asesoría de un abogado para casos particulares.</p>
+  </div>
+</div>
+"""
+    return page("Información de interés · PQR", body)
 
 
 @app.route("/pqr/crear", methods=["GET", "POST"])
@@ -29534,7 +29781,21 @@ a{{color:#1e40af}}
       <div><label>Tipo PQR</label>
         <select name="tipo_pqr"><option>Petición</option><option>Queja</option><option>Reclamo</option><option>Recurso</option><option>Reporte de pago</option><option>Cancelación</option></select></div>
       <div><label>Subtipo</label>
-        <select name="subtipo"><option>Consulta</option><option>Fallas del servicio</option><option>Recibos / Facturación</option><option>Solicitud estado de cuenta</option><option>Pago no aplicado</option><option>Solicitud paz y salvo</option></select></div>
+        <select name="subtipo">
+          <option>Consulta</option>
+          <option>Fallas del servicio</option>
+          <option>Recibos / Facturación</option>
+          <option>Solicitud estado de cuenta</option>
+          <option>Pago no aplicado</option>
+          <option>Solicitud paz y salvo</option>
+          <option>Cambio de plan / licencia</option>
+          <option>Cambio de titularidad de la institución</option>
+          <option>Desactivación de módulos adicionales</option>
+          <option>Solicitud de reactivación del servicio</option>
+          <option>Suspensión temporal del servicio</option>
+          <option>Protección de datos personales (Habeas Data)</option>
+          <option>Otros</option>
+        </select></div>
     </div>
     <label>Prioridad</label>
     <select name="prioridad"><option>BAJA</option><option selected>MEDIA</option><option>ALTA</option><option>CRITICA</option></select>
