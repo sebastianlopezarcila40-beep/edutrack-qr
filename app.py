@@ -905,6 +905,13 @@ class Plataforma(db.Model):
     direccion = db.Column(db.String(255), default="")
     ciudad = db.Column(db.String(120), default="")
     representante_legal = db.Column(db.String(160), default="")
+    # Textos editables del centro de ayuda (/pqr-info) y kit legal de ventas
+    pqr_presentacion = db.Column(db.Text, default="")
+    pqr_radicado = db.Column(db.Text, default="")
+    pqr_facturacion = db.Column(db.Text, default="")
+    pqr_plazo = db.Column(db.Text, default="")
+    kit_habeas_data = db.Column(db.Text, default="")
+    kit_confirmacion_contrato = db.Column(db.Text, default="")
     # Centro de actualizaciones (visible en login)
     version_sistema = db.Column(db.String(40), default="2.5.0")
     novedades = db.Column(db.Text, default="")
@@ -2527,6 +2534,12 @@ def migrar_columnas():
         ("plataforma", "direccion", "ALTER TABLE plataforma ADD COLUMN direccion VARCHAR(255) DEFAULT ''"),
         ("plataforma", "ciudad", "ALTER TABLE plataforma ADD COLUMN ciudad VARCHAR(120) DEFAULT ''"),
         ("plataforma", "representante_legal", "ALTER TABLE plataforma ADD COLUMN representante_legal VARCHAR(160) DEFAULT ''"),
+        ("plataforma", "pqr_presentacion", "ALTER TABLE plataforma ADD COLUMN pqr_presentacion TEXT DEFAULT ''"),
+        ("plataforma", "pqr_radicado", "ALTER TABLE plataforma ADD COLUMN pqr_radicado TEXT DEFAULT ''"),
+        ("plataforma", "pqr_facturacion", "ALTER TABLE plataforma ADD COLUMN pqr_facturacion TEXT DEFAULT ''"),
+        ("plataforma", "pqr_plazo", "ALTER TABLE plataforma ADD COLUMN pqr_plazo TEXT DEFAULT ''"),
+        ("plataforma", "kit_habeas_data", "ALTER TABLE plataforma ADD COLUMN kit_habeas_data TEXT DEFAULT ''"),
+        ("plataforma", "kit_confirmacion_contrato", "ALTER TABLE plataforma ADD COLUMN kit_confirmacion_contrato TEXT DEFAULT ''"),
         ("estudiantes", "estado_promocion", "ALTER TABLE estudiantes ADD COLUMN estado_promocion VARCHAR(30) DEFAULT ''"),
         ("estudiantes", "piar_activo", "ALTER TABLE estudiantes ADD COLUMN piar_activo BOOLEAN DEFAULT 0"),
         ("estudiantes", "piar_pdf", "ALTER TABLE estudiantes ADD COLUMN piar_pdf VARCHAR(255) DEFAULT ''"),
@@ -14541,6 +14554,7 @@ def gerencia_hq():
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
         <a class="own" href="/gerencia/procsis-web">🌐 Página web de Procsis</a>
+        <a class="own" href="/gerencia/pqr-info">📋 Textos legales (PQR / Habeas Data)</a>
         <a class="own" href="/gerencia/parametros">⚙️ Parámetros dinámicos</a>
         <a class="own" href="/gerencia/facturacion-auto-test">⏱ Facturación auto (5 min)</a>
         <a class="own" href="/gerencia/planes">Aprobar precios y planes</a>
@@ -16378,7 +16392,6 @@ def gerencia_suspender():
     return page("Suspender colegios", body)
 
 
-@app.route("/api/ventas/validar-men")
 def _dane_depto_nombre(code2):
     """Código DANE departamento (2 dígitos) → nombre."""
     m = {
@@ -16416,6 +16429,7 @@ def _guardar_men_cache(dane, nombre, municipio="", departamento="", sector="Ofic
             pass
 
 
+@app.route("/api/ventas/validar-men")
 def api_validar_men():
     """
     Valida colegio por DANE (12 dígitos), NIT o nombre.
@@ -16693,13 +16707,51 @@ def ventas_kit_mensajes():
           <button type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.innerText);this.textContent='Copiado ✓'"
             style="background:#0B2D57;color:#fff;border:0;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer">Copiar texto</button>
         </div>"""
+    try:
+        _pp = plataforma()
+        habeas_txt = (getattr(_pp, "kit_habeas_data", None) or "").strip()
+        confirm_txt = (getattr(_pp, "kit_confirmacion_contrato", None) or "").strip()
+    except Exception:
+        habeas_txt = confirm_txt = ""
+    habeas_txt = habeas_txt or (
+        "Como titular de sus datos, usted tiene derecho a conocerlos, actualizarlos, rectificarlos, solicitar prueba "
+        "de la autorización dada, ser informado del uso que les damos, presentar quejas ante la Superintendencia de "
+        "Industria y Comercio (SIC) por infracciones a la ley, revocar la autorización, solicitar la supresión de sus "
+        "datos cuando proceda, y acceder a ellos de forma gratuita. Encuentra nuestra política de tratamiento de "
+        "datos y el aviso de privacidad en edutrack.procsis.com/tratamiento-datos."
+    )
+    confirm_txt = confirm_txt or (
+        "Ya con las condiciones del plan que conversamos, le vamos a enviar el contrato de servicios EduTrack a su "
+        "correo electrónico para su revisión y aceptación por este mismo chat; al final encontrará las condiciones "
+        "particulares de su plan y los anexos de autorización de datos.\\n\\n"
+        "¿Me confirma la recepción y aceptación del contrato y las autorizaciones que le acabamos de enviar? SI ___ NO ___"
+    )
+    bloques_legal = f"""
+        <div style="background:#fff;border:1px solid #f59e0b;border-radius:12px;padding:14px;margin-bottom:10px">
+          <h3 style="margin:0 0 6px;color:#92400e;font-size:15px">📋 Habeas Data (obligatorio antes de radicar datos del colegio)</h3>
+          <p style="font-size:13px;color:#334155;line-height:1.45;white-space:pre-line" id="t-habeas">{_esc(habeas_txt)}</p>
+          <button type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.innerText);this.textContent='Copiado ✓'"
+            style="background:#92400e;color:#fff;border:0;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer">Copiar texto</button>
+        </div>
+        <div style="background:#fff;border:1px solid #f59e0b;border-radius:12px;padding:14px;margin-bottom:10px">
+          <h3 style="margin:0 0 6px;color:#92400e;font-size:15px">📋 Confirmación de contrato (al cierre de la venta)</h3>
+          <p style="font-size:13px;color:#334155;line-height:1.45;white-space:pre-line" id="t-confirm">{_esc(confirm_txt)}</p>
+          <button type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.innerText);this.textContent='Copiado ✓'"
+            style="background:#92400e;color:#fff;border:0;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer">Copiar texto</button>
+        </div>"""
     body = f"""
 <div style="max-width:640px;margin:0 auto;padding:20px;font-family:Segoe UI,sans-serif">
   <p><a href="/ventas/panel">← Panel ventas</a></p>
   <h1 style="color:#0B2D57">Plantillas de Prospección</h1>
   <p style="color:#64748b;font-size:14px">Textos listos para WhatsApp según el estado del cliente.</p>
   {bloques}
-  <p style="margin-top:14px;font-size:12px;color:#94a3b8"><a href="/whatsapp-mensaje-legal">Mensaje de bienvenida / consentimiento (legal)</a></p>
+  <h2 style="color:#92400e;font-size:16px;margin-top:22px">Guiones legales (Colombia)</h2>
+  <p style="color:#64748b;font-size:13px">Léalos siempre antes de radicar los datos de un colegio o cerrar una venta.</p>
+  {bloques_legal}
+  <p style="margin-top:14px;font-size:12px;color:#94a3b8">
+    <a href="/whatsapp-mensaje-legal">Mensaje de bienvenida / consentimiento (legal)</a> ·
+    <a href="/gerencia/pqr-info">Editar estos textos</a>
+  </p>
 </div>
 """
     return page("Plantillas de Prospección", body)
@@ -27283,6 +27335,12 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
     if(next){{next.focus(); if(next.select) next.select(); ev.preventDefault();}}
   }});
   document.querySelectorAll('tr[data-est]').forEach(tr=>recalc(tr.dataset.est));
+  window.addEventListener('beforeunload', function(ev){{
+    if(document.querySelectorAll('.px-cell.error, .px-log-cell.error').length > 0){{
+      ev.preventDefault(); ev.returnValue = '';
+      return 'Hay notas que no se pudieron guardar. Si sale ahora, se van a perder.';
+    }}
+  }});
   
   document.querySelectorAll('.px-pct-input').forEach(inp=>{{
     inp.addEventListener('change', async ()=>{{
@@ -29630,9 +29688,37 @@ def pqr_info():
         tel = (getattr(pp, "contacto_publico_tel", None) or "—").strip() or "—"
         email = (getattr(pp, "contacto_publico_email", None) or "contacto@procsis.com").strip()
         wa_num = "".join(c for c in (getattr(pp, "contacto_whatsapp_ventas", None) or "") if c.isdigit())
+        txt_presentacion = (getattr(pp, "pqr_presentacion", None) or "").strip()
+        txt_radicado = (getattr(pp, "pqr_radicado", None) or "").strip()
+        txt_facturacion = (getattr(pp, "pqr_facturacion", None) or "").strip()
+        txt_plazo = (getattr(pp, "pqr_plazo", None) or "").strip()
     except Exception:
         tel, email, wa_num = "—", "contacto@procsis.com", ""
+        txt_presentacion = txt_radicado = txt_facturacion = txt_plazo = ""
     wa_texto = f"https://wa.me/{wa_num}" if wa_num else "/contacto"
+    txt_presentacion = txt_presentacion or (
+        "Usted tiene derecho a presentar peticiones, quejas, reclamos o recursos (PQR) ante Procsis en cualquier "
+        "momento, por cualquiera de nuestros canales de atención. Para radicarla por escrito, indique su nombre "
+        "completo, número de identificación (o NIT de la institución), un correo de contacto y el motivo de su solicitud."
+    )
+    txt_radicado = txt_radicado or (
+        "Una vez recibida su PQR, le confirmamos la recepción y le asignamos un número de radicado con el cual "
+        "puede hacer seguimiento al estado de su solicitud."
+    )
+    txt_facturacion = txt_facturacion or (
+        "Usted no está obligado a ponerse al día con su factura como condición para que le recibamos, atendamos y "
+        "respondamos una PQR relacionada con la facturación, siempre que el reclamo se presente dentro del plazo de "
+        "pago oportuno indicado en el recibo. Cuenta con seis (6) meses desde el vencimiento de esa factura para "
+        "presentar peticiones o reclamos asociados a ella."
+    )
+    txt_plazo = txt_plazo or (
+        "Procsis dará respuesta a su PQR dentro de los quince (15) días hábiles siguientes a su radicación, por el "
+        "mismo medio en que fue presentada (salvo que usted indique otro). Si se requiere practicar pruebas, se le "
+        "informará y el plazo podrá extenderse quince (15) días hábiles adicionales. Si no está de acuerdo con la "
+        "decisión, puede interponer los recursos de reposición y, en subsidio, de apelación, dentro de los diez (10) "
+        "días siguientes a la notificación. El recurso de reposición lo resuelve Procsis; el de apelación, la "
+        "Superintendencia de Industria y Comercio (SIC)."
+    )
     body = f"""
 <style>
 body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;color:#0f172a}}
@@ -29661,24 +29747,16 @@ body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;color:#0
     <h2>Cómo radicar una PQR o una solicitud sobre su información</h2>
 
     <h3>Presentación de la PQR</h3>
-    <p>Usted tiene derecho a presentar peticiones, quejas, reclamos o recursos (PQR) ante Procsis en cualquier momento,
-    por cualquiera de nuestros canales de atención. Para radicarla por escrito, indique su nombre completo,
-    número de identificación (o NIT de la institución), un correo de contacto y el motivo de su solicitud.</p>
+    <p>{_esc(txt_presentacion)}</p>
 
-    <h3>La PQR y el pago del servicio</h3>
-    <p>Usted no está obligado a ponerse al día con su factura como condición para que le recibamos, atendamos y
-    respondamos una PQR relacionada con la facturación, siempre que el reclamo se presente dentro del plazo de
-    pago oportuno indicado en el recibo. Cuenta con seis (6) meses desde el vencimiento de esa factura para
-    presentar peticiones o reclamos asociados a ella.</p>
+    <h3>Radicado y seguimiento</h3>
+    <p>{_esc(txt_radicado)}</p>
 
-    <h3>Trámite y respuesta</h3>
-    <p>Procsis dará respuesta a su PQR dentro de los quince (15) días hábiles siguientes a su radicación, por el
-    mismo medio en que fue presentada (salvo que usted indique otro). Si se requiere practicar pruebas, se le
-    informará y el plazo podrá extenderse quince (15) días hábiles adicionales. Si la respuesta no llega dentro
-    del término, y la ley así lo prevé para el caso, se entenderá resuelta a su favor (silencio administrativo positivo).</p>
-    <p>Si no está de acuerdo con la decisión, puede interponer los recursos de reposición y, en subsidio, de
-    apelación, dentro de los diez (10) días siguientes a la notificación. El recurso de reposición lo resuelve
-    Procsis; el de apelación, la Superintendencia de Industria y Comercio (SIC).</p>
+    <h3>PQR y facturación</h3>
+    <p>{_esc(txt_facturacion)}</p>
+
+    <h3>Plazo de respuesta</h3>
+    <p>{_esc(txt_plazo)}</p>
 
     <h3>Canales de atención</h3>
     <div class="canal"><b>📞 Teléfono / línea de atención:</b> {_esc(tel)}</div>
@@ -29692,6 +29770,52 @@ body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;color:#0
 </div>
 """
     return page("Información de interés · PQR", body)
+
+
+@app.route("/gerencia/pqr-info", methods=["GET", "POST"])
+def gerencia_editar_pqr_info():
+    """Editar los textos del centro de ayuda (/pqr-info) y el kit legal de ventas."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Soporte", "Comercial", "Administrador", "Superadmin"):
+        return acceso_denegado()
+    p = plataforma()
+    mensaje = ""
+    if request.method == "POST":
+        p.pqr_presentacion = (request.form.get("pqr_presentacion") or "").strip()
+        p.pqr_radicado = (request.form.get("pqr_radicado") or "").strip()
+        p.pqr_facturacion = (request.form.get("pqr_facturacion") or "").strip()
+        p.pqr_plazo = (request.form.get("pqr_plazo") or "").strip()
+        p.kit_habeas_data = (request.form.get("kit_habeas_data") or "").strip()
+        p.kit_confirmacion_contrato = (request.form.get("kit_confirmacion_contrato") or "").strip()
+        db.session.commit()
+        registrar_auditoria("Textos PQR/kit legal actualizados", session.get("usuario") or "")
+        mensaje = "Guardado."
+    volver = {"Comercial": "/ventas/kit-mensajes"}.get(rol_actual(), "/pqr-info")
+    content = f"""
+<header class="role-hero"><div>
+  <h1>✏️ Editar textos de PQR y kit legal</h1>
+  <p>Estos textos se ven en <a href="/pqr-info" target="_blank">/pqr-info</a> (público) y en el Kit de prospección de Ventas.</p>
+</div>
+<a class="btn" href="{volver}">Volver</a></header>
+{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+<section class="role-panel">
+  <form method="POST">
+    <label><b>Presentación de la PQR</b></label>
+    <textarea name="pqr_presentacion" rows="3" placeholder="(vacío = usa el texto por defecto)">{_esc(p.pqr_presentacion)}</textarea>
+    <label style="margin-top:10px;display:block"><b>Radicado y seguimiento</b></label>
+    <textarea name="pqr_radicado" rows="3">{_esc(p.pqr_radicado)}</textarea>
+    <label style="margin-top:10px;display:block"><b>PQR y facturación</b></label>
+    <textarea name="pqr_facturacion" rows="3">{_esc(p.pqr_facturacion)}</textarea>
+    <label style="margin-top:10px;display:block"><b>Plazo de respuesta</b></label>
+    <textarea name="pqr_plazo" rows="4">{_esc(p.pqr_plazo)}</textarea>
+    <label style="margin-top:16px;display:block"><b>Kit de prospección · guion de datos personales (Habeas Data)</b></label>
+    <textarea name="kit_habeas_data" rows="5" placeholder="(vacío = usa el texto por defecto)">{_esc(p.kit_habeas_data)}</textarea>
+    <label style="margin-top:10px;display:block"><b>Kit de prospección · confirmación de contrato</b></label>
+    <textarea name="kit_confirmacion_contrato" rows="5">{_esc(p.kit_confirmacion_contrato)}</textarea>
+    <button type="submit" style="margin-top:14px">Guardar</button>
+  </form>
+</section>
+"""
+    return page("Editar PQR / kit legal", shell(content))
 
 
 @app.route("/pqr/crear", methods=["GET", "POST"])
