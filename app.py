@@ -899,6 +899,12 @@ class Plataforma(db.Model):
     email_cartera = db.Column(db.String(160), default="carteraedutrackqr@gmail.com")
     web = db.Column(db.String(160), default="")
     notas = db.Column(db.Text, default="")
+    # Datos legales de la empresa (Procsis), para documentos oficiales (admisión, contratos, etc.)
+    nit = db.Column(db.String(40), default="")
+    codigo_dane = db.Column(db.String(40), default="")
+    direccion = db.Column(db.String(255), default="")
+    ciudad = db.Column(db.String(120), default="")
+    representante_legal = db.Column(db.String(160), default="")
     # Centro de actualizaciones (visible en login)
     version_sistema = db.Column(db.String(40), default="2.5.0")
     novedades = db.Column(db.Text, default="")
@@ -2492,6 +2498,11 @@ def migrar_columnas():
         ("plataforma", "corp_footer_texto", "ALTER TABLE plataforma ADD COLUMN corp_footer_texto TEXT DEFAULT ''"),
         ("plataforma", "corp_portafolio_titulo", "ALTER TABLE plataforma ADD COLUMN corp_portafolio_titulo VARCHAR(160) DEFAULT ''"),
         ("plataforma", "corp_portafolio_texto", "ALTER TABLE plataforma ADD COLUMN corp_portafolio_texto TEXT DEFAULT ''"),
+        ("plataforma", "nit", "ALTER TABLE plataforma ADD COLUMN nit VARCHAR(40) DEFAULT ''"),
+        ("plataforma", "codigo_dane", "ALTER TABLE plataforma ADD COLUMN codigo_dane VARCHAR(40) DEFAULT ''"),
+        ("plataforma", "direccion", "ALTER TABLE plataforma ADD COLUMN direccion VARCHAR(255) DEFAULT ''"),
+        ("plataforma", "ciudad", "ALTER TABLE plataforma ADD COLUMN ciudad VARCHAR(120) DEFAULT ''"),
+        ("plataforma", "representante_legal", "ALTER TABLE plataforma ADD COLUMN representante_legal VARCHAR(160) DEFAULT ''"),
         ("estudiantes", "estado_promocion", "ALTER TABLE estudiantes ADD COLUMN estado_promocion VARCHAR(30) DEFAULT ''"),
         ("estudiantes", "piar_activo", "ALTER TABLE estudiantes ADD COLUMN piar_activo BOOLEAN DEFAULT 0"),
         ("estudiantes", "piar_pdf", "ALTER TABLE estudiantes ADD COLUMN piar_pdf VARCHAR(255) DEFAULT ''"),
@@ -13772,21 +13783,28 @@ def bootstrap_emergencia(token):
     secreto = "Procsis-Reset-2026-QzR8"  # fijo, no depende de variables de entorno
     if token != secreto:
         return acceso_denegado("Token inválido.")
-    ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
-    borrados = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).delete(synchronize_session=False)
-    import secrets as _secrets
-    nuevas = [
-        ("soporte", "Soporte"),
-        ("ventas", "Comercial"),
-        ("gerencia", "Gerente"),
-    ]
-    creadas = []
-    for usuario, rol in nuevas:
-        clave = _secrets.token_urlsafe(9)
-        u = Usuario(usuario=usuario, rol=rol, password=crear_hash(clave), password_temporal=True, activo=True)
-        db.session.add(u)
-        creadas.append((usuario, rol, clave))
-    db.session.commit()
+    try:
+        ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
+        borrados = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).delete(synchronize_session=False)
+        db.session.commit()
+        import secrets as _secrets
+        nuevas = [
+            ("soporte", "Soporte"),
+            ("ventas", "Comercial"),
+            ("gerencia", "Gerente"),
+        ]
+        creadas = []
+        for usuario, rol in nuevas:
+            clave = _secrets.token_urlsafe(9)
+            u = Usuario(usuario=usuario, rol=rol, password=crear_hash(clave), password_temporal=True)
+            db.session.add(u)
+            creadas.append((usuario, rol, clave))
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        import traceback
+        tb = traceback.format_exc()
+        return f"<pre style='white-space:pre-wrap;font-family:monospace;padding:20px;color:#b91c1c'>ERROR REAL:\n{tb}</pre>", 500
     registrar_auditoria("BOOTSTRAP DE EMERGENCIA", f"{borrados} cuenta(s) de staff eliminadas, {len(creadas)} nueva(s) creadas")
     filas = "".join(
         f"<tr><td><b>{u}</b></td><td>{r}</td><td><code style='font-size:15px'>{c}</code></td>"
@@ -14158,6 +14176,8 @@ def gerencia_hq():
       <h2>Reservado a dirección / gerencia</h2>
       <div class="grid-mod">
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
+        <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
+        <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
         <a class="own" href="/gerencia/parametros">⚙️ Parámetros dinámicos</a>
         <a class="own" href="/gerencia/facturacion-auto-test">⏱ Facturación auto (5 min)</a>
         <a class="own" href="/gerencia/planes">Aprobar precios y planes</a>
@@ -14363,62 +14383,9 @@ def gerencia_reinicio_datos():
 
 @app.route("/gerencia/roles", methods=["GET", "POST"])
 def gerencia_roles():
-    """Gestión de roles del personal interno: cambiar el rol (Soporte/Comercial/Gerente/etc.)
-    de cualquier cuenta de staff — no de usuarios de colegios."""
-    g = _guard_gerencia()
-    if g:
-        return g
-    ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
-    mensaje = ""
-    error = ""
-    if request.method == "POST":
-        try:
-            uid = int(request.form.get("user_id") or 0)
-        except Exception:
-            uid = 0
-        u = Usuario.query.get(uid)
-        nuevo_rol = (request.form.get("rol") or "").strip()
-        if not u or u.rol not in ROLES_STAFF:
-            error = "Usuario no encontrado o no es una cuenta de staff."
-        elif nuevo_rol not in ROLES_STAFF:
-            error = "Rol no válido."
-        elif u.usuario == session.get("usuario") and nuevo_rol != u.rol:
-            error = "No puede cambiarse el rol a usted mismo desde aquí — pídaselo a otro Gerente/Superadmin."
-        else:
-            anterior = u.rol
-            u.rol = nuevo_rol
-            db.session.commit()
-            registrar_auditoria("Cambio de rol", f"{u.usuario}: {anterior} → {nuevo_rol} (por {session.get('usuario')})")
-            mensaje = f"{u.usuario} ahora tiene el rol {nuevo_rol}."
-    staff = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).order_by(Usuario.rol.asc(), Usuario.usuario.asc()).all()
-    filas = "".join(
-        f"""<tr><td><b>{_esc(u.usuario)}</b>{' · '+_esc(u.nombre_completo) if u.nombre_completo else ''}</td><td>{_esc(u.rol)}</td>
-        <td><form method="POST" style="display:flex;gap:6px;align-items:center" onsubmit="return confirm('¿Cambiar el rol de {u.usuario}?')">
-          <input type="hidden" name="user_id" value="{u.id}">
-          <select name="rol">{"".join(f'<option value="{r}" {"selected" if r==u.rol else ""}>{r}</option>' for r in ROLES_STAFF)}</select>
-          <button type="submit" class="small-action">Cambiar</button>
-        </form></td></tr>"""
-        for u in staff
-    ) or '<tr><td colspan="3">Sin cuentas de staff</td></tr>'
-    content = f"""
-<header class="role-hero"><div>
-  <h1>🔐 Gestión de roles</h1>
-  <p>Cambie el rol de las cuentas internas (Soporte, Ventas, Gerencia). No afecta usuarios de colegios.</p>
-</div>
-<a class="btn" href="/gerencia/hq">Volver</a></header>
-{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
-{"<div class='msg err'>"+error+"</div>" if error else ""}
-<section class="role-panel">
-  <div style="overflow-x:auto">
-    <table>
-      <tr><th>Usuario</th><th>Rol actual</th><th>Cambiar a</th></tr>
-      {filas}
-    </table>
-  </div>
-  <p class="mini-text" style="margin-top:10px">Recuerde: el rol <b>Soporte</b> ahora solo puede restablecer contraseñas — para dar acceso completo al centro de operaciones, use Administrador o Superadmin.</p>
-</section>
-"""
-    return page("Gestión de roles", shell(content))
+    """Redirige al módulo completo (crear/renombrar/rol/clave/activar)."""
+    return redirect("/gerencia/usuarios")
+
 
 
 def _catalogo_documentos_corp():
@@ -18934,6 +18901,20 @@ def gerencia_usuarios():
                 db.session.commit()
                 registrar_auditoria("Gerencia cambió rol", f"{u.usuario}: {anterior} → {nuevo_rol}")
                 msg = f"Rol de <b>{u.usuario}</b> actualizado a <b>{nuevo_rol}</b>."
+        elif accion == "cambiar_clave":
+            uid = request.form.get("uid", type=int)
+            nueva_clave = (request.form.get("nueva_clave") or "").strip()
+            u = Usuario.query.get(uid) if uid else None
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin"):
+                error = "Usuario no válido."
+            elif len(nueva_clave) < 8:
+                error = "La contraseña debe tener mínimo 8 caracteres."
+            else:
+                u.password = crear_hash(nueva_clave)
+                u.password_temporal = True
+                db.session.commit()
+                registrar_auditoria("Gerencia cambió clave", f"{u.usuario} (clave temporal asignada)")
+                msg = f"Contraseña de <b>{u.usuario}</b> actualizada. Debe cambiarla al entrar."
         elif accion == "toggle_activo":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
@@ -18964,6 +18945,12 @@ def gerencia_usuarios():
               <input type="hidden" name="uid" value="{u.id}">
               <input name="nuevo_usuario" placeholder="Nuevo usuario" value="{_esc(u.usuario)}" style="width:120px;padding:6px;border:1px solid #e2e8f0;border-radius:6px">
               <button type="submit" style="padding:6px 10px;background:#0B2D57;color:#fff;border:0;border-radius:6px;font-size:12px">Renombrar</button>
+            </form>
+            <form method="POST" style="display:inline-flex;gap:6px;align-items:center;margin-top:4px">
+              <input type="hidden" name="accion" value="cambiar_clave">
+              <input type="hidden" name="uid" value="{u.id}">
+              <input name="nueva_clave" type="text" placeholder="Nueva clave (min. 8)" style="width:130px;padding:6px;border:1px solid #e2e8f0;border-radius:6px">
+              <button type="submit" style="padding:6px 10px;background:#b45309;color:#fff;border:0;border-radius:6px;font-size:12px">Cambiar clave</button>
             </form>
             <form method="POST" style="display:inline-flex;gap:6px;align-items:center;margin-top:4px">
               <input type="hidden" name="accion" value="cambiar_rol">
@@ -19021,6 +19008,134 @@ def gerencia_usuarios():
 </div>
 """
     return page("Gerencia usuarios", body)
+
+
+@app.route("/gerencia/datos-empresa", methods=["GET", "POST"])
+def gerencia_datos_empresa():
+    """Datos legales de Procsis (NIT, DANE, dirección) para usar en documentos oficiales
+    como el certificado de admisión de personal."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    p = plataforma()
+    mensaje = ""
+    if request.method == "POST":
+        p.nit = (request.form.get("nit") or "").strip()[:40]
+        p.codigo_dane = (request.form.get("codigo_dane") or "").strip()[:40]
+        p.direccion = (request.form.get("direccion") or "").strip()[:255]
+        p.ciudad = (request.form.get("ciudad") or "").strip()[:120]
+        p.representante_legal = (request.form.get("representante_legal") or "").strip()[:160]
+        db.session.commit()
+        registrar_auditoria("Datos de empresa actualizados", f"NIT={p.nit} DANE={p.codigo_dane}")
+        mensaje = "Datos guardados."
+    content = f"""
+<header class="role-hero"><div>
+  <h1>🏢 Datos de la empresa (Procsis)</h1>
+  <p>Estos datos aparecen en documentos oficiales de la empresa, como el certificado de admisión de personal.</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver</a></header>
+{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+<section class="role-panel">
+  <form method="POST">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label><b>NIT</b></label><input name="nit" value="{_esc(p.nit)}" placeholder="900.999.999-1"></div>
+      <div><label><b>Código DANE</b></label><input name="codigo_dane" value="{_esc(p.codigo_dane)}" placeholder="199999999999"></div>
+      <div><label><b>Ciudad</b></label><input name="ciudad" value="{_esc(p.ciudad)}" placeholder="Bogotá D.C."></div>
+      <div><label><b>Representante legal</b></label><input name="representante_legal" value="{_esc(p.representante_legal)}"></div>
+      <div style="grid-column:1/3"><label><b>Dirección</b></label><input name="direccion" value="{_esc(p.direccion)}"></div>
+    </div>
+    <button type="submit" style="margin-top:14px">Guardar</button>
+  </form>
+</section>
+"""
+    return page("Datos de la empresa", shell(content))
+
+
+@app.route("/gerencia/admision-personal", methods=["GET", "POST"])
+def gerencia_admision_personal():
+    """Genera el certificado de admisión de personal (PDF con logo) para el equipo de Procsis
+    (Soporte, Ventas, Gerencia)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
+    staff = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).order_by(Usuario.usuario.asc()).all()
+    filas = "".join(
+        f"""<tr><td><b>{_esc(u.usuario)}</b>{' · '+_esc(u.nombre_completo) if u.nombre_completo else ''}</td><td>{_esc(u.rol)}</td>
+        <td><form method="POST" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input type="hidden" name="uid" value="{u.id}">
+          <input name="cargo" placeholder="Cargo (ej. Asesor comercial)" style="width:170px">
+          <input name="fecha_ingreso" type="date" required>
+          <button type="submit" class="small-action">Generar certificado</button>
+        </form></td></tr>"""
+        for u in staff
+    ) or '<tr><td colspan="3">Sin cuentas de staff</td></tr>'
+    if request.method == "POST":
+        uid = request.form.get("uid", type=int)
+        u = Usuario.query.get(uid) if uid else None
+        cargo = (request.form.get("cargo") or "").strip() or u.rol if u else ""
+        fecha_ingreso = (request.form.get("fecha_ingreso") or "").strip()
+        if not u or u.rol not in ROLES_STAFF:
+            return page("Admisión de personal", shell("<div class='msg err'>Usuario no válido. <a href='/gerencia/admision-personal'>Volver</a></div>"))
+        nombre_mostrar = (u.nombre_completo or u.usuario)
+        p = plataforma()
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas as _canvas
+        from reportlab.lib.units import cm
+        from reportlab.lib.utils import simpleSplit
+        buf = BytesIO()
+        pdf = _canvas.Canvas(buf, pagesize=letter)
+        w, h = letter
+        try:
+            _logo_web = logo_plataforma()
+            _logo_disk = _logo_web.lstrip("/").replace("\\", "/")
+            pdf.drawImage(_logo_disk, 2 * cm, h - 3.2 * cm, width=2.2 * cm, height=2.2 * cm, preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
+        pdf.setFont("Helvetica-Bold", 15)
+        pdf.drawCentredString(w / 2, h - 2.2 * cm, p.empresa or "Procsis")
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.drawCentredString(w / 2, h - 3.4 * cm, "CERTIFICADO DE ADMISIÓN DE PERSONAL")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawCentredString(w / 2, h - 4.0 * cm, f"NIT: {p.nit or '—'} · {p.direccion or ''} {p.ciudad or ''}".strip())
+        pdf.setFont("Helvetica", 11)
+        y = h - 5.4 * cm
+        texto = (
+            f"{p.representante_legal or 'La Gerencia'}, en representación de {p.empresa or 'Procsis'}, certifica que "
+            f"{nombre_mostrar}, identificado(a) con usuario de acceso \"{u.usuario}\", fue admitido(a) para "
+            f"desempeñarse como {cargo or u.rol}, a partir del {fecha_ingreso or '—'}, vinculación vigente a la "
+            f"fecha de expedición del presente certificado."
+        )
+        for ln in simpleSplit(texto, "Helvetica", 11, w - 4 * cm):
+            pdf.drawString(2 * cm, y, ln)
+            y -= 16
+        y -= 40
+        pdf.drawString(2 * cm, y, f"Fecha de expedición: {fecha_hoy()}")
+        y -= 50
+        pdf.drawString(2 * cm, y, "___________________________")
+        y -= 12
+        pdf.drawString(2 * cm, y, p.representante_legal or "Gerencia")
+        pdf.save()
+        buf.seek(0)
+        registrar_auditoria("Certificado de admisión generado", f"{u.usuario} · cargo: {cargo} · ingreso: {fecha_ingreso}")
+        return send_file(buf, as_attachment=True, download_name=f"admision_{u.usuario}.pdf", mimetype="application/pdf")
+    content = f"""
+<header class="role-hero"><div>
+  <h1>📄 Admisión de personal</h1>
+  <p>Genere el certificado de vinculación laboral de un miembro del equipo de Procsis, con el logo de la empresa.</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver</a></header>
+<section class="role-panel">
+  <div style="overflow-x:auto">
+    <table>
+      <tr><th>Usuario</th><th>Rol</th><th>Generar</th></tr>
+      {filas}
+    </table>
+  </div>
+  <p class="mini-text" style="margin-top:8px">Los datos de NIT y dirección salen de <a href="/gerencia/datos-empresa">Datos de la empresa</a> — complételos primero para que el PDF salga completo.</p>
+</section>
+"""
+    return page("Admisión de personal", shell(content))
 
 
 
@@ -21682,7 +21797,6 @@ def _modulos_por_rol(rol):
         ("EduTrack HQ", "/gerencia/hq", "#0B2D57"),
         ("Anuncios globales", "/gerencia/anuncios", "#0B2D57"),
         ("Marca global", "/soporte/marca", "#0B2D57"),
-        ("🔐 Gestión de roles", "/gerencia/roles", "#7c2d12"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
         ("Editar planes", "/gerencia/planes", "#0B2D57"),
         ("Feature flags", "/feature_flags", "#7c2d12"),
