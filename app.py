@@ -2817,6 +2817,7 @@ def _normalizar_estado_factura(e):
 
 
 _migracion_bd_lista = False  # candado: ejecutar migrar_columnas() una sola vez por proceso, no en cada request
+_ultimo_dia_cron_facturacion = None  # candado: correr el ciclo de facturación automática una vez por día
 
 
 def inicializar_bd(): 
@@ -3077,6 +3078,21 @@ def before():
             db.session.rollback()
         except Exception:
             pass
+    # Facturación automática "en vivo": corre sola una vez al día (con el primer request
+    # que llegue ese día), sin depender de que alguien entre manualmente a /gerencia/facturacion/cron.
+    global _ultimo_dia_cron_facturacion
+    hoy_str = fecha_hoy()
+    if _ultimo_dia_cron_facturacion != hoy_str and not request.path.startswith("/static"):
+        _ultimo_dia_cron_facturacion = hoy_str
+        try:
+            _r_cron = _ciclo_facturacion_automatica()
+            print(f"Cron facturación automático ({hoy_str}): {_r_cron}")
+        except Exception as _cron_err:
+            print("cron facturacion auto:", _cron_err)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
     if requiere_login():
         ultimo = session.get("ultimo_movimiento")
         ahora_ts = ahora().timestamp()
@@ -22322,6 +22338,7 @@ def _modulos_por_rol(rol):
         ("Notas de cliente", "/notas-cliente", "#0f766e"),
         ("Retención", "/retencion", "#7c2d12"),
         ("Licencias y cobros", "/soporte/licencias", "#b45309"),
+        ("💳 Facturación y Cobranza", "/gerencia/facturacion-cobranza", "#b45309"),
         ("Cancelaciones", "/soporte/cancelaciones", "#b45309"),
         ("Historial de comisiones", "/ventas/comisiones", "#0f766e"),
         ("Propuesta comercial (PDF)", "/ventas/propuesta-pdf", "#b45309"),
@@ -32634,6 +32651,100 @@ def gerencia_facturacion_cron():
         f"<p>Instituciones bloqueadas por mora: <b>{r.get('bloqueadas', 0)}</b></p>"
         f"<p><a href='/gerencia/facturacion'>← Volver a facturación</a></p></div>",
     )
+
+
+@app.route("/gerencia/facturacion-cobranza", methods=["GET", "POST"])
+def gerencia_facturacion_cobranza():
+    """Panel unificado de Facturación y Cobranza — vivo, conectado a la activación de planes.
+    Muestra todas las facturas pendientes/vencidas de todos los colegios en un solo lugar,
+    permite marcarlas pagadas y dispara el ciclo automático manualmente si hace falta."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Comercial", "Soporte"):
+        return redirect("/gerencia-login")
+    mensaje = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        fid = request.form.get("factura_id", type=int)
+        f = FacturaCobro.query.get(fid) if fid else None
+        if accion == "marcar_pagada" and f:
+            f.estado = "PAGADO"
+            f.pagada_en = f"{fecha_hoy()} {hora_actual()}"
+            db.session.commit()
+            inst_pag = Institucion.query.get(f.institucion_id)
+            if inst_pag and inst_pag.estado == "SUSPENDIDA":
+                inst_pag.estado = "ACTIVA"
+                db.session.commit()
+            registrar_auditoria("Factura marcada pagada", f"{f.consecutivo} · {f.colegio_snapshot} · {_cop(f.valor)}")
+            mensaje = f"Factura {f.consecutivo} marcada como pagada."
+        elif accion == "anular" and f:
+            f.estado = "ANULADO"
+            db.session.commit()
+            registrar_auditoria("Factura anulada", f"{f.consecutivo} · {f.colegio_snapshot}")
+            mensaje = f"Factura {f.consecutivo} anulada."
+        elif accion == "correr_ciclo":
+            r = _ciclo_facturacion_automatica()
+            mensaje = f"Ciclo ejecutado: {r.get('generadas', 0)} factura(s) generada(s), {r.get('bloqueadas', 0)} colegio(s) bloqueado(s) por mora."
+    hoy = ahora().date() if hasattr(ahora(), "date") else datetime.now().date()
+    pendientes = FacturaCobro.query.filter_by(estado="PENDIENTE").order_by(FacturaCobro.vencimiento.asc()).all()
+    vencidas, por_vencer = [], []
+    for f in pendientes:
+        try:
+            d = datetime.strptime((f.vencimiento or hoy.isoformat())[:10], "%Y-%m-%d").date()
+        except Exception:
+            d = hoy
+        (vencidas if d < hoy else por_vencer).append(f)
+    pagadas_mes = FacturaCobro.query.filter(FacturaCobro.estado == "PAGADO", FacturaCobro.pagada_en.like(f"{hoy.strftime('%Y-%m')}%")).all()
+    total_pendiente = sum(f.valor or 0 for f in pendientes)
+    total_vencido = sum(f.valor or 0 for f in vencidas)
+    total_recaudado_mes = sum(f.valor or 0 for f in pagadas_mes)
+    instituciones_activas = Institucion.query.filter_by(estado="ACTIVA").count()
+    instituciones_mora = Institucion.query.filter(Institucion.estado.in_(["SUSPENDIDA", "CANCELACION_PENDIENTE"])).count()
+
+    def _fila(f, urgente=False):
+        return (
+            f"<tr style='{'background:#fef2f2' if urgente else ''}'>"
+            f"<td>{_esc(f.consecutivo)}</td><td>{_esc(f.colegio_snapshot)}</td><td>{_esc(f.tipo)}</td>"
+            f"<td>{_cop(f.valor)}</td><td>{_esc(f.vencimiento)}</td>"
+            f"<td><form method='POST' style='display:inline'><input type='hidden' name='accion' value='marcar_pagada'>"
+            f"<input type='hidden' name='factura_id' value='{f.id}'>"
+            f"<button type='submit' class='small-action' onclick=\"return confirm('¿Marcar {f.consecutivo} como pagada?')\">Marcar pagada</button></form> "
+            f"<form method='POST' style='display:inline'><input type='hidden' name='accion' value='anular'>"
+            f"<input type='hidden' name='factura_id' value='{f.id}'>"
+            f"<button type='submit' class='small-action' style='background:#b91c1c' onclick=\"return confirm('¿Anular {f.consecutivo}?')\">Anular</button></form></td></tr>"
+        )
+    filas_vencidas = "".join(_fila(f, urgente=True) for f in vencidas) or '<tr><td colspan="6">Sin facturas vencidas 🎉</td></tr>'
+    filas_por_vencer = "".join(_fila(f) for f in por_vencer) or '<tr><td colspan="6">Sin facturas pendientes por vencer</td></tr>'
+    content = f"""
+<header class="role-hero"><div>
+  <h1>💳 Facturación y Cobranza</h1>
+  <p>Vista en vivo de toda la cartera: se actualiza sola todos los días y se conecta directo con la activación
+  de planes (ventas / contrato digital) — nadie tiene que generar la primera factura a mano.</p>
+</div>
+<a class="btn" href="/gerencia/facturacion">Recibo manual</a></header>
+{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+<div class="role-grid" style="margin-bottom:14px">
+  <div class="role-card"><h3>{_cop(total_vencido)}</h3><p>Cartera vencida ({len(vencidas)} factura(s))</p></div>
+  <div class="role-card"><h3>{_cop(total_pendiente)}</h3><p>Total pendiente ({len(pendientes)} factura(s))</p></div>
+  <div class="role-card"><h3>{_cop(total_recaudado_mes)}</h3><p>Recaudado este mes</p></div>
+  <div class="role-card"><h3>{instituciones_activas}</h3><p>Colegios activos</p></div>
+  <div class="role-card"><h3 style="color:#b91c1c">{instituciones_mora}</h3><p>Colegios en mora / suspendidos</p></div>
+</div>
+<section class="role-panel">
+  <form method="POST" style="margin-bottom:10px">
+    <input type="hidden" name="accion" value="correr_ciclo">
+    <button type="submit">🔄 Ejecutar ciclo de facturación ahora</button>
+    <span class="mini-text" style="margin-left:8px">(ya corre solo una vez al día — este botón es solo para forzarlo manualmente)</span>
+  </form>
+  <h2 style="color:#b91c1c">⚠ Facturas vencidas</h2>
+  <div style="overflow-x:auto">
+    <table><tr><th>N°</th><th>Colegio</th><th>Tipo</th><th>Valor</th><th>Vencimiento</th><th>Acción</th></tr>{filas_vencidas}</table>
+  </div>
+  <h2 style="margin-top:20px">Pendientes (aún no vencen)</h2>
+  <div style="overflow-x:auto">
+    <table><tr><th>N°</th><th>Colegio</th><th>Tipo</th><th>Valor</th><th>Vencimiento</th><th>Acción</th></tr>{filas_por_vencer}</table>
+  </div>
+</section>
+"""
+    return page("Facturación y Cobranza", shell(content))
 
 
 # Bloqueo visual al ingresar si la institución está SUSPENDIDA
