@@ -905,6 +905,7 @@ class Plataforma(db.Model):
     direccion = db.Column(db.String(255), default="")
     ciudad = db.Column(db.String(120), default="")
     representante_legal = db.Column(db.String(160), default="")
+    bootstrap_usado = db.Column(db.Boolean, default=False)  # candado: reinicio de emergencia de staff, un solo uso
     # Textos editables del centro de ayuda (/pqr-info) y kit legal de ventas
     pqr_presentacion = db.Column(db.Text, default="")
     pqr_radicado = db.Column(db.Text, default="")
@@ -2534,6 +2535,7 @@ def migrar_columnas():
         ("plataforma", "direccion", "ALTER TABLE plataforma ADD COLUMN direccion VARCHAR(255) DEFAULT ''"),
         ("plataforma", "ciudad", "ALTER TABLE plataforma ADD COLUMN ciudad VARCHAR(120) DEFAULT ''"),
         ("plataforma", "representante_legal", "ALTER TABLE plataforma ADD COLUMN representante_legal VARCHAR(160) DEFAULT ''"),
+        ("plataforma", "bootstrap_usado", "ALTER TABLE plataforma ADD COLUMN bootstrap_usado BOOLEAN DEFAULT 0"),
         ("plataforma", "pqr_presentacion", "ALTER TABLE plataforma ADD COLUMN pqr_presentacion TEXT DEFAULT ''"),
         ("plataforma", "pqr_radicado", "ALTER TABLE plataforma ADD COLUMN pqr_radicado TEXT DEFAULT ''"),
         ("plataforma", "pqr_facturacion", "ALTER TABLE plataforma ADD COLUMN pqr_facturacion TEXT DEFAULT ''"),
@@ -3096,9 +3098,14 @@ def before():
     if requiere_login():
         ultimo = session.get("ultimo_movimiento")
         ahora_ts = ahora().timestamp()
-        if ultimo and ahora_ts - float(ultimo) > 600:
+        TIEMPO_MAX_INACTIVIDAD = 7200  # 2 horas — antes eran 10 min, cerraba la sesión demasiado rápido
+        if ultimo and ahora_ts - float(ultimo) > TIEMPO_MAX_INACTIVIDAD:
+            rol_expirado = session.get("rol")
             session.clear()
-            return redirect("/login")
+            destino = {"Soporte": "/soporte-login", "Comercial": "/ventas-login",
+                       "Gerente": "/gerencia-login", "Administrador": "/gerencia-login",
+                       "Superadmin": "/gerencia-login"}.get(rol_expirado, "/login")
+            return redirect(destino)
         session["ultimo_movimiento"] = ahora_ts
         if session.get("password_temporal") and request.path not in ["/cambiar_password", "/logout", "/docente-login"] and not request.path.startswith("/static") and not request.path.startswith("/docente"):
             return redirect("/cambiar_password")
@@ -14165,6 +14172,17 @@ def bootstrap_emergencia(token):
     secreto = "Procsis-Reset-2026-QzR8"  # fijo, no depende de variables de entorno
     if token != secreto:
         return acceso_denegado("Token inválido.")
+    p_lock = plataforma()
+    if getattr(p_lock, "bootstrap_usado", False):
+        return page("Reinicio ya usado", """
+<div style="max-width:600px;margin:60px auto;font-family:Segoe UI;padding:24px;background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
+<h1 style="color:#b91c1c">Esta puerta ya se usó una vez</h1>
+<p>Por seguridad, este reinicio de emergencia solo se puede usar <b>una vez</b>. Ya fue usado antes, así que
+visitar esta URL de nuevo no vuelve a borrar ni crear cuentas — así evitamos que sus credenciales se
+reinicien sin que usted lo pida.</p>
+<p>Si de verdad necesita repetirlo (perdió el acceso otra vez), pídaselo a Claude para que lo reactive
+puntualmente.</p>
+</div>""")
     try:
         ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
         ids_viejos = [u.id for u in Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).all()]
@@ -14197,6 +14215,8 @@ def bootstrap_emergencia(token):
         tb = traceback.format_exc()
         return f"<pre style='white-space:pre-wrap;font-family:monospace;padding:20px;color:#b91c1c'>ERROR REAL:\n{tb}</pre>", 500
     registrar_auditoria("BOOTSTRAP DE EMERGENCIA", f"{borrados} cuenta(s) de staff eliminadas, {len(creadas)} nueva(s) creadas")
+    p_lock.bootstrap_usado = True
+    db.session.commit()
     filas = "".join(
         f"<tr><td><b>{u}</b></td><td>{r}</td><td><code style='font-size:15px'>{c}</code></td>"
         f"<td><a href='/{'soporte' if r=='Soporte' else ('ventas' if r=='Comercial' else 'gerencia')}-login'>Ir a iniciar sesión</a></td></tr>"
@@ -14237,8 +14257,9 @@ background:#fff;padding:10px 16px;box-shadow:0 12px 40px rgba(0,0,0,.25)}}
 .bo-box .sub{{text-align:center;opacity:.88;margin:0 0 8px;font-size:14px;line-height:1.45}}
 .bo-badge{{display:inline-block;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.35);
 color:#fbbf24;font-size:12px;font-weight:700;padding:6px 12px;border-radius:999px;margin:0 auto 22px;text-align:center}}
-.bo-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
-@media(max-width:720px){{.bo-grid{{grid-template-columns:1fr}}}}
+.bo-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}}
+@media(max-width:900px){{.bo-grid{{grid-template-columns:repeat(2,1fr)}}}}
+@media(max-width:520px){{.bo-grid{{grid-template-columns:1fr}}}}
 .bo-card{{background:#fff;color:#0f172a;border-radius:18px;padding:28px 20px 24px;text-align:center;
 text-decoration:none;box-shadow:0 16px 40px rgba(0,0,0,.22);transition:transform .18s ease,box-shadow .18s ease;
 border:1px solid rgba(255,255,255,.08);display:block}}
@@ -14250,6 +14271,7 @@ font-size:26px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px sol
 .bo-card.s .bo-ico{{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-color:#a7f3d0}}
 .bo-card.v .bo-ico{{background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fed7aa}}
 .bo-card.g .bo-ico{{background:linear-gradient(135deg,#eff6ff,#dbeafe);border-color:#93c5fd}}
+.bo-card.f .bo-ico{{background:linear-gradient(135deg,#fef2f2,#fee2e2);border-color:#fecaca}}
 .bo-cta{{display:inline-block;margin-top:14px;padding:8px 14px;border-radius:10px;background:#0B2D57;color:#fff;
 font-size:12px;font-weight:800;letter-spacing:.02em}}
 .bo-card:hover .bo-cta{{background:#1e40af}}
@@ -14279,6 +14301,12 @@ font-size:12px;font-weight:800;letter-spacing:.02em}}
       <div class="bo-ico">📊</div>
       <h2>Gerencia</h2>
       <p>Planes, precios, supervisión comercial y control de la operación.</p>
+      <span class="bo-cta">Ingresar →</span>
+    </a>
+    <a class="bo-card f" href="/gerencia/facturacion-cobranza">
+      <div class="bo-ico">💳</div>
+      <h2>Facturación y Cobranza</h2>
+      <p>Cartera vencida, pendientes y recaudo de todos los colegios, en vivo.</p>
       <span class="bo-cta">Ingresar →</span>
     </a>
   </div>
@@ -14319,6 +14347,7 @@ def ventas_login():
                     session["usuario"] = user.usuario
                     session["rol"] = rol
                     session["uid"] = user.id
+                    session["password_temporal"] = bool(user.password_temporal)
                     try:
                         registrar_sesion_empleado(user)
                     except Exception:
@@ -14388,6 +14417,7 @@ def gerencia_login():
                     session["usuario"] = user.usuario
                     session["rol"] = rol
                     session["uid"] = user.id
+                    session["password_temporal"] = bool(user.password_temporal)
                     try:
                         registrar_sesion_empleado(user)
                     except Exception:
@@ -14396,7 +14426,10 @@ def gerencia_login():
                     return redirect("/gerencia/hq")
             else:
                 _rate_limit_fail()
-                error = "Solo Gerencia / Superadmin / Soporte."
+                if not user:
+                    error = "Usuario o contraseña incorrectos."
+                else:
+                    error = f'El usuario "{user.usuario}" tiene el rol "{rol or "(sin rol)"}", que no tiene acceso a Gerencia.'
     _logo_proc = logo_plataforma()
     body = f"""
 <style>
@@ -16840,41 +16873,45 @@ def ventas_propuesta_pdf():
     if not ok_rl:
         return _rate_limit_response(espera)
     try:
-        _seed_planes_comerciales()
-    except Exception:
-        pass
-    planes = PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden.asc()).all()
-    addons = AddonComercial.query.filter_by(activo=True).all()
-    partes = [
-        "<p><b>Propuesta comercial — Plataforma EduTrack</b></p>",
-        "<p>Preparada por Procsis para su institución educativa. Precios en pesos colombianos (COP), sujetos a los planes vigentes.</p>",
-        "<h2>Planes disponibles</h2>",
-    ]
-    for p in planes:
-        feats = []
         try:
-            feats = json.loads(p.features_json or "[]")
+            _seed_planes_comerciales()
         except Exception:
+            pass
+        planes = PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden.asc()).all()
+        addons = AddonComercial.query.filter_by(activo=True).all()
+        partes = [
+            "<p><b>Propuesta comercial — Plataforma EduTrack</b></p>",
+            "<p>Preparada por Procsis para su institución educativa. Precios en pesos colombianos (COP), sujetos a los planes vigentes.</p>",
+            "<h2>Planes disponibles</h2>",
+        ]
+        for p in planes:
             feats = []
-        feats_txt = " · ".join(feats[:6]) if feats else ""
+            try:
+                feats = json.loads(p.features_json or "[]")
+            except Exception:
+                feats = []
+            feats_txt = " · ".join(feats[:6]) if feats else ""
+            partes.append(
+                f"<p><b>{p.nombre}</b> — Mensualidad: {_cop(p.precio_mensual)} · "
+                f"Implementación (pago único): {_cop(p.fee_implementacion)} · "
+                f"Hasta {p.max_estudiantes} estudiantes, {p.max_sedes} sede(s)."
+                + (f"<br>{feats_txt}" if feats_txt else "") + "</p>"
+            )
+        if addons:
+            partes.append("<h2>Módulos adicionales (add-ons)</h2>")
+            for a in addons:
+                partes.append(f"<p><b>{a.nombre}</b> — {_cop(a.precio_mensual)}/mes. {a.descripcion or ''}</p>")
+        partes.append("<h2>Condiciones</h2>")
         partes.append(
-            f"<p><b>{p.nombre}</b> — Mensualidad: {_cop(p.precio_mensual)} · "
-            f"Implementación (pago único): {_cop(p.fee_implementacion)} · "
-            f"Hasta {p.max_estudiantes} estudiantes, {p.max_sedes} sede(s)."
-            + (f"<br>{feats_txt}" if feats_txt else "") + "</p>"
+            "<p>Renovación mensual automática. Implementación, migración de datos y capacitación incluidas en el fee. "
+            "Tratamiento de datos conforme a la Ley 1581 de 2012. Propuesta válida por 15 días desde su emisión.</p>"
         )
-    if addons:
-        partes.append("<h2>Módulos adicionales (add-ons)</h2>")
-        for a in addons:
-            partes.append(f"<p><b>{a.nombre}</b> — {_cop(a.precio_mensual)}/mes. {a.descripcion or ''}</p>")
-    partes.append("<h2>Condiciones</h2>")
-    partes.append(
-        "<p>Renovación mensual automática. Implementación, migración de datos y capacitación incluidas en el fee. "
-        "Tratamiento de datos conforme a la Ley 1581 de 2012. Propuesta válida por 15 días desde su emisión.</p>"
-    )
-    partes.append(f"<p>Atentamente<br>Equipo comercial EduTrack — Procsis<br>Asesor: {(session.get('usuario') or '').title()}</p>")
-    html_body = "".join(partes)
-    data = _doc_pdf_bytes("Propuesta comercial EduTrack", html_body, confidencial=False)
+        partes.append(f"<p>Atentamente<br>Equipo comercial EduTrack — Procsis<br>Asesor: {(session.get('usuario') or '').title()}</p>")
+        html_body = "".join(partes)
+        data = _doc_pdf_bytes("Propuesta comercial EduTrack", html_body, confidencial=False)
+    except Exception as ex:
+        import traceback
+        return f"<pre style='white-space:pre-wrap;font-family:monospace;padding:20px;color:#b91c1c'>ERROR REAL:\n{traceback.format_exc()}</pre>", 500
     from flask import Response
     return Response(
         data,
@@ -17622,11 +17659,13 @@ def soporte_logs_errores():
 
 @app.errorhandler(Exception)
 def _capturar_error_sistema(e):
-    """Registra excepciones no controladas en logs_errores (no oculta el error en debug)."""
+    """Registra excepciones no controladas en logs_errores y muestra una pantalla con
+    código de referencia en vez de dejar la pantalla en blanco de Flask."""
+    log_id = None
     try:
         if request.path.startswith("/static"):
             raise e
-        db.session.add(LogErrorSistema(
+        log = LogErrorSistema(
             ts=_ahora_str_ms() if "_ahora_str_ms" in dir() else f"{fecha_hoy()} {hora_actual()}",
             nivel="ERROR",
             mensaje=str(e)[:2000],
@@ -17634,8 +17673,10 @@ def _capturar_error_sistema(e):
             usuario=session.get("usuario") or "",
             institucion_id=session.get("institucion_id"),
             traceback=(__import__("traceback").format_exc() or "")[:4000],
-        ))
+        )
+        db.session.add(log)
         db.session.commit()
+        log_id = log.id
     except Exception:
         try:
             db.session.rollback()
@@ -17648,7 +17689,23 @@ def _capturar_error_sistema(e):
         _tb.print_exc()
     except Exception:
         pass
-    raise e
+    if request.path.startswith("/static"):
+        raise e
+    ref = f"#{log_id}" if log_id else "sin registrar"
+    detalle_staff = ""
+    try:
+        if rol_actual() in ("Gerente", "Superadmin", "Administrador"):
+            detalle_staff = f"<p style='font-size:12px;color:#94a3b8;margin-top:16px'>{_esc(str(e))[:300]}</p>"
+    except Exception:
+        pass
+    html = f"""
+<div style="max-width:480px;margin:70px auto;font-family:Segoe UI,Arial;text-align:center;padding:24px">
+  <h1 style="color:#b91c1c">Algo salió mal</h1>
+  <p>Ocurrió un error inesperado. Ya quedó registrado con el código <b>{ref}</b> para que Soporte lo revise.</p>
+  <p><a href="javascript:history.back()">← Volver</a> · <a href="/">Ir al inicio</a></p>
+  {detalle_staff}
+</div>"""
+    return html, 500
 
 
 @app.route("/gerencia/web-corporativa", methods=["GET", "POST"])
@@ -19326,6 +19383,8 @@ def gerencia_usuarios():
                 error = "Usuario no válido."
             elif nuevo_rol not in ("Comercial", "Soporte", "Gerente"):
                 error = "Rol no permitido."
+            elif session.get("uid") == u.id and nuevo_rol != u.rol:
+                error = "No puede cambiarse el rol a usted mismo — pídaselo a otro Gerente/Superadmin."
             else:
                 anterior = u.rol
                 u.rol = nuevo_rol
@@ -19342,10 +19401,13 @@ def gerencia_usuarios():
                 error = "La contraseña debe tener mínimo 8 caracteres."
             else:
                 u.password = crear_hash(nueva_clave)
-                u.password_temporal = True
+                es_uno_mismo = session.get("uid") == u.id
+                u.password_temporal = not es_uno_mismo  # si se la cambia a sí mismo, no la vuelve a pedir
                 db.session.commit()
-                registrar_auditoria("Gerencia cambió clave", f"{u.usuario} (clave temporal asignada)")
-                msg = f"Contraseña de <b>{u.usuario}</b> actualizada. Debe cambiarla al entrar."
+                if es_uno_mismo:
+                    session["password_temporal"] = False
+                registrar_auditoria("Gerencia cambió clave", f"{u.usuario} ({'su propia cuenta' if es_uno_mismo else 'clave temporal asignada'})")
+                msg = f"Contraseña de <b>{u.usuario}</b> actualizada." + ("" if es_uno_mismo else " Debe cambiarla al entrar.")
         elif accion == "toggle_activo":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
@@ -21135,6 +21197,7 @@ def api_biometria_estado(token):
             session["usuario"] = u.usuario
             session["rol"] = (u.rol or "").strip()
             session["uid"] = u.id
+            session["password_temporal"] = bool(u.password_temporal)
             session.permanent = True
             try:
                 registrar_sesion_empleado(u)
@@ -22344,7 +22407,7 @@ def _modulos_por_rol(rol):
         ("Propuesta comercial (PDF)", "/ventas/propuesta-pdf", "#b45309"),
         ("Generar contrato digital", "/ventas/contrato-digital", "#7c2d12"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
-        ("Instituciones (consulta)", "/tenants", "#64748b"),
+        ("Instituciones (ver / eliminar)", "/tenants", "#64748b"),
     ]
     gerencia = ventas + [
         ("EduTrack HQ", "/gerencia/hq", "#0B2D57"),
@@ -23568,46 +23631,58 @@ def editar_institucion(id):
 
 @app.route("/eliminar_institucion/<int:id>")
 def eliminar_institucion(id):
-    """Borrado definitivo de institución (no se recrea sola)."""
+    """Borrado definitivo de institución (no se recrea sola). Limpia TODAS las tablas que
+    tengan institucion_id o estudiante_id ligado a este colegio, buscándolas automáticamente
+    en vez de una lista fija a mano (para no volver a olvidar una tabla nueva)."""
     if not requiere_soporte_global():
         return redirect("/login")
     inst = Institucion.query.get_or_404(id)
     codigo = inst.codigo or str(id)
     nombre = inst.nombre or ""
     try:
-        # Limpiar datos ligados al tenant
-        for model_name in [
-            "Configuracion", "FeatureFlag", "SedeInstitucion", "PreMatricula",
-            "TicketPQR", "AsignacionDocente", "SieeDimension", "SieeCriterio",
-            "NotaRegistro", "FaltaPlanilla",
-        ]:
+        # 1) IDs de estudiantes de este colegio, para limpiar tablas que solo tienen estudiante_id
+        ids_estudiantes = [e.id for e in Estudiante.query.filter_by(institucion_id=inst.id).all()]
+        modelos_por_estudiante = []
+        modelos_por_institucion = []
+        for mapper in db.Model.registry.mappers:
+            cls = mapper.class_
+            if cls is Institucion or cls is Estudiante:
+                continue
+            if hasattr(cls, "estudiante_id"):
+                modelos_por_estudiante.append(cls)
+            elif hasattr(cls, "institucion_id"):
+                modelos_por_institucion.append(cls)
+        if ids_estudiantes:
+            for cls in modelos_por_estudiante:
+                try:
+                    cls.query.filter(cls.estudiante_id.in_(ids_estudiantes)).delete(synchronize_session=False)
+                except Exception:
+                    db.session.rollback()
+        for cls in modelos_por_institucion:
             try:
-                model = globals().get(model_name)
-                if model is not None and hasattr(model, "institucion_id"):
-                    model.query.filter_by(institucion_id=inst.id).delete(synchronize_session=False)
+                cls.query.filter(cls.institucion_id == inst.id).delete(synchronize_session=False)
             except Exception:
                 db.session.rollback()
-        # Usuarios del colegio (no Soporte global)
+        # Usuarios propios del colegio (Soporte global no se toca, solo se desvincula)
+        ids_usuarios_colegio = [
+            u.id for u in Usuario.query.filter(Usuario.institucion_id == inst.id).all()
+            if (u.rol or "") != "Soporte"
+        ]
+        if ids_usuarios_colegio:
+            for mapper in db.Model.registry.mappers:
+                cls = mapper.class_
+                if cls is Usuario or not hasattr(cls, "usuario_id"):
+                    continue
+                try:
+                    cls.query.filter(cls.usuario_id.in_(ids_usuarios_colegio)).delete(synchronize_session=False)
+                except Exception:
+                    db.session.rollback()
         for u in Usuario.query.filter(Usuario.institucion_id == inst.id).all():
             if (u.rol or "") == "Soporte":
                 u.institucion_id = None
             else:
-                try:
-                    AsignacionDocente.query.filter_by(usuario_id=u.id).delete(synchronize_session=False)
-                except Exception:
-                    pass
                 db.session.delete(u)
-        # Estudiantes del colegio
-        for e in Estudiante.query.filter_by(institucion_id=inst.id).all():
-            try:
-                IngresoPorteria.query.filter_by(estudiante_id=e.id).delete(synchronize_session=False)
-            except Exception:
-                pass
-            try:
-                AsistenciaClase.query.filter_by(estudiante_id=e.id).delete(synchronize_session=False)
-            except Exception:
-                pass
-            db.session.delete(e)
+        Estudiante.query.filter_by(institucion_id=inst.id).delete(synchronize_session=False)
         db.session.delete(inst)
         db.session.commit()
         if session.get("institucion_id") == id:
