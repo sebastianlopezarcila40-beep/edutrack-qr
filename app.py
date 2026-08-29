@@ -104,27 +104,51 @@ def _password_ok(pw):
     return True, ""
 
 
-def _rate_limit_login(max_attempts=5, window_sec=900):
-    """Bloquea IP tras demasiados fallos de login (15 min)."""
+def _rate_limit_login(max_attempts=8, window_sec=120, portal="general"):
+    """Límite de login POR PORTAL e IP (no comparte bloqueo entre gerencia/ventas/soporte/cobranza).
+    Gerencia: sin bloqueo (portal='gerencia' → siempre OK).
+    Otros: ventana corta (2 min) y más intentos para no trabar operación."""
     import time
+    if (portal or "").lower() in ("gerencia", "gerente", "hq", "admin"):
+        return True, 0
     ip = _client_ip()
+    key = f"{ip}:{portal or 'general'}"
     now = time.time()
-    arr = [t for t in _login_attempts.get(ip, []) if now - t < window_sec]
-    _login_attempts[ip] = arr
+    arr = [t for t in _login_attempts.get(key, []) if now - t < window_sec]
+    _login_attempts[key] = arr
     if len(arr) >= max_attempts:
-        return False, max(1, int(window_sec - (now - arr[0])) // 60)
+        return False, max(1, int(window_sec - (now - arr[0])))
     return True, 0
 
 
-def _rate_limit_fail():
+def _rate_limit_fail(portal="general"):
     import time
+    if (portal or "").lower() in ("gerencia", "gerente", "hq", "admin"):
+        return
     ip = _client_ip()
-    _login_attempts.setdefault(ip, []).append(time.time())
+    key = f"{ip}:{portal or 'general'}"
+    _login_attempts.setdefault(key, []).append(time.time())
 
 
-def _rate_limit_ok():
+def _rate_limit_ok(portal="general"):
     ip = _client_ip()
+    key = f"{ip}:{portal or 'general'}"
+    _login_attempts.pop(key, None)
+    # compat: limpiar clave vieja solo-IP
     _login_attempts.pop(ip, None)
+
+
+def _rate_limit_clear_all(ip=None):
+    """Soporte/Gerencia: limpia bloqueos de login (reinicio de acceso)."""
+    if ip:
+        keys = [k for k in list(_login_attempts.keys()) if str(k).startswith(str(ip))]
+        for k in keys:
+            _login_attempts.pop(k, None)
+        _login_attempts.pop(ip, None)
+        return len(keys)
+    n = len(_login_attempts)
+    _login_attempts.clear()
+    return n
 
 
 # ── Rate limiting genérico (no solo login): protege PDFs, formularios públicos, etc. ──
@@ -147,11 +171,17 @@ def _rate_limit(nombre, max_veces=20, ventana_seg=60):
 
 
 def _rate_limit_response(espera_seg):
+    # espera_seg ya viene en segundos
+    try:
+        espera_seg = max(1, int(espera_seg))
+    except Exception:
+        espera_seg = 30
     resp = page(
         "Demasiadas solicitudes",
-        f"""<div style="font-family:Segoe UI,Arial;max-width:480px;margin:60px auto;text-align:center;padding:20px">
-        <h1 style="color:#b91c1c">Demasiadas solicitudes</h1>
-        <p>Está haciendo esta acción con mucha frecuencia. Espere aproximadamente {espera_seg} segundos e intente de nuevo.</p>
+        f"""<div style="font-family:Tahoma,Segoe UI,Arial;max-width:480px;margin:60px auto;text-align:center;padding:20px;background:#f0f0f0;border:2px solid #808080">
+        <h1 style="color:#b91c1c;font-size:18px">Demasiadas solicitudes</h1>
+        <p style="font-size:13px">Espere aproximadamente <b>{espera_seg}</b> segundos e intente de nuevo.<br>
+        Si es Gerencia/Soporte, use <b>Reinicio de acceso</b> en el panel de Soporte.</p>
         <a href="javascript:history.back()">← Volver</a></div>""",
     )
     return resp, 429
@@ -5833,9 +5863,9 @@ def login():
     error = ""
     rate_blocked = False
     if request.method == "POST":
-        ok_rl, wait_m = _rate_limit_login()
+        ok_rl, wait_m = _rate_limit_login(portal="colegios")
         if not ok_rl:
-            error = f"Demasiados intentos. Espere {wait_m} min."
+            error = f"Demasiados intentos. Espere {wait_m} segundos."
             rate_blocked = True
     inst_id = request.values.get("institucion_id") or request.args.get("inst")
     try:
@@ -5936,9 +5966,10 @@ def login():
                     error = "Contraseña incorrecta para este colegio."
             elif mismos:
                 error = "Contraseña incorrecta."
+                _rate_limit_fail(portal="colegios")
             else:
-                _rate_limit_fail()
-            error = "Usuario o contraseña incorrectos."
+                _rate_limit_fail(portal="colegios")
+                error = "Usuario o contraseña incorrectos."
 
     instituciones = Institucion.query.filter(
         Institucion.estado.in_(["ACTIVA", "CANCELACION_PENDIENTE"])
@@ -14666,12 +14697,12 @@ font-size:12px;font-weight:800;letter-spacing:.02em}}
 
 @app.route("/ventas-login", methods=["GET", "POST"])
 def ventas_login():
-    """Login exclusivo asesores comerciales (rol Comercial o Soporte/Gerente)."""
+    """Login exclusivo asesores comerciales (rol Comercial)."""
     error = ""
     if request.method == "POST":
-        ok_rl, wait_m = _rate_limit_login()
+        ok_rl, wait_m = _rate_limit_login(portal="ventas")
         if not ok_rl:
-            return _rate_limit_response(wait_m * 60)
+            return _rate_limit_response(wait_m)
         if True:
             user = login_usuario(request.form.get("usuario"), request.form.get("password"))
             rol = (user.rol or "").strip() if user else ""
@@ -14702,10 +14733,10 @@ def ventas_login():
                     except Exception:
                         pass
                     registrar_auditoria("Login ventas", user.usuario)
-                    _rate_limit_ok()
+                    _rate_limit_ok(portal="ventas")
                     return redirect("/ventas/panel")
             else:
-                _rate_limit_fail()
+                _rate_limit_fail(portal="ventas")
                 error = "Solo personal con rol Comercial (Ventas). Use el portal de su rol."
     _logo_proc = logo_plataforma()
     body = f"""
@@ -14751,9 +14782,9 @@ def gerencia_login():
     """Login gerencia: planes y control."""
     error = ""
     if request.method == "POST":
-        ok_rl, wait_m = _rate_limit_login()
+        ok_rl, wait_m = _rate_limit_login(portal="gerencia")
         if not ok_rl:
-            return _rate_limit_response(wait_m * 60)
+            return _rate_limit_response(wait_m)
         if True:
             user = login_usuario(request.form.get("usuario"), request.form.get("password"))
             rol = (user.rol or "").strip() if user else ""
@@ -14761,7 +14792,7 @@ def gerencia_login():
                 if not _usuario_activo_ok(user):
                     error = "Usuario desactivado."
                 else:
-                    _rate_limit_ok()
+                    _rate_limit_ok(portal="gerencia")
                     session.clear()
                     session["usuario"] = user.usuario
                     session["rol"] = rol
@@ -14773,9 +14804,13 @@ def gerencia_login():
                     except Exception:
                         pass
                     registrar_auditoria("Login gerencia", user.usuario)
+                    try:
+                        _rate_limit_clear_all()
+                    except Exception:
+                        pass
                     return redirect("/gerencia/hq")
             else:
-                _rate_limit_fail()
+                _rate_limit_fail(portal="gerencia")
                 if not user:
                     error = "Usuario o contraseña incorrectos."
                 else:
@@ -15003,6 +15038,7 @@ def gerencia_hq():
       <h2>Reservado a dirección / gerencia</h2>
       <div class="grid-mod">
         <a class="own" href="/gerencia/turnos">👥 Turnos y notas de gestión</a>
+        <a class="own" href="/gerencia/almacenamiento">💾 Almacenamiento GB</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -21651,9 +21687,9 @@ def soporte_login():
     """Acceso directo de Soporte desde el login público (sin elegir colegio ni ver datos confidenciales de estudiantes)."""
     error = ""
     if request.method == "POST":
-        ok_rl, wait_m = _rate_limit_login()
+        ok_rl, wait_m = _rate_limit_login(portal="soporte")
         if not ok_rl:
-            return _rate_limit_response(wait_m * 60)
+            return _rate_limit_response(wait_m)
         user = login_usuario(request.form.get("usuario"), request.form.get("password"))
         if user and (user.rol or "").strip() in ("Soporte", "Superadmin"):
             # Normalizar activo si la columna viene NULL
@@ -21672,7 +21708,7 @@ def soporte_login():
                 # Flujo biométrico: PIN en PC + aprobación en app móvil
                 usar_bio = os.environ.get("BIOMETRIA_LOGIN", "1") != "0"
                 if usar_bio:
-                    _rate_limit_ok()
+                    _rate_limit_ok(portal="soporte")
                     ch = _crear_reto_biometrico(user.id)
                     session.clear()
                     session["bio_token"] = ch.token
@@ -21705,7 +21741,7 @@ def soporte_login():
                 session["password_temporal"] = bool(user.password_temporal)
                 session["ultimo_movimiento"] = ahora().timestamp()
                 session.pop("institucion_id", None)
-                _rate_limit_ok()
+                _rate_limit_ok(portal="soporte")
                 if _mfa_requerido(user):
                     session["mfa_pendiente"] = True
                     session["mfa_user_id"] = user.id
@@ -22957,6 +22993,8 @@ def soporte_admin():
 <section class="role-panel" style="margin-bottom:14px">
   <h2 style="margin:0 0 10px">👥 Gestión de usuarios</h2>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    <a class="btn" href="/soporte/reinicio-acceso" style="background:#b91c1c;color:#fff">🔄 Reinicio de acceso</a>
+    <a class="btn" href="/soporte/almacenamiento" style="background:#0f766e;color:#fff">💾 Almacenamiento GB</a>
     <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">Restablecer contraseñas</a>
     <a class="btn" href="/soporte/impersonar" style="background:#0369a1;color:#fff">Impersonar perfil</a>
     <a class="btn" href="/usuarios" style="background:#0f766e;color:#fff">Buscar usuarios</a>
@@ -33502,14 +33540,263 @@ def modulo_turnos():
     return page(f"Turnos {area}", shell(content))
 
 
+
+def _bytes_dir(path):
+    total = 0
+    try:
+        for root, dirs, files in os.walk(path):
+            for f in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, f))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return total
+
+
+def _uso_almacenamiento_colegio(inst):
+    """Estima bytes usados por un colegio (logos, fotos, uploads con id)."""
+    root = app.root_path
+    used = 0
+    candidates = [
+        os.path.join(root, "static", "uploads", "logos", str(inst.id)),
+        os.path.join(root, "static", "uploads", "fotos_estudiantes"),
+        os.path.join(root, "static", "uploads", "excusas", str(inst.id)),
+        os.path.join(root, "static", "uploads", "piar"),
+        os.path.join(root, "static", "uploads", f"inst_{inst.id}"),
+        os.path.join(root, "static", "uploads", "colegios", str(inst.id)),
+    ]
+    # logo path if local
+    try:
+        logo = (inst.logo or "") if hasattr(inst, "logo") else ""
+        if logo.startswith("/static/"):
+            lp = os.path.join(root, logo.lstrip("/"))
+            if os.path.isfile(lp):
+                used += os.path.getsize(lp)
+    except Exception:
+        pass
+    for p in candidates:
+        if os.path.isdir(p):
+            # fotos: filtrar por prefijo si es carpeta compartida
+            if p.endswith("fotos_estudiantes"):
+                try:
+                    for fn in os.listdir(p):
+                        # no hay inst id en nombre siempre; contar solo si hay tenant path
+                        fp = os.path.join(p, fn)
+                        if os.path.isfile(fp):
+                            # aproximación: no atribuir todas las fotos a un colegio en carpeta compartida
+                            pass
+                except Exception:
+                    pass
+            else:
+                used += _bytes_dir(p)
+    # tenant db file if multi-tenant files
+    try:
+        tdb = os.path.join(root, "database", "tenants", f"{inst.codigo}.db")
+        if os.path.isfile(tdb):
+            used += os.path.getsize(tdb)
+    except Exception:
+        pass
+    quota = float(ALMACENAMIENTO_GB_POR_COLEGIO) * (1024 ** 3)
+    return {
+        "used_bytes": used,
+        "quota_bytes": quota,
+        "used_gb": round(used / (1024 ** 3), 3),
+        "quota_gb": ALMACENAMIENTO_GB_POR_COLEGIO,
+        "free_gb": max(0, round((quota - used) / (1024 ** 3), 3)),
+        "pct": min(100, round((used / quota) * 100, 1)) if quota else 0,
+    }
+
+
+# CSS Win32 classic tables (reusable)
+WIN32_TABLE_CSS = """
+.w32-box{font-family:Tahoma,'MS Sans Serif',Segoe UI,sans-serif;background:#c0c0c0;border:2px solid;border-color:#dfdfdf #808080 #808080 #dfdfdf;padding:6px;margin:10px 0}
+.w32-title{background:#000080;color:#fff;font-weight:700;font-size:12px;padding:4px 8px;margin:-6px -6px 6px -6px;font-family:Tahoma,sans-serif}
+.w32-toolbar{background:#c0c0c0;padding:4px 0;margin-bottom:4px;font-size:12px}
+.w32-toolbar button,.w32-btn{font-family:Tahoma,sans-serif;font-size:11px;background:#c0c0c0;border:2px solid;border-color:#dfdfdf #808080 #808080 #dfdfdf;padding:3px 10px;cursor:pointer;margin-right:4px}
+.w32-toolbar button:active,.w32-btn:active{border-color:#808080 #dfdfdf #dfdfdf #808080}
+.w32-tbl-wrap{background:#fff;border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080;overflow:auto;max-height:480px}
+.w32-tbl{width:100%;border-collapse:collapse;font-size:11px;font-family:Tahoma,'MS Sans Serif',sans-serif}
+.w32-tbl th{background:#c0c0c0;border:1px solid #808080;padding:3px 6px;text-align:left;font-weight:700;position:sticky;top:0}
+.w32-tbl td{border:1px solid #c0c0c0;padding:2px 6px;background:#fff;white-space:nowrap}
+.w32-tbl tr:nth-child(even) td{background:#f0f0f0}
+.w32-tbl tr.sel td{background:#000080;color:#fff}
+.w32-tbl tr:hover td{background:#e8e8ff}
+.w32-status{background:#c0c0c0;border-top:1px solid #808080;padding:2px 6px;font-size:11px;margin:4px -6px -6px -6px}
+.w32-input{font-family:Tahoma,sans-serif;font-size:11px;border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080;padding:2px 4px;background:#fff}
+.w32-field{background:#fff;border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080;padding:6px;margin:6px 0}
+"""
+
+
+@app.route("/soporte/almacenamiento")
+@app.route("/gerencia/almacenamiento")
+def modulo_almacenamiento():
+    """GB por colegio: cuota, usado, disponible (Soporte y Gerencia)."""
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
+    q = (request.args.get("q") or "").strip()
+    insts = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    if q:
+        like = f"%{q}%"
+        insts = [i for i in insts if q.lower() in (i.nombre or "").lower() or q.lower() in (i.codigo or "").lower() or q in (i.nit or "")]
+    filas = ""
+    total_used = 0
+    for i, inst in enumerate(insts[:200]):
+        u = _uso_almacenamiento_colegio(inst)
+        total_used += u["used_bytes"]
+        bar = int(u["pct"])
+        filas += (
+            f"<tr>"
+            f"<td>{i+1}</td>"
+            f"<td style='font-weight:700'>{_esc(inst.codigo)}</td>"
+            f"<td>{_esc(inst.nombre)[:45]}</td>"
+            f"<td>{_esc(inst.estado or '')}</td>"
+            f"<td>{u['quota_gb']} GB</td>"
+            f"<td>{u['used_gb']} GB</td>"
+            f"<td>{u['free_gb']} GB</td>"
+            f"<td>{u['pct']}%"
+            f"<div style='height:10px;background:#c0c0c0;border:1px solid #808080;width:80px;display:inline-block;vertical-align:middle;margin-left:6px'>"
+            f"<div style='height:100%;width:{bar}%;background:{'#c00' if bar>90 else '#000080'}'></div></div></td>"
+            f"</tr>"
+        )
+    if not filas:
+        filas = "<tr><td colspan='8'>Sin colegios</td></tr>"
+    total_gb = round(total_used / (1024**3), 3)
+    volver = _home_portal()
+    content = f"""
+<style>{WIN32_TABLE_CSS}</style>
+<header class="role-hero"><div>
+  <h1>💾 Almacenamiento por colegio</h1>
+  <p>Cuota fija: <b>{ALMACENAMIENTO_GB_POR_COLEGIO} GB</b> por institución · Uso estimado de archivos del tenant</p>
+</div><a class="btn" href="{volver}">Volver</a></header>
+<div class="w32-box">
+  <div class="w32-title">Almacenamiento · EduTrack</div>
+  <div class="w32-toolbar">
+    <form method="GET" style="display:inline">
+      <input class="w32-input" name="q" value="{_esc(q)}" placeholder="Buscar código o nombre">
+      <button type="submit" class="w32-btn">Buscar</button>
+    </form>
+    <span style="margin-left:12px;font-size:11px">Total usado (aprox): <b>{total_gb} GB</b> · Colegios listados: {len(insts[:200])}</span>
+  </div>
+  <div class="w32-tbl-wrap">
+    <table class="w32-tbl">
+      <tr><th>#</th><th>CUENTA</th><th>COLEGIO</th><th>ESTADO</th><th>CUOTA</th><th>USADO</th><th>DISPONIBLE</th><th>CONSUMO</th></tr>
+      {filas}
+    </table>
+  </div>
+  <div class="w32-status">Listo · Cuota por colegio = {ALMACENAMIENTO_GB_POR_COLEGIO} GB</div>
+</div>
+"""
+    return page("Almacenamiento", shell(content))
+
+
+@app.route("/soporte/reinicio-acceso", methods=["GET", "POST"])
+def soporte_reinicio_acceso():
+    """Cuando el sistema no deja entrar: limpia bloqueos de rate-limit y sesiones trabadas."""
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/soporte-login")
+    msg = error = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "limpiar_ip":
+            ip = (request.form.get("ip") or _client_ip() or "").strip()
+            n = _rate_limit_clear_all(ip)
+            msg = f"Bloqueos de login limpiados para IP {ip} ({n} claves)."
+            registrar_auditoria("Reinicio acceso IP", ip)
+        elif accion == "limpiar_todo":
+            n = _rate_limit_clear_all()
+            msg = f"Todos los bloqueos de login limpiados ({n})."
+            registrar_auditoria("Reinicio acceso total", session.get("usuario"))
+        elif accion == "desbloquear_usuario":
+            uname = (request.form.get("usuario") or "").strip().lower()
+            u = Usuario.query.filter_by(usuario=uname).first()
+            if not u:
+                error = "Usuario no encontrado."
+            else:
+                if hasattr(u, "activo"):
+                    u.activo = True
+                db.session.commit()
+                # limpiar intentos globales
+                _rate_limit_clear_all()
+                msg = f"Usuario {_esc(uname)} reactivado y bloqueos de login limpiados."
+                registrar_auditoria("Reinicio usuario", uname)
+        elif accion == "cerrar_sesiones_empleado":
+            uname = (request.form.get("usuario") or "").strip().lower()
+            u = Usuario.query.filter_by(usuario=uname).first()
+            if u:
+                try:
+                    SesionEmpleado.query.filter_by(usuario_id=u.id, activa=True).update({"activa": False})
+                    db.session.commit()
+                except Exception:
+                    pass
+                msg = f"Sesiones de {uname} cerradas."
+            else:
+                error = "Usuario no encontrado."
+    ip_actual = _client_ip()
+    bloqueos = []
+    try:
+        import time
+        now = time.time()
+        for k, arr in list(_login_attempts.items()):
+            arr2 = [t for t in arr if now - t < 900]
+            if arr2:
+                bloqueos.append(f"{k} → {len(arr2)} intentos")
+    except Exception:
+        pass
+    lista_b = "".join(f"<tr><td>{_esc(b)}</td></tr>" for b in bloqueos) or "<tr><td>Sin bloqueos activos en memoria</td></tr>"
+    content = f"""
+<style>{WIN32_TABLE_CSS}</style>
+<header class="role-hero"><div>
+  <h1>🔄 Reinicio de acceso</h1>
+  <p>Si un portal no deja entrar por «demasiadas solicitudes» o usuario bloqueado, use este módulo.</p>
+</div><a class="btn" href="/soporte_admin">Volver</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+{"<div class='msg' style='color:#b91c1c'>"+_esc(error)+"</div>" if error else ""}
+<div class="w32-box">
+  <div class="w32-title">Reinicio de acceso · Procsis</div>
+  <div class="w32-field">
+    <b>IP actual:</b> {_esc(ip_actual)}
+    <form method="POST" style="margin-top:8px">
+      <input type="hidden" name="accion" value="limpiar_ip">
+      <input class="w32-input" name="ip" value="{_esc(ip_actual)}" style="width:200px">
+      <button class="w32-btn" type="submit">Limpiar bloqueos de esta IP</button>
+    </form>
+    <form method="POST" style="margin-top:8px" onsubmit="return confirm('¿Limpiar TODOS los bloqueos de login?');">
+      <input type="hidden" name="accion" value="limpiar_todo">
+      <button class="w32-btn" type="submit">Limpiar TODOS los bloqueos</button>
+    </form>
+  </div>
+  <div class="w32-field">
+    <b>Reactivar usuario interno</b>
+    <form method="POST" style="margin-top:6px">
+      <input type="hidden" name="accion" value="desbloquear_usuario">
+      <input class="w32-input" name="usuario" placeholder="usuario (ej. gerencia)" required>
+      <button class="w32-btn" type="submit">Reactivar + limpiar bloqueos</button>
+    </form>
+    <form method="POST" style="margin-top:6px">
+      <input type="hidden" name="accion" value="cerrar_sesiones_empleado">
+      <input class="w32-input" name="usuario" placeholder="usuario" required>
+      <button class="w32-btn" type="submit">Cerrar sesiones del usuario</button>
+    </form>
+  </div>
+  <div class="w32-tbl-wrap">
+    <table class="w32-tbl"><tr><th>Bloqueos en memoria (IP:portal)</th></tr>{lista_b}</table>
+  </div>
+  <div class="w32-status">Gerencia ya no se bloquea por intentos. Soporte/Ventas/Cobranza tienen límite separado por portal.</div>
+</div>
+"""
+    return page("Reinicio de acceso", shell(content))
+
+
 @app.route("/cobranza-login", methods=["GET", "POST"])
 def cobranza_login():
     """Login exclusivo del rol Cobranza / Facturación."""
     error = ""
     if request.method == "POST":
-        ok_rl, wait_m = _rate_limit_login()
+        ok_rl, wait_m = _rate_limit_login(portal="cobranza")
         if not ok_rl:
-            return _rate_limit_response(wait_m * 60)
+            return _rate_limit_response(wait_m)
         user = login_usuario(request.form.get("usuario"), request.form.get("password"))
         rol = (user.rol or "").strip() if user else ""
         if user and rol in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
@@ -33533,7 +33820,7 @@ def cobranza_login():
         elif user:
             error = f"Esta cuenta tiene rol «{user.rol}». Use el portal correspondiente."
         else:
-            _rate_limit_fail()
+            _rate_limit_fail(portal="cobranza")
             error = "Usuario o contraseña incorrectos."
     try:
         logo = logo_plataforma()
