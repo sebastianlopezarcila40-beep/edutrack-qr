@@ -1975,7 +1975,21 @@ def page(title, body):
 })();
 </script>
 """
-    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EduTrack | {title}</title><link rel="icon" type="image/png" href="/static/img/favicon.png?v=7"><link rel="shortcut icon" href="/static/img/favicon.png?v=7"><link rel="apple-touch-icon" href="/static/img/favicon.png?v=7">{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}</body></html>"""
+    _bfcache_fix = """
+<script>
+// Corrige el botón "atrás": si el navegador restaura esta página desde su caché
+// (bfcache) en vez de pedirla de nuevo al servidor, puede mostrar una vista de
+// OTRO portal/rol (ej. Gerencia viendo una página vieja de Soporte). Forzamos
+// una recarga real contra el servidor cuando eso pasa.
+window.addEventListener('pageshow', function (event) {
+  if (event.persisted || (window.performance && performance.getEntriesByType &&
+      performance.getEntriesByType('navigation')[0] &&
+      performance.getEntriesByType('navigation')[0].type === 'back_forward')) {
+    window.location.reload();
+  }
+});
+</script>"""
+    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EduTrack | {title}</title><link rel="icon" type="image/png" href="/static/img/favicon.png?v=7"><link rel="shortcut icon" href="/static/img/favicon.png?v=7"><link rel="apple-touch-icon" href="/static/img/favicon.png?v=7">{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}</body></html>"""
 
 
 
@@ -4468,6 +4482,31 @@ def _crear_reto_biometrico(usuario_id):
         expira = (now + timedelta(minutes=3)).strftime("%Y-%m-%d %H:%M:%S") if hasattr(now, "__add__") else creado
     else:
         creado = expira = ""
+    ch = LoginChallenge(
+        usuario_id=usuario_id,
+        pin=pin,
+        token=token,
+        estado="pendiente",
+        ip_pc=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80],
+        creado=creado,
+        expira=expira,
+    )
+    db.session.add(ch)
+    db.session.commit()
+    return ch
+
+
+def _crear_reto_pin(usuario_id):
+    """Reto de login SOLO con PIN (sin validación biométrica/selfie). El PIN se envía
+    al correo registrado del usuario de Soporte y se valida en la misma pantalla del PC."""
+    _ensure_login_challenge_cols()
+    import secrets
+    from datetime import timedelta
+    pin = f"{secrets.randbelow(1000000):06d}"
+    token = secrets.token_hex(24)
+    now = ahora()
+    creado = now.strftime("%Y-%m-%d %H:%M:%S") if hasattr(now, "strftime") else ""
+    expira = (now + timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S") if hasattr(now, "strftime") else ""
     ch = LoginChallenge(
         usuario_id=usuario_id,
         pin=pin,
@@ -9761,11 +9800,13 @@ def reset_usuario(id):
 def eliminar_usuario(id):
     if not requiere_login():
         return redirect("/login")
-    if rol_actual() != "Soporte" and not puede_usuarios():
+    if rol_actual() == "Soporte":
+        return acceso_denegado("Soporte no tiene permiso para eliminar usuarios. Escale el caso a Gerencia.")
+    if not puede_usuarios():
         return acceso_denegado()
     u = Usuario.query.get_or_404(id)
     iid = institucion_id_actual()
-    if rol_actual() != "Soporte" and iid is not None and u.institucion_id is not None and int(u.institucion_id) != int(iid):
+    if iid is not None and u.institucion_id is not None and int(u.institucion_id) != int(iid):
         return acceso_denegado("No puedes eliminar usuarios de otro colegio.")
     if u.usuario == session.get("usuario"):
         session["flash_usuarios"] = "No puedes eliminarte a ti mismo."
@@ -15027,33 +15068,6 @@ def gerencia_hq():
     e = m["embudo"]
     srv_color = {"verde": "#16a34a", "amarillo": "#ca8a04", "rojo": "#dc2626"}.get(m["srv"], "#64748b")
 
-    # Tabla maestra gerencia: contratos / cartera por colegio
-    filas_cartera = ""
-    try:
-        insts = Institucion.query.order_by(Institucion.nombre.asc()).limit(120).all()
-        for inst in insts:
-            pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
-            saldo = sum(float(x.valor or 0) for x in pend)
-            corte = (inst.fecha_vencimiento or "—")[:10]
-            plan = inst.plan or "—"
-            nit = inst.nit or "—"
-            est = (inst.estado or "ACTIVA").upper()
-            color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c"}.get(est, "#b45309")
-            filas_cartera += (
-                f"<tr>"
-                f"<td style='font-weight:800;color:#0B2D57'>{_esc(inst.codigo)}</td>"
-                f"<td>{_esc(nit)}</td>"
-                f"<td>{_esc(inst.nombre)[:40]}</td>"
-                f"<td>{_esc(plan)}</td>"
-                f"<td style='font-weight:700;color:{'#b91c1c' if saldo else '#16a34a'}'>{_cop(saldo) if saldo else '$ 0'}</td>"
-                f"<td>{_esc(corte)}</td>"
-                f"<td><span style='background:{color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>{est}</span></td>"
-                f"</tr>"
-            )
-    except Exception as _ex:
-        filas_cartera = f"<tr><td colspan='7'>Error cargando cartera: {_esc(str(_ex)[:80])}</td></tr>"
-    if not filas_cartera:
-        filas_cartera = "<tr><td colspan='7' style='text-align:center;color:#64748b;padding:12px'>Sin instituciones</td></tr>"
     # Nombre del gerente
     gerente_user = (session.get("usuario") or "gerente").strip()
     gerente_label = gerente_user.replace("_", " ").replace(".", " ").title()
@@ -15138,32 +15152,6 @@ def gerencia_hq():
     </div>
   </header>
   <div class="hq-wrap">
-
-    <div class="sec">
-      <h2>Cuadro de mando · contratos y cartera</h2>
-      <div style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin-top:8px">
-        <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE GERENCIA · CONTRATOS / CARTERA</div>
-        <div style="overflow-x:auto;max-height:420px">
-          <table style="width:100%;border-collapse:collapse;font-size:12.5px;font-family:Segoe UI,Tahoma,sans-serif">
-            <tr style="background:#1e40af;color:#fff;position:sticky;top:0">
-              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">ID CONTRATO</th>
-              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">NIT / CLIENTE</th>
-              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">COLEGIO</th>
-              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">PLAN</th>
-              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">SALDO CARTERA</th>
-              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">FECHA CORTE</th>
-              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">ESTADO</th>
-            </tr>
-            {filas_cartera}
-          </table>
-        </div>
-        <div style="padding:8px 12px;background:#f8fafc;font-size:12px">
-          <a href="/gerencia/cartera" style="font-weight:700;color:#0B2D57">Abrir módulo Cartera →</a>
-          · <a href="/gerencia/facturacion-cobranza" style="font-weight:700;color:#0B2D57">Facturación y Cobranza →</a>
-          · <a href="/interno/buscar-colegio" style="font-weight:700;color:#0B2D57">Buscar colegio →</a>
-        </div>
-      </div>
-    </div>
 
     <div class="sec">
       <h2>Módulos operativos</h2>
@@ -21450,6 +21438,63 @@ def gerencia_planes():
 
 
 
+@app.route("/soporte/verificar-pin/<token>", methods=["GET", "POST"])
+def soporte_verificar_pin(token):
+    """Segundo factor de Soporte: SOLO PIN (sin foto/selfie). El PIN llegó al correo
+    registrado del usuario; se escribe aquí mismo, en el PC, para completar el ingreso."""
+    ch = LoginChallenge.query.filter_by(token=token).first()
+    if not ch:
+        return page("Enlace no válido", "<div class='center'><h1>Enlace no válido</h1><p>Inicie sesión de nuevo.</p></div>")
+    u = Usuario.query.get(ch.usuario_id)
+    error = ""
+    if request.method == "POST":
+        pin_in = (request.form.get("pin") or "").strip().replace(" ", "")
+        if not _reto_vigente(ch):
+            error = "El PIN venció. Vuelva a iniciar sesión para recibir uno nuevo."
+        elif pin_in != (ch.pin or ""):
+            error = "PIN incorrecto."
+        else:
+            ch.estado = "aprobado"
+            db.session.commit()
+            if not u or session.get("bio_uid") != u.id:
+                error = "Sesión inválida. Vuelva a iniciar sesión."
+            else:
+                registrar_auditoria("Login soporte: PIN verificado", f"{u.usuario}")
+                dest = session.pop("bio_redirect", "/soporte_admin")
+                session.pop("bio_token", None)
+                session.pop("bio_uid", None)
+                session["uid"] = u.id
+                session["password_temporal"] = bool(u.password_temporal)
+                session["ultimo_movimiento"] = ahora().timestamp()
+                session.pop("institucion_id", None)
+                session["usuario"] = u.usuario
+                session["rol"] = (u.rol or "").strip()
+                session["panel"] = "soporte"
+                try:
+                    registrar_sesion_empleado(u)
+                except Exception:
+                    pass
+                registrar_auditoria("Login soporte", f"{u.rol} {u.usuario} desde /soporte-login (PIN)")
+                return redirect(dest)
+    nombre = (u.usuario if u else "colaborador")
+    body = f"""
+<div style="min-height:100vh;background:#f4f6f8;display:flex;align-items:center;justify-content:center;font-family:Segoe UI,system-ui,sans-serif">
+  <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:360px;width:100%;box-shadow:0 8px 28px rgba(15,23,42,.08)">
+    <h1 style="margin:0 0 8px;font-size:20px;color:#0B2D57;text-align:center">Verificación por PIN</h1>
+    <p style="font-size:13px;color:#64748b;text-align:center;margin:0 0 16px">Enviamos un PIN de 6 dígitos al correo registrado de <b>{nombre}</b>. Escríbalo aquí para continuar.</p>
+    {"<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px'>"+error+"</div>" if error else ""}
+    <form method="POST">
+      <input name="pin" inputmode="numeric" maxlength="6" placeholder="000000" required
+        style="width:100%;box-sizing:border-box;padding:12px;font-size:20px;letter-spacing:8px;text-align:center;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px">
+      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer">Validar e ingresar</button>
+    </form>
+    <p style="text-align:center;margin-top:12px"><a href="/soporte-login" style="font-size:12px;color:#0B2D57">Cancelar y volver al login</a></p>
+  </div>
+</div>
+"""
+    return page("Verificación por PIN", body)
+
+
 @app.route("/biometria/esperar/<token>")
 def biometria_esperar(token):
     ch = LoginChallenge.query.filter_by(token=token).first()
@@ -21860,16 +21905,20 @@ def soporte_login():
                 error = "Fuera de horario laboral autorizado. Solicite acceso extraordinario a un administrador."
                 registrar_auditoria("Login bloqueado horario", f"{user.usuario}")
             else:
-                # Flujo biométrico: PIN en PC + aprobación en app móvil
-                usar_bio = os.environ.get("BIOMETRIA_LOGIN", "1") != "0"
-                if usar_bio:
+                # Segundo factor de Soporte: SOLO PIN por correo (sin selfie/biometría)
+                usar_pin = os.environ.get("PIN_LOGIN_SOPORTE", "1") != "0"
+                if usar_pin and (user.correo or "").strip():
                     _rate_limit_ok(portal="soporte")
-                    ch = _crear_reto_biometrico(user.id)
+                    ch = _crear_reto_pin(user.id)
                     session.clear()
                     session["bio_token"] = ch.token
                     session["bio_uid"] = user.id
                     session["bio_redirect"] = "/soporte_admin"
-                    registrar_auditoria("Login soporte: reto biométrico", f"{user.usuario} PIN generado")
+                    enviado = enviar_pin(user.correo, ch.pin)
+                    registrar_auditoria(
+                        "Login soporte: PIN generado",
+                        f"{user.usuario} · correo {'enviado' if enviado else 'FALLÓ EL ENVÍO'}",
+                    )
                     try:
                         registrar_acceso_planilla({
                             "fecha": fecha_hoy(),
@@ -21878,19 +21927,19 @@ def soporte_login():
                             "id": user.id,
                             "rol": user.rol,
                             "asesor": user.usuario,
-                            "evento": "RETO_BIOMETRICO_GENERADO",
+                            "evento": "RETO_PIN_GENERADO",
                             "ip": (request.headers.get("X-Forwarded-For") or request.remote_addr or ""),
                             "dispositivo": (request.headers.get("User-Agent") or ""),
                             "pin": ch.pin,
                             "token": (ch.token or "")[:16],
-                            "biometria_registrada": "SI" if getattr(user, "biometria_registrada", False) else "NO",
+                            "biometria_registrada": "N/A (solo PIN)",
                             "foto": "",
                             "resultado": "PENDIENTE",
-                            "detalle": "PIN generado - esperando validacion movil",
+                            "detalle": "PIN generado - esperando verificación en PC",
                         })
                     except Exception:
                         pass
-                    return redirect(f"/biometria/esperar/{ch.token}")
+                    return redirect(f"/soporte/verificar-pin/{ch.token}")
                 session.clear()
                 session["uid"] = user.id
                 session["password_temporal"] = bool(user.password_temporal)
@@ -23149,7 +23198,6 @@ def soporte_admin():
   <h2 style="margin:0 0 10px">👥 Gestión de usuarios</h2>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
     <a class="btn" href="/soporte/reinicio-acceso" style="background:#b91c1c;color:#fff">🔄 Reinicio de acceso</a>
-    <a class="btn" href="/soporte/almacenamiento" style="background:#0f766e;color:#fff">💾 Almacenamiento GB</a>
     <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">Restablecer contraseñas</a>
     <a class="btn" href="/soporte/impersonar" style="background:#0369a1;color:#fff">Impersonar perfil</a>
     <a class="btn" href="/usuarios" style="background:#0f766e;color:#fff">Buscar usuarios</a>
@@ -23561,8 +23609,7 @@ def soporte_usuarios_institucion(id):
             f"<a href='/reset_usuario/{u.id}'>Reset clave</a> · "
             f"<form method='POST' style='display:inline'><input type='hidden' name='accion' value='{toggle}'>"
             f"<input type='hidden' name='user_id' value='{u.id}'>"
-            f"<button style='font-size:11px;padding:3px 8px'>{'Desactivar' if activo else 'Activar'}</button></form> · "
-            f"<a class='danger-link' href='/eliminar_usuario/{u.id}' onclick=\"return confirm('¿Eliminar {u.usuario}?')\">Eliminar</a>"
+            f"<button style='font-size:11px;padding:3px 8px'>{'Desactivar' if activo else 'Activar'}</button></form>"
             f"</td></tr>"
         )
     filas = "".join(filas_list) or "<tr><td colspan='8'>Sin usuarios en este colegio</td></tr>"
@@ -23974,6 +24021,10 @@ def tenants():
         n_users = Usuario.query.filter_by(institucion_id=i.id).count()
         n_est = Estudiante.query.filter_by(institucion_id=i.id).count()
         logo = logo_actual(i.id)
+        _eliminar_link = (
+            f"· <a class='danger-link' href='/eliminar_institucion/{i.id}' onclick=\"return confirm('¿Eliminar institución {i.codigo}? Se borrarán su configuración y se desvincularán usuarios/estudiantes de este tenant.')\">Eliminar</a>"
+            if rol_actual() != "Soporte" else ""
+        )
         filas += f"""<tr>
           <td>{i.id}</td>
           <td><img src='{logo}' alt='' style='width:36px;height:36px;object-fit:contain;background:#fff;border-radius:8px'></td>
@@ -23986,8 +24037,7 @@ def tenants():
           <td>{i.fecha_creacion or ''}</td>
           <td>
             <a href='/entrar_institucion/{i.id}'>Entrar</a> ·
-            <a href='/editar_institucion/{i.id}'>Editar</a> ·
-            <a class='danger-link' href='/eliminar_institucion/{i.id}' onclick="return confirm('¿Eliminar institución {i.codigo}? Se borrarán su configuración y se desvincularán usuarios/estudiantes de este tenant.')">Eliminar</a>
+            <a href='/editar_institucion/{i.id}'>Editar</a> {_eliminar_link}
           </td>
         </tr>"""
     content = f"""
@@ -24318,9 +24368,13 @@ def editar_institucion(id):
 def eliminar_institucion(id):
     """Borrado definitivo de institución (no se recrea sola). Limpia TODAS las tablas que
     tengan institucion_id o estudiante_id ligado a este colegio, buscándolas automáticamente
-    en vez de una lista fija a mano (para no volver a olvidar una tabla nueva)."""
-    if not requiere_soporte_global():
+    en vez de una lista fija a mano (para no volver a olvidar una tabla nueva).
+    Solo Gerencia/Administrador puede ejecutar esta baja definitiva; Soporte puede
+    buscar/ver instituciones pero nunca darlas de baja (eso se escala a Gerencia)."""
+    if not requiere_login():
         return redirect("/login")
+    if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        return acceso_denegado("Solo Gerencia/Administrador puede dar de baja una institución definitivamente.")
     inst = Institucion.query.get_or_404(id)
     codigo = inst.codigo or str(id)
     nombre = inst.nombre or ""
@@ -31622,30 +31676,57 @@ def soporte_diseno():
 
 
 
+_PQR_BUCKETS = {
+    "abiertos": (["RADICADA", "EN VALIDACIÓN", "ABIERTO"], "🔴", "#dc2626"),
+    "proceso": (["ASIGNADA", "EN PROCESO", "PENDIENTE DEL CLIENTE"], "🟡", "#ca8a04"),
+    "escalados": (["ESCALADA A DESARROLLO"], "🔵", "#2563eb"),
+    "cerrados": (["RESUELTA", "CERRADA"], "🟢", "#16a34a"),
+}
+
+
 @app.route("/soporte/pqr")
 def soporte_pqr_centro():
     if not requiere_login() or rol_actual() != "Soporte":
         return redirect("/soporte-login")
-    estado = (request.args.get("estado") or "").strip()
+    bucket = (request.args.get("bucket") or "").strip().lower()
+    qtxt = (request.args.get("q") or "").strip()
     q = TicketPQR.query
-    if estado:
-        q = q.filter(TicketPQR.estado == estado)
+    if bucket in _PQR_BUCKETS:
+        q = q.filter(TicketPQR.estado.in_(_PQR_BUCKETS[bucket][0]))
+    if qtxt:
+        like = f"%{qtxt}%"
+        q = q.filter(or_(
+            TicketPQR.radicado.ilike(like),
+            TicketPQR.numero_documento.ilike(like),
+            TicketPQR.nit_colegio.ilike(like),
+            TicketPQR.ticket.ilike(like),
+            TicketPQR.razon_social.ilike(like),
+        ))
     rows = q.order_by(TicketPQR.id.desc()).limit(150).all()
     filas = ""
     for t in rows:
-        filas += f"<tr><td><a href='/soporte/pqr/{t.id}'>{t.radicado}</a><br><span class='mini-text'>{t.ticket}</span></td><td>{t.razon_social}<br><span class='mini-text'>{t.email}</span></td><td>{t.tipo_pqr}/{t.subtipo}</td><td><b>{t.estado}</b></td><td>{t.prioridad}</td><td>{t.fecha}</td></tr>"
-    ab = TicketPQR.query.filter(TicketPQR.estado.in_(["RADICADA","EN VALIDACIÓN","ABIERTO"])).count()
-    pr = TicketPQR.query.filter(TicketPQR.estado.in_(["ASIGNADA","EN PROCESO","PENDIENTE DEL CLIENTE","ESCALADA A DESARROLLO"])).count()
-    ce = TicketPQR.query.filter(TicketPQR.estado.in_(["RESUELTA","CERRADA"])).count()
+        filas += f"<tr><td><a href='/soporte/pqr/{t.id}'>{t.radicado}</a><br><span class='mini-text'>{t.ticket}</span></td><td>{t.razon_social}<br><span class='mini-text'>{t.numero_documento or ''} · {t.email}</span></td><td>{t.tipo_pqr}/{t.subtipo}</td><td><b>{t.estado}</b></td><td>{t.prioridad}</td><td>{t.fecha}</td></tr>"
+    conteos = {b: TicketPQR.query.filter(TicketPQR.estado.in_(v[0])).count() for b, v in _PQR_BUCKETS.items()}
+    tabs = "".join(
+        f'<a href="/soporte/pqr?bucket={b}{("&q="+qtxt) if qtxt else ""}" '
+        f'style="padding:8px 14px;border-radius:999px;font-weight:700;font-size:13px;text-decoration:none;'
+        f'border:2px solid {v[2]};color:{"#fff" if bucket==b else v[2]};background:{v[2] if bucket==b else "#fff"};margin-right:6px;display:inline-block">'
+        f'{v[1]} {b.capitalize()} ({conteos[b]})</a>'
+        for b, v in _PQR_BUCKETS.items()
+    )
+    limpiar = '<a href="/soporte/pqr" style="font-size:12px;color:#64748b;margin-left:6px">Quitar filtro ×</a>' if bucket else ""
     content = f"""
 <header class="role-hero"><div><h1>Centro PQR · Soporte</h1><p>Canal interno Procsis</p></div>
   <a class="btn" href="/soporte/pqr/crear">Radicar interna</a>
   <a class="btn" href="/soporte/pqr/consulta">Consulta validada</a>
 </header>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
-  <div class="role-panel"><h2>{ab}</h2><p>Abiertas</p></div>
-  <div class="role-panel"><h2>{pr}</h2><p>En proceso</p></div>
-  <div class="role-panel"><h2>{ce}</h2><p>Cerradas</p></div>
+<div class="role-panel" style="margin-bottom:12px">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    {("<input type='hidden' name='bucket' value='"+bucket+"'>") if bucket else ""}
+    <input name="q" value="{_esc(qtxt)}" placeholder="Buscar por radicado, cédula del profesor o NIT del colegio" style="flex:1;min-width:260px;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+    <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button>
+  </form>
+  <div>{tabs}{limpiar}</div>
 </div>
 <div class="role-panel" style="overflow:auto">
 <table>
@@ -33784,13 +33865,13 @@ WIN32_TABLE_CSS = """
 """
 
 
-@app.route("/soporte/almacenamiento")
 @app.route("/gerencia/almacenamiento")
 def modulo_almacenamiento():
-    """GB por colegio: cuota, usado, disponible (Soporte y Gerencia). Cobranza NO."""
-    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
-        if rol_actual() == "Cobranza":
-            return redirect("/cobranza/panel")
+    """GB por colegio: cuota, usado, disponible. Solo Gerencia (Soporte no debe alterar
+    ni ver espacio de servidores; si un colegio se queda sin espacio, escala a Gerencia)."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        if rol_actual() in ("Cobranza", "Soporte"):
+            return redirect(_home_portal(rol_actual()))
         return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
     q = (request.args.get("q") or "").strip()
     insts = Institucion.query.order_by(Institucion.nombre.asc()).all()
