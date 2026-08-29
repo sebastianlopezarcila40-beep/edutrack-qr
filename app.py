@@ -1611,6 +1611,25 @@ class NotaInteraccion(db.Model):
     resultado = db.Column(db.String(80), default="")  # Resuelto, Pendiente, Escalar, etc.
 
 
+class CasoTurno(db.Model):
+    """Cola de trabajo por turnos: cobranza / soporte / gerencia.
+    Notas hijas van en NotaInteraccion (institucion_id + area)."""
+    __tablename__ = "casos_turno"
+    id = db.Column(db.Integer, primary_key=True)
+    area = db.Column(db.String(40), default="Cobranza", index=True)  # Cobranza | Soporte | Gerencia | Ventas
+    institucion_id = db.Column(db.Integer, db.ForeignKey("instituciones.id"), nullable=True, index=True)
+    cuenta = db.Column(db.String(40), default="")  # codigo colegio
+    colegio = db.Column(db.String(200), default="")
+    documento = db.Column(db.String(40), default="")  # NIT
+    movil = db.Column(db.String(40), default="")
+    asunto = db.Column(db.String(255), default="")
+    estado = db.Column(db.String(30), default="PENDIENTE", index=True)  # PENDIENTE | EN_PROCESO | CERRADO
+    asignado_a = db.Column(db.String(120), default="", index=True)
+    creado_en = db.Column(db.String(30), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(120), default="")
+
+
 class CasoRetencion(db.Model):
     """Casos de retención: cancelación, baja de plan, descuento. Solo Retención/Gerencia ejecuta."""
     __tablename__ = "casos_retencion"
@@ -5837,7 +5856,8 @@ def login():
         if user:
             # Roles internos solo por /soporte-login
             if (user.rol or "").strip() in ROLES_INTERNOS or (user.rol or "").strip() == "Soporte":
-                error = "Las cuentas de Soporte / administración deben ingresar por el portal de Soporte."
+                rol_u = (user.rol or "").strip()
+                error = f"Las cuentas internas deben ingresar por su portal ({_login_portal(rol_u)}), no por el login de colegios."
                 user = None
             if user and inst_id and user.institucion_id and int(user.institucion_id) != int(inst_id):
                 error = "Este usuario no pertenece a la institución seleccionada."
@@ -13238,30 +13258,153 @@ def interno_buscar_colegio_ui():
     return page("Buscar colegio", shell(content))
 
 
+def _home_portal(rol=None):
+    """Home exclusivo de cada rol interno."""
+    r = (rol or rol_actual() or "").strip()
+    return {
+        "Comercial": "/ventas/panel",
+        "Soporte": "/soporte_admin",
+        "Gerente": "/gerencia/hq",
+        "Administrador": "/gerencia/hq",
+        "Superadmin": "/gerencia/hq",
+        "Cobranza": "/cobranza/panel",
+    }.get(r, "/login")
+
+
+def _login_portal(rol=None):
+    r = (rol or rol_actual() or "").strip()
+    return {
+        "Comercial": "/ventas-login",
+        "Soporte": "/soporte-login",
+        "Gerente": "/gerencia-login",
+        "Administrador": "/gerencia-login",
+        "Superadmin": "/gerencia-login",
+        "Cobranza": "/cobranza-login",
+    }.get(r, "/login")
+
+
 @app.before_request
 def _aislar_paneles_internos():
-    """Impide que un rol interno navegue al panel de otro (evita cruces con el botón atrás)."""
+    """Cada rol interno SOLO opera en su portal. Atrás del navegador no salta a otro panel."""
+    path = request.path or ""
+    if path.startswith("/static") or path.startswith("/api/webhooks"):
+        return None
+
+    # Páginas de login de portales: limpiar sesión ajena y no mezclar
+    login_map = {
+        "/ventas-login": "Comercial",
+        "/soporte-login": "Soporte",
+        "/gerencia-login": ("Gerente", "Superadmin", "Administrador"),
+        "/cobranza-login": "Cobranza",
+    }
+    if path in login_map and request.method == "GET":
+        rol = (session.get("rol") or "").strip()
+        esperado = login_map[path]
+        ok = rol in esperado if isinstance(esperado, tuple) else (rol == esperado)
+        if session.get("usuario") and not ok:
+            # Había otra sesión (otro portal): cerrar para no cruzar
+            session.clear()
+        elif session.get("usuario") and ok:
+            return redirect(_home_portal(rol))
+        return None
+
+    if path == "/login" and request.method == "GET":
+        # Login de colegios: si hay staff interno logueado, no mezclar — mandarlo a su portal
+        rol = (session.get("rol") or "").strip()
+        if session.get("usuario") and rol in ROLES_INTERNOS:
+            return redirect(_home_portal(rol))
+        return None
+
     if not session.get("usuario"):
         return None
-    path = request.path or ""
-    if path.startswith("/static") or path in ("/logout", "/mi-perfil", "/cambiar_password"):
-        return None
+
     rol = (session.get("rol") or "").strip()
-    # Comercial solo panel ventas (catálogo público /ventas sí permitido)
+    if rol not in ROLES_INTERNOS and rol != "Soporte":
+        return None
+
+    # Rutas siempre permitidas para staff
+    if path in ("/logout", "/mi-perfil", "/cambiar_password", "/mfa") or path.startswith("/biometria"):
+        return None
+    if path.startswith("/api/interno"):
+        return None
+
+    home = _home_portal(rol)
+
+    # Rutas de colegio: staff no debe entrar al dashboard escolar
+    if path in ("/dashboard", "/estudiantes", "/reportes", "/usuarios") or path.startswith("/familia"):
+        # /usuarios lo usa soporte: permitir solo Soporte/Gerente
+        if path.startswith("/usuarios") and rol in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+            return None
+        if path in ("/dashboard", "/estudiantes", "/reportes") or path.startswith("/familia"):
+            return redirect(home)
+
+    # —— Aislamiento estricto por rol ——
     if rol == "Comercial":
-        if path.startswith("/gerencia") or path.startswith("/soporte") or path.startswith("/cobranza") or path.startswith("/soporte_admin"):
-            return redirect("/ventas/panel")
-    # Soporte no entra a ventas panel ni cobranza ni HQ gerencia
-    if rol == "Soporte":
-        if path.startswith("/ventas/panel") or path.startswith("/ventas/comisiones") or path.startswith("/cobranza") or path.startswith("/gerencia/"):
-            return redirect("/soporte_admin")
-    # Cobranza solo su portal y facturación
-    if rol == "Cobranza":
-        if path.startswith("/ventas/panel") or path.startswith("/soporte") or path.startswith("/soporte_admin"):
-            return redirect("/cobranza/panel")
-        if path.startswith("/gerencia/") and not path.startswith("/gerencia/facturacion"):
-            return redirect("/cobranza/panel")
+        permitido = (
+            path.startswith("/ventas/panel")
+            or path.startswith("/ventas/comisiones")
+            or path.startswith("/ventas/kit")
+            or path.startswith("/ventas/crm")
+            or path.startswith("/ventas/demos")
+            or path.startswith("/ventas/notas")
+            or path.startswith("/ventas/contrato")
+            or path.startswith("/ventas/propuesta")
+            or path.startswith("/ventas/comprar")
+            or path.startswith("/api/ventas")
+            or path == "/ventas"
+            or path.startswith("/interno/buscar")
+        )
+        if not permitido and (path.startswith("/gerencia") or path.startswith("/soporte")
+                              or path.startswith("/cobranza") or path.startswith("/soporte_admin")
+                              or path.startswith("/tenants")):
+            return redirect(home)
+        if path.startswith("/gerencia") or path.startswith("/soporte_admin") or path.startswith("/cobranza"):
+            return redirect(home)
+
+    elif rol == "Soporte":
+        if (path.startswith("/ventas/panel") or path.startswith("/ventas/comisiones")
+                or path.startswith("/cobranza") or path.startswith("/gerencia/")
+                or path == "/gerencia" or path == "/gerencia/hq"):
+            return redirect(home)
+
+    elif rol == "Cobranza":
+        ok_cob = (
+            path.startswith("/cobranza")
+            or path.startswith("/gerencia/facturacion")
+            or path.startswith("/interno/buscar")
+            or path.startswith("/interno/turnos")
+            or path.startswith("/gerencia/turnos")
+        )
+        if not ok_cob and (path.startswith("/ventas") or path.startswith("/soporte")
+                           or path.startswith("/soporte_admin") or path.startswith("/gerencia")):
+            return redirect(home)
+
+    elif rol in ("Gerente", "Superadmin", "Administrador"):
+        # Gerencia NO opera el panel de ventas ni soporte_admin como home ajeno
+        if path.startswith("/ventas/panel") or path.startswith("/ventas/comisiones"):
+            return redirect(home)
+        if path.startswith("/cobranza/panel") or path == "/cobranza":
+            # cobranza panel es para rol Cobranza; gerencia usa /gerencia/facturacion-cobranza
+            return redirect("/gerencia/facturacion-cobranza")
+
+    # Headers anti-caché en portales internos (botón atrás no reusa página de otro rol)
     return None
+
+
+@app.after_request
+def _no_cache_portales_internos(resp):
+    try:
+        path = request.path or ""
+        if any(path.startswith(p) for p in (
+            "/ventas/panel", "/ventas/comisiones", "/soporte", "/soporte_admin",
+            "/gerencia", "/cobranza", "/interno/",
+        )):
+            resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
+    except Exception:
+        pass
+    return resp
 
 def requiere_gerencia():
     if not requiere_login():
@@ -14563,7 +14706,7 @@ def ventas_login():
                     return redirect("/ventas/panel")
             else:
                 _rate_limit_fail()
-                error = "Solo personal de Ventas / Gerencia / Soporte."
+                error = "Solo personal con rol Comercial (Ventas). Use el portal de su rol."
     _logo_proc = logo_plataforma()
     body = f"""
 <style>
@@ -14846,8 +14989,8 @@ def gerencia_hq():
         <a class="g" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
         <a class="a" href="/gerencia/gastos">Gastos y cashflow</a>
         <a class="t" href="/gerencia/planes">Planes · precios · paywalls</a>
-        <a href="/ventas/panel">Panel ventas</a>
-        <a href="/ventas/notas">Notas / embudo</a>
+        <a href="/gerencia/reportes">Reportes comerciales</a>
+        <a href="/gerencia/turnos">Turnos y notas</a>
         <a href="/soporte_admin">Centro de soporte</a>
         <a href="/tenants">Instituciones</a>
         <a href="/auditoria">Auditoría</a>
@@ -14859,6 +15002,7 @@ def gerencia_hq():
     <div class="sec">
       <h2>Reservado a dirección / gerencia</h2>
       <div class="grid-mod">
+        <a class="own" href="/gerencia/turnos">👥 Turnos y notas de gestión</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -33075,6 +33219,287 @@ def gerencia_facturacion_cron():
         f"<p><a href='/gerencia/facturacion'>← Volver a facturación</a></p></div>",
     )
 
+
+
+
+@app.route("/gerencia/turnos", methods=["GET", "POST"])
+@app.route("/cobranza/turnos", methods=["GET", "POST"])
+@app.route("/soporte/turnos", methods=["GET", "POST"])
+@app.route("/interno/turnos", methods=["GET", "POST"])
+def modulo_turnos():
+    """Módulo de turnos: notas con fecha/hora automática, filtro por estado y reasignación."""
+    if not requiere_login() or (rol_actual() not in ROLES_INTERNOS and rol_actual() != "Soporte"):
+        return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
+    rol = rol_actual()
+    path = request.path or ""
+    # Área según portal
+    if path.startswith("/cobranza") or rol == "Cobranza":
+        area = "Cobranza"
+        if rol not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
+            return redirect(_home_portal(rol))
+    elif path.startswith("/soporte") or rol == "Soporte":
+        area = "Soporte"
+        if rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+            return redirect(_home_portal(rol))
+    else:
+        area = "Gerencia"
+        if rol not in ("Gerente", "Superadmin", "Administrador"):
+            return redirect(_home_portal(rol))
+
+    try:
+        db.create_all()
+    except Exception:
+        pass
+
+    msg = error = ""
+    ahora_txt = f"{fecha_hoy()} {hora_actual()}"
+    usuario_nom = (session.get("usuario") or "").strip()
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "nueva_nota":
+            detalle = (request.form.get("detalle") or "").strip()
+            iid = request.form.get("institucion_id", type=int)
+            caso_id = request.form.get("caso_id", type=int)
+            if not detalle:
+                error = "Escriba la nota de la llamada o gestión."
+            else:
+                inst = Institucion.query.get(iid) if iid else None
+                n = NotaInteraccion(
+                    institucion_id=iid,
+                    contacto_nombre=(request.form.get("contacto") or "").strip()[:160],
+                    medio=(request.form.get("medio") or "Llamada").strip()[:40],
+                    motivo=(request.form.get("motivo") or "Seguimiento turno").strip()[:80],
+                    detalle=detalle[:4000],
+                    creado_en=ahora_txt,
+                    usuario_id=int(session.get("uid") or 0),
+                    usuario_nombre=usuario_nom,
+                    area=area,
+                    telefono_contacto=(request.form.get("movil") or "").strip()[:40],
+                    resultado=(request.form.get("resultado") or "Pendiente").strip()[:80],
+                )
+                db.session.add(n)
+                if caso_id:
+                    c = CasoTurno.query.get(caso_id)
+                    if c:
+                        c.actualizado_en = ahora_txt
+                        est = (request.form.get("nuevo_estado") or "").strip().upper()
+                        if est in ("PENDIENTE", "EN_PROCESO", "CERRADO"):
+                            c.estado = est
+                db.session.commit()
+                registrar_auditoria("Nota turno", f"{area} · {usuario_nom} · {detalle[:80]}")
+                msg = f"Nota guardada · {ahora_txt} · Usuario: {usuario_nom}"
+        elif accion == "nuevo_caso":
+            iid = request.form.get("institucion_id", type=int)
+            inst = Institucion.query.get(iid) if iid else None
+            asunto = (request.form.get("asunto") or "").strip()[:255]
+            if not asunto and not inst:
+                error = "Indique colegio o asunto del caso."
+            else:
+                c = CasoTurno(
+                    area=area,
+                    institucion_id=iid,
+                    cuenta=(inst.codigo if inst else "") or (request.form.get("cuenta") or "")[:40],
+                    colegio=(inst.nombre if inst else "") or (request.form.get("colegio") or "")[:200],
+                    documento=(inst.nit if inst else "") or (request.form.get("documento") or "")[:40],
+                    movil=(inst.contacto_facturacion if inst else "") or (request.form.get("movil") or "")[:40],
+                    asunto=asunto or f"Gestión {area}",
+                    estado="PENDIENTE",
+                    asignado_a=(request.form.get("asignado_a") or usuario_nom)[:120],
+                    creado_en=ahora_txt,
+                    actualizado_en=ahora_txt,
+                    creado_por=usuario_nom,
+                )
+                db.session.add(c)
+                db.session.commit()
+                msg = f"Caso #{c.id} creado y asignado a {c.asignado_a}."
+        elif accion == "reasignar":
+            cid = request.form.get("caso_id", type=int)
+            nuevo = (request.form.get("asignado_a") or "").strip()[:120]
+            c = CasoTurno.query.get(cid) if cid else None
+            if not c or not nuevo:
+                error = "Caso o asesor inválido."
+            else:
+                anterior = c.asignado_a
+                c.asignado_a = nuevo
+                c.actualizado_en = ahora_txt
+                if c.estado == "CERRADO":
+                    c.estado = "PENDIENTE"
+                db.session.commit()
+                registrar_auditoria("Reasignar caso turno", f"#{c.id} {anterior} → {nuevo}")
+                msg = f"Caso #{c.id} reasignado de {anterior or '—'} a {nuevo}."
+        elif accion == "cambiar_estado":
+            cid = request.form.get("caso_id", type=int)
+            est = (request.form.get("estado") or "").strip().upper()
+            c = CasoTurno.query.get(cid) if cid else None
+            if c and est in ("PENDIENTE", "EN_PROCESO", "CERRADO"):
+                c.estado = est
+                c.actualizado_en = ahora_txt
+                db.session.commit()
+                msg = f"Caso #{c.id} → {est}."
+
+    f_estado = (request.args.get("estado") or "").strip().upper()
+    f_asignado = (request.args.get("asignado") or "").strip()
+    q = CasoTurno.query.filter_by(area=area)
+    if f_estado in ("PENDIENTE", "EN_PROCESO", "CERRADO"):
+        q = q.filter_by(estado=f_estado)
+    if f_asignado:
+        q = q.filter(CasoTurno.asignado_a.ilike(f"%{f_asignado}%"))
+    casos = q.order_by(CasoTurno.id.desc()).limit(150).all()
+
+    # Asesores del área (usuarios internos)
+    roles_area = {
+        "Cobranza": ["Cobranza", "Gerente"],
+        "Soporte": ["Soporte"],
+        "Gerencia": ["Gerente", "Administrador", "Superadmin"],
+        "Ventas": ["Comercial"],
+    }.get(area, list(ROLES_INTERNOS))
+    asesores = Usuario.query.filter(Usuario.rol.in_(roles_area)).order_by(Usuario.usuario).all()
+    opts_asesor = "".join(
+        f'<option value="{_esc(a.usuario)}">{_esc(a.usuario)} ({_esc(a.rol)})</option>'
+        for a in asesores
+    )
+
+    filas = ""
+    for c in casos:
+        color = {"PENDIENTE": "#b91c1c", "EN_PROCESO": "#b45309", "CERRADO": "#16a34a"}.get(c.estado, "#64748b")
+        # últimas notas del colegio
+        notas_html = ""
+        try:
+            notas = NotaInteraccion.query.filter_by(institucion_id=c.institucion_id, area=area).order_by(NotaInteraccion.id.desc()).limit(3).all()
+            for n in notas:
+                notas_html += (
+                    f"<div style='font-size:11px;border-bottom:1px solid #e2e8f0;padding:4px 0'>"
+                    f"<b>{_esc(n.creado_en)}</b> · {_esc(n.usuario_nombre)}: {_esc((n.detalle or '')[:120])}</div>"
+                )
+        except Exception:
+            pass
+        filas += f"""
+        <tr>
+          <td style="font-weight:800;color:#0B2D57">#{c.id}</td>
+          <td>{_esc(c.cuenta or '—')}</td>
+          <td>{_esc(c.colegio or '—')}</td>
+          <td>{_esc(c.documento or '—')}</td>
+          <td>{_esc(c.movil or '—')}</td>
+          <td>{_esc(c.asunto or '—')}</td>
+          <td><span style="background:{color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">{_esc(c.estado)}</span></td>
+          <td style="font-weight:700">{_esc(c.asignado_a or '—')}</td>
+          <td style="min-width:220px">{notas_html or '<span style=color:#94a3b8>Sin notas</span>'}</td>
+          <td style="white-space:nowrap">
+            <form method="POST" style="display:inline-block;margin:2px 0">
+              <input type="hidden" name="accion" value="cambiar_estado">
+              <input type="hidden" name="caso_id" value="{c.id}">
+              <select name="estado" style="font-size:11px;padding:3px">
+                <option value="PENDIENTE">PENDIENTE</option>
+                <option value="EN_PROCESO">EN_PROCESO</option>
+                <option value="CERRADO">CERRADO</option>
+              </select>
+              <button style="font-size:11px;padding:3px 6px;background:#0B2D57;color:#fff;border:0;border-radius:4px">OK</button>
+            </form>
+            <form method="POST" style="display:inline-block;margin:2px 0">
+              <input type="hidden" name="accion" value="reasignar">
+              <input type="hidden" name="caso_id" value="{c.id}">
+              <select name="asignado_a" style="font-size:11px;padding:3px">{opts_asesor}</select>
+              <button style="font-size:11px;padding:3px 6px;background:#b45309;color:#fff;border:0;border-radius:4px">Pasar turno</button>
+            </form>
+            <details style="margin-top:4px">
+              <summary style="cursor:pointer;font-size:11px;color:#0B2D57;font-weight:700">+ Nota</summary>
+              <form method="POST" style="margin-top:4px">
+                <input type="hidden" name="accion" value="nueva_nota">
+                <input type="hidden" name="caso_id" value="{c.id}">
+                <input type="hidden" name="institucion_id" value="{c.institucion_id or ''}">
+                <input type="hidden" name="movil" value="{_esc(c.movil or '')}">
+                <textarea name="detalle" required rows="2" style="width:100%;font-size:12px;padding:6px;border:1px solid #cbd5e1;border-radius:6px" placeholder="Ej: Se contactó al pagador. Volver a llamar a las 3:00 PM"></textarea>
+                <select name="nuevo_estado" style="font-size:11px;margin-top:4px">
+                  <option value="">(estado igual)</option>
+                  <option value="PENDIENTE">Dejar PENDIENTE</option>
+                  <option value="EN_PROCESO">EN_PROCESO</option>
+                  <option value="CERRADO">CERRADO</option>
+                </select>
+                <button style="margin-top:4px;padding:6px 10px;background:#0B2D57;color:#fff;border:0;border-radius:6px;font-size:12px;font-weight:700">Guardar nota</button>
+              </form>
+            </details>
+          </td>
+        </tr>"""
+
+    if not filas:
+        filas = '<tr><td colspan="10" style="text-align:center;padding:16px;color:#64748b">Sin casos. Cree el primero abajo o filtre por otro estado.</td></tr>'
+
+    # selector colegios
+    opts_inst = '<option value="">— Colegio —</option>'
+    try:
+        for inst in Institucion.query.order_by(Institucion.nombre).limit(400).all():
+            opts_inst += f'<option value="{inst.id}">{_esc(inst.codigo)} · {_esc(inst.nombre)[:50]}</option>'
+    except Exception:
+        pass
+
+    volver = _home_portal(rol)
+    content = f"""
+<style>
+.tu-wrap{{font-family:Segoe UI,Tahoma,sans-serif}}
+.tu-tbl{{width:100%;border-collapse:collapse;font-size:12.5px}}
+.tu-tbl th{{background:#0B2D57;color:#fff;padding:8px 10px;text-align:left;border:1px solid #1e3a8a;position:sticky;top:0}}
+.tu-tbl td{{padding:8px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top}}
+.tu-tbl tr:nth-child(even){{background:#f8fafc}}
+.tu-filt a{{display:inline-block;padding:6px 12px;margin:2px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;border:1px solid #cbd5e1;color:#0B2D57}}
+.tu-filt a.on{{background:#0B2D57;color:#fff;border-color:#0B2D57}}
+</style>
+<div class="tu-wrap">
+<header class="role-hero"><div>
+  <h1>👥 Turnos · {area}</h1>
+  <p>Notas con fecha/hora automática · estados · pasar caso al compañero del siguiente turno</p>
+</div><a class="btn" href="{volver}">Volver</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+{"<div class='msg' style='background:#fef2f2;color:#b91c1c'>"+_esc(error)+"</div>" if error else ""}
+
+<section class="tu-filt" style="margin:10px 0">
+  <b style="margin-right:8px">Filtrar estado:</b>
+  <a href="?estado=" class="{'on' if not f_estado else ''}">Todos</a>
+  <a href="?estado=PENDIENTE" class="{'on' if f_estado=='PENDIENTE' else ''}">🔴 PENDIENTE</a>
+  <a href="?estado=EN_PROCESO" class="{'on' if f_estado=='EN_PROCESO' else ''}">🟡 EN PROCESO</a>
+  <a href="?estado=CERRADO" class="{'on' if f_estado=='CERRADO' else ''}">🟢 CERRADO</a>
+  <form method="GET" style="display:inline;margin-left:12px">
+    <input type="hidden" name="estado" value="{_esc(f_estado)}">
+    <input name="asignado" value="{_esc(f_asignado)}" placeholder="Asesor asignado" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px">
+    <button style="padding:6px 10px;background:#0B2D57;color:#fff;border:0;border-radius:6px;font-size:12px">Filtrar</button>
+  </form>
+</section>
+
+<section style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin-bottom:16px">
+  <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE {area.upper()} · COLA DE TURNOS</div>
+  <div style="overflow-x:auto;max-height:520px">
+    <table class="tu-tbl">
+      <tr>
+        <th>CASO</th><th>CUENTA</th><th>COLEGIO</th><th>DOCUMENTO</th><th>MÓVIL</th>
+        <th>ASUNTO</th><th>ESTADO</th><th>ASESOR ASIGNADO</th><th>ÚLTIMAS NOTAS</th><th>ACCIONES</th>
+      </tr>
+      {filas}
+    </table>
+  </div>
+</section>
+
+<section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+  <h3 style="margin:0 0 10px;color:#0B2D57">Nuevo caso de turno</h3>
+  <form method="POST">
+    <input type="hidden" name="accion" value="nuevo_caso">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label style="font-size:12px;font-weight:700">Colegio</label>
+      <select name="institucion_id" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px">{opts_inst}</select></div>
+      <div><label style="font-size:12px;font-weight:700">Asignar a</label>
+      <select name="asignado_a" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px">
+        <option value="{_esc(usuario_nom)}">Yo ({_esc(usuario_nom)})</option>
+        {opts_asesor}
+      </select></div>
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Asunto</label>
+      <input name="asunto" placeholder="Ej: Mora agosto · Confirmar cheque" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
+    </div>
+    <button type="submit" style="margin-top:12px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800">Crear caso PENDIENTE</button>
+  </form>
+  <p style="font-size:12px;color:#64748b;margin-top:10px">Al guardar una nota el sistema registra automáticamente fecha, hora y usuario (ej. <b>{ahora_txt} | {usuario_nom}</b>). Use <b>Pasar turno</b> para heredar el caso al compañero.</p>
+</section>
+</div>
+"""
+    return page(f"Turnos {area}", shell(content))
 
 
 @app.route("/cobranza-login", methods=["GET", "POST"])
