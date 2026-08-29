@@ -13485,6 +13485,29 @@ def ventas_panel():
     except Exception:
         n_contacto = n_demo = n_neg = n_ganado = 0
 
+    # Tabla maestra CRM leads (estilo agencia)
+    filas_leads = ""
+    try:
+        for L in LeadCRM.query.order_by(LeadCRM.id.desc()).limit(100).all():
+            et = (L.etapa or "CONTACTO").upper()
+            color = {
+                "CONTACTO": "#64748b", "DEMO": "#0369a1", "NEGOCIACION": "#b45309",
+                "GANADO": "#16a34a", "PERDIDO": "#b91c1c",
+            }.get(et, "#64748b")
+            filas_leads += (
+                f"<tr>"
+                f"<td style='font-weight:800;color:#0B2D57'>LD-{L.id:05d}</td>"
+                f"<td>{_esc(L.colegio or '—')}</td>"
+                f"<td>{_esc(L.rector or '—')}</td>"
+                f"<td>{_esc(L.telefono or '—')}</td>"
+                f"<td><span style='background:{color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>{_esc(et)}</span></td>"
+                f"</tr>"
+            )
+    except Exception:
+        filas_leads = ""
+    if not filas_leads:
+        filas_leads = "<tr><td colspan='5' style='text-align:center;color:#64748b;padding:12px'>Sin leads. Cree prospectos en el embudo.</td></tr>"
+
     # Mini tarjetas del embudo (últimos leads)
     def _cards_etapa(etapa, limit=5):
         html = ""
@@ -13626,6 +13649,22 @@ def ventas_panel():
     <div class="vp-kpi"><div class="l">Comisiones</div><div class="v">{comision_txt}</div><div class="s">Acumulado mes (COP)</div></div>
     <div class="vp-kpi"><div class="l">Prospectos</div><div class="v">{n_contacto}</div><div class="s">Contacto inicial</div></div>
     <div class="vp-kpi"><div class="l">En demo</div><div class="v">{n_demo}</div><div class="s">Prueba activa</div></div>
+  </div>
+
+  <div style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin:12px 0 16px">
+    <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE VENTAS / COMERCIAL · LEADS</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;font-family:Segoe UI,Tahoma,sans-serif">
+        <tr style="background:#1e40af;color:#fff">
+          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">CÓDIGO LEAD</th>
+          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">COLEGIO</th>
+          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">RECTOR / REPRE</th>
+          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">TELÉFONO</th>
+          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">ETAPA DE VENTA</th>
+        </tr>
+        {filas_leads}
+      </table>
+    </div>
   </div>
 
   <div class="vp-actions">
@@ -14663,6 +14702,34 @@ def gerencia_hq():
     m = _gerencia_metricas()
     e = m["embudo"]
     srv_color = {"verde": "#16a34a", "amarillo": "#ca8a04", "rojo": "#dc2626"}.get(m["srv"], "#64748b")
+
+    # Tabla maestra gerencia: contratos / cartera por colegio
+    filas_cartera = ""
+    try:
+        insts = Institucion.query.order_by(Institucion.nombre.asc()).limit(120).all()
+        for inst in insts:
+            pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
+            saldo = sum(float(x.valor or 0) for x in pend)
+            corte = (inst.fecha_vencimiento or "—")[:10]
+            plan = inst.plan or "—"
+            nit = inst.nit or "—"
+            est = (inst.estado or "ACTIVA").upper()
+            color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c"}.get(est, "#b45309")
+            filas_cartera += (
+                f"<tr>"
+                f"<td style='font-weight:800;color:#0B2D57'>{_esc(inst.codigo)}</td>"
+                f"<td>{_esc(nit)}</td>"
+                f"<td>{_esc(inst.nombre)[:40]}</td>"
+                f"<td>{_esc(plan)}</td>"
+                f"<td style='font-weight:700;color:{'#b91c1c' if saldo else '#16a34a'}'>{_cop(saldo) if saldo else '$ 0'}</td>"
+                f"<td>{_esc(corte)}</td>"
+                f"<td><span style='background:{color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>{est}</span></td>"
+                f"</tr>"
+            )
+    except Exception as _ex:
+        filas_cartera = f"<tr><td colspan='7'>Error cargando cartera: {_esc(str(_ex)[:80])}</td></tr>"
+    if not filas_cartera:
+        filas_cartera = "<tr><td colspan='7' style='text-align:center;color:#64748b;padding:12px'>Sin instituciones</td></tr>"
     # Nombre del gerente
     gerente_user = (session.get("usuario") or "gerente").strip()
     gerente_label = gerente_user.replace("_", " ").replace(".", " ").title()
@@ -14747,6 +14814,31 @@ def gerencia_hq():
     </div>
   </header>
   <div class="hq-wrap">
+
+    <div class="sec">
+      <h2>Cuadro de mando · contratos y cartera</h2>
+      <div style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin-top:8px">
+        <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE GERENCIA · CONTRATOS / CARTERA</div>
+        <div style="overflow-x:auto;max-height:420px">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;font-family:Segoe UI,Tahoma,sans-serif">
+            <tr style="background:#1e40af;color:#fff;position:sticky;top:0">
+              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">ID CONTRATO</th>
+              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">NIT / CLIENTE</th>
+              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">COLEGIO</th>
+              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">PLAN</th>
+              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">SALDO CARTERA</th>
+              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">FECHA CORTE</th>
+              <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">ESTADO</th>
+            </tr>
+            {filas_cartera}
+          </table>
+        </div>
+        <div style="padding:8px 12px;background:#f8fafc;font-size:12px">
+          <a href="/gerencia/facturacion-cobranza" style="font-weight:700;color:#0B2D57">Ir a Facturación y Cobranza →</a>
+          · <a href="/interno/buscar-colegio" style="font-weight:700;color:#0B2D57">Buscar colegio →</a>
+        </div>
+      </div>
+    </div>
 
     <div class="sec">
       <h2>Módulos operativos</h2>
@@ -18730,9 +18822,11 @@ def gerencia_facturacion():
 
 
 @app.route("/gerencia/facturacion/<int:fid>/pdf")
+@app.route("/gerencia/facturacion/<int:fid>/imprimir")
 def gerencia_factura_pdf(fid):
-    """Recibo interno estilo factura profesional (pre-Siigo / cuenta de cobro)."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
+    """Factura / cuenta de cobro profesional: detalle del plan, descripción del servicio,
+    espacio CUFE DIAN e impresión (inline PDF)."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza", "Comercial"):
         return redirect("/cobranza-login" if rol_actual() == "Cobranza" else "/gerencia-login")
     try:
         _migrate_facturas_cobro_columns()
@@ -18751,195 +18845,92 @@ def gerencia_factura_pdf(fid):
     ubic = ", ".join(x for x in [dir_, mun, dep] if x) or "Colombia"
     est = _normalizar_estado_factura(f.estado)
     tipo_one = (f.tipo or "") == "one_time"
+    plan_nombre = (inst.plan if inst else "") or ""
+    if not plan_nombre and f.concepto:
+        plan_nombre = f.concepto
+
+    # Plan comercial + features (descripción del servicio adquirido)
+    plan_obj = None
+    features = []
+    try:
+        if plan_nombre:
+            plan_obj = PlanComercial.query.filter(
+                db.or_(
+                    PlanComercial.nombre.ilike(plan_nombre),
+                    PlanComercial.codigo.ilike(plan_nombre),
+                )
+            ).first()
+        if not plan_obj and inst and inst.plan:
+            plan_obj = PlanComercial.query.filter(
+                db.or_(PlanComercial.nombre.ilike(inst.plan), PlanComercial.codigo.ilike(inst.plan))
+            ).first()
+        if plan_obj:
+            plan_nombre = plan_obj.nombre or plan_nombre
+            import json as _json
+            raw = getattr(plan_obj, "features_json", None) or "[]"
+            features = _json.loads(raw) if isinstance(raw, str) else (raw or [])
+            if not isinstance(features, list):
+                features = []
+    except Exception:
+        features = []
+
     try:
         p = plataforma()
         empresa = (getattr(p, "empresa", None) or "Procsis").strip()
         producto = (getattr(p, "nombre_producto", None) or "EduTrack").strip()
-        tel_sop = (getattr(p, "telefono_soporte", None) or getattr(p, "telefono_cartera", None) or "").strip() or "3000000000"
-        email_sop = (getattr(p, "email_soporte", None) or getattr(p, "email_cartera", None) or "").strip() or "cartera@procsis.co"
-        logo = (getattr(p, "logo_path", None) or "").strip()
-        # Datos de recaudo (completar en plataforma o variables de entorno)
-        # Datos de tesorería (Gerencia) con fallback a env / plataforma
-        try:
-            _tes = _leer_tesoreria()
-        except Exception:
-            _tes = {}
-        banco = (_tes.get("banco") or os.environ.get("PROCSIS_BANCO") or getattr(p, "banco_nombre", None) or "Bancolombia").strip()
-        cuenta = (_tes.get("numero_cuenta") or os.environ.get("PROCSIS_CUENTA") or getattr(p, "banco_cuenta", None) or "").strip()
-        titular = (_tes.get("titular") or os.environ.get("PROCSIS_TITULAR") or getattr(p, "banco_titular", None) or "").strip()
-        cedula = (_tes.get("nit") or os.environ.get("PROCSIS_CEDULA") or getattr(p, "banco_cedula", None) or "").strip()
-        tipo_cta = (_tes.get("tipo_cuenta") or os.environ.get("PROCSIS_TIPO_CUENTA") or getattr(p, "banco_tipo", None) or "Ahorros").strip()
-        firma_nombre = (os.environ.get("PROCSIS_FIRMA") or getattr(p, "firma_nombre", None) or "Procsis · Dirección Comercial").strip()
-        pasarela_nombre = (_tes.get("pasarela") or "").strip()
-        pasarela_pk = (_tes.get("pasarela_public_key") or _tes.get("link_pago") or "").strip()
-        link_pago_cfg = (_tes.get("link_pago") or _tes.get("pasarela_checkout") or "").strip()
+        logo = (getattr(p, "logo_path", None) or "/static/img/logo-edutrack.png")
+        nit_emp = (getattr(p, "nit", None) or "").strip()
+        email_emp = (getattr(p, "email_cartera", None) or getattr(p, "email_soporte", None) or "soporte@procsis.com")
+        tel_emp = (getattr(p, "telefono_cartera", None) or getattr(p, "telefono_soporte", None) or "")
     except Exception:
-        empresa, producto, tel_sop, email_sop, logo = "Procsis", "EduTrack", "3000000000", "cartera@procsis.co", ""
-        banco, cuenta = "Bancolombia", "[Número de cuenta de ahorros]"
-        titular, cedula, tipo_cta = "[Nombre completo del titular de la cuenta]", "[Cédula de ciudadanía]", "Ahorros"
-        firma_nombre = "[Nombre] — Director General"
+        empresa, producto, logo, nit_emp = "Procsis", "EduTrack", "/static/img/logo-edutrack.png", ""
+        email_emp, tel_emp = "soporte@procsis.com", ""
 
-    # Plan limits for icons — dinámico según plan real del colegio
-    def _norm_plan(s):
-        s = (s or "").strip().lower()
-        for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u")):
-            s = s.replace(a, b)
-        return s
-
-    PLAN_LABELS = {
-        "demo": ("Demo", 150, 1),
-        "piloto": ("Demo", 150, 1),
-        "basico": ("Básico", 300, 1),
-        "estandar": ("Estándar", 800, 2),
-        "pro": ("Pro", 1500, 3),
-        "premium": ("Premium", 99999, 8),
-    }
-    raw_plan = (inst.plan if inst and inst.plan else "") or ""
-    plan_nom = "Plan contratado"
-    max_est, max_sed = 300, 1  # default prudente (Básico), no Estándar
+    # Tesorería / Wompi
+    link_pago_cfg = ""
+    cta_banco = "3122837769"
     try:
-        pc = None
-        if inst:
-            # 1) por código exacto
-            pc = PlanComercial.query.filter_by(codigo=raw_plan).first()
-            if not pc:
-                pc = PlanComercial.query.filter(PlanComercial.codigo.ilike(raw_plan)).first()
-            # 2) por nombre
-            if not pc and raw_plan:
-                pc = PlanComercial.query.filter(PlanComercial.nombre.ilike(f"%{raw_plan}%")).first()
-            # 3) por catálogo normalizado
-            if not pc:
-                key = _norm_plan(raw_plan)
-                for cod, (label, me, ms) in PLAN_LABELS.items():
-                    if cod in key or key in cod:
-                        plan_nom, max_est, max_sed = label, me, ms
-                        break
-        if pc:
-            key = _norm_plan(pc.codigo or pc.nombre or "")
-            label = (pc.nombre or "").strip()
-            # acentos estándar
-            if _norm_plan(label) == "basico" or key == "basico":
-                label = "Básico"
-            elif _norm_plan(label) == "estandar" or key == "estandar":
-                label = "Estándar"
-            plan_nom = label or plan_nom
-            max_est = int(pc.max_estudiantes or max_est)
-            max_sed = int(pc.max_sedes or max_sed)
-        elif raw_plan:
-            key = _norm_plan(raw_plan)
-            if key in PLAN_LABELS:
-                plan_nom, max_est, max_sed = PLAN_LABELS[key]
-            else:
-                for cod, vals in PLAN_LABELS.items():
-                    if cod in key:
-                        plan_nom, max_est, max_sed = vals
-                        break
+        import json as _json, os as _os
+        tp = _os.path.join("config", "tesoreria.json")
+        if _os.path.isfile(tp):
+            with open(tp, encoding="utf-8") as fh:
+                data = _json.load(fh)
+            link_pago_cfg = (data.get("link_pago") or data.get("wompi_link") or "").strip()
+            cta_banco = data.get("nequi") or data.get("cuenta") or cta_banco
     except Exception:
         pass
 
     valor = float(f.valor or 0)
+    total = valor
+    venc = (f.vencimiento or "")[:10]
     moneda_doc = "COP"
     addon_ia = addon_migracion = addon_soporte247 = False
-    try:
-        import json as _json
-        _meta = _json.loads(f.ref_externa or "{}")
-        moneda_doc = (_meta.get("moneda") or "COP").upper()
-        addon_ia = bool(_meta.get("addon_ia"))
-        addon_migracion = bool(_meta.get("addon_migracion"))
-        addon_soporte247 = bool(_meta.get("addon_soporte247"))
-        # compat legado sede (ya no se vende)
-        if _meta.get("addon_sede"):
-            pass
-    except Exception:
-        if "IA" in (f.concepto or "") or "Varita" in (f.concepto or ""):
-            addon_ia = True
-        if "Migración" in (f.concepto or "") or "histórico" in (f.concepto or "").lower():
-            addon_migracion = True
-        if "24/7" in (f.concepto or "") or "Prioritaria" in (f.concepto or ""):
-            addon_soporte247 = True
-    def _money(v):
-        if moneda_doc == "USD":
-            return f"USD {float(v):,.2f}"
-        return _cop(v)
-    deuda_ant = 0.0
-
-    try:
-        prev = (
-            FacturaCobro.query.filter(
-                FacturaCobro.institucion_id == f.institucion_id,
-                FacturaCobro.id < f.id,
-                FacturaCobro.estado.in_(["PENDIENTE", "VENCIDO", "VENCIDA", "PAGADA", "PAGADO"]),
-            )
-            .order_by(FacturaCobro.id.desc())
-            .all()
-        )
-        for pf in prev:
-            st = _normalizar_estado_factura(pf.estado)
-            if st in ("PENDIENTE", "VENCIDO"):
-                deuda_ant += float(pf.valor or 0)
-    except Exception:
-        deuda_ant = 0.0
-
-    cargo_fijo = 0.0 if tipo_one else valor
-    adicional = valor if tipo_one else 0.0
-    total = deuda_ant + cargo_fijo + adicional
-    if total <= 0:
-        total = valor
-
-    venc = (f.vencimiento or "").strip()
-    if not venc and f.creado_en:
-        try:
-            from datetime import datetime, timedelta
-            base = datetime.strptime(str(f.creado_en)[:10], "%Y-%m-%d")
-            venc = (base + timedelta(days=10)).strftime("%Y-%m-%d")
-        except Exception:
-            venc = "—"
-    # fecha limite label
-    limite_txt = venc or "—"
-    limite_urgente = est in ("VENCIDO", "PENDIENTE")
-    if est == "VENCIDO":
-        limite_txt = "INMEDIATO"
-        limite_urgente = True
-    elif est == "PAGADO":
-        limite_txt = f.pagada_en[:10] if f.pagada_en else "Pagado"
-        limite_urgente = False
-
-    # WhatsApp QR payload
-    tel_wa = "".join(c for c in tel_sop if c.isdigit()) or "573000000000"
-    if len(tel_wa) == 10:
-        tel_wa = "57" + tel_wa
-    from urllib.parse import quote
-    wa_msg = quote(f"Hola, quiero reportar el pago del recibo {cons} — {colegio}")
-    wa_url = f"https://wa.me/{tel_wa}?text={wa_msg}"
 
     from io import BytesIO
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.units import cm
-    from reportlab.lib.colors import HexColor, black, white
+    from reportlab.lib.colors import HexColor, white, black
     from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable, KeepTogether
     )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.enums import TA_RIGHT, TA_CENTER, TA_LEFT
 
-    # —— Paleta estilo factura corporativa (Tigo-like / Procsis) ——
-    BLUE = HexColor("#0050FF")
-    BLUE_DARK = HexColor("#0033AA")
     NAVY = HexColor("#0B2D57")
+    BLUE_DARK = HexColor("#0a2447")
+    DARK = HexColor("#0f172a")
     GRAY = HexColor("#64748b")
     GRAY_SOFT = HexColor("#94a3b8")
-    LIGHT = HexColor("#F4F7FB")
-    BORDER = HexColor("#BFDBFE")
-    DARK = HexColor("#0f172a")
-    GREEN = HexColor("#15803d")
+    BORDER = HexColor("#cbd5e1")
+    LIGHT = HexColor("#f1f5f9")
+    GREEN = HexColor("#166534")
+    AMBER = HexColor("#b45309")
 
-    def _money(v):
+    def _cop_fmt(n):
         try:
-            n = float(v or 0)
+            n = float(n or 0)
         except Exception:
             n = 0.0
-        if moneda_doc == "USD":
-            return f"USD {n:,.2f}"
         return f"$ {n:,.0f}".replace(",", ".")
 
     def _fecha_larga(iso):
@@ -18964,35 +18955,65 @@ def gerencia_factura_pdf(fid):
         mes_per = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
         d0 = _dt.strptime(exped[:10], "%Y-%m-%d")
         periodo_txt = f"{mes_per[d0.month-1]} {d0.year}"
+        if f.ciclo and len(str(f.ciclo)) >= 7:
+            try:
+                y, m = str(f.ciclo)[:7].split("-")
+                periodo_txt = f"{mes_per[int(m)-1]} {y}"
+            except Exception:
+                pass
     except Exception:
         periodo_txt = (f.ciclo or "—")
     venc_txt = _fecha_larga(venc) if venc else "—"
 
-    # Desglose
+    # Líneas de detalle del servicio (como factura real)
     filas_desg = []
+    concepto_base = (f.concepto or "").strip()
     if tipo_one:
-        filas_desg.append(("Implementación / onboarding", float(valor or total)))
+        filas_desg.append((
+            concepto_base or f"Implementación / onboarding — plan {plan_nombre or producto}",
+            "1",
+            valor,
+            valor,
+        ))
     else:
-        base = float(valor or 0)
-        # si hay addons, el valor del form ya puede incluirlos; mostrar líneas informativas
-        filas_desg.append((f"Mensualidad plan {(inst.plan if inst else '') or 'EduTrack'}", base))
-    if addon_ia:
-        filas_desg.append(("Asistente Pedagógico con IA (Varita Mágica)", 30000 if moneda_doc == "COP" else 8))
-    if addon_migracion:
-        filas_desg.append(("Migración de datos históricos (pago único)", 150000 if moneda_doc == "COP" else 40))
-    if addon_soporte247:
-        filas_desg.append(("Soporte prioritario 24/7", 50000 if moneda_doc == "COP" else 13))
+        desc = concepto_base or f"Mensualidad plan {plan_nombre or producto} — periodo {periodo_txt}"
+        filas_desg.append((desc, "1", valor, valor))
 
-    # QR payload (Wompi)
-    qr_payload = wa_url
+    # Descripción extendida del plan (módulos incluidos)
+    desc_servicio_lineas = []
+    if plan_obj:
+        desc_servicio_lineas.append(f"Plan contratado: {plan_obj.nombre}")
+        if getattr(plan_obj, "max_estudiantes", None):
+            desc_servicio_lineas.append(f"Hasta {plan_obj.max_estudiantes} estudiantes")
+        if getattr(plan_obj, "max_sedes", None):
+            desc_servicio_lineas.append(f"Hasta {plan_obj.max_sedes} sedes")
+        if getattr(plan_obj, "precio_mensual", None):
+            desc_servicio_lineas.append(f"Tarifa de referencia: {_cop_fmt(plan_obj.precio_mensual)} / mes")
+    if features:
+        for ft in features[:12]:
+            if isinstance(ft, dict):
+                desc_servicio_lineas.append(str(ft.get("nombre") or ft.get("label") or ft))
+            else:
+                desc_servicio_lineas.append(str(ft))
+    if not desc_servicio_lineas:
+        desc_servicio_lineas = [
+            f"Licencia de uso de la plataforma {producto}",
+            "Acceso web multi-usuario para la institución educativa",
+            "Soporte técnico según el plan contratado",
+            f"Almacenamiento: {ALMACENAMIENTO_GB_POR_COLEGIO} GB por colegio",
+            "Los datos académicos se conservan íntegros ante suspensión por mora",
+        ]
+
+    from urllib.parse import quote
+    wa_url = f"https://wa.me/57{''.join(c for c in str(tel_emp) if c.isdigit())[-10:]}" if tel_emp else ""
+    qr_payload = wa_url or f"{cons}|{total}|{colegio}"
     try:
         _lp = (link_pago_cfg or "").strip()
         if _lp:
             _val = str(int(round(float(total))))
             _ref = str(cons).replace(" ", "")
             qr_payload = (
-                _lp.replace("{valor}", _val)
-                   .replace("{ref}", _ref)
+                _lp.replace("{valor}", _val).replace("{ref}", _ref)
                    .replace("{consecutivo}", _ref)
                    .replace("{amount_in_cents}", str(int(round(float(total) * 100))))
             )
@@ -19015,28 +19036,30 @@ def gerencia_factura_pdf(fid):
 
     buf = BytesIO()
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="Hi", fontName="Helvetica-Bold", fontSize=18, textColor=white, leading=22))
+    styles.add(ParagraphStyle(name="Hi", fontName="Helvetica-Bold", fontSize=16, textColor=white, leading=20))
     styles.add(ParagraphStyle(name="HiSub", fontName="Helvetica", fontSize=8.5, textColor=HexColor("#D6E4FF"), leading=11))
-    styles.add(ParagraphStyle(name="Sec", fontName="Helvetica-Bold", fontSize=9, textColor=NAVY, leading=12, spaceBefore=4, spaceAfter=4))
+    styles.add(ParagraphStyle(name="Sec", fontName="Helvetica-Bold", fontSize=9, textColor=NAVY, leading=12, spaceBefore=2, spaceAfter=3))
     styles.add(ParagraphStyle(name="Body", fontName="Helvetica", fontSize=8.5, textColor=DARK, leading=11))
     styles.add(ParagraphStyle(name="BodyB", fontName="Helvetica-Bold", fontSize=8.5, textColor=DARK, leading=11))
-    styles.add(ParagraphStyle(name="BigMoney", fontName="Helvetica-Bold", fontSize=20, textColor=BLUE_DARK, leading=24, alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name="BigMoney", fontName="Helvetica-Bold", fontSize=18, textColor=BLUE_DARK, leading=22, alignment=TA_RIGHT))
     styles.add(ParagraphStyle(name="MoneyLbl", fontName="Helvetica", fontSize=8, textColor=GRAY, leading=10, alignment=TA_RIGHT))
-    styles.add(ParagraphStyle(name="Limit", fontName="Helvetica-Bold", fontSize=14, textColor=DARK, leading=17))
+    styles.add(ParagraphStyle(name="Limit", fontName="Helvetica-Bold", fontSize=13, textColor=DARK, leading=16))
     styles.add(ParagraphStyle(name="Warn", fontName="Helvetica", fontSize=7.5, textColor=GRAY, leading=10))
     styles.add(ParagraphStyle(name="Legal", fontName="Helvetica", fontSize=6.5, textColor=GRAY_SOFT, leading=8.5))
     styles.add(ParagraphStyle(name="Center", fontName="Helvetica", fontSize=8, textColor=GRAY, alignment=TA_CENTER, leading=10))
     styles.add(ParagraphStyle(name="PayTitle", fontName="Helvetica-Bold", fontSize=9, textColor=NAVY, leading=12))
     styles.add(ParagraphStyle(name="Small", fontName="Helvetica", fontSize=7.5, textColor=GRAY, leading=9))
-    styles.add(ParagraphStyle(name="WhiteRight", fontName="Helvetica-Bold", fontSize=9, textColor=white, alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name="Th", fontName="Helvetica-Bold", fontSize=8, textColor=white, leading=10))
+    styles.add(ParagraphStyle(name="Td", fontName="Helvetica", fontSize=8, textColor=DARK, leading=10))
+    styles.add(ParagraphStyle(name="Cufe", fontName="Helvetica", fontSize=7.5, textColor=DARK, leading=10))
 
     story = []
 
-    # —— 1. CABECERA AZUL ——
+    # CABECERA
     logo_cell = Paragraph(f"<font color='white'><b>{empresa}</b><br/>{producto}</font>", styles["HiSub"])
     try:
-        if logo and (logo.startswith("/static") or logo.startswith("static")):
-            import os as _os
+        import os as _os
+        if logo:
             lp = logo if logo.startswith("/") else "/" + logo
             local = _os.path.join(app.root_path, lp.lstrip("/"))
             if _os.path.isfile(local):
@@ -19045,125 +19068,179 @@ def gerencia_factura_pdf(fid):
         pass
 
     head_left = [
-        Paragraph(f"Hola, {colegio[:48]}", styles["Hi"]),
-        Spacer(1, 4),
+        Paragraph(f"Hola, {colegio}", styles["Hi"]),
         Paragraph(
-            f"Cuenta de Cobro Interna · {cons}<br/>"
+            f"Cuenta de Cobro Interna · <b>{cons}</b><br/>"
             f"Fecha de expedición: {exped_txt}<br/>"
             f"Periodo facturado: {periodo_txt}",
             styles["HiSub"],
         ),
     ]
-    head = Table([[
-        head_left,
-        logo_cell,
-    ]], colWidths=[14.2*cm, 3.5*cm])
-    head.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), BLUE),
+    head_tbl = Table(
+        [[logo_cell, head_left]],
+        colWidths=[2.6*cm, 15.2*cm],
+    )
+    head_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), NAVY),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (0, 0), 14),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING", (0, 0), (-1, -1), 14),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
     ]))
-    story.append(head)
+    story.append(head_tbl)
     story.append(Spacer(1, 10))
 
-    # —— 2. DOS COLUMNAS: datos + valor ——
-    datos_txt = (
-        f"<b>Datos del cliente</b><br/><br/>"
+    # Datos cliente + total
+    cliente_html = (
         f"<b>Institución:</b> {colegio}<br/>"
         f"<b>Documento / NIT:</b> {nit}<br/>"
         f"<b>Rector(a):</b> {rector}<br/>"
         f"<b>Teléfono:</b> {tel}<br/>"
         f"<b>Dirección:</b> {ubic}<br/>"
-        f"<b>Estado del recibo:</b> {est}"
+        f"<b>Estado del recibo:</b> {est}<br/>"
+        f"<b>Plan:</b> {plan_nombre or '—'}"
     )
-    desg_lines = "<br/>".join(
-        f"· {lab}: <b>{_money(val)}</b>" for lab, val in filas_desg[:6]
-    ) or "· Según plan contratado"
-    valor_block = [
+    left_box = Paragraph(cliente_html, styles["Body"])
+    right_box = [
         Paragraph("Valor total a pagar", styles["MoneyLbl"]),
-        Paragraph(_money(total), styles["BigMoney"]),
-        Spacer(1, 4),
-        Paragraph(desg_lines, styles["Small"]),
+        Paragraph(_cop_fmt(total), styles["BigMoney"]),
+        Paragraph(f"{'Implementación' if tipo_one else 'Mensualidad'} · {plan_nombre or producto}", styles["Small"]),
     ]
-    col = Table([[
-        Paragraph(datos_txt, styles["Body"]),
-        valor_block,
-    ]], colWidths=[9.5*cm, 8.2*cm])
-    col.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), LIGHT),
-        ("BOX", (0, 0), (-1, -1), 0.8, BORDER),
-        ("LINEAFTER", (0, 0), (0, 0), 0.6, BORDER),
+    info = Table([[left_box, right_box]], colWidths=[11.5*cm, 6.3*cm])
+    info.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.6, BORDER),
+        ("BACKGROUND", (1, 0), (1, 0), LIGHT),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING", (0, 0), (-1, -1), 12),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-    ]))
-    story.append(col)
-    story.append(Spacer(1, 12))
-
-    # —— 3. FECHA LÍMITE (estilo Tigo: sobrio) ——
-    limit_tbl = Table([[
-        [
-            Paragraph("Fecha límite de pago", styles["Small"]),
-            Paragraph(venc_txt, styles["Limit"]),
-            Paragraph(
-                "En caso de no registrar el pago antes de esta fecha, el soporte técnico de la plataforma "
-                "será suspendido temporalmente. Los datos académicos se conservan íntegros.",
-                styles["Warn"],
-            ),
-        ]
-    ]], colWidths=[17.7*cm])
-    limit_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), white),
-        ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#e2e8f0")),
         ("LEFTPADDING", (0, 0), (-1, -1), 10),
         ("RIGHTPADDING", (0, 0), (-1, -1), 10),
         ("TOPPADDING", (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
-    story.append(limit_tbl)
-    story.append(Spacer(1, 12))
+    story.append(info)
+    story.append(Spacer(1, 8))
 
-    # —— 4. MEDIOS DE PAGO + QR ——
-    medios = (
+    # Tabla de ítems (factura real)
+    story.append(Paragraph("Detalle del servicio / productos facturados", styles["Sec"]))
+    item_header = [
+        Paragraph("<b>#</b>", styles["Th"]),
+        Paragraph("<b>Descripción del servicio</b>", styles["Th"]),
+        Paragraph("<b>Cant.</b>", styles["Th"]),
+        Paragraph("<b>Valor unit.</b>", styles["Th"]),
+        Paragraph("<b>Subtotal</b>", styles["Th"]),
+    ]
+    item_rows = [item_header]
+    for i, (desc, cant, vu, st) in enumerate(filas_desg, 1):
+        item_rows.append([
+            Paragraph(str(i), styles["Td"]),
+            Paragraph(str(desc)[:220], styles["Td"]),
+            Paragraph(str(cant), styles["Td"]),
+            Paragraph(_cop_fmt(vu), styles["Td"]),
+            Paragraph(_cop_fmt(st), styles["Td"]),
+        ])
+    # Totales row
+    item_rows.append([
+        Paragraph("", styles["Td"]),
+        Paragraph("<b>TOTAL A PAGAR</b>", styles["BodyB"]),
+        Paragraph("", styles["Td"]),
+        Paragraph("", styles["Td"]),
+        Paragraph(f"<b>{_cop_fmt(total)}</b>", styles["BodyB"]),
+    ])
+    items_tbl = Table(item_rows, colWidths=[1*cm, 9.5*cm, 1.5*cm, 2.8*cm, 2.8*cm])
+    items_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), white),
+        ("GRID", (0, 0), (-1, -2), 0.4, BORDER),
+        ("BOX", (0, 0), (-1, -1), 0.8, NAVY),
+        ("BACKGROUND", (0, -1), (-1, -1), LIGHT),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+    ]))
+    story.append(items_tbl)
+    story.append(Spacer(1, 8))
+
+    # Descripción del plan / módulos incluidos
+    story.append(Paragraph("Descripción del servicio adquirido (plan y módulos)", styles["Sec"]))
+    feat_txt = "<br/>".join(f"• {x}" for x in desc_servicio_lineas)
+    story.append(Paragraph(feat_txt, styles["Body"]))
+    story.append(Spacer(1, 8))
+
+    # Fecha límite
+    limit_box = Table([[
+        Paragraph(f"<b>Fecha límite de pago</b><br/><font size='12'>{venc_txt}</font>", styles["Limit"]),
+        Paragraph(
+            "En caso de no registrar el pago antes de esta fecha, el soporte técnico de la plataforma "
+            "será suspendido temporalmente. Los datos académicos se conservan íntegros.",
+            styles["Warn"],
+        ),
+    ]], colWidths=[6*cm, 11.8*cm])
+    limit_box.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.8, AMBER),
+        ("BACKGROUND", (0, 0), (0, 0), HexColor("#fffbeb")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(limit_box)
+    story.append(Spacer(1, 8))
+
+    # Pago + QR
+    pay_txt = (
         f"<b>Paga tu cuenta de cobro fácil y seguro con Wompi</b><br/>"
         f"Tarjeta crédito/débito · PSE · Nequi · Bancolombia<br/>"
-        f"<font size='7' color='#64748b'>También puede consignar a la cuenta de {tipo_cta} "
-        f"N° <b>{cuenta or '—'}</b> · {banco or '—'} · Titular: {titular or '—'} · C.C. {cedula or '—'}</font><br/>"
-        f"<font size='7'>Referencia de pago: <b>{cons}</b> · Cartera: {tel_sop} · {email_sop}</font>"
+        f"También puede consignar a la cuenta de Ahorros N° <b>{cta_banco}</b> — NEQUI · Titular: <b>PROCSIS</b><br/>"
+        f"Referencia de pago: <b>{cons}</b> · Cartera: {tel_emp or '—'} · {email_emp}"
     )
+    qr_cell = Paragraph("QR no disponible", styles["Small"])
     if qr_ok:
-        qr_img = Image(qr_buf, width=3.2*cm, height=3.2*cm)
-    else:
-        qr_img = Paragraph("QR no disponible", styles["Center"])
-    qr_side = [
-        qr_img,
-        Paragraph("<b>Paga aquí</b>", styles["Center"]),
-        Paragraph("Escanee el código con su celular", styles["Center"]),
-    ]
-    pay = Table([[
-        Paragraph(medios, styles["Body"]),
-        qr_side,
-    ]], colWidths=[12.8*cm, 4.9*cm])
+        try:
+            qr_cell = Image(qr_buf, width=3.2*cm, height=3.2*cm)
+        except Exception:
+            pass
+    pay = Table([[Paragraph(pay_txt, styles["Body"]), qr_cell]], colWidths=[13.5*cm, 4.3*cm])
     pay.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), HexColor("#EEF5FF")),
-        ("BOX", (0, 0), (-1, -1), 0.8, BLUE),
+        ("BOX", (0, 0), (-1, -1), 0.8, NAVY),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ("ALIGN", (1, 0), (1, 0), "CENTER"),
     ]))
     story.append(pay)
-    story.append(Spacer(1, 14))
+    story.append(Spacer(1, 10))
 
-    # —— Legal ——
+    # —— CUFE / DIAN (espacio reservado para factura electrónica) ——
+    story.append(Paragraph("Facturación electrónica DIAN · Código CUFE", styles["Sec"]))
+    cufe_box = Table([[
+        Paragraph(
+            "<b>CUFE (Código Único de Factura Electrónica)</b><br/><br/>"
+            "_______________________________________________________________<br/>"
+            "_______________________________________________________________<br/><br/>"
+            "<font size='7' color='#64748b'>Espacio reservado para el CUFE asignado por la DIAN / proveedor tecnológico "
+            "(Siigo, Alegra, etc.) al emitir la factura electrónica de venta definitiva. "
+            "Esta cuenta de cobro interna se consolida conforme a la Ley 2155 de 2021.</font>",
+            styles["Cufe"],
+        )
+    ]], colWidths=[17.8*cm])
+    cufe_box.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 1.0, NAVY),
+        ("BACKGROUND", (0, 0), (-1, -1), HexColor("#f8fafc")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(cufe_box)
+    story.append(Spacer(1, 10))
+
+    # Legal
     story.append(Paragraph(
         "<b>Intereses por mora:</b> A partir de la fecha de vencimiento, la mora en el pago de la presente obligación "
         "causará intereses moratorios a la tasa máxima legal autorizada por la Superintendencia Financiera de Colombia "
@@ -19171,13 +19248,15 @@ def gerencia_factura_pdf(fid):
         styles["Legal"],
     ))
     story.append(Paragraph(
-        "Esta es una cuenta de cobro interna de soporte y control operativo emitida por PROCSIS. Los valores aquí "
+        f"Esta es una cuenta de cobro interna de soporte y control operativo emitida por {empresa}. Los valores aquí "
         "expresados se consolidarán en la factura electrónica de venta definitiva de conformidad con lo establecido "
         "en la Ley 2155 de 2021 y las normativas vigentes de la DIAN.",
         styles["Legal"],
     ))
+    if nit_emp:
+        story.append(Paragraph(f"NIT emisor: {nit_emp}", styles["Legal"]))
     story.append(Spacer(1, 6))
-    story.append(Paragraph(f"{empresa} · {producto} · Recibo {cons}", styles["Center"]))
+    story.append(Paragraph(f"{empresa} · {producto} · Recibo {cons} · Documento imprimible", styles["Center"]))
 
     def _on_page(canvas, doc):
         canvas.saveState()
@@ -19186,28 +19265,27 @@ def gerencia_factura_pdf(fid):
         canvas.rect(1.2*cm, 1.1*cm, 18.6*cm, 26*cm, stroke=1, fill=0)
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(GRAY)
-        canvas.drawString(1.5*cm, 0.7*cm, f"{empresa} · Cuenta de cobro interna")
-        canvas.drawRightString(19.5*cm, 0.7*cm, f"Página {doc.page}")
+        canvas.drawString(1.5*cm, 0.7*cm, f"{empresa} · Cuenta de cobro · Imprimible")
+        canvas.drawRightString(19.5*cm, 0.7*cm, f"Página {doc.page} · {cons}")
         canvas.restoreState()
 
     doc = SimpleDocTemplate(
         buf, pagesize=letter,
         leftMargin=1.4*cm, rightMargin=1.4*cm,
         topMargin=1.2*cm, bottomMargin=1.3*cm,
-        title=f"Recibo {cons}",
+        title=f"Recibo {cons} — {colegio}",
         author=empresa,
     )
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     pdf = buf.getvalue()
     from flask import Response
+    # inline = abrir/imprimir en navegador; attachment fuerza descarga
+    disp = "inline" if "imprimir" in (request.path or "") or request.args.get("print") else "inline"
     return Response(
         pdf,
         mimetype="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{cons}.pdf"'},
+        headers={"Content-Disposition": f'{disp}; filename="{cons}.pdf"'},
     )
-
-
-
 
 
 @app.route("/gerencia/facturacion/<int:fid>/eliminar", methods=["POST"])
@@ -22666,6 +22744,35 @@ def soporte_admin():
     p = plataforma()
     rol_actual_ = rol_actual()
     if rol_actual_ == "Soporte":
+        # Tabla maestra CRM de tickets (estilo agencia / legacy UI)
+        filas_tk = ""
+        try:
+            tickets = TicketPQR.query.order_by(TicketPQR.id.desc()).limit(80).all()
+            for t in tickets:
+                est = (t.estado or "RADICADO").upper()
+                color = {
+                    "RADICADO": "#b45309", "ABIERTO": "#b45309", "RADICADA": "#b45309",
+                    "EN PROCESO": "#0369a1", "ASIGNADA": "#0369a1", "EN TRÁMITE": "#0369a1",
+                    "RESUELTA": "#16a34a", "CERRADA": "#16a34a", "CERRADO": "#16a34a",
+                }.get(est, "#64748b")
+                falla = (t.objeto or t.hechos or t.subtipo or t.tipo_pqr or "—")[:80]
+                movil = (t.numero_documento or "")  # prefer phone if stored in hechos/email
+                # intentar teléfono en email field o dejar documento
+                contacto = (t.email or t.numero_documento or "—")[:40]
+                inst_nom = (t.nombre_colegio or t.razon_social or "—")[:50]
+                filas_tk += (
+                    f"<tr>"
+                    f"<td style='font-weight:800;color:#0B2D57'>{_esc(t.ticket or t.radicado)}</td>"
+                    f"<td>{_esc(inst_nom)}</td>"
+                    f"<td>{_esc(contacto)}</td>"
+                    f"<td>{_esc(falla)}</td>"
+                    f"<td><span style='background:{color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>{_esc(est)}</span></td>"
+                    f"</tr>"
+                )
+        except Exception:
+            filas_tk = "<tr><td colspan='5'>Sin tickets aún</td></tr>"
+        if not filas_tk:
+            filas_tk = "<tr><td colspan='5' style='text-align:center;color:#64748b;padding:12px'>Sin casos registrados</td></tr>"
         content = f"""
 <section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:22px;padding:22px 24px;margin-bottom:14px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
   <div style="display:flex;gap:16px;align-items:center">
@@ -22677,21 +22784,34 @@ def soporte_admin():
     </div>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn" href="/interno/buscar-colegio" style="background:#334155;color:#fff">🔍 Buscar colegio</a>
     <a class="btn" href="/mi-perfil" style="background:#334155;color:#fff">👤 Mi perfil</a>
     <a class="btn btn-red" href="/logout">Salir</a>
   </div>
 </section>
-<section class="role-panel" style="margin-bottom:14px">
-  <h2 style="margin:0 0 10px">🎫 Tickets y casos</h2>
-  <p class="mini-text">Bandeja de reportes de colegios (abiertos, en proceso, solucionados).</p>
-  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-    <a class="btn" href="/soporte/pqr" style="background:#0B2D57;color:#fff">Centro PQR / Tickets</a>
-    <a class="btn" href="/soporte/logs-errores" style="background:#7c3aed;color:#fff">Bugs / Escalamiento</a>
+
+<section style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin-bottom:14px">
+  <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE SOPORTE TÉCNICO · CASOS</div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;font-family:Segoe UI,Tahoma,sans-serif">
+      <tr style="background:#1e40af;color:#fff">
+        <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">CASO / TICKET</th>
+        <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">INSTITUCIÓN</th>
+        <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">MÓVIL / CONTACTO</th>
+        <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">FALLA REPORTADA</th>
+        <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">ESTADO</th>
+      </tr>
+      {filas_tk}
+    </table>
+  </div>
+  <div style="padding:8px 12px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px">
+    <a href="/soporte/pqr" style="font-weight:700;color:#0B2D57">Abrir centro PQR completo →</a>
+    · <a href="/soporte/logs-errores" style="font-weight:700;color:#7c3aed">Bugs / escalamiento →</a>
   </div>
 </section>
+
 <section class="role-panel" style="margin-bottom:14px">
   <h2 style="margin:0 0 10px">👥 Gestión de usuarios</h2>
-  <p class="mini-text">Buscar usuarios, restablecer claves e impersonar para guiar al profesor.</p>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
     <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">Restablecer contraseñas</a>
     <a class="btn" href="/soporte/impersonar" style="background:#0369a1;color:#fff">Impersonar perfil</a>
@@ -22700,24 +22820,14 @@ def soporte_admin():
 </section>
 <section class="role-panel" style="margin-bottom:14px">
   <h2 style="margin:0 0 10px">⚙️ Permisos escolares</h2>
-  <p class="mini-text">Ajustes de fechas académicas y correcciones que el colegio no puede resolver solo.</p>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
     <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;color:#fff">Periodos / fechas</a>
     <a class="btn" href="/soporte/aperturas-notas" style="background:#334155;color:#fff">Aperturas de notas</a>
     <a class="btn" href="/soporte/prorroga" style="background:#475569;color:#fff">Prórrogas</a>
   </div>
 </section>
-<section class="role-panel" style="margin-bottom:14px">
-  <h2 style="margin:0 0 10px">📝 Base de conocimiento</h2>
-  <p class="mini-text">Guías y plantillas internas para respuestas rápidas.</p>
-  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-    <a class="btn" href="/soporte/actualizaciones" style="background:#0B2D57;color:#fff">Actualizaciones / guías</a>
-    <a class="btn" href="/centro-ayuda" style="background:#64748b;color:#fff">Centro de ayuda público</a>
-  </div>
-</section>
 <section class="role-panel">
-  <h2 style="margin:0 0 10px">🏫 Instituciones (consulta)</h2>
-  <p class="mini-text">Consulta de colegios. <b>No elimina instituciones</b> (solo Gerencia).</p>
+  <h2 style="margin:0 0 10px">🏫 Instituciones</h2>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
     <a class="btn" href="/interno/buscar-colegio" style="background:#0B2D57;color:#fff">🔍 Buscar colegio</a>
     <a class="btn" href="/tenants" style="background:#334155;color:#fff">Ver instituciones</a>
