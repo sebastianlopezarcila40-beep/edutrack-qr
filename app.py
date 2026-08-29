@@ -3042,6 +3042,7 @@ def inicializar_bd():
         _ensure_user("ventas", "Ventas2026*", "Comercial")
         if not Usuario.query.filter_by(usuario="soporte").first():
             _ensure_user("soporte", "Soporte2026*", "Soporte")
+        # Rol Cobranza: NO se crea solo. Gerencia lo crea en /gerencia/usuarios.
     except Exception as _se:
         print("seed internos:", _se)
         try:
@@ -4115,8 +4116,10 @@ def qr_texto(e):
 
 
 # ===== Seguridad de empleados =====
-ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial")
-ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente")
+ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza")
+# Cuota de almacenamiento por colegio (GB)
+ALMACENAMIENTO_GB_POR_COLEGIO = 10
+ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza")
 ACCIONES_SENSIBLES = (
     "eliminar", "export", "exportar", "borrar", "desactivar", "permiso",
     "reset", "restablecer", "backup", "respaldo", "simat",
@@ -6490,7 +6493,7 @@ def cambiar_password():
     if not requiere_login(): return redirect("/login")
     mensaje = ""
     rol = rol_actual()
-    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin")
+    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza")
     if request.method == "POST":
         nueva = request.form.get("password", "").strip()
         confirmar = request.form.get("confirmar", "").strip()
@@ -6510,7 +6513,7 @@ def cambiar_password():
             registrar_auditoria("Cambio de contraseña", "Usuario cambió su contraseña temporal" + (f" · nombre: {nombre_completo}" if es_staff else ""))
             if es_staff:
                 destino = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Gerente": "/gerencia/hq",
-                           "Administrador": "/gerencia/hq", "Superadmin": "/gerencia/hq"}.get(rol, "/dashboard")
+                           "Administrador": "/gerencia/hq", "Superadmin": "/gerencia/hq", "Cobranza": "/cobranza/panel"}.get(rol, "/dashboard")
                 return redirect(destino)
             return redirect("/dashboard")
     campo_nombre = (
@@ -12974,13 +12977,19 @@ def whatsapp_mensaje_legal():
 
 @app.route("/logout")
 def logout():
-    if requiere_login(): registrar_auditoria("Cierre de sesión", f"Usuario {session.get('usuario')} salió")
-    session.clear(); return redirect("/login")
-
-
-# ============================================================
-# MULTI-INQUILINO (SaaS) - Panel Soporte / Procsis
-# ============================================================
+    """Cierra sesión y devuelve al login del portal correcto (no mezcla paneles)."""
+    rol = (session.get("rol") or "").strip()
+    panel = (session.get("panel") or "").strip()
+    session.clear()
+    if panel == "ventas" or rol == "Comercial":
+        return redirect("/ventas-login")
+    if panel == "soporte" or rol == "Soporte":
+        return redirect("/soporte-login")
+    if panel == "cobranza" or rol == "Cobranza":
+        return redirect("/cobranza-login")
+    if panel == "gerencia" or rol in ("Gerente", "Superadmin", "Administrador"):
+        return redirect("/gerencia-login")
+    return redirect("/login")
 
 
 def _usuario_actual_obj():
@@ -13006,7 +13015,7 @@ def nombre_mostrar_actual():
 def mi_perfil():
     """Cambiar el nombre para mostrar (y opcionalmente el usuario de login) de cuentas internas
     de Soporte, Ventas y Gerencia — para que documentos y auditoría muestren su nombre real."""
-    if not requiere_login() or rol_actual() not in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"):
+    if not requiere_login() or rol_actual() not in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza"):
         return redirect("/login")
     u = _usuario_actual_obj()
     if not u:
@@ -13060,30 +13069,67 @@ def _guard_soporte():
     rol = rol_actual()
     if rol not in ("Soporte", "Administrador", "Superadmin", "Gerente"):
         return redirect("/soporte-login")
-    # Soporte (rol exacto, no Admin/Superadmin/Gerente) solo puede resetear claves — el resto
-    # del centro de operaciones queda reservado a roles de mayor confianza.
+    # Aislamiento: Comercial / Cobranza no entran al panel de Soporte
+    if rol in ("Comercial", "Cobranza"):
+        return redirect("/soporte-login")
+    # Soporte (rol exacto) tiene acceso a módulos operativos de soporte (tickets, usuarios,
+    # base de conocimiento, permisos escolares, bugs, reset, impersonar). No elimina colegios
+    # ni gestiona facturación/cobranza (eso es Gerencia / Cobranza).
     if rol == "Soporte":
+        path = request.path or ""
         permitido = (
-            request.path.startswith("/soporte/reset-clave")
-            or request.path.startswith("/soporte_admin")
-            or request.path.startswith("/mi-perfil")
+            path.startswith("/soporte")
+            or path.startswith("/soporte_admin")
+            or path.startswith("/mi-perfil")
+            or path.startswith("/tenants")
+            or path.startswith("/sedes")
+            or path.startswith("/usuarios")
+            or path.startswith("/auditoria")
+            or path.startswith("/api/")
         )
-        if not permitido:
-            return acceso_denegado("Su cuenta de Soporte solo tiene permiso para restablecer contraseñas.")
+        # Bloquear acciones destructivas de colegio y módulos de gerencia/cobranza
+        bloqueado = (
+            path.startswith("/eliminar_institucion")
+            or path.startswith("/gerencia")
+            or path.startswith("/ventas/panel")
+            or path.startswith("/ventas/comisiones")
+            or path.startswith("/cobranza")
+        )
+        if bloqueado or not permitido:
+            return acceso_denegado("Su cuenta de Soporte no tiene permiso para esta acción.")
     return None
 
 def _guard_gerencia():
     if not requiere_login():
         return redirect("/gerencia-login")
-    if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+    rol = rol_actual()
+    if rol not in ("Gerente", "Superadmin", "Administrador"):
+        # Evitar cruce de paneles
+        if rol == "Comercial":
+            return redirect("/ventas/panel")
+        if rol == "Soporte":
+            return redirect("/soporte_admin")
+        if rol == "Cobranza":
+            return redirect("/cobranza/panel")
         return redirect("/gerencia-login")
     return None
 
 def _guard_ventas():
     if not requiere_login():
         return redirect("/ventas-login")
-    if rol_actual() not in ("Comercial", "Gerente", "Soporte", "Superadmin", "Administrador"):
+    rol = rol_actual()
+    # Solo Comercial opera el panel de ventas. Gerencia supervisa desde /gerencia.
+    if rol not in ("Comercial",):
         return redirect("/ventas-login")
+    return None
+
+def _guard_cobranza():
+    """Guard del portal Facturación y Cobranza (rol propio Cobranza + gerencia)."""
+    if not requiere_login():
+        return redirect("/cobranza-login")
+    rol = rol_actual()
+    if rol not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/cobranza-login")
     return None
 
 
@@ -13095,7 +13141,127 @@ def requiere_soporte_global():
 def requiere_ventas():
     if not requiere_login():
         return False
-    return rol_actual() in ["Comercial", "Gerente", "Soporte", "Superadmin", "Administrador"]
+    return rol_actual() in ["Comercial"]
+
+def requiere_cobranza():
+    if not requiere_login():
+        return False
+    return rol_actual() in ["Cobranza", "Gerente", "Superadmin", "Administrador"]
+
+
+
+@app.route("/api/interno/buscar-colegio")
+def api_interno_buscar_colegio():
+    """Búsqueda global de colegios para portales internos (soporte, ventas, gerencia, cobranza)."""
+    if not requiere_login() or rol_actual() not in ROLES_INTERNOS:
+        return {"ok": False, "error": "no autorizado"}, 403
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return {"ok": True, "items": []}
+    like = f"%{q}%"
+    rows = Institucion.query.filter(
+        db.or_(
+            Institucion.nombre.ilike(like),
+            Institucion.codigo.ilike(like),
+            Institucion.nit.ilike(like),
+            Institucion.dane.ilike(like),
+            Institucion.municipio.ilike(like),
+        )
+    ).order_by(Institucion.nombre.asc()).limit(25).all()
+    items = []
+    for r in rows:
+        items.append({
+            "id": r.id,
+            "cuenta": r.codigo or "",
+            "nombre": r.nombre or "",
+            "documento": r.nit or "",
+            "movil": r.contacto_facturacion or "",
+            "estado": (r.estado or "ACTIVA").upper(),
+            "plan": r.plan or "",
+            "almacenamiento_gb": ALMACENAMIENTO_GB_POR_COLEGIO,
+        })
+    return {"ok": True, "items": items}
+
+
+@app.route("/interno/buscar-colegio")
+def interno_buscar_colegio_ui():
+    """UI de búsqueda de colegio con diseño tipo ficha de cobranza (todos los portales internos)."""
+    if not requiere_login() or rol_actual() not in ROLES_INTERNOS:
+        return redirect("/login")
+    q = (request.args.get("q") or "").strip()
+    items = []
+    if len(q) >= 2:
+        like = f"%{q}%"
+        items = Institucion.query.filter(
+            db.or_(
+                Institucion.nombre.ilike(like),
+                Institucion.codigo.ilike(like),
+                Institucion.nit.ilike(like),
+                Institucion.dane.ilike(like),
+                Institucion.municipio.ilike(like),
+            )
+        ).order_by(Institucion.nombre.asc()).limit(40).all()
+    filas = ""
+    for r in items:
+        est = (r.estado or "ACTIVA").upper()
+        color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c"}.get(est, "#b45309")
+        filas += (
+            f"<tr><td style='font-weight:800;color:#0B2D57'>{_esc(r.codigo)}</td>"
+            f"<td>{_esc(r.nombre)}</td><td>{_esc(r.nit or '—')}</td>"
+            f"<td>{_esc(r.contacto_facturacion or '—')}</td>"
+            f"<td><span style='background:{color};color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700'>{est}</span></td>"
+            f"<td>{_esc(r.plan or '—')}</td><td>{ALMACENAMIENTO_GB_POR_COLEGIO} GB</td></tr>"
+        )
+    if q and not filas:
+        filas = '<tr><td colspan="7" style="text-align:center;padding:16px;color:#64748b">Sin resultados</td></tr>'
+    volver = {
+        "Soporte": "/soporte_admin",
+        "Comercial": "/ventas/panel",
+        "Gerente": "/gerencia/hq",
+        "Cobranza": "/cobranza/panel",
+        "Administrador": "/gerencia/hq",
+        "Superadmin": "/gerencia/hq",
+    }.get(rol_actual(), "/")
+    content = f"""
+<header class="role-hero"><div>
+  <h1>🔍 Buscar colegio</h1>
+  <p>Diseño unificado · cuenta, documento, móvil y estado del servicio</p>
+</div><a class="btn" href="{volver}">Volver</a></header>
+<section style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap">
+    <input name="q" value="{_esc(q)}" placeholder="Nombre, código, NIT, DANE o municipio" style="flex:1;min-width:220px;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    <button style="padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800">Buscar</button>
+  </form>
+</section>
+{"<section style='background:#fff;border:2px solid #0B2D57;border-radius:14px;overflow:hidden'><div style='background:#0B2D57;color:#fff;padding:10px 14px;font-weight:800;font-size:13px;text-transform:uppercase'>Detalle agencia · resultados</div><div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'><tr style='background:#1e3a5f;color:#fff'><th style='padding:10px'>CUENTA</th><th style='padding:10px'>COLEGIO</th><th style='padding:10px'>DOCUMENTO</th><th style='padding:10px'>MÓVIL</th><th style='padding:10px'>ESTADO</th><th style='padding:10px'>PLAN</th><th style='padding:10px'>STORAGE</th></tr>"+filas+"</table></div></section>" if q else ""}
+"""
+    return page("Buscar colegio", shell(content))
+
+
+@app.before_request
+def _aislar_paneles_internos():
+    """Impide que un rol interno navegue al panel de otro (evita cruces con el botón atrás)."""
+    if not session.get("usuario"):
+        return None
+    path = request.path or ""
+    if path.startswith("/static") or path in ("/logout", "/mi-perfil", "/cambiar_password"):
+        return None
+    rol = (session.get("rol") or "").strip()
+    # Comercial solo panel ventas (catálogo público /ventas sí permitido)
+    if rol == "Comercial":
+        if path.startswith("/gerencia") or path.startswith("/soporte") or path.startswith("/cobranza") or path.startswith("/soporte_admin"):
+            return redirect("/ventas/panel")
+    # Soporte no entra a ventas panel ni cobranza ni HQ gerencia
+    if rol == "Soporte":
+        if path.startswith("/ventas/panel") or path.startswith("/ventas/comisiones") or path.startswith("/cobranza") or path.startswith("/gerencia/"):
+            return redirect("/soporte_admin")
+    # Cobranza solo su portal y facturación
+    if rol == "Cobranza":
+        if path.startswith("/ventas/panel") or path.startswith("/soporte") or path.startswith("/soporte_admin"):
+            return redirect("/cobranza/panel")
+        if path.startswith("/gerencia/") and not path.startswith("/gerencia/facturacion"):
+            return redirect("/cobranza/panel")
+    return None
 
 def requiere_gerencia():
     if not requiere_login():
@@ -14303,7 +14469,7 @@ font-size:12px;font-weight:800;letter-spacing:.02em}}
       <p>Planes, precios, supervisión comercial y control de la operación.</p>
       <span class="bo-cta">Ingresar →</span>
     </a>
-    <a class="bo-card f" href="/gerencia/facturacion-cobranza">
+    <a class="bo-card f" href="/cobranza-login">
       <div class="bo-ico">💳</div>
       <h2>Facturación y Cobranza</h2>
       <p>Cartera vencida, pendientes y recaudo de todos los colegios, en vivo.</p>
@@ -14327,7 +14493,7 @@ def ventas_login():
         if True:
             user = login_usuario(request.form.get("usuario"), request.form.get("password"))
             rol = (user.rol or "").strip() if user else ""
-            if user and rol in ("Comercial", "Gerente", "Soporte", "Superadmin", "Administrador"):
+            if user and rol == "Comercial":
                 if not _usuario_activo_ok(user):
                     error = "Usuario desactivado."
                 else:
@@ -14348,6 +14514,7 @@ def ventas_login():
                     session["rol"] = rol
                     session["uid"] = user.id
                     session["password_temporal"] = bool(user.password_temporal)
+                    session["panel"] = "ventas"
                     try:
                         registrar_sesion_empleado(user)
                     except Exception:
@@ -14408,7 +14575,7 @@ def gerencia_login():
         if True:
             user = login_usuario(request.form.get("usuario"), request.form.get("password"))
             rol = (user.rol or "").strip() if user else ""
-            if user and rol in ("Gerente", "Superadmin", "Soporte", "Administrador"):
+            if user and rol in ("Gerente", "Superadmin", "Administrador"):
                 if not _usuario_activo_ok(user):
                     error = "Usuario desactivado."
                 else:
@@ -14418,6 +14585,7 @@ def gerencia_login():
                     session["rol"] = rol
                     session["uid"] = user.id
                     session["password_temporal"] = bool(user.password_temporal)
+                    session["panel"] = "gerencia"
                     try:
                         registrar_sesion_empleado(user)
                     except Exception:
@@ -18564,8 +18732,8 @@ def gerencia_facturacion():
 @app.route("/gerencia/facturacion/<int:fid>/pdf")
 def gerencia_factura_pdf(fid):
     """Recibo interno estilo factura profesional (pre-Siigo / cuenta de cobro)."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Comercial", "Soporte"):
-        return redirect("/gerencia-login")
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
+        return redirect("/cobranza-login" if rol_actual() == "Cobranza" else "/gerencia-login")
     try:
         _migrate_facturas_cobro_columns()
     except Exception:
@@ -19342,7 +19510,7 @@ def gerencia_usuarios():
             usuario = (request.form.get("usuario") or "").strip().lower()
             password = (request.form.get("password") or "").strip()
             rol = (request.form.get("rol") or "Comercial").strip()
-            if rol not in ("Comercial", "Soporte", "Gerente"):
+            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza"):
                 error = "Rol no permitido."
             elif not usuario or len(password) < 8:
                 error = "Usuario obligatorio y contraseña de al menos 8 caracteres."
@@ -19360,7 +19528,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo = (request.form.get("nuevo_usuario") or "").strip().lower()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
                 error = "Usuario no válido."
             elif not nuevo or len(nuevo) < 3:
                 error = "Nuevo nombre de usuario inválido."
@@ -19379,7 +19547,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo_rol = (request.form.get("nuevo_rol") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
                 error = "Usuario no válido."
             elif nuevo_rol not in ("Comercial", "Soporte", "Gerente"):
                 error = "Rol no permitido."
@@ -19395,7 +19563,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nueva_clave = (request.form.get("nueva_clave") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
                 error = "Usuario no válido."
             elif len(nueva_clave) < 8:
                 error = "La contraseña debe tener mínimo 8 caracteres."
@@ -19411,7 +19579,7 @@ def gerencia_usuarios():
         elif accion == "toggle_activo":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
                 error = "Usuario no válido."
             elif session.get("uid") == u.id:
                 error = "No puede desactivarse a sí mismo."
@@ -19423,7 +19591,32 @@ def gerencia_usuarios():
                 estado = "activado" if getattr(u, "activo", True) else "desactivado"
                 registrar_auditoria("Gerencia toggle usuario", f"{u.usuario} {estado}")
                 msg = f"Usuario <b>{u.usuario}</b> {estado}."
-    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin"])).order_by(Usuario.id.desc()).limit(80).all()
+        elif accion == "eliminar":
+            uid = request.form.get("uid", type=int)
+            u = Usuario.query.get(uid) if uid else None
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza"):
+                error = "Usuario no válido o no se puede eliminar (protegido)."
+            elif session.get("uid") == u.id:
+                error = "No puede eliminarse a sí mismo."
+            elif (u.rol or "") == "Superadmin":
+                error = "No se puede eliminar Superadmin."
+            else:
+                nombre = u.usuario
+                rol_u = u.rol
+                try:
+                    # cortar sesiones
+                    try:
+                        SesionEmpleado.query.filter_by(usuario_id=u.id).delete(synchronize_session=False)
+                    except Exception:
+                        pass
+                    db.session.delete(u)
+                    db.session.commit()
+                    registrar_auditoria("Gerencia eliminó usuario/rol", f"{nombre} rol={rol_u}")
+                    msg = f"Usuario <b>{nombre}</b> ({rol_u}) eliminado definitivamente."
+                except Exception as ex:
+                    db.session.rollback()
+                    error = f"No se pudo eliminar: {ex}"
+    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"])).order_by(Usuario.id.desc()).limit(80).all()
     filas = ""
     for u in lista:
         activo = getattr(u, "activo", True)
@@ -19451,6 +19644,7 @@ def gerencia_usuarios():
               <select name="nuevo_rol" style="padding:6px;border:1px solid #e2e8f0;border-radius:6px">
                 <option value="Comercial" {"selected" if u.rol=="Comercial" else ""}>Comercial</option>
                 <option value="Soporte" {"selected" if u.rol=="Soporte" else ""}>Soporte</option>
+                <option value="Cobranza" {"selected" if u.rol=="Cobranza" else ""}>Cobranza</option>
                 <option value="Gerente" {"selected" if u.rol=="Gerente" else ""}>Gerente</option>
               </select>
               <button type="submit" style="padding:6px 10px;background:#0369a1;color:#fff;border:0;border-radius:6px;font-size:12px">Rol</button>
@@ -19460,6 +19654,11 @@ def gerencia_usuarios():
               <input type="hidden" name="uid" value="{u.id}">
               <button type="submit" style="padding:6px 10px;background:{'#b91c1c' if activo else '#16a34a'};color:#fff;border:0;border-radius:6px;font-size:12px">{'Desactivar' if activo else 'Activar'}</button>
             </form>
+            <form method="POST" style="display:inline;margin-left:4px" onsubmit="return confirm('¿Eliminar definitivamente a {u.usuario}? Esta acción no se puede deshacer.');">
+              <input type="hidden" name="accion" value="eliminar">
+              <input type="hidden" name="uid" value="{u.id}">
+              <button type="submit" style="padding:6px 10px;background:#7f1d1d;color:#fff;border:0;border-radius:6px;font-size:12px">Eliminar</button>
+            </form>
           </td>
         </tr>"""
     body = f"""
@@ -19468,7 +19667,7 @@ def gerencia_usuarios():
     <img src="/static/img/logo-edutrack.png" alt="EduTrack" style="height:42px;width:auto" onerror="this.style.display='none'">
     <div>
       <h1 style="margin:0;color:#0B2D57">Gerencia · Equipo y roles</h1>
-      <p style="margin:4px 0 0;color:#64748b;font-size:13px">Cree, renombre y gestione usuarios de Ventas, Soporte y Gerencia</p>
+      <p style="margin:4px 0 0;color:#64748b;font-size:13px">Cree, renombre, desactive o elimine usuarios de Ventas, Soporte, Cobranza y Gerencia</p>
     </div>
   </div>
   {"<p style='color:#16a34a;background:#f0fdf4;padding:10px;border-radius:8px'>"+msg+"</p>" if msg else ""}
@@ -19486,6 +19685,7 @@ def gerencia_usuarios():
     <select name="rol" style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px">
       <option value="Comercial">Comercial (Ventas)</option>
       <option value="Soporte">Soporte técnico</option>
+      <option value="Cobranza">Cobranza / Facturación</option>
       <option value="Gerente">Gerente</option>
     </select>
     <button type="submit" style="margin-top:10px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;cursor:pointer">Crear usuario</button>
@@ -21233,7 +21433,7 @@ def soporte_login():
         if not ok_rl:
             return _rate_limit_response(wait_m * 60)
         user = login_usuario(request.form.get("usuario"), request.form.get("password"))
-        if user and (user.rol or "").strip() in ROLES_INTERNOS:
+        if user and (user.rol or "").strip() in ("Soporte", "Superadmin"):
             # Normalizar activo si la columna viene NULL
             try:
                 if getattr(user, "activo", None) is None:
@@ -21293,6 +21493,7 @@ def soporte_login():
                     return redirect("/mfa")
                 session["usuario"] = user.usuario
                 session["rol"] = (user.rol or "").strip()
+                session["panel"] = "soporte"
                 try:
                     registrar_sesion_empleado(user)
                 except Exception as _ex:
@@ -22480,10 +22681,47 @@ def soporte_admin():
     <a class="btn btn-red" href="/logout">Salir</a>
   </div>
 </section>
+<section class="role-panel" style="margin-bottom:14px">
+  <h2 style="margin:0 0 10px">🎫 Tickets y casos</h2>
+  <p class="mini-text">Bandeja de reportes de colegios (abiertos, en proceso, solucionados).</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    <a class="btn" href="/soporte/pqr" style="background:#0B2D57;color:#fff">Centro PQR / Tickets</a>
+    <a class="btn" href="/soporte/logs-errores" style="background:#7c3aed;color:#fff">Bugs / Escalamiento</a>
+  </div>
+</section>
+<section class="role-panel" style="margin-bottom:14px">
+  <h2 style="margin:0 0 10px">👥 Gestión de usuarios</h2>
+  <p class="mini-text">Buscar usuarios, restablecer claves e impersonar para guiar al profesor.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">Restablecer contraseñas</a>
+    <a class="btn" href="/soporte/impersonar" style="background:#0369a1;color:#fff">Impersonar perfil</a>
+    <a class="btn" href="/usuarios" style="background:#0f766e;color:#fff">Buscar usuarios</a>
+  </div>
+</section>
+<section class="role-panel" style="margin-bottom:14px">
+  <h2 style="margin:0 0 10px">⚙️ Permisos escolares</h2>
+  <p class="mini-text">Ajustes de fechas académicas y correcciones que el colegio no puede resolver solo.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;color:#fff">Periodos / fechas</a>
+    <a class="btn" href="/soporte/aperturas-notas" style="background:#334155;color:#fff">Aperturas de notas</a>
+    <a class="btn" href="/soporte/prorroga" style="background:#475569;color:#fff">Prórrogas</a>
+  </div>
+</section>
+<section class="role-panel" style="margin-bottom:14px">
+  <h2 style="margin:0 0 10px">📝 Base de conocimiento</h2>
+  <p class="mini-text">Guías y plantillas internas para respuestas rápidas.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    <a class="btn" href="/soporte/actualizaciones" style="background:#0B2D57;color:#fff">Actualizaciones / guías</a>
+    <a class="btn" href="/centro-ayuda" style="background:#64748b;color:#fff">Centro de ayuda público</a>
+  </div>
+</section>
 <section class="role-panel">
-  <h2>🔑 Restablecer contraseñas</h2>
-  <p class="mini-text">Su cuenta solo tiene permiso para restablecer contraseñas de usuarios de colegios. Cada reset queda registrado con la nota que escriba.</p>
-  <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff;display:inline-block;margin-top:8px">Ir a Resetear contraseñas</a>
+  <h2 style="margin:0 0 10px">🏫 Instituciones (consulta)</h2>
+  <p class="mini-text">Consulta de colegios. <b>No elimina instituciones</b> (solo Gerencia).</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    <a class="btn" href="/interno/buscar-colegio" style="background:#0B2D57;color:#fff">🔍 Buscar colegio</a>
+    <a class="btn" href="/tenants" style="background:#334155;color:#fff">Ver instituciones</a>
+  </div>
 </section>
 """
         return page("Soporte", shell_soporte(content))
@@ -32728,14 +32966,100 @@ def gerencia_facturacion_cron():
     )
 
 
+
+@app.route("/cobranza-login", methods=["GET", "POST"])
+def cobranza_login():
+    """Login exclusivo del rol Cobranza / Facturación."""
+    error = ""
+    if request.method == "POST":
+        ok_rl, wait_m = _rate_limit_login()
+        if not ok_rl:
+            return _rate_limit_response(wait_m * 60)
+        user = login_usuario(request.form.get("usuario"), request.form.get("password"))
+        rol = (user.rol or "").strip() if user else ""
+        if user and rol in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
+            if not _usuario_activo_ok(user):
+                error = "Usuario desactivado."
+            else:
+                session.clear()
+                session["usuario"] = user.usuario
+                session["rol"] = rol
+                session["uid"] = user.id
+                session["password_temporal"] = bool(user.password_temporal)
+                session["panel"] = "cobranza"
+                try:
+                    registrar_sesion_empleado(user)
+                except Exception:
+                    pass
+                registrar_auditoria("Login cobranza", f"{rol} {user.usuario}")
+                if rol == "Cobranza":
+                    return redirect("/cobranza/panel")
+                return redirect("/gerencia/facturacion-cobranza")
+        elif user:
+            error = f"Esta cuenta tiene rol «{user.rol}». Use el portal correspondiente."
+        else:
+            _rate_limit_fail()
+            error = "Usuario o contraseña incorrectos."
+    try:
+        logo = logo_plataforma()
+    except Exception:
+        logo = "/static/img/logo-edutrack.png"
+    body = f"""
+<style>
+.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
+.gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(15,23,42,.08)}}
+.gl-c h1{{margin:0 0 4px;color:#0B2D57;font-size:1.45rem}}
+.gl-c .sub{{color:#64748b;font-size:13px;margin:0 0 18px}}
+.gl-c label{{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}}
+.gl-c input{{width:100%;padding:12px 14px;margin:0 0 14px;border:1px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;background:#f8fafc}}
+.gl-c button{{width:100%;padding:13px;border:0;border-radius:10px;background:linear-gradient(180deg,#b45309,#92400e);color:#fff;font-weight:800;font-size:14px;cursor:pointer}}
+.err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px;border-radius:8px;margin-bottom:12px}}
+</style>
+<div class="gl"><div class="gl-c">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <img src="{logo}" alt="" style="height:48px;border-radius:8px" onerror="this.style.display='none'">
+    <div>
+      <h1>Portal Cobranza</h1>
+      <p class="sub">Facturación · Cartera · Pagos</p>
+    </div>
+  </div>
+  {"<div class='err'>"+error+"</div>" if error else ""}
+  <form method="POST">
+    <label>Usuario</label>
+    <input name="usuario" required autocomplete="username">
+    <label>Contraseña</label>
+    <input name="password" type="password" required autocomplete="current-password">
+    <button type="submit">Entrar a cobranza</button>
+  </form>
+  <p style="margin-top:14px;font-size:12px;text-align:center"><a href="/backoffice" style="color:#0B2D57;font-weight:600">Backoffice</a></p>
+</div></div>
+"""
+    return page("Login Cobranza", body)
+
+
+@app.route("/cobranza/panel")
+@app.route("/cobranza")
+def cobranza_panel():
+    """Panel principal del rol Cobranza: redirige al módulo unificado con guard propio."""
+    _g = _guard_cobranza()
+    if _g is not None:
+        return _g
+    session["panel"] = "cobranza"
+    return redirect("/gerencia/facturacion-cobranza")
+
+
 @app.route("/gerencia/facturacion-cobranza", methods=["GET", "POST"])
 def gerencia_facturacion_cobranza():
-    """Panel unificado de Facturación y Cobranza — vivo, conectado a la activación de planes.
-    Muestra todas las facturas pendientes/vencidas de todos los colegios en un solo lugar,
-    permite marcarlas pagadas y dispara el ciclo automático manualmente si hace falta."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Comercial", "Soporte"):
-        return redirect("/gerencia-login")
+    """Panel unificado de Facturación y Cobranza.
+    Acceso: rol Cobranza + Gerente/Superadmin/Administrador.
+    Incluye buscador de colegio con ficha estilo agencia de cobranza."""
+    _g = _guard_cobranza()
+    if _g is not None:
+        return _g
+    session["panel"] = session.get("panel") or ("cobranza" if rol_actual() == "Cobranza" else "gerencia")
     mensaje = ""
+    q_busqueda = (request.values.get("q") or "").strip()
+    colegio_sel = None
     if request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
         fid = request.form.get("factura_id", type=int)
@@ -32745,7 +33069,7 @@ def gerencia_facturacion_cobranza():
             f.pagada_en = f"{fecha_hoy()} {hora_actual()}"
             db.session.commit()
             inst_pag = Institucion.query.get(f.institucion_id)
-            if inst_pag and inst_pag.estado == "SUSPENDIDA":
+            if inst_pag and (inst_pag.estado or "").upper() == "SUSPENDIDA":
                 inst_pag.estado = "ACTIVA"
                 db.session.commit()
             registrar_auditoria("Factura marcada pagada", f"{f.consecutivo} · {f.colegio_snapshot} · {_cop(f.valor)}")
@@ -32757,7 +33081,48 @@ def gerencia_facturacion_cobranza():
             mensaje = f"Factura {f.consecutivo} anulada."
         elif accion == "correr_ciclo":
             r = _ciclo_facturacion_automatica()
-            mensaje = f"Ciclo ejecutado: {r.get('generadas', 0)} factura(s) generada(s), {r.get('bloqueadas', 0)} colegio(s) bloqueado(s) por mora."
+            mensaje = f"Ciclo ejecutado: {r.get('generadas', 0)} factura(s), {r.get('bloqueadas', 0)} bloqueo(s) por mora."
+        elif accion == "suspender_colegio":
+            iid = request.form.get("institucion_id", type=int)
+            inst = Institucion.query.get(iid) if iid else None
+            if inst:
+                inst.estado = "SUSPENDIDA"
+                inst.motivo_bloqueo = (request.form.get("motivo") or "Mora en pago").strip()[:255]
+                inst.fecha_suspension = fecha_hoy()
+                db.session.commit()
+                registrar_auditoria("Suspensión por cobranza", f"{inst.codigo} {inst.nombre}")
+                mensaje = f"Colegio {inst.nombre} suspendido (acceso bloqueado, datos conservados)."
+        elif accion == "reactivar_colegio":
+            iid = request.form.get("institucion_id", type=int)
+            inst = Institucion.query.get(iid) if iid else None
+            if inst:
+                inst.estado = "ACTIVA"
+                inst.motivo_bloqueo = ""
+                db.session.commit()
+                registrar_auditoria("Reactivación por cobranza", f"{inst.codigo} {inst.nombre}")
+                mensaje = f"Colegio {inst.nombre} reactivado."
+        q_busqueda = (request.form.get("q") or q_busqueda or "").strip()
+
+    # Buscador de colegio
+    resultados = []
+    if q_busqueda:
+        like = f"%{q_busqueda}%"
+        resultados = Institucion.query.filter(
+            db.or_(
+                Institucion.nombre.ilike(like),
+                Institucion.codigo.ilike(like),
+                Institucion.nit.ilike(like),
+                Institucion.dane.ilike(like),
+                Institucion.municipio.ilike(like),
+                Institucion.contacto_facturacion.ilike(like),
+            )
+        ).order_by(Institucion.nombre.asc()).limit(30).all()
+        iid_sel = request.values.get("iid", type=int)
+        if iid_sel:
+            colegio_sel = Institucion.query.get(iid_sel)
+        elif len(resultados) == 1:
+            colegio_sel = resultados[0]
+
     hoy = ahora().date() if hasattr(ahora(), "date") else datetime.now().date()
     pendientes = FacturaCobro.query.filter_by(estado="PENDIENTE").order_by(FacturaCobro.vencimiento.asc()).all()
     vencidas, por_vencer = [], []
@@ -32767,47 +33132,171 @@ def gerencia_facturacion_cobranza():
         except Exception:
             d = hoy
         (vencidas if d < hoy else por_vencer).append(f)
-    pagadas_mes = FacturaCobro.query.filter(FacturaCobro.estado == "PAGADO", FacturaCobro.pagada_en.like(f"{hoy.strftime('%Y-%m')}%")).all()
+    pagadas_mes = FacturaCobro.query.filter(
+        FacturaCobro.estado == "PAGADO",
+        FacturaCobro.pagada_en.like(f"{hoy.strftime('%Y-%m')}%"),
+    ).all()
     total_pendiente = sum(f.valor or 0 for f in pendientes)
     total_vencido = sum(f.valor or 0 for f in vencidas)
     total_recaudado_mes = sum(f.valor or 0 for f in pagadas_mes)
-    instituciones_activas = Institucion.query.filter_by(estado="ACTIVA").count()
-    instituciones_mora = Institucion.query.filter(Institucion.estado.in_(["SUSPENDIDA", "CANCELACION_PENDIENTE"])).count()
+    try:
+        instituciones_activas = Institucion.query.filter_by(estado="ACTIVA").count()
+        instituciones_mora = Institucion.query.filter(Institucion.estado.in_(["SUSPENDIDA"])).count()
+    except Exception:
+        instituciones_activas = instituciones_mora = 0
 
     def _fila(f, urgente=False):
+        bg = "background:#fef2f2;" if urgente else ""
         return (
-            f"<tr style='{'background:#fef2f2' if urgente else ''}'>"
-            f"<td>{_esc(f.consecutivo)}</td><td>{_esc(f.colegio_snapshot)}</td><td>{_esc(f.tipo)}</td>"
-            f"<td>{_cop(f.valor)}</td><td>{_esc(f.vencimiento)}</td>"
+            f"<tr style='{bg}'><td>{_esc(f.consecutivo)}</td><td>{_esc(f.colegio_snapshot)}</td>"
+            f"<td>{_esc(getattr(f, 'tipo', None) or '—')}</td><td>{_cop(f.valor)}</td>"
+            f"<td>{_esc(f.vencimiento)}</td>"
             f"<td><form method='POST' style='display:inline'><input type='hidden' name='accion' value='marcar_pagada'>"
             f"<input type='hidden' name='factura_id' value='{f.id}'>"
-            f"<button type='submit' class='small-action' onclick=\"return confirm('¿Marcar {f.consecutivo} como pagada?')\">Marcar pagada</button></form> "
+            f"<button type='submit' class='small-action' style='background:#16a34a'>Pagada</button></form> "
             f"<form method='POST' style='display:inline'><input type='hidden' name='accion' value='anular'>"
             f"<input type='hidden' name='factura_id' value='{f.id}'>"
-            f"<button type='submit' class='small-action' style='background:#b91c1c' onclick=\"return confirm('¿Anular {f.consecutivo}?')\">Anular</button></form></td></tr>"
+            f"<button type='submit' class='small-action' style='background:#b91c1c' "
+            f"onclick=\"return confirm('¿Anular { _esc(f.consecutivo) }?')\">Anular</button></form></td></tr>"
         )
+
     filas_vencidas = "".join(_fila(f, urgente=True) for f in vencidas) or '<tr><td colspan="6">Sin facturas vencidas 🎉</td></tr>'
     filas_por_vencer = "".join(_fila(f) for f in por_vencer) or '<tr><td colspan="6">Sin facturas pendientes por vencer</td></tr>'
+
+    # Tabla resultados estilo agencia de cobranza (foto)
+    filas_busqueda = ""
+    for r in resultados:
+        est = (r.estado or "ACTIVA").upper()
+        color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c", "MANTENIMIENTO": "#b45309"}.get(est, "#64748b")
+        filas_busqueda += (
+            f"<tr style='cursor:pointer' onclick=\"location.href='?q={_esc(q_busqueda)}&iid={r.id}'\">"
+            f"<td style='font-weight:700;color:#0B2D57'>{_esc(r.codigo)}</td>"
+            f"<td>{_esc(r.nombre)}</td>"
+            f"<td>{_esc(r.nit or '—')}</td>"
+            f"<td>{_esc(r.contacto_facturacion or '—')}</td>"
+            f"<td><span style='background:{color};color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700'>{est}</span></td>"
+            f"<td>{_esc(r.plan or '—')}</td></tr>"
+        )
+    if q_busqueda and not filas_busqueda:
+        filas_busqueda = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:16px">Sin resultados para esa búsqueda</td></tr>'
+
+    # Ficha del colegio seleccionado
+    ficha_html = ""
+    if colegio_sel:
+        c = colegio_sel
+        est = (c.estado or "ACTIVA").upper()
+        color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c"}.get(est, "#b45309")
+        facts = FacturaCobro.query.filter_by(institucion_id=c.id).order_by(FacturaCobro.id.desc()).limit(12).all()
+        filas_f = ""
+        for fx in facts:
+            filas_f += (
+                f"<tr><td>{_esc(fx.consecutivo)}</td><td>{_esc(fx.estado)}</td>"
+                f"<td>{_cop(fx.valor)}</td><td>{_esc(fx.vencimiento)}</td><td>{_esc(fx.pagada_en or '—')}</td></tr>"
+            )
+        if not filas_f:
+            filas_f = '<tr><td colspan="5">Sin facturas registradas</td></tr>'
+        btn_susp = ""
+        if est == "ACTIVA":
+            btn_susp = f"""
+            <form method="POST" style="display:inline" onsubmit="return confirm('¿Suspender acceso de este colegio por mora? Los datos se conservan.');">
+              <input type="hidden" name="accion" value="suspender_colegio">
+              <input type="hidden" name="institucion_id" value="{c.id}">
+              <input type="hidden" name="q" value="{_esc(q_busqueda)}">
+              <input type="hidden" name="motivo" value="Suspendido por mora — cobranza">
+              <button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer">⛔ Desactivación temporal</button>
+            </form>"""
+        else:
+            btn_susp = f"""
+            <form method="POST" style="display:inline">
+              <input type="hidden" name="accion" value="reactivar_colegio">
+              <input type="hidden" name="institucion_id" value="{c.id}">
+              <input type="hidden" name="q" value="{_esc(q_busqueda)}">
+              <button type="submit" style="background:#16a34a;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer">✅ Reactivar colegio</button>
+            </form>"""
+        ficha_html = f"""
+<section style="background:#fff;border:2px solid #0B2D57;border-radius:14px;overflow:hidden;margin:16px 0;box-shadow:0 8px 24px rgba(11,45,87,.08)">
+  <div style="background:#0B2D57;color:#fff;padding:12px 18px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:13px">
+    Detalle agencia de cobranza · ficha del colegio
+  </div>
+  <div style="padding:0;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <tr style="background:#1e3a5f;color:#fff">
+        <th style="padding:10px 14px;text-align:left">CUENTA</th>
+        <th style="padding:10px 14px;text-align:left">DOCUMENTO / NIT</th>
+        <th style="padding:10px 14px;text-align:left">MÓVIL / CONTACTO</th>
+        <th style="padding:10px 14px;text-align:left">ESTADO</th>
+        <th style="padding:10px 14px;text-align:left">PLAN</th>
+      </tr>
+      <tr style="background:#f8fafc">
+        <td style="padding:12px 14px;font-weight:800;color:#0B2D57">{_esc(c.codigo)}</td>
+        <td style="padding:12px 14px">{_esc(c.nit or '—')}</td>
+        <td style="padding:12px 14px">{_esc(c.contacto_facturacion or '—')}</td>
+        <td style="padding:12px 14px"><span style="background:{color};color:#fff;padding:4px 10px;border-radius:6px;font-weight:700;font-size:12px">{est}</span></td>
+        <td style="padding:12px 14px">{_esc(c.plan or '—')}</td>
+      </tr>
+    </table>
+  </div>
+  <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;color:#334155">
+    <div><b>Institución:</b> {_esc(c.nombre)}</div>
+    <div><b>Municipio:</b> {_esc(c.municipio or '—')} · {_esc(c.departamento or '')}</div>
+    <div><b>DANE:</b> {_esc(c.dane or '—')}</div>
+    <div><b>Vencimiento licencia:</b> {_esc(c.fecha_vencimiento or '—')}</div>
+    <div><b>Almacenamiento:</b> 10 GB por colegio</div>
+    <div><b>Motivo bloqueo:</b> {_esc(c.motivo_bloqueo or '—')}</div>
+  </div>
+  <div style="padding:0 18px 14px;display:flex;gap:10px;flex-wrap:wrap">{btn_susp}
+    <a href="/gerencia/facturacion" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:700">Generar cobro</a>
+  </div>
+  <div style="padding:0 18px 18px">
+    <h3 style="margin:0 0 8px;color:#0B2D57;font-size:14px">Historial de facturas</h3>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr style="background:#e2e8f0"><th style="padding:8px">N°</th><th>Estado</th><th>Valor</th><th>Vence</th><th>Pagada</th></tr>
+        {filas_f}
+      </table>
+    </div>
+  </div>
+</section>
+"""
+
+    volver = "/cobranza/panel" if rol_actual() == "Cobranza" else "/gerencia/hq"
     content = f"""
+<style>
+.cb-search{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 4px 14px rgba(15,23,42,.04)}}
+.cb-search input{{width:100%;max-width:420px;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;box-sizing:border-box}}
+.cb-search button{{padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;cursor:pointer;margin-left:8px}}
+.cb-table{{width:100%;border-collapse:collapse;font-size:13px}}
+.cb-table th{{background:#0B2D57;color:#fff;padding:10px 12px;text-align:left}}
+.cb-table td{{padding:10px 12px;border-bottom:1px solid #e2e8f0}}
+.cb-table tr:hover td{{background:#eff6ff}}
+</style>
 <header class="role-hero"><div>
   <h1>💳 Facturación y Cobranza</h1>
-  <p>Vista en vivo de toda la cartera: se actualiza sola todos los días y se conecta directo con la activación
-  de planes (ventas / contrato digital) — nadie tiene que generar la primera factura a mano.</p>
+  <p>Busque un colegio, vea su ficha, cartera, plan y suspenda o reactive sin perder datos.</p>
 </div>
-<a class="btn" href="/gerencia/facturacion">Recibo manual</a></header>
+<a class="btn" href="{volver}">Volver</a></header>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+
+<section class="cb-search">
+  <form method="GET" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+    <input type="search" name="q" value="{_esc(q_busqueda)}" placeholder="Buscar colegio por nombre, código, NIT, DANE, municipio o contacto…" autofocus>
+    <button type="submit">🔍 Buscar</button>
+  </form>
+  {"<div style='margin-top:14px;overflow-x:auto'><table class='cb-table'><tr><th>CUENTA</th><th>COLEGIO</th><th>DOCUMENTO / NIT</th><th>MÓVIL / CONTACTO</th><th>ESTADO</th><th>PLAN</th></tr>"+filas_busqueda+"</table></div>" if q_busqueda else "<p class='mini-text' style='margin:10px 0 0'>Escriba y busque para ver la ficha estilo agencia de cobranza.</p>"}
+</section>
+{ficha_html}
+
 <div class="role-grid" style="margin-bottom:14px">
-  <div class="role-card"><h3>{_cop(total_vencido)}</h3><p>Cartera vencida ({len(vencidas)} factura(s))</p></div>
-  <div class="role-card"><h3>{_cop(total_pendiente)}</h3><p>Total pendiente ({len(pendientes)} factura(s))</p></div>
+  <div class="role-card"><h3>{_cop(total_vencido)}</h3><p>Cartera vencida ({len(vencidas)})</p></div>
+  <div class="role-card"><h3>{_cop(total_pendiente)}</h3><p>Total pendiente ({len(pendientes)})</p></div>
   <div class="role-card"><h3>{_cop(total_recaudado_mes)}</h3><p>Recaudado este mes</p></div>
   <div class="role-card"><h3>{instituciones_activas}</h3><p>Colegios activos</p></div>
-  <div class="role-card"><h3 style="color:#b91c1c">{instituciones_mora}</h3><p>Colegios en mora / suspendidos</p></div>
+  <div class="role-card"><h3 style="color:#b91c1c">{instituciones_mora}</h3><p>En mora / suspendidos</p></div>
 </div>
 <section class="role-panel">
   <form method="POST" style="margin-bottom:10px">
     <input type="hidden" name="accion" value="correr_ciclo">
     <button type="submit">🔄 Ejecutar ciclo de facturación ahora</button>
-    <span class="mini-text" style="margin-left:8px">(ya corre solo una vez al día — este botón es solo para forzarlo manualmente)</span>
   </form>
   <h2 style="color:#b91c1c">⚠ Facturas vencidas</h2>
   <div style="overflow-x:auto">
@@ -32820,6 +33309,7 @@ def gerencia_facturacion_cobranza():
 </section>
 """
     return page("Facturación y Cobranza", shell(content))
+
 
 
 # Bloqueo visual al ingresar si la institución está SUSPENDIDA
