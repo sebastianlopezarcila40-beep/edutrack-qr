@@ -14812,9 +14812,28 @@ def gerencia_login():
             else:
                 _rate_limit_fail(portal="gerencia")
                 if not user:
-                    error = "Usuario o contraseña incorrectos."
+                    try:
+                        cand = Usuario.query.filter(
+                            func.lower(Usuario.usuario) == (request.form.get("usuario") or "").strip().lower()
+                        ).first()
+                    except Exception:
+                        cand = None
+                    if cand:
+                        error = (
+                            "Usuario existe pero la contrasena no coincide (rol: "
+                            + str(cand.rol or "-")
+                            + "). Pruebe gerencia / Gerencia2026* o use /recuperar-staff"
+                        )
+                    else:
+                        error = "Usuario no encontrado. Pruebe gerencia / Gerencia2026* o /recuperar-staff"
                 else:
-                    error = f'El usuario "{user.usuario}" tiene el rol "{rol or "(sin rol)"}", que no tiene acceso a Gerencia.'
+                    error = (
+                        "El usuario "
+                        + str(user.usuario)
+                        + " tiene el rol "
+                        + str(rol or "(sin rol)")
+                        + " y no tiene acceso a Gerencia. Use el portal de su rol."
+                    )
     _logo_proc = logo_plataforma()
     body = f"""
 <style>
