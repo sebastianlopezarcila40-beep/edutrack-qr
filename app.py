@@ -14695,6 +14695,118 @@ font-size:12px;font-weight:800;letter-spacing:.02em}}
     return page("EduTrack Backoffice", body)
 
 
+
+@app.route("/recuperar-staff", methods=["GET", "POST"])
+@app.route("/recuperar_staff", methods=["GET", "POST"])
+def recuperar_staff():
+    """Emergencia: restablece clave de usuario interno. Clave: env RECOVERY_KEY o EduTrackRecover2026*"""
+    try:
+        key_env = (os.environ.get("RECOVERY_KEY") or "EduTrackRecover2026*").strip()
+    except Exception:
+        key_env = "EduTrackRecover2026*"
+    msg = ""
+    error = ""
+    if request.method == "POST":
+        try:
+            clave = (request.form.get("clave") or "").strip()
+            uname = (request.form.get("usuario") or "").strip().lower()
+            nueva = (request.form.get("password") or "").strip()
+            if clave != key_env:
+                error = "Clave de recuperacion incorrecta."
+            elif not uname or len(nueva) < 8:
+                error = "Usuario obligatorio y contrasena minimo 8 caracteres."
+            else:
+                try:
+                    db.create_all()
+                except Exception:
+                    pass
+                u = None
+                try:
+                    u = Usuario.query.filter(func.lower(Usuario.usuario) == uname).first()
+                except Exception:
+                    try:
+                        u = Usuario.query.filter_by(usuario=uname).first()
+                    except Exception:
+                        u = None
+                if not u:
+                    u = Usuario(
+                        usuario=uname,
+                        password=crear_hash(nueva),
+                        rol="Gerente",
+                        institucion_id=None,
+                    )
+                    if hasattr(u, "activo"):
+                        u.activo = True
+                    db.session.add(u)
+                    db.session.commit()
+                    msg = "Usuario creado como Gerente. Ya puede entrar en /gerencia-login"
+                else:
+                    u.password = crear_hash(nueva)
+                    if hasattr(u, "activo"):
+                        u.activo = True
+                    if hasattr(u, "password_temporal"):
+                        u.password_temporal = False
+                    db.session.commit()
+                    try:
+                        _rate_limit_clear_all()
+                    except Exception:
+                        pass
+                    msg = "Contrasena actualizada (rol: %s). Entre en su portal." % (u.rol or "")
+                try:
+                    registrar_auditoria("Recuperar staff", uname)
+                except Exception:
+                    pass
+        except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            error = "Error al guardar: %s" % (str(ex)[:200],)
+
+    html = (
+        "<!doctype html><html lang=es><head><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<title>Recuperar acceso</title></head><body "
+        "style='margin:0;background:#d4d0c8;font-family:Tahoma,MS Sans Serif,sans-serif'>"
+        "<div style='max-width:420px;margin:48px auto;background:#c0c0c0;"
+        "border:2px solid;border-color:#dfdfdf #808080 #808080 #dfdfdf;padding:12px'>"
+        "<div style='background:#000080;color:#fff;font-weight:700;padding:6px 10px;"
+        "margin:-12px -12px 12px -12px;font-size:13px'>Recuperar acceso staff · EduTrack</div>"
+    )
+    if msg:
+        html += "<p style='background:#e8ffe8;border:1px solid #080;padding:8px;font-size:12px'>%s</p>" % msg
+    if error:
+        html += "<p style='background:#ffe8e8;border:1px solid #800;padding:8px;font-size:12px;color:#800'>%s</p>" % error
+    html += (
+        "<form method=POST>"
+        "<label style='font-size:12px'>Clave de recuperacion</label><br>"
+        "<input name=clave type=password required style='width:100%;box-sizing:border-box;padding:6px;margin:4px 0 10px;"
+        "border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080'><br>"
+        "<label style='font-size:12px'>Usuario</label><br>"
+        "<input name=usuario required placeholder='sebastian o gerencia' "
+        "style='width:100%;box-sizing:border-box;padding:6px;margin:4px 0 10px;"
+        "border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080'><br>"
+        "<label style='font-size:12px'>Nueva contrasena (min 8)</label><br>"
+        "<input name=password type=password required minlength=8 "
+        "style='width:100%;box-sizing:border-box;padding:6px;margin:4px 0 10px;"
+        "border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080'><br>"
+        "<button type=submit style='padding:6px 14px;font-weight:700;font-family:Tahoma;"
+        "background:#c0c0c0;border:2px solid;border-color:#dfdfdf #808080 #808080 #dfdfdf'>Restablecer</button>"
+        "</form>"
+        "<p style='font-size:11px;margin-top:14px;line-height:1.45'>"
+        "Clave por defecto: <b>EduTrackRecover2026*</b><br>"
+        "Luego entre a:<br>"
+        "<a href='/gerencia-login'>/gerencia-login</a> · "
+        "<a href='/soporte-login'>/soporte-login</a> · "
+        "<a href='/ventas-login'>/ventas-login</a><br>"
+        "Usuarios base: gerencia / Gerencia2026* · ventas / Ventas2026* · soporte / Soporte2026*"
+        "</p>"
+        "<p style='font-size:11px'><a href='/backoffice'>Backoffice</a></p>"
+        "</div></body></html>"
+    )
+    return html, 200
+
+
 @app.route("/ventas-login", methods=["GET", "POST"])
 def ventas_login():
     """Login exclusivo asesores comerciales (rol Comercial)."""
@@ -18120,6 +18232,13 @@ def soporte_logs_errores():
 def _capturar_error_sistema(e):
     """Registra excepciones no controladas en logs_errores y muestra una pantalla con
     código de referencia en vez de dejar la pantalla en blanco de Flask."""
+    # No convertir 404 / HTTPException en "Algo salió mal"
+    try:
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return e
+    except Exception:
+        pass
     log_id = None
     try:
         if request.path.startswith("/static"):
