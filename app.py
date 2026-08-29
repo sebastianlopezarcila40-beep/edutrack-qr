@@ -13118,10 +13118,15 @@ def _guard_soporte():
     if not requiere_login():
         return redirect("/soporte-login")
     rol = rol_actual()
-    if rol not in ("Soporte", "Administrador", "Superadmin", "Gerente"):
-        return redirect("/soporte-login")
-    # Aislamiento: Comercial / Cobranza no entran al panel de Soporte
-    if rol in ("Comercial", "Cobranza"):
+    # Portal Soporte SOLO para rol Soporte (y Superadmin emergencia).
+    # Gerencia / Cobranza / Ventas NO deben ver este portal.
+    if rol == "Cobranza":
+        return redirect("/cobranza/panel")
+    if rol == "Comercial":
+        return redirect("/ventas/panel")
+    if rol in ("Gerente", "Administrador"):
+        return redirect("/gerencia/hq")
+    if rol not in ("Soporte", "Superadmin"):
         return redirect("/soporte-login")
     # Soporte (rol exacto) tiene acceso a módulos operativos de soporte (tickets, usuarios,
     # base de conocimiento, permisos escolares, bugs, reset, impersonar). No elimina colegios
@@ -13404,10 +13409,20 @@ def _aislar_paneles_internos():
             or path.startswith("/gerencia/facturacion")
             or path.startswith("/interno/buscar")
             or path.startswith("/interno/turnos")
-            or path.startswith("/gerencia/turnos")
+            or path.startswith("/cobranza/turnos")
+            or path.startswith("/tenants")
+            or path.startswith("/usuarios")
+            or path.startswith("/mi-perfil")
+            or path.startswith("/soporte/reinicio-acceso")  # solo reinicio, no el resto de soporte
         )
-        if not ok_cob and (path.startswith("/ventas") or path.startswith("/soporte")
-                           or path.startswith("/soporte_admin") or path.startswith("/gerencia")):
+        # Bloquear resto de soporte técnico y HQ gerencia
+        if path.startswith("/soporte") and not path.startswith("/soporte/reinicio-acceso"):
+            return redirect(home)
+        if path.startswith("/soporte_admin") or path.startswith("/ventas"):
+            return redirect(home)
+        if path.startswith("/gerencia/") and not path.startswith("/gerencia/facturacion"):
+            return redirect(home)
+        if not ok_cob and path.startswith("/gerencia"):
             return redirect(home)
 
     elif rol in ("Gerente", "Superadmin", "Administrador"):
@@ -15143,7 +15158,8 @@ def gerencia_hq():
           </table>
         </div>
         <div style="padding:8px 12px;background:#f8fafc;font-size:12px">
-          <a href="/gerencia/facturacion-cobranza" style="font-weight:700;color:#0B2D57">Ir a Facturación y Cobranza →</a>
+          <a href="/gerencia/cartera" style="font-weight:700;color:#0B2D57">Abrir módulo Cartera →</a>
+          · <a href="/gerencia/facturacion-cobranza" style="font-weight:700;color:#0B2D57">Facturación y Cobranza →</a>
           · <a href="/interno/buscar-colegio" style="font-weight:700;color:#0B2D57">Buscar colegio →</a>
         </div>
       </div>
@@ -15152,6 +15168,7 @@ def gerencia_hq():
     <div class="sec">
       <h2>Módulos operativos</h2>
       <div class="grid-mod">
+        <a class="g" href="/gerencia/cartera">Cuadro de mando · Cartera</a>
         <a class="g" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
         <a class="a" href="/gerencia/gastos">Gastos y cashflow</a>
         <a class="t" href="/gerencia/planes">Planes · precios · paywalls</a>
@@ -33770,8 +33787,10 @@ WIN32_TABLE_CSS = """
 @app.route("/soporte/almacenamiento")
 @app.route("/gerencia/almacenamiento")
 def modulo_almacenamiento():
-    """GB por colegio: cuota, usado, disponible (Soporte y Gerencia)."""
+    """GB por colegio: cuota, usado, disponible (Soporte y Gerencia). Cobranza NO."""
     if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        if rol_actual() == "Cobranza":
+            return redirect("/cobranza/panel")
         return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
     q = (request.args.get("q") or "").strip()
     insts = Institucion.query.order_by(Institucion.nombre.asc()).all()
@@ -33832,8 +33851,8 @@ def modulo_almacenamiento():
 @app.route("/soporte/reinicio-acceso", methods=["GET", "POST"])
 def soporte_reinicio_acceso():
     """Cuando el sistema no deja entrar: limpia bloqueos de rate-limit y sesiones trabadas."""
-    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
-        return redirect("/soporte-login")
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Cobranza"):
+        return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/soporte-login")
     msg = error = ""
     if request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
@@ -33927,6 +33946,77 @@ def soporte_reinicio_acceso():
     return page("Reinicio de acceso", shell(content))
 
 
+
+@app.route("/gerencia/cartera")
+def gerencia_cartera():
+    """Modulo Gerencia: cuadro de mando contratos y cartera (tabla maestra)."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    q = (request.args.get("q") or "").strip()
+    filas = ""
+    try:
+        insts = Institucion.query.order_by(Institucion.nombre.asc()).all()
+        if q:
+            ql = q.lower()
+            insts = [i for i in insts if ql in (i.nombre or "").lower() or ql in (i.codigo or "").lower() or q in (i.nit or "")]
+        for inst in insts[:200]:
+            pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
+            saldo = sum(float(x.valor or 0) for x in pend)
+            corte = (inst.fecha_vencimiento or "—")[:10]
+            est = (inst.estado or "ACTIVA").upper()
+            color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c"}.get(est, "#b45309")
+            filas += (
+                f"<tr>"
+                f"<td style='font-weight:800;color:#0B2D57'>{_esc(inst.codigo)}</td>"
+                f"<td>{_esc(inst.nit or '—')}</td>"
+                f"<td>{_esc(inst.nombre)[:45]}</td>"
+                f"<td>{_esc(inst.plan or '—')}</td>"
+                f"<td style='font-weight:700;color:{'#b91c1c' if saldo else '#16a34a'}'>{_cop(saldo) if saldo else '$ 0'}</td>"
+                f"<td>{_esc(corte)}</td>"
+                f"<td><span style='background:{color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>{est}</span></td>"
+                f"</tr>"
+            )
+    except Exception as ex:
+        filas = f"<tr><td colspan='7'>{_esc(str(ex)[:100])}</td></tr>"
+    if not filas:
+        filas = "<tr><td colspan='7' style='text-align:center;padding:12px;color:#64748b'>Sin datos</td></tr>"
+    content = f"""
+<style>
+.w32-box{{font-family:Tahoma,sans-serif;background:#c0c0c0;border:2px solid;border-color:#dfdfdf #808080 #808080 #dfdfdf;padding:6px}}
+.w32-title{{background:#000080;color:#fff;font-weight:700;font-size:12px;padding:4px 8px;margin:-6px -6px 6px -6px}}
+.w32-tbl{{width:100%;border-collapse:collapse;font-size:11px}}
+.w32-tbl th{{background:#c0c0c0;border:1px solid #808080;padding:4px 6px;text-align:left;position:sticky;top:0}}
+.w32-tbl td{{border:1px solid #c0c0c0;padding:3px 6px;background:#fff}}
+.w32-tbl tr:nth-child(even) td{{background:#f0f0f0}}
+</style>
+<header class="role-hero"><div>
+  <h1>Cuadro de mando · Contratos y cartera</h1>
+  <p>Modulo de gerencia · vista macro de saldos y estados</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver HQ</a>
+<a class="btn" href="/gerencia/facturacion-cobranza" style="margin-left:8px">Facturación y Cobranza</a>
+</header>
+<form method="GET" style="margin:10px 0">
+  <input name="q" value="{_esc(q)}" placeholder="Buscar colegio, codigo o NIT" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;min-width:240px">
+  <button style="padding:8px 12px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button>
+</form>
+<div class="w32-box">
+  <div class="w32-title">DETALLE GERENCIA · CONTRATOS / CARTERA</div>
+  <div style="overflow:auto;max-height:520px;background:#fff;border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080">
+    <table class="w32-tbl">
+      <tr>
+        <th>ID CONTRATO</th><th>NIT / CLIENTE</th><th>COLEGIO</th><th>PLAN</th>
+        <th>SALDO CARTERA</th><th>FECHA CORTE</th><th>ESTADO</th>
+      </tr>
+      {filas}
+    </table>
+  </div>
+</div>
+"""
+    return page("Cartera Gerencia", shell(content))
+
+
 @app.route("/cobranza-login", methods=["GET", "POST"])
 def cobranza_login():
     """Login exclusivo del rol Cobranza / Facturación."""
@@ -34000,12 +34090,101 @@ def cobranza_login():
 @app.route("/cobranza/panel")
 @app.route("/cobranza")
 def cobranza_panel():
-    """Panel principal del rol Cobranza: redirige al módulo unificado con guard propio."""
+    """Panel exclusivo Cobranza: cartera, instituciones, reinicio acceso, sin herramientas de soporte técnico."""
     _g = _guard_cobranza()
     if _g is not None:
         return _g
     session["panel"] = "cobranza"
-    return redirect("/gerencia/facturacion-cobranza")
+    session.pop("institucion_id", None)
+    # Solo rol Cobranza ve este home (Gerente usa /gerencia/facturacion-cobranza)
+    if rol_actual() != "Cobranza" and rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        return redirect(_home_portal())
+    p = plataforma()
+    op = _esc(getattr(_usuario_actual_obj(), "nombre_completo", None) or session.get("usuario") or "")
+
+    # Tabla cartera estilo agencia
+    filas = ""
+    try:
+        insts = Institucion.query.order_by(Institucion.nombre.asc()).limit(150).all()
+        for inst in insts:
+            pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
+            saldo = sum(float(x.valor or 0) for x in pend)
+            est = (inst.estado or "ACTIVA").upper()
+            color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c"}.get(est, "#b45309")
+            riesgo = "ALTO" if saldo > 0 and est == "SUSPENDIDA" else ("MEDIO" if saldo > 0 else "BAJO")
+            rc = {"ALTO": "#b91c1c", "MEDIO": "#b45309", "BAJO": "#16a34a"}[riesgo]
+            filas += (
+                f"<tr>"
+                f"<td style='font-weight:800;color:#0B2D57'>{_esc(inst.codigo)}</td>"
+                f"<td>{_esc(inst.nit or '—')}</td>"
+                f"<td>{_esc(inst.nombre)[:42]}</td>"
+                f"<td>{_esc(inst.contacto_facturacion or '—')}</td>"
+                f"<td><span style='background:{rc};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>{riesgo}</span></td>"
+                f"<td style='font-weight:700;color:{'#b91c1c' if saldo else '#16a34a'}'>{_cop(saldo) if saldo else '$ 0'}</td>"
+                f"<td><span style='background:{color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>{est}</span></td>"
+                f"</tr>"
+            )
+    except Exception as ex:
+        filas = f"<tr><td colspan='7'>Error: {_esc(str(ex)[:80])}</td></tr>"
+    if not filas:
+        filas = "<tr><td colspan='7' style='text-align:center;color:#64748b;padding:12px'>Sin instituciones</td></tr>"
+
+    content = f"""
+<style>
+.w32-box{{font-family:Tahoma,'MS Sans Serif',sans-serif;background:#c0c0c0;border:2px solid;border-color:#dfdfdf #808080 #808080 #dfdfdf;padding:6px;margin:12px 0}}
+.w32-title{{background:#000080;color:#fff;font-weight:700;font-size:12px;padding:4px 8px;margin:-6px -6px 6px -6px}}
+.w32-tbl{{width:100%;border-collapse:collapse;font-size:11px}}
+.w32-tbl th{{background:#c0c0c0;border:1px solid #808080;padding:3px 6px;text-align:left}}
+.w32-tbl td{{border:1px solid #c0c0c0;padding:3px 6px;background:#fff}}
+.w32-tbl tr:nth-child(even) td{{background:#f0f0f0}}
+.cb-hero{{background:linear-gradient(135deg,#7c2d12,#b45309);color:#fff;border-radius:16px;padding:20px 22px;margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}}
+.cb-btn{{display:inline-block;padding:10px 14px;border-radius:10px;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;font-size:13px;margin:4px}}
+.cb-btn.warn{{background:#b45309}}
+.cb-btn.red{{background:#b91c1c}}
+</style>
+<section class="cb-hero">
+  <div style="display:flex;gap:14px;align-items:center">
+    <img src="{logo_plataforma()}" style="width:56px;height:56px;object-fit:contain;background:#fff;border-radius:12px;padding:4px" alt="">
+    <div>
+      <div style="font-size:11px;opacity:.9;letter-spacing:1px;text-transform:uppercase">Portal exclusivo · Facturación y cobranza</div>
+      <h1 style="margin:4px 0;font-size:22px">{_esc(getattr(p,'empresa',None) or 'Procsis')}</h1>
+      <p style="margin:0;opacity:.95">Operador: <b>{op}</b> · Rol: <b>Cobranza</b></p>
+    </div>
+  </div>
+  <div>
+    <a class="cb-btn" href="/mi-perfil">Mi perfil</a>
+    <a class="cb-btn red" href="/logout">Salir</a>
+  </div>
+</section>
+
+<div class="w32-box">
+  <div class="w32-title">DETALLE DE FACTURACIÓN — CUENTAS Y CARTERA</div>
+  <div style="overflow-x:auto;background:#fff;border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080">
+    <table class="w32-tbl">
+      <tr>
+        <th>CUENTA</th><th>NIT</th><th>COLEGIO</th><th>MÓVIL / CONTACTO</th>
+        <th>CENTRAL DE RIESGO</th><th>SALDO PENDIENTE</th><th>ESTADO</th>
+      </tr>
+      {filas}
+    </table>
+  </div>
+</div>
+
+<section class="role-panel" style="margin-top:14px">
+  <h2 style="margin:0 0 8px">Herramientas de cobranza</h2>
+  <p class="mini-text">Sin acceso a soporte técnico, impersonar, prórrogas académicas ni almacenamiento GB.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    <a class="cb-btn warn" href="/gerencia/facturacion-cobranza">💳 Facturación y cartera</a>
+    <a class="cb-btn" href="/gerencia/facturacion">Generar / ver recibos</a>
+    <a class="cb-btn" href="/cobranza/turnos">👥 Turnos y notas</a>
+    <a class="cb-btn" href="/interno/buscar-colegio">🔍 Buscar colegio</a>
+    <a class="cb-btn" href="/tenants">🏫 Ver instituciones</a>
+    <a class="cb-btn" href="/usuarios">👤 Buscar usuarios (contacto)</a>
+    <a class="cb-btn red" href="/soporte/reinicio-acceso">🔄 Reinicio de acceso</a>
+  </div>
+</section>
+"""
+    return page("Cobranza", shell(content))
 
 
 @app.route("/gerencia/facturacion-cobranza", methods=["GET", "POST"])
