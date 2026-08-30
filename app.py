@@ -11,6 +11,9 @@ import json
 import random
 import re
 import smtplib
+import csv
+import difflib
+import requests
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 
@@ -1499,6 +1502,27 @@ class InvitacionDemo(db.Model):
     usada_en = db.Column(db.String(30), default="")
     institucion_id = db.Column(db.Integer, nullable=True)
     activa = db.Column(db.Boolean, default=True)
+
+
+class VerificacionRector(db.Model):
+    """Registro de verificación de identidad/antecedentes de un rector antes de la
+    validación legal del colegio. Guarda evidencia de qué se consultó, cuándo y quién,
+    y bloquea el proceso si hay alerta OFAC o si el rector es marcado como PEP."""
+    __tablename__ = "verificaciones_rector"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre_rector = db.Column(db.String(160), default="")
+    cedula_rector = db.Column(db.String(30), index=True, default="")
+    nit_colegio = db.Column(db.String(30), index=True, default="")
+    nombre_colegio = db.Column(db.String(220), default="")
+    consultado_por = db.Column(db.String(120), default="")
+    fecha = db.Column(db.String(20), default="")
+    hora = db.Column(db.String(20), default="")
+    ip = db.Column(db.String(80), default="")
+    ofac_alerta = db.Column(db.Boolean, default=False)
+    ofac_detalle = db.Column(db.Text, default="")
+    es_pep = db.Column(db.Boolean, default=False)
+    pep_aprobado_por = db.Column(db.String(120), default="")
+    pep_aprobado_fecha = db.Column(db.String(20), default="")
 
 
 class DirectorioMEN(db.Model):
@@ -13899,6 +13923,7 @@ def ventas_panel():
 
   <div class="vp-actions">
     <button type="button" onclick="document.getElementById('men-modal').classList.add('on')" style="background:#0B2D57">Validar Colegio MEN / DUE</button>
+    <a class="btn" href="/ventas/verificacion" style="background:#7c2d12;color:#fff;text-decoration:none">🕵️ Verificación de identidad · Rector</a>
     <form method="POST" style="display:inline;margin:0">
       <input type="hidden" name="accion" value="crear_link_demo">
       <input type="hidden" name="dias" value="15">
@@ -13967,6 +13992,7 @@ async function consultarMEN(){{
         + '<div style="font-size:12px;margin-top:6px;color:#334155">Estado: <b>'+(j.estado||'ACTIVO')+'</b> · Sector: '+(j.sector||'—')
         + (j.matricula ? (' · Matrícula: '+j.matricula) : '')
         + (j.municipio ? (' · '+j.municipio) : '') + '</div>'
+        + (j.descripcion ? '<div style="font-size:12px;margin-top:8px;color:#334155;background:#f8fafc;border-radius:6px;padding:8px">'+j.descripcion+'</div>' : '')
         + (j.extra ? '<div style="font-size:11px;color:#b45309;margin-top:6px">'+j.extra+'</div>' : '')
         + '<form method="POST" action="/ventas/crm" style="margin-top:10px">'
         + '<input type="hidden" name="accion" value="crear">'
@@ -17054,6 +17080,177 @@ def _guardar_men_cache(dane, nombre, municipio="", departamento="", sector="Ofic
             pass
 
 
+_ROLES_VENTAS_VERIF = ["Ventas", "Comercial", "Gerencia", "Administrador", "Gerente", "Superadmin"]
+
+
+def _consultar_ofac(nombre_completo):
+    """Cruza un nombre contra la lista pública OFAC (SDN + Consolidada) del Tesoro de
+    EE.UU. Es información pública oficial (no requiere scraping ni credenciales).
+    Devuelve (alerta:bool, detalle:str). Si el servicio no responde, no bloquea el
+    proceso — solo avisa que hay que revisar manualmente."""
+    nombre_norm = (nombre_completo or "").strip().upper()
+    if not nombre_norm:
+        return False, ""
+    try:
+        r = requests.get("https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.CSV", timeout=8)
+        if r.status_code != 200:
+            raise Exception(f"HTTP {r.status_code}")
+        texto = r.content.decode("utf-8", errors="ignore")
+        lector = csv.reader(texto.splitlines())
+        candidatos = []
+        for fila in lector:
+            if len(fila) < 2:
+                continue
+            nombre_lista = (fila[1] or "").strip().upper()
+            if not nombre_lista:
+                continue
+            score = difflib.SequenceMatcher(None, nombre_norm, nombre_lista).ratio()
+            if score >= 0.82 or (len(nombre_norm) > 6 and nombre_norm in nombre_lista):
+                candidatos.append(f"{nombre_lista} (similitud {score:.0%})")
+        if candidatos:
+            return True, "Posible coincidencia en lista OFAC: " + "; ".join(candidatos[:5])
+        return False, "Sin coincidencias en la lista pública OFAC (SDN/Consolidada)."
+    except Exception as ex:
+        return False, f"⚠ No se pudo consultar OFAC automáticamente ({str(ex)[:80]}). Verifique manualmente en sanctionssearch.ofac.treas.gov"
+
+
+@app.route("/ventas/verificacion", methods=["GET", "POST"])
+def ventas_verificacion_rector():
+    """Submódulo de verificación de identidad y antecedentes del rector, integrado al
+    panel de ventas para no tener que salir a buscar en otras ventanas. Combina:
+    accesos rápidos a los portales oficiales (Policía, Ley 1918, Procuraduría,
+    Contraloría), cruce automático contra la lista pública OFAC, y marcador de PEP
+    que exige aprobación de Gerencia antes de continuar."""
+    if not requiere_login() or rol_actual() not in _ROLES_VENTAS_VERIF:
+        return redirect("/ventas-login")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    resultado = None
+    if request.method == "POST":
+        accion = request.form.get("accion", "")
+        if accion == "consultar":
+            nombre = (request.form.get("nombre_rector") or "").strip()
+            cedula = (request.form.get("cedula_rector") or "").strip()
+            nit = (request.form.get("nit_colegio") or "").strip()
+            colegio = (request.form.get("nombre_colegio") or "").strip()
+            alerta_ofac, detalle_ofac = _consultar_ofac(nombre)
+            v = VerificacionRector(
+                nombre_rector=nombre, cedula_rector=cedula, nit_colegio=nit,
+                nombre_colegio=colegio, consultado_por=session.get("usuario", ""),
+                fecha=fecha_hoy(), hora=hora_actual(),
+                ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80],
+                ofac_alerta=alerta_ofac, ofac_detalle=detalle_ofac,
+            )
+            db.session.add(v)
+            db.session.commit()
+            registrar_auditoria("Verificación rector iniciada", f"{nombre} / CC {cedula} / colegio {colegio}")
+            resultado = v
+        elif accion == "marcar_pep":
+            vid = request.form.get("vid")
+            v = VerificacionRector.query.get(int(vid)) if vid else None
+            if v:
+                v.es_pep = True
+                db.session.commit()
+                registrar_auditoria("Rector marcado como PEP", f"{v.nombre_rector} — pendiente de aprobación de Gerencia")
+            resultado = v
+        elif accion == "aprobar_pep":
+            if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+                return acceso_denegado("Solo Gerencia puede aprobar un caso marcado como PEP.")
+            vid = request.form.get("vid")
+            v = VerificacionRector.query.get(int(vid)) if vid else None
+            if v:
+                v.pep_aprobado_por = session.get("usuario", "")
+                v.pep_aprobado_fecha = f"{fecha_hoy()} {hora_actual()}"
+                db.session.commit()
+                registrar_auditoria("PEP aprobado por Gerencia", f"{v.nombre_rector} aprobado por {session.get('usuario')}")
+            resultado = v
+
+    historial = VerificacionRector.query.order_by(VerificacionRector.id.desc()).limit(15).all()
+    filas_hist = ""
+    for h in historial:
+        estado_ofac = "🔴 Alerta OFAC" if h.ofac_alerta else "🟢 Sin alerta"
+        estado_pep = ("✔ PEP aprobado por " + h.pep_aprobado_por) if h.pep_aprobado_por else ("🟡 PEP pendiente de Gerencia" if h.es_pep else "—")
+        filas_hist += f"<tr><td>{h.fecha} {h.hora}</td><td>{_esc(h.nombre_rector)}<br><span class='mini-text'>CC {_esc(h.cedula_rector)}</span></td><td>{_esc(h.nombre_colegio)}<br><span class='mini-text'>NIT {_esc(h.nit_colegio)}</span></td><td>{estado_ofac}</td><td>{estado_pep}</td><td>{_esc(h.consultado_por)}</td></tr>"
+
+    r_html = ""
+    if resultado:
+        v = resultado
+        cc = _esc(v.cedula_rector)
+        nit = _esc(v.nit_colegio)
+        ofac_box = (
+            f"<div style='background:#fee2e2;border:2px solid #dc2626;padding:12px;border-radius:10px;margin-top:10px'><b style='color:#991b1b'>⚠️ Requiere Verificación de Gerencia</b><br><span style='font-size:12.5px'>{_esc(v.ofac_detalle)}</span></div>"
+            if v.ofac_alerta else
+            f"<div style='background:#ecfdf5;border:1px solid #6ee7b7;padding:10px;border-radius:10px;margin-top:10px;font-size:12.5px'>🟢 {_esc(v.ofac_detalle)}</div>"
+        )
+        pep_box = ""
+        if v.pep_aprobado_por:
+            pep_box = f"<div style='background:#ecfdf5;border:1px solid #6ee7b7;padding:10px;border-radius:10px;margin-top:8px;font-size:12.5px'>✔ PEP aprobado por {_esc(v.pep_aprobado_por)} el {v.pep_aprobado_fecha}</div>"
+        elif v.es_pep:
+            aprobar_btn = (
+                f"<form method='POST' style='margin-top:6px'><input type='hidden' name='accion' value='aprobar_pep'><input type='hidden' name='vid' value='{v.id}'><button style='background:#0B2D57;color:#fff;padding:6px 12px;border:0;border-radius:6px'>Aprobar como Gerencia</button></form>"
+                if rol_actual() in ("Gerente", "Superadmin", "Administrador") else
+                "<p style='font-size:12px;color:#b45309;margin-top:6px'>Pendiente: solo Gerencia puede aprobar este caso.</p>"
+            )
+            pep_box = f"<div style='background:#fffbeb;border:2px solid #d97706;padding:12px;border-radius:10px;margin-top:8px'><b style='color:#92400e'>🟡 Marcado como PEP — bloqueado hasta aprobación de Gerencia</b>{aprobar_btn}</div>"
+        else:
+            pep_box = f"<form method='POST' style='margin-top:8px'><input type='hidden' name='accion' value='marcar_pep'><input type='hidden' name='vid' value='{v.id}'><label style='font-size:13px'><input type='checkbox' onclick=\"this.form.submit()\"> ¿El rector es Persona Expuesta Políticamente (PEP)?</label></form>"
+
+        r_html = f"""
+        <div class="role-panel" style="margin-top:14px">
+          <h2>Resultado de la verificación · {_esc(v.nombre_rector)}</h2>
+
+          <h3 style="margin:14px 0 6px;font-size:14px;color:#0B2D57">1. Identidad y pasado judicial</h3>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <a target="_blank" href="https://antecedentes.policia.gov.co:7005/WebJudicial/" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">🔎 Antecedentes judiciales · Policía Nacional</a>
+            <a target="_blank" href="https://inhabilidades.policia.gov.co/consulta" style="background:#7c2d12;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">🚨 Ley 1918 · Delitos sexuales contra menores</a>
+          </div>
+          <p style="font-size:12px;color:#64748b;margin:8px 0 0">Cédula a consultar: <b>{cc}</b> (cópiela y péguela en el portal — no se puede prellenar por el captcha oficial). La consulta de Ley 1918 requiere que Procsis esté previamente autorizada por el ICBF como entidad solicitante.</p>
+
+          <h3 style="margin:16px 0 6px;font-size:14px;color:#0B2D57">2. Control disciplinario y fiscal</h3>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <a target="_blank" href="https://apps.procuraduria.gov.co/webcert/Certificado.aspx" style="background:#0f766e;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">🏛️ Procuraduría · Certificado de antecedentes</a>
+            <a target="_blank" href="https://www.contraloria.gov.co/control-fiscal/responsabilidad-fiscal/certificado-de-antecedentes-fiscales" style="background:#1e3a8a;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">💰 Contraloría · Antecedentes fiscales</a>
+          </div>
+          <p style="font-size:12px;color:#64748b;margin:8px 0 0">El certificado de Procuraduría ya incluye penal, fiscal, disciplinario, contractual y pérdida de investidura en un solo documento — la Contraloría es un chequeo complementario.</p>
+
+          <h3 style="margin:16px 0 6px;font-size:14px;color:#0B2D57">3. Listas restrictivas internacionales</h3>
+          {ofac_box}
+          {pep_box}
+        </div>
+        """
+
+    content = f"""
+<header class="role-hero"><div><h1>Verificación de identidad · Rector</h1><p>Todo en un solo panel, sin salir a buscar en otras ventanas</p></div>
+  <a class="btn" href="/ventas/panel">← Panel ventas</a>
+</header>
+<div class="role-panel">
+  <form method="POST" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+    <input type="hidden" name="accion" value="consultar">
+    <div><label style="font-size:12px;font-weight:700;display:block">Nombre completo del rector</label>
+      <input name="nombre_rector" required style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;min-width:220px"></div>
+    <div><label style="font-size:12px;font-weight:700;display:block">Cédula del rector</label>
+      <input name="cedula_rector" required inputmode="numeric" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;min-width:140px"></div>
+    <div><label style="font-size:12px;font-weight:700;display:block">Colegio</label>
+      <input name="nombre_colegio" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;min-width:200px"></div>
+    <div><label style="font-size:12px;font-weight:700;display:block">NIT del colegio</label>
+      <input name="nit_colegio" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;min-width:140px"></div>
+    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Verificar</button>
+  </form>
+</div>
+{r_html}
+<div class="role-panel" style="margin-top:14px;overflow:auto">
+  <h2>Últimas verificaciones</h2>
+  <table>
+    <tr><th>Fecha</th><th>Rector</th><th>Colegio</th><th>OFAC</th><th>PEP</th><th>Asesor</th></tr>
+    {filas_hist if filas_hist else "<tr><td colspan=6>Sin verificaciones registradas</td></tr>"}
+  </table>
+</div>
+"""
+    return page("Verificación de identidad", shell(content))
+
+
 @app.route("/api/ventas/validar-men")
 def api_validar_men():
     """
@@ -17110,14 +17307,21 @@ def api_validar_men():
     if not row and len(q) >= 4 and not (digits and len(digits) == len(q)):
         row = DirectorioMEN.query.filter(DirectorioMEN.nombre.ilike(f"%{q}%")).first()
     if row and (row.estado or "ACTIVO").upper() in ("ACTIVO", "ACTIVA", "ABIERTO", ""):
+        _mun_txt = f"{row.municipio or ''}, {row.departamento or ''}".strip(", ")
+        _descripcion = (
+            f"{row.nombre or 'Institución educativa'} es un colegio {(row.sector or 'de sector no especificado').lower()}"
+            f"{(' ubicado en ' + _mun_txt) if _mun_txt else ''}, con estado {row.estado or 'ACTIVO'}"
+            f"{(' y ' + str(row.matricula) + ' estudiantes matriculados') if row.matricula else ''}."
+        )
         return jsonify({
             "ok": True, "valido": True,
             "nombre": row.nombre or f"Institución DANE {row.codigo_dane}",
             "estado": row.estado or "ACTIVO",
             "sector": row.sector or "—",
             "matricula": row.matricula or 0,
-            "municipio": f"{row.municipio or ''}, {row.departamento or ''}".strip(", "),
+            "municipio": _mun_txt,
             "dane": row.codigo_dane or digits, "fuente": "local",
+            "descripcion": _descripcion,
         })
 
     # 2) Búsqueda por nombre en datos.gov.co (listado colegios)
@@ -17150,6 +17354,7 @@ def api_validar_men():
                     "dane": digits or "",
                     "fuente": "datos.gov.co",
                     "extra": f"Niveles: {item.get('niveles') or '—'} · Jornada: {item.get('jornada') or '—'}",
+                    "descripcion": f"{nombre} es una institución de tipo {(item.get('tipo_establecimiento') or 'no especificado').lower()}, con niveles {item.get('niveles') or '—'} y jornada {item.get('jornada') or '—'}, registrada en la fuente oficial datos.gov.co.",
                 })
         except Exception:
             pass
