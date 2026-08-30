@@ -13,7 +13,6 @@ import re
 import smtplib
 import csv
 import difflib
-import requests
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 
@@ -13208,13 +13207,16 @@ def _guard_soporte():
             or path.startswith("/auditoria")
             or path.startswith("/api/")
         )
-        # Bloquear acciones destructivas de colegio y módulos de gerencia/cobranza
+        # Bloquear acciones destructivas de colegio y módulos de gerencia/cobranza/finanzas
         bloqueado = (
             path.startswith("/eliminar_institucion")
             or path.startswith("/gerencia")
             or path.startswith("/ventas/panel")
             or path.startswith("/ventas/comisiones")
             or path.startswith("/cobranza")
+            or path.startswith("/soporte/licencias")
+            or path.startswith("/soporte/cancelaciones")
+            or path.startswith("/soporte/almacenamiento")
         )
         if bloqueado or not permitido:
             return acceso_denegado("Su cuenta de Soporte no tiene permiso para esta acción.")
@@ -17092,10 +17094,15 @@ def _consultar_ofac(nombre_completo):
     if not nombre_norm:
         return False, ""
     try:
-        r = requests.get("https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.CSV", timeout=8)
-        if r.status_code != 200:
-            raise Exception(f"HTTP {r.status_code}")
-        texto = r.content.decode("utf-8", errors="ignore")
+        import urllib.request
+        import ssl
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(
+            "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.CSV",
+            headers={"User-Agent": "EduTrack-Procsis/1.0"},
+        )
+        with urllib.request.urlopen(req, context=ctx, timeout=8) as resp:
+            texto = resp.read().decode("utf-8", errors="ignore")
         lector = csv.reader(texto.splitlines())
         candidatos = []
         for fila in lector:
@@ -23242,15 +23249,13 @@ def _modulos_por_rol(rol):
         ("Usuarios · activo / eliminar", "/usuarios", "#b91c1c"),
         ("Logs de errores", "/soporte/logs-errores", "#b91c1c"),
         ("Prórroga 24h", "/soporte/prorroga", "#7c2d12"),
-        ("Instituciones", "/tenants", "#1d4ed8"),
+        ("Instituciones (ver)", "/tenants", "#1d4ed8"),
         ("Nueva institución", "/nueva_institucion", "#15803d"),
         ("Centro PQR / tickets", "/soporte/pqr", "#1d4ed8"),
         ("Radicar PQR interna", "/soporte/pqr/crear", "#1d4ed8"),
         ("Consulta PQR validada", "/soporte/pqr/consulta", "#1d4ed8"),
         ("Aperturas de notas", "/soporte/aperturas-notas", "#b45309"),
         ("Auditoría", "/auditoria", "#1d4ed8"),
-        ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
-        ("Cancelaciones técnicas", "/soporte/cancelaciones", "#64748b"),
         ("Actualizaciones / login", "/soporte/actualizaciones", "#1d4ed8"),
         ("Servidores", "/servidores", "#1d4ed8"),
         ("Modo prueba", "/modo_prueba", "#64748b"),
@@ -23266,16 +23271,13 @@ def _modulos_por_rol(rol):
         ("Plantillas de Prospección", "/ventas/kit-mensajes", "#7c3aed"),
         ("Portal ventas / planes", "/ventas", "#dc2626"),
         ("Registrar institución", "/ventas/comprar", "#dc2626"),
+        ("Verificación de identidad · Rector", "/ventas/verificacion", "#7c2d12"),
         ("Notas de cliente", "/notas-cliente", "#0f766e"),
-        ("Retención", "/retencion", "#7c2d12"),
-        ("Licencias y cobros", "/soporte/licencias", "#b45309"),
-        ("💳 Facturación y Cobranza", "/gerencia/facturacion-cobranza", "#b45309"),
-        ("Cancelaciones", "/soporte/cancelaciones", "#b45309"),
         ("Historial de comisiones", "/ventas/comisiones", "#0f766e"),
         ("Propuesta comercial (PDF)", "/ventas/propuesta-pdf", "#b45309"),
         ("Generar contrato digital", "/ventas/contrato-digital", "#7c2d12"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
-        ("Instituciones (ver / eliminar)", "/tenants", "#64748b"),
+        ("Instituciones (ver / registrar)", "/tenants", "#64748b"),
     ]
     gerencia = ventas + [
         ("EduTrack HQ", "/gerencia/hq", "#0B2D57"),
@@ -23287,11 +23289,14 @@ def _modulos_por_rol(rol):
         ("Equipo Procsis", "/soporte/equipo", "#7c2d12"),
         ("Kit RRHH / seguridad", "/soporte/rrhh", "#7c2d12"),
         ("Crear usuarios Ventas/Soporte", "/gerencia/usuarios", "#0B2D57"),
+        ("💳 Facturación y Cobranza", "/gerencia/facturacion-cobranza", "#b45309"),
+        ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Facturación", "/gerencia/facturacion", "#0B2D57"),
         ("Gastos", "/gerencia/gastos", "#0B2D57"),
         ("Notas de cliente", "/notas-cliente", "#0f766e"),
         ("Retención (validar)", "/retencion", "#7c2d12"),
         ("Cancelaciones de servicio", "/gerencia/cancelaciones", "#7c2d12"),
+        ("Cancelaciones técnicas", "/soporte/cancelaciones", "#64748b"),
         ("Auditoría", "/auditoria", "#1d4ed8"),
         ("Soporte completo", "/soporte_admin", "#0B2D57"),
     ]
@@ -24228,7 +24233,7 @@ def tenants():
         logo = logo_actual(i.id)
         _eliminar_link = (
             f"· <a class='danger-link' href='/eliminar_institucion/{i.id}' onclick=\"return confirm('¿Eliminar institución {i.codigo}? Se borrarán su configuración y se desvincularán usuarios/estudiantes de este tenant.')\">Eliminar</a>"
-            if rol_actual() != "Soporte" else ""
+            if rol_actual() in ("Gerente", "Superadmin", "Administrador") else ""
         )
         filas += f"""<tr>
           <td>{i.id}</td>
@@ -31904,6 +31909,8 @@ def soporte_pqr_centro():
             TicketPQR.radicado.ilike(like),
             TicketPQR.numero_documento.ilike(like),
             TicketPQR.nit_colegio.ilike(like),
+            TicketPQR.codigo_colegio.ilike(like),
+            TicketPQR.nombre_colegio.ilike(like),
             TicketPQR.ticket.ilike(like),
             TicketPQR.razon_social.ilike(like),
         ))
@@ -31928,7 +31935,7 @@ def soporte_pqr_centro():
 <div class="role-panel" style="margin-bottom:12px">
   <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
     {("<input type='hidden' name='bucket' value='"+bucket+"'>") if bucket else ""}
-    <input name="q" value="{_esc(qtxt)}" placeholder="Buscar por radicado, cédula del profesor o NIT del colegio" style="flex:1;min-width:260px;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+    <input name="q" value="{_esc(qtxt)}" placeholder="Buscar por radicado, cédula del profesor, NIT o código DANE del colegio" style="flex:1;min-width:260px;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
     <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button>
   </form>
   <div>{tabs}{limpiar}</div>
