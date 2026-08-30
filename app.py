@@ -1088,6 +1088,8 @@ class TicketPQR(db.Model):
     medio_ingreso = db.Column(db.String(60), default="Web")
     descripcion_cierre = db.Column(db.Text, default="")
     motivo = db.Column(db.String(255), default="")
+    token_notificacion = db.Column(db.String(64), default="", index=True)
+    notificacion_enviada_en = db.Column(db.String(20), default="")
 
 
 class AsignacionDocente(db.Model):
@@ -2376,6 +2378,8 @@ def migrar_columnas():
 
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS canal VARCHAR(40) DEFAULT 'PUBLICO'",
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS direccion VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS token_notificacion VARCHAR(64) DEFAULT ''",
+        "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS notificacion_enviada_en VARCHAR(20) DEFAULT ''",
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS cerrado_por VARCHAR(120) DEFAULT ''",
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS fecha_cierre VARCHAR(20) DEFAULT ''",
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS prioridad VARCHAR(20) DEFAULT 'MEDIA'",
@@ -2652,6 +2656,8 @@ def migrar_columnas():
         ("instituciones", "factura_final_generada", "ALTER TABLE instituciones ADD COLUMN factura_final_generada BOOLEAN DEFAULT 0"),
         ("instituciones", "rector", "ALTER TABLE instituciones ADD COLUMN rector VARCHAR(160) DEFAULT ''"),
         ("tickets_pqr", "direccion", "ALTER TABLE tickets_pqr ADD COLUMN direccion VARCHAR(255) DEFAULT ''"),
+        ("tickets_pqr", "token_notificacion", "ALTER TABLE tickets_pqr ADD COLUMN token_notificacion VARCHAR(64) DEFAULT ''"),
+        ("tickets_pqr", "notificacion_enviada_en", "ALTER TABLE tickets_pqr ADD COLUMN notificacion_enviada_en VARCHAR(20) DEFAULT ''"),
         ("instituciones", "tipo_bloqueo", "ALTER TABLE instituciones ADD COLUMN tipo_bloqueo VARCHAR(30) DEFAULT ''"),
         ("instituciones", "ultima_sincronizacion", "ALTER TABLE instituciones ADD COLUMN ultima_sincronizacion VARCHAR(30) DEFAULT ''"),
         ("solicitudes_cancelacion", "canal", "ALTER TABLE solicitudes_cancelacion ADD COLUMN canal VARCHAR(40) DEFAULT 'PORTAL'"),
@@ -4667,6 +4673,152 @@ def registrar_historial_pqr(ticket_id, accion, detalle="", estado_nuevo=""):
     ))
 
 
+
+
+def _asegurar_token_pqr(t):
+    """Genera (una sola vez) un token seguro para el link público de notificación,
+    para no exponer el radicado interno en la URL que recibe el cliente."""
+    if not (t.token_notificacion or "").strip():
+        import secrets
+        t.token_notificacion = secrets.token_urlsafe(24)
+        db.session.commit()
+    return t.token_notificacion
+
+
+def enviar_notificacion_pqr_estilo_tigo(destino, t):
+    """Correo de notificación con el mismo patrón que usan las telcos (Tigo, Claro,
+    etc.): un aviso corto con botón 'Ver respuesta' que lleva a una página del propio
+    sistema donde el cliente ve los datos de su PQR y descarga el PDF — en vez de
+    mandar el PDF pesado directo por correo."""
+    if not destino or not SOPORTE_EMAIL:
+        return False
+    password = os.getenv("SOPORTE_PASSWORD", "")
+    if not password:
+        print("PQR notificación email: falta SOPORTE_PASSWORD")
+        return False
+    token = _asegurar_token_pqr(t)
+    base_url = (os.environ.get("APP_BASE_URL") or request.url_root or "").rstrip("/")
+    link = f"{base_url}/pqr/notificacion/{token}"
+    nombre = (t.razon_social or "usuario").strip()
+    empresa = nombre_empresa()
+    producto = nombre_producto()
+    try:
+        pp = plataforma()
+        wa_num = "".join(c for c in (getattr(pp, "contacto_whatsapp_ventas", None) or "") if c.isdigit())
+        email_ayuda = (getattr(pp, "contacto_publico_email", None) or SOPORTE_EMAIL).strip()
+    except Exception:
+        wa_num, email_ayuda = "", SOPORTE_EMAIL
+    wa_link = f"https://wa.me/{wa_num}" if wa_num else f"mailto:{email_ayuda}"
+    html = f"""
+<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
+  <div style="position:relative;background:#dbeafe;padding:24px 26px 32px">
+    <div style="position:absolute;top:0;right:0;width:150px;height:90px;background:#0B2D57;border-bottom-left-radius:70px;display:flex;align-items:center;justify-content:center">
+      <span style="color:#fff;font-weight:800;font-size:15px;letter-spacing:.5px">{producto}</span>
+    </div>
+    <div style="max-width:340px">
+      <p style="margin:0;color:#0B2D57;font-size:14px">Hola,</p>
+      <p style="margin:2px 0 14px;color:#0B2D57;font-weight:800;font-size:16px">{_esc(nombre)}</p>
+      <span style="background:#facc15;color:#0f172a;font-weight:800;padding:4px 10px;border-radius:4px;font-size:14px;display:inline-block">Esta información es para ti</span>
+    </div>
+  </div>
+  <div style="padding:22px 26px 8px;color:#0f172a;font-size:14px;line-height:1.6">
+    <p>Por medio de este correo electrónico, te compartimos de forma oportuna y efectiva la respuesta a la solicitud que nos realizaste. Para verla, haz clic en el botón a continuación:</p>
+    <div style="text-align:center;margin:22px 0">
+      <a href="{link}" style="background:#0ea5e9;color:#fff;text-decoration:none;font-weight:800;padding:14px 34px;border-radius:24px;display:inline-block;font-size:14px;letter-spacing:.5px">VER RESPUESTA</a>
+    </div>
+  </div>
+  <div style="padding:0 26px 20px">
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;font-size:11.5px;color:#475569">
+      <b>Ten en cuenta:</b> con la recepción de este correo se entiende que has sido notificado para todos los efectos, según las normas aplicables vigentes, en especial los artículos 12 y 20 de la Ley 527 de 1999 y sus normas reglamentarias sobre mensajes de datos.
+    </div>
+  </div>
+  <div style="background:#0B2D57;color:#fff;padding:24px 26px;text-align:center">
+    <div style="border:1px solid #f59e0b;border-radius:8px;padding:12px;font-size:12px;margin-bottom:16px">
+      ⚠ Por favor no respondas este mensaje. Este buzón tiene como propósito el envío de información y no es un canal oficial para la recepción de solicitudes, peticiones, quejas y reclamos.
+    </div>
+    <p style="margin:0 0 10px;font-size:13px">¿Dudas? Te las resolvemos aquí</p>
+    <a href="mailto:{email_ayuda}" style="display:inline-block;background:#fff;color:#0B2D57;text-decoration:none;font-weight:700;padding:8px 16px;border-radius:20px;font-size:12px;margin:0 6px">Centro de Ayuda</a>
+    <a href="{wa_link}" style="display:inline-block;background:#25D366;color:#fff;text-decoration:none;font-weight:700;padding:8px 16px;border-radius:20px;font-size:12px;margin:0 6px">WhatsApp</a>
+  </div>
+  <div style="padding:14px 26px;font-size:10.5px;color:#94a3b8;text-align:center">
+    {empresa} © {ahora().year} · Todos los derechos reservados
+  </div>
+</div>
+"""
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = f"{producto} · Tenemos la respuesta a tu solicitud Radicado No. {t.radicado or t.nro_cun}"
+        msg["From"] = SOPORTE_EMAIL
+        msg["To"] = destino
+        msg.set_content(
+            f"Hola {nombre},\n\n"
+            f"Te compartimos la respuesta a tu solicitud (Radicado No. {t.radicado}).\n"
+            f"Consúltala en: {link}\n\n"
+            f"Por favor no respondas este mensaje.\n{empresa} · {producto}"
+        )
+        msg.add_alternative(html, subtype="html")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(SOPORTE_EMAIL, password)
+            smtp.send_message(msg)
+        t.notificacion_enviada_en = f"{fecha_hoy()} {hora_actual()}"
+        db.session.commit()
+        return True
+    except Exception as e:
+        print("PQR notificación estilo Tigo error:", e)
+        return False
+
+
+@app.route("/pqr/notificacion/<token>")
+def pqr_notificacion_publica(token):
+    """Landing pública (sin login) donde el cliente ve el detalle de su PQR resuelta
+    y descarga el PDF — el mismo patrón de 'transacciones.tigo.com.co/notificaciones/pqr/...'."""
+    t = TicketPQR.query.filter_by(token_notificacion=token).first()
+    if not t:
+        return page("Enlace no válido", "<div style='max-width:480px;margin:60px auto;font-family:Segoe UI,Arial;text-align:center'><h1>Enlace no válido o vencido</h1><p>Verifica el enlace o contacta a soporte con tu número de radicado.</p></div>")
+    empresa = nombre_empresa()
+    producto = nombre_producto()
+    fecha_envio = t.notificacion_enviada_en or f"{t.fecha_respuesta or t.fecha} 12:00 pm"
+    fecha_actual = f"{fecha_hoy()} {hora_actual()}"
+    sol_html = (t.descripcion_cierre or t.respuesta or "Su solicitud ha sido gestionada.").replace("<", "&lt;").replace("\n", "<br>")
+    body = f"""
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{producto} · Respuesta a tu solicitud</title></head>
+<body style="margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a">
+  <div style="background:#0B2D57;padding:14px 24px"><b style="color:#fff;font-size:18px">{producto}</b></div>
+  <div style="background:linear-gradient(90deg,#0B2D57,#1e40af);color:#fff;padding:34px 24px">
+    <h1 style="margin:0;font-size:24px">Te brindamos<br>la respuesta</h1>
+    <span style="background:#facc15;color:#0f172a;font-weight:800;padding:4px 10px;border-radius:4px;font-size:14px;display:inline-block;margin-top:8px">a tu solicitud</span>
+  </div>
+  <div style="max-width:900px;margin:0 auto;padding:24px;display:grid;grid-template-columns:280px 1fr;gap:20px">
+    <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e2e8f0">
+      <h3 style="margin:0 0 12px">Información de PQR:</h3>
+      <p style="font-size:13px"><b>Radicado:</b><br>{_esc(t.radicado or t.nro_cun or '—')}</p>
+      <p style="font-size:13px"><b>Asunto:</b><br>Respuesta Radicado: {_esc(t.radicado or '—')}</p>
+      <p style="font-size:13px"><b>Fecha de envío:</b><br>{_esc(fecha_envio)}</p>
+      <p style="font-size:13px"><b>Fecha actual:</b><br>{_esc(fecha_actual)}</p>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #e2e8f0">
+      <h2 style="margin:0 0 12px;font-size:18px">Señor(a) {_esc((t.razon_social or 'usuario').upper())},</h2>
+      <p style="font-size:14px;line-height:1.6">Gracias por haberte puesto en contacto con nosotros. Estamos compartiéndote la respuesta a tu solicitud. Si requieres información adicional, puedes comunicarte con un asesor por nuestros canales oficiales.</p>
+      <div style="background:#f8fafc;border-left:4px solid #0B2D57;padding:14px;margin:14px 0;font-size:13.5px">{sol_html}</div>
+      <h3 style="margin:20px 0 8px;font-size:14px">Archivos Adjuntos</h3>
+      <a href="/pqr/notificacion/{token}/pdf" style="color:#1e40af;font-size:13.5px">📄 Respuesta_{_esc(t.ticket or t.id)}.pdf</a>
+      <p style="font-size:11px;color:#94a3b8;margin-top:24px">Este buzón se usa únicamente para el envío de respuestas; por favor no respondas directamente a este mensaje.</p>
+    </div>
+  </div>
+</body></html>
+"""
+    return body
+
+
+@app.route("/pqr/notificacion/<token>/pdf")
+def pqr_notificacion_pdf_publico(token):
+    """Descarga del PDF de respuesta desde la landing pública (por token, no por ID)."""
+    t = TicketPQR.query.filter_by(token_notificacion=token).first()
+    if not t:
+        return page("Enlace no válido", "<div style='max-width:480px;margin:60px auto;font-family:Segoe UI,Arial;text-align:center'><h1>Enlace no válido</h1></div>")
+    b = generar_pdf_respuesta_pqr(t)
+    return send_file(b, as_attachment=True, download_name=f"Respuesta_{t.ticket or t.id}.pdf", mimetype="application/pdf")
 
 
 def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
@@ -32451,11 +32603,19 @@ def soporte_pqr_detalle(id):
                 except Exception as ex:
                     db.session.rollback()
                     print("historial pqr:", ex)
-                enviar_mail = (request.form.get("enviar_correo") or "") == "1"
+                cierra_caso = nuevo.upper() in ("CERRADA", "CERRADO", "RESUELTA")
+                enviar_mail = (request.form.get("enviar_correo") or "") == "1" or cierra_caso
                 mail_ok = False
                 if resp and t.email and enviar_mail:
                     try:
-                        mail_ok = enviar_correo_respuesta_pqr(t.email, t, resp)
+                        # Al cerrar/resolver el caso se envía automáticamente el aviso
+                        # estilo Tigo (link a la landing pública); en otros estados
+                        # intermedios se manda el correo directo con la respuesta.
+                        mail_ok = (
+                            enviar_notificacion_pqr_estilo_tigo(t.email, t)
+                            if cierra_caso else
+                            enviar_correo_respuesta_pqr(t.email, t, resp)
+                        )
                     except Exception as ex:
                         print("mail respuesta:", ex)
                 if resp and t.email and enviar_mail:
@@ -32496,7 +32656,7 @@ def soporte_pqr_detalle(id):
     <textarea name="respuesta" rows="6" placeholder="Escriba la solución completa que verá el cliente (Descripción de cierre)..."></textarea>
     <label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-weight:700">
       <input type="checkbox" name="enviar_correo" value="1" checked style="width:auto">
-      Enviar respuesta al correo del usuario (diseño formal)
+      Enviar correo al usuario (si el estado es Resuelta/Cerrada se envía automáticamente el aviso con link, aunque desmarques esto)
     </label>
     <button type="submit">Guardar respuesta / estado</button>
   </form>
