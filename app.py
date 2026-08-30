@@ -818,6 +818,10 @@ class Institucion(db.Model):
     fecha_fin_servicio = db.Column(db.String(20), default="")  # fecha efectiva fin (cuenta regresiva)
     no_generar_facturas = db.Column(db.Boolean, default=False)  # True = ciclo no genera más facturas nuevas
     factura_final_generada = db.Column(db.Boolean, default=False)  # prorrateo del mes en curso ya emitido
+    # Info institucional (consulta de datos del titular) y bloqueo/seguridad
+    rector = db.Column(db.String(160), default="")
+    tipo_bloqueo = db.Column(db.String(30), default="")  # "" | SEGURIDAD | MORA (persistido por Bloqueo y Seguridad)
+    ultima_sincronizacion = db.Column(db.String(30), default="")  # sello del módulo de Aprovisionamiento Escolar
 
 
 class Configuracion(db.Model):
@@ -1063,6 +1067,7 @@ class TicketPQR(db.Model):
     nit_colegio = db.Column(db.String(40), default="", index=True)
     codigo_colegio = db.Column(db.String(40), default="")
     nombre_colegio = db.Column(db.String(220), default="")
+    direccion = db.Column(db.String(255), default="")
     tipo_pqr = db.Column(db.String(60), default="Petición")
     subtipo = db.Column(db.String(120), default="")
     objeto = db.Column(db.Text, default="")
@@ -2365,8 +2370,12 @@ def migrar_columnas():
         "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS contacto_facturacion VARCHAR(160) DEFAULT ''",
         "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS plan_pendiente VARCHAR(40) DEFAULT ''",
         "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS fecha_corte_plan VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS rector VARCHAR(160) DEFAULT ''",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS tipo_bloqueo VARCHAR(30) DEFAULT ''",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS ultima_sincronizacion VARCHAR(30) DEFAULT ''",
 
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS canal VARCHAR(40) DEFAULT 'PUBLICO'",
+        "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS direccion VARCHAR(255) DEFAULT ''",
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS cerrado_por VARCHAR(120) DEFAULT ''",
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS fecha_cierre VARCHAR(20) DEFAULT ''",
         "ALTER TABLE tickets_pqr ADD COLUMN IF NOT EXISTS prioridad VARCHAR(20) DEFAULT 'MEDIA'",
@@ -2641,6 +2650,10 @@ def migrar_columnas():
         ("instituciones", "fecha_fin_servicio", "ALTER TABLE instituciones ADD COLUMN fecha_fin_servicio VARCHAR(20) DEFAULT ''"),
         ("instituciones", "no_generar_facturas", "ALTER TABLE instituciones ADD COLUMN no_generar_facturas BOOLEAN DEFAULT 0"),
         ("instituciones", "factura_final_generada", "ALTER TABLE instituciones ADD COLUMN factura_final_generada BOOLEAN DEFAULT 0"),
+        ("instituciones", "rector", "ALTER TABLE instituciones ADD COLUMN rector VARCHAR(160) DEFAULT ''"),
+        ("tickets_pqr", "direccion", "ALTER TABLE tickets_pqr ADD COLUMN direccion VARCHAR(255) DEFAULT ''"),
+        ("instituciones", "tipo_bloqueo", "ALTER TABLE instituciones ADD COLUMN tipo_bloqueo VARCHAR(30) DEFAULT ''"),
+        ("instituciones", "ultima_sincronizacion", "ALTER TABLE instituciones ADD COLUMN ultima_sincronizacion VARCHAR(30) DEFAULT ''"),
         ("solicitudes_cancelacion", "canal", "ALTER TABLE solicitudes_cancelacion ADD COLUMN canal VARCHAR(40) DEFAULT 'PORTAL'"),
         ("solicitudes_cancelacion", "factura_final_id", "ALTER TABLE solicitudes_cancelacion ADD COLUMN factura_final_id INTEGER DEFAULT 0"),
         ("solicitudes_cancelacion", "valor_prorrateo", "ALTER TABLE solicitudes_cancelacion ADD COLUMN valor_prorrateo FLOAT DEFAULT 0"),
@@ -4724,7 +4737,10 @@ def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
 
 
 def generar_pdf_respuesta_pqr(t):
-    """PDF tipo carta formal (fecha, CUN, destinatario, asunto, cuerpo, pie)."""
+    """PDF tipo carta formal de respuesta a Derecho de Petición (fecha de notificación,
+    Radicado No. — sin usar la etiqueta 'CUN' —, datos completos del peticionario,
+    asunto, cuerpo técnico-legal con referencia normativa, y cierre con firma de
+    Mesa de Control y Soporte Corporativo, sin recursos de reposición/apelación)."""
     from reportlab.lib.utils import simpleSplit
     from datetime import datetime
     b = BytesIO()
@@ -4733,10 +4749,9 @@ def generar_pdf_respuesta_pqr(t):
     margen = 54
     ancho = w - 2 * margen
 
-    # Fecha legible
-    fecha_txt = t.fecha_respuesta or t.fecha_cierre or t.fecha or fecha_hoy()
+    # Fecha de notificación (fecha en que se emite ESTA respuesta, no la de radicación)
+    fecha_txt = fecha_hoy()
     try:
-        # si viene YYYY-MM-DD
         partes = fecha_txt[:10].split("-")
         if len(partes) == 3:
             meses = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -4745,23 +4760,21 @@ def generar_pdf_respuesta_pqr(t):
             fecha_txt = f"{d:02d} de {meses[m]} de {a}"
     except Exception:
         pass
+    fecha_radicacion = t.fecha or fecha_hoy()
 
-    cun = t.nro_cun or (t.radicado or "").replace("-", "") or t.radicado or "—"
-    # mostrar CUN con guiones si parece el radicado
-    if t.radicado and "-" in (t.radicado or ""):
-        cun_mostrar = t.radicado
-    else:
-        cun_mostrar = cun
+    radicado_no = t.radicado or t.nro_cun or "—"
 
     cliente = f"{(t.razon_social or '').strip()} {(t.apellidos or '').strip()}".strip() or "Señor(a) usuario"
     email = (t.email or "").strip()
-    ciudad = f"{(t.ciudad or '').strip()}{(', ' + t.departamento) if (t.departamento or '').strip() else ''}".strip() or "Colombia"
+    direccion = (t.direccion or "").strip()
+    ciudad = f"{(t.ciudad or '').strip()}{(', ' + t.departamento) if (t.departamento or '').strip() else ''}".strip()
+    identificacion = f"{t.tipo_documento or 'CC/NIT'}: {t.numero_documento}" if (t.numero_documento or "").strip() else ""
     tipo = t.tipo_pqr or "Petición"
     subtipo = t.subtipo or ""
-    asunto = f"Respuesta a su {tipo}" + (f" — {subtipo}" if subtipo else "") + "."
+    asunto = f"Respuesta formal a su Derecho de Petición de tipo {tipo}" + (f" / {subtipo}" if subtipo else "") + "."
     sol = (t.descripcion_cierre or t.respuesta or "").replace("\r", "").strip() or "Su solicitud ha sido gestionada."
 
-    # Encabezado superior (marca)
+    # Encabezado superior (marca EduTrack + firma Procsis, en las esquinas)
     pdf.setFillColor(colors.HexColor("#0B2D57"))
     pdf.rect(0, h - 48, w, 48, fill=1, stroke=0)
     pdf.setFillColor(colors.white)
@@ -4772,32 +4785,37 @@ def generar_pdf_respuesta_pqr(t):
 
     y = h - 78
     pdf.setFillColor(colors.HexColor("#0f172a"))
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(margen, y, fecha_txt)
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(margen, y, "Fecha de notificación:")
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(margen + 120, y, fecha_txt)
     pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawRightString(w - margen, y, f"CUN {cun_mostrar}")
+    pdf.drawRightString(w - margen, y, f"Radicado No. {radicado_no}")
 
-    y -= 36
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(margen, y, "Señor(a)")
-    y -= 16
+    # Datos completos del peticionario
+    y -= 30
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(margen, y, "Destinatario")
+    y -= 15
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(margen, y, cliente[:80])
-    y -= 15
+    y -= 14
     pdf.setFont("Helvetica", 10)
-    if email:
-        pdf.drawString(margen, y, email[:70])
-        y -= 14
-    if (t.numero_documento or "").strip():
-        pdf.drawString(margen, y, f"{t.tipo_documento or 'Doc'}: {t.numero_documento}")
-        y -= 14
+    if identificacion:
+        pdf.drawString(margen, y, identificacion[:80])
+        y -= 13
+    if direccion:
+        pdf.drawString(margen, y, direccion[:90])
+        y -= 13
     if ciudad:
         pdf.drawString(margen, y, ciudad[:70])
-        y -= 14
+        y -= 13
+    if email:
+        pdf.drawString(margen, y, email[:70])
+        y -= 13
 
-    y -= 18
+    y -= 15
     pdf.setFont("Helvetica-Bold", 11)
-    # Asunto con ajuste de línea
     pdf.drawString(margen, y, "Asunto:")
     pdf.setFont("Helvetica", 11)
     asunto_lines = simpleSplit(asunto, "Helvetica", 11, ancho - 50)
@@ -4819,12 +4837,11 @@ def generar_pdf_respuesta_pqr(t):
         y -= 13
 
     y -= 10
-    # Referencia a la comunicación del usuario
+    # Referencia a la solicitud del cliente (fundamento legal de la respuesta)
     ref = (
-        f"En su comunicación recibida el {t.fecha or '—'} con CUN {cun_mostrar}, "
-        f"nos manifiesta lo siguiente respecto a su {tipo.lower()}"
-        + (f" ({subtipo})" if subtipo else "")
-        + ":"
+        f"En atención a su comunicación radicada el día {fecha_radicacion}, identificada con el "
+        f"Radicado No. {radicado_no}, en la cual nos manifiesta lo siguiente respecto a su "
+        f"{tipo.lower()}" + (f" ({subtipo})" if subtipo else "") + ":"
     )
     for line in simpleSplit(ref, "Helvetica", 10, ancho):
         if y < 100:
@@ -4847,8 +4864,9 @@ def generar_pdf_respuesta_pqr(t):
         pdf.setFillColor(colors.HexColor("#0f172a"))
         y -= 8
 
+    # Fundamento técnico/comercial y decisión
     pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(margen, y, "Respuesta / decisión:")
+    pdf.drawString(margen, y, "Fundamento y respuesta:")
     y -= 14
     pdf.setFont("Helvetica", 10)
     for para in sol.split("\n"):
@@ -4860,11 +4878,28 @@ def generar_pdf_respuesta_pqr(t):
             y -= 13
         y -= 4
 
-    y -= 12
-    cierre = (
-        "Quedamos atentos a cualquier inquietud adicional a través de nuestros canales oficiales de soporte. "
-        "Cordialmente,"
+    y -= 8
+    # Normativa vigente aplicable
+    normativa = (
+        "Lo anterior, en concordancia con los términos contractuales del servicio y el artículo 19 "
+        "de la Ley 1437 de 2011 (Código de Procedimiento Administrativo y de lo Contencioso Administrativo)."
     )
+    pdf.setFont("Helvetica-Oblique", 9)
+    pdf.setFillColor(colors.HexColor("#64748b"))
+    for line in simpleSplit(normativa, "Helvetica-Oblique", 9, ancho):
+        if y < 100:
+            pdf.showPage()
+            y = h - 60
+        pdf.drawString(margen, y, line)
+        y -= 12
+    pdf.setFillColor(colors.HexColor("#0f172a"))
+
+    y -= 18
+    cierre = (
+        "Si desea soporte adicional sobre esta respuesta, puede escribir a nuestros canales oficiales "
+        "de atención o responder directamente a este mismo radicado. Cordialmente,"
+    )
+    pdf.setFont("Helvetica", 10)
     for line in simpleSplit(cierre, "Helvetica", 10, ancho):
         if y < 100:
             pdf.showPage()
@@ -4874,12 +4909,12 @@ def generar_pdf_respuesta_pqr(t):
 
     y -= 28
     pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(margen, y, f"Equipo de Soporte · {nombre_empresa()}")
+    pdf.drawString(margen, y, "Mesa de Control y Soporte Corporativo")
     y -= 12
     pdf.setFont("Helvetica", 9)
-    pdf.drawString(margen, y, f"{nombre_producto()} · Gestión PQR")
+    pdf.drawString(margen, y, f"{nombre_empresa()} · {nombre_producto()}")
 
-    # Pie de página fijo
+    # Pie de página fijo (firma de la empresa Procsis)
     pdf.setFillColor(colors.HexColor("#0B2D57"))
     pdf.rect(0, 0, w, 52, fill=1, stroke=0)
     pdf.setFillColor(colors.white)
@@ -4887,7 +4922,7 @@ def generar_pdf_respuesta_pqr(t):
     pdf.drawString(margen, 30, nombre_empresa())
     pdf.setFont("Helvetica", 8)
     pdf.drawString(margen, 16, f"{nombre_producto()} · Respuesta oficial PQR · Documento generado electrónicamente")
-    pdf.drawRightString(w - margen, 30, f"Ticket {t.ticket or '—'}")
+    pdf.drawRightString(w - margen, 30, f"Radicado No. {radicado_no}")
     pdf.drawRightString(w - margen, 16, f"Estado: {t.estado or '—'}")
 
     pdf.save()
@@ -13412,10 +13447,10 @@ def _aislar_paneles_internos():
         return None
 
     if path == "/login" and request.method == "GET":
-        # Login de colegios: si hay staff interno logueado, no mezclar — mandarlo a su portal
-        rol = (session.get("rol") or "").strip()
-        if session.get("usuario") and rol in ROLES_INTERNOS:
-            return redirect(_home_portal(rol))
+        # Login de colegios: se muestra siempre el formulario, incluso si hay una sesión
+        # de staff abierta en otra pestaña del mismo navegador (las cookies de sesión son
+        # por navegador, no por pestaña). Si el usuario efectivamente inicia sesión aquí
+        # como colegio, la ruta /login se encarga de reemplazar la sesión.
         return None
 
     if not session.get("usuario"):
@@ -15202,7 +15237,7 @@ def gerencia_hq():
       <h2>Reservado a dirección / gerencia</h2>
       <div class="grid-mod">
         <a class="own" href="/gerencia/turnos">👥 Turnos y notas de gestión</a>
-        <a class="own" href="/gerencia/almacenamiento">💾 Almacenamiento GB</a>
+        <a class="own" href="/gerencia/recursos-financieros">💾 Recursos Financieros y Consumo</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -23244,6 +23279,7 @@ def _modulos_por_rol(rol):
     rol = (rol or "").strip()
     # Soporte = operación técnica pura (sin reglas de negocio ni RRHH interno)
     soporte = [
+        ("Información Institucional", "/soporte/info-institucional", "#0B2D57"),
         ("Suplantar usuario", "/soporte/impersonar", "#0f766e"),
         ("Resetear contraseñas", "/soporte/reset-clave", "#b45309"),
         ("Usuarios · activo / eliminar", "/usuarios", "#b91c1c"),
@@ -23251,6 +23287,7 @@ def _modulos_por_rol(rol):
         ("Prórroga 24h", "/soporte/prorroga", "#7c2d12"),
         ("Instituciones (ver)", "/tenants", "#1d4ed8"),
         ("Nueva institución", "/nueva_institucion", "#15803d"),
+        ("Bloqueo y Seguridad", "/soporte/info-institucional", "#dc2626"),
         ("Centro PQR / tickets", "/soporte/pqr", "#1d4ed8"),
         ("Radicar PQR interna", "/soporte/pqr/crear", "#1d4ed8"),
         ("Consulta PQR validada", "/soporte/pqr/consulta", "#1d4ed8"),
@@ -23327,6 +23364,268 @@ def _html_modulos_rol(rol):
 """
 
 
+
+
+def _ensure_institucion_seguridad_cols():
+    """Columnas para el módulo de Bloqueo y Seguridad (tipo de bloqueo) y para el
+    sello de última sincronización del módulo de Aprovisionamiento Escolar."""
+    try:
+        from sqlalchemy import text, inspect
+        insp = inspect(db.engine)
+        if "instituciones" not in insp.get_table_names():
+            return
+        cols = {c["name"] for c in insp.get_columns("instituciones")}
+        with db.engine.begin() as conn:
+            if "tipo_bloqueo" not in cols:
+                conn.execute(text("ALTER TABLE instituciones ADD COLUMN tipo_bloqueo VARCHAR(30) DEFAULT ''"))
+            if "ultima_sincronizacion" not in cols:
+                conn.execute(text("ALTER TABLE instituciones ADD COLUMN ultima_sincronizacion VARCHAR(30) DEFAULT ''"))
+    except Exception as ex:
+        print("ensure instituciones seguridad cols:", ex)
+
+
+def _buscar_institucion_qs():
+    """Busca institución por DANE, NIT, código o nombre (para los 3 módulos nuevos)."""
+    q = (request.args.get("q") or request.form.get("q") or "").strip()
+    if not q:
+        return None, q
+    like = f"%{q}%"
+    inst = Institucion.query.filter(or_(
+        Institucion.dane == q, Institucion.nit == q, Institucion.codigo == q,
+        Institucion.dane.ilike(like), Institucion.nit.ilike(like),
+        Institucion.codigo.ilike(like), Institucion.nombre.ilike(like),
+    )).first()
+    return inst, q
+
+
+@app.route("/soporte/info-institucional")
+def soporte_info_institucional():
+    """Módulo de Información Institucional: nombre, DANE, NIT, rector, estado de la
+    plataforma y plan contratado. Solo lectura — sin precios ni datos de pago."""
+    _g = _guard_soporte()
+    if _g is not None:
+        return _g
+    inst, q = _buscar_institucion_qs()
+    r_html = ""
+    if q and not inst:
+        r_html = "<div class='role-panel' style='margin-top:12px'>No se encontró ninguna institución con ese dato.</div>"
+    elif inst:
+        rector_u = Usuario.query.filter(
+            Usuario.institucion_id == inst.id, Usuario.rol.in_(["Rector", "Rectoría"])
+        ).first()
+        rector_nom = (getattr(rector_u, "nombre_completo", "") or getattr(rector_u, "usuario", "") or "—") if rector_u else "—"
+        estado_color = "#16a34a" if (inst.estado or "").upper() in ("ACTIVA", "ACTIVO") else "#b91c1c"
+        r_html = f"""
+        <div class="role-panel" style="margin-top:12px">
+          <h2>{_esc(inst.nombre)}</h2>
+          <table style="width:100%;font-size:14px">
+            <tr><td style="padding:6px 0;color:#64748b;width:180px">Código DANE</td><td><b>{_esc(inst.dane or '—')}</b></td></tr>
+            <tr><td style="padding:6px 0;color:#64748b">NIT</td><td><b>{_esc(inst.nit or '—')}</b></td></tr>
+            <tr><td style="padding:6px 0;color:#64748b">Rector(a)</td><td><b>{_esc(rector_nom)}</b></td></tr>
+            <tr><td style="padding:6px 0;color:#64748b">Municipio / Depto</td><td>{_esc(inst.municipio or '—')}, {_esc(inst.departamento or '—')}</td></tr>
+            <tr><td style="padding:6px 0;color:#64748b">Estado de la plataforma</td><td><span style="background:{estado_color};color:#fff;padding:2px 10px;border-radius:6px;font-weight:700">{_esc(inst.estado or 'ACTIVA')}</span></td></tr>
+            <tr><td style="padding:6px 0;color:#64748b">Plan contratado</td><td><b>{_esc(inst.plan or 'Basico')}</b></td></tr>
+          </table>
+          <p style="margin-top:10px"><a href="/soporte/aprovisionamiento?q={quote(q)}">🛠️ Ir a aprovisionamiento →</a> · <a href="/soporte/bloqueo-seguridad?q={quote(q)}">🔒 Ir a bloqueo/seguridad →</a></p>
+        </div>
+        """
+    content = f"""
+<header class="role-hero"><div><h1>Información Institucional</h1><p>Nombre, DANE, NIT, rector, estado y plan — sin datos financieros</p></div>
+  <a class="btn" href="/soporte_admin">← Panel soporte</a>
+</header>
+<div class="role-panel">
+  <form method="GET" style="display:flex;gap:8px">
+    <input name="q" value="{_esc(q)}" placeholder="Buscar por código DANE, NIT o nombre del colegio" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
+  </form>
+</div>
+{r_html}
+"""
+    return page("Información Institucional", shell_soporte(content))
+
+
+@app.route("/soporte/aprovisionamiento", methods=["GET", "POST"])
+def soporte_aprovisionamiento():
+    """Módulo de Aprovisionamiento Escolar: acciones técnicas de bajo riesgo que un
+    técnico de soporte puede aplicar cuando la plataforma de un colegio se queda
+    pegada, sin tocar facturación ni datos sensibles."""
+    _g = _guard_soporte()
+    if _g is not None:
+        return _g
+    try:
+        _ensure_institucion_seguridad_cols()
+    except Exception:
+        pass
+    inst, q = _buscar_institucion_qs()
+    mensaje = ""
+    if request.method == "POST" and inst:
+        accion = request.form.get("accion", "")
+        if accion == "limpiar_cache":
+            n = LoginChallenge.query.join(Usuario, LoginChallenge.usuario_id == Usuario.id).filter(
+                Usuario.institucion_id == inst.id
+            ).delete(synchronize_session=False)
+            db.session.commit()
+            mensaje = f"Caché de sesión limpiada: {n} reto(s) de login pendientes eliminados para {inst.codigo}."
+            registrar_auditoria("Aprovisionamiento: limpiar caché", f"{inst.codigo} — {n} retos eliminados")
+        elif accion == "resync_alumnos":
+            total = Estudiante.query.filter_by(institucion_id=inst.id).count()
+            inst.ultima_sincronizacion = f"{fecha_hoy()} {hora_actual()}"
+            db.session.commit()
+            mensaje = f"Base de alumnos re-sincronizada: {total} estudiante(s) verificados en {inst.codigo}."
+            registrar_auditoria("Aprovisionamiento: re-sync alumnos", f"{inst.codigo} — {total} estudiantes")
+        elif accion == "reset_permisos_docentes":
+            docentes = Usuario.query.filter_by(institucion_id=inst.id, rol="Docente").all()
+            n = 0
+            for d in docentes:
+                if not d.activo:
+                    d.activo = True
+                    n += 1
+            db.session.query(LoginChallenge).join(Usuario, LoginChallenge.usuario_id == Usuario.id).filter(
+                Usuario.institucion_id == inst.id, Usuario.rol == "Docente"
+            ).delete(synchronize_session=False)
+            db.session.commit()
+            mensaje = f"Permisos de profesores reiniciados: {len(docentes)} docente(s) revisados, {n} reactivado(s)."
+            registrar_auditoria("Aprovisionamiento: reset permisos docentes", f"{inst.codigo} — {n} reactivados")
+
+    r_html = ""
+    if q and not inst:
+        r_html = "<div class='role-panel' style='margin-top:12px'>No se encontró ninguna institución con ese dato.</div>"
+    elif inst:
+        r_html = f"""
+        <div class="role-panel" style="margin-top:12px">
+          <h2>{_esc(inst.nombre)} <span style="font-size:12px;color:#64748b">({_esc(inst.codigo)})</span></h2>
+          <p style="font-size:12px;color:#64748b">Última sincronización: {_esc(inst.ultima_sincronizacion or '—')}</p>
+          {"<div class='msg ok' style='margin-bottom:10px'>"+_esc(mensaje)+"</div>" if mensaje else ""}
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            <form method="POST"><input type="hidden" name="q" value="{_esc(q)}"><input type="hidden" name="accion" value="limpiar_cache">
+              <button style="background:#0f766e;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700">🧹 Limpiar caché del servidor</button></form>
+            <form method="POST"><input type="hidden" name="q" value="{_esc(q)}"><input type="hidden" name="accion" value="resync_alumnos">
+              <button style="background:#1d4ed8;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700">🔄 Re-sincronizar base de alumnos</button></form>
+            <form method="POST"><input type="hidden" name="q" value="{_esc(q)}"><input type="hidden" name="accion" value="reset_permisos_docentes">
+              <button style="background:#7c2d12;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700">👩‍🏫 Reiniciar permisos de profesores</button></form>
+          </div>
+          <p style="font-size:12px;color:#64748b;margin-top:10px">
+            <b>Limpiar caché</b>: borra retos de sesión atascados. <b>Re-sincronizar alumnos</b>: revalida el conteo de estudiantes del colegio. <b>Reiniciar permisos</b>: reactiva docentes desactivados por error y limpia sus sesiones pegadas.
+          </p>
+        </div>
+        """
+    content = f"""
+<header class="role-hero"><div><h1>Aprovisionamiento Escolar</h1><p>Acciones técnicas para destrabar la plataforma de un colegio</p></div>
+  <a class="btn" href="/soporte_admin">← Panel soporte</a>
+</header>
+<div class="role-panel">
+  <form method="GET" style="display:flex;gap:8px">
+    <input name="q" value="{_esc(q)}" placeholder="Buscar por código DANE, NIT o nombre del colegio" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
+  </form>
+</div>
+{r_html}
+"""
+    return page("Aprovisionamiento Escolar", shell_soporte(content))
+
+
+@app.route("/soporte/bloqueo-seguridad", methods=["GET", "POST"])
+def soporte_bloqueo_seguridad():
+    """Módulo de Bloqueo y Seguridad Institucional. Soporte puede bloquear un colegio
+    por ALERTA DE SEGURIDAD (ej. contraseña de un profesor comprometida) — no requiere
+    ver finanzas. El bloqueo por MORA DE PAGO es exclusivo de Gerencia/Cobranza, porque
+    implica conocer el estado de pagos del colegio."""
+    _g = _guard_soporte()
+    if _g is not None:
+        return _g
+    try:
+        _ensure_institucion_seguridad_cols()
+    except Exception:
+        pass
+    puede_mora = rol_actual() in ("Gerente", "Superadmin", "Administrador", "Cobranza")
+    inst, q = _buscar_institucion_qs()
+    mensaje = ""
+    if request.method == "POST" and inst:
+        accion = request.form.get("accion", "")
+        if accion == "bloquear_seguridad":
+            inst.estado = "SUSPENDIDA"
+            inst.tipo_bloqueo = "SEGURIDAD"
+            inst.fecha_suspension = fecha_hoy()
+            inst.motivo_bloqueo = (request.form.get("motivo") or "Alerta de seguridad: acceso comprometido.").strip()
+            db.session.commit()
+            mensaje = f"{inst.codigo} bloqueada por ALERTA DE SEGURIDAD."
+            registrar_auditoria("Bloqueo por seguridad", f"{inst.codigo} — {inst.motivo_bloqueo}")
+        elif accion == "bloquear_mora" and puede_mora:
+            inst.estado = "SUSPENDIDA"
+            inst.tipo_bloqueo = "MORA"
+            inst.fecha_suspension = fecha_hoy()
+            inst.motivo_bloqueo = (request.form.get("motivo") or "Suspensión temporal por mora de pago.").strip()
+            db.session.commit()
+            mensaje = f"{inst.codigo} bloqueada por MORA DE PAGO."
+            registrar_auditoria("Bloqueo por mora", f"{inst.codigo} — {inst.motivo_bloqueo}")
+        elif accion == "reactivar":
+            tipo_actual = (inst.tipo_bloqueo or "").upper()
+            puede_reactivar = (
+                rol_actual() in ("Gerente", "Superadmin", "Administrador")
+                or (tipo_actual == "MORA" and rol_actual() == "Cobranza")
+            )
+            if not puede_reactivar:
+                return acceso_denegado(
+                    "Solo Gerencia puede reactivar un bloqueo por seguridad; Cobranza solo puede reactivar bloqueos por mora."
+                )
+            inst.estado = "ACTIVA"
+            inst.tipo_bloqueo = ""
+            inst.fecha_suspension = ""
+            inst.motivo_bloqueo = ""
+            db.session.commit()
+            mensaje = f"{inst.codigo} reactivada."
+            registrar_auditoria("Reactivación institución", f"{inst.codigo} (bloqueo previo: {tipo_actual or 'N/A'})")
+
+    r_html = ""
+    if q and not inst:
+        r_html = "<div class='role-panel' style='margin-top:12px'>No se encontró ninguna institución con ese dato.</div>"
+    elif inst:
+        bloqueada = (inst.estado or "").upper() == "SUSPENDIDA"
+        tipo_actual = (inst.tipo_bloqueo or "").upper()
+        puede_reactivar_esta = (
+            rol_actual() in ("Gerente", "Superadmin", "Administrador")
+            or (tipo_actual == "MORA" and rol_actual() == "Cobranza")
+        )
+        reactivar_html = (
+            "<form method='POST' style='margin-top:8px'><input type='hidden' name='q' value='"+_esc(q)+"'><input type='hidden' name='accion' value='reactivar'><button style='background:#16a34a;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700'>✔ Reactivar acceso</button></form>"
+            if puede_reactivar_esta else
+            "<p style='font-size:12px;color:#94a3b8;margin-top:8px'>Este bloqueo solo puede reactivarlo "
+            + ("Cobranza o Gerencia (es un bloqueo por mora)." if tipo_actual == "MORA" else "Gerencia.")
+            + "</p>"
+        )
+        mora_btn = (
+            f"<form method='POST'><input type='hidden' name='q' value='{_esc(q)}'><input type='hidden' name='accion' value='bloquear_mora'><input name='motivo' placeholder='Motivo (opcional)' style='padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin-right:6px'><button style='background:#7c2d12;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700'>💰 Bloquear por Mora de Pago</button></form>"
+            if puede_mora else
+            "<p style='font-size:12px;color:#94a3b8'>💰 Bloqueo por Mora de Pago: exclusivo de Gerencia/Cobranza.</p>"
+        )
+        r_html = f"""
+        <div class="role-panel" style="margin-top:12px">
+          <h2>{_esc(inst.nombre)} <span style="font-size:12px;color:#64748b">({_esc(inst.codigo)})</span></h2>
+          {"<div class='msg ok' style='margin-bottom:10px'>"+_esc(mensaje)+"</div>" if mensaje else ""}
+          <p>Estado actual: <b style="color:{'#b91c1c' if bloqueada else '#16a34a'}">{_esc(inst.estado or 'ACTIVA')}</b>
+          {(' · Tipo: <b>'+_esc(inst.tipo_bloqueo)+'</b>') if bloqueada and inst.tipo_bloqueo else ''}
+          {(' · Motivo: '+_esc(inst.motivo_bloqueo)) if bloqueada and inst.motivo_bloqueo else ''}</p>
+          {reactivar_html if bloqueada else f'''
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">
+            <form method="POST"><input type="hidden" name="q" value="{_esc(q)}"><input type="hidden" name="accion" value="bloquear_seguridad"><input name="motivo" placeholder="Motivo (opcional)" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin-right:6px"><button style="background:#b91c1c;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700">🚨 Bloquear por Alerta de Seguridad</button></form>
+            {mora_btn}
+          </div>
+          '''}
+        </div>
+        """
+    content = f"""
+<header class="role-hero"><div><h1>Bloqueo y Seguridad Institucional</h1><p>Suspende el acceso completo de un colegio por seguridad; la mora de pago la gestiona Gerencia/Cobranza</p></div>
+  <a class="btn" href="/soporte_admin">← Panel soporte</a>
+</header>
+<div class="role-panel">
+  <form method="GET" style="display:flex;gap:8px">
+    <input name="q" value="{_esc(q)}" placeholder="Buscar por código DANE, NIT o nombre del colegio" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
+  </form>
+</div>
+{r_html}
+"""
+    return page("Bloqueo y Seguridad", shell_soporte(content))
 
 
 @app.route("/soporte_admin")
@@ -23426,6 +23725,9 @@ def soporte_admin():
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
     <a class="btn" href="/interno/buscar-colegio" style="background:#0B2D57;color:#fff">🔍 Buscar colegio</a>
     <a class="btn" href="/tenants" style="background:#334155;color:#fff">Ver instituciones</a>
+    <a class="btn" href="/soporte/info-institucional" style="background:#1d4ed8;color:#fff">📋 Información institucional</a>
+    <a class="btn" href="/soporte/aprovisionamiento" style="background:#0f766e;color:#fff">🛠️ Aprovisionamiento escolar</a>
+    <a class="btn" href="/soporte/bloqueo-seguridad" style="background:#b91c1c;color:#fff">🔒 Bloqueo y seguridad</a>
   </div>
 </section>
 """
@@ -30670,12 +30972,19 @@ def pqr_colegio():
 
 
 def _gen_radicado_pqr():
-    """Genera radicado 16-dígitos estilo 4331-26-000000001 y ticket de 6 dígitos."""
+    """Genera radicado 16-dígitos estilo 4331-26-000000001 y ticket de 6 dígitos.
+    Reintenta si por azar ya existe (antes solo se revisaba el ticket, no el radicado,
+    lo que podía romper el INSERT con un IntegrityError sin capturar)."""
     import random
     from datetime import datetime
     yy = datetime.now().strftime("%y")
-    seq = random.randint(1, 999999999)
-    rad = f"4331-{yy}-{seq:09d}"
+    tries = 0
+    while True:
+        seq = random.randint(1, 999999999)
+        rad = f"4331-{yy}-{seq:09d}"
+        if not TicketPQR.query.filter_by(radicado=rad).first() or tries >= 20:
+            break
+        tries += 1
     tick = f"{random.randint(100000, 999999)}"
     # evitar colisiones básicas de ticket
     tries = 0
@@ -31972,6 +32281,8 @@ def soporte_pqr_crear():
             numero_documento=(f.get("numero_documento") or "").strip()[:40],
             razon_social=(f.get("razon_social") or "").strip()[:220],
             email=(f.get("email") or "").strip()[:160],
+            direccion=(f.get("direccion") or "").strip()[:255],
+            ciudad=(f.get("ciudad") or "").strip()[:80],
             tipo_pqr=(f.get("tipo_pqr") or "Petición").strip()[:60],
             subtipo=(f.get("subtipo") or "Interna").strip()[:80],
             objeto=(f.get("objeto") or "").strip()[:1500],
@@ -31983,9 +32294,13 @@ def soporte_pqr_crear():
             fecha=fecha_hoy(), hora=hora_actual(),
             creado_por=session.get("usuario") or "soporte",
         )
-        db.session.add(t)
-        db.session.commit()
-        mensaje = f"Radicado interno: {rad}"
+        try:
+            db.session.add(t)
+            db.session.commit()
+            mensaje = f"Radicado interno: {rad}"
+        except Exception as ex:
+            db.session.rollback()
+            mensaje = f"⚠ No se pudo radicar: {ex}. Intente de nuevo."
     content = f"""
 <header class="role-hero"><div><h1>Radicar PQR interna</h1></div><a class="btn" href="/soporte/pqr">Volver</a></header>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
@@ -31994,6 +32309,8 @@ def soporte_pqr_crear():
   <label>Documento / NIT</label><input name="numero_documento" required>
   <label>Razón social</label><input name="razon_social" required>
   <label>Email</label><input name="email" type="email">
+  <label>Dirección / Municipio</label><input name="direccion" placeholder="Dirección y municipio de la institución">
+  <label>Ciudad</label><input name="ciudad">
   <label>Tipo</label><select name="tipo_pqr"><option>Petición</option><option>Queja</option><option>Reclamo</option></select>
   <label>Subtipo</label><input name="subtipo" value="Soporte interno">
   <label>Prioridad</label><select name="prioridad"><option>MEDIA</option><option>ALTA</option><option>CRITICA</option><option>BAJA</option></select>
@@ -32089,7 +32406,7 @@ def pqr_pdf_publico(codigo):
         <div style="max-width:480px;margin:40px auto;font-family:Segoe UI,Arial;padding:24px;background:#fff;border-radius:12px;border:1px solid #e2e8f0">
           <h1 style="color:#0B2D57;font-size:18px">Documento solo por correo</h1>
           <p>La respuesta formal en PDF <b>no se descarga desde la consulta</b>. Se envía únicamente al correo electrónico que registró al radicar la PQR.</p>
-          <p>Si no la recibió, revise spam o solicite reenvío a soporte con su número de ticket o CUN.</p>
+          <p>Si no la recibió, revise spam o solicite reenvío a soporte con su número de ticket o Radicado.</p>
           <p><a href="/pqr/consulta">← Volver a consultar</a></p>
         </div>
         """,
@@ -32130,7 +32447,9 @@ def soporte_pqr_detalle(id):
                 cerrado = (t.estado or "").upper() in ("CERRADA", "CERRADO", "RESUELTA")
                 try:
                     registrar_historial_pqr(t.id, "RESPUESTA" if resp else "ESTADO", resp or f"Estado → {nuevo}", nuevo)
+                    db.session.commit()
                 except Exception as ex:
+                    db.session.rollback()
                     print("historial pqr:", ex)
                 enviar_mail = (request.form.get("enviar_correo") or "") == "1"
                 mail_ok = False
@@ -34077,12 +34396,14 @@ WIN32_TABLE_CSS = """
 """
 
 
-@app.route("/gerencia/almacenamiento")
+@app.route("/gerencia/recursos-financieros")
 def modulo_almacenamiento():
-    """GB por colegio: cuota, usado, disponible. Solo Gerencia (Soporte no debe alterar
-    ni ver espacio de servidores; si un colegio se queda sin espacio, escala a Gerencia)."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
-        if rol_actual() in ("Cobranza", "Soporte"):
+    """Módulo de Recursos Financieros y Consumo — GB por colegio + historial de
+    mensualidades/mora. Exclusivo para Cobranza y Gerencia (Soporte no debe ver ni
+    alterar esto; si un colegio se queda sin espacio o en mora, Soporte escala el
+    caso aquí, no lo resuelve directamente)."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
+        if rol_actual() == "Soporte":
             return redirect(_home_portal(rol_actual()))
         return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
     q = (request.args.get("q") or "").strip()
@@ -34096,6 +34417,13 @@ def modulo_almacenamiento():
         u = _uso_almacenamiento_colegio(inst)
         total_used += u["used_bytes"]
         bar = int(u["pct"])
+        pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
+        venc = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="VENCIDO").all()
+        saldo_mora = sum(float(x.valor or 0) for x in pend) + sum(float(x.valor or 0) for x in venc)
+        mora_txt = (
+            f"<span style='color:#b91c1c;font-weight:700'>{_cop(saldo_mora)}</span>"
+            if saldo_mora else "<span style='color:#166534'>$ 0</span>"
+        )
         filas += (
             f"<tr>"
             f"<td>{i+1}</td>"
@@ -34108,20 +34436,22 @@ def modulo_almacenamiento():
             f"<td>{u['pct']}%"
             f"<div style='height:10px;background:#c0c0c0;border:1px solid #808080;width:80px;display:inline-block;vertical-align:middle;margin-left:6px'>"
             f"<div style='height:100%;width:{bar}%;background:{'#c00' if bar>90 else '#000080'}'></div></div></td>"
+            f"<td>{mora_txt}</td>"
+            f"<td><a href='/gerencia/recursos-financieros/{inst.id}/historial'>Ver historial</a></td>"
             f"</tr>"
         )
     if not filas:
-        filas = "<tr><td colspan='8'>Sin colegios</td></tr>"
+        filas = "<tr><td colspan='9'>Sin colegios</td></tr>"
     total_gb = round(total_used / (1024**3), 3)
     volver = _home_portal()
     content = f"""
 <style>{WIN32_TABLE_CSS}</style>
 <header class="role-hero"><div>
-  <h1>💾 Almacenamiento por colegio</h1>
-  <p>Cuota fija: <b>{ALMACENAMIENTO_GB_POR_COLEGIO} GB</b> por institución · Uso estimado de archivos del tenant</p>
+  <h1>💾 Recursos Financieros y Consumo</h1>
+  <p>Cuota fija: <b>{ALMACENAMIENTO_GB_POR_COLEGIO} GB</b> por institución · Consumo de almacenamiento + mensualidades/mora</p>
 </div><a class="btn" href="{volver}">Volver</a></header>
 <div class="w32-box">
-  <div class="w32-title">Almacenamiento · EduTrack</div>
+  <div class="w32-title">Recursos financieros · EduTrack</div>
   <div class="w32-toolbar">
     <form method="GET" style="display:inline">
       <input class="w32-input" name="q" value="{_esc(q)}" placeholder="Buscar código o nombre">
@@ -34131,14 +34461,47 @@ def modulo_almacenamiento():
   </div>
   <div class="w32-tbl-wrap">
     <table class="w32-tbl">
-      <tr><th>#</th><th>CUENTA</th><th>COLEGIO</th><th>ESTADO</th><th>CUOTA</th><th>USADO</th><th>DISPONIBLE</th><th>CONSUMO</th></tr>
+      <tr><th>#</th><th>CUENTA</th><th>COLEGIO</th><th>ESTADO</th><th>CUOTA</th><th>USADO</th><th>DISPONIBLE</th><th>CONSUMO</th><th>SALDO EN MORA</th><th></th></tr>
       {filas}
     </table>
   </div>
   <div class="w32-status">Listo · Cuota por colegio = {ALMACENAMIENTO_GB_POR_COLEGIO} GB</div>
 </div>
 """
-    return page("Almacenamiento", shell(content))
+    return page("Recursos financieros", shell(content))
+
+
+@app.route("/gerencia/recursos-financieros/<int:iid>/historial")
+def modulo_historial_mensualidades(iid):
+    """Historial de mensualidades pagadas / en mora de un colegio. Exclusivo Cobranza/Gerencia."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
+        if rol_actual() == "Soporte":
+            return redirect(_home_portal(rol_actual()))
+        return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
+    inst = Institucion.query.get_or_404(iid)
+    facturas = FacturaCobro.query.filter_by(institucion_id=iid).order_by(FacturaCobro.ciclo.desc()).all()
+    filas = ""
+    for f in facturas:
+        color = {"PAGADO": "#166534", "VENCIDO": "#b91c1c", "PENDIENTE": "#b45309", "ANULADO": "#64748b"}.get(f.estado, "#334155")
+        filas += (
+            f"<tr><td>{_esc(f.consecutivo)}</td><td>{_esc(f.ciclo)}</td><td>{_esc(f.concepto)}</td>"
+            f"<td>{_cop(f.valor)}</td><td style='color:{color};font-weight:700'>{_esc(f.estado)}</td>"
+            f"<td>{_esc(f.vencimiento)}</td><td>{_esc(f.pagada_en) or '—'}</td></tr>"
+        )
+    if not filas:
+        filas = "<tr><td colspan='7'>Sin facturas registradas</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Historial de mensualidades · {_esc(inst.nombre)}</h1><p>{_esc(inst.codigo)} · NIT {_esc(inst.nit or '—')}</p></div>
+  <a class="btn" href="/gerencia/recursos-financieros">← Volver</a>
+</header>
+<div class="role-panel" style="overflow:auto">
+<table>
+<tr><th>Consecutivo</th><th>Ciclo</th><th>Concepto</th><th>Valor</th><th>Estado</th><th>Vence</th><th>Pagada en</th></tr>
+{filas}
+</table>
+</div>
+"""
+    return page("Historial de mensualidades", shell(content))
 
 
 @app.route("/soporte/reinicio-acceso", methods=["GET", "POST"])
