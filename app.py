@@ -32355,6 +32355,65 @@ _PQR_BUCKETS = {
 }
 
 
+@app.route("/soporte/pqr/probar-correo", methods=["GET", "POST"])
+def soporte_pqr_probar_correo():
+    """Página de prueba: envía un correo de notificación estilo Tigo de verdad, para
+    confirmar que SOPORTE_EMAIL / SOPORTE_PASSWORD están bien conectados en Railway,
+    sin tener que esperar a resolver un ticket real de un colegio."""
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/soporte-login")
+    password_configurada = bool(os.getenv("SOPORTE_PASSWORD", "").strip())
+    base_url_configurada = bool(os.environ.get("APP_BASE_URL", "").strip())
+    mensaje = ""
+    ok = None
+    if request.method == "POST":
+        destino = (request.form.get("destino") or "").strip()
+        if not destino:
+            mensaje = "Escriba un correo destino."
+        else:
+            # Ticket de prueba: no se guarda en la tabla real, solo se usa en memoria
+            # para poder generar el PDF y el link exactamente igual que uno de verdad.
+            t_prueba = TicketPQR(
+                id=999999999, radicado="4331-26-000000000", ticket="000000",
+                razon_social="Colegio de Prueba", email=destino,
+                tipo_pqr="Petición", subtipo="Prueba de envío",
+                objeto="Este es un ticket de prueba para verificar el envío de correo.",
+                estado="RESUELTA", respuesta="Esta es una respuesta de prueba para confirmar que el correo llega correctamente.",
+                descripcion_cierre="Esta es una respuesta de prueba para confirmar que el correo llega correctamente.",
+                fecha=fecha_hoy(), fecha_respuesta=fecha_hoy(),
+                token_notificacion="prueba-" + os.urandom(8).hex(),
+            )
+            try:
+                ok = enviar_notificacion_pqr_estilo_tigo(destino, t_prueba)
+            except Exception as ex:
+                ok = False
+                mensaje = f"Error: {ex}"
+            if ok:
+                mensaje = f"✅ Correo de prueba enviado a {destino}. Revisa la bandeja (y spam)."
+            elif not mensaje:
+                mensaje = "❌ No se pudo enviar. Revisa que SOPORTE_EMAIL y SOPORTE_PASSWORD estén configuradas en Railway."
+    content = f"""
+<header class="role-hero"><div><h1>Probar envío de correo PQR</h1><p>Verifica que el sistema esté conectado a una cuenta real antes de usarlo en producción</p></div>
+  <a class="btn" href="/soporte/pqr">← Centro PQR</a>
+</header>
+<div class="role-panel">
+  <h3 style="margin-top:0">Estado de configuración</h3>
+  <p>SOPORTE_EMAIL: <b>{_esc(SOPORTE_EMAIL)}</b></p>
+  <p>SOPORTE_PASSWORD (contraseña de aplicación): {"<span style='color:#16a34a;font-weight:700'>✅ configurada</span>" if password_configurada else "<span style='color:#b91c1c;font-weight:700'>❌ NO configurada — el envío fallará</span>"}</p>
+  <p>APP_BASE_URL (dominio para que el link del correo apunte a tu sitio real): {"<span style='color:#16a34a;font-weight:700'>✅ configurada</span>" if base_url_configurada else "<span style='color:#b45309;font-weight:700'>⚠ no configurada — usará la URL de esta petición, puede quedar mal en algunos casos</span>"}</p>
+</div>
+{"<div class='msg " + ("ok" if ok else "danger") + "' style='margin-top:12px'>" + mensaje + "</div>" if mensaje else ""}
+<div class="role-panel" style="margin-top:12px">
+  <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap">
+    <input type="email" name="destino" required placeholder="tu-correo@ejemplo.com" style="flex:1;min-width:240px;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Enviar correo de prueba</button>
+  </form>
+  <p style="font-size:12px;color:#64748b;margin-top:10px">Esto NO crea un ticket real — solo envía el mismo diseño de correo con datos ficticios, para que lo veas llegar a tu bandeja.</p>
+</div>
+"""
+    return page("Probar correo PQR", shell(content))
+
+
 @app.route("/soporte/pqr")
 def soporte_pqr_centro():
     if not requiere_login() or rol_actual() != "Soporte":
@@ -32392,6 +32451,7 @@ def soporte_pqr_centro():
 <header class="role-hero"><div><h1>Centro PQR · Soporte</h1><p>Canal interno Procsis</p></div>
   <a class="btn" href="/soporte/pqr/crear">Radicar interna</a>
   <a class="btn" href="/soporte/pqr/consulta">Consulta validada</a>
+  <a class="btn" href="/soporte/pqr/probar-correo" style="background:#0f766e">📧 Probar correo</a>
 </header>
 <div class="role-panel" style="margin-bottom:12px">
   <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
