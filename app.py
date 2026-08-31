@@ -3522,7 +3522,7 @@ def _credenciales_smtp(uso="soporte"):
             return p.smtp_correo.strip(), p.smtp_password.strip()
     except Exception:
         pass
-    return SOPORTE_EMAIL, os.getenv("SOPORTE_PASSWORD", "")
+    return SOPORTE_EMAIL, (os.getenv("SOPORTE_PASSWORD") or os.getenv("SMTP_PASS_SOPORTE") or "")
 
 
 def _logo_ruta_valida(ruta):
@@ -32640,7 +32640,8 @@ def soporte_pqr_probar_correo():
     p = plataforma()
     soporte_conectado = bool((p.smtp_correo or "").strip() and (p.smtp_password or "").strip())
     notif_conectado = bool((p.smtp_notif_correo or "").strip() and (p.smtp_notif_password or "").strip())
-    password_configurada = soporte_conectado or notif_conectado or bool(os.getenv("SOPORTE_PASSWORD", "").strip())
+    env_password = (os.getenv("SOPORTE_PASSWORD") or os.getenv("SMTP_PASS_SOPORTE") or "").strip()
+    password_configurada = soporte_conectado or notif_conectado or bool(env_password)
     base_url_configurada = bool(os.environ.get("APP_BASE_URL", "").strip())
     mensaje = ""
     ok = None
@@ -32649,19 +32650,19 @@ def soporte_pqr_probar_correo():
         if not destino:
             mensaje = "Escriba un correo destino."
         else:
-            # Ticket de prueba: no se guarda en la tabla real, solo se usa en memoria
-            # para poder generar el PDF y el link exactamente igual que uno de verdad.
-            t_prueba = TicketPQR(
-                id=999999999, radicado=f"{ahora().year}99000001", ticket="000000",
-                razon_social="Colegio de Prueba", email=destino,
-                tipo_pqr="Petición", subtipo="Prueba de envío",
-                objeto="Este es un ticket de prueba para verificar el envío de correo.",
-                estado="RESUELTA", respuesta="Esta es una respuesta de prueba para confirmar que el correo llega correctamente.",
-                descripcion_cierre="Esta es una respuesta de prueba para confirmar que el correo llega correctamente.",
-                fecha=fecha_hoy(), fecha_respuesta=fecha_hoy(),
-                token_notificacion="prueba-" + os.urandom(8).hex(),
-            )
             try:
+                # Ticket de prueba: no se guarda en la tabla real, solo se usa en memoria
+                # para poder generar el PDF y el link exactamente igual que uno de verdad.
+                t_prueba = TicketPQR(
+                    radicado=f"{ahora().year}99000001", ticket="000000",
+                    razon_social="Colegio de Prueba", email=destino,
+                    tipo_pqr="Petición", subtipo="Prueba de envío",
+                    objeto="Este es un ticket de prueba para verificar el envío de correo.",
+                    estado="RESUELTA", respuesta="Esta es una respuesta de prueba para confirmar que el correo llega correctamente.",
+                    descripcion_cierre="Esta es una respuesta de prueba para confirmar que el correo llega correctamente.",
+                    fecha=fecha_hoy(), fecha_respuesta=fecha_hoy(),
+                    token_notificacion="prueba-" + os.urandom(8).hex(),
+                )
                 ok = enviar_notificacion_pqr_estilo_tigo(destino, t_prueba)
             except Exception as ex:
                 ok = False
@@ -32669,7 +32670,7 @@ def soporte_pqr_probar_correo():
             if ok:
                 mensaje = f"✅ Correo de prueba enviado a {destino}. Revisa la bandeja (y spam)."
             elif not mensaje:
-                mensaje = "❌ No se pudo enviar. Revisa que SOPORTE_EMAIL y SOPORTE_PASSWORD estén configuradas en Railway."
+                mensaje = "❌ No se pudo enviar. Revisa la conexión de Gmail en /gerencia/correo-soporte."
     content = f"""
 <header class="role-hero"><div><h1>Probar envío de correo PQR</h1><p>Verifica que el sistema esté conectado a una cuenta real antes de usarlo en producción</p></div>
   <a class="btn" href="/soporte/pqr">← Centro PQR</a>
