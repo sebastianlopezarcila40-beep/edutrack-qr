@@ -3528,8 +3528,8 @@ def _credenciales_smtp(uso="soporte"):
 def _smtp_enviar(msg, correo_envio, password):
     """Envía un EmailMessage por Gmail de forma robusta en Railway/cloud.
 
-    Puerto 465 → SMTP_SSL (TLS implícito / "secure").
-    Si falla (firewall, timeout, certificados), reintenta por 587 + STARTTLS.
+    En muchos hosts el puerto 465 se cuelga (WORKER TIMEOUT de Gunicorn ~30s).
+    Por eso se prueba PRIMERO 587 + STARTTLS (timeout corto) y luego 465 SSL.
 
     Requiere contraseña de aplicación de Gmail (no la clave normal de la cuenta).
     """
@@ -3542,19 +3542,11 @@ def _smtp_enviar(msg, correo_envio, password):
     correo_envio = str(correo_envio).strip()
     password = str(password).strip().replace(" ", "")
     ctx = ssl.create_default_context()
-    last_err = None
-    # 1) Puerto 465 — SSL implícito (secure=True)
+    errores = []
+    # Timeout corto: si se cuelga, falla antes del WORKER TIMEOUT de Gunicorn (30s)
+    # 1) Puerto 587 + STARTTLS (recomendado en Railway / cloud)
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=45) as smtp:
-            smtp.login(correo_envio, password)
-            smtp.send_message(msg)
-        return True
-    except Exception as e:
-        last_err = e
-        print("SMTP 465 falló, reintentando 587 STARTTLS:", e)
-    # 2) Puerto 587 — STARTTLS
-    try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=45) as smtp:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=12) as smtp:
             smtp.ehlo()
             smtp.starttls(context=ctx)
             smtp.ehlo()
@@ -3562,9 +3554,22 @@ def _smtp_enviar(msg, correo_envio, password):
             smtp.send_message(msg)
         return True
     except Exception as e:
-        last_err = e
-        print("SMTP 587 también falló:", e)
-    raise RuntimeError(f"No se pudo enviar el correo por Gmail (465/587): {last_err}") from last_err
+        errores.append(f"587 STARTTLS: {type(e).__name__}: {e}")
+        print("SMTP 587 falló:", e)
+    # 2) Puerto 465 — SSL implícito (secure)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=12) as smtp:
+            smtp.login(correo_envio, password)
+            smtp.send_message(msg)
+        return True
+    except Exception as e:
+        errores.append(f"465 SSL: {type(e).__name__}: {e}")
+        print("SMTP 465 falló:", e)
+    raise RuntimeError(
+        "No se pudo enviar el correo por Gmail. "
+        + " | ".join(errores)
+        + " — Use contraseña de aplicación de 16 caracteres y verifique SOPORTE_EMAIL."
+    )
 
 
 
@@ -32699,17 +32704,6 @@ def soporte_pqr_probar_correo():
             mensaje = "Escriba un correo destino."
         else:
             try:
-                # Ticket de prueba: no se guarda en la tabla real, solo se usa en memoria
-                t_prueba = TicketPQR(
-                    radicado=f"{ahora().year}99000001", ticket="000000",
-                    razon_social="Colegio de Prueba", email=destino,
-                    tipo_pqr="Petición", subtipo="Prueba de envío",
-                    objeto="Este es un ticket de prueba para verificar el envío de correo.",
-                    estado="RESUELTA", respuesta="Esta es una respuesta de prueba para confirmar que el correo llega correctamente.",
-                    descripcion_cierre="Esta es una respuesta de prueba para confirmar que el correo llega correctamente.",
-                    fecha=fecha_hoy(), fecha_respuesta=fecha_hoy(),
-                    token_notificacion="prueba-" + os.urandom(8).hex(),
-                )
                 correo_envio, password = _credenciales_smtp("notificaciones")
                 if not correo_envio or not password:
                     ok = False
@@ -32719,24 +32713,32 @@ def soporte_pqr_probar_correo():
                         "SOPORTE_PASSWORD (contraseña de aplicación de 16 caracteres) en Railway."
                     )
                 else:
-                    ok = enviar_notificacion_pqr_estilo_tigo(destino, t_prueba)
-                    if not ok:
-                        try:
-                            from email.message import EmailMessage as _EM
-                            _m = _EM()
-                            _m["Subject"] = "EduTrack · Prueba SMTP"
-                            _m["From"] = correo_envio
-                            _m["To"] = destino
-                            _m.set_content("Correo de prueba EduTrack (diagnóstico SMTP).")
-                            _smtp_enviar(_m, correo_envio, password)
-                            ok = True
-                        except Exception as smtp_ex:
-                            ok = False
-                            mensaje = f"❌ Error SMTP: {smtp_ex}"
+                    # Envío simple y rápido (sin plantilla pesada) para no superar el timeout de Gunicorn
+                    from email.message import EmailMessage as _EM
+                    _m = _EM()
+                    _m["Subject"] = "EduTrack · Prueba de correo OK"
+                    _m["From"] = correo_envio
+                    _m["To"] = destino
+                    _m.set_content(
+                        "Este es un correo de prueba de EduTrack.\n"
+                        "Si lo recibes, la conexión SMTP (Gmail) está bien configurada.\n"
+                        f"Remitente: {correo_envio}\n"
+                    )
+                    _m.add_alternative(
+                        f"<div style='font-family:Segoe UI,Arial;padding:20px'>"
+                        f"<h2 style='color:#0B2D57'>Prueba de correo OK</h2>"
+                        f"<p>Si ves este mensaje, SMTP de Gmail funciona en Railway.</p>"
+                        f"<p style='color:#64748b;font-size:13px'>Remitente: {correo_envio}</p>"
+                        f"</div>",
+                        subtype="html",
+                    )
+                    _smtp_enviar(_m, correo_envio, password)
+                    ok = True
+                    mensaje = f"✅ Correo de prueba enviado a {destino} desde {correo_envio}. Revisa bandeja y spam."
             except Exception as ex:
                 ok = False
-                mensaje = f"Error: {ex}"
-            if ok:
+                mensaje = f"❌ Error SMTP: {ex}"
+            if ok and not mensaje:
                 mensaje = f"✅ Correo de prueba enviado a {destino}. Revisa la bandeja (y spam)."
             elif not mensaje:
                 mensaje = "❌ No se pudo enviar. Revisa la conexión de Gmail en /gerencia/correo-soporte."
