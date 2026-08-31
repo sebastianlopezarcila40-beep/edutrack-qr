@@ -2255,7 +2255,7 @@ def shell(content):
     """Layout ejecutivo: barra superior + iconos horizontales (sin menú lateral)."""
     if rol_actual() == "Soporte":
         return shell_soporte(content)
-    logo = logo_actual()
+    logo = logo_plataforma()  # panel administrativo = marca Procsis, nunca el logo del colegio
     usuario = (session.get("usuario") or "").upper()
     rol = rol_actual() or "Sin rol"
     items = menu_items_por_rol()
@@ -13412,13 +13412,12 @@ def _guard_soporte():
         return redirect("/soporte-login")
     rol = rol_actual()
     # Portal Soporte SOLO para rol Soporte (y Superadmin emergencia).
-    # Gerencia / Cobranza / Ventas NO deben ver este portal.
-    if rol == "Cobranza":
-        return redirect("/cobranza/panel")
-    if rol == "Comercial":
-        return redirect("/ventas/panel")
-    if rol in ("Gerente", "Administrador"):
-        return redirect("/gerencia/hq")
+    # Si hay otro rol logueado (misma pestaña o navegador), lo mandamos al LOGIN de
+    # soporte (no de vuelta a su propio portal) para que pueda entrar con esas
+    # credenciales si de verdad quiere cambiar de portal — así no se siente "atrapado"
+    # en su rol actual al abrir otra pestaña.
+    if rol in ("Cobranza", "Comercial", "Gerente", "Administrador"):
+        return redirect("/soporte-login")
     if rol not in ("Soporte", "Superadmin"):
         return redirect("/soporte-login")
     # Soporte (rol exacto) tiene acceso a módulos operativos de soporte (tickets, usuarios,
@@ -13456,13 +13455,8 @@ def _guard_gerencia():
         return redirect("/gerencia-login")
     rol = rol_actual()
     if rol not in ("Gerente", "Superadmin", "Administrador"):
-        # Evitar cruce de paneles
-        if rol == "Comercial":
-            return redirect("/ventas/panel")
-        if rol == "Soporte":
-            return redirect("/soporte_admin")
-        if rol == "Cobranza":
-            return redirect("/cobranza/panel")
+        # Igual que en Soporte: mandar al LOGIN del portal que se intenta abrir, no de
+        # vuelta al portal actual — así se puede cambiar de rol abriendo otra pestaña.
         return redirect("/gerencia-login")
     return None
 
@@ -13662,6 +13656,19 @@ def _aislar_paneles_internos():
 
     home = _home_portal(rol)
 
+    def _login_del_portal(p):
+        """Si p pertenece a otro portal interno, da el login de ESE portal (para poder
+        cambiar de rol abriendo otra pestaña) en vez de rebotar siempre al portal actual."""
+        if p.startswith("/gerencia"):
+            return "/gerencia-login"
+        if p.startswith("/soporte_admin") or p.startswith("/soporte"):
+            return "/soporte-login"
+        if p.startswith("/ventas"):
+            return "/ventas-login"
+        if p.startswith("/cobranza"):
+            return "/cobranza-login"
+        return home
+
     # Rutas de colegio: staff no debe entrar al dashboard escolar
     if path in ("/dashboard", "/estudiantes", "/reportes", "/usuarios") or path.startswith("/familia"):
         # /usuarios lo usa soporte: permitir solo Soporte/Gerente
@@ -13689,15 +13696,15 @@ def _aislar_paneles_internos():
         if not permitido and (path.startswith("/gerencia") or path.startswith("/soporte")
                               or path.startswith("/cobranza") or path.startswith("/soporte_admin")
                               or path.startswith("/tenants")):
-            return redirect(home)
+            return redirect(_login_del_portal(path))
         if path.startswith("/gerencia") or path.startswith("/soporte_admin") or path.startswith("/cobranza"):
-            return redirect(home)
+            return redirect(_login_del_portal(path))
 
     elif rol == "Soporte":
         if (path.startswith("/ventas/panel") or path.startswith("/ventas/comisiones")
                 or path.startswith("/cobranza") or path.startswith("/gerencia/")
                 or path == "/gerencia" or path == "/gerencia/hq"):
-            return redirect(home)
+            return redirect(_login_del_portal(path))
 
     elif rol == "Cobranza":
         ok_cob = (
@@ -13713,18 +13720,18 @@ def _aislar_paneles_internos():
         )
         # Bloquear resto de soporte técnico y HQ gerencia
         if path.startswith("/soporte") and not path.startswith("/soporte/reinicio-acceso"):
-            return redirect(home)
+            return redirect(_login_del_portal(path))
         if path.startswith("/soporte_admin") or path.startswith("/ventas"):
-            return redirect(home)
+            return redirect(_login_del_portal(path))
         if path.startswith("/gerencia/") and not path.startswith("/gerencia/facturacion"):
-            return redirect(home)
+            return redirect(_login_del_portal(path))
         if not ok_cob and path.startswith("/gerencia"):
-            return redirect(home)
+            return redirect(_login_del_portal(path))
 
     elif rol in ("Gerente", "Superadmin", "Administrador"):
         # Gerencia NO opera el panel de ventas ni soporte_admin como home ajeno
         if path.startswith("/ventas/panel") or path.startswith("/ventas/comisiones"):
-            return redirect(home)
+            return redirect(_login_del_portal(path))
         if path.startswith("/cobranza/panel") or path == "/cobranza":
             # cobranza panel es para rol Cobranza; gerencia usa /gerencia/facturacion-cobranza
             return redirect("/gerencia/facturacion-cobranza")
