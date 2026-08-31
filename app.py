@@ -3525,6 +3525,50 @@ def _credenciales_smtp(uso="soporte"):
     return SOPORTE_EMAIL, (os.getenv("SOPORTE_PASSWORD") or os.getenv("SMTP_PASS_SOPORTE") or "")
 
 
+def _smtp_enviar(msg, correo_envio, password):
+    """Envía un EmailMessage por Gmail de forma robusta en Railway/cloud.
+
+    Puerto 465 → SMTP_SSL (TLS implícito / "secure").
+    Si falla (firewall, timeout, certificados), reintenta por 587 + STARTTLS.
+
+    Requiere contraseña de aplicación de Gmail (no la clave normal de la cuenta).
+    """
+    import ssl
+    if not correo_envio or not password:
+        raise RuntimeError(
+            "Faltan credenciales SMTP. Conecte el correo en /gerencia/correo-soporte "
+            "o defina SOPORTE_EMAIL y SOPORTE_PASSWORD (contraseña de aplicación) en Railway."
+        )
+    correo_envio = str(correo_envio).strip()
+    password = str(password).strip().replace(" ", "")
+    ctx = ssl.create_default_context()
+    last_err = None
+    # 1) Puerto 465 — SSL implícito (secure=True)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=45) as smtp:
+            smtp.login(correo_envio, password)
+            smtp.send_message(msg)
+        return True
+    except Exception as e:
+        last_err = e
+        print("SMTP 465 falló, reintentando 587 STARTTLS:", e)
+    # 2) Puerto 587 — STARTTLS
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=45) as smtp:
+            smtp.ehlo()
+            smtp.starttls(context=ctx)
+            smtp.ehlo()
+            smtp.login(correo_envio, password)
+            smtp.send_message(msg)
+        return True
+    except Exception as e:
+        last_err = e
+        print("SMTP 587 también falló:", e)
+    raise RuntimeError(f"No se pudo enviar el correo por Gmail (465/587): {last_err}") from last_err
+
+
+
+
 def _logo_ruta_valida(ruta):
     """Devuelve la ruta web si el archivo existe, http(s), o data:; si no, fallback SVG."""
     ruta = (ruta or "").strip()
@@ -4798,11 +4842,15 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
             f"Por favor no respondas este mensaje.\n{empresa} · {producto}"
         )
         msg.add_alternative(html, subtype="html")
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(correo_envio, password)
-            smtp.send_message(msg)
+        _smtp_enviar(msg, correo_envio, password)
         t.notificacion_enviada_en = f"{fecha_hoy()} {hora_actual()}"
-        db.session.commit()
+        # Solo persistir si el ticket ya existe en BD (evitar commit de tickets de prueba en memoria)
+        if getattr(t, "id", None):
+            try:
+                db.session.commit()
+            except Exception as ce:
+                db.session.rollback()
+                print("PQR notificación: no se pudo guardar notificacion_enviada_en:", ce)
         return True
     except Exception as e:
         print("PQR notificación estilo Tigo error:", e)
@@ -4920,9 +4968,7 @@ def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
             )
         except Exception as ex:
             print("adjunto PDF PQR:", ex)
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(correo_envio, password)
-            smtp.send_message(msg)
+        _smtp_enviar(msg, correo_envio, password)
         return True
     except Exception as e:
         print("PQR respuesta email error:", e)
@@ -5161,9 +5207,7 @@ def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO
         msg["To"] = destino
         msg.set_content(f"Su PQR fue radicada. Número de Radicado: {radicado_fmt}. Ticket: {ticket}. Respuesta aprox. 5 días hábiles.")
         msg.add_alternative(html, subtype="html")
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(correo_envio, password)
-            smtp.send_message(msg)
+        _smtp_enviar(msg, correo_envio, password)
         return True
     except Exception as e:
         print("PQR email error:", e)
@@ -5541,8 +5585,7 @@ def enviar_pin(correo_destino, pin):
     msg = EmailMessage(); msg["Subject"] = "PIN de recuperación - EduTrack"; msg["From"] = SOPORTE_EMAIL; msg["To"] = correo_destino
     msg.set_content(f"Tu PIN de recuperación es: {pin}\nEste PIN vence en 2 minutos.\n{APP_NAME}")
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(SOPORTE_EMAIL, SOPORTE_PASSWORD); smtp.send_message(msg)
+        _smtp_enviar(msg, SOPORTE_EMAIL, SOPORTE_PASSWORD)
         return True
     except Exception as e:
         print("ERROR PIN:", e); return False
@@ -17440,9 +17483,7 @@ def _notificar_gerencia_verificacion(asunto, motivo, v):
             f"Asesor: {v.consultado_por}\nFecha: {v.fecha} {v.hora}\n\n"
             f"Ingresa a Ventas → Verificación de identidad para revisar y aprobar."
         )
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(correo_envio, password)
-            smtp.send_message(msg)
+        _smtp_enviar(msg, correo_envio, password)
         return True
     except Exception as e:
         print("Notificación a Gerencia error:", e)
@@ -32659,7 +32700,6 @@ def soporte_pqr_probar_correo():
         else:
             try:
                 # Ticket de prueba: no se guarda en la tabla real, solo se usa en memoria
-                # para poder generar el PDF y el link exactamente igual que uno de verdad.
                 t_prueba = TicketPQR(
                     radicado=f"{ahora().year}99000001", ticket="000000",
                     razon_social="Colegio de Prueba", email=destino,
@@ -32670,7 +32710,29 @@ def soporte_pqr_probar_correo():
                     fecha=fecha_hoy(), fecha_respuesta=fecha_hoy(),
                     token_notificacion="prueba-" + os.urandom(8).hex(),
                 )
-                ok = enviar_notificacion_pqr_estilo_tigo(destino, t_prueba)
+                correo_envio, password = _credenciales_smtp("notificaciones")
+                if not correo_envio or not password:
+                    ok = False
+                    mensaje = (
+                        "❌ Faltan credenciales. Conecte Gmail en /gerencia/correo-soporte "
+                        "o /gerencia/correo-notificaciones, o defina SOPORTE_EMAIL y "
+                        "SOPORTE_PASSWORD (contraseña de aplicación de 16 caracteres) en Railway."
+                    )
+                else:
+                    ok = enviar_notificacion_pqr_estilo_tigo(destino, t_prueba)
+                    if not ok:
+                        try:
+                            from email.message import EmailMessage as _EM
+                            _m = _EM()
+                            _m["Subject"] = "EduTrack · Prueba SMTP"
+                            _m["From"] = correo_envio
+                            _m["To"] = destino
+                            _m.set_content("Correo de prueba EduTrack (diagnóstico SMTP).")
+                            _smtp_enviar(_m, correo_envio, password)
+                            ok = True
+                        except Exception as smtp_ex:
+                            ok = False
+                            mensaje = f"❌ Error SMTP: {smtp_ex}"
             except Exception as ex:
                 ok = False
                 mensaje = f"Error: {ex}"
