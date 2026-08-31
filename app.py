@@ -15302,12 +15302,6 @@ def gerencia_login():
 
 
 
-@app.route("/gerencia")
-@app.route("/gerencia")
-@app.route("/gerencia")
-@app.route("/gerencia/hq")
-
-
 @app.route("/gerencia/verificaciones-pendientes")
 def gerencia_verificaciones_pendientes():
     """Bandeja de casos de Ventas que necesitan aprobación de Gerencia: alertas OFAC
@@ -15347,6 +15341,8 @@ def gerencia_verificaciones_pendientes():
     return page("Verificaciones pendientes", shell(content))
 
 
+@app.route("/gerencia")
+@app.route("/gerencia/hq")
 def gerencia_hq():
     """EduTrack HQ — indicadores financieros, crecimiento, producto y control del dueño."""
     try:
@@ -15479,6 +15475,8 @@ def gerencia_hq():
         <a href="/auditoria">Auditoría</a>
         <a class="t" href="/gerencia/lideres">Líderes / equipo web</a>
         <a class="a" href="/gerencia/anuncios">📢 Anuncios institucionales</a>
+        <a class="own" href="/gerencia/correo-soporte">📧 Conectar Gmail · Soporte</a>
+        <a class="own" href="/gerencia/correo-notificaciones">📧 Conectar Gmail · Notificaciones</a>
       </div>
     </div>
 
@@ -15496,6 +15494,8 @@ def gerencia_hq():
         <a class="own" href="/gerencia/facturacion-auto-test">⏱ Facturación auto (5 min)</a>
         <a class="own" href="/gerencia/planes">Aprobar precios y planes</a>
         <a class="own" href="/gerencia/tesoreria">Cuentas bancarias y pasarelas</a>
+        <a class="own" href="/gerencia/correo-soporte">📧 Conectar Gmail · Soporte</a>
+        <a class="own" href="/gerencia/correo-notificaciones">📧 Conectar Gmail · Notificaciones automáticas</a>
         <a class="own" href="/gerencia/descuentos">Descuentos especiales</a>
         <a class="own" href="/gerencia/lideres">Equipo directivo (web)</a>
         <a class="own" href="/gerencia/web-corporativa">Web corporativa</a>
@@ -17405,7 +17405,6 @@ def _consultar_ofac(nombre_completo):
         return False, f"⚠ No se pudo consultar OFAC automáticamente ({str(ex)[:80]}). Verifique manualmente en sanctionssearch.ofac.treas.gov"
 
 
-@app.route("/ventas/verificacion", methods=["GET", "POST"])
 def _notificar_gerencia_verificacion(asunto, motivo, v):
     """Avisa por correo a todos los usuarios Gerente/Superadmin/Administrador que
     tengan correo registrado, cuando Ventas marca un caso que necesita revisión
@@ -17443,6 +17442,7 @@ def _notificar_gerencia_verificacion(asunto, motivo, v):
         return False
 
 
+@app.route("/ventas/verificacion", methods=["GET", "POST"])
 def ventas_verificacion_rector():
     """Submódulo de verificación de identidad y antecedentes del rector, integrado al
     panel de ventas para no tener que salir a buscar en otras ventanas. Combina:
