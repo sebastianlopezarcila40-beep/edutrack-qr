@@ -15308,6 +15308,45 @@ def gerencia_login():
 @app.route("/gerencia/hq")
 
 
+@app.route("/gerencia/verificaciones-pendientes")
+def gerencia_verificaciones_pendientes():
+    """Bandeja de casos de Ventas que necesitan aprobación de Gerencia: alertas OFAC
+    sin resolver o rectores marcados como PEP sin aprobar."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    pendientes = VerificacionRector.query.filter(
+        db.or_(
+            db.and_(VerificacionRector.ofac_alerta == True),
+            db.and_(VerificacionRector.es_pep == True, VerificacionRector.pep_aprobado_por == ""),
+        )
+    ).order_by(VerificacionRector.id.desc()).all()
+    filas = ""
+    for v in pendientes:
+        motivo = []
+        if v.ofac_alerta:
+            motivo.append("🔴 Alerta OFAC")
+        if v.es_pep and not v.pep_aprobado_por:
+            motivo.append("🟡 PEP sin aprobar")
+        filas += (
+            f"<tr><td>{v.fecha} {v.hora}</td><td>{_esc(v.nombre_rector)}<br><span class='mini-text'>CC {_esc(v.cedula_rector)}</span></td>"
+            f"<td>{_esc(v.nombre_colegio)}<br><span class='mini-text'>NIT {_esc(v.nit_colegio)}</span></td>"
+            f"<td>{' / '.join(motivo)}</td><td>{_esc(v.consultado_por)}</td>"
+            f"<td><a href='/ventas/verificacion'>Revisar en Ventas →</a></td></tr>"
+        )
+    if not filas:
+        filas = "<tr><td colspan='6' style='text-align:center;color:#64748b;padding:14px'>No hay casos pendientes 🎉</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Verificaciones pendientes de Gerencia</h1><p>Alertas OFAC y casos PEP marcados por Ventas que necesitan tu revisión</p></div>
+  <a class="btn" href="/gerencia/hq">← HQ</a>
+</header>
+<div class="role-panel" style="overflow:auto">
+<table><tr><th>Fecha</th><th>Rector</th><th>Colegio</th><th>Motivo</th><th>Asesor</th><th></th></tr>{filas}</table>
+</div>
+"""
+    return page("Verificaciones pendientes", shell(content))
+
+
 def gerencia_hq():
     """EduTrack HQ — indicadores financieros, crecimiento, producto y control del dueño."""
     try:
@@ -15346,6 +15385,21 @@ def gerencia_hq():
             hoy_txt = hoy_txt.replace(en, es)
     except Exception:
         hoy_txt = m.get("mes") or ""
+    try:
+        n_pendientes = VerificacionRector.query.filter(
+            db.or_(
+                VerificacionRector.ofac_alerta == True,
+                db.and_(VerificacionRector.es_pep == True, VerificacionRector.pep_aprobado_por == ""),
+            )
+        ).count()
+    except Exception:
+        n_pendientes = 0
+    aviso_pendientes = (
+        f"<div style='background:#fee2e2;border:2px solid #dc2626;padding:14px;border-radius:10px;margin-bottom:14px'>"
+        f"<b style='color:#991b1b'>⚠️ {n_pendientes} verificación(es) de Ventas esperando tu aprobación</b> "
+        f"(alerta OFAC o rector marcado como PEP). <a href='/gerencia/verificaciones-pendientes' style='font-weight:700;color:#991b1b'>Revisar ahora →</a>"
+        f"</div>" if n_pendientes else ""
+    )
     body = f"""
 <style>
 .hq{{background:#eef2f6;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}}
@@ -15409,6 +15463,7 @@ def gerencia_hq():
     </div>
   </header>
   <div class="hq-wrap">
+    {aviso_pendientes}
 
     <div class="sec">
       <h2>Módulos operativos</h2>
@@ -17351,6 +17406,43 @@ def _consultar_ofac(nombre_completo):
 
 
 @app.route("/ventas/verificacion", methods=["GET", "POST"])
+def _notificar_gerencia_verificacion(asunto, motivo, v):
+    """Avisa por correo a todos los usuarios Gerente/Superadmin/Administrador que
+    tengan correo registrado, cuando Ventas marca un caso que necesita revisión
+    (alerta OFAC o PEP). Usa la cuenta de correo de Soporte ya conectada."""
+    correo_envio, password = _credenciales_smtp("soporte")
+    if not correo_envio or not password:
+        print("Notificación a Gerencia: falta conectar el correo de Soporte")
+        return False
+    destinatarios = [
+        u.correo.strip() for u in Usuario.query.filter(
+            Usuario.rol.in_(["Gerente", "Superadmin", "Administrador"])
+        ).all() if (u.correo or "").strip()
+    ]
+    if not destinatarios:
+        print("Notificación a Gerencia: ningún Gerente/Superadmin tiene correo registrado")
+        return False
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = f"⚠️ {asunto} · {v.nombre_rector or ''}"
+        msg["From"] = correo_envio
+        msg["To"] = ", ".join(destinatarios)
+        msg.set_content(
+            f"{motivo}\n\n"
+            f"Rector: {v.nombre_rector}\nCédula: {v.cedula_rector}\n"
+            f"Colegio: {v.nombre_colegio} (NIT {v.nit_colegio})\n"
+            f"Asesor: {v.consultado_por}\nFecha: {v.fecha} {v.hora}\n\n"
+            f"Ingresa a Ventas → Verificación de identidad para revisar y aprobar."
+        )
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(correo_envio, password)
+            smtp.send_message(msg)
+        return True
+    except Exception as e:
+        print("Notificación a Gerencia error:", e)
+        return False
+
+
 def ventas_verificacion_rector():
     """Submódulo de verificación de identidad y antecedentes del rector, integrado al
     panel de ventas para no tener que salir a buscar en otras ventanas. Combina:
@@ -17382,6 +17474,15 @@ def ventas_verificacion_rector():
             db.session.add(v)
             db.session.commit()
             registrar_auditoria("Verificación rector iniciada", f"{nombre} / CC {cedula} / colegio {colegio}")
+            if alerta_ofac:
+                try:
+                    _notificar_gerencia_verificacion(
+                        "Alerta OFAC requiere verificación de Gerencia",
+                        "Ventas encontró una posible coincidencia en la lista OFAC al verificar un rector. El caso queda bloqueado hasta que Gerencia lo revise.",
+                        v,
+                    )
+                except Exception as ex:
+                    print("notificar OFAC:", ex)
             resultado = v
         elif accion == "marcar_pep":
             vid = request.form.get("vid")
@@ -17390,6 +17491,14 @@ def ventas_verificacion_rector():
                 v.es_pep = True
                 db.session.commit()
                 registrar_auditoria("Rector marcado como PEP", f"{v.nombre_rector} — pendiente de aprobación de Gerencia")
+                try:
+                    _notificar_gerencia_verificacion(
+                        "Rector marcado como PEP — requiere tu aprobación",
+                        "Un asesor de Ventas marcó a este rector como Persona Expuesta Políticamente (PEP). El contrato queda bloqueado hasta que Gerencia lo apruebe.",
+                        v,
+                    )
+                except Exception as ex:
+                    print("notificar PEP:", ex)
             resultado = v
         elif accion == "aprobar_pep":
             if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
