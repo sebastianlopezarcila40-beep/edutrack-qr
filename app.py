@@ -984,6 +984,20 @@ class Plataforma(db.Model):
     contacto_publico_email = db.Column(db.String(120), default="")
     contacto_whatsapp_ventas = db.Column(db.String(40), default="")
     contacto_whatsapp_soporte = db.Column(db.String(40), default="")
+    # Conexión de correo saliente (Gmail con contraseña de aplicación) — reemplaza a
+    # las variables de entorno SOPORTE_EMAIL/SOPORTE_PASSWORD para poder conectarla
+    # desde el panel sin tocar Railway, igual que la conexión de Wompi/tesorería.
+    smtp_correo = db.Column(db.String(160), default="")
+    smtp_password = db.Column(db.String(255), default="")  # contraseña de aplicación de Gmail
+    smtp_conectado_por = db.Column(db.String(120), default="")
+    smtp_conectado_en = db.Column(db.String(20), default="")
+    # Segunda cuenta, exclusiva para el envío masivo/automático de notificaciones de
+    # PQR (separada de la cuenta general de soporte para no saturarla ni arriesgar
+    # que Gmail la marque como spam por volumen).
+    smtp_notif_correo = db.Column(db.String(160), default="")
+    smtp_notif_password = db.Column(db.String(255), default="")
+    smtp_notif_conectado_por = db.Column(db.String(120), default="")
+    smtp_notif_conectado_en = db.Column(db.String(20), default="")
     horario_lunes = db.Column(db.String(80), default="8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
     horario_semana = db.Column(db.String(80), default="7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
     soporte_mensaje = db.Column(db.Text, default="")
@@ -2615,6 +2629,14 @@ def migrar_columnas():
         ("plataforma", "contacto_publico_email", "ALTER TABLE plataforma ADD COLUMN contacto_publico_email VARCHAR(120) DEFAULT ''"),
         ("plataforma", "contacto_whatsapp_ventas", "ALTER TABLE plataforma ADD COLUMN contacto_whatsapp_ventas VARCHAR(40) DEFAULT ''"),
         ("plataforma", "contacto_whatsapp_soporte", "ALTER TABLE plataforma ADD COLUMN contacto_whatsapp_soporte VARCHAR(40) DEFAULT ''"),
+        ("plataforma", "smtp_correo", "ALTER TABLE plataforma ADD COLUMN smtp_correo VARCHAR(160) DEFAULT ''"),
+        ("plataforma", "smtp_password", "ALTER TABLE plataforma ADD COLUMN smtp_password VARCHAR(255) DEFAULT ''"),
+        ("plataforma", "smtp_conectado_por", "ALTER TABLE plataforma ADD COLUMN smtp_conectado_por VARCHAR(120) DEFAULT ''"),
+        ("plataforma", "smtp_conectado_en", "ALTER TABLE plataforma ADD COLUMN smtp_conectado_en VARCHAR(20) DEFAULT ''"),
+        ("plataforma", "smtp_notif_correo", "ALTER TABLE plataforma ADD COLUMN smtp_notif_correo VARCHAR(160) DEFAULT ''"),
+        ("plataforma", "smtp_notif_password", "ALTER TABLE plataforma ADD COLUMN smtp_notif_password VARCHAR(255) DEFAULT ''"),
+        ("plataforma", "smtp_notif_conectado_por", "ALTER TABLE plataforma ADD COLUMN smtp_notif_conectado_por VARCHAR(120) DEFAULT ''"),
+        ("plataforma", "smtp_notif_conectado_en", "ALTER TABLE plataforma ADD COLUMN smtp_notif_conectado_en VARCHAR(20) DEFAULT ''"),
         ("plataforma", "corp_tag", "ALTER TABLE plataforma ADD COLUMN corp_tag VARCHAR(120) DEFAULT 'SOLUCIONES DIGITALES · COLOMBIA'"),
         ("plataforma", "corp_hero_titulo", "ALTER TABLE plataforma ADD COLUMN corp_hero_titulo VARCHAR(255) DEFAULT ''"),
         ("plataforma", "corp_hero_texto", "ALTER TABLE plataforma ADD COLUMN corp_hero_texto TEXT DEFAULT ''"),
@@ -3481,7 +3503,26 @@ def plataforma():
         x.hero_chip = "Plataforma institucional · Acceso seguro"
         x.hero_titulo = "Tecnología educativa con control y transparencia"
         x.hero_texto = ""
+        x.smtp_correo = x.smtp_password = x.smtp_notif_correo = x.smtp_notif_password = ""
         return x
+
+
+def _credenciales_smtp(uso="soporte"):
+    """Resuelve (correo, password) para enviar correo por Gmail. Primero mira la
+    conexión guardada en el panel (Plataforma, editable desde /gerencia/correo-soporte
+    y /gerencia/correo-notificaciones — igual al patrón de Wompi); si no hay nada
+    conectado ahí, cae a las variables de entorno SOPORTE_EMAIL/SOPORTE_PASSWORD de
+    Railway como respaldo. uso: "soporte" (correos generales) | "notificaciones"
+    (avisos automáticos masivos de PQR resueltas)."""
+    try:
+        p = plataforma()
+        if uso == "notificaciones" and (p.smtp_notif_correo or "").strip() and (p.smtp_notif_password or "").strip():
+            return p.smtp_notif_correo.strip(), p.smtp_notif_password.strip()
+        if (p.smtp_correo or "").strip() and (p.smtp_password or "").strip():
+            return p.smtp_correo.strip(), p.smtp_password.strip()
+    except Exception:
+        pass
+    return SOPORTE_EMAIL, os.getenv("SOPORTE_PASSWORD", "")
 
 
 def _logo_ruta_valida(ruta):
@@ -4690,11 +4731,11 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     etc.): un aviso corto con botón 'Ver respuesta' que lleva a una página del propio
     sistema donde el cliente ve los datos de su PQR y descarga el PDF — en vez de
     mandar el PDF pesado directo por correo."""
-    if not destino or not SOPORTE_EMAIL:
+    if not destino:
         return False
-    password = os.getenv("SOPORTE_PASSWORD", "")
-    if not password:
-        print("PQR notificación email: falta SOPORTE_PASSWORD")
+    correo_envio, password = _credenciales_smtp("notificaciones")
+    if not correo_envio or not password:
+        print("PQR notificación email: falta conectar el correo de notificaciones (o SOPORTE_PASSWORD)")
         return False
     token = _asegurar_token_pqr(t)
     base_url = (os.environ.get("APP_BASE_URL") or request.url_root or "").rstrip("/")
@@ -4747,18 +4788,18 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
 """
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"{producto} · Tenemos la respuesta a tu solicitud Radicado No. {t.radicado or t.nro_cun}"
-        msg["From"] = SOPORTE_EMAIL
+        msg["Subject"] = f"{producto} · Tenemos la respuesta a tu solicitud Radicado No. {formatear_radicado(t.radicado or t.nro_cun)}"
+        msg["From"] = correo_envio
         msg["To"] = destino
         msg.set_content(
             f"Hola {nombre},\n\n"
-            f"Te compartimos la respuesta a tu solicitud (Radicado No. {t.radicado}).\n"
+            f"Te compartimos la respuesta a tu solicitud (Radicado No. {formatear_radicado(t.radicado)}).\n"
             f"Consúltala en: {link}\n\n"
             f"Por favor no respondas este mensaje.\n{empresa} · {producto}"
         )
         msg.add_alternative(html, subtype="html")
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(SOPORTE_EMAIL, password)
+            smtp.login(correo_envio, password)
             smtp.send_message(msg)
         t.notificacion_enviada_en = f"{fecha_hoy()} {hora_actual()}"
         db.session.commit()
@@ -4792,8 +4833,8 @@ def pqr_notificacion_publica(token):
   <div style="max-width:900px;margin:0 auto;padding:24px;display:grid;grid-template-columns:280px 1fr;gap:20px">
     <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e2e8f0">
       <h3 style="margin:0 0 12px">Información de PQR:</h3>
-      <p style="font-size:13px"><b>Radicado:</b><br>{_esc(t.radicado or t.nro_cun or '—')}</p>
-      <p style="font-size:13px"><b>Asunto:</b><br>Respuesta Radicado: {_esc(t.radicado or '—')}</p>
+      <p style="font-size:13px"><b>Radicado:</b><br>{_esc(formatear_radicado(t.radicado or t.nro_cun))}</p>
+      <p style="font-size:13px"><b>Asunto:</b><br>Respuesta Radicado No. {_esc(formatear_radicado(t.radicado))}</p>
       <p style="font-size:13px"><b>Fecha de envío:</b><br>{_esc(fecha_envio)}</p>
       <p style="font-size:13px"><b>Fecha actual:</b><br>{_esc(fecha_actual)}</p>
     </div>
@@ -4823,11 +4864,11 @@ def pqr_notificacion_pdf_publico(token):
 
 def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
     """Correo formal con la solución / descripción de cierre."""
-    if not destino or not SOPORTE_EMAIL:
+    if not destino:
         return False
-    password = os.getenv("SOPORTE_PASSWORD", "")
-    if not password:
-        print("PQR respuesta email: falta SOPORTE_PASSWORD")
+    correo_envio, password = _credenciales_smtp("soporte")
+    if not correo_envio or not password:
+        print("PQR respuesta email: falta conectar el correo de soporte (o SOPORTE_PASSWORD)")
         return False
     sol = (texto_solucion or t.descripcion_cierre or t.respuesta or "").replace("<", "&lt;").replace("\n", "<br>")
     empresa = nombre_empresa()
@@ -4843,7 +4884,7 @@ def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
         <p>Damos respuesta a su solicitud radicada en nuestro sistema:</p>
         <table style="width:100%;border-collapse:collapse;font-size:13px;margin:14px 0">
           <tr><td style="padding:8px;border:1px solid #e2e8f0;background:#f8fafc;width:40%"><b>Nro ticket</b></td><td style="padding:8px;border:1px solid #e2e8f0">{t.ticket}</td></tr>
-          <tr><td style="padding:8px;border:1px solid #e2e8f0;background:#f8fafc"><b>Nro CUN / Radicado</b></td><td style="padding:8px;border:1px solid #e2e8f0">{t.nro_cun or t.radicado}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e2e8f0;background:#f8fafc"><b>Número de Radicado</b></td><td style="padding:8px;border:1px solid #e2e8f0">{formatear_radicado(t.radicado or t.nro_cun)}</td></tr>
           <tr><td style="padding:8px;border:1px solid #e2e8f0;background:#f8fafc"><b>Estado</b></td><td style="padding:8px;border:1px solid #e2e8f0">{t.estado}</td></tr>
           <tr><td style="padding:8px;border:1px solid #e2e8f0;background:#f8fafc"><b>Tipo</b></td><td style="padding:8px;border:1px solid #e2e8f0">{t.tipo_pqr} / {t.subtipo or '—'}</td></tr>
         </table>
@@ -4858,13 +4899,13 @@ def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
     """
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"Respuesta a su {t.tipo_pqr or 'PQR'} · CUN {t.radicado or t.nro_cun}"
-        msg["From"] = SOPORTE_EMAIL
+        msg["Subject"] = f"Respuesta a su {t.tipo_pqr or 'PQR'} · Radicado No. {formatear_radicado(t.radicado or t.nro_cun)}"
+        msg["From"] = correo_envio
         msg["To"] = destino
         msg.set_content(
             f"Señor(a) {(t.razon_social or '')}.\n\n"
             f"Adjuntamos la respuesta formal a su solicitud PQR.\n"
-            f"CUN / Radicado: {t.radicado}\nTicket: {t.ticket}\n\n"
+            f"Número de Radicado: {formatear_radicado(t.radicado)}\nTicket: {t.ticket}\n\n"
             f"{(texto_solucion or '')[:2500]}\n\n"
             f"Equipo de Soporte · {producto}"
         )
@@ -4880,7 +4921,7 @@ def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
         except Exception as ex:
             print("adjunto PDF PQR:", ex)
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(SOPORTE_EMAIL, password)
+            smtp.login(correo_envio, password)
             smtp.send_message(msg)
         return True
     except Exception as e:
@@ -4914,7 +4955,7 @@ def generar_pdf_respuesta_pqr(t):
         pass
     fecha_radicacion = t.fecha or fecha_hoy()
 
-    radicado_no = t.radicado or t.nro_cun or "—"
+    radicado_no = formatear_radicado(t.radicado or t.nro_cun)
 
     cliente = f"{(t.razon_social or '').strip()} {(t.apellidos or '').strip()}".strip() or "Señor(a) usuario"
     email = (t.email or "").strip()
@@ -5085,12 +5126,13 @@ def generar_pdf_respuesta_pqr(t):
 
 def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO"):
     """Correo HTML de radicación / respuesta PQR."""
-    if not destino or not SOPORTE_EMAIL:
+    if not destino:
         return False
-    password = os.getenv("SOPORTE_PASSWORD", "")
-    if not password:
-        print("PQR email: falta SOPORTE_PASSWORD")
+    correo_envio, password = _credenciales_smtp("soporte")
+    if not correo_envio or not password:
+        print("PQR email: falta conectar el correo de soporte (o SOPORTE_PASSWORD)")
         return False
+    radicado_fmt = formatear_radicado(radicado)
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
       <div style="background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:20px 24px">
@@ -5100,8 +5142,8 @@ def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO
       <div style="padding:22px 24px;color:#0f172a;font-size:14px;line-height:1.5">
         <p>Su solicitud fue <b>radicada correctamente</b>.</p>
         <p style="background:#eff6ff;border-radius:10px;padding:14px;border:1px solid #bfdbfe">
-          <b>Número de radicado:</b><br>
-          <span style="font-size:18px;color:#1e40af;letter-spacing:1px">{radicado}</span><br>
+          <b>Número de Radicado:</b><br>
+          <span style="font-size:18px;color:#1e40af;letter-spacing:1px">{radicado_fmt}</span><br>
           <b>Ticket:</b> {ticket}
         </p>
         <p><b>Tipo:</b> {subtipo}<br><b>Objeto:</b> {(objeto or '')[:200]}</p>
@@ -5114,13 +5156,13 @@ def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO
     """
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"PQR radicada {radicado} · EduTrack / Procsis"
-        msg["From"] = SOPORTE_EMAIL
+        msg["Subject"] = f"PQR radicada · Número de Radicado {radicado_fmt} · EduTrack / Procsis"
+        msg["From"] = correo_envio
         msg["To"] = destino
-        msg.set_content(f"Su PQR fue radicada. Radicado: {radicado}. Ticket: {ticket}. Respuesta aprox. 5 días hábiles.")
+        msg.set_content(f"Su PQR fue radicada. Número de Radicado: {radicado_fmt}. Ticket: {ticket}. Respuesta aprox. 5 días hábiles.")
         msg.add_alternative(html, subtype="html")
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(SOPORTE_EMAIL, password)
+            smtp.login(correo_envio, password)
             smtp.send_message(msg)
         return True
     except Exception as e:
@@ -18979,6 +19021,95 @@ def soporte_lideres():
     return gerencia_lideres()
 
 
+def _formulario_conexion_gmail(titulo, descripcion, campo_correo, campo_password, campo_por, campo_en, volver_url, ruta_prueba):
+    """Genera el formulario de conexión de una cuenta Gmail (mismo patrón visual que
+    la conexión de Wompi en Tesorería): correo + contraseña de aplicación, guardado
+    en la base de datos (Plataforma), editable sin tocar Railway."""
+    p = plataforma()
+    correo_actual = getattr(p, campo_correo, "") or ""
+    tiene_password = bool((getattr(p, campo_password, "") or "").strip())
+    conectado_por = getattr(p, campo_por, "") or ""
+    conectado_en = getattr(p, campo_en, "") or ""
+    estado_html = (
+        f"<div style='background:#ecfdf5;border:1px solid #6ee7b7;padding:12px;border-radius:10px;margin-bottom:16px'>"
+        f"🟢 Conectado: <b>{_esc(correo_actual)}</b><br>"
+        f"<span style='font-size:12px;color:#166534'>Por {_esc(conectado_por)} el {_esc(conectado_en)}</span></div>"
+        if correo_actual and tiene_password else
+        "<div style='background:#fee2e2;border:1px solid #fca5a5;padding:12px;border-radius:10px;margin-bottom:16px;color:#991b1b'>🔴 Sin conectar — el envío de estos correos fallará hasta que conectes una cuenta.</div>"
+    )
+    return f"""
+<header class="role-hero"><div><h1>{titulo}</h1><p>{descripcion}</p></div>
+  <a class="btn" href="{volver_url}">← Volver</a>
+</header>
+{estado_html}
+<div class="role-panel" style="max-width:520px">
+  <form method="POST">
+    <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Correo Gmail</label>
+    <input type="email" name="correo" value="{_esc(correo_actual)}" required placeholder="ejemplo@gmail.com" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+    <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Contraseña de aplicación de Gmail</label>
+    <input type="password" name="password" placeholder="{'Dejar en blanco para no cambiarla' if tiene_password else 'xxxx xxxx xxxx xxxx'}" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:6px">
+    <p style="font-size:11.5px;color:#64748b;margin:0 0 14px">No es la contraseña normal de la cuenta. Se genera en Google: Cuenta → Seguridad → Verificación en 2 pasos (debe estar activada) → Contraseñas de aplicaciones.</p>
+    <button style="background:#0B2D57;color:#fff;padding:10px 20px;border:0;border-radius:8px;font-weight:700">Guardar conexión</button>
+  </form>
+</div>
+<div class="role-panel" style="max-width:520px;margin-top:12px">
+  <a class="btn" href="{ruta_prueba}" style="background:#0f766e">📧 Probar este correo</a>
+</div>
+"""
+
+
+@app.route("/gerencia/correo-soporte", methods=["GET", "POST"])
+def gerencia_correo_soporte():
+    """Conexión de la cuenta Gmail general de Soporte (respuestas de PQR, radicación,
+    resets de clave, etc.) — igual al patrón de conexión de Wompi en Tesorería."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    if request.method == "POST":
+        p = plataforma()
+        p.smtp_correo = (request.form.get("correo") or "").strip()[:160]
+        nueva_pass = (request.form.get("password") or "").strip()
+        if nueva_pass:
+            p.smtp_password = nueva_pass
+        p.smtp_conectado_por = session.get("usuario", "")
+        p.smtp_conectado_en = f"{fecha_hoy()} {hora_actual()}"
+        db.session.commit()
+        registrar_auditoria("Conexión correo de Soporte actualizada", session.get("usuario", ""))
+        return redirect("/gerencia/correo-soporte")
+    content = _formulario_conexion_gmail(
+        "Correo de Soporte", "Cuenta usada para respuestas de PQR, radicación y avisos generales",
+        "smtp_correo", "smtp_password", "smtp_conectado_por", "smtp_conectado_en",
+        "/gerencia/hq", "/soporte/pqr/probar-correo",
+    )
+    return page("Correo de Soporte", shell(content))
+
+
+@app.route("/gerencia/correo-notificaciones", methods=["GET", "POST"])
+def gerencia_correo_notificaciones():
+    """Conexión de la cuenta Gmail exclusiva para el envío automático masivo de
+    notificaciones de PQR resueltas (separada de Soporte para no saturarla)."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    if request.method == "POST":
+        p = plataforma()
+        p.smtp_notif_correo = (request.form.get("correo") or "").strip()[:160]
+        nueva_pass = (request.form.get("password") or "").strip()
+        if nueva_pass:
+            p.smtp_notif_password = nueva_pass
+        p.smtp_notif_conectado_por = session.get("usuario", "")
+        p.smtp_notif_conectado_en = f"{fecha_hoy()} {hora_actual()}"
+        db.session.commit()
+        registrar_auditoria("Conexión correo de Notificaciones actualizada", session.get("usuario", ""))
+        return redirect("/gerencia/correo-notificaciones")
+    content = _formulario_conexion_gmail(
+        "Correo de Notificaciones Automáticas", "Cuenta exclusiva para el aviso automático estilo Tigo cuando se resuelve una PQR",
+        "smtp_notif_correo", "smtp_notif_password", "smtp_notif_conectado_por", "smtp_notif_conectado_en",
+        "/gerencia/hq", "/soporte/pqr/probar-correo",
+    )
+    return page("Correo de Notificaciones", shell(content))
+
+
 @app.route("/gerencia/tesoreria", methods=["GET", "POST"])
 def gerencia_tesoreria():
     """Cuentas bancarias y pasarelas — solo gerencia."""
@@ -23479,6 +23610,8 @@ def _modulos_por_rol(rol):
         ("Kit RRHH / seguridad", "/soporte/rrhh", "#7c2d12"),
         ("Crear usuarios Ventas/Soporte", "/gerencia/usuarios", "#0B2D57"),
         ("💳 Facturación y Cobranza", "/gerencia/facturacion-cobranza", "#b45309"),
+        ("📧 Correo de Soporte", "/gerencia/correo-soporte", "#0f766e"),
+        ("📧 Correo de Notificaciones", "/gerencia/correo-notificaciones", "#0f766e"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Facturación", "/gerencia/facturacion", "#0B2D57"),
         ("Gastos", "/gerencia/gastos", "#0B2D57"),
@@ -30626,7 +30759,7 @@ p{{color:#64748b;font-size:14px;line-height:1.5}}
 <div class="card">
   <h1>Solicitud radicada</h1>
   <p>Su pre-matrícula fue registrada en <b>{inst.nombre}</b>.</p>
-  <div class="rad">{rad}</div>
+  <div class="rad">{formatear_radicado(rad)}</div>
   <p>Guarde este número de radicado. El colegio revisará la solicitud en Admisiones.</p>
   <a class="btn" id="dl" href="{pdf_url}">Descargar PDF de constancia</a>
   <br>
@@ -30767,9 +30900,7 @@ def colegio_pqr(codigo):
         if not nro or not razon or not email or not objeto or not subtipo:
             mensaje = "Complete los campos obligatorios (*)."
         else:
-            rad, tick = _gen_radicado_pqr()
-            while TicketPQR.query.filter_by(radicado=rad).first():
-                rad, tick = _gen_radicado_pqr()
+            rad, tick = _gen_radicado_pqr(tipo_canal="11")
             t = TicketPQR(
                 radicado=rad, ticket=tick,
                 institucion_id=inst.id,
@@ -30787,24 +30918,31 @@ def colegio_pqr(codigo):
                 objeto=objeto, hechos=hechos,
                 estado="RADICADA", prioridad=(f.get("prioridad") or "MEDIA").strip()[:20],
                 medio_ingreso="ONLINE", canal="PADRES_COLEGIO",
-                nro_cun=(rad or "").replace("-", "")[:16], fecha_estimada="", estado_cun="RADICADO", motivo=(objeto or "")[:255], fecha=fecha_hoy(), hora=hora_actual(),
+                nro_cun=rad, fecha_estimada="", estado_cun="RADICADO", motivo=(objeto or "")[:255], fecha=fecha_hoy(), hora=hora_actual(),
                 creado_por="Padre/Acudiente (portal público)",
             )
             db.session.add(t)
-            db.session.commit()
             try:
-                registrar_historial_pqr(t.id, "RADICACION", f"PQR padres → {inst.nombre}", "RADICADA")
-            except Exception:
-                pass
-            try:
-                enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PADRES_COLEGIO")
-            except Exception:
-                pass
-            try:
-                registrar_auditoria("PQR padres", f"{rad} · {inst.codigo} · {subtipo}")
-            except Exception:
-                pass
-            mensaje = f"OK|{rad}|{tick}"
+                db.session.commit()
+            except Exception as ex:
+                db.session.rollback()
+                mensaje = f"⚠ No se pudo radicar su solicitud, intente de nuevo. ({ex})"
+                t = None
+            if t is not None:
+                try:
+                    registrar_historial_pqr(t.id, "RADICACION", f"PQR padres → {inst.nombre}", "RADICADA")
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                try:
+                    enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PADRES_COLEGIO")
+                except Exception:
+                    pass
+                try:
+                    registrar_auditoria("PQR padres", f"{rad} · {inst.codigo} · {subtipo}")
+                except Exception:
+                    pass
+                mensaje = f"OK|{rad}|{tick}"
 
     if mensaje.startswith("OK|"):
         _, rad, tick = mensaje.split("|", 2)
@@ -30816,7 +30954,7 @@ a{{color:#1d4ed8;font-weight:700}}</style>
 <div class="card">
   <h1 style="color:#065f46;margin:0">Solicitud radicada</h1>
   <p>Su PQR fue enviada a <b>{inst.nombre}</b>.</p>
-  <div class="rad">{rad}</div>
+  <div class="rad">{formatear_radicado(rad)}</div>
   <p style="color:#64748b;font-size:14px">Ticket: {tick}. Guarde este número para consultar el estado.</p>
   <p><a href="/colegio/{cod}/pqr/consulta">Consultar radicado</a> · <a href="/colegio/{cod}">Portal del colegio</a></p>
 </div>"""
@@ -31123,27 +31261,50 @@ def pqr_colegio():
 
 
 
-def _gen_radicado_pqr():
-    """Genera radicado 16-dígitos estilo 4331-26-000000001 y ticket de 6 dígitos.
-    Reintenta si por azar ya existe (antes solo se revisaba el ticket, no el radicado,
-    lo que podía romper el INSERT con un IntegrityError sin capturar)."""
-    import random
+def _gen_radicado_pqr(tipo_canal="11"):
+    """Número de Radicado 100% numérico (12 dígitos), formato legal colombiano:
+    AAAA (año) + TT (tipo de canal) + NNNNNN (consecutivo secuencial).
+    tipo_canal: "11" = Padres de familia / canal público web · "22" = Soporte técnico (B2B/institucional).
+    El consecutivo reinicia en 000001 cada 1 de enero y avanza de forma estricta por año+canal.
+    (No usamos una tabla de secuencia con bloqueo dedicado; en tráfico concurrente muy alto
+    podría saltarse algún número, pero nunca se repite — el sitio de llamada reintenta si
+    detecta colisión, y el número siempre queda estrictamente creciente)."""
     from datetime import datetime
-    yy = datetime.now().strftime("%y")
-    tries = 0
-    while True:
-        seq = random.randint(1, 999999999)
-        rad = f"4331-{yy}-{seq:09d}"
-        if not TicketPQR.query.filter_by(radicado=rad).first() or tries >= 20:
-            break
-        tries += 1
+    anio = datetime.now().strftime("%Y")
+    tipo_canal = "".join(c for c in str(tipo_canal or "11") if c.isdigit()).zfill(2)[:2]
+    prefijo = f"{anio}{tipo_canal}"
+    ultimo = (
+        db.session.query(db.func.max(TicketPQR.radicado))
+        .filter(TicketPQR.radicado.like(f"{prefijo}%"), db.func.length(TicketPQR.radicado) == 12)
+        .scalar()
+    )
+    try:
+        siguiente = int(ultimo[6:]) + 1 if ultimo else 1
+    except Exception:
+        siguiente = 1
+    rad = f"{prefijo}{siguiente:06d}"
+    intentos = 0
+    while TicketPQR.query.filter_by(radicado=rad).first() and intentos < 50:
+        siguiente += 1
+        rad = f"{prefijo}{siguiente:06d}"
+        intentos += 1
+    import random
     tick = f"{random.randint(100000, 999999)}"
-    # evitar colisiones básicas de ticket
     tries = 0
     while TicketPQR.query.filter_by(ticket=tick).first() and tries < 20:
         tick = f"{random.randint(100000, 999999)}"
         tries += 1
     return rad, tick
+
+
+def formatear_radicado(rad):
+    """Solo para MOSTRAR en pantalla/PDF/correo: separa año-canal-consecutivo con
+    guiones (ej. 2026-11-000452). La base de datos SIEMPRE guarda los 12 dígitos
+    continuos (ej. 202611000452) — el guion es puramente visual."""
+    rad = (rad or "").strip()
+    if len(rad) == 12 and rad.isdigit():
+        return f"{rad[:4]}-{rad[4:6]}-{rad[6:]}"
+    return rad or "—"
 
 
 @app.route("/pqr")
@@ -31336,10 +31497,8 @@ def pqr_crear():
         if not nro or not razon or not email or not objeto:
             mensaje = "Complete los campos obligatorios."
         else:
-            rad, tick = _gen_radicado_pqr()
-            while TicketPQR.query.filter_by(radicado=rad).first():
-                rad, tick = _gen_radicado_pqr()
-            cun = (rad or "").replace("-", "")[:16]
+            rad, tick = _gen_radicado_pqr(tipo_canal="11")
+            cun = rad
             try:
                 from datetime import datetime as _dt, timedelta as _td
                 base = _dt.strptime(fecha_hoy(), "%Y-%m-%d")
@@ -31363,16 +31522,23 @@ def pqr_crear():
                 fecha=fecha_hoy(), hora=hora_actual(),
             )
             db.session.add(t)
-            db.session.commit()
             try:
-                registrar_historial_pqr(t.id, "RADICACION", f"Radicado por portal público", "RADICADA")
-            except Exception:
-                pass
-            try:
-                enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PUBLICO")
-            except Exception:
-                pass
-            mensaje = f"Su solicitud fue radicada correctamente. Número: {rad} · Ticket: {tick}"
+                db.session.commit()
+            except Exception as ex:
+                db.session.rollback()
+                mensaje = f"⚠ No se pudo radicar su solicitud, intente de nuevo. ({ex})"
+                t = None
+            if t is not None:
+                try:
+                    registrar_historial_pqr(t.id, "RADICACION", f"Radicado por portal público", "RADICADA")
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                try:
+                    enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PUBLICO")
+                except Exception:
+                    pass
+                mensaje = f"Su solicitud fue radicada correctamente. Número de Radicado: {formatear_radicado(rad)}"
     body = f"""
 <style>
 body{{margin:0;font-family:Segoe UI,Arial;background:#f1f5f9}}
@@ -31462,7 +31628,7 @@ def pqr_consulta():
                 cliente = ((t.razon_social or "") + " " + (t.apellidos or "")).strip() or "—"
                 motivo = (t.motivo or t.objeto or "")
                 cierre = (t.descripcion_cierre or t.respuesta or "")
-                cun = t.nro_cun or (t.radicado or "").replace("-", "")[:16] or "—"
+                cun = formatear_radicado(t.nro_cun or t.radicado)
                 filas.append(
                     "<tr>"
                     f"<td>{t.ticket or '—'}</td>"
@@ -31483,11 +31649,11 @@ def pqr_consulta():
                 )
             resultado = (
                 '<div class="tbl-wrap"><table class="pqr-tbl"><thead><tr>'
-                "<th>Nro ticket</th><th>Nro CUN</th><th>Cliente</th>"
+                "<th>Nro ticket</th><th>Número de Radicado</th><th>Cliente</th>"
                 "<th>Tipo Requerimiento</th><th>SubTipo</th>"
                 "<th>Petición / Queja / Recurso</th><th>Motivo</th>"
                 "<th>Fecha Creación</th><th>Fecha Estimada Solución</th>"
-                "<th>Estado</th><th>Estado CUN</th>"
+                "<th>Estado</th><th>Estado del Radicado</th>"
                 "<th>Medio de Ingreso</th><th>Canal de Ingreso</th>"
                 "<th>Descripción Cierre</th>"
                 "</tr></thead><tbody>"
@@ -31499,11 +31665,11 @@ def pqr_consulta():
     clave_safe = clave.replace('"', "")
     empty_table = (
         '<div class="tbl-wrap"><table class="pqr-tbl"><thead><tr>'
-        "<th>Nro ticket</th><th>Nro CUN</th><th>Cliente</th>"
+        "<th>Nro ticket</th><th>Número de Radicado</th><th>Cliente</th>"
         "<th>Tipo Requerimiento</th><th>SubTipo</th>"
         "<th>Petición / Queja / Recurso</th><th>Motivo</th>"
         "<th>Fecha Creación</th><th>Fecha Estimada Solución</th>"
-        "<th>Estado</th><th>Estado CUN</th>"
+        "<th>Estado</th><th>Estado del Radicado</th>"
         "<th>Medio de Ingreso</th><th>Canal de Ingreso</th>"
         "<th>Descripción Cierre</th></tr></thead>"
         '<tbody><tr><td colspan="14" style="text-align:center;padding:16px;color:#64748b">'
@@ -31529,12 +31695,12 @@ body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#fff;color:#111}
   <form class="filt" method="POST">
     <div>
       <div style="font-size:13px;font-weight:700;margin-bottom:6px">Seleccione el Tipo de Consulta</div>
-      <label><input type="radio" name="tipo_consulta" value="ticket" {chk_t}> por Nro CUN / Ticket</label>
+      <label><input type="radio" name="tipo_consulta" value="ticket" {chk_t}> por Número de Radicado / Ticket</label>
       &nbsp;
       <label><input type="radio" name="tipo_consulta" value="documento" {chk_d}> por Nro Documento</label>
     </div>
     <div>
-      <input type="text" name="clave" value="{clave_safe}" placeholder="Ticket, CUN o documento" required>
+      <input type="text" name="clave" value="{clave_safe}" placeholder="Ticket, Número de Radicado o documento" required>
       <button type="submit">Consultar</button>
       <a href="/pqr" style="margin-left:8px;font-size:13px">Regresar</a>
     </div>
@@ -32362,7 +32528,10 @@ def soporte_pqr_probar_correo():
     sin tener que esperar a resolver un ticket real de un colegio."""
     if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
         return redirect("/soporte-login")
-    password_configurada = bool(os.getenv("SOPORTE_PASSWORD", "").strip())
+    p = plataforma()
+    soporte_conectado = bool((p.smtp_correo or "").strip() and (p.smtp_password or "").strip())
+    notif_conectado = bool((p.smtp_notif_correo or "").strip() and (p.smtp_notif_password or "").strip())
+    password_configurada = soporte_conectado or notif_conectado or bool(os.getenv("SOPORTE_PASSWORD", "").strip())
     base_url_configurada = bool(os.environ.get("APP_BASE_URL", "").strip())
     mensaje = ""
     ok = None
@@ -32374,7 +32543,7 @@ def soporte_pqr_probar_correo():
             # Ticket de prueba: no se guarda en la tabla real, solo se usa en memoria
             # para poder generar el PDF y el link exactamente igual que uno de verdad.
             t_prueba = TicketPQR(
-                id=999999999, radicado="4331-26-000000000", ticket="000000",
+                id=999999999, radicado=f"{ahora().year}99000001", ticket="000000",
                 razon_social="Colegio de Prueba", email=destino,
                 tipo_pqr="Petición", subtipo="Prueba de envío",
                 objeto="Este es un ticket de prueba para verificar el envío de correo.",
@@ -32398,8 +32567,9 @@ def soporte_pqr_probar_correo():
 </header>
 <div class="role-panel">
   <h3 style="margin-top:0">Estado de configuración</h3>
-  <p>SOPORTE_EMAIL: <b>{_esc(SOPORTE_EMAIL)}</b></p>
-  <p>SOPORTE_PASSWORD (contraseña de aplicación): {"<span style='color:#16a34a;font-weight:700'>✅ configurada</span>" if password_configurada else "<span style='color:#b91c1c;font-weight:700'>❌ NO configurada — el envío fallará</span>"}</p>
+  <p>Correo de Soporte: {"<span style='color:#16a34a;font-weight:700'>🟢 conectado (" + _esc(p.smtp_correo) + ")</span>" if soporte_conectado else "<span style='color:#b91c1c;font-weight:700'>🔴 sin conectar</span>"} — <a href="/gerencia/correo-soporte">configurar</a></p>
+  <p>Correo de Notificaciones automáticas: {"<span style='color:#16a34a;font-weight:700'>🟢 conectado (" + _esc(p.smtp_notif_correo) + ")</span>" if notif_conectado else "<span style='color:#b45309;font-weight:700'>⚠ sin conectar (usará el de Soporte o la variable de Railway)</span>"} — <a href="/gerencia/correo-notificaciones">configurar</a></p>
+  <p>Variable SOPORTE_PASSWORD en Railway (respaldo si no conectas nada arriba): {"<span style='color:#16a34a;font-weight:700'>✅ configurada</span>" if os.getenv("SOPORTE_PASSWORD","").strip() else "<span style='color:#94a3b8'>no configurada</span>"}</p>
   <p>APP_BASE_URL (dominio para que el link del correo apunte a tu sitio real): {"<span style='color:#16a34a;font-weight:700'>✅ configurada</span>" if base_url_configurada else "<span style='color:#b45309;font-weight:700'>⚠ no configurada — usará la URL de esta petición, puede quedar mal en algunos casos</span>"}</p>
 </div>
 {"<div class='msg " + ("ok" if ok else "danger") + "' style='margin-top:12px'>" + mensaje + "</div>" if mensaje else ""}
@@ -32478,7 +32648,7 @@ def soporte_pqr_crear():
     mensaje = ""
     if request.method == "POST":
         f = request.form
-        rad, tick = _gen_radicado_pqr()
+        rad, tick = _gen_radicado_pqr(tipo_canal="22")
         medio = (f.get("medio_ingreso") or "LLAMADA").strip()[:60]
         canal = (f.get("canal") or medio or "LLAMADA").strip()[:40]
         cun = (rad or "").replace("-", "")[:16]
