@@ -1883,18 +1883,26 @@ class PreMatricula(db.Model):
 
 
 def html_anuncio_global():
-    """Modal pantalla grande: anuncio de Procsis con fotos. X cierra y recuerda en localStorage."""
+    """Modal de anuncio: se muestra UNA vez por sesión de login.
+    Al cerrar con X no vuelve a salir al cambiar de módulo.
+    Vuelve a salir solo tras cerrar sesión e ingresar de nuevo (o si Gerencia publica nueva versión)."""
     try:
         p = plataforma()
     except Exception:
         return ""
     if not getattr(p, "anuncio_activo", False):
         return ""
+    ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")
+    # Ya cerrado en esta sesión de login → no renderizar
+    try:
+        if str(session.get("anuncio_dismissed_ver") or "") == ver:
+            return ""
+    except Exception:
+        pass
     titulo = _esc(getattr(p, "anuncio_titulo", None) or "Aviso importante")
     cuerpo_raw = getattr(p, "anuncio_cuerpo", None) or ""
     cuerpo = cuerpo_raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
     cuenta = _esc(getattr(p, "anuncio_cuenta", None) or "")
-    ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")
     imgs = []
     for attr in ("anuncio_img1", "anuncio_img2"):
         path = (getattr(p, attr, None) or "").strip()
@@ -1930,17 +1938,34 @@ def html_anuncio_global():
         '<div style="padding:18px 28px 26px;color:#334155;font-size:14px;line-height:1.55">'
         + imgs_html
         + '<div style="margin-top:12px">' + cuerpo + "</div>" + cuenta_html
-        + '<p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Cierre con la X. Este aviso se mostrará cada vez que abra el sistema mientras esté activo.</p>'
+        + '<p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Cierre con la X. No volverá a mostrarse hasta su próximo inicio de sesión.</p>'
         "</div></div></div>"
-        '<script>(function(){var ver="' + ver + '";var key="edutrack_anuncio_dismiss_"+ver;'
-        '/* siempre mostrar anuncio al abrir */'
+        '<script>(function(){var ver="' + ver + '";'
         'var el=document.getElementById("anuncio-global");if(!el)return;el.style.display="flex";'
         "var btn=document.getElementById(\"anuncio-cerrar\");"
-        'if(btn)btn.onclick=function(){el.style.display="none";};'
+        'if(btn)btn.onclick=function(){el.style.display="none";'
+        'try{fetch("/anuncio/cerrar",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},'
+        'body:"ver="+encodeURIComponent(ver),credentials:"same-origin"});}catch(e){}};'
         "})();</script>"
     )
 
 
+
+
+
+@app.route("/anuncio/cerrar", methods=["POST", "GET"])
+def anuncio_cerrar():
+    """Marca el anuncio como visto en esta sesión de login (no vuelve a salir al navegar)."""
+    ver = (request.values.get("ver") or "").strip()[:40]
+    if not ver:
+        try:
+            ver = str(getattr(plataforma(), "anuncio_version", None) or "1")
+        except Exception:
+            ver = "1"
+    session["anuncio_dismissed_ver"] = ver
+    if request.method == "GET":
+        return redirect(request.referrer or "/")
+    return ("", 204)
 
 def css_tema_global():
     """Fuente y colores globales configurados desde soporte."""
@@ -6729,6 +6754,7 @@ def login():
                     if lic.get("bloqueado"):
                         error = f"Institución suspendida: {lic.get('mensaje') or 'Contacte a Procsis / cartera.'}"
                     else:
+                        session.pop("anuncio_dismissed_ver", None)
                         session["usuario"] = user.usuario
                         session["rol"] = user.rol
                         session["user_id"] = user.id
@@ -6767,6 +6793,7 @@ def login():
                         dest = "/docente-escritorio" if (user.rol or "").strip() == "Docente" else "/dashboard"
                         return redirect(dest)
                 else:
+                    session.pop("anuncio_dismissed_ver", None)
                     session["usuario"] = user.usuario
                     session["rol"] = user.rol
                     session["user_id"] = user.id
