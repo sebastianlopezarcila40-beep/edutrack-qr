@@ -1107,6 +1107,8 @@ class TicketPQR(db.Model):
     motivo = db.Column(db.String(255), default="")
     token_notificacion = db.Column(db.String(64), default="", index=True)
     notificacion_enviada_en = db.Column(db.String(20), default="")
+    token_csat = db.Column(db.String(64), default="", index=True)
+    csat_enviada_en = db.Column(db.String(30), default="")
 
 
 class AsignacionDocente(db.Model):
@@ -1139,6 +1141,36 @@ class SedeInstitucion(db.Model):
     observaciones = db.Column(db.Text, default="")
     activa = db.Column(db.Boolean, default=True)
     creado_en = db.Column(db.String(30), default="")
+
+
+
+class EncuestaCSAT(db.Model):
+    """Encuesta de satisfacción post-resolución de caso (Soporte / PQR)."""
+    __tablename__ = "encuestas_csat"
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("tickets_pqr.id"), nullable=True, index=True)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    radicado = db.Column(db.String(40), default="")
+    email = db.Column(db.String(160), default="")
+    nombre = db.Column(db.String(220), default="")
+    # 1–5 estrellas
+    q1_chat = db.Column(db.Integer, default=0)
+    q2_asesor = db.Column(db.Integer, default=0)
+    q3_app = db.Column(db.Integer, default=0)
+    q4_global = db.Column(db.Integer, default=0)
+    comentario = db.Column(db.Text, default="")
+    promedio = db.Column(db.Float, default=0.0)
+    alerta_retencion = db.Column(db.Boolean, default=False)
+    ip = db.Column(db.String(80), default="")
+    ubicacion = db.Column(db.String(200), default="")
+    proveedor_isp = db.Column(db.String(160), default="")
+    user_agent = db.Column(db.String(400), default="")
+    fecha = db.Column(db.String(20), default="")
+    hora = db.Column(db.String(20), default="")
+    respondida = db.Column(db.Boolean, default=False)
+    creada_en = db.Column(db.String(30), default="")
+    respondida_en = db.Column(db.String(30), default="")
 
 
 class HistorialPQR(db.Model):
@@ -2719,6 +2751,8 @@ def migrar_columnas():
         ("instituciones", "factura_final_generada", "ALTER TABLE instituciones ADD COLUMN factura_final_generada BOOLEAN DEFAULT 0"),
         ("instituciones", "rector", "ALTER TABLE instituciones ADD COLUMN rector VARCHAR(160) DEFAULT ''"),
         ("tickets_pqr", "direccion", "ALTER TABLE tickets_pqr ADD COLUMN direccion VARCHAR(255) DEFAULT ''"),
+        ("tickets_pqr", "token_csat", "ALTER TABLE tickets_pqr ADD COLUMN token_csat VARCHAR(64) DEFAULT ''"),
+        ("tickets_pqr", "csat_enviada_en", "ALTER TABLE tickets_pqr ADD COLUMN csat_enviada_en VARCHAR(30) DEFAULT ''"),
         ("tickets_pqr", "token_notificacion", "ALTER TABLE tickets_pqr ADD COLUMN token_notificacion VARCHAR(64) DEFAULT ''"),
         ("tickets_pqr", "notificacion_enviada_en", "ALTER TABLE tickets_pqr ADD COLUMN notificacion_enviada_en VARCHAR(20) DEFAULT ''"),
         ("instituciones", "tipo_bloqueo", "ALTER TABLE instituciones ADD COLUMN tipo_bloqueo VARCHAR(30) DEFAULT ''"),
@@ -5134,6 +5168,58 @@ def _nombre_destinatario_pqr(t):
         pass
     return "Usuario"
 
+
+
+def _asegurar_token_csat(t):
+    """Token único para encuesta de satisfacción del caso."""
+    import secrets as _sec
+    if not (getattr(t, "token_csat", None) or "").strip():
+        t.token_csat = _sec.token_urlsafe(24)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    return (t.token_csat or "").strip()
+
+
+def _url_encuesta_csat(t):
+    base = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
+    try:
+        if not base and request:
+            base = (request.url_root or "").rstrip("/")
+    except Exception:
+        pass
+    tok = _asegurar_token_csat(t)
+    if not base:
+        base = ""
+    return f"{base}/encuesta/{tok}"
+
+
+def _crear_encuesta_csat_para_ticket(t):
+    """Crea registro pendiente de encuesta al resolver el caso."""
+    tok = _asegurar_token_csat(t)
+    try:
+        existente = EncuestaCSAT.query.filter_by(token=tok).first()
+        if existente:
+            return existente, _url_encuesta_csat(t)
+        enc = EncuestaCSAT(
+            ticket_id=t.id,
+            token=tok,
+            institucion_id=getattr(t, "institucion_id", None),
+            radicado=(t.radicado or "")[:40],
+            email=(t.email or "")[:160],
+            nombre=(t.razon_social or "")[:220],
+            creada_en=f"{fecha_hoy()} {hora_actual()}",
+            respondida=False,
+        )
+        db.session.add(enc)
+        t.csat_enviada_en = f"{fecha_hoy()} {hora_actual()}"
+        db.session.commit()
+        return enc, _url_encuesta_csat(t)
+    except Exception as e:
+        db.session.rollback()
+        print("crear encuesta csat:", e)
+        return None, _url_encuesta_csat(t)
 
 def enviar_notificacion_pqr_estilo_tigo(destino, t):
     """Correo de notificación con el mismo patrón que usan las telcos (Tigo, Claro,
@@ -16457,6 +16543,7 @@ def gerencia_hq():
         <a href="/soporte_admin">Centro de soporte</a>
         <a class="a" href="/gerencia/pqr-limpieza">🧹 Limpieza PQR de prueba</a>
         <a href="/gerencia/auditoria">📋 Auditoría IP / ubicación</a>
+        <a class="g" href="/gerencia/fidelizacion">💙 Fidelización CSAT</a>
         <a href="/gerencia/procsis-web">📰 Noticias y productos web</a>
         <a href="/gerencia/anuncios">📢 Anuncios (editar)</a>
         <a href="/tenants">Instituciones</a>
@@ -33874,6 +33961,7 @@ def soporte_pqr_centro():
   <a class="btn" href="/soporte/pqr/consulta">Consulta validada</a>
   <a class="btn" href="/soporte/pqr/probar-correo" style="background:#0f766e">📧 Probar correo</a>
   <a class="btn" href="/gerencia/pqr-limpieza" style="background:#b91c1c">🧹 Limpieza PQR</a>
+  <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488">💙 CSAT</a>
 </header>
 <div class="role-panel" style="margin-bottom:12px">
   <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -34061,6 +34149,276 @@ def pqr_pdf_publico(codigo):
 
 
 @app.route("/soporte/pqr/<int:id>", methods=["GET", "POST"])
+
+
+@app.route("/encuesta/<token>", methods=["GET", "POST"])
+def encuesta_csat_publica(token):
+    """Encuesta CSAT sin login. Registra IP / ubicación / ISP (Ley 1581)."""
+    token = (token or "").strip()
+    enc = EncuestaCSAT.query.filter_by(token=token).first()
+    if not enc:
+        # crear desde ticket si solo existe token en ticket
+        t = TicketPQR.query.filter_by(token_csat=token).first()
+        if t:
+            enc, _ = _crear_encuesta_csat_para_ticket(t)
+        if not enc:
+            return page("Encuesta no válida",
+                "<div style='max-width:480px;margin:40px auto;font-family:Segoe UI,Arial;text-align:center'>"
+                "<h1 style='color:#0B2D57'>Enlace no válido o vencido</h1>"
+                "<p style='color:#64748b'>Solicite un nuevo link a soporte PROCSIS.</p></div>")
+    if enc.respondida and request.method == "GET":
+        return page("Gracias",
+            "<div style='max-width:480px;margin:40px auto;font-family:Segoe UI,Arial;text-align:center;padding:24px'>"
+            "<h1 style='color:#0B2D57'>Ya registramos su evaluación</h1>"
+            f"<p>Promedio: <b>{enc.promedio:.1f}</b> / 5</p>"
+            "<p style='color:#64748b'>Gracias por ayudarnos a mejorar · PROCSIS · EduTrack</p></div>")
+
+    error = ""
+    if request.method == "POST" and not enc.respondida:
+        try:
+            q1 = int(request.form.get("q1") or 0)
+            q2 = int(request.form.get("q2") or 0)
+            q3 = int(request.form.get("q3") or 0)
+            q4 = int(request.form.get("q4") or 0)
+        except Exception:
+            q1 = q2 = q3 = q4 = 0
+        if min(q1, q2, q3, q4) < 1 or max(q1, q2, q3, q4) > 5:
+            error = "Califique las 4 preguntas obligatorias de 1 a 5 estrellas."
+        else:
+            comentario = (request.form.get("comentario") or "").strip()[:2000]
+            vals = [q1, q2, q3, q4]
+            prom = sum(vals) / 4.0
+            alerta = any(v <= 2 for v in vals)
+            ip = _client_ip_audit()
+            ubic, isp = "", ""
+            try:
+                geo = _geo_por_ip(ip)
+                if isinstance(geo, tuple):
+                    ubic, isp = geo[0] or "", geo[1] or ""
+                else:
+                    ubic = str(geo or "")
+            except Exception:
+                pass
+            ua = (request.headers.get("User-Agent") or "")[:400]
+            enc.q1_chat = q1
+            enc.q2_asesor = q2
+            enc.q3_app = q3
+            enc.q4_global = q4
+            enc.comentario = comentario
+            enc.promedio = round(prom, 2)
+            enc.alerta_retencion = alerta
+            enc.ip = ip
+            enc.ubicacion = (ubic or "")[:200]
+            enc.proveedor_isp = (isp or "")[:160]
+            enc.user_agent = ua
+            enc.fecha = fecha_hoy()
+            enc.hora = hora_actual()
+            enc.respondida = True
+            enc.respondida_en = f"{fecha_hoy()} {hora_actual()}"
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                error = f"No se pudo guardar: {e}"
+            if not error:
+                try:
+                    registrar_auditoria(
+                        "Encuesta CSAT respondida",
+                        f"radicado={enc.radicado} prom={enc.promedio} alerta={alerta} IP={ip} Ubic={ubic} ISP={isp}",
+                    )
+                except Exception:
+                    pass
+                return page("Gracias",
+                    "<div style='max-width:520px;margin:40px auto;font-family:Segoe UI,Arial;text-align:center;padding:28px;"
+                    "background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08)'>"
+                    "<div style='font-size:42px'>✅</div>"
+                    "<h1 style='color:#0B2D57;margin:8px 0'>¡Gracias por su evaluación!</h1>"
+                    f"<p style='font-size:18px'>Promedio: <b style='color:#0d9488'>{enc.promedio:.1f}</b> / 5</p>"
+                    + ("<p style='color:#b91c1c;font-size:14px'>Hemos registrado su inconformidad. Un asesor de PROCSIS podrá contactarle.</p>" if alerta else "")
+                    + "<p style='color:#64748b;font-size:13px;margin-top:16px'>PROCSIS · EduTrack · Su IP fue registrada para trazabilidad (Ley 1581 de 2012).</p></div>")
+
+    def estrellas(name):
+        return "".join(
+            f'<label style="cursor:pointer;margin:0 4px;font-size:28px">'
+            f'<input type="radio" name="{name}" value="{n}" required style="display:none" class="star-in" onchange="this.parentNode.parentNode.querySelectorAll(\'label\').forEach((l,i)=>l.style.color=i<{n}?\'#f59e0b\':\'#cbd5e1\')">'
+            f'<span>★</span></label>'
+            for n in range(1, 6)
+        )
+
+    logo = "/static/img/logo-procsis.jpeg"
+    try:
+        if not os.path.isfile(os.path.join(app.root_path, "static", "img", "logo-procsis.jpeg")):
+            logo = "/static/img/logo-edutrack.png"
+    except Exception:
+        pass
+    err_html = f"<div style='background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px'>{_esc(error)}</div>" if error else ""
+    body = f"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Encuesta PROCSIS · Satisfacción</title>
+<style>
+body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a}}
+.wrap{{max-width:560px;margin:24px auto;padding:16px}}
+.card{{background:#fff;border-radius:16px;padding:22px;box-shadow:0 8px 28px rgba(15,23,42,.08);border:1px solid #e2e8f0}}
+.q{{margin:18px 0;padding-bottom:14px;border-bottom:1px solid #f1f5f9}}
+.q b{{display:block;margin-bottom:8px;color:#0B2D57;font-size:14px}}
+.stars{{display:flex;gap:2px;align-items:center}}
+.stars label{{color:#cbd5e1;transition:color .15s}}
+textarea{{width:100%;min-height:90px;padding:10px;border-radius:10px;border:1px solid #cbd5e1;box-sizing:border-box}}
+button{{background:#0B2D57;color:#fff;border:0;padding:14px 22px;border-radius:12px;font-weight:800;width:100%;cursor:pointer;margin-top:12px;font-size:15px}}
+button:hover{{background:#1e3a8a}}
+.hint{{font-size:12px;color:#94a3b8;margin-top:8px}}
+</style></head><body>
+<div class="wrap">
+  <div class="card">
+    <div style="text-align:center;margin-bottom:8px">
+      <img src="{logo}" alt="PROCSIS" style="max-height:56px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
+      <div style="font-size:12px;letter-spacing:1px;color:#64748b;margin-top:6px">PROCSIS · EVALUACIÓN DE SERVICIO</div>
+      <h1 style="margin:8px 0 4px;font-size:20px;color:#0B2D57">¿Cómo fue su experiencia?</h1>
+      <p style="margin:0;font-size:13px;color:#64748b">Caso { _esc(enc.radicado or '') } · 1 = muy malo · 5 = excelente</p>
+    </div>
+    {err_html}
+    <form method="POST">
+      <div class="q"><b>1. ¿Cómo califica la agilidad y atención recibida a través de nuestro chat de soporte?</b>
+        <div class="stars">{estrellas('q1')}</div></div>
+      <div class="q"><b>2. ¿El ingeniero o asesor de PROCSIS resolvió su requerimiento con claridad y respeto?</b>
+        <div class="stars">{estrellas('q2')}</div></div>
+      <div class="q"><b>3. ¿Qué tan fácil y rápido fue utilizar las funciones de la plataforma EduTrack para resolver su problema?</b>
+        <div class="stars">{estrellas('q3')}</div></div>
+      <div class="q"><b>4. ¿Cómo califica su experiencia general con nuestra empresa PROCSIS durante la gestión de este caso?</b>
+        <div class="stars">{estrellas('q4')}</div></div>
+      <div class="q" style="border:0"><b>5. Comentario o sugerencia (opcional)</b>
+        <textarea name="comentario" placeholder="Cuéntenos cómo podemos mejorar..."></textarea></div>
+      <button type="submit">Enviar evaluación</button>
+      <p class="hint">Al enviar, registramos su dirección IP y datos técnicos de acceso para trazabilidad y prevención de fraude, conforme a la Ley 1581 de 2012. No se solicita contraseña.</p>
+    </form>
+  </div>
+</div>
+<script>
+document.querySelectorAll('.stars').forEach(function(box){{
+  box.querySelectorAll('label').forEach(function(lab, idx){{
+    lab.addEventListener('click', function(){{
+      box.querySelectorAll('label').forEach(function(l, i){{ l.style.color = i <= idx ? '#f59e0b' : '#cbd5e1'; }});
+      lab.querySelector('input').checked = true;
+    }});
+  }});
+}});
+</script>
+</body></html>"""
+    return body
+
+
+@app.route("/gerencia/fidelizacion")
+@app.route("/soporte/fidelizacion")
+@app.route("/ventas/fidelizacion")
+@app.route("/cobranza/fidelizacion")
+def panel_fidelizacion_csat():
+    """Índice de felicidad (CSAT) y alertas de retención por calificaciones bajas."""
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte", "Comercial", "Cobranza"):
+        return acceso_denegado("Panel de fidelización restringido.")
+    try:
+        respondidas = EncuestaCSAT.query.filter_by(respondida=True).order_by(EncuestaCSAT.id.desc()).limit(200).all()
+        pendientes = EncuestaCSAT.query.filter_by(respondida=False).order_by(EncuestaCSAT.id.desc()).limit(50).all()
+        alertas = EncuestaCSAT.query.filter_by(respondida=True, alerta_retencion=True).order_by(EncuestaCSAT.id.desc()).limit(50).all()
+    except Exception as e:
+        respondidas, pendientes, alertas = [], [], []
+        print("fidelizacion query:", e)
+
+    def avg(attr):
+        vals = [getattr(r, attr) or 0 for r in respondidas if (getattr(r, attr) or 0) > 0]
+        return round(sum(vals) / len(vals), 2) if vals else 0.0
+
+    n = len(respondidas)
+    prom_global = round(sum(r.promedio or 0 for r in respondidas) / n, 2) if n else 0.0
+    a1, a2, a3, a4 = avg("q1_chat"), avg("q2_asesor"), avg("q3_app"), avg("q4_global")
+
+    filas_a = ""
+    for a in alertas:
+        filas_a += (
+            f"<tr style='background:#fef2f2'><td>{_esc(a.fecha)} {_esc(a.hora)}</td>"
+            f"<td><b>{_esc(a.radicado)}</b><br><span style='font-size:11px'>{_esc(a.nombre)}</span></td>"
+            f"<td>{a.q1_chat}/{a.q2_asesor}/{a.q3_app}/{a.q4_global}</td>"
+            f"<td><b style='color:#b91c1c'>{a.promedio}</b></td>"
+            f"<td style='font-size:12px'>{_esc((a.comentario or '')[:80])}</td>"
+            f"<td style='font-size:11px'>{_esc(a.ip)}<br>{_esc(a.ubicacion or '')}</td></tr>"
+        )
+    if not filas_a:
+        filas_a = "<tr><td colspan='6' style='text-align:center;color:#64748b;padding:12px'>Sin alertas de retención 🎉</td></tr>"
+
+    filas_r = ""
+    for r in respondidas[:40]:
+        col = "#b91c1c" if r.alerta_retencion else "#16a34a"
+        filas_r += (
+            f"<tr><td style='font-size:12px'>{_esc(r.fecha)}</td><td>{_esc(r.radicado)}</td>"
+            f"<td>{_esc(r.nombre)}</td><td>{r.q1_chat}</td><td>{r.q2_asesor}</td><td>{r.q3_app}</td><td>{r.q4_global}</td>"
+            f"<td><b style='color:{col}'>{r.promedio}</b></td>"
+            f"<td style='font-size:11px'>{_esc((r.comentario or '')[:60])}</td></tr>"
+        )
+    if not filas_r:
+        filas_r = "<tr><td colspan='9' style='text-align:center;color:#64748b;padding:12px'>Aún no hay evaluaciones</td></tr>"
+
+    volver = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Cobranza": "/cobranza/panel"}.get(rol, "/gerencia/hq")
+    content = f"""
+<header class="role-hero"><div>
+  <h1>💙 Fidelización y retención · CSAT</h1>
+  <p>Índice de felicidad del cliente tras resolver casos de soporte / PQR.</p>
+</div>
+<a class="btn" href="{volver}">← Volver</a></header>
+
+<section class="role-panel">
+  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Botón 1 · Índice de Felicidad (CSAT)</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
+    <div style="background:#0B2D57;color:#fff;border-radius:12px;padding:16px;text-align:center">
+      <div style="font-size:12px;opacity:.85">Promedio global</div>
+      <div style="font-size:32px;font-weight:800">{prom_global}</div>
+      <div style="font-size:11px">/ 5 · {n} respuestas</div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:11px;color:#64748b">1. Chat</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a1}</div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:11px;color:#64748b">2. Asesor</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a2}</div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:11px;color:#64748b">3. App EduTrack</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a3}</div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:11px;color:#64748b">4. Experiencia</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a4}</div>
+    </div>
+    <div style="background:##fee2e2;border:1px solid #fecaca;border-radius:12px;padding:14px;text-align:center;background:#fef2f2">
+      <div style="font-size:11px;color:#991b1b">Alertas retención</div>
+      <div style="font-size:24px;font-weight:800;color:#b91c1c">{len(alertas)}</div>
+    </div>
+  </div>
+</section>
+
+<section class="role-panel" style="margin-top:14px;border:2px solid #fecaca">
+  <h2 style="margin-top:0;font-size:16px;color:#b91c1c">⚠️ Alertas de retención (1 o 2 estrellas)</h2>
+  <p style="font-size:13px;color:#64748b">Contacte de inmediato a estos clientes para evitar pérdida de cuenta.</p>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#7f1d1d;color:#fff"><th style="padding:8px">Fecha</th><th>Caso</th><th>Q1–Q4</th><th>Prom.</th><th>Comentario</th><th>IP / Ubicación</th></tr>
+    {filas_a}
+  </table></div>
+</section>
+
+<section class="role-panel" style="margin-top:14px">
+  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Últimas evaluaciones</h2>
+  <p class="mini-text">Pendientes de respuesta: <b>{len(pendientes)}</b></p>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px">Fecha</th><th>Radicado</th><th>Cliente</th><th>Chat</th><th>Asesor</th><th>App</th><th>Global</th><th>Prom.</th><th>Comentario</th>
+    </tr>
+    {filas_r}
+  </table></div>
+</section>
+"""
+    if rol == "Soporte":
+        return page("Fidelización CSAT", shell_soporte(content))
+    return page("Fidelización CSAT", shell(content) if rol not in ("Gerente", "Superadmin", "Administrador") else content)
+
+
+
 def soporte_pqr_detalle(id):
     if not requiere_login() or rol_actual() != "Soporte":
         return redirect("/soporte-login")
@@ -34099,6 +34457,14 @@ def soporte_pqr_detalle(id):
                     db.session.rollback()
                     print("historial pqr:", ex)
                 cierra_caso = nuevo.upper() in ("CERRADA", "CERRADO", "RESUELTA")
+                encuesta_url = ""
+                if cierra_caso:
+                    try:
+                        _enc, encuesta_url = _crear_encuesta_csat_para_ticket(t)
+                        if encuesta_url:
+                            mensaje = (mensaje + " " if mensaje else "") + f"Link encuesta CSAT: {encuesta_url}"
+                    except Exception as _ce:
+                        print("csat on resolve:", _ce)
                 enviar_mail = (request.form.get("enviar_correo") or "") == "1" or cierra_caso
                 mail_ok = False
                 if resp and t.email and enviar_mail:
@@ -34164,10 +34530,30 @@ def soporte_pqr_detalle(id):
     <a class="btn" style="background:#0d9488" href="/pqr/consulta">Ver consulta pública</a>
   </div>
 """
+
+    csat_box = ""
+    try:
+        if (t.estado or "").upper() in ("RESUELTA", "CERRADA", "CERRADO") or (getattr(t, "token_csat", None) or "").strip():
+            _u = _url_encuesta_csat(t)
+            csat_box = f"""
+<div class="role-panel" style="margin-top:12px;border:2px solid #0d9488;background:#f0fdfa">
+  <h3 style="margin:0 0 8px;color:#0f766e">⭐ Encuesta de satisfacción (CSAT)</h3>
+  <p style="font-size:13px;color:#334155;margin:0 0 8px">Comparte este link por WhatsApp o correo. El cliente responde sin contraseña; se registra IP (Ley 1581 de 2012).</p>
+  <input readonly value="{_esc(_u)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #99f6e4;font-size:12px" onclick="this.select()">
+  <p style="font-size:12px;margin:8px 0 0">
+    <a href="{_esc(_u)}" target="_blank">Abrir encuesta →</a> ·
+    <a href="https://wa.me/?text=Califique%20nuestro%20servicio%20PROCSIS:%20{_esc(_u)}" target="_blank">Enviar por WhatsApp</a>
+  </p>
+</div>"""
+    except Exception as _ex_cs:
+        print("csat box:", _ex_cs)
+        csat_box = ""
+
     content = f"""
 <header class="role-hero"><div><h1>{t.radicado}</h1><p>Ticket {t.ticket} · {t.canal}</p></div>
 <a class="btn" href="/soporte/pqr">Volver</a></header>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+{csat_box}
 <div class="role-panel">
   <p><b>{t.razon_social}</b> · {t.email}<br>{t.tipo_pqr} / {t.subtipo} · Prioridad {t.prioridad}<br>
   Estado actual: <b>{t.estado}</b>
