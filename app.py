@@ -3526,25 +3526,114 @@ def _credenciales_smtp(uso="soporte"):
 
 
 def _smtp_enviar(msg, correo_envio, password):
-    """Envía un EmailMessage por Gmail de forma robusta en Railway/cloud.
+    """Envía un EmailMessage.
 
-    En muchos hosts el puerto 465 se cuelga (WORKER TIMEOUT de Gunicorn ~30s).
-    Por eso se prueba PRIMERO 587 + STARTTLS (timeout corto) y luego 465 SSL.
+    En Railway (plan Hobby/Trial/Free) el SMTP saliente está BLOQUEADO
+    (Errno 101 Network is unreachable). Por eso:
+      1) Si existe RESEND_API_KEY → envío por HTTPS (api.resend.com) — funciona en Hobby.
+      2) Si no, intenta SMTP Gmail 587/465 (solo plan Pro de Railway o hosting con SMTP abierto).
 
-    Requiere contraseña de aplicación de Gmail (no la clave normal de la cuenta).
+    Variables útiles en Railway:
+      RESEND_API_KEY   = re_xxxx  (https://resend.com)
+      RESEND_FROM      = onboarding@resend.dev  (pruebas) o un remitente de dominio verificado
+      SOPORTE_EMAIL / SOPORTE_PASSWORD = Gmail (solo si tienes plan Pro)
     """
     import ssl
+    import json
+    import urllib.request
+    import urllib.error
+
+    if not correo_envio and not os.environ.get("RESEND_API_KEY"):
+        raise RuntimeError(
+            "Faltan credenciales. Configure RESEND_API_KEY (recomendado en Railway Hobby) "
+            "o SOPORTE_EMAIL + SOPORTE_PASSWORD en plan Pro."
+        )
+
+    # ── 1) Resend por HTTPS (funciona aunque SMTP esté bloqueado) ─────────────
+    resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+    if resend_key:
+        try:
+            to_addrs = []
+            for hdr in ("To", "Cc", "Bcc"):
+                if msg.get(hdr):
+                    to_addrs.extend([a.strip() for a in str(msg.get(hdr)).split(",") if a.strip()])
+            if not to_addrs:
+                raise RuntimeError("El mensaje no tiene destinatario (To).")
+            subject = str(msg.get("Subject") or "EduTrack")
+            # Extraer texto / html del EmailMessage
+            text_body, html_body = "", ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    ctype = part.get_content_type()
+                    if ctype == "text/plain" and not text_body:
+                        try:
+                            text_body = part.get_content()
+                        except Exception:
+                            text_body = part.get_payload(decode=True).decode("utf-8", errors="replace")
+                    elif ctype == "text/html" and not html_body:
+                        try:
+                            html_body = part.get_content()
+                        except Exception:
+                            html_body = part.get_payload(decode=True).decode("utf-8", errors="replace")
+            else:
+                try:
+                    text_body = msg.get_content()
+                except Exception:
+                    text_body = str(msg.get_payload(decode=True) or b"", "utf-8", errors="replace")
+            from_addr = (os.environ.get("RESEND_FROM") or "").strip() or correo_envio or "onboarding@resend.dev"
+            # Resend exige formato "Nombre <email>" o solo email
+            if "<" not in from_addr and correo_envio and "@" in str(correo_envio):
+                # Preferir RESEND_FROM; si no, usar el correo configurado
+                pass
+            payload = {
+                "from": from_addr if "@" in from_addr else "EduTrack <onboarding@resend.dev>",
+                "to": to_addrs[:50],
+                "subject": subject,
+            }
+            if html_body:
+                payload["html"] = html_body
+            if text_body:
+                payload["text"] = text_body
+            if not html_body and not text_body:
+                payload["text"] = subject
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {resend_key}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "EduTrack/1.0",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                print("Resend OK:", body[:200])
+            return True
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace") if e.fp else str(e)
+            print("Resend HTTP error:", e.code, detail)
+            raise RuntimeError(
+                f"Resend rechazó el envío (HTTP {e.code}): {detail[:400]}. "
+                "Verifique RESEND_API_KEY y que RESEND_FROM sea onboarding@resend.dev "
+                "o un dominio verificado en resend.com."
+            ) from e
+        except Exception as e:
+            print("Resend falló:", e)
+            raise RuntimeError(f"Resend (HTTPS) falló: {e}") from e
+
+    # ── 2) SMTP Gmail (solo si Railway permite SMTP = plan Pro+) ──────────────
+    correo_envio = str(correo_envio or "").strip()
+    password = str(password or "").strip().replace(" ", "")
     if not correo_envio or not password:
         raise RuntimeError(
-            "Faltan credenciales SMTP. Conecte el correo en /gerencia/correo-soporte "
-            "o defina SOPORTE_EMAIL y SOPORTE_PASSWORD (contraseña de aplicación) en Railway."
+            "Railway bloquea SMTP en plan Hobby/Free (Errno 101). "
+            "Solución: cree una cuenta gratis en https://resend.com, copie la API Key "
+            "y agregue en Railway la variable RESEND_API_KEY=re_xxxx. "
+            "Opcional: RESEND_FROM=onboarding@resend.dev para pruebas."
         )
-    correo_envio = str(correo_envio).strip()
-    password = str(password).strip().replace(" ", "")
     ctx = ssl.create_default_context()
     errores = []
-    # Timeout corto: si se cuelga, falla antes del WORKER TIMEOUT de Gunicorn (30s)
-    # 1) Puerto 587 + STARTTLS (recomendado en Railway / cloud)
     try:
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=12) as smtp:
             smtp.ehlo()
@@ -3556,7 +3645,6 @@ def _smtp_enviar(msg, correo_envio, password):
     except Exception as e:
         errores.append(f"587 STARTTLS: {type(e).__name__}: {e}")
         print("SMTP 587 falló:", e)
-    # 2) Puerto 465 — SSL implícito (secure)
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=12) as smtp:
             smtp.login(correo_envio, password)
@@ -3565,12 +3653,19 @@ def _smtp_enviar(msg, correo_envio, password):
     except Exception as e:
         errores.append(f"465 SSL: {type(e).__name__}: {e}")
         print("SMTP 465 falló:", e)
+    joined = " | ".join(errores)
+    if "101" in joined or "unreachable" in joined.lower():
+        raise RuntimeError(
+            "Railway bloquea el puerto SMTP en su plan actual (Hobby/Free/Trial). "
+            "Gmail SMTP no puede usarse desde este servidor. "
+            "Solución recomendada: agregue RESEND_API_KEY en Railway "
+            "(cuenta gratis en https://resend.com → API Keys). "
+            "Alternativa: subir a plan Pro de Railway, que sí permite SMTP."
+        )
     raise RuntimeError(
-        "No se pudo enviar el correo por Gmail. "
-        + " | ".join(errores)
+        "No se pudo enviar el correo por Gmail. " + joined
         + " — Use contraseña de aplicación de 16 caracteres y verifique SOPORTE_EMAIL."
     )
-
 
 
 
