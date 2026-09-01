@@ -1543,6 +1543,11 @@ class VerificacionRector(db.Model):
     es_pep = db.Column(db.Boolean, default=False)
     pep_aprobado_por = db.Column(db.String(120), default="")
     pep_aprobado_fecha = db.Column(db.String(20), default="")
+    # Decisión de Gerencia: permitir o no vender a este rector/colegio
+    gerencia_decision = db.Column(db.String(20), default="")  # APROBADO | RECHAZADO | ""
+    gerencia_motivo = db.Column(db.Text, default="")
+    gerencia_por = db.Column(db.String(120), default="")
+    gerencia_fecha = db.Column(db.String(30), default="")
 
 
 class DirectorioMEN(db.Model):
@@ -2692,6 +2697,10 @@ def migrar_columnas():
         ("plataforma", "horario_semana", "ALTER TABLE plataforma ADD COLUMN horario_semana VARCHAR(80) DEFAULT ''"),
         ("plataforma", "soporte_mensaje", "ALTER TABLE plataforma ADD COLUMN soporte_mensaje TEXT"),
         ("tickets_pqr", "nro_cun", "ALTER TABLE tickets_pqr ADD COLUMN nro_cun VARCHAR(40) DEFAULT ''"),
+        ("verificaciones_rector", "gerencia_decision", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_decision VARCHAR(20) DEFAULT ''"),
+        ("verificaciones_rector", "gerencia_motivo", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_motivo TEXT DEFAULT ''"),
+        ("verificaciones_rector", "gerencia_por", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_por VARCHAR(120) DEFAULT ''"),
+        ("verificaciones_rector", "gerencia_fecha", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_fecha VARCHAR(30) DEFAULT ''"),
         ("tickets_pqr", "fecha_estimada", "ALTER TABLE tickets_pqr ADD COLUMN fecha_estimada VARCHAR(20) DEFAULT ''"),
         ("tickets_pqr", "estado_cun", "ALTER TABLE tickets_pqr ADD COLUMN estado_cun VARCHAR(40) DEFAULT ''"),
         ("tickets_pqr", "medio_ingreso", "ALTER TABLE tickets_pqr ADD COLUMN medio_ingreso VARCHAR(60) DEFAULT 'Web'"),
@@ -15680,43 +15689,179 @@ def gerencia_login():
 
 
 
-@app.route("/gerencia/verificaciones-pendientes")
+@app.route("/gerencia/verificaciones-pendientes", methods=["GET", "POST"])
 def gerencia_verificaciones_pendientes():
-    """Bandeja de casos de Ventas que necesitan aprobación de Gerencia: alertas OFAC
-    sin resolver o rectores marcados como PEP sin aprobar."""
+    """Bandeja Gerencia: autorizar o rechazar la venta cuando hay alerta OFAC o rector PEP."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
-    pendientes = VerificacionRector.query.filter(
-        db.or_(
-            db.and_(VerificacionRector.ofac_alerta == True),
-            db.and_(VerificacionRector.es_pep == True, VerificacionRector.pep_aprobado_por == ""),
-        )
-    ).order_by(VerificacionRector.id.desc()).all()
+    mensaje = error = ""
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        try:
+            vid = int(request.form.get("vid") or 0)
+        except Exception:
+            vid = 0
+        motivo = (request.form.get("motivo") or "").strip()[:800]
+        v = VerificacionRector.query.get(vid) if vid else None
+        if not v:
+            error = "Registro no encontrado."
+        elif accion in ("aprobar_venta", "rechazar_venta"):
+            quien = session.get("usuario") or "gerencia"
+            ahora_txt = f"{fecha_hoy()} {hora_actual()}"
+            if accion == "aprobar_venta":
+                v.gerencia_decision = "APROBADO"
+                v.gerencia_motivo = motivo or "Venta autorizada por Gerencia"
+                v.gerencia_por = quien
+                v.gerencia_fecha = ahora_txt
+                if v.es_pep and not (v.pep_aprobado_por or "").strip():
+                    v.pep_aprobado_por = quien
+                    v.pep_aprobado_fecha = ahora_txt
+                # La alerta OFAC queda documentada pero el caso deja de estar "pendiente"
+                # al tener gerencia_decision = APROBADO
+                try:
+                    registrar_auditoria(
+                        "Gerencia aprobó venta",
+                        f"verif_id={v.id} rector={v.nombre_rector} cc={v.cedula_rector} nit={v.nit_colegio} motivo={motivo[:120]}",
+                    )
+                except Exception:
+                    pass
+                db.session.commit()
+                mensaje = f"Venta APROBADA para {_esc(v.nombre_rector)} · {_esc(v.nombre_colegio or v.nit_colegio)}."
+            else:
+                v.gerencia_decision = "RECHAZADO"
+                v.gerencia_motivo = motivo or "Venta no autorizada por Gerencia"
+                v.gerencia_por = quien
+                v.gerencia_fecha = ahora_txt
+                try:
+                    registrar_auditoria(
+                        "Gerencia rechazó venta",
+                        f"verif_id={v.id} rector={v.nombre_rector} cc={v.cedula_rector} nit={v.nit_colegio} motivo={motivo[:120]}",
+                    )
+                except Exception:
+                    pass
+                db.session.commit()
+                mensaje = f"Venta RECHAZADA para {_esc(v.nombre_rector)}. Ventas no debe continuar con este caso."
+
+    # Pendientes: OFAC o PEP sin decisión de gerencia
+    try:
+        pendientes = VerificacionRector.query.filter(
+            db.or_(
+                VerificacionRector.gerencia_decision == None,
+                VerificacionRector.gerencia_decision == "",
+            ),
+            db.or_(
+                VerificacionRector.ofac_alerta == True,
+                db.and_(VerificacionRector.es_pep == True, VerificacionRector.pep_aprobado_por == ""),
+            ),
+        ).order_by(VerificacionRector.id.desc()).all()
+    except Exception:
+        # Si columnas nuevas aún no migraron
+        pendientes = VerificacionRector.query.filter(
+            db.or_(
+                db.and_(VerificacionRector.ofac_alerta == True),
+                db.and_(VerificacionRector.es_pep == True, VerificacionRector.pep_aprobado_por == ""),
+            )
+        ).order_by(VerificacionRector.id.desc()).all()
+
     filas = ""
     for v in pendientes:
         motivo = []
         if v.ofac_alerta:
-            motivo.append("🔴 Alerta OFAC")
-        if v.es_pep and not v.pep_aprobado_por:
-            motivo.append("🟡 PEP sin aprobar")
-        filas += (
-            f"<tr><td>{v.fecha} {v.hora}</td><td>{_esc(v.nombre_rector)}<br><span class='mini-text'>CC {_esc(v.cedula_rector)}</span></td>"
-            f"<td>{_esc(v.nombre_colegio)}<br><span class='mini-text'>NIT {_esc(v.nit_colegio)}</span></td>"
-            f"<td>{' / '.join(motivo)}</td><td>{_esc(v.consultado_por)}</td>"
-            f"<td><a href='/ventas/verificacion'>Revisar en Ventas →</a></td></tr>"
-        )
+            motivo.append('<span style="background:#fee2e2;color:#991b1b;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11px">OFAC</span>')
+        if v.es_pep and not (v.pep_aprobado_por or "").strip():
+            motivo.append('<span style="background:#fef3c7;color:#92400e;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11px">PEP</span>')
+        detalle_ofac = (v.ofac_detalle or "").strip()
+        det_html = f"<div style='font-size:11px;color:#64748b;margin-top:4px'>{_esc(detalle_ofac[:180])}</div>" if detalle_ofac else ""
+        filas += f"""
+        <tr>
+          <td style="white-space:nowrap;font-size:12px">{_esc(v.fecha or '')}<br>{_esc(v.hora or '')}</td>
+          <td><b>{_esc(v.nombre_rector or '—')}</b><br><span style="font-size:11px;color:#64748b">CC {_esc(v.cedula_rector or '')}</span></td>
+          <td>{_esc(v.nombre_colegio or '—')}<br><span style="font-size:11px;color:#64748b">NIT {_esc(v.nit_colegio or '')}</span></td>
+          <td>{' '.join(motivo)}{det_html}</td>
+          <td style="font-size:12px">{_esc(v.consultado_por or '')}</td>
+          <td style="min-width:280px">
+            <form method="POST" style="display:flex;flex-direction:column;gap:6px">
+              <input type="hidden" name="vid" value="{v.id}">
+              <input name="motivo" placeholder="Motivo / observación (opcional)" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px">
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button type="submit" name="accion" value="aprobar_venta"
+                  style="background:#16a34a;color:#fff;border:0;padding:8px 12px;border-radius:8px;font-weight:800;cursor:pointer;font-size:12px"
+                  onclick="return confirm('¿Autorizar la venta a este rector/colegio?');">
+                  ✅ Aprobar venta
+                </button>
+                <button type="submit" name="accion" value="rechazar_venta"
+                  style="background:#b91c1c;color:#fff;border:0;padding:8px 12px;border-radius:8px;font-weight:800;cursor:pointer;font-size:12px"
+                  onclick="return confirm('¿Rechazar y bloquear esta venta?');">
+                  ⛔ Rechazar venta
+                </button>
+              </div>
+            </form>
+          </td>
+        </tr>"""
     if not filas:
-        filas = "<tr><td colspan='6' style='text-align:center;color:#64748b;padding:14px'>No hay casos pendientes 🎉</td></tr>"
+        filas = "<tr><td colspan='6' style='text-align:center;color:#64748b;padding:18px'>No hay casos pendientes 🎉</td></tr>"
+
+    # Historial reciente de decisiones
+    hist_rows = ""
+    try:
+        hist = VerificacionRector.query.filter(
+            VerificacionRector.gerencia_decision.in_(["APROBADO", "RECHAZADO"])
+        ).order_by(VerificacionRector.id.desc()).limit(15).all()
+        for h in hist:
+            color = "#16a34a" if h.gerencia_decision == "APROBADO" else "#b91c1c"
+            hist_rows += (
+                f"<tr><td style='font-size:12px'>{_esc(h.gerencia_fecha or '')}</td>"
+                f"<td>{_esc(h.nombre_rector)}</td><td>{_esc(h.nombre_colegio or h.nit_colegio)}</td>"
+                f"<td><b style='color:{color}'>{h.gerencia_decision}</b></td>"
+                f"<td style='font-size:12px'>{_esc(h.gerencia_por)}</td>"
+                f"<td style='font-size:12px'>{_esc((h.gerencia_motivo or '')[:100])}</td></tr>"
+            )
+    except Exception:
+        hist = []
+    if not hist_rows:
+        hist_rows = "<tr><td colspan='6' style='text-align:center;color:#94a3b8;padding:12px'>Sin decisiones registradas aún</td></tr>"
+
     content = f"""
-<header class="role-hero"><div><h1>Verificaciones pendientes de Gerencia</h1><p>Alertas OFAC y casos PEP marcados por Ventas que necesitan tu revisión</p></div>
+<header class="role-hero"><div>
+  <h1>Autorización de ventas · PEP / OFAC</h1>
+  <p>Decide si se permite continuar la venta cuando Ventas marca PEP o hay alerta OFAC.</p>
+</div>
   <a class="btn" href="/gerencia/hq">← HQ</a>
 </header>
-<div class="role-panel" style="overflow:auto">
-<table><tr><th>Fecha</th><th>Rector</th><th>Colegio</th><th>Motivo</th><th>Asesor</th><th></th></tr>{filas}</table>
-</div>
+{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+{"<div class='msg danger'>"+error+"</div>" if error else ""}
+<section class="role-panel" style="overflow:auto">
+  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Pendientes de tu decisión</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px;text-align:left">Fecha</th>
+      <th style="padding:8px;text-align:left">Rector</th>
+      <th style="padding:8px;text-align:left">Colegio</th>
+      <th style="padding:8px;text-align:left">Alerta</th>
+      <th style="padding:8px;text-align:left">Asesor</th>
+      <th style="padding:8px;text-align:left">Decisión</th>
+    </tr>
+    {filas}
+  </table>
+</section>
+<section class="role-panel" style="margin-top:16px;overflow:auto">
+  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Historial de autorizaciones</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#e2e8f0">
+      <th style="padding:8px;text-align:left">Fecha decisión</th>
+      <th style="padding:8px;text-align:left">Rector</th>
+      <th style="padding:8px;text-align:left">Colegio</th>
+      <th style="padding:8px;text-align:left">Resultado</th>
+      <th style="padding:8px;text-align:left">Por</th>
+      <th style="padding:8px;text-align:left">Motivo</th>
+    </tr>
+    {hist_rows}
+  </table>
+</section>
 """
-    return page("Verificaciones pendientes", shell(content))
+    return page("Autorización ventas PEP/OFAC", shell(content))
 
 
 @app.route("/gerencia")
@@ -15944,9 +16089,13 @@ def gerencia_hq():
     try:
         n_pendientes = VerificacionRector.query.filter(
             db.or_(
+                VerificacionRector.gerencia_decision == None,
+                VerificacionRector.gerencia_decision == "",
+            ),
+            db.or_(
                 VerificacionRector.ofac_alerta == True,
                 db.and_(VerificacionRector.es_pep == True, VerificacionRector.pep_aprobado_por == ""),
-            )
+            ),
         ).count()
     except Exception:
         n_pendientes = 0
