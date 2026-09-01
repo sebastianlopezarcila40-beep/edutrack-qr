@@ -1927,13 +1927,13 @@ def html_anuncio_global():
         '<div style="padding:18px 28px 26px;color:#334155;font-size:14px;line-height:1.55">'
         + imgs_html
         + '<div style="margin-top:12px">' + cuerpo + "</div>" + cuenta_html
-        + '<p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Cierre con la X. Se mostrará de nuevo si publicamos una nueva versión del anuncio.</p>'
+        + '<p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Cierre con la X. Este aviso se mostrará cada vez que abra el sistema mientras esté activo.</p>'
         "</div></div></div>"
         '<script>(function(){var ver="' + ver + '";var key="edutrack_anuncio_dismiss_"+ver;'
-        'try{if(localStorage.getItem(key)==="1")return;}catch(e){}'
+        '/* siempre mostrar anuncio al abrir */'
         'var el=document.getElementById("anuncio-global");if(!el)return;el.style.display="flex";'
         "var btn=document.getElementById(\"anuncio-cerrar\");"
-        'if(btn)btn.onclick=function(){el.style.display="none";try{localStorage.setItem(key,"1");}catch(e){}};'
+        'if(btn)btn.onclick=function(){el.style.display="none";};'
         "})();</script>"
     )
 
@@ -2841,9 +2841,11 @@ def _parse_user_agent(ua: str):
 
 
 def _geo_por_ip(ip: str):
-    """Ubicación y proveedor ISP por IP. Caché 6h. Usa ip-api.com (sin API key).
-    Devuelve (ubicacion_str, isp_str). Compat: si se usa como str, str() da la ubicación."""
+    """Ubicación y proveedor ISP por IP (multi-fuente). Caché 6h.
+    Devuelve (ubicacion_str, isp_str). Nota: IPs móviles (Claro/Tigo) a menudo
+    resuelven a la región del gateway del operador, no al municipio exacto."""
     import time
+    import urllib.request
     ip = (ip or "").split(",")[0].strip()
     if not ip or ip.startswith("127.") or ip.startswith("10.") or ip.startswith("192.168.") or ip == "::1":
         return "Red local / privada", "Red local"
@@ -2855,18 +2857,42 @@ def _geo_por_ip(ip: str):
             return val[0], val[1]
         return str(val), ""
     ubic, isp = "No determinada", ""
+    # Fuente 1: ip-api.com
     try:
-        import urllib.request
-        url = f"http://ip-api.com/json/{ip}?fields=status,country,regionName,city,isp,query"
+        url = f"http://ip-api.com/json/{ip}?fields=status,country,regionName,city,isp,as,query,lat,lon&lang=es"
         req = urllib.request.Request(url, headers={"User-Agent": "EduTrack-Audit/1.0"})
-        with urllib.request.urlopen(req, timeout=2.5) as resp:
+        with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore") or "{}")
         if data.get("status") == "success":
             parts = [data.get("city"), data.get("regionName"), data.get("country")]
             ubic = ", ".join(p for p in parts if p) or ubic
-            isp = (data.get("isp") or "")[:160]
-    except Exception:
-        pass
+            isp = (data.get("isp") or data.get("as") or "")[:160]
+            lat, lon = data.get("lat"), data.get("lon")
+            if lat is not None and lon is not None:
+                ubic = f"{ubic} (≈{lat:.2f},{lon:.2f})" if ubic != "No determinada" else f"≈{lat:.2f},{lon:.2f}"
+    except Exception as e1:
+        print("geo ip-api:", e1)
+    # Fuente 2: ipapi.co (si la primera falló o no trajo ciudad)
+    if ubic in ("No determinada", "") or not isp:
+        try:
+            url2 = f"https://ipapi.co/{ip}/json/"
+            req2 = urllib.request.Request(url2, headers={"User-Agent": "EduTrack-Audit/1.0"})
+            with urllib.request.urlopen(req2, timeout=3) as resp2:
+                d2 = json.loads(resp2.read().decode("utf-8", errors="ignore") or "{}")
+            if not d2.get("error"):
+                parts2 = [d2.get("city"), d2.get("region"), d2.get("country_name")]
+                u2 = ", ".join(p for p in parts2 if p)
+                if u2 and (ubic in ("No determinada", "") or "Department" in ubic):
+                    ubic = u2
+                if not isp:
+                    isp = (d2.get("org") or d2.get("asn") or "")[:160]
+        except Exception as e2:
+            print("geo ipapi.co:", e2)
+    # Marcar IPs de operador móvil como aproximadas
+    isp_up = (isp or "").upper()
+    if any(x in isp_up for x in ("COMCEL", "CLARO", "TIGO", "MOVISTAR", "COLOMBIA TELECOMUNICACIONES", "COMUNICACIÓN CELULAR")):
+        if ubic and "aprox" not in ubic.lower():
+            ubic = f"{ubic} · aprox. por red móvil"
     _geo_cache[ip] = ((ubic, isp), now)
     return ubic, isp
 
@@ -15827,8 +15853,11 @@ def gerencia_verificaciones_pendientes():
                 if v.es_pep and not (v.pep_aprobado_por or "").strip():
                     v.pep_aprobado_por = quien
                     v.pep_aprobado_fecha = ahora_txt
-                # La alerta OFAC queda documentada pero el caso deja de estar "pendiente"
-                # al tener gerencia_decision = APROBADO
+                # Deja de contar como pendiente en HQ
+                try:
+                    v.ofac_alerta = False
+                except Exception:
+                    pass
                 try:
                     registrar_auditoria(
                         "Gerencia aprobó venta",
@@ -15984,7 +16013,7 @@ def gerencia_pqr_limpieza():
     mensaje = error = ""
     # Filtros de búsqueda
     qtxt = (request.values.get("q") or "").strip()
-    solo_prueba = (request.values.get("solo_prueba") or "1") == "1"
+    solo_prueba = (request.values.get("solo_prueba") or "0") == "1"
 
     if request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
@@ -16081,7 +16110,7 @@ def gerencia_pqr_limpieza():
                 TicketPQR.numero_documento.ilike(like),
             )
         )
-    rows = qry.order_by(TicketPQR.id.desc()).limit(200).all()
+    rows = qry.order_by(TicketPQR.id.desc()).limit(500).all()
     filas = ""
     for t in rows:
         rad = formatear_radicado(t.radicado or t.nro_cun or "")
@@ -16196,16 +16225,36 @@ def gerencia_hq():
     except Exception:
         hoy_txt = m.get("mes") or ""
     try:
-        n_pendientes = VerificacionRector.query.filter(
-            db.or_(
-                VerificacionRector.gerencia_decision == None,
-                VerificacionRector.gerencia_decision == "",
-            ),
-            db.or_(
-                VerificacionRector.ofac_alerta == True,
-                db.and_(VerificacionRector.es_pep == True, VerificacionRector.pep_aprobado_por == ""),
-            ),
-        ).count()
+        try:
+            n_pendientes = VerificacionRector.query.filter(
+                db.or_(
+                    VerificacionRector.gerencia_decision == None,
+                    VerificacionRector.gerencia_decision == "",
+                ),
+                db.or_(
+                    VerificacionRector.ofac_alerta == True,
+                    db.and_(
+                        VerificacionRector.es_pep == True,
+                        db.or_(
+                            VerificacionRector.pep_aprobado_por == None,
+                            VerificacionRector.pep_aprobado_por == "",
+                        ),
+                    ),
+                ),
+            ).count()
+        except Exception:
+            n_pendientes = VerificacionRector.query.filter(
+                db.or_(
+                    VerificacionRector.ofac_alerta == True,
+                    db.and_(
+                        VerificacionRector.es_pep == True,
+                        db.or_(
+                            VerificacionRector.pep_aprobado_por == None,
+                            VerificacionRector.pep_aprobado_por == "",
+                        ),
+                    ),
+                ),
+            ).count()
     except Exception:
         n_pendientes = 0
     aviso_pendientes = (
@@ -16291,6 +16340,8 @@ def gerencia_hq():
         <a href="/soporte_admin">Centro de soporte</a>
         <a class="a" href="/gerencia/pqr-limpieza">🧹 Limpieza PQR de prueba</a>
         <a href="/gerencia/auditoria">📋 Auditoría IP / ubicación</a>
+        <a href="/gerencia/procsis-web">📰 Noticias y productos web</a>
+        <a href="/gerencia/anuncios">📢 Anuncios (editar)</a>
         <a href="/tenants">Instituciones</a>
         <a href="/auditoria">Auditoría</a>
         <a class="t" href="/gerencia/lideres">Líderes / equipo web</a>
@@ -26225,6 +26276,44 @@ def eliminar_institucion(id):
             "estudiantes",
         )
 
+
+        # 6b) Borrar tablas huérfanas conocidas que bloquean FK (tickets legacy, etc.)
+        for tn in ("tickets", "tickets_pqr", "historial_pqr", "sedes_institucion", "configuracion",
+                   "usuarios", "estudiantes", "matriculas", "notas", "asistencias"):
+            try:
+                cols = []
+                try:
+                    cols = [c["name"] for c in sa_inspect(db.engine).get_columns(tn)]
+                except Exception:
+                    pass
+                if "institucion_id" in cols:
+                    db.session.execute(text(f'DELETE FROM "{tn}" WHERE institucion_id = :iid'), {"iid": iid})
+                    db.session.commit()
+            except Exception as e_tn:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                print("force del", tn, e_tn)
+        # Postgres: desactivar triggers FK temporalmente si el rol lo permite
+        try:
+            db.session.execute(text("SET session_replication_role = 'replica'"))
+            db.session.execute(text('DELETE FROM instituciones WHERE id = :iid'), {"iid": iid})
+            db.session.execute(text("SET session_replication_role = 'origin'"))
+            db.session.commit()
+            inst2 = None  # ya borrada
+        except Exception as e_rep:
+            try:
+                db.session.rollback()
+                db.session.execute(text("SET session_replication_role = 'origin'"))
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+            print("replication_role delete:", e_rep)
+
         # 6) Institución
         inst2 = Institucion.query.get(iid)
         if inst2:
@@ -33630,11 +33719,14 @@ def soporte_pqr_probar_correo():
 def soporte_pqr_centro():
     if not requiere_login() or rol_actual() != "Soporte":
         return redirect("/soporte-login")
-    bucket = (request.args.get("bucket") or "").strip().lower()
+    bucket = (request.args.get("bucket") or "abiertas").strip().lower()
     qtxt = (request.args.get("q") or "").strip()
     q = TicketPQR.query
     if bucket in _PQR_BUCKETS:
         q = q.filter(TicketPQR.estado.in_(_PQR_BUCKETS[bucket][0]))
+    elif bucket != "todas":
+        # por defecto ocultar cerradas/resueltas
+        q = q.filter(~TicketPQR.estado.in_(["RESUELTA", "CERRADA", "CERRADO", "ANULADA"]))
     if qtxt:
         like = f"%{qtxt}%"
         q = q.filter(or_(
