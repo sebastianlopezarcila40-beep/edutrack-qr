@@ -3596,6 +3596,17 @@ def _smtp_enviar(msg, correo_envio, password):
                 payload["text"] = text_body
             if not html_body and not text_body:
                 payload["text"] = subject
+            # Adjuntos inline (cid:) leídos de msg._resend_inline_attachments si existen
+            inline = getattr(msg, "_resend_inline_attachments", None) or []
+            if inline:
+                import base64 as _b64
+                payload["attachments"] = []
+                for att in inline:
+                    payload["attachments"].append({
+                        "filename": att.get("filename") or "image.png",
+                        "content": _b64.b64encode(att["content"]).decode("ascii"),
+                        "content_id": att.get("content_id") or "inline",
+                    })
             req = urllib.request.Request(
                 "https://api.resend.com/emails",
                 data=json.dumps(payload).encode("utf-8"),
@@ -4888,6 +4899,57 @@ def _fecha_limite_pqr_habiles(fecha_inicio=None, dias_habiles=15):
     return cur.strftime("%Y-%m-%d")
 
 
+
+def _cargar_hero_pqr():
+    """Devuelve (bytes, mime_subtype, filename) de la foto hero PROCSIS, o (None, None, None)."""
+    candidates = []
+    base = os.path.dirname(os.path.abspath(__file__))
+    for name in (
+        "pqr-respuesta-hero.png",
+        "pqr-respuesta-hero.jpg",
+        "pqr-respuesta-hero.jpeg",
+        "pqr-respuesta-hero.png.jpeg",
+        "pqr-respuesta-hero.PNG",
+        "pqr-respuesta-hero.JPG",
+    ):
+        candidates.append(os.path.join(base, "static", "img", name))
+        candidates.append(os.path.join("static", "img", name))
+    for p in candidates:
+        try:
+            if not (p and os.path.isfile(p) and os.path.getsize(p) > 500):
+                continue
+            with open(p, "rb") as fh:
+                raw = fh.read()
+            # magic bytes
+            if raw[:3] == b"\xff\xd8\xff":
+                return raw, "jpeg", "pqr-respuesta-hero.jpg"
+            if raw[:8] == b"\x89PNG\r\n\x1a\n":
+                return raw, "png", "pqr-respuesta-hero.png"
+            # fallback por extensión
+            ext = os.path.splitext(p)[1].lower()
+            if "jpg" in ext or "jpeg" in ext:
+                return raw, "jpeg", "pqr-respuesta-hero.jpg"
+            return raw, "png", "pqr-respuesta-hero.png"
+        except Exception as e:
+            print("hero load skip", p, e)
+    return None, None, None
+
+
+def _nombre_destinatario_pqr(t):
+    """Nombre para saludar en correos/landing: razón social del ticket o usuario en sesión."""
+    nom = (getattr(t, "razon_social", None) or "").strip()
+    if nom:
+        return nom
+    try:
+        if session.get("nombre_completo"):
+            return str(session.get("nombre_completo")).strip()
+        if session.get("usuario"):
+            return str(session.get("usuario")).strip()
+    except Exception:
+        pass
+    return "Usuario"
+
+
 def enviar_notificacion_pqr_estilo_tigo(destino, t):
     """Correo de notificación con el mismo patrón que usan las telcos (Tigo, Claro,
     etc.): un aviso corto con botón 'Ver respuesta' que lleva a una página del propio
@@ -4911,7 +4973,7 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     token = _asegurar_token_pqr(t)
     base_url = (os.environ.get("APP_BASE_URL") or request.url_root or "").rstrip("/")
     link = f"{base_url}/pqr/notificacion/{token}"
-    nombre = (t.razon_social or "usuario").strip()
+    nombre = _nombre_destinatario_pqr(t)
     empresa = nombre_empresa()
     producto = nombre_producto()
     try:
@@ -4921,41 +4983,14 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     except Exception:
         wa_num, email_ayuda = "", SOPORTE_EMAIL
     wa_link = f"https://wa.me/{wa_num}" if wa_num else f"mailto:{email_ayuda}"
-    # Imagen hero PROCSIS: se embebe en base64 para que Gmail/Resend la muestren
-    # aunque la URL pública falle (404 / APP_BASE_URL mal).
-    import base64 as _b64
-    hero_img = f"{base_url}/static/img/pqr-respuesta-hero.png"
-    _img_candidates = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img", "pqr-respuesta-hero.png"),
-        os.path.join("static", "img", "pqr-respuesta-hero.png"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img", "pqr-respuesta-hero.jpg"),
-        os.path.join("static", "img", "pqr-respuesta-hero.jpg"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img", "pqr-respuesta-hero.jpeg"),
-        os.path.join("static", "img", "pqr-respuesta-hero.jpeg"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img", "pqr-respuesta-hero.png.jpeg"),
-    ]
-    for _p in _img_candidates:
-        try:
-            if _p and os.path.isfile(_p) and os.path.getsize(_p) > 500:
-                with open(_p, "rb") as _fh:
-                    _raw = _fh.read()
-                _ext = os.path.splitext(_p)[1].lower().replace(".", "")
-                if _ext in ("jpg", "jpeg") or _p.endswith(".png.jpeg"):
-                    _mime = "jpeg"
-                elif _ext == "webp":
-                    _mime = "webp"
-                else:
-                    _mime = "png"
-                # Detectar JPEG real por magic bytes aunque la extensión diga png
-                if _raw[:3] == b"\xff\xd8\xff":
-                    _mime = "jpeg"
-                elif _raw[:8] == b"\x89PNG\r\n\x1a\n":
-                    _mime = "png"
-                hero_img = f"data:image/{_mime};base64," + _b64.b64encode(_raw).decode("ascii")
-                print("PQR hero embebida desde:", _p, "mime=", _mime, "bytes=", len(_raw))
-                break
-        except Exception as _ie:
-            print("PQR hero skip", _p, _ie)
+    # Foto hero PROCSIS como CID (Resend attachment content_id). Gmail bloquea data-URI.
+    hero_img = "cid:hero_procsis"
+    _hero_bytes, _hero_mime, _hero_fname = _cargar_hero_pqr()
+    if not _hero_bytes:
+        # Fallback URL pública por si el archivo no está en el contenedor
+        hero_img = f"{base_url}/static/img/pqr-respuesta-hero.png"
+        print("PQR hero: sin archivo local, se usará URL", hero_img)
+
     html = f"""
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
   <!-- Cabecera visual tipo telco: saludo + foto PROCSIS + chip amarillo -->
@@ -5012,6 +5047,28 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
             f"Por favor no respondas este mensaje.\n{empresa} · {producto}"
         )
         msg.add_alternative(html, subtype="html")
+        # Adjuntar foto hero como inline CID para Resend/Gmail
+        try:
+            if _hero_bytes:
+                msg._resend_inline_attachments = [{
+                    "content": _hero_bytes,
+                    "filename": _hero_fname or "pqr-respuesta-hero.png",
+                    "content_id": "hero_procsis",
+                }]
+                # También related part para SMTP clásico
+                try:
+                    msg.get_payload()[-1].add_related(
+                        _hero_bytes,
+                        maintype="image",
+                        subtype=_hero_mime or "png",
+                        cid="hero_procsis",
+                    )
+                except Exception as _rel_e:
+                    print("related attach:", _rel_e)
+            else:
+                print("PQR hero: archivo no encontrado en static/img/ — el correo irá sin foto")
+        except Exception as _att_e:
+            print("PQR hero attach error:", _att_e)
         _smtp_enviar(msg, correo_envio, password)
         t.notificacion_enviada_en = f"{fecha_hoy()} {hora_actual()}"
         # Solo persistir si el ticket ya existe en BD (evitar commit de tickets de prueba en memoria)
@@ -5106,13 +5163,15 @@ body{{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:#f1f5f
     </aside>
     <section class="card main">
       <h2>Señor(a) {nombre},</h2>
-      <p>Gracias por haberte puesto en contacto con nosotros. Estamos compartiéndote la respuesta a tu solicitud. Si requieres información adicional, puedes comunicarte con un asesor por nuestros canales oficiales.</p>
-      <div class="sol">{sol_html}</div>
+      <p>Gracias por haberse puesto en contacto con nosotros. La <b>respuesta oficial</b> a su solicitud está disponible en el documento PDF adjunto. Por seguridad y trazabilidad (Ley 1581 de 2012), el detalle del caso no se muestra en esta pantalla.</p>
+      <div class="sol" style="background:#eff6ff;border-left-color:#1e40af">
+        Su caso fue atendido. Descargue el PDF para ver la respuesta formal firmada por PROCSIS / EduTrack.
+      </div>
       <div class="adj" style="margin-top:22px">
         <h3 style="margin:0 0 10px;font-size:14px;color:#0B2D57">Archivos adjuntos</h3>
         <a href="/pqr/notificacion/{token}/pdf" target="_blank" rel="noopener">📄 Descargar respuesta oficial (PDF)</a>
       </div>
-      <p class="foot">Este espacio se usa únicamente para consultar la respuesta a su PQR.
+      <p class="foot">Este espacio se usa únicamente para acceder al documento de respuesta.
       Información protegida (Ley 1581 de 2012). No comparta este enlace.
       {empresa} · {producto}</p>
     </section>
