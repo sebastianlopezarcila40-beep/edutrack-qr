@@ -4921,8 +4921,41 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     except Exception:
         wa_num, email_ayuda = "", SOPORTE_EMAIL
     wa_link = f"https://wa.me/{wa_num}" if wa_num else f"mailto:{email_ayuda}"
-    # Imagen hero PROCSIS (estilo Tigo): debe existir en static/img/pqr-respuesta-hero.png
+    # Imagen hero PROCSIS: se embebe en base64 para que Gmail/Resend la muestren
+    # aunque la URL pública falle (404 / APP_BASE_URL mal).
+    import base64 as _b64
     hero_img = f"{base_url}/static/img/pqr-respuesta-hero.png"
+    _img_candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img", "pqr-respuesta-hero.png"),
+        os.path.join("static", "img", "pqr-respuesta-hero.png"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img", "pqr-respuesta-hero.jpg"),
+        os.path.join("static", "img", "pqr-respuesta-hero.jpg"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img", "pqr-respuesta-hero.jpeg"),
+        os.path.join("static", "img", "pqr-respuesta-hero.jpeg"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img", "pqr-respuesta-hero.png.jpeg"),
+    ]
+    for _p in _img_candidates:
+        try:
+            if _p and os.path.isfile(_p) and os.path.getsize(_p) > 500:
+                with open(_p, "rb") as _fh:
+                    _raw = _fh.read()
+                _ext = os.path.splitext(_p)[1].lower().replace(".", "")
+                if _ext in ("jpg", "jpeg") or _p.endswith(".png.jpeg"):
+                    _mime = "jpeg"
+                elif _ext == "webp":
+                    _mime = "webp"
+                else:
+                    _mime = "png"
+                # Detectar JPEG real por magic bytes aunque la extensión diga png
+                if _raw[:3] == b"\xff\xd8\xff":
+                    _mime = "jpeg"
+                elif _raw[:8] == b"\x89PNG\r\n\x1a\n":
+                    _mime = "png"
+                hero_img = f"data:image/{_mime};base64," + _b64.b64encode(_raw).decode("ascii")
+                print("PQR hero embebida desde:", _p, "mime=", _mime, "bytes=", len(_raw))
+                break
+        except Exception as _ie:
+            print("PQR hero skip", _p, _ie)
     html = f"""
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
   <!-- Cabecera visual tipo telco: saludo + foto PROCSIS + chip amarillo -->
@@ -15633,7 +15666,7 @@ def gerencia_verificaciones_pendientes():
 @app.route("/gerencia/pqr-limpieza", methods=["GET", "POST"])
 def gerencia_pqr_limpieza():
     """Panel exclusivo Gerencia/Superadmin: listar y eliminar PQR de prueba de forma definitiva."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Soporte"):
         return redirect("/gerencia-login")
     mensaje = error = ""
     # Filtros de búsqueda
@@ -33215,6 +33248,7 @@ def soporte_pqr_centro():
   <a class="btn" href="/soporte/pqr/crear">Radicar interna</a>
   <a class="btn" href="/soporte/pqr/consulta">Consulta validada</a>
   <a class="btn" href="/soporte/pqr/probar-correo" style="background:#0f766e">📧 Probar correo</a>
+  <a class="btn" href="/gerencia/pqr-limpieza" style="background:#b91c1c">🧹 Limpieza PQR</a>
 </header>
 <div class="role-panel" style="margin-bottom:12px">
   <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
