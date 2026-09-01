@@ -4878,9 +4878,18 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     if not destino:
         return False
     correo_envio, password = _credenciales_smtp("notificaciones")
-    if not correo_envio or not password:
-        print("PQR notificación email: falta conectar el correo de notificaciones (o SOPORTE_PASSWORD)")
+    resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+    # Railway Hobby: solo RESEND_API_KEY. Plan Pro: Gmail SMTP también sirve.
+    if not resend_key and (not correo_envio or not password):
+        print("PQR notificación: falta RESEND_API_KEY (Hobby) o SOPORTE_EMAIL/PASSWORD (Pro)")
         return False
+    from_addr = (
+        (os.environ.get("RESEND_FROM") or "").strip()
+        or correo_envio
+        or "EduTrack <onboarding@resend.dev>"
+    )
+    if not correo_envio:
+        correo_envio = from_addr
     token = _asegurar_token_pqr(t)
     base_url = (os.environ.get("APP_BASE_URL") or request.url_root or "").rstrip("/")
     link = f"{base_url}/pqr/notificacion/{token}"
@@ -4933,7 +4942,7 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     try:
         msg = EmailMessage()
         msg["Subject"] = f"{producto} · Tenemos la respuesta a tu solicitud Radicado No. {formatear_radicado(t.radicado or t.nro_cun)}"
-        msg["From"] = correo_envio
+        msg["From"] = from_addr
         msg["To"] = destino
         msg.set_content(
             f"Hola {nombre},\n\n"
@@ -4958,42 +4967,94 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
 
 
 @app.route("/pqr/notificacion/<token>")
+@app.route("/PQR/ver-respuesta/<token>")
+@app.route("/pqr/ver-respuesta/<token>")
 def pqr_notificacion_publica(token):
-    """Landing pública (sin login) donde el cliente ve el detalle de su PQR resuelta
-    y descarga el PDF — el mismo patrón de 'transacciones.tigo.com.co/notificaciones/pqr/...'."""
+    """Panel de respuesta PQR (correo → botón VER RESPUESTA → esta pantalla).
+
+    Flujo:
+      1) Soporte marca RESUELTA → se envía correo elegante con botón (sin la respuesta escrita).
+      2) El padre hace clic en VER RESPUESTA → llega aquí con un token secreto.
+      3) Ve resumen a la izquierda y respuesta oficial + PDF a la derecha.
+
+    Seguridad Ley 1581: el token es largo e impredecible (no se expone el radicado).
+    No se exige login de colegio porque el peticionario externo normalmente no tiene
+    usuario en EduTrack; el enlace del correo es la llave de acceso al caso.
+    """
     t = TicketPQR.query.filter_by(token_notificacion=token).first()
     if not t:
-        return page("Enlace no válido", "<div style='max-width:480px;margin:60px auto;font-family:Segoe UI,Arial;text-align:center'><h1>Enlace no válido o vencido</h1><p>Verifica el enlace o contacta a soporte con tu número de radicado.</p></div>")
+        return page(
+            "Enlace no válido",
+            "<div style='max-width:480px;margin:60px auto;font-family:Segoe UI,Arial;text-align:center;padding:24px'>"
+            "<h1 style='color:#0B2D57'>Enlace no válido o vencido</h1>"
+            "<p style='color:#64748b'>Verifica el enlace del correo o contacta a soporte con tu número de radicado.</p>"
+            "<a href='/login' style='color:#0B2D57;font-weight:700'>Ir al inicio de sesión</a></div>",
+        )
     empresa = nombre_empresa()
     producto = nombre_producto()
-    fecha_envio = t.notificacion_enviada_en or f"{t.fecha_respuesta or t.fecha} 12:00 pm"
-    fecha_actual = f"{fecha_hoy()} {hora_actual()}"
-    sol_html = (t.descripcion_cierre or t.respuesta or "Su solicitud ha sido gestionada.").replace("<", "&lt;").replace("\n", "<br>")
-    body = f"""
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{producto} · Respuesta a tu solicitud</title></head>
-<body style="margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a">
-  <div style="background:#0B2D57;padding:14px 24px"><b style="color:#fff;font-size:18px">{producto}</b></div>
-  <div style="background:linear-gradient(90deg,#0B2D57,#1e40af);color:#fff;padding:34px 24px">
-    <h1 style="margin:0;font-size:24px">Te brindamos<br>la respuesta</h1>
-    <span style="background:#facc15;color:#0f172a;font-weight:800;padding:4px 10px;border-radius:4px;font-size:14px;display:inline-block;margin-top:8px">a tu solicitud</span>
-  </div>
-  <div style="max-width:900px;margin:0 auto;padding:24px;display:grid;grid-template-columns:280px 1fr;gap:20px">
-    <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e2e8f0">
-      <h3 style="margin:0 0 12px">Información de PQR:</h3>
-      <p style="font-size:13px"><b>Radicado:</b><br>{_esc(formatear_radicado(t.radicado or t.nro_cun))}</p>
-      <p style="font-size:13px"><b>Asunto:</b><br>Respuesta Radicado No. {_esc(formatear_radicado(t.radicado))}</p>
-      <p style="font-size:13px"><b>Fecha de envío:</b><br>{_esc(fecha_envio)}</p>
-      <p style="font-size:13px"><b>Fecha actual:</b><br>{_esc(fecha_actual)}</p>
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #e2e8f0">
-      <h2 style="margin:0 0 12px;font-size:18px">Señor(a) {_esc((t.razon_social or 'usuario').upper())},</h2>
-      <p style="font-size:14px;line-height:1.6">Gracias por haberte puesto en contacto con nosotros. Estamos compartiéndote la respuesta a tu solicitud. Si requieres información adicional, puedes comunicarte con un asesor por nuestros canales oficiales.</p>
-      <div style="background:#f8fafc;border-left:4px solid #0B2D57;padding:14px;margin:14px 0;font-size:13.5px">{sol_html}</div>
-      <h3 style="margin:20px 0 8px;font-size:14px">Archivos Adjuntos</h3>
-      <a href="/pqr/notificacion/{token}/pdf" style="color:#1e40af;font-size:13.5px">📄 Respuesta_{_esc(t.ticket or t.id)}.pdf</a>
-      <p style="font-size:11px;color:#94a3b8;margin-top:24px">Este buzón se usa únicamente para el envío de respuestas; por favor no respondas directamente a este mensaje.</p>
-    </div>
+    fecha_envio = (t.fecha or "")[:20]
+    fecha_resp = (t.fecha_respuesta or t.fecha_cierre or "")[:20]
+    fecha_actual = fecha_hoy()
+    sol = (t.descripcion_cierre or t.respuesta or "").strip() or "—"
+    try:
+        sol_html = _esc(sol).replace("\n", "<br>")
+    except Exception:
+        sol_html = str(sol).replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+    rad = formatear_radicado(t.radicado or t.nro_cun or "")
+    nombre = (t.razon_social or "usuario").strip().upper()
+    estado = (t.estado or "RESUELTA").upper()
+    ticket = t.ticket or "—"
+    # Diseño dos columnas: ficha del caso | respuesta oficial + PDF
+    body = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{producto} · Respuesta a tu solicitud</title>
+<style>
+body{{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:#f1f5f9;color:#0f172a}}
+.top{{background:#0B2D57;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}}
+.top b{{color:#fff;font-size:18px}}
+.top a{{color:#93c5fd;font-size:13px;font-weight:700;text-decoration:none}}
+.hero{{background:linear-gradient(90deg,#0B2D57,#1e40af);color:#fff;padding:34px 24px}}
+.hero h1{{margin:0;font-size:26px;line-height:1.2}}
+.hero .chip{{background:#facc15;color:#0f172a;font-weight:800;padding:4px 12px;border-radius:4px;font-size:14px;display:inline-block;margin-top:10px}}
+.wrap{{max-width:960px;margin:0 auto;padding:24px 16px 40px;display:grid;grid-template-columns:280px 1fr;gap:20px}}
+@media(max-width:800px){{.wrap{{grid-template-columns:1fr}}}}
+.card{{background:#fff;border-radius:14px;padding:20px;border:1px solid #e2e8f0;box-shadow:0 8px 24px rgba(15,23,42,.06)}}
+.card h3{{margin:0 0 14px;font-size:15px;color:#0B2D57}}
+.meta{{font-size:13px;margin:0 0 12px;line-height:1.45;color:#334155}}
+.meta b{{display:block;color:#0f172a;margin-bottom:2px}}
+.main h2{{margin:0 0 12px;font-size:20px;color:#0B2D57}}
+.main p{{font-size:14.5px;line-height:1.65;color:#334155}}
+.sol{{background:#f8fafc;border-left:4px solid #0B2D57;padding:16px;margin:16px 0;font-size:14px;line-height:1.6;color:#0f172a;border-radius:0 10px 10px 0}}
+.adj a{{display:inline-flex;align-items:center;gap:8px;color:#1e40af;font-weight:700;font-size:14px;text-decoration:none;padding:10px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff}}
+.foot{{font-size:11px;color:#94a3b8;margin-top:28px}}
+.badge{{display:inline-block;background:#dcfce7;color:#166534;font-weight:800;font-size:11px;padding:4px 10px;border-radius:999px}}
+</style></head>
+<body>
+  <div class="top"><b>{producto}</b><a href="/login">Acceso instituciones →</a></div>
+  <div class="hero"><h1>Te brindamos<br>la respuesta</h1><span class="chip">a tu solicitud</span></div>
+  <div class="wrap">
+    <aside class="card">
+      <h3>Información de PQR</h3>
+      <p class="meta"><b>Radicado</b>{rad or "—"}</p>
+      <p class="meta"><b>Asunto</b>Respuesta Radicado No. {rad}</p>
+      <p class="meta"><b>Ticket</b>{ticket}</p>
+      <p class="meta"><b>Estado</b><span class="badge">{estado}</span></p>
+      <p class="meta"><b>Fecha de radicación</b>{fecha_envio or "—"}</p>
+      <p class="meta"><b>Fecha de respuesta</b>{fecha_resp or fecha_actual}</p>
+      <p class="meta"><b>Fecha de consulta</b>{fecha_actual}</p>
+    </aside>
+    <section class="card main">
+      <h2>Señor(a) {nombre},</h2>
+      <p>Gracias por haberte puesto en contacto con nosotros. Estamos compartiéndote la respuesta a tu solicitud. Si requieres información adicional, puedes comunicarte con un asesor por nuestros canales oficiales.</p>
+      <div class="sol">{sol_html}</div>
+      <div class="adj" style="margin-top:22px">
+        <h3 style="margin:0 0 10px;font-size:14px;color:#0B2D57">Archivos adjuntos</h3>
+        <a href="/pqr/notificacion/{token}/pdf" target="_blank" rel="noopener">📄 Descargar respuesta oficial (PDF)</a>
+      </div>
+      <p class="foot">Este espacio se usa únicamente para consultar la respuesta a su PQR.
+      Información protegida (Ley 1581 de 2012). No comparta este enlace.
+      {empresa} · {producto}</p>
+    </section>
   </div>
 </body></html>
 """
@@ -5015,9 +5076,11 @@ def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
     if not destino:
         return False
     correo_envio, password = _credenciales_smtp("soporte")
-    if not correo_envio or not password:
-        print("PQR respuesta email: falta conectar el correo de soporte (o SOPORTE_PASSWORD)")
+    if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not correo_envio or not password):
+        print("PQR respuesta email: falta RESEND_API_KEY o SOPORTE_EMAIL/PASSWORD")
         return False
+    if not correo_envio:
+        correo_envio = (os.environ.get("RESEND_FROM") or "EduTrack <onboarding@resend.dev>").strip()
     sol = (texto_solucion or t.descripcion_cierre or t.respuesta or "").replace("<", "&lt;").replace("\n", "<br>")
     empresa = nombre_empresa()
     producto = nombre_producto()
@@ -33125,7 +33188,11 @@ def soporte_pqr_detalle(id):
                     except Exception as ex:
                         print("mail respuesta:", ex)
                 if resp and t.email and enviar_mail:
-                    mensaje = "Respuesta guardada. " + ("Correo enviado al usuario." if mail_ok else "No se pudo enviar el correo (revise SOPORTE_PASSWORD).")
+                    mensaje = "Respuesta guardada. " + (
+                        "Correo enviado al usuario (botón VER RESPUESTA)."
+                        if mail_ok
+                        else "No se pudo enviar el correo (configure RESEND_API_KEY en Railway o SOPORTE_PASSWORD en plan Pro)."
+                    )
                 else:
                     mensaje = "Respuesta y estado guardados correctamente."
             except Exception as ex:
