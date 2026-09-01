@@ -4921,22 +4921,32 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     except Exception:
         wa_num, email_ayuda = "", SOPORTE_EMAIL
     wa_link = f"https://wa.me/{wa_num}" if wa_num else f"mailto:{email_ayuda}"
+    # Imagen hero PROCSIS (estilo Tigo): debe existir en static/img/pqr-respuesta-hero.png
+    hero_img = f"{base_url}/static/img/pqr-respuesta-hero.png"
     html = f"""
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
-  <div style="position:relative;background:#dbeafe;padding:24px 26px 32px">
-    <div style="position:absolute;top:0;right:0;width:160px;height:90px;background:#0B2D57;border-bottom-left-radius:70px;display:flex;align-items:center;justify-content:center;padding:8px">
-      <span style="color:#fff;font-weight:800;font-size:16px;letter-spacing:1.5px;font-family:Georgia,Times New Roman,serif">PROCSIS</span>
+  <!-- Cabecera visual tipo telco: saludo + foto PROCSIS + chip amarillo -->
+  <div style="position:relative;background:#b8d4f0;overflow:hidden">
+    <div style="position:absolute;top:0;right:0;width:120px;height:72px;background:#0B2D57;border-bottom-left-radius:56px;z-index:2;display:flex;align-items:center;justify-content:center">
+      <span style="color:#fff;font-weight:800;font-size:13px;letter-spacing:1.2px;font-family:Georgia,Times New Roman,serif">PROCSIS</span>
     </div>
-    <div style="max-width:340px">
-      <p style="margin:0;color:#0B2D57;font-size:14px">Hola,</p>
-      <p style="margin:2px 0 14px;color:#0B2D57;font-weight:800;font-size:16px">{_esc(nombre)}</p>
-      <span style="background:#facc15;color:#0f172a;font-weight:800;padding:4px 10px;border-radius:4px;font-size:14px;display:inline-block">Esta información es para ti</span>
-    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      <tr>
+        <td style="vertical-align:middle;padding:28px 20px 28px 26px;width:42%">
+          <p style="margin:0;color:#0B2D57;font-size:15px">Hola,</p>
+          <p style="margin:4px 0 16px;color:#0B2D57;font-weight:800;font-size:18px;line-height:1.25">{_esc(nombre)}</p>
+          <span style="background:#facc15;color:#0f172a;font-weight:800;padding:8px 14px;border-radius:6px;font-size:15px;display:inline-block;line-height:1.3">Esta información<br>es para ti</span>
+        </td>
+        <td style="vertical-align:bottom;padding:0;width:58%;text-align:right">
+          <img src="{hero_img}" alt="PROCSIS" width="280" style="display:block;width:100%;max-width:280px;height:auto;margin:0 0 0 auto;border:0">
+        </td>
+      </tr>
+    </table>
   </div>
-  <div style="padding:22px 26px 8px;color:#0f172a;font-size:14px;line-height:1.6">
-    <p>Por medio de este correo electrónico certificado, <b>PROCSIS Tecnologías</b> le comparte de forma oportuna la respuesta a la solicitud que nos realizó a través de la plataforma EduTrack. Para consultarla de forma segura, haga clic en el botón a continuación:</p>
-    <div style="text-align:center;margin:22px 0">
-      <a href="{link}" style="background:#0ea5e9;color:#fff;text-decoration:none;font-weight:800;padding:14px 34px;border-radius:24px;display:inline-block;font-size:14px;letter-spacing:.5px">VER RESPUESTA</a>
+  <div style="padding:22px 26px 8px;color:#0B2D57;font-size:15px;line-height:1.6">
+    <p style="margin:0 0 8px">Por medio de este correo electrónico certificado, te compartimos de forma oportuna y efectiva, <b>la respuesta a la solicitud que nos realizaste</b>, para verla haz clic en el botón a continuación:</p>
+    <div style="text-align:center;margin:26px 0 18px">
+      <a href="{link}" style="background:#38bdf8;color:#fff;text-decoration:none;font-weight:800;padding:14px 40px;border-radius:999px;display:inline-block;font-size:15px;letter-spacing:.4px">VER RESPUESTA</a>
     </div>
   </div>
   <div style="padding:0 26px 20px">
@@ -15618,6 +15628,188 @@ def gerencia_verificaciones_pendientes():
 
 
 @app.route("/gerencia")
+
+
+@app.route("/gerencia/pqr-limpieza", methods=["GET", "POST"])
+def gerencia_pqr_limpieza():
+    """Panel exclusivo Gerencia/Superadmin: listar y eliminar PQR de prueba de forma definitiva."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        return redirect("/gerencia-login")
+    mensaje = error = ""
+    # Filtros de búsqueda
+    qtxt = (request.values.get("q") or "").strip()
+    solo_prueba = (request.values.get("solo_prueba") or "1") == "1"
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        # Confirmación por texto (evita borrados accidentales)
+        conf = (request.form.get("confirmacion") or "").strip().upper()
+        if accion == "eliminar_ids":
+            if conf != "ELIMINAR":
+                error = 'Escriba ELIMINAR en mayúsculas para confirmar el borrado definitivo.'
+            else:
+                ids_raw = request.form.getlist("ids") or []
+                ids = []
+                for x in ids_raw:
+                    try:
+                        ids.append(int(x))
+                    except Exception:
+                        pass
+                if not ids:
+                    error = "No seleccionó ninguna PQR."
+                else:
+                    n_hist = n_tick = 0
+                    try:
+                        # Borrar historial primero (FK)
+                        n_hist = HistorialPQR.query.filter(HistorialPQR.ticket_id.in_(ids)).delete(synchronize_session=False)
+                        n_tick = TicketPQR.query.filter(TicketPQR.id.in_(ids)).delete(synchronize_session=False)
+                        db.session.commit()
+                        try:
+                            registrar_auditoria(
+                                "PQR eliminadas (gerencia)",
+                                f"ids={ids} tickets={n_tick} historial={n_hist} por={session.get('usuario')}",
+                            )
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+                        mensaje = f"Eliminadas de forma definitiva: {n_tick} PQR y {n_hist} registros de historial."
+                    except Exception as ex:
+                        db.session.rollback()
+                        error = f"No se pudo eliminar: {ex}"
+        elif accion == "eliminar_pruebas_auto":
+            if conf != "ELIMINAR":
+                error = 'Escriba ELIMINAR en mayúsculas para confirmar.'
+            else:
+                try:
+                    # Criterios de "prueba": radicado con 99, ticket 000000, razón "prueba", email test, etc.
+                    q = TicketPQR.query.filter(
+                        db.or_(
+                            TicketPQR.radicado.ilike("%9900%"),
+                            TicketPQR.ticket == "000000",
+                            TicketPQR.razon_social.ilike("%prueba%"),
+                            TicketPQR.objeto.ilike("%prueba%"),
+                            TicketPQR.email.ilike("%test%"),
+                            TicketPQR.email.ilike("%example.com%"),
+                            TicketPQR.subtipo.ilike("%prueba%"),
+                        )
+                    )
+                    ids = [r.id for r in q.limit(500).all()]
+                    if not ids:
+                        mensaje = "No se encontraron PQR que coincidan con criterios de prueba."
+                    else:
+                        n_hist = HistorialPQR.query.filter(HistorialPQR.ticket_id.in_(ids)).delete(synchronize_session=False)
+                        n_tick = TicketPQR.query.filter(TicketPQR.id.in_(ids)).delete(synchronize_session=False)
+                        db.session.commit()
+                        try:
+                            registrar_auditoria("PQR pruebas borradas", f"n={n_tick} ids={ids[:40]} por={session.get('usuario')}")
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+                        mensaje = f"Limpieza automática: {n_tick} PQR de prueba eliminadas ({n_hist} historiales)."
+                except Exception as ex:
+                    db.session.rollback()
+                    error = f"Error en limpieza automática: {ex}"
+
+    # Listado
+    qry = TicketPQR.query
+    if solo_prueba:
+        qry = qry.filter(
+            db.or_(
+                TicketPQR.radicado.ilike("%9900%"),
+                TicketPQR.ticket == "000000",
+                TicketPQR.razon_social.ilike("%prueba%"),
+                TicketPQR.objeto.ilike("%prueba%"),
+                TicketPQR.email.ilike("%test%"),
+                TicketPQR.email.ilike("%example.com%"),
+                TicketPQR.subtipo.ilike("%prueba%"),
+            )
+        )
+    if qtxt:
+        like = f"%{qtxt}%"
+        qry = qry.filter(
+            db.or_(
+                TicketPQR.radicado.ilike(like),
+                TicketPQR.ticket.ilike(like),
+                TicketPQR.razon_social.ilike(like),
+                TicketPQR.email.ilike(like),
+                TicketPQR.numero_documento.ilike(like),
+            )
+        )
+    rows = qry.order_by(TicketPQR.id.desc()).limit(200).all()
+    filas = ""
+    for t in rows:
+        rad = formatear_radicado(t.radicado or t.nro_cun or "")
+        filas += (
+            f"<tr>"
+            f"<td style='text-align:center'><input type='checkbox' name='ids' value='{t.id}'></td>"
+            f"<td>{t.id}</td>"
+            f"<td><b>{_esc(rad)}</b><br><span style='font-size:11px;color:#64748b'>{_esc(t.ticket or '')}</span></td>"
+            f"<td>{_esc(t.razon_social or '—')}<br><span style='font-size:11px;color:#64748b'>{_esc(t.email or '')}</span></td>"
+            f"<td>{_esc(t.estado or '')}</td>"
+            f"<td>{_esc(t.fecha or '')}</td>"
+            f"<td style='font-size:12px'>{_esc((t.objeto or t.subtipo or '')[:60])}</td>"
+            f"</tr>"
+        )
+    content = f"""
+<header class="role-hero"><div>
+  <h1>🧹 Limpieza de PQR</h1>
+  <p>Eliminación definitiva de tickets de prueba. Solo Gerencia / Superadmin. Esta acción no se puede deshacer.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+{"<div class='msg ok'>"+_esc(mensaje)+"</div>" if mensaje else ""}
+{"<div class='msg danger'>"+_esc(error)+"</div>" if error else ""}
+<section class="role-panel">
+  <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:14px">
+    <div style="flex:1;min-width:200px">
+      <label style="font-size:12px;font-weight:700">Buscar</label>
+      <input name="q" value="{_esc(qtxt)}" placeholder="Radicado, email, nombre…">
+    </div>
+    <label style="font-size:13px;display:flex;align-items:center;gap:6px">
+      <input type="checkbox" name="solo_prueba" value="1" {"checked" if solo_prueba else ""}> Solo posibles pruebas
+    </label>
+    <button type="submit" class="btn">Filtrar</button>
+  </form>
+  <form method="POST" onsubmit="return confirm('¿Eliminar de forma DEFINITIVA las PQR seleccionadas?');">
+    <input type="hidden" name="accion" value="eliminar_ids">
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr style="background:#0B2D57;color:#fff">
+          <th style="padding:8px"></th><th>ID</th><th>Radicado</th><th>Solicitante</th><th>Estado</th><th>Fecha</th><th>Detalle</th>
+        </tr>
+        {filas or "<tr><td colspan='7' style='padding:16px;text-align:center;color:#64748b'>Sin registros con este filtro</td></tr>"}
+      </table>
+    </div>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <label style="font-size:13px">Confirmar escribiendo <b>ELIMINAR</b>:
+        <input name="confirmacion" placeholder="ELIMINAR" style="width:140px;margin-left:6px" autocomplete="off">
+      </label>
+      <button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800;cursor:pointer">
+        Eliminar seleccionadas
+      </button>
+    </div>
+  </form>
+</section>
+<section class="role-panel" style="margin-top:16px;border:2px solid #fecaca">
+  <h2 style="color:#b91c1c;margin-top:0;font-size:16px">Limpieza automática de pruebas</h2>
+  <p style="font-size:13px;color:#64748b">Borra tickets cuyo radicado contiene 9900, ticket 000000, razón/objeto/subtipo con «prueba», o emails test/example.com (máx. 500).</p>
+  <form method="POST" onsubmit="return confirm('¿Borrar TODAS las PQR detectadas como prueba?');">
+    <input type="hidden" name="accion" value="eliminar_pruebas_auto">
+    <label style="font-size:13px">Confirmar <b>ELIMINAR</b>:
+      <input name="confirmacion" placeholder="ELIMINAR" style="width:140px;margin-left:6px" autocomplete="off">
+    </label>
+    <button type="submit" style="background:#7f1d1d;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800;cursor:pointer;margin-left:8px">
+      Ejecutar limpieza automática
+    </button>
+  </form>
+</section>
+"""
+    try:
+        return page("Limpieza PQR", shell(content))
+    except Exception:
+        return page("Limpieza PQR", content)
+
+
+
 @app.route("/gerencia/hq")
 def gerencia_hq():
     """EduTrack HQ — indicadores financieros, crecimiento, producto y control del dueño."""
@@ -15747,6 +15939,7 @@ def gerencia_hq():
         <a href="/gerencia/reportes">Reportes comerciales</a>
         <a href="/gerencia/turnos">Turnos y notas</a>
         <a href="/soporte_admin">Centro de soporte</a>
+        <a class="a" href="/gerencia/pqr-limpieza">🧹 Limpieza PQR de prueba</a>
         <a href="/tenants">Instituciones</a>
         <a href="/auditoria">Auditoría</a>
         <a class="t" href="/gerencia/lideres">Líderes / equipo web</a>
