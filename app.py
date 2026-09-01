@@ -4870,6 +4870,24 @@ def _asegurar_token_pqr(t):
     return t.token_notificacion
 
 
+
+def _fecha_limite_pqr_habiles(fecha_inicio=None, dias_habiles=15):
+    """Suma N días hábiles (lun–vie) desde fecha_inicio (YYYY-MM-DD).
+    Aproxima el plazo de respuesta del CPACA / Ley 1755 (sin festivos locales)."""
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        base = _dt.strptime((fecha_inicio or fecha_hoy())[:10], "%Y-%m-%d")
+    except Exception:
+        base = _dt.utcnow()
+    agregados = 0
+    cur = base
+    while agregados < int(dias_habiles):
+        cur = cur + _td(days=1)
+        if cur.weekday() < 5:  # 0=lun … 4=vie
+            agregados += 1
+    return cur.strftime("%Y-%m-%d")
+
+
 def enviar_notificacion_pqr_estilo_tigo(destino, t):
     """Correo de notificación con el mismo patrón que usan las telcos (Tigo, Claro,
     etc.): un aviso corto con botón 'Ver respuesta' que lleva a una página del propio
@@ -4906,8 +4924,8 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     html = f"""
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
   <div style="position:relative;background:#dbeafe;padding:24px 26px 32px">
-    <div style="position:absolute;top:0;right:0;width:150px;height:90px;background:#0B2D57;border-bottom-left-radius:70px;display:flex;align-items:center;justify-content:center">
-      <span style="color:#fff;font-weight:800;font-size:15px;letter-spacing:.5px">{producto}</span>
+    <div style="position:absolute;top:0;right:0;width:160px;height:90px;background:#0B2D57;border-bottom-left-radius:70px;display:flex;align-items:center;justify-content:center;padding:8px">
+      <span style="color:#fff;font-weight:800;font-size:16px;letter-spacing:1.5px;font-family:Georgia,Times New Roman,serif">PROCSIS</span>
     </div>
     <div style="max-width:340px">
       <p style="margin:0;color:#0B2D57;font-size:14px">Hola,</p>
@@ -4916,7 +4934,7 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     </div>
   </div>
   <div style="padding:22px 26px 8px;color:#0f172a;font-size:14px;line-height:1.6">
-    <p>Por medio de este correo electrónico, te compartimos de forma oportuna y efectiva la respuesta a la solicitud que nos realizaste. Para verla, haz clic en el botón a continuación:</p>
+    <p>Por medio de este correo electrónico certificado, <b>PROCSIS Tecnologías</b> le comparte de forma oportuna la respuesta a la solicitud que nos realizó a través de la plataforma EduTrack. Para consultarla de forma segura, haga clic en el botón a continuación:</p>
     <div style="text-align:center;margin:22px 0">
       <a href="{link}" style="background:#0ea5e9;color:#fff;text-decoration:none;font-weight:800;padding:14px 34px;border-radius:24px;display:inline-block;font-size:14px;letter-spacing:.5px">VER RESPUESTA</a>
     </div>
@@ -4941,7 +4959,7 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
 """
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"{producto} · Tenemos la respuesta a tu solicitud Radicado No. {formatear_radicado(t.radicado or t.nro_cun)}"
+        msg["Subject"] = f"PROCSIS · Respuesta a su solicitud Radicado No. {formatear_radicado(t.radicado or t.nro_cun)}"
         msg["From"] = from_addr
         msg["To"] = destino
         msg.set_content(
@@ -5007,7 +5025,7 @@ def pqr_notificacion_publica(token):
     # Diseño dos columnas: ficha del caso | respuesta oficial + PDF
     body = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{producto} · Respuesta a tu solicitud</title>
+<title>PROCSIS · Respuesta a su solicitud</title>
 <style>
 body{{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:#f1f5f9;color:#0f172a}}
 .top{{background:#0B2D57;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}}
@@ -5030,7 +5048,7 @@ body{{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:#f1f5f
 .badge{{display:inline-block;background:#dcfce7;color:#166534;font-weight:800;font-size:11px;padding:4px 10px;border-radius:999px}}
 </style></head>
 <body>
-  <div class="top"><b>{producto}</b><a href="/login">Acceso instituciones →</a></div>
+  <div class="top"><b>EduTrack | PROCSIS</b><span style="color:#93c5fd;font-size:13px;font-weight:700">Mesa de Ayuda PROCSIS</span><a href="/login">Acceso instituciones →</a></div>
   <div class="hero"><h1>Te brindamos<br>la respuesta</h1><span class="chip">a tu solicitud</span></div>
   <div class="wrap">
     <aside class="card">
@@ -5333,47 +5351,92 @@ def generar_pdf_respuesta_pqr(t):
 
 
 
-def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO"):
-    """Correo HTML de radicación / respuesta PQR."""
+def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO", fecha_limite=""):
+    """Correo de confirmación al radicar una PQR (padre, colegio o público).
+    Usa Resend en Railway Hobby. Incluye fecha máxima de respuesta (15 días hábiles)."""
     if not destino:
         return False
     correo_envio, password = _credenciales_smtp("soporte")
-    if not correo_envio or not password:
-        print("PQR email: falta conectar el correo de soporte (o SOPORTE_PASSWORD)")
+    resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+    if not resend_key and (not correo_envio or not password):
+        print("PQR radicación email: falta RESEND_API_KEY o SOPORTE_EMAIL/PASSWORD")
         return False
+    from_addr = (
+        (os.environ.get("RESEND_FROM") or "").strip()
+        or correo_envio
+        or "EduTrack <onboarding@resend.dev>"
+    )
+    if not correo_envio:
+        correo_envio = from_addr
     radicado_fmt = formatear_radicado(radicado)
+    fecha_rad = fecha_hoy()
+    if not fecha_limite:
+        try:
+            fecha_limite = _fecha_limite_pqr_habiles(fecha_rad, 15)
+        except Exception:
+            fecha_limite = ""
+    # Formato legible DD/MM/YYYY si viene ISO
+    def _fmt_fecha(f):
+        f = (f or "").strip()[:10]
+        if len(f) == 10 and f[4] == "-":
+            return f"{f[8:10]}/{f[5:7]}/{f[0:4]}"
+        return f or "—"
+    fecha_rad_v = _fmt_fecha(fecha_rad)
+    fecha_lim_v = _fmt_fecha(fecha_limite)
     html = f"""
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
-      <div style="background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:20px 24px">
-        <div style="font-size:12px;opacity:.85;letter-spacing:1px">PROCSIS · EDUTRACK</div>
-        <h1 style="margin:8px 0 0;font-size:20px">Confirmación de radicación PQR</h1>
-      </div>
-      <div style="padding:22px 24px;color:#0f172a;font-size:14px;line-height:1.5">
-        <p>Su solicitud fue <b>radicada correctamente</b>.</p>
-        <p style="background:#eff6ff;border-radius:10px;padding:14px;border:1px solid #bfdbfe">
-          <b>Número de Radicado:</b><br>
-          <span style="font-size:18px;color:#1e40af;letter-spacing:1px">{radicado_fmt}</span><br>
-          <b>Ticket:</b> {ticket}
-        </p>
-        <p><b>Tipo:</b> {subtipo}<br><b>Objeto:</b> {(objeto or '')[:200]}</p>
-        <p>El tiempo estimado de respuesta es de aproximadamente <b>5 días hábiles</b>.</p>
-        <p>Puede consultar el estado en el portal PQR con el radicado o el NIT del colegio.</p>
-        <p style="font-size:12px;color:#64748b">Este mensaje es informativo. Canal: {canal}.</p>
-      </div>
-      <div style="background:#f8fafc;padding:12px 24px;font-size:11px;color:#64748b">Procsis · Tecnología para una educación moderna y responsable</div>
+<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
+  <div style="position:relative;background:#dbeafe;padding:24px 26px 32px">
+    <div style="position:absolute;top:0;right:0;width:160px;height:90px;background:#0B2D57;border-bottom-left-radius:70px;display:flex;align-items:center;justify-content:center;padding:8px">
+      <span style="color:#fff;font-weight:800;font-size:16px;letter-spacing:1.5px;font-family:Georgia,Times New Roman,serif">PROCSIS</span>
     </div>
-    """
+    <div style="max-width:340px">
+      <p style="margin:0;color:#0B2D57;font-size:13px;font-weight:700;letter-spacing:.04em">CONFIRMACIÓN DE RADICACIÓN</p>
+      <p style="margin:8px 0 0;color:#0B2D57;font-weight:800;font-size:18px">Hemos recibido su solicitud</p>
+      <span style="background:#facc15;color:#0f172a;font-weight:800;padding:4px 10px;border-radius:4px;font-size:13px;display:inline-block;margin-top:12px">Radicado No. {radicado_fmt}</span>
+    </div>
+  </div>
+  <div style="padding:22px 26px;color:#0f172a;font-size:14px;line-height:1.65">
+    <p>Apreciado(a) usuario(a),</p>
+    <p>Le informamos que <b>PROCSIS Tecnologías</b> ha recibido correctamente su petición, queja o reclamo a través de nuestra plataforma <b>EduTrack</b>. Su requerimiento ha quedado registrado bajo el <b>Código Único de Radicación #{radicado_fmt}</b>.</p>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;margin:18px 0">
+      <div style="font-size:12px;font-weight:800;color:#1e40af;margin-bottom:10px;letter-spacing:.04em">INFORMACIÓN DE TRAZABILIDAD</div>
+      <p style="margin:0 0 8px"><b>Número de Radicado:</b> {radicado_fmt}</p>
+      <p style="margin:0 0 8px"><b>Ticket:</b> {ticket or "—"}</p>
+      <p style="margin:0 0 8px"><b>Tipo / asunto:</b> {(subtipo or "PQR")[:80]}</p>
+      <p style="margin:0 0 8px"><b>Fecha de radicación:</b> {fecha_rad_v}</p>
+      <p style="margin:0"><b>Fecha máxima de respuesta:</b> {fecha_lim_v} <span style="color:#64748b">(15 días hábiles)</span></p>
+    </div>
+    <p style="font-size:13px;color:#334155">De acuerdo con la normatividad vigente en Colombia (Código de Procedimiento Administrativo y de lo Contencioso Administrativo), su solicitud será contestada a más tardar en la fecha indicada. Si requiere hacer seguimiento, puede consultar el estado en el portal PQR de EduTrack con su número de radicado o documento.</p>
+    <p style="margin-top:20px">Cordialmente,<br>
+    <b>Mesa de Soluciones Corporativas</b><br>
+    PROCSIS S.A.S. · Plataforma EduTrack</p>
+  </div>
+  <div style="background:#0B2D57;color:#fff;padding:16px 26px;font-size:11px;text-align:center">
+    ⚠ Este buzón es solo informativo. No responda a este mensaje para radicar nuevas solicitudes.
+  </div>
+  <div style="padding:12px 26px;font-size:10.5px;color:#94a3b8;text-align:center">
+    Procsis · EduTrack · Ley 1581 de 2012 · Canal: {canal}
+  </div>
+</div>
+"""
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"PQR radicada · Número de Radicado {radicado_fmt} · EduTrack / Procsis"
-        msg["From"] = correo_envio
+        msg["Subject"] = f"📥 Hemos recibido tu solicitud · Radicado No. {radicado_fmt}"
+        msg["From"] = from_addr
         msg["To"] = destino
-        msg.set_content(f"Su PQR fue radicada. Número de Radicado: {radicado_fmt}. Ticket: {ticket}. Respuesta aprox. 5 días hábiles.")
+        msg.set_content(
+            f"Apreciado(a) usuario(a),\n\n"
+            f"PROCSIS Tecnologías ha recibido su PQR a través de EduTrack.\n"
+            f"Radicado No. {radicado_fmt}\nTicket: {ticket}\n"
+            f"Fecha de radicación: {fecha_rad_v}\n"
+            f"Fecha máxima de respuesta: {fecha_lim_v} (15 días hábiles).\n\n"
+            f"Mesa de Soluciones Corporativas · PROCSIS S.A.S."
+        )
         msg.add_alternative(html, subtype="html")
         _smtp_enviar(msg, correo_envio, password)
         return True
     except Exception as e:
-        print("PQR email error:", e)
+        print("PQR radicación email error:", e)
         return False
 
 
@@ -31238,7 +31301,7 @@ def colegio_pqr(codigo):
                 objeto=objeto, hechos=hechos,
                 estado="RADICADA", prioridad=(f.get("prioridad") or "MEDIA").strip()[:20],
                 medio_ingreso="ONLINE", canal="PADRES_COLEGIO",
-                nro_cun=rad, fecha_estimada="", estado_cun="RADICADO", motivo=(objeto or "")[:255], fecha=fecha_hoy(), hora=hora_actual(),
+                nro_cun=rad, fecha_estimada=_fecha_limite_pqr_habiles(fecha_hoy(), 15), estado_cun="RADICADO", motivo=(objeto or "")[:255], fecha=fecha_hoy(), hora=hora_actual(),
                 creado_por="Padre/Acudiente (portal público)",
             )
             db.session.add(t)
@@ -31255,7 +31318,7 @@ def colegio_pqr(codigo):
                 except Exception:
                     db.session.rollback()
                 try:
-                    enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PADRES_COLEGIO")
+                    enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PADRES_COLEGIO", fecha_limite=_fecha_limite_pqr_habiles())
                 except Exception:
                     pass
                 try:
@@ -31820,9 +31883,7 @@ def pqr_crear():
             rad, tick = _gen_radicado_pqr(tipo_canal="11")
             cun = rad
             try:
-                from datetime import datetime as _dt, timedelta as _td
-                base = _dt.strptime(fecha_hoy(), "%Y-%m-%d")
-                est_sol = (base + _td(days=5)).strftime("%Y-%m-%d")
+                est_sol = _fecha_limite_pqr_habiles(fecha_hoy(), 15)
             except Exception:
                 est_sol = ""
             t = TicketPQR(
@@ -31855,7 +31916,7 @@ def pqr_crear():
                 except Exception:
                     db.session.rollback()
                 try:
-                    enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PUBLICO")
+                    enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PUBLICO", fecha_limite=getattr(t, "fecha_estimada", "") or _fecha_limite_pqr_habiles())
                 except Exception:
                     pass
                 mensaje = f"Su solicitud fue radicada correctamente. Número de Radicado: {formatear_radicado(rad)}"
@@ -32992,16 +33053,16 @@ def soporte_pqr_crear():
         canal = (f.get("canal") or medio or "LLAMADA").strip()[:40]
         cun = (rad or "").replace("-", "")[:16]
         try:
-            from datetime import datetime as _dt, timedelta as _td
-            est_sol = (_dt.strptime(fecha_hoy(), "%Y-%m-%d") + _td(days=5)).strftime("%Y-%m-%d")
+            est_sol = _fecha_limite_pqr_habiles(fecha_hoy(), 15)
         except Exception:
             est_sol = ""
+        email_cli = (f.get("email") or "").strip()[:160]
         t = TicketPQR(
             radicado=rad, ticket=tick,
             tipo_documento=(f.get("tipo_documento") or "NIT").strip()[:20],
             numero_documento=(f.get("numero_documento") or "").strip()[:40],
             razon_social=(f.get("razon_social") or "").strip()[:220],
-            email=(f.get("email") or "").strip()[:160],
+            email=email_cli,
             direccion=(f.get("direccion") or "").strip()[:255],
             ciudad=(f.get("ciudad") or "").strip()[:80],
             tipo_pqr=(f.get("tipo_pqr") or "Petición").strip()[:60],
@@ -33019,6 +33080,19 @@ def soporte_pqr_crear():
             db.session.add(t)
             db.session.commit()
             mensaje = f"Radicado interno: {rad}"
+            if email_cli:
+                try:
+                    ok_mail = enviar_correo_pqr(
+                        email_cli, rad, tick,
+                        (f.get("subtipo") or "Interna"),
+                        (f.get("objeto") or ""),
+                        "SOPORTE_INTERNO",
+                        fecha_limite=est_sol,
+                    )
+                    if ok_mail:
+                        mensaje += " · Correo de confirmación enviado."
+                except Exception as exm:
+                    print("mail radicacion interna:", exm)
         except Exception as ex:
             db.session.rollback()
             mensaje = f"⚠ No se pudo radicar: {ex}. Intente de nuevo."
