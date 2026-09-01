@@ -1393,6 +1393,14 @@ class Auditoria(db.Model):
     accion = db.Column(db.String(120), nullable=False)
     detalle = db.Column(db.Text, default="")
     ip = db.Column(db.String(80), default="")
+    user_agent = db.Column(db.String(400), default="")
+    dispositivo = db.Column(db.String(80), default="")
+    navegador = db.Column(db.String(80), default="")
+    sistema_os = db.Column(db.String(80), default="")
+    ubicacion = db.Column(db.String(200), default="")  # Ciudad, región, país
+    proveedor_isp = db.Column(db.String(160), default="")  # Claro, Tigo, etc.
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    ruta = db.Column(db.String(200), default="")
 
 
 class LogAuditoriaNota(db.Model):
@@ -2697,6 +2705,14 @@ def migrar_columnas():
         ("plataforma", "horario_semana", "ALTER TABLE plataforma ADD COLUMN horario_semana VARCHAR(80) DEFAULT ''"),
         ("plataforma", "soporte_mensaje", "ALTER TABLE plataforma ADD COLUMN soporte_mensaje TEXT"),
         ("tickets_pqr", "nro_cun", "ALTER TABLE tickets_pqr ADD COLUMN nro_cun VARCHAR(40) DEFAULT ''"),
+        ("auditoria", "user_agent", "ALTER TABLE auditoria ADD COLUMN user_agent VARCHAR(400) DEFAULT ''"),
+        ("auditoria", "dispositivo", "ALTER TABLE auditoria ADD COLUMN dispositivo VARCHAR(80) DEFAULT ''"),
+        ("auditoria", "navegador", "ALTER TABLE auditoria ADD COLUMN navegador VARCHAR(80) DEFAULT ''"),
+        ("auditoria", "sistema_os", "ALTER TABLE auditoria ADD COLUMN sistema_os VARCHAR(80) DEFAULT ''"),
+        ("auditoria", "ubicacion", "ALTER TABLE auditoria ADD COLUMN ubicacion VARCHAR(200) DEFAULT ''"),
+        ("auditoria", "proveedor_isp", "ALTER TABLE auditoria ADD COLUMN proveedor_isp VARCHAR(160) DEFAULT ''"),
+        ("auditoria", "institucion_id", "ALTER TABLE auditoria ADD COLUMN institucion_id INTEGER"),
+        ("auditoria", "ruta", "ALTER TABLE auditoria ADD COLUMN ruta VARCHAR(200) DEFAULT ''"),
         ("verificaciones_rector", "gerencia_decision", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_decision VARCHAR(20) DEFAULT ''"),
         ("verificaciones_rector", "gerencia_motivo", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_motivo TEXT DEFAULT ''"),
         ("verificaciones_rector", "gerencia_por", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_por VARCHAR(120) DEFAULT ''"),
@@ -2824,17 +2840,21 @@ def _parse_user_agent(ua: str):
     return disp, nav, so
 
 
-def _geo_por_ip(ip: str) -> str:
-    """Ubicación aproximada por IP (ciudad, región, país). Caché 6h. Sin API key."""
+def _geo_por_ip(ip: str):
+    """Ubicación y proveedor ISP por IP. Caché 6h. Usa ip-api.com (sin API key).
+    Devuelve (ubicacion_str, isp_str). Compat: si se usa como str, str() da la ubicación."""
     import time
     ip = (ip or "").split(",")[0].strip()
     if not ip or ip.startswith("127.") or ip.startswith("10.") or ip.startswith("192.168.") or ip == "::1":
-        return "Red local / privada"
+        return "Red local / privada", "Red local"
     now = time.time()
     cached = _geo_cache.get(ip)
     if cached and now - cached[1] < 21600:
-        return cached[0]
-    ubic = "No determinada"
+        val = cached[0]
+        if isinstance(val, tuple):
+            return val[0], val[1]
+        return str(val), ""
+    ubic, isp = "No determinada", ""
     try:
         import urllib.request
         url = f"http://ip-api.com/json/{ip}?fields=status,country,regionName,city,isp,query"
@@ -2842,12 +2862,13 @@ def _geo_por_ip(ip: str) -> str:
         with urllib.request.urlopen(req, timeout=2.5) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore") or "{}")
         if data.get("status") == "success":
-            parts = [data.get("city"), data.get("regionName"), data.get("country"), data.get("isp")]
+            parts = [data.get("city"), data.get("regionName"), data.get("country")]
             ubic = ", ".join(p for p in parts if p) or ubic
+            isp = (data.get("isp") or "")[:160]
     except Exception:
         pass
-    _geo_cache[ip] = (ubic, now)
-    return ubic
+    _geo_cache[ip] = ((ubic, isp), now)
+    return ubic, isp
 
 
 def _client_ip_audit():
@@ -2858,15 +2879,23 @@ def _client_ip_audit():
 
 
 def registrar_auditoria(accion, detalle=""):
-    """Registro preciso: IP, UA, dispositivo, navegador, SO, ubicación aprox., ruta, tenant."""
+    """Registro preciso: IP, ubicación, ISP, UA, dispositivo, navegador, SO, ruta, tenant."""
     try:
         ip = _client_ip_audit()
         ua = (request.headers.get("User-Agent") or "")[:400]
-        disp, nav, so = _parse_user_agent(ua)
         try:
-            ubic = _geo_por_ip(ip)
+            disp, nav, so = _parse_user_agent(ua)
         except Exception:
-            ubic = ""
+            disp, nav, so = "", "", ""
+        ubic, isp = "", ""
+        try:
+            geo = _geo_por_ip(ip)
+            if isinstance(geo, tuple):
+                ubic, isp = geo[0] or "", geo[1] or ""
+            else:
+                ubic = str(geo or "")
+        except Exception:
+            pass
         try:
             iid = session.get("institucion_id")
             if iid is not None:
@@ -2878,19 +2907,25 @@ def registrar_auditoria(accion, detalle=""):
             ruta = (request.path or "")[:200]
         except Exception:
             pass
+        # Detalle enriquecido si no trae IP/ubicación
+        det = str(detalle or "")[:1200]
+        extra = f" | IP:{ip} | Ubic:{ubic} | ISP:{isp}"
+        if extra.strip(" |") and "IP:" not in det:
+            det = (det + extra)[:1500]
         db.session.add(Auditoria(
             fecha=fecha_hoy(),
             hora=hora_actual(),
             usuario=session.get("usuario", "Sistema") or "Sistema",
             rol=session.get("rol", "") or "",
             accion=(accion or "")[:120],
-            detalle=str(detalle)[:1500],
-            ip=ip,
+            detalle=det,
+            ip=(ip or "")[:80],
             user_agent=ua,
-            dispositivo=disp,
-            navegador=nav,
-            sistema_os=so,
+            dispositivo=(disp or "")[:80],
+            navegador=(nav or "")[:80],
+            sistema_os=(so or "")[:80],
             ubicacion=(ubic or "")[:200],
+            proveedor_isp=(isp or "")[:160],
             institucion_id=iid,
             ruta=ruta,
         ))
@@ -15689,6 +15724,80 @@ def gerencia_login():
 
 
 
+
+
+@app.route("/gerencia/auditoria")
+def gerencia_auditoria():
+    """Visor de auditoría para Gerencia: IP, ubicación, ISP, usuario, acción."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    q = (request.args.get("q") or "").strip()
+    qry = Auditoria.query
+    if q:
+        like = f"%{q}%"
+        qry = qry.filter(
+            db.or_(
+                Auditoria.usuario.ilike(like),
+                Auditoria.accion.ilike(like),
+                Auditoria.detalle.ilike(like),
+                Auditoria.ip.ilike(like),
+                Auditoria.ubicacion.ilike(like),
+            )
+        )
+    rows = qry.order_by(Auditoria.id.desc()).limit(200).all()
+    filas = ""
+    for a in rows:
+        isp = getattr(a, "proveedor_isp", None) or ""
+        ubic = getattr(a, "ubicacion", None) or ""
+        # extraer ISP del detalle si columna vacía
+        if not isp and a.detalle and "ISP:" in (a.detalle or ""):
+            try:
+                isp = (a.detalle.split("ISP:")[-1] or "").split("|")[0].strip()[:80]
+            except Exception:
+                pass
+        filas += (
+            f"<tr>"
+            f"<td style='font-size:12px;white-space:nowrap'>{_esc(a.fecha)} {_esc(a.hora)}</td>"
+            f"<td>{_esc(a.usuario)}<br><span style='font-size:11px;color:#64748b'>{_esc(a.rol)}</span></td>"
+            f"<td><b>{_esc(a.accion)}</b><br><span style='font-size:11px;color:#64748b'>{_esc((a.detalle or '')[:120])}</span></td>"
+            f"<td style='font-size:12px'><code>{_esc(a.ip or '—')}</code></td>"
+            f"<td style='font-size:12px'>{_esc(ubic or '—')}</td>"
+            f"<td style='font-size:12px'>{_esc(isp or '—')}</td>"
+            f"</tr>"
+        )
+    if not filas:
+        filas = "<tr><td colspan='6' style='text-align:center;padding:16px;color:#64748b'>Sin registros</td></tr>"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>📋 Auditoría del sistema</h1>
+  <p>IP, ubicación y proveedor de internet capturados en cada inicio de sesión y acciones clave.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  <form method="GET" style="margin-bottom:12px;display:flex;gap:8px">
+    <input name="q" value="{_esc(q)}" placeholder="Buscar usuario, IP, acción…" style="flex:1;padding:8px;border-radius:8px;border:1px solid #cbd5e1">
+    <button type="submit" class="btn">Filtrar</button>
+  </form>
+  <div style="overflow:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px;text-align:left">Fecha/hora</th>
+      <th style="padding:8px;text-align:left">Usuario</th>
+      <th style="padding:8px;text-align:left">Acción</th>
+      <th style="padding:8px;text-align:left">IP</th>
+      <th style="padding:8px;text-align:left">Ubicación</th>
+      <th style="padding:8px;text-align:left">Proveedor ISP</th>
+    </tr>
+    {filas}
+  </table>
+  </div>
+  <p class="mini-text" style="margin-top:10px">Fuente geo: ip-api.com · Los inicios de sesión y radicaciones de PQR quedan registrados automáticamente.</p>
+</section>
+"""
+    return page("Auditoría Gerencia", shell(content))
+
+
 @app.route("/gerencia/verificaciones-pendientes", methods=["GET", "POST"])
 def gerencia_verificaciones_pendientes():
     """Bandeja Gerencia: autorizar o rechazar la venta cuando hay alerta OFAC o rector PEP."""
@@ -16181,6 +16290,7 @@ def gerencia_hq():
         <a href="/gerencia/turnos">Turnos y notas</a>
         <a href="/soporte_admin">Centro de soporte</a>
         <a class="a" href="/gerencia/pqr-limpieza">🧹 Limpieza PQR de prueba</a>
+        <a href="/gerencia/auditoria">📋 Auditoría IP / ubicación</a>
         <a href="/tenants">Instituciones</a>
         <a href="/auditoria">Auditoría</a>
         <a class="t" href="/gerencia/lideres">Líderes / equipo web</a>
@@ -25978,13 +26088,10 @@ def editar_institucion(id):
     return page("Editar institución", shell(content))
 
 
-@app.route("/eliminar_institucion/<int:id>")
+@app.route("/eliminar_institucion/<int:id>", methods=["GET", "POST"])
 def eliminar_institucion(id):
-    """Borrado definitivo de institución (no se recrea sola). Limpia TODAS las tablas que
-    tengan institucion_id o estudiante_id ligado a este colegio, buscándolas automáticamente
-    en vez de una lista fija a mano (para no volver a olvidar una tabla nueva).
-    Solo Gerencia/Administrador puede ejecutar esta baja definitiva; Soporte puede
-    buscar/ver instituciones pero nunca darlas de baja (eso se escala a Gerencia)."""
+    """Borrado definitivo de institución. Limpia tablas hijas con savepoints
+    (un fallo en una tabla no deshace el resto). Solo Gerencia/Admin."""
     if not requiere_login():
         return redirect("/login")
     if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
@@ -25992,58 +26099,159 @@ def eliminar_institucion(id):
     inst = Institucion.query.get_or_404(id)
     codigo = inst.codigo or str(id)
     nombre = inst.nombre or ""
-    try:
-        # 1) IDs de estudiantes de este colegio, para limpiar tablas que solo tienen estudiante_id
-        ids_estudiantes = [e.id for e in Estudiante.query.filter_by(institucion_id=inst.id).all()]
-        modelos_por_estudiante = []
-        modelos_por_institucion = []
-        for mapper in db.Model.registry.mappers:
-            cls = mapper.class_
-            if cls is Institucion or cls is Estudiante:
-                continue
-            if hasattr(cls, "estudiante_id"):
-                modelos_por_estudiante.append(cls)
-            elif hasattr(cls, "institucion_id"):
-                modelos_por_institucion.append(cls)
-        if ids_estudiantes:
-            for cls in modelos_por_estudiante:
-                try:
-                    cls.query.filter(cls.estudiante_id.in_(ids_estudiantes)).delete(synchronize_session=False)
-                except Exception:
-                    db.session.rollback()
-        for cls in modelos_por_institucion:
+    from sqlalchemy import text, inspect as sa_inspect
+
+    def _safe_delete(fn, label=""):
+        try:
+            fn()
+            db.session.commit()
+            return True
+        except Exception as e:
             try:
-                cls.query.filter(cls.institucion_id == inst.id).delete(synchronize_session=False)
-            except Exception:
                 db.session.rollback()
-        # Usuarios propios del colegio (Soporte global no se toca, solo se desvincula)
+            except Exception:
+                pass
+            print(f"eliminar_institucion [{label}]:", e)
+            return False
+
+    try:
+        iid = inst.id
+        ids_estudiantes = [e.id for e in Estudiante.query.filter_by(institucion_id=iid).all()]
         ids_usuarios_colegio = [
-            u.id for u in Usuario.query.filter(Usuario.institucion_id == inst.id).all()
+            u.id for u in Usuario.query.filter(Usuario.institucion_id == iid).all()
             if (u.rol or "") != "Soporte"
         ]
-        if ids_usuarios_colegio:
-            for mapper in db.Model.registry.mappers:
-                cls = mapper.class_
-                if cls is Usuario or not hasattr(cls, "usuario_id"):
+
+        # 1) Tablas ORM con estudiante_id
+        for mapper in db.Model.registry.mappers:
+            cls = mapper.class_
+            if cls is Institucion or cls is Estudiante or cls is Usuario:
+                continue
+            if hasattr(cls, "estudiante_id") and ids_estudiantes:
+                _safe_delete(
+                    lambda c=cls: c.query.filter(c.estudiante_id.in_(ids_estudiantes)).delete(synchronize_session=False),
+                    f"est:{getattr(cls, '__tablename__', cls.__name__)}",
+                )
+            if hasattr(cls, "institucion_id"):
+                _safe_delete(
+                    lambda c=cls: c.query.filter(c.institucion_id == iid).delete(synchronize_session=False),
+                    f"inst:{getattr(cls, '__tablename__', cls.__name__)}",
+                )
+            if hasattr(cls, "usuario_id") and ids_usuarios_colegio:
+                _safe_delete(
+                    lambda c=cls: c.query.filter(c.usuario_id.in_(ids_usuarios_colegio)).delete(synchronize_session=False),
+                    f"usr:{getattr(cls, '__tablename__', cls.__name__)}",
+                )
+
+        # 2) SQL directo por inspector (cubre tablas sin modelo o FK raras)
+        try:
+            insp = sa_inspect(db.engine)
+            for tname in insp.get_table_names():
+                if tname in ("instituciones", "alembic_version"):
                     continue
                 try:
-                    cls.query.filter(cls.usuario_id.in_(ids_usuarios_colegio)).delete(synchronize_session=False)
+                    cols = [c["name"] for c in insp.get_columns(tname)]
                 except Exception:
-                    db.session.rollback()
-        for u in Usuario.query.filter(Usuario.institucion_id == inst.id).all():
+                    continue
+                if "institucion_id" in cols:
+                    _safe_delete(
+                        lambda tn=tname: db.session.execute(
+                            text(f'DELETE FROM "{tn}" WHERE institucion_id = :iid'),
+                            {"iid": iid},
+                        ),
+                        f"sql:{tname}",
+                    )
+                if "estudiante_id" in cols and ids_estudiantes:
+                    # borrar en lotes
+                    def _del_est(tn=tname, ids=ids_estudiantes):
+                        for i in range(0, len(ids), 200):
+                            chunk = ids[i:i+200]
+                            db.session.execute(
+                                text(f'DELETE FROM "{tn}" WHERE estudiante_id IN :ids').bindparams(
+                                    # fallback simple
+                                )
+                            ) if False else db.session.execute(
+                                text(f'DELETE FROM "{tn}" WHERE estudiante_id = ANY(:ids)'),
+                                {"ids": chunk},
+                            )
+                    # PostgreSQL ANY; si falla, fila a fila
+                    try:
+                        _safe_delete(lambda: _del_est(), f"sql-est:{tname}")
+                    except Exception:
+                        for eid in ids_estudiantes:
+                            _safe_delete(
+                                lambda e=eid, tn=tname: db.session.execute(
+                                    text(f'DELETE FROM "{tn}" WHERE estudiante_id = :e'),
+                                    {"e": e},
+                                ),
+                                f"sql-est1:{tname}",
+                            )
+        except Exception as ex_insp:
+            print("inspector cleanup:", ex_insp)
+
+        # 3) TicketPQR ligados por codigo/nit sin institucion_id
+        try:
+            if codigo:
+                _safe_delete(
+                    lambda: TicketPQR.query.filter(TicketPQR.codigo_colegio == str(codigo)).delete(synchronize_session=False),
+                    "pqr-codigo",
+                )
+            nit = (inst.nit or "").strip()
+            if nit:
+                _safe_delete(
+                    lambda: TicketPQR.query.filter(TicketPQR.nit_colegio == nit).delete(synchronize_session=False),
+                    "pqr-nit",
+                )
+        except Exception as ex_p:
+            print("pqr cleanup:", ex_p)
+
+        # 4) Usuarios del colegio
+        for u in Usuario.query.filter(Usuario.institucion_id == iid).all():
             if (u.rol or "") == "Soporte":
                 u.institucion_id = None
             else:
-                db.session.delete(u)
-        Estudiante.query.filter_by(institucion_id=inst.id).delete(synchronize_session=False)
-        db.session.delete(inst)
-        db.session.commit()
+                try:
+                    db.session.delete(u)
+                except Exception:
+                    pass
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        # 5) Estudiantes
+        _safe_delete(
+            lambda: Estudiante.query.filter_by(institucion_id=iid).delete(synchronize_session=False),
+            "estudiantes",
+        )
+
+        # 6) Institución
+        inst2 = Institucion.query.get(iid)
+        if inst2:
+            try:
+                db.session.delete(inst2)
+                db.session.commit()
+            except Exception as ex_final:
+                db.session.rollback()
+                # último recurso: SQL
+                try:
+                    db.session.execute(text('DELETE FROM instituciones WHERE id = :iid'), {"iid": iid})
+                    db.session.commit()
+                except Exception as ex2:
+                    db.session.rollback()
+                    session["flash_tenants"] = f"Error al eliminar: {ex2}"
+                    registrar_auditoria("Error eliminar institución", str(ex2)[:200])
+                    return redirect("/tenants")
+
         if session.get("institucion_id") == id:
             session.pop("institucion_id", None)
         registrar_auditoria("Eliminar institución", f"Borró {codigo} · {nombre}")
-        session["flash_tenants"] = f"Institución '{nombre}' eliminada. No se volverá a crear sola."
+        session["flash_tenants"] = f"Institución '{nombre}' eliminada definitivamente."
     except Exception as ex:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         session["flash_tenants"] = f"Error al eliminar: {ex}"
         registrar_auditoria("Error eliminar institución", str(ex)[:200])
     return redirect("/tenants")
