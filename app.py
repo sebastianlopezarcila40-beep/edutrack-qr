@@ -344,6 +344,9 @@ SOPORTE_TELEFONO = "3105615621"
 
 # Código de seguridad para limpiar auditoría.
 # En Render puedes definir AUDITORIA_DELETE_HASH con un hash generado por generate_password_hash.
+
+# Multi-inquilino: cada colegio puede tener hasta 20 sedes
+MAX_SEDES_POR_COLEGIO = 20
 # Si no existe, se usa este código temporal de pruebas: Auditoria2026*
 AUDITORIA_DELETE_HASH = os.getenv("AUDITORIA_DELETE_HASH", generate_password_hash("Auditoria2026*"))
 HORA_INICIO_ASISTENCIA = "06:00"
@@ -1649,7 +1652,7 @@ class PlanComercial(db.Model):
     descuento_pct = db.Column(db.Float, default=0.0)  # % descuento activo
     fee_implementacion = db.Column(db.Float, default=0.0)
     max_estudiantes = db.Column(db.Integer, default=200)
-    max_sedes = db.Column(db.Integer, default=15)
+    max_sedes = db.Column(db.Integer, default=20)
     features_json = db.Column(db.Text, default="[]")  # lista de strings
     activo = db.Column(db.Boolean, default=True)
     orden = db.Column(db.Integer, default=0)
@@ -3322,42 +3325,129 @@ def before():
         pass
 
 def institucion_id_actual():
-    """Tenant activo de la sesión. Soporte global puede no tener uno."""
-    return session.get("institucion_id")
+    """Tenant activo de la sesión. Roles de colegio SIEMPRE llevan institucion_id.
+    Soporte/Gerencia pueden operar sin tenant (multi-colegio)."""
+    iid = session.get("institucion_id")
+    if iid:
+        try:
+            return int(iid)
+        except Exception:
+            return iid
+    # Roles de colegio: recuperar del usuario en BD (evita sesión incompleta)
+    rol = (session.get("rol") or "").strip()
+    if rol in ("Docente", "Secretaría", "Coordinación", "Rectoría", "Estudiante", "Acudiente"):
+        try:
+            uid = session.get("user_id")
+            if uid:
+                u = Usuario.query.get(uid)
+                if u and u.institucion_id:
+                    session["institucion_id"] = u.institucion_id
+                    return int(u.institucion_id)
+        except Exception:
+            pass
+    return None
 
 
 def get_institucion(inst_id=None):
-    iid = inst_id or institucion_id_actual()
+    """Institución del tenant activo. Nunca devuelve 'el primer colegio activo'
+    (eso mezclaba datos entre inquilinos)."""
+    iid = inst_id if inst_id is not None else institucion_id_actual()
     if iid:
         return Institucion.query.get(iid)
-    return Institucion.query.filter_by(estado="ACTIVA").order_by(Institucion.id.asc()).first()
+    return None
 
 
 def config(inst_id=None):
-    """Configuración del tenant activo. Crea defaults si no existen."""
-    iid = inst_id or institucion_id_actual()
-    q = Configuracion.query
-    if iid:
-        c = q.filter_by(institucion_id=iid).first()
+    """Configuración del tenant activo. Crea defaults solo para ESE tenant."""
+    iid = inst_id if inst_id is not None else institucion_id_actual()
+    if not iid:
+        # Sin tenant: no usar configuración de otro colegio
+        c = Configuracion.query.filter(Configuracion.institucion_id.is_(None)).first()
         if c:
             return c
-    c = q.first()
-    if not c:
-        inst = get_institucion(iid)
         c = Configuracion(
-            institucion_id=(inst.id if inst else None),
-            periodo_actual="Periodo 2",
+            institucion_id=None,
+            periodo_actual="Periodo 1",
             jornada="Mañana",
-            inst_nombre=(inst.nombre if inst else DEFAULT_INST_NOMBRE),
-            inst_sede=(inst.sede if inst else DEFAULT_INST_SEDE),
-            inst_dane=(inst.dane if inst else DEFAULT_INST_DANE),
-            inst_nit=(inst.nit if inst else DEFAULT_INST_NIT),
-            inst_direccion=(inst.direccion if inst else DEFAULT_INST_DIRECCION),
-            inst_resolucion=(inst.resolucion if inst else DEFAULT_INST_RESOLUCION),
+            inst_nombre=DEFAULT_INST_NOMBRE,
+            inst_sede=DEFAULT_INST_SEDE,
+            inst_dane=DEFAULT_INST_DANE,
+            inst_nit=DEFAULT_INST_NIT,
+            inst_direccion=DEFAULT_INST_DIRECCION,
+            inst_resolucion=DEFAULT_INST_RESOLUCION,
         )
+        try:
+            db.session.add(c)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return c
+    c = Configuracion.query.filter_by(institucion_id=iid).first()
+    if c:
+        return c
+    inst = Institucion.query.get(iid)
+    c = Configuracion(
+        institucion_id=iid,
+        periodo_actual="Periodo 1",
+        jornada="Mañana",
+        inst_nombre=(inst.nombre if inst else DEFAULT_INST_NOMBRE),
+        inst_sede=(inst.sede if inst else DEFAULT_INST_SEDE),
+        inst_dane=(inst.dane if inst else DEFAULT_INST_DANE),
+        inst_nit=(inst.nit if inst else DEFAULT_INST_NIT),
+        inst_direccion=(inst.direccion if inst else DEFAULT_INST_DIRECCION),
+        inst_resolucion=(inst.resolucion if inst else DEFAULT_INST_RESOLUCION),
+    )
+    try:
         db.session.add(c)
         db.session.commit()
+    except Exception:
+        db.session.rollback()
+        c = Configuracion.query.filter_by(institucion_id=iid).first() or c
     return c
+
+
+def assert_mismo_tenant(obj, campo="institucion_id"):
+    """True si el objeto pertenece al tenant de la sesión (o si el usuario es global)."""
+    rol = (session.get("rol") or "").strip()
+    if rol in ("Soporte", "Superadmin", "Gerente", "Administrador", "Comercial", "Cobranza"):
+        return True
+    iid = institucion_id_actual()
+    if not iid or obj is None:
+        return False
+    try:
+        return int(getattr(obj, campo, None) or 0) == int(iid)
+    except Exception:
+        return False
+
+
+def max_sedes_para_institucion(iid):
+    """Tope de sedes: plan del colegio o MAX_SEDES_POR_COLEGIO (20)."""
+    tope = MAX_SEDES_POR_COLEGIO if "MAX_SEDES_POR_COLEGIO" in dir() else 20
+    try:
+        tope = int(MAX_SEDES_POR_COLEGIO)
+    except Exception:
+        tope = 20
+    try:
+        inst = Institucion.query.get(iid) if iid else None
+        if inst and getattr(inst, "max_sedes", None):
+            tope = min(int(inst.max_sedes) or tope, 20)
+        # plan comercial ligado
+        plan_nombre = (getattr(inst, "plan", None) or getattr(inst, "plan_codigo", None) or "") if inst else ""
+        if plan_nombre:
+            try:
+                pc = PlanComercial.query.filter(
+                    db.or_(
+                        PlanComercial.codigo == plan_nombre,
+                        PlanComercial.nombre == plan_nombre,
+                    )
+                ).first()
+                if pc and pc.max_sedes:
+                    tope = min(int(pc.max_sedes), 20)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return max(1, min(int(tope), 20))
 
 
 def sincronizar_inst_globals(c=None):
@@ -5938,8 +6028,8 @@ def puede_configurar():
     Ventas lo define al crear el colegio; Rectoría no modifica esos datos."""
     return rol_actual() in ["Soporte", "Superadmin", "Gerente", "Administrador"]
 def puede_sedes():
-    """Sedes del colegio: Secretaría (CRUD), Rectoría (ver/editar), Soporte (global)."""
-    return rol_actual() in ["Secretaría", "Rectoría", "Administrador", "Soporte"]
+    """Sedes del colegio: Secretaría/Rectoría/Coordinación (CRUD), Soporte (global)."""
+    return rol_actual() in ["Secretaría", "Rectoría", "Coordinación", "Administrador", "Soporte"]
 def puede_ver_historial(): return rol_actual() in ["Rectoría", "Coordinación", "Secretaría", "Administrador", "Admin", "Soporte"]
 
 def dentro_horario_docente():
@@ -12139,8 +12229,8 @@ def sedes_colegios():
                                 error = "Sede no válida."
                                 s = None
                         else:
-                            # Capacidad: máximo 15 sedes por colegio
-                            MAX_SEDES_COLEGIO = 15
+                            # Capacidad: hasta 20 sedes por colegio (o tope del plan)
+                            MAX_SEDES_COLEGIO = max_sedes_para_institucion(int(target_iid))
                             n_sedes = SedeInstitucion.query.filter_by(institucion_id=int(target_iid)).count()
                             if n_sedes >= MAX_SEDES_COLEGIO:
                                 error = f"Este colegio ya tiene {n_sedes} sedes. Máximo permitido: {MAX_SEDES_COLEGIO}."
@@ -22803,7 +22893,7 @@ def gerencia_planes():
                     p.precio_mensual = precio_base
                 p.fee_implementacion = float(request.form.get("fee") or 0)
                 p.max_estudiantes = int(request.form.get("max_e") or 100)
-                p.max_sedes = int(request.form.get("max_s") or 15)
+                p.max_sedes = int(request.form.get("max_s") or 20)
             except ValueError:
                 pass
             feats = (request.form.get("features") or "").strip()
@@ -24461,7 +24551,7 @@ def _seed_planes_comerciales():
         bas = PlanComercial.query.filter_by(codigo="basico").first()
         if bas and abs(float(bas.precio_mensual or 0) - 149950) > 1:
             force = True
-        if bas and int(bas.max_sedes or 0) != 12:
+        if bas and int(bas.max_sedes or 0) < 20:
             force = True
         if PlanComercial.query.filter_by(activo=True).count() < 5:
             force = True
@@ -24496,12 +24586,12 @@ def _seed_planes_comerciales():
             p.precio_mensual = float(d["precio"])
             p.fee_implementacion = float(d["fee"])
             p.max_estudiantes = int(d["max_e"] or 0)
-            p.max_sedes = int(d["max_s"] or 12)
+            p.max_sedes = int(d["max_s"] or 20)
             p.features_json = json.dumps(feats, ensure_ascii=False)
             p.orden = int(d["orden"])
         p.activo = True
         if not p.max_sedes:
-            p.max_sedes = 12
+            p.max_sedes = 20
     for extra in PlanComercial.query.all():
         if (extra.codigo or "").lower() not in codigos_ok:
             extra.activo = False
