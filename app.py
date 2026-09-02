@@ -17568,6 +17568,8 @@ def gerencia_hq():
         <a class="a" href="/gerencia/anuncios">📢 Anuncios institucionales</a>
         <a class="own" href="/gerencia/correo-soporte">📧 Conectar Gmail · Soporte</a>
         <a class="own" href="/gerencia/correo-notificaciones">📧 Conectar Gmail · Notificaciones</a>
+        <a class="g" href="/gerencia/wati-conexion" style="background:#25D366;color:#fff">🔌 Conectar WhatsApp · API WATI</a>
+        <a class="g" href="/whatsapp/inbox?canal=soporte" style="background:#128C7E;color:#fff">💬 Inbox WhatsApp</a>
       </div>
     </div>
 
@@ -17587,6 +17589,7 @@ def gerencia_hq():
         <a class="own" href="/gerencia/tesoreria">Cuentas bancarias y pasarelas</a>
         <a class="own" href="/gerencia/correo-soporte">📧 Conectar Gmail · Soporte</a>
         <a class="own" href="/gerencia/correo-notificaciones">📧 Conectar Gmail · Notificaciones automáticas</a>
+        <a class="own" href="/gerencia/wati-conexion">🔌 Conectar WhatsApp · API WATI</a>
         <a class="own" href="/gerencia/descuentos">Descuentos especiales</a>
         <a class="own" href="/gerencia/lideres">Equipo directivo (web)</a>
         <a class="own" href="/gerencia/web-corporativa">Web corporativa</a>
