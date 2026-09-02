@@ -14335,9 +14335,12 @@ def _aislar_paneles_internos():
             or path.startswith("/ventas/contrato")
             or path.startswith("/ventas/propuesta")
             or path.startswith("/ventas/comprar")
+            or path.startswith("/ventas/fidelizacion")
+            or path.startswith("/ventas/verificacion")
             or path.startswith("/api/ventas")
             or path == "/ventas"
             or path.startswith("/interno/buscar")
+            or path.startswith("/notas-cliente")
         )
         if not permitido and (path.startswith("/gerencia") or path.startswith("/soporte")
                               or path.startswith("/cobranza") or path.startswith("/soporte_admin")
@@ -25182,6 +25185,7 @@ def soporte_admin():
   <div style="padding:8px 12px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px">
     <a href="/soporte/pqr" style="font-weight:700;color:#0B2D57">Abrir centro PQR completo →</a>
     · <a href="/soporte/logs-errores" style="font-weight:700;color:#7c3aed">Bugs / escalamiento →</a>
+    · <a href="/soporte/fidelizacion" style="font-weight:700;color:#0d9488">💙 Fidelización CSAT →</a>
   </div>
 </section>
 
@@ -25260,6 +25264,7 @@ def soporte_admin():
     <a class="btn" href="/soporte/prorroga" style="background:#1e3a5f;color:#fff;border:1px solid #fff3">📅 Prórroga 24h</a>
     <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
     <a class="btn" href="/soporte/pqr" style="background:#1e40af;color:#fff">Tickets</a>
+    <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488;color:#fff">💙 CSAT</a>
     <a class="btn btn-red" href="/logout">Salir</a>
   </div>
 </section>
@@ -34170,7 +34175,15 @@ def pqr_pdf_publico(codigo):
 def encuesta_csat_publica(token):
     """Encuesta CSAT sin login. Registra IP / ubicación / ISP (Ley 1581)."""
     token = (token or "").strip()
-    enc = EncuestaCSAT.query.filter_by(token=token).first()
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        enc = EncuestaCSAT.query.filter_by(token=token).first()
+    except Exception as e_q:
+        print("encuesta query:", e_q)
+        enc = None
     if not enc:
         # crear desde ticket si solo existe token en ticket
         t = TicketPQR.query.filter_by(token_csat=token).first()
@@ -34326,124 +34339,232 @@ document.querySelectorAll('.stars').forEach(function(box){{
 @app.route("/ventas/fidelizacion", methods=["GET", "POST"])
 @app.route("/cobranza/fidelizacion", methods=["GET", "POST"])
 def panel_fidelizacion_csat():
-    """Índice de felicidad (CSAT) y alertas de retención por calificaciones bajas.
-    Permite generar encuesta para un colegio o registrar 'solo consulta/pregunta'."""
+    """CSAT + notas de consulta. Nunca debe tumbar el portal: crea tablas y atrapa errores."""
     if not requiere_login():
-        return redirect("/login")
-    rol = rol_actual()
+        # redirigir al login del portal según path
+        p = request.path or ""
+        if p.startswith("/soporte"):
+            return redirect("/soporte-login")
+        if p.startswith("/cobranza"):
+            return redirect("/cobranza-login")
+        if p.startswith("/gerencia"):
+            return redirect("/gerencia-login")
+        return redirect("/ventas-login")
+    rol = (rol_actual() or "").strip()
     if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte", "Comercial", "Ventas", "Cobranza"):
         return acceso_denegado("Panel de fidelización restringido.")
+
+    def _ensure_csat_table():
+        try:
+            db.create_all()
+        except Exception as e:
+            print("csat create_all:", e)
+        try:
+            from sqlalchemy import text as _sql_text, inspect as _insp
+            insp = _insp(db.engine)
+            tables = insp.get_table_names()
+            if "encuestas_csat" not in tables:
+                db.session.execute(_sql_text("""
+                    CREATE TABLE IF NOT EXISTS encuestas_csat (
+                        id SERIAL PRIMARY KEY,
+                        ticket_id INTEGER,
+                        token VARCHAR(64) UNIQUE NOT NULL,
+                        institucion_id INTEGER,
+                        radicado VARCHAR(40) DEFAULT '',
+                        email VARCHAR(160) DEFAULT '',
+                        nombre VARCHAR(220) DEFAULT '',
+                        q1_chat INTEGER DEFAULT 0,
+                        q2_asesor INTEGER DEFAULT 0,
+                        q3_app INTEGER DEFAULT 0,
+                        q4_global INTEGER DEFAULT 0,
+                        comentario TEXT DEFAULT '',
+                        promedio FLOAT DEFAULT 0,
+                        alerta_retencion BOOLEAN DEFAULT FALSE,
+                        ip VARCHAR(80) DEFAULT '',
+                        ubicacion VARCHAR(200) DEFAULT '',
+                        proveedor_isp VARCHAR(160) DEFAULT '',
+                        user_agent VARCHAR(400) DEFAULT '',
+                        fecha VARCHAR(20) DEFAULT '',
+                        hora VARCHAR(20) DEFAULT '',
+                        respondida BOOLEAN DEFAULT FALSE,
+                        creada_en VARCHAR(30) DEFAULT '',
+                        respondida_en VARCHAR(30) DEFAULT '',
+                        tipo_encuesta VARCHAR(40) DEFAULT 'CASO',
+                        nota_interna TEXT DEFAULT ''
+                    )
+                """))
+                db.session.commit()
+            else:
+                cols = {c["name"] for c in insp.get_columns("encuestas_csat")}
+                for col, ddl in (
+                    ("tipo_encuesta", "ALTER TABLE encuestas_csat ADD COLUMN tipo_encuesta VARCHAR(40) DEFAULT 'CASO'"),
+                    ("nota_interna", "ALTER TABLE encuestas_csat ADD COLUMN nota_interna TEXT DEFAULT ''"),
+                    ("proveedor_isp", "ALTER TABLE encuestas_csat ADD COLUMN proveedor_isp VARCHAR(160) DEFAULT ''"),
+                    ("ubicacion", "ALTER TABLE encuestas_csat ADD COLUMN ubicacion VARCHAR(200) DEFAULT ''"),
+                ):
+                    if col not in cols:
+                        try:
+                            db.session.execute(_sql_text(ddl))
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            print("ensure csat table:", e)
+
+    _ensure_csat_table()
+
     mensaje = error = ""
     encuesta_url_nueva = ""
+    respondidas, pendientes, alertas, consultas = [], [], [], []
 
-    if request.method == "POST":
-        accion = (request.form.get("accion") or "").strip()
-        if accion == "generar_colegio":
-            import secrets as _sec
-            try:
-                iid = int(request.form.get("institucion_id") or 0)
-            except Exception:
-                iid = 0
-            inst = Institucion.query.get(iid) if iid else None
-            email = (request.form.get("email") or "").strip()[:160]
-            nombre = (request.form.get("nombre") or (inst.nombre if inst else "") or "").strip()[:220]
-            if not inst and not nombre:
-                error = "Seleccione un colegio o escriba el nombre del contacto."
-            else:
-                tok = _sec.token_urlsafe(24)
-                enc = EncuestaCSAT(
-                    ticket_id=None,
-                    token=tok,
-                    institucion_id=(inst.id if inst else None),
-                    radicado=f"COL-{inst.codigo}" if inst else "MANUAL",
-                    email=email,
-                    nombre=nombre or (inst.nombre if inst else "Cliente"),
-                    tipo_encuesta="COLEGIO",
-                    creada_en=f"{fecha_hoy()} {hora_actual()}",
-                    respondida=False,
-                )
-                try:
-                    db.session.add(enc)
-                    db.session.commit()
-                    base = (os.environ.get("APP_BASE_URL") or request.url_root or "").rstrip("/")
-                    encuesta_url_nueva = f"{base}/encuesta/{tok}"
-                    mensaje = f"Encuesta generada para {nombre or inst.nombre}."
-                    registrar_auditoria("CSAT generada colegio", f"inst={iid} token={tok[:8]}…")
-                except Exception as ex:
-                    db.session.rollback()
-                    error = str(ex)
-        elif accion == "solo_consulta":
-            try:
-                iid = int(request.form.get("institucion_id") or 0)
-            except Exception:
-                iid = 0
-            inst = Institucion.query.get(iid) if iid else None
-            nota = (request.form.get("nota") or "").strip()[:1500]
-            nombre = (request.form.get("nombre") or (inst.nombre if inst else "") or "Consulta").strip()[:220]
-            if not nota:
-                error = "Escriba la nota: por ejemplo, solo vinieron a preguntar por el plan."
-            else:
+    try:
+        if request.method == "POST":
+            accion = (request.form.get("accion") or "").strip()
+            if accion == "generar_colegio":
                 import secrets as _sec
-                tok = _sec.token_urlsafe(16)
-                enc = EncuestaCSAT(
-                    ticket_id=None,
-                    token=tok,
-                    institucion_id=(inst.id if inst else None),
-                    radicado="CONSULTA",
-                    email=(request.form.get("email") or "")[:160],
-                    nombre=nombre,
-                    tipo_encuesta="SOLO_CONSULTA",
-                    nota_interna=nota,
-                    comentario=nota,
-                    respondida=True,  # no requiere estrellas
-                    promedio=0,
-                    fecha=fecha_hoy(),
-                    hora=hora_actual(),
-                    creada_en=f"{fecha_hoy()} {hora_actual()}",
-                    respondida_en=f"{fecha_hoy()} {hora_actual()}",
-                    ip=_client_ip_audit(),
-                )
                 try:
-                    db.session.add(enc)
-                    db.session.commit()
-                    mensaje = "Nota de consulta registrada (sin encuesta de estrellas)."
-                    registrar_auditoria("CSAT solo consulta", f"{nombre}: {nota[:80]}")
-                except Exception as ex:
-                    db.session.rollback()
-                    error = str(ex)
+                    iid = int(request.form.get("institucion_id") or 0)
+                except Exception:
+                    iid = 0
+                inst = Institucion.query.get(iid) if iid else None
+                email = (request.form.get("email") or "").strip()[:160]
+                nombre = (request.form.get("nombre") or (inst.nombre if inst else "") or "").strip()[:220]
+                if not inst and not nombre:
+                    error = "Seleccione un colegio o escriba el nombre del contacto."
+                else:
+                    tok = _sec.token_urlsafe(24)
+                    enc = EncuestaCSAT(
+                        ticket_id=None,
+                        token=tok,
+                        institucion_id=(inst.id if inst else None),
+                        radicado=("COL-" + str(inst.codigo)) if inst else "MANUAL",
+                        email=email,
+                        nombre=nombre or (inst.nombre if inst else "Cliente"),
+                        tipo_encuesta="COLEGIO",
+                        creada_en=f"{fecha_hoy()} {hora_actual()}",
+                        respondida=False,
+                    )
+                    try:
+                        db.session.add(enc)
+                        db.session.commit()
+                        base = (os.environ.get("APP_BASE_URL") or request.url_root or "").rstrip("/")
+                        encuesta_url_nueva = f"{base}/encuesta/{tok}"
+                        mensaje = f"Encuesta generada para {nombre or (inst.nombre if inst else '')}."
+                        try:
+                            registrar_auditoria("CSAT generada colegio", f"inst={iid} token={tok[:8]}")
+                        except Exception:
+                            pass
+                    except Exception as ex:
+                        db.session.rollback()
+                        error = f"No se pudo guardar la encuesta: {ex}"
+            elif accion == "solo_consulta":
+                import secrets as _sec
+                try:
+                    iid = int(request.form.get("institucion_id") or 0)
+                except Exception:
+                    iid = 0
+                inst = Institucion.query.get(iid) if iid else None
+                nota = (request.form.get("nota") or "").strip()[:1500]
+                nombre = (request.form.get("nombre") or (inst.nombre if inst else "") or "Consulta").strip()[:220]
+                if not nota:
+                    error = "Escriba la nota de la consulta."
+                else:
+                    tok = _sec.token_urlsafe(16)
+                    try:
+                        ip = _client_ip_audit()
+                    except Exception:
+                        ip = ""
+                    enc = EncuestaCSAT(
+                        ticket_id=None,
+                        token=tok,
+                        institucion_id=(inst.id if inst else None),
+                        radicado="CONSULTA",
+                        email=(request.form.get("email") or "")[:160],
+                        nombre=nombre,
+                        tipo_encuesta="SOLO_CONSULTA",
+                        nota_interna=nota,
+                        comentario=nota,
+                        respondida=True,
+                        promedio=0,
+                        fecha=fecha_hoy(),
+                        hora=hora_actual(),
+                        creada_en=f"{fecha_hoy()} {hora_actual()}",
+                        respondida_en=f"{fecha_hoy()} {hora_actual()}",
+                        ip=ip,
+                    )
+                    try:
+                        db.session.add(enc)
+                        db.session.commit()
+                        mensaje = "Nota de consulta guardada correctamente."
+                        try:
+                            registrar_auditoria("CSAT solo consulta", f"{nombre}: {nota[:80]}")
+                        except Exception:
+                            pass
+                    except Exception as ex:
+                        db.session.rollback()
+                        error = f"No se pudo guardar la nota: {ex}"
+    except Exception as e_post:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        error = f"Error al procesar: {e_post}"
+        print("fidelizacion POST:", e_post)
 
     try:
         respondidas = EncuestaCSAT.query.filter_by(respondida=True).order_by(EncuestaCSAT.id.desc()).limit(200).all()
-        pendientes = EncuestaCSAT.query.filter_by(respondida=False).order_by(EncuestaCSAT.id.desc()).limit(50).all()
-        alertas = EncuestaCSAT.query.filter_by(respondida=True, alerta_retencion=True).order_by(EncuestaCSAT.id.desc()).limit(50).all()
-        consultas = EncuestaCSAT.query.filter_by(tipo_encuesta="SOLO_CONSULTA").order_by(EncuestaCSAT.id.desc()).limit(30).all()
     except Exception as e:
-        respondidas, pendientes, alertas, consultas = [], [], [], []
-        print("fidelizacion query:", e)
+        print("csat respondidas:", e)
+        respondidas = []
+    try:
+        pendientes = EncuestaCSAT.query.filter_by(respondida=False).order_by(EncuestaCSAT.id.desc()).limit(50).all()
+    except Exception:
+        pendientes = []
+    try:
+        alertas = [r for r in respondidas if getattr(r, "alerta_retencion", False)]
+    except Exception:
+        alertas = []
+    try:
+        consultas = EncuestaCSAT.query.filter(
+            EncuestaCSAT.tipo_encuesta == "SOLO_CONSULTA"
+        ).order_by(EncuestaCSAT.id.desc()).limit(30).all()
+    except Exception:
+        try:
+            consultas = [r for r in respondidas if (getattr(r, "radicado", "") or "") == "CONSULTA"]
+        except Exception:
+            consultas = []
 
     def avg(attr):
         vals = [getattr(r, attr) or 0 for r in respondidas if (getattr(r, attr) or 0) > 0]
         return round(sum(vals) / len(vals), 2) if vals else 0.0
 
-    n = len(respondidas)
-    prom_global = round(sum(r.promedio or 0 for r in respondidas) / n, 2) if n else 0.0
+    n = len([r for r in respondidas if (getattr(r, "promedio", 0) or 0) > 0])
+    prom_global = round(sum((r.promedio or 0) for r in respondidas if (r.promedio or 0) > 0) / n, 2) if n else 0.0
     a1, a2, a3, a4 = avg("q1_chat"), avg("q2_asesor"), avg("q3_app"), avg("q4_global")
 
     filas_a = ""
-    for a in alertas:
+    for a in alertas[:50]:
         filas_a += (
             f"<tr style='background:#fef2f2'><td>{_esc(a.fecha)} {_esc(a.hora)}</td>"
             f"<td><b>{_esc(a.radicado)}</b><br><span style='font-size:11px'>{_esc(a.nombre)}</span></td>"
             f"<td>{a.q1_chat}/{a.q2_asesor}/{a.q3_app}/{a.q4_global}</td>"
             f"<td><b style='color:#b91c1c'>{a.promedio}</b></td>"
             f"<td style='font-size:12px'>{_esc((a.comentario or '')[:80])}</td>"
-            f"<td style='font-size:11px'>{_esc(a.ip)}<br>{_esc(a.ubicacion or '')}</td></tr>"
+            f"<td style='font-size:11px'>{_esc(a.ip or '')}<br>{_esc(getattr(a,'ubicacion',None) or '')}</td></tr>"
         )
     if not filas_a:
-        filas_a = "<tr><td colspan='6' style='text-align:center;color:#64748b;padding:12px'>Sin alertas de retención 🎉</td></tr>"
+        filas_a = "<tr><td colspan='6' style='text-align:center;color:#64748b;padding:12px'>Sin alertas de retención</td></tr>"
 
     filas_r = ""
     for r in respondidas[:40]:
+        if (getattr(r, "tipo_encuesta", "") or "") == "SOLO_CONSULTA":
+            continue
+        if not (r.promedio or 0):
+            continue
         col = "#b91c1c" if r.alerta_retencion else "#16a34a"
         filas_r += (
             f"<tr><td style='font-size:12px'>{_esc(r.fecha)}</td><td>{_esc(r.radicado)}</td>"
@@ -34454,32 +34575,40 @@ def panel_fidelizacion_csat():
     if not filas_r:
         filas_r = "<tr><td colspan='9' style='text-align:center;color:#64748b;padding:12px'>Aún no hay evaluaciones</td></tr>"
 
-    volver = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Ventas": "/ventas/panel", "Cobranza": "/cobranza/panel"}.get(rol, "/gerencia/hq")
-    opts_inst = "".join(
-        f'<option value="{i.id}">{_esc((i.codigo or str(i.id)) + " — " + (i.nombre or ""))}</option>'
-        for i in Institucion.query.order_by(Institucion.nombre.asc()).limit(300).all()
-    )
     filas_c = ""
-    try:
-        for c in consultas:
-            filas_c += (
-                f"<tr><td style='font-size:12px'>{_esc(c.fecha)} {_esc(c.hora)}</td>"
-                f"<td>{_esc(c.nombre)}</td><td style='font-size:13px'>{_esc((c.nota_interna or c.comentario or '')[:200])}</td>"
-                f"<td style='font-size:11px'>{_esc(c.email)}</td></tr>"
-            )
-    except Exception:
-        pass
+    for c in consultas:
+        filas_c += (
+            f"<tr><td style='font-size:12px'>{_esc(c.fecha)} {_esc(c.hora)}</td>"
+            f"<td>{_esc(c.nombre)}</td><td style='font-size:13px'>{_esc((getattr(c,'nota_interna',None) or c.comentario or '')[:200])}</td>"
+            f"<td style='font-size:11px'>{_esc(c.email)}</td></tr>"
+        )
     if not filas_c:
         filas_c = "<tr><td colspan='4' style='text-align:center;color:#64748b;padding:10px'>Sin notas de consulta</td></tr>"
+
+    try:
+        opts_inst = "".join(
+            f'<option value="{i.id}">{_esc((i.codigo or str(i.id)) + " — " + (i.nombre or ""))}</option>'
+            for i in Institucion.query.order_by(Institucion.nombre.asc()).limit(300).all()
+        )
+    except Exception:
+        opts_inst = ""
+
+    volver = {
+        "Soporte": "/soporte_admin",
+        "Comercial": "/ventas/panel",
+        "Ventas": "/ventas/panel",
+        "Cobranza": "/cobranza/panel",
+    }.get(rol, "/gerencia/hq")
+
     content = f"""
 <header class="role-hero"><div>
   <h1>💙 Fidelización y retención · CSAT</h1>
   <p>Encuesta 1–5 estrellas · alertas de retención · notas de “solo preguntaron”.</p>
 </div>
 <a class="btn" href="{volver}">← Volver</a></header>
-{"<div class='msg ok'>"+_esc(mensaje)+"</div>" if mensaje else ""}
-{"<div class='msg danger'>"+_esc(error)+"</div>" if error else ""}
-{"<div class='msg ok'><b>Link encuesta:</b> <code style='word-break:break-all'>"+_esc(encuesta_url_nueva)+"</code><br><a target='_blank' href='"+_esc(encuesta_url_nueva)+"'>Abrir</a> · <a target='_blank' href='https://wa.me/?text="+_esc(encuesta_url_nueva)+"'>WhatsApp</a></div>" if encuesta_url_nueva else ""}
+{"<div class='msg ok'>" + _esc(mensaje) + "</div>" if mensaje else ""}
+{"<div class='msg danger'>" + _esc(error) + "</div>" if error else ""}
+{"<div class='msg ok'><b>Link encuesta:</b> <code style='word-break:break-all'>" + _esc(encuesta_url_nueva) + "</code><br><a target='_blank' href='" + _esc(encuesta_url_nueva) + "'>Abrir</a> · <a target='_blank' href='https://wa.me/?text=" + _esc(encuesta_url_nueva) + "'>WhatsApp</a></div>" if encuesta_url_nueva else ""}
 
 <section class="role-panel">
   <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Generar encuesta o registrar consulta</h2>
@@ -34487,7 +34616,7 @@ def panel_fidelizacion_csat():
     <form method="POST" style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:14px">
       <input type="hidden" name="accion" value="generar_colegio">
       <b style="color:#0f766e">⭐ Encuesta para un colegio / contacto</b>
-      <p style="font-size:12px;color:#64748b">Genera link (sin login) con las 5 preguntas de estrellas.</p>
+      <p style="font-size:12px;color:#64748b">Link sin login · 5 preguntas · se registra IP (Ley 1581).</p>
       <label style="font-size:12px;font-weight:700">Colegio</label>
       <select name="institucion_id"><option value="">— Opcional —</option>{opts_inst}</select>
       <label style="font-size:12px;font-weight:700">Nombre contacto</label>
@@ -34499,20 +34628,20 @@ def panel_fidelizacion_csat():
     <form method="POST" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:14px">
       <input type="hidden" name="accion" value="solo_consulta">
       <b style="color:#c2410c">📝 Solo vinieron a preguntar</b>
-      <p style="font-size:12px;color:#64748b">No envía encuesta. Queda como nota en fidelización.</p>
+      <p style="font-size:12px;color:#64748b">No envía encuesta. Queda como nota permanente.</p>
       <label style="font-size:12px;font-weight:700">Colegio</label>
       <select name="institucion_id"><option value="">— Opcional —</option>{opts_inst}</select>
       <label style="font-size:12px;font-weight:700">Nombre</label>
       <input name="nombre" placeholder="Quién preguntó">
       <label style="font-size:12px;font-weight:700">¿Qué preguntaron?</label>
-      <textarea name="nota" rows="3" required placeholder="Ej. Solo consultaron precios del plan Premium, sin demo."></textarea>
+      <textarea name="nota" rows="3" required placeholder="Ej. Solo consultaron precios del plan Premium."></textarea>
       <button type="submit" style="margin-top:10px;background:#c2410c;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800;cursor:pointer">Guardar nota de consulta</button>
     </form>
   </div>
 </section>
 
 <section class="role-panel">
-  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Botón 1 · Índice de Felicidad (CSAT)</h2>
+  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Índice de Felicidad (CSAT)</h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
     <div style="background:#0B2D57;color:#fff;border-radius:12px;padding:16px;text-align:center">
       <div style="font-size:12px;opacity:.85">Promedio global</div>
@@ -34531,7 +34660,7 @@ def panel_fidelizacion_csat():
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
       <div style="font-size:11px;color:#64748b">4. Experiencia</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a4}</div>
     </div>
-    <div style="background:##fee2e2;border:1px solid #fecaca;border-radius:12px;padding:14px;text-align:center;background:#fef2f2">
+    <div style="border:1px solid #fecaca;border-radius:12px;padding:14px;text-align:center;background:#fef2f2">
       <div style="font-size:11px;color:#991b1b">Alertas retención</div>
       <div style="font-size:24px;font-weight:800;color:#b91c1c">{len(alertas)}</div>
     </div>
@@ -34540,7 +34669,6 @@ def panel_fidelizacion_csat():
 
 <section class="role-panel" style="margin-top:14px;border:2px solid #fecaca">
   <h2 style="margin-top:0;font-size:16px;color:#b91c1c">⚠️ Alertas de retención (1 o 2 estrellas)</h2>
-  <p style="font-size:13px;color:#64748b">Contacte de inmediato a estos clientes para evitar pérdida de cuenta.</p>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
     <tr style="background:#7f1d1d;color:#fff"><th style="padding:8px">Fecha</th><th>Caso</th><th>Q1–Q4</th><th>Prom.</th><th>Comentario</th><th>IP / Ubicación</th></tr>
     {filas_a}
@@ -34566,9 +34694,15 @@ def panel_fidelizacion_csat():
   </table></div>
 </section>
 """
-    if rol == "Soporte":
-        return page("Fidelización CSAT", shell_soporte(content))
-    return page("Fidelización CSAT", shell(content) if rol not in ("Gerente", "Superadmin", "Administrador") else content)
+    try:
+        if rol == "Soporte":
+            return page("Fidelización CSAT", shell_soporte(content))
+        if rol in ("Gerente", "Superadmin", "Administrador"):
+            return page("Fidelización CSAT", content)
+        return page("Fidelización CSAT", shell(content) if "shell" in dir() else content)
+    except Exception as e_render:
+        print("fidelizacion render:", e_render)
+        return page("Fidelización CSAT", content)
 
 
 
