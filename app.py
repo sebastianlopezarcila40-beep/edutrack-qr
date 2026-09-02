@@ -6184,18 +6184,65 @@ def asignaciones_docente_actual():
         return []
 
 
+def _norm_grado_key(g):
+    """Normaliza '8°', '08', 'Octavo' → forma comparable."""
+    s = str(g or "").strip().lower().replace("°", "").replace("º", "")
+    s = s.replace("grado", "").strip()
+    # solo dígitos iniciales
+    import re as _re
+    m = _re.match(r"(\d{1,2})", s)
+    if m:
+        return str(int(m.group(1)))  # 08 → 8
+    mapa = {
+        "sexto": "6", "sexto": "6", "6to": "6",
+        "septimo": "7", "séptimo": "7", "7mo": "7",
+        "octavo": "8", "8vo": "8",
+        "noveno": "9", "9no": "9",
+        "decimo": "10", "décimo": "10", "10mo": "10",
+        "once": "11", "undecimo": "11", "undécimo": "11",
+    }
+    for k, v in mapa.items():
+        if k in s:
+            return v
+    return s
+
+
 def materias_docente_actual():
+    """None = sin filtro (dirección). Lista = solo esas materias. Nunca bloquea el piloto."""
     asig = asignaciones_docente_actual()
     if asig is None:
         return None
-    return sorted({a.asignatura for a in asig if a.asignatura})
+    mats = sorted({(a.asignatura or "").strip() for a in asig if (a.asignatura or "").strip()})
+    if mats:
+        return mats
+    # Sin asignaciones: materias del colegio (planilla usable en piloto)
+    try:
+        return list(todas_materias() or [])
+    except Exception:
+        return [
+            "Matemáticas", "Humanidades / Lengua Castellana", "Idioma Extranjero (Inglés)",
+            "Ciencias Naturales", "Ciencias Sociales", "Educación Física, Recreación y Deportes",
+            "Educación Artística y Cultural", "Educación Ética y en Valores Humanos",
+            "Educación Religiosa", "Tecnología e Informática",
+        ]
 
 
 def grados_docente_actual():
+    """None = sin filtro. Lista de grados del docente; si no hay asignación, grados con estudiantes."""
     asig = asignaciones_docente_actual()
     if asig is None:
         return None
-    return sorted({a.grado for a in asig if a.grado})
+    grados = sorted(
+        {(a.grado or "").strip() for a in asig if (a.grado or "").strip()},
+        key=lambda x: int(_norm_grado_key(x)) if _norm_grado_key(x).isdigit() else 999,
+    )
+    if grados:
+        return grados
+    # Fallback: grados reales con matrícula en el colegio
+    try:
+        return list(grados_disponibles() or [])
+    except Exception:
+        return ["6", "7", "8", "9", "10", "11"]
 
 
 def requiere_login(): return "usuario" in session
@@ -9036,77 +9083,93 @@ def secretaria_planilla_grupo_generar():
         ))
     inst = Institucion.query.get(iid) if iid else None
     nom_inst = (inst.nombre if inst else None) or INST_NOMBRE or "Institución educativa"
-    from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas as _canvas
+    # Carta horizontal (Letter) — tamaño block/escolar estándar en Colombia
+    page_w, page_h = letter  # 612 x 792 pt
+    # Usamos landscape letter compacto
+    from reportlab.lib.pagesizes import landscape as _ls
     buf = BytesIO()
-    pdf = _canvas.Canvas(buf, pagesize=landscape(letter))
-    w, h = landscape(letter)
+    pdf = _canvas.Canvas(buf, pagesize=_ls(letter))
+    w, h = _ls(letter)
     dias_mes = 31
     for grado, grupo in combos:
-        q = Estudiante.query.filter(Estudiante.grado == grado)
-        if grupo:
-            q = q.filter(Estudiante.grupo == grupo)
-        else:
-            q = q.filter((Estudiante.grupo == "") | (Estudiante.grupo.is_(None)))
+        gk = _norm_grado_key(grado)
+        q = Estudiante.query
         if iid is not None:
             q = q.filter(Estudiante.institucion_id == iid)
-        estudiantes = q.order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc()).all()
-        # --- Encabezado ---
-        pdf.setFont("Helvetica-Bold", 13)
-        pdf.drawCentredString(w / 2, h - 30, str(nom_inst)[:90])
+        # Match flexible de grado
+        candidatos = q.order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc()).limit(500).all()
+        estudiantes = []
+        for e in candidatos:
+            if _norm_grado_key(getattr(e, "grado", None)) != gk:
+                continue
+            eg = (getattr(e, "grupo", None) or "").strip()
+            if grupo:
+                if eg != str(grupo).strip() and eg.lstrip("0") != str(grupo).strip().lstrip("0"):
+                    continue
+            estudiantes.append(e)
+        # --- Encabezado compacto ---
         pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawCentredString(w / 2, h - 22, str(nom_inst)[:80])
+        pdf.setFont("Helvetica-Bold", 10)
         titulo = "PLANILLA DE ASISTENCIA" if tipo == "asistencia" else "PLANILLA DE NOTAS"
-        pdf.drawCentredString(w / 2, h - 46, titulo)
-        pdf.setFont("Helvetica", 9)
-        pdf.drawString(30, h - 66, f"Docente: {(docente.nombre_completo or docente.usuario)}")
-        pdf.drawString(260, h - 66, f"Grado: {grado}" + (f" - {grupo}" if grupo else ""))
-        pdf.drawString(460, h - 66, f"Año escolar: {anio}")
-        pdf.drawString(600, h - 66, f"Mes: {mes}" if tipo == "asistencia" else "")
-        y_tabla = h - 90
-        # --- Columnas ---
-        col_orden_w, col_nombre_w, col_codigo_w = 26, 190, 60
-        x0 = 30
+        pdf.drawCentredString(w / 2, h - 36, titulo)
+        pdf.setFont("Helvetica", 8)
+        pdf.drawString(24, h - 52, f"Docente: {(docente.nombre_completo or docente.usuario)}")
+        pdf.drawString(220, h - 52, f"Grado: {grado}" + (f" - {grupo}" if grupo else ""))
+        pdf.drawString(380, h - 52, f"Año: {anio}")
+        pdf.drawString(480, h - 52, f"Mes: {mes}" if tipo == "asistencia" else "")
+        y_tabla = h - 68
+        col_orden_w, col_nombre_w, col_codigo_w = 22, 170, 54
+        x0 = 24
         x_orden = x0
         x_nombre = x_orden + col_orden_w
         x_codigo = x_nombre + col_nombre_w
         x_grid = x_codigo + col_codigo_w
         n_cols_grid = dias_mes if tipo == "asistencia" else 8
-        ancho_disp = (w - 30) - x_grid
+        ancho_disp = (w - 24) - x_grid
         col_w = ancho_disp / n_cols_grid
-        alto_fila = 14
-        alto_encabezado = 16
-        # Encabezado de tabla
-        pdf.setFont("Helvetica-Bold", 7)
+        alto_fila = 12
+        alto_encabezado = 14
+        pdf.setFont("Helvetica-Bold", 6)
         pdf.rect(x_orden, y_tabla - alto_encabezado, col_orden_w, alto_encabezado)
-        pdf.drawCentredString(x_orden + col_orden_w / 2, y_tabla - alto_encabezado + 5, "N°")
+        pdf.drawCentredString(x_orden + col_orden_w / 2, y_tabla - alto_encabezado + 4, "N°")
         pdf.rect(x_nombre, y_tabla - alto_encabezado, col_nombre_w, alto_encabezado)
-        pdf.drawCentredString(x_nombre + col_nombre_w / 2, y_tabla - alto_encabezado + 5, "APELLIDOS Y NOMBRE")
+        pdf.drawCentredString(x_nombre + col_nombre_w / 2, y_tabla - alto_encabezado + 4, "APELLIDOS Y NOMBRE")
         pdf.rect(x_codigo, y_tabla - alto_encabezado, col_codigo_w, alto_encabezado)
-        pdf.drawCentredString(x_codigo + col_codigo_w / 2, y_tabla - alto_encabezado + 5, "CÓDIGO")
+        pdf.drawCentredString(x_codigo + col_codigo_w / 2, y_tabla - alto_encabezado + 4, "CÓDIGO")
         for c in range(n_cols_grid):
             cx = x_grid + c * col_w
             pdf.rect(cx, y_tabla - alto_encabezado, col_w, alto_encabezado)
-            etiqueta = str(c + 1) if tipo == "asistencia" else f"P{c+1}" if c < 4 else ""
-            pdf.setFont("Helvetica-Bold", 6)
-            pdf.drawCentredString(cx + col_w / 2, y_tabla - alto_encabezado + 5, etiqueta)
+            etiqueta = str(c + 1) if tipo == "asistencia" else (f"P{c+1}" if c < 4 else "")
+            pdf.setFont("Helvetica-Bold", 5)
+            pdf.drawCentredString(cx + col_w / 2, y_tabla - alto_encabezado + 4, etiqueta)
         y = y_tabla - alto_encabezado
-        pdf.setFont("Helvetica", 7)
-        max_filas = 32
+        pdf.setFont("Helvetica", 6)
+        # Solo alumnos + 2 filas libres (no llena la hoja de vacíos)
+        max_filas = max(len(estudiantes) + 2, 12)
+        max_filas = min(max_filas, 35)
         for i in range(max_filas):
             y -= alto_fila
-            if y < 40:
+            if y < 28:
                 break
             pdf.rect(x_orden, y, col_orden_w, alto_fila)
-            pdf.drawCentredString(x_orden + col_orden_w / 2, y + 4, str(i + 1))
+            pdf.drawCentredString(x_orden + col_orden_w / 2, y + 3, str(i + 1))
             pdf.rect(x_nombre, y, col_nombre_w, alto_fila)
             pdf.rect(x_codigo, y, col_codigo_w, alto_fila)
             if i < len(estudiantes):
                 e = estudiantes[i]
-                pdf.drawString(x_nombre + 3, y + 4, f"{(e.apellido or '')} {(e.nombre or '')}"[:48])
-                pdf.drawString(x_codigo + 3, y + 4, str(e.codigo or "")[:14])
+                pdf.drawString(x_nombre + 2, y + 3, f"{(e.apellido or '')} {(e.nombre or '')}"[:42])
+                pdf.drawString(x_codigo + 2, y + 3, str(e.codigo or "")[:12])
             for c in range(n_cols_grid):
                 cx = x_grid + c * col_w
                 pdf.rect(cx, y, col_w, alto_fila)
+        # Pie de página tamaño carta
+        pdf.setFont("Helvetica", 6)
+        pdf.setFillColorRGB(0.4, 0.4, 0.45)
+        pdf.drawString(24, 14, "Formato carta (Letter) · EduTrack / PROCSIS · Uso institucional")
+        pdf.setFillColorRGB(0, 0, 0)
         pdf.showPage()
     pdf.save()
     buf.seek(0)
@@ -30729,18 +30792,15 @@ def notas_planilla():
     mats_doc = materias_docente_actual()
     grados_doc = grados_docente_actual()
     if mats_doc is not None:
-        if not mats_doc:
-            return page("Planilla", """
-            <div style="padding:40px;font-family:Segoe UI,Arial">
-              <div style="background:#fef2f2;border:1px solid #fecaca;padding:16px;border-radius:12px;color:#991b1b">
-                No tienes materias asignadas.
-              </div>
-              <p style="margin-top:16px"><a href="/docente-escritorio" style="color:#2563eb">← Volver</a></p>
-            </div>""")
-        if asignatura and asignatura not in mats_doc:
-            asignatura = ""
-        if grados_doc and grado and grado not in grados_doc:
-            grado = ""
+        # No bloquear si la lista viene vacía: materias_docente_actual ya hace fallback
+        if asignatura and mats_doc and asignatura not in mats_doc:
+            # comparación flexible
+            if not any(asignatura.lower() == m.lower() for m in mats_doc):
+                asignatura = ""
+        if grados_doc and grado:
+            gk = _norm_grado_key(grado)
+            if not any(_norm_grado_key(g) == gk for g in grados_doc):
+                grado = ""
 
     # Planilla vacía hasta elegir GRADO + MATERIA (sin opción General)
     dim_slots, log_slots = ensure_siee_schema(iid, asignatura or "Matemáticas")
@@ -30748,8 +30808,39 @@ def notas_planilla():
     notas_map, logro_map = {}, {}
     estudiantes_all = []
     if grado and asignatura:
-        est_q = q_estudiantes().filter(Estudiante.grado == grado)
-        estudiantes_all = est_q.order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc()).limit(250).all()
+        # Match flexible de grado: "8" == "8°" == "08"
+        gk = _norm_grado_key(grado)
+        est_q = q_estudiantes()
+        try:
+            todos_tmp = est_q.limit(4000).all()
+        except Exception:
+            todos_tmp = list(est_q.all())
+        estudiantes_all = []
+        for e in todos_tmp:
+            eg = getattr(e, "grado", None)
+            try:
+                if _norm_grado_key(eg) == gk:
+                    estudiantes_all.append(e)
+                    continue
+            except Exception:
+                pass
+            if str(eg or "").strip().replace("°", "").replace("º", "") == str(grado).strip().replace("°", "").replace("º", ""):
+                estudiantes_all.append(e)
+        grupo_f = (request.args.get("grupo") or "").strip()
+        if grupo_f and grupo_f not in ("—", "-"):
+            filtrados = []
+            for e in estudiantes_all:
+                eg = (getattr(e, "grupo", None) or "").strip()
+                if eg == grupo_f or eg.lstrip("0") == grupo_f.lstrip("0"):
+                    filtrados.append(e)
+            estudiantes_all = filtrados
+        estudiantes_all = sorted(
+            estudiantes_all,
+            key=lambda e: ((getattr(e, "apellido", None) or ""), (getattr(e, "nombre", None) or "")),
+        )[:250]
+        if not estudiantes_all:
+            print("planilla sin estudiantes grado=%r gk=%r asig=%r grupo=%r tenant=%s" % (grado, gk, asignatura, grupo_f, len(todos_tmp)))
+
         if estudiantes_all and all_ids:
             qn = NotaRegistro.query.filter(
                 NotaRegistro.institucion_id == iid,
@@ -30789,15 +30880,77 @@ def notas_planilla():
     elif filtro == "aprobados":
         estudiantes = [e for e in estudiantes if e.id in def_map and def_map[e.id] >= 3.0]
 
-    lista_grados = grados_disponibles()
-    if grados_doc is not None:
-        # Docente: SOLO grados asignados
-        lista_grados = [g for g in lista_grados if g in grados_doc]
-        if not lista_grados:
-            lista_grados = list(grados_doc)
-        if grado and grado not in lista_grados:
+    lista_grados = list(grados_disponibles() or [])
+    if grados_doc is not None and len(list(grados_doc)) > 0:
+        # Preferir grados del docente; match flexible 8 / 8°
+        gd_norm = {_norm_grado_key(g): g for g in grados_doc if g}
+        matched = []
+        for g in lista_grados:
+            if _norm_grado_key(g) in gd_norm or g in grados_doc:
+                matched.append(g)
+        if matched:
+            lista_grados = matched
+        else:
+            # Añadir grados del docente aunque no estén en BD aún
+            lista_grados = sorted(set(list(grados_doc) + list(lista_grados)), key=lambda x: int(_norm_grado_key(x) or 999) if str(_norm_grado_key(x) or "").isdigit() else 999)
+        if grado and _norm_grado_key(grado) not in {_norm_grado_key(g) for g in lista_grados}:
             grado = lista_grados[0] if lista_grados else ""
-    grados_opts = "".join(f'<option value="{g}" {"selected" if g==grado else ""}>{g}</option>' for g in lista_grados)
+    # Si docente sin asignaciones: mostrar grados reales con estudiantes del colegio
+    if not lista_grados:
+        try:
+            lista_grados = list(grados_disponibles() or [])
+        except Exception:
+            lista_grados = ["6", "7", "8", "9", "10", "11"]
+    if not lista_grados:
+        lista_grados = ["6", "7", "8", "9", "10", "11"]
+    # Unificar etiquetas de grado (8 / 8°) y marcar seleccionado por clave normalizada
+    _seen_gk = set()
+    _grados_ui = []
+    for g in lista_grados:
+        gk = _norm_grado_key(g)
+        if gk in _seen_gk and gk:
+            continue
+        _seen_gk.add(gk or g)
+        _grados_ui.append(g)
+    lista_grados = _grados_ui or lista_grados
+    grados_opts = "".join(
+        f'<option value="{g}" {"selected" if _norm_grado_key(g)==_norm_grado_key(grado) else ""}>{g}</option>'
+        for g in lista_grados
+    )
+    # Grupos disponibles para el grado elegido (01, 02, A…)
+    grupos_lista = []
+    try:
+        if grado:
+            gk = _norm_grado_key(grado)
+            # Consulta directa por grado normalizado
+            for e in q_estudiantes().limit(3000).all():
+                if _norm_grado_key(getattr(e, "grado", None)) == gk:
+                    gg = (getattr(e, "grupo", None) or "").strip()
+                    if not gg:
+                        gg = "—"  # sin grupo en BD
+                    if gg not in grupos_lista:
+                        grupos_lista.append(gg)
+            # Orden: numéricos primero (01, 02), luego letras
+            def _gk_sort(x):
+                xs = x.lstrip("0") if x not in ("—", "") else x
+                if xs.isdigit():
+                    return (0, int(xs))
+                return (1, x)
+            grupos_lista = sorted([g for g in grupos_lista if g != "—"], key=_gk_sort)
+            if any((getattr(e, "grupo", None) or "").strip() == "" for e in q_estudiantes().limit(3000).all() if _norm_grado_key(e.grado) == gk):
+                # hay alumnos sin grupo: opción explícita
+                pass
+    except Exception as _gx:
+        print("grupos planilla:", _gx)
+        grupos_lista = []
+    grupo_sel = (request.args.get("grupo") or "").strip()
+    grupos_opts = '<option value="">Todos los grupos</option>' + "".join(
+        f'<option value="{g}" {"selected" if g==grupo_sel else ""}>Grupo {g}</option>' for g in grupos_lista
+    )
+    if not grupos_lista and grado:
+        grupos_opts = '<option value="">Sin grupos cargados (se muestran todos)</option>'
+
+    mats = materias_para_grado(grado) if grado else todas_materias()
     mats = materias_para_grado(grado) if grado else todas_materias()
     if mats_doc is not None:
         # Docente: SOLO materias asignadas (nunca el catálogo completo)
@@ -30922,7 +31075,7 @@ def notas_planilla():
             f'<tr class="{row_cls}" data-est="{e.id}">'
             f'<td class="st st-n">{ri + 1}</td>'
             f'<td class="st st-cod">{e.codigo}</td>'
-            f'<td class="st st-est">{nombre_completo_estudiante(e).upper()}</td>'
+            f'<td class="st st-est">{nombre_completo_estudiante(e).upper()}{(" · "+str(e.grupo)) if (getattr(e,"grupo",None) or "").strip() else ""}</td>'
             f'<td class="st st-def" id="def-{e.id}">—</td>'
             f'<td class="st st-des" id="des-{e.id}">—</td>'
             f'<td class="st st-nm" id="nm-{e.id}">—</td>'
@@ -30936,7 +31089,7 @@ def notas_planilla():
     else:
         rows_html = "".join(rows_html_parts) if rows_html_parts else "<tr><td colspan='40' style='padding:20px'>Sin estudiantes en este grado</td></tr>"
 
-    qbase = f"grado={grado}&asignatura={asignatura}&periodo={periodo}"
+    qbase = f"grado={grado}&grupo={grupo_sel}&asignatura={asignatura}&periodo={periodo}"
     n_grupos_cols = sum(len(slots) for _, slots in dim_slots)
 
     content = f"""
@@ -31050,7 +31203,7 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 <div class="px-top">
   <div>
     <h1>Planilla SIEE · {asignatura}</h1>
-    <div class="meta">{INST_NOMBRE} · Grado {grado or "Todos"} · {periodo} · Motor de definitivas automático</div>
+    <div class="meta">{INST_NOMBRE} · Grado {grado or "Todos"}{(" · Grupo "+grupo_sel) if grupo_sel else ""} · {periodo} · Motor de definitivas automático</div>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap">
     <a class="btn-exp" href="/notas/planilla/exportar?{qbase}">⬇ Exportar Excel</a>
@@ -31059,14 +31212,14 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
     <a class="btn-back" href="/notas">← Regresar al panel</a>
   </div>
 </div>
-<div class="siee-bar">Trabajos 30% · Tareas 20% · Talleres/Quices 20% · Eval. Final 15% · Actitudinal 15% · Cláusula: Eval.&lt;3.0 pierde periodo · Definitiva al cerrar Eval+Actitudinal · NM = mínimo próximo'
-            + (' · <b style="color:#b45309">MODO CONSULTA — no se pueden editar notas</b>' if solo_lectura else '') + </div>
+<div class="siee-bar">Trabajos 30% · Tareas 20% · Talleres/Quices 20% · Eval. Final 15% · Actitudinal 15% · Cláusula: Eval.&lt;3.0 pierde periodo · Definitiva al cerrar Eval+Actitudinal · NM = mínimo próximo{" · <b style='color:#b45309'>MODO CONSULTA — no se pueden editar notas</b>" if solo_lectura else ""}</div>
 
 <form class="px-tools" method="GET" action="/notas/planilla">
   <div><label>GRADO</label><select name="grado" required onchange="this.form.submit()"><option value="">— Seleccione grado —</option>{grados_opts}</select></div>
+  <div><label>GRUPO</label><select name="grupo" onchange="this.form.submit()">{grupos_opts}</select></div>
   <div><label>MATERIA</label><select name="asignatura" required onchange="this.form.submit()"><option value="">— Seleccione materia —</option>{materia_opts}</select></div>
   <div><label>PERIODO</label><select name="periodo" onchange="this.form.submit()">{periodo_opts}</select></div>
-  <span class="mini-text" style="align-self:center;color:#64748b">Cambia grado/materia y carga solo</span>
+  <span class="mini-text" style="align-self:center;color:#64748b">Filtra grado, grupo y materia</span>
   <div style="display:flex;gap:6px;margin-left:8px;align-items:center">
     <a class="chip {"on" if filtro=="todos" else ""}" href="/notas/planilla?{qbase}&filtro=todos">Todos</a>
     <a class="chip fail {"on" if filtro=="perdidos" else ""}" href="/notas/planilla?{qbase}&filtro=perdidos">⚠ Perdiendo (&lt;3.0)</a>
