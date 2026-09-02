@@ -6125,12 +6125,13 @@ def todas_materias():
 
 
 def asignaciones_docente_actual():
-    """Lista de asignaciones del docente logueado (o vacía si no es docente)."""
+    """Lista de asignaciones del docente logueado (o vacía si no es docente).
+    None = sin filtro (roles de dirección / soporte ven todo el catálogo)."""
     if rol_actual() != "Docente":
-        return None  # None = sin filtro (admin ve todo)
+        return None
     uid = session.get("user_id") or session.get("usuario_id")
+    u = None
     if not uid:
-        # resolver por nombre de usuario
         u = Usuario.query.filter_by(usuario=session.get("usuario")).first()
         uid = u.id if u else None
     if not uid:
@@ -6139,7 +6140,48 @@ def asignaciones_docente_actual():
     q = AsignacionDocente.query.filter_by(usuario_id=uid, activa=True)
     if iid is not None:
         q = q.filter(AsignacionDocente.institucion_id == iid)
-    return q.all()
+    rows = q.all()
+    if rows:
+        return rows
+    # Fallback: campos en Usuario (grados_clase / materias) si aún no hay filas en AsignacionDocente
+    try:
+        if u is None:
+            u = Usuario.query.get(uid)
+        if not u:
+            return []
+        grados = []
+        mats = []
+        try:
+            grados = normalizar_lista_grados(getattr(u, "grados_clase", "") or "")
+        except Exception:
+            graw = (getattr(u, "grados_clase", None) or "")
+            grados = [x.strip() for x in str(graw).replace(";", ",").split(",") if x.strip()]
+        mraw = (getattr(u, "materias", None) or getattr(u, "asignaturas", None) or "")
+        if mraw:
+            mats = [x.strip() for x in str(mraw).replace(";", ",").split(",") if x.strip()]
+        if not grados and not mats:
+            return []
+        # Objetos simples compatibles con .asignatura / .grado
+        class _A:
+            pass
+        out = []
+        if mats and grados:
+            for g in grados:
+                for m in mats:
+                    a = _A(); a.asignatura = m; a.grado = g; a.activa = True
+                    out.append(a)
+        elif mats:
+            for m in mats:
+                a = _A(); a.asignatura = m; a.grado = ""; a.activa = True
+                out.append(a)
+        else:
+            for g in grados:
+                a = _A(); a.asignatura = ""; a.grado = g; a.activa = True
+                out.append(a)
+        return out
+    except Exception as ex:
+        print("asignaciones fallback:", ex)
+        return []
 
 
 def materias_docente_actual():
@@ -30105,15 +30147,37 @@ def notas_planilla():
 
     lista_grados = grados_disponibles()
     if grados_doc is not None:
-        lista_grados = [g for g in lista_grados if g in grados_doc] or list(grados_doc)
+        # Docente: SOLO grados asignados
+        lista_grados = [g for g in lista_grados if g in grados_doc]
+        if not lista_grados:
+            lista_grados = list(grados_doc)
+        if grado and grado not in lista_grados:
+            grado = lista_grados[0] if lista_grados else ""
     grados_opts = "".join(f'<option value="{g}" {"selected" if g==grado else ""}>{g}</option>' for g in lista_grados)
     mats = materias_para_grado(grado) if grado else todas_materias()
     if mats_doc is not None:
-        mats = [m for m in mats if m in mats_doc] or list(mats_doc)
+        # Docente: SOLO materias asignadas (nunca el catálogo completo)
+        mats = [m for m in (mats or []) if m in mats_doc]
+        if not mats:
+            mats = list(mats_doc)
+        # Si eligió grado, filtrar materias de ese grado según asignaciones
+        try:
+            asig_list = asignaciones_docente_actual() or []
+            if grado and asig_list:
+                mats_g = sorted({{a.asignatura for a in asig_list if a.grado == grado and a.asignatura}})
+                if mats_g:
+                    mats = mats_g
+        except Exception:
+            pass
     mats = [m for m in mats if m and m != "General"]
-    if asignatura and asignatura not in mats:
+    if asignatura and asignatura not in mats and mats_doc is None:
         mats = [asignatura] + list(mats)
+    elif asignatura and asignatura not in mats and mats_doc is not None:
+        asignatura = mats[0] if mats else ""
     materia_opts = "".join(f'<option value="{m}" {"selected" if m==asignatura else ""}>{m}</option>' for m in mats)
+    if mats_doc is not None and not mats:
+        materia_opts = '<option value="">— Sin materias asignadas —</option>'
+
     periodos_lista = ["Periodo 1", "Periodo 2", "Periodo 3", "Periodo 4", "Final"]
     if periodo and periodo not in periodos_lista:
         periodos_lista = [periodo] + periodos_lista
@@ -30177,7 +30241,7 @@ def notas_planilla():
                 vs = "" if v == "" else f"{v:g}"
                 ro = " readonly tabindex=\"-1\"" if solo_lectura else ""
                 cells += (
-                    f'<td><input class="px-cell{" ro" if solo_lectura else ""}" data-r="{ri}" data-c="{col_i}" data-est="{e.id}" '
+                    f'<td><input class="px-cell{" ro" if solo_lectura else ""}" type="text" inputmode="decimal" autocomplete="off" data-r="{ri}" data-c="{col_i}" data-est="{e.id}" '
                     f'data-crit="{c.id}" data-dim="{d.id}" value="{vs}" inputmode="decimal"{ro}></td>'
                 )
                 col_i += 1
@@ -30273,18 +30337,21 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 .px-wrap::-webkit-scrollbar-thumb:hover{{background:#0B2D57}}
 .px-wrap::-webkit-scrollbar-track{{background:#e2e8f0;border-radius:10px;box-shadow:inset 0 0 0 1px #cbd5e1}}
 .px-wrap::-webkit-scrollbar-corner{{background:#e2e8f0}}
-.px-table{{min-width:2200px!important;width:max-content!important;border-collapse:collapse;table-layout:auto}}
+.px-table{{min-width:2800px!important;width:max-content!important;border-collapse:collapse;table-layout:auto}}
 .px-table thead th,.px-table tbody td{{white-space:nowrap}}
 /* Pista inferior fija visual cuando hay pocas filas */
 .px-scroll-bar{{
-  height:20px;width:100%;overflow-x:scroll!important;overflow-y:hidden;display:block!important;
-  background:#e2e8f0;border-top:1px solid #cbd5e1;
-  scrollbar-width:auto;scrollbar-color:#64748b #e2e8f0;
+  height:22px;width:100%;overflow-x:scroll!important;overflow-y:hidden;display:block!important;
+  background:#cbd5e1;border-top:2px solid #0B2D57;
+  scrollbar-width:auto;scrollbar-color:#0B2D57 #e2e8f0;
+  position:sticky;bottom:0;z-index:30;flex-shrink:0;
 }}
-.px-scroll-bar::-webkit-scrollbar{{height:18px}}
-.px-scroll-bar::-webkit-scrollbar-thumb{{background:#64748b;border-radius:10px}}
+.px-scroll-bar::-webkit-scrollbar{{height:20px}}
+.px-scroll-bar::-webkit-scrollbar-thumb{{background:#0B2D57;border-radius:10px;border:2px solid #e2e8f0;min-width:64px}}
 .px-scroll-bar::-webkit-scrollbar-track{{background:#e2e8f0}}
-.px-scroll-bar-inner{{height:1px;min-width:2200px;width:2200px}}
+.px-scroll-bar-inner{{height:1px;min-width:2800px;width:2800px}}
+.px-page{{display:flex;flex-direction:column;height:100vh;overflow:hidden}}
+.px-wrap{{flex:1 1 auto;}}
 
 .px-scroll-hint{{font-size:12px;color:#1e40af;background:#eff6ff;padding:6px 12px;border-bottom:1px solid #bfdbfe;font-weight:600}}
 .px-table{{border-collapse:collapse;width:max-content;min-width:100%;font-size:10px}}
@@ -30406,15 +30473,27 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
   var inner = document.getElementById("px-scroll-bar-inner");
   if (!wrap || !bar || !table) return;
   function syncSize(){{
-    var w = Math.max(table.scrollWidth || 0, 1800);
-    if (inner) inner.style.minWidth = w + "px";
+    var w = Math.max(table.scrollWidth || 0, wrap.scrollWidth || 0, 2800);
+    if (inner) {{ inner.style.minWidth = w + "px"; inner.style.width = w + "px"; }}
+    bar.style.display = "block";
   }}
   syncSize();
-  if (bar) {{
-    bar.addEventListener("scroll", function(){{ wrap.scrollLeft = bar.scrollLeft; }});
-    wrap.addEventListener("scroll", function(){{ bar.scrollLeft = wrap.scrollLeft; }});
-  }}
+  setTimeout(syncSize, 100);
+  setTimeout(syncSize, 500);
+  bar.addEventListener("scroll", function(){{ wrap.scrollLeft = bar.scrollLeft; }});
+  wrap.addEventListener("scroll", function(){{ if (Math.abs(bar.scrollLeft - wrap.scrollLeft) > 1) bar.scrollLeft = wrap.scrollLeft; }});
   window.addEventListener("resize", syncSize);
+  // Rueda horizontal (shift+rueda o trackpad)
+  wrap.addEventListener("wheel", function(ev){{
+    if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {{
+      wrap.scrollLeft += ev.deltaX;
+      bar.scrollLeft = wrap.scrollLeft;
+    }} else if (ev.shiftKey) {{
+      wrap.scrollLeft += ev.deltaY;
+      bar.scrollLeft = wrap.scrollLeft;
+      ev.preventDefault();
+    }}
+  }}, {{passive:false}});
 }})();
 </script>
 
@@ -30551,13 +30630,29 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
   }}
   function formatNota(raw){{
     if(raw===''||raw==null) return '';
-    let s=String(raw).trim().replace(',','.');
+    let s=String(raw).trim().replace(',','.').replace(/[^0-9.]/g,'');
     if(!s) return '';
-    if(/^[0-9]{{2}}$/.test(s) && parseInt(s,10)<=50){{ s=s[0]+'.'+s[1]; }}
+    // 34 → 3.4 | 50 → 5.0 | 05 → 0.5
+    if(/^[0-9]{{2}}$/.test(s)){{
+      const n2=parseInt(s,10);
+      if(n2<=50) s=s.charAt(0)+'.'+s.charAt(1);
+    }}
+    // un solo dígito: 5 → 5.0 | 0 → 0.0
+    if(/^[0-9]$/.test(s)){{
+      s=s+'.0';
+    }}
+    // 3 dígitos tipo 450 → 4.50 (si <=500)
+    if(/^[0-9]{{3}}$/.test(s)){{
+      const n3=parseInt(s,10);
+      if(n3<=500) s=s.charAt(0)+'.'+s.charAt(1)+s.charAt(2);
+    }}
     let n=parseFloat(s);
     if(isNaN(n)) return '';
+    // 15 sin punto interpretado como 1.5 si quedó >5
     if(n>5 && n<=50) n=n/10;
-    if(n>5) n=5; if(n<0) n=0;
+    if(n>5) n=5;
+    if(n<0) n=0;
+    // Siempre un decimal visible (5.0, 3.4)
     return n.toFixed(1);
   }}
   async function flushOffline(){{
@@ -30579,9 +30674,34 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
   if(btnSync) btnSync.onclick=()=>flushOffline();
   window.addEventListener('online',()=>flushOffline());
   document.querySelectorAll('.px-cell').forEach(inp=>{{
-    inp.addEventListener('blur',()=>{{ if(READONLY) return; const f=formatNota(inp.value); if(f!=='') inp.value=f; }});
-    inp.addEventListener('change',()=>{{ if(READONLY) return; inp.value=formatNota(inp.value); save(inp); }});
-    inp.addEventListener('input',()=>recalc(inp.dataset.est));
+    // No type=number: permite teclear 34 y formatear a 3.4
+    try {{ inp.setAttribute('inputmode','decimal'); inp.setAttribute('type','text'); }} catch(e){{}}
+    inp.addEventListener('input', function(){{
+      if(READONLY) return;
+      let s=String(inp.value||'').replace(',','.').replace(/[^0-9.]/g,'');
+      // Al completar 2 dígitos sin punto → insertar punto al vuelo
+      if(/^[0-9]{{2}}$/.test(s)){{
+        const f=formatNota(s);
+        if(f){{ inp.value=f; }}
+      }}
+      recalc(inp.dataset.est);
+    }});
+    inp.addEventListener('blur', function(){{
+      if(READONLY) return;
+      const f=formatNota(inp.value);
+      if(f!==''){{ inp.value=f; save(inp); }}
+      else if(String(inp.value).trim()===''){{ inp.value=''; save(inp); }}
+      else {{ const f2=formatNota(inp.value); if(f2) inp.value=f2; }}
+    }});
+    inp.addEventListener('change', function(){{
+      if(READONLY) return;
+      const f=formatNota(inp.value);
+      inp.value = f==='' ? '' : f;
+      save(inp);
+    }});
+    inp.addEventListener('keydown', function(ev){{
+      if(ev.key==='Enter'){{ ev.preventDefault(); inp.blur(); }}
+    }});
   }});
   document.querySelectorAll('.px-log-cell').forEach(inp=>inp.addEventListener('change',()=>save(inp)));
   document.querySelectorAll('.px-falta').forEach(inp=>{{
