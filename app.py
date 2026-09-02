@@ -15525,7 +15525,7 @@ def ventas_comprar():
             "<label>Departamento</label><input name=\"departamento\" placeholder=\"Ej: Antioquia\">"
             "<label>Municipio / Ciudad</label><input name=\"ciudad\" placeholder=\"Ej: Medellín\">"
         )
-        li_in = "".join(f"<li>✅ {x}</li>" for x in incluidos)
+    li_in = "".join(f"<li>✅ {x}</li>" for x in incluidos)
     li_ex = "".join(f"<li>❌ {x}</li>" for x in excluidos) if excluidos else "<li style='color:#64748b'>Ninguno relevante</li>"
     body = f"""
 <style>
@@ -15636,7 +15636,37 @@ def ventas_comprar():
   </div>
 </div>
 """
-    return page(f"Plan {plan_nom}", body)
+    try:
+        return page(f"Plan {plan_nom}", body)
+    except Exception as e_page:
+        print("ventas_comprar render:", e_page)
+        # Fallback mínimo para no tumbar el portal de ventas
+        safe = (
+            "<div style='max-width:560px;margin:40px auto;font-family:Segoe UI;padding:24px;"
+            "background:#fff;border-radius:16px;border:1px solid #e2e8f0'>"
+            f"<h1 style='color:#0B2D57'>Activar plan {plan_nom}</h1>"
+            f"<p style='color:#b91c1c'>Hubo un problema al cargar el formulario completo ({e_page}). "
+            "Use el formulario simplificado:</p>"
+            "<form method='POST' enctype='multipart/form-data'>"
+            f"<input type='hidden' name='plan' value='{plan}'>"
+            "<label>Código *</label><input name='codigo' required>"
+            "<label>Nombre colegio *</label><input name='nombre' required>"
+            "<label>Logo *</label><input type='file' name='logo_colegio' accept='image/*' required>"
+            "<label>Departamento</label><input name='departamento'>"
+            "<label>Municipio</label><input name='ciudad'>"
+            "<label>NIT</label><input name='nit'>"
+            "<label>Usuario rector *</label><input name='rector_usuario' required>"
+            "<label>Nombre rector *</label><input name='rector_nombre' required>"
+            "<label>Usuario secretaría *</label><input name='secretaria_usuario' required>"
+            "<label>Nombre secretaría *</label><input name='secretaria_nombre' required>"
+            "<label>Usuario coordinación *</label><input name='coord_usuario' required>"
+            "<label>Nombre coordinación *</label><input name='coord_nombre' required>"
+            "<label>Clave temporal *</label><input name='clave_temporal' value='Colegio2026*' minlength='8' required>"
+            "<button style='margin-top:12px;padding:12px;background:#0B2D57;color:#fff;border:0;"
+            "border-radius:10px;font-weight:800;width:100%'>Activar</button></form>"
+            "<p><a href='/ventas'>← Volver a planes</a></p></div>"
+        )
+        return page(f"Plan {plan_nom}", safe)
 
 
 def _ventas_comprar_legacy_placeholder():
