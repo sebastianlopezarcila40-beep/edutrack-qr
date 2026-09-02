@@ -10,6 +10,7 @@ from pathlib import Path
 import os
 import json
 import random
+import secrets
 import re
 import smtplib
 import csv
@@ -5293,30 +5294,60 @@ def _opts_departamentos_html(selected=""):
 
 
 def _html_campos_dep_mun(dep_name="departamento", mun_name="municipio", dep_val="", mun_val="", required=True, label_mun="Municipio / Ciudad"):
-    """Selects Departamento + Municipio (DIVIPOLA). Usar en cualquier formulario de activación/colegio."""
-    uid = secrets.token_hex(3)
-    dep_id = f"dep_{uid}"
-    mun_id = f"mun_{uid}"
+    """Selects Departamento + Municipio (DIVIPOLA). Nunca debe tumbar la página."""
+    try:
+        import secrets as _sec
+        uid = _sec.token_hex(3)
+    except Exception:
+        uid = str(abs(hash(str(dep_name) + str(mun_name))) % 10**8)
+    dep_id = "dep_" + str(uid)
+    mun_id = "mun_" + str(uid)
     req = " required" if required else ""
-    return f"""
-{_script_divipola_subtipos()}
-<label>Departamento{" *" if required else ""}</label>
-<select name="{dep_name}" id="{dep_id}"{req} onchange="fillMun('{dep_id}','{mun_id}')">
-{_opts_departamentos_html(dep_val)}
-</select>
-<label>{label_mun}{" *" if required else ""}</label>
-<select name="{mun_name}" id="{mun_id}"{req} data-sel="{_esc(mun_val)}">
-  <option value="">— Elija departamento primero —</option>
-</select>
-<script>
-(function(){{
-  var d=document.getElementById('{dep_id}'), m=document.getElementById('{mun_id}');
-  if(m) m.setAttribute('data-sel', '{_esc(mun_val)}');
-  if(typeof fillMun==='function') fillMun('{dep_id}','{mun_id}');
-  document.addEventListener('DOMContentLoaded', function(){{ if(typeof fillMun==='function') fillMun('{dep_id}','{mun_id}'); }});
-}})();
-</script>
-"""
+    try:
+        opts = _opts_departamentos_html(dep_val or "")
+    except Exception as e:
+        print("opts dep:", e)
+        opts = '<option value="">— Departamento —</option>'
+    try:
+        script = _script_divipola_subtipos()
+    except Exception as e:
+        print("script divipola:", e)
+        script = "<script>window.DIVIPOLA=window.DIVIPOLA||{};function fillMun(a,b){}</script>"
+    try:
+        mun_esc = _esc(mun_val or "")
+        dep_name_s = _esc(dep_name)
+        mun_name_s = _esc(mun_name)
+        label_s = _esc(label_mun)
+    except Exception:
+        mun_esc = ""
+        dep_name_s = str(dep_name)
+        mun_name_s = str(mun_name)
+        label_s = str(label_mun)
+    star = " *" if required else ""
+    html = []
+    html.append(script)
+    html.append("<label>Departamento" + star + "</label>")
+    html.append(
+        '<select name="' + dep_name_s + '" id="' + dep_id + '"' + req
+        + ' onchange="fillMun(\'' + dep_id + '\',\'' + mun_id + '\')">'
+    )
+    html.append(opts)
+    html.append("</select>")
+    html.append("<label>" + label_s + star + "</label>")
+    html.append(
+        '<select name="' + mun_name_s + '" id="' + mun_id + '"' + req
+        + ' data-sel="' + mun_esc + '">'
+    )
+    html.append('<option value="">— Elija departamento primero —</option></select>')
+    html.append(
+        "<script>(function(){var m=document.getElementById('" + mun_id + "');"
+        "if(m)m.setAttribute('data-sel','" + mun_esc + "');"
+        "function run(){if(typeof fillMun==='function')fillMun('" + dep_id + "','" + mun_id + "');}"
+        "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run);else run();"
+        "})();</script>"
+    )
+    return "".join(html)
+
 
 
 SUBTIPOS_PQR = {
@@ -15486,7 +15517,15 @@ def ventas_comprar():
                     db.session.rollback()
                     error = f"No se pudo registrar: {ex}"
 
-    li_in = "".join(f"<li>✅ {x}</li>" for x in incluidos)
+    try:
+        geo_campos = _html_campos_dep_mun("departamento", "ciudad", label_mun="Municipio / Ciudad")
+    except Exception as _geo_ex:
+        print("geo campos ventas:", _geo_ex)
+        geo_campos = (
+            "<label>Departamento</label><input name=\"departamento\" placeholder=\"Ej: Antioquia\">"
+            "<label>Municipio / Ciudad</label><input name=\"ciudad\" placeholder=\"Ej: Medellín\">"
+        )
+        li_in = "".join(f"<li>✅ {x}</li>" for x in incluidos)
     li_ex = "".join(f"<li>❌ {x}</li>" for x in excluidos) if excluidos else "<li style='color:#64748b'>Ninguno relevante</li>"
     body = f"""
 <style>
@@ -15557,7 +15596,7 @@ def ventas_comprar():
         <input name="telefono">
         <label>Correo</label>
         <input name="correo" type="email">
-        {_html_campos_dep_mun("departamento", "ciudad", label_mun="Municipio / Ciudad")}
+        {geo_campos}
         <label>Sede principal</label>
         <input name="sede" placeholder="Principal">
         <label>Periodos académicos del colegio *</label>
@@ -15603,6 +15642,10 @@ def ventas_comprar():
 def _ventas_comprar_legacy_placeholder():
     plan = "estandar"
     error = ok = ""
+    try:
+        geo_campos = _html_campos_dep_mun("departamento", "ciudad", label_mun="Municipio / Ciudad")
+    except Exception:
+        geo_campos = "<label>Departamento</label><input name=\"departamento\"><label>Municipio</label><input name=\"ciudad\">"
     body = f"""
 <style>
 .vc{{background:#f8fafc;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:24px}}
@@ -15640,7 +15683,7 @@ def _ventas_comprar_legacy_placeholder():
     <input name="dane" placeholder="Código DANE">
     <label>Sede</label>
     <input name="sede" placeholder="Principal / Urbana / Rural">
-    {_html_campos_dep_mun("departamento", "ciudad", label_mun="Municipio / Ciudad")}
+    {geo_campos}
     <label>Rector / representante</label>
     <input name="rector">
     <label>Teléfono</label>
