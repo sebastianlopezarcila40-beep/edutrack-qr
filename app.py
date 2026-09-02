@@ -13665,47 +13665,584 @@ def eduaura_datos(periodo=None, rango_dias=30):
 
 @app.route("/eduaura")
 def eduaura():
-    if not requiere_login(): return redirect("/login")
-    if rol_actual() not in ["Administrador", "Soporte", "Rectoría", "Coordinación", "Docente"]: return acceso_denegado()
+    """EduAura IA: vista institucional (dirección) o panel docente filtrado por grado/materia."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ["Administrador", "Soporte", "Rectoría", "Coordinación", "Docente"]:
+        return acceso_denegado()
+
+    es_docente = rol_actual() == "Docente"
+    grado = (request.args.get("grado") or "").strip()
+    asignatura = (request.args.get("asignatura") or "").strip()
+    periodo = (request.args.get("periodo") or periodo_actual() or "Periodo 1").strip()
     rango = request.args.get("rango", "30")
-    try: rango = int(rango)
-    except Exception: rango = 30
+    try:
+        rango = int(rango)
+    except Exception:
+        rango = 30
+
+    # Listas para filtros docente
+    mats_doc = materias_docente_actual()
+    grados_doc = grados_docente_actual()
+    if es_docente:
+        lista_grados = list(grados_doc) if grados_doc is not None else grados_disponibles()
+        lista_mats = list(mats_doc) if mats_doc is not None else []
+        # Filtrar materias por grado si hay asignaciones
+        try:
+            asig = asignaciones_docente_actual() or []
+            if grado and asig:
+                mg = sorted({a.asignatura for a in asig if getattr(a, "grado", "") == grado and a.asignatura})
+                if mg:
+                    lista_mats = mg
+        except Exception:
+            pass
+        if not lista_mats and mats_doc:
+            lista_mats = list(mats_doc)
+        if grado and grado not in (lista_grados or []):
+            grado = (lista_grados[0] if lista_grados else "")
+        if asignatura and lista_mats and asignatura not in lista_mats:
+            asignatura = lista_mats[0] if lista_mats else ""
+    else:
+        lista_grados = grados_disponibles()
+        lista_mats = todas_materias() if not grado else (materias_para_grado(grado) or todas_materias())
+
+    # --- Panel DOCENTE: KPIs + lista de clase ---
+    if es_docente:
+        ests = []
+        if grado:
+            ests = (
+                q_estudiantes()
+                .filter(Estudiante.grado == grado)
+                .order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc())
+                .limit(200)
+                .all()
+            )
+        # Promedios y faltas por estudiante en la materia
+        iid = institucion_id_actual()
+        proms = {}
+        faltas_map = {}
+        if ests and asignatura:
+            ids = [e.id for e in ests]
+            try:
+                regs = NotaRegistro.query.filter(
+                    NotaRegistro.institucion_id == iid,
+                    NotaRegistro.estudiante_id.in_(ids),
+                    NotaRegistro.periodo == periodo,
+                    NotaRegistro.asignatura == asignatura,
+                    NotaRegistro.valor.isnot(None),
+                ).all()
+                bucket = {}
+                for r in regs:
+                    bucket.setdefault(r.estudiante_id, []).append(float(r.valor))
+                for eid, vals in bucket.items():
+                    if vals:
+                        proms[eid] = round(sum(vals) / len(vals), 2)
+            except Exception as ex:
+                print("eduaura prom:", ex)
+            try:
+                fls = FaltaPlanilla.query.filter(
+                    FaltaPlanilla.estudiante_id.in_(ids),
+                    FaltaPlanilla.periodo == periodo,
+                    FaltaPlanilla.asignatura == asignatura,
+                ).all()
+                for f in fls:
+                    faltas_map[f.estudiante_id] = int(f.nj or 0) + int(f.fj or 0) + int(f.ac or 0)
+            except Exception as ex:
+                print("eduaura faltas:", ex)
+
+        # KPIs
+        vals_prom = list(proms.values())
+        prom_grupo = round(sum(vals_prom) / len(vals_prom), 2) if vals_prom else None
+        en_riesgo = sum(1 for v in vals_prom if v < 3.0)
+        # Ausentismo crítico: >15% — asumimos ~20 clases del periodo si no hay dato
+        clases_ref = 20
+        aus_crit = 0
+        for e in ests:
+            nf = faltas_map.get(e.id, 0)
+            if clases_ref > 0 and (nf / clases_ref) >= 0.15:
+                aus_crit += 1
+
+        grados_opts = "".join(
+            f'<option value="{_esc(g)}" {"selected" if g == grado else ""}>{_esc(g)}</option>'
+            for g in (lista_grados or [])
+        )
+        mats_opts = "".join(
+            f'<option value="{_esc(m)}" {"selected" if m == asignatura else ""}>{_esc(m)}</option>'
+            for m in (lista_mats or [])
+        )
+        per_opts = "".join(
+            f'<option value="Periodo {n}" {"selected" if periodo == f"Periodo {n}" else ""}>Periodo {n}</option>'
+            for n in (1, 2, 3, 4)
+        )
+
+        filas = []
+        for e in ests:
+            prom = proms.get(e.id)
+            nf = faltas_map.get(e.id, 0)
+            pct_falta = round((nf / clases_ref) * 100, 1) if clases_ref else 0
+            riesgo_nota = prom is not None and prom < 3.0
+            riesgo_aus = pct_falta >= 15
+            # Saber 11 predictivo solo grados 11
+            saber_html = "—"
+            gnorm = str(e.grado or "").lower().replace("°", "").strip()
+            if gnorm.startswith("11") or "once" in gnorm:
+                # Heurística: promedio materia (y bonus si es mates/cálculo)
+                base = prom if prom is not None else 3.0
+                mat_l = (asignatura or "").lower()
+                if any(x in mat_l for x in ("matem", "cálculo", "calculo", "algebra")):
+                    base = min(5.0, base + 0.1)
+                # Map 1-5 → probabilidad 20%-95%
+                prob = int(max(20, min(95, (base / 5.0) * 100)))
+                if prom is None:
+                    saber_html = '<span style="color:#64748b">Sin notas</span>'
+                elif prob < 50:
+                    saber_html = (
+                        f'<span style="background:#fff7ed;color:#c2410c;padding:4px 8px;border-radius:8px;'
+                        f'font-weight:800;font-size:11px">⚠ {prob}% · Requiere simulacro de profundización</span>'
+                    )
+                elif prob < 70:
+                    saber_html = (
+                        f'<span style="background:#fef9c3;color:#a16207;padding:4px 8px;border-radius:8px;'
+                        f'font-weight:700;font-size:11px">{prob}% · Reforzar</span>'
+                    )
+                else:
+                    saber_html = (
+                        f'<span style="background:#ecfdf5;color:#047857;padding:4px 8px;border-radius:8px;'
+                        f'font-weight:700;font-size:11px">{prob}% · Favorable</span>'
+                    )
+            prom_txt = f"{prom:.1f}" if prom is not None else "—"
+            estilo_prom = "color:#b91c1c;font-weight:800" if riesgo_nota else "color:#0B2D57;font-weight:700"
+            filas.append(
+                f"""<tr data-est="{e.id}">
+                <td><b>{_esc(estudiante_nombre(e))}</b><br><span style="font-size:11px;color:#64748b">{_esc(e.codigo)}</span></td>
+                <td style="{estilo_prom}">{prom_txt}</td>
+                <td>{nf} <span style="font-size:11px;color:#64748b">({pct_falta}%)</span></td>
+                <td>{saber_html}</td>
+                <td style="white-space:nowrap">
+                  <button type="button" class="ea-btn ea-obs" data-id="{e.id}" title="Redactar observación con IA">📝 IA</button>
+                  <a class="ea-btn ea-plan" href="/eduaura/plan-mejoramiento/{e.id}?asignatura={quote(asignatura)}&periodo={quote(periodo)}&grado={quote(grado)}" title="Plan de mejoramiento PDF">📈 Plan</a>
+                  <a class="ea-btn ea-hist" href="/eduaura/historial/{e.id}">Historial</a>
+                </td>
+                </tr>"""
+            )
+        filas_html = "".join(filas) or '<tr><td colspan="5">Seleccione grado y materia para ver su grupo.</td></tr>'
+
+        kpi_prom = f"{prom_grupo:.1f} / 5.0" if prom_grupo is not None else "—"
+        content = f"""
+<style>
+.ea-hero{{background:linear-gradient(135deg,#1e1b4b 0%,#4c1d95 50%,#6d28d9 100%);color:#fff;border-radius:18px;padding:22px 24px;margin-bottom:14px;border-top:4px solid #c4b5fd}}
+.ea-hero h1{{margin:0 0 6px;font-size:22px}}
+.ea-hero p{{margin:0;opacity:.92;font-size:13px}}
+.ea-kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px}}
+.ea-kpi{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 4px 14px rgba(15,23,42,.05)}}
+.ea-kpi .lbl{{font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}}
+.ea-kpi .val{{font-size:26px;font-weight:800;color:#0B2D57;margin-top:4px}}
+.ea-kpi.risk .val{{color:#b91c1c}}
+.ea-kpi.warn .val{{color:#c2410c}}
+.ea-filters{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:end}}
+.ea-filters label{{display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:4px}}
+.ea-filters select{{padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;min-width:140px}}
+.ea-filters button{{background:#4c1d95;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer}}
+.ea-table{{width:100%;border-collapse:collapse;background:#fff;font-size:13px;border-radius:12px;overflow:hidden}}
+.ea-table th{{background:#0B2D57;color:#fff;padding:10px 8px;text-align:left;font-size:12px}}
+.ea-table td{{padding:10px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}}
+.ea-btn{{display:inline-block;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;border:0;cursor:pointer;margin:2px}}
+.ea-obs{{background:#4c1d95;color:#fff}}
+.ea-plan{{background:#0f766e;color:#fff}}
+.ea-hist{{background:#e2e8f0;color:#0f172a}}
+.ea-modal{{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1000;align-items:center;justify-content:center;padding:16px}}
+.ea-modal.on{{display:flex}}
+.ea-box{{background:#fff;border-radius:16px;max-width:560px;width:100%;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.2)}}
+.ea-box textarea{{width:100%;min-height:140px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-family:Segoe UI,sans-serif;font-size:13px}}
+.ea-tip{{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:12px;font-size:13px;color:#4c1d95;margin-bottom:12px}}
+</style>
+<div class="ea-hero">
+  <div style="font-size:11px;opacity:.85;letter-spacing:.06em;text-transform:uppercase">EduAura IA · Panel docente</div>
+  <h1>Tu clase, en un vistazo</h1>
+  <p>Filtra por grado y materia. La IA redacta observaciones, planes de mejoramiento y alertas Saber 11 con base en notas y faltas reales.</p>
+</div>
+<form class="ea-filters" method="GET" action="/eduaura">
+  <div><label>Grado / grupo *</label><select name="grado" required>
+    <option value="">— Seleccionar grado —</option>{grados_opts}
+  </select></div>
+  <div><label>Materia *</label><select name="asignatura" required>
+    <option value="">— Seleccionar materia —</option>{mats_opts}
+  </select></div>
+  <div><label>Periodo</label><select name="periodo">{per_opts}</select></div>
+  <button type="submit">Analizar con EduAura</button>
+</form>
+<div class="ea-kpis">
+  <div class="ea-kpi"><div class="lbl">Rendimiento promedio</div><div class="val">{kpi_prom}</div></div>
+  <div class="ea-kpi risk"><div class="lbl">Estudiantes en riesgo (&lt; 3.0)</div><div class="val">{en_riesgo}</div></div>
+  <div class="ea-kpi warn"><div class="lbl">Ausentismo crítico (&gt; 15%)</div><div class="val">{aus_crit}</div></div>
+</div>
+<div class="ea-tip">
+  <b>📝 IA</b> genera un texto profesional para el observador.
+  <b>📈 Plan</b> descarga una guía de recuperaciones en PDF.
+  En <b>grado 11°</b> verá la alerta predictiva Saber 11.
+</div>
+<div style="overflow-x:auto;border-radius:12px;border:1px solid #e2e8f0">
+<table class="ea-table">
+  <tr><th>Estudiante</th><th>Promedio</th><th>Faltas</th><th>Saber 11</th><th>Acciones IA</th></tr>
+  {filas_html}
+</table>
+</div>
+<div class="ea-modal" id="ea-modal">
+  <div class="ea-box">
+    <h3 style="margin:0 0 8px;color:#4c1d95">Observación generada por EduAura</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 10px" id="ea-modal-sub"></p>
+    <textarea id="ea-obs-text"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button type="button" id="ea-copy" style="background:#4c1d95;color:#fff;border:0;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer">Copiar texto</button>
+      <button type="button" id="ea-save" style="background:#0f766e;color:#fff;border:0;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer">Guardar en boletín</button>
+      <button type="button" onclick="document.getElementById('ea-modal').classList.remove('on')" style="background:#e2e8f0;border:0;padding:10px 14px;border-radius:10px;cursor:pointer">Cerrar</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){{
+  var ASIG = {json.dumps(asignatura)};
+  var PER = {json.dumps(periodo)};
+  var GRADO = {json.dumps(grado)};
+  var currentId = null;
+  document.querySelectorAll('.ea-obs').forEach(function(btn){{
+    btn.addEventListener('click', function(){{
+      currentId = btn.getAttribute('data-id');
+      btn.disabled = true; btn.textContent = '…';
+      fetch('/api/eduaura/observacion', {{
+        method:'POST', headers:{{'Content-Type':'application/json'}},
+        body: JSON.stringify({{estudiante_id: parseInt(currentId), asignatura: ASIG, periodo: PER, grado: GRADO}})
+      }}).then(function(r){{ return r.json(); }}).then(function(j){{
+        btn.disabled = false; btn.textContent = '📝 IA';
+        if(!j.ok){{ alert(j.error || 'No se pudo generar'); return; }}
+        document.getElementById('ea-obs-text').value = j.texto || '';
+        document.getElementById('ea-modal-sub').textContent = j.estudiante || '';
+        document.getElementById('ea-modal').classList.add('on');
+      }}).catch(function(){{ btn.disabled=false; btn.textContent='📝 IA'; alert('Sin conexión'); }});
+    }});
+  }});
+  document.getElementById('ea-copy').onclick = function(){{
+    var t = document.getElementById('ea-obs-text');
+    t.select(); document.execCommand('copy');
+    this.textContent = '✓ Copiado';
+  }};
+  document.getElementById('ea-save').onclick = function(){{
+    var texto = document.getElementById('ea-obs-text').value;
+    if(!currentId || !texto) return;
+    fetch('/api/eduaura/observacion', {{
+      method:'POST', headers:{{'Content-Type':'application/json'}},
+      body: JSON.stringify({{estudiante_id: parseInt(currentId), asignatura: ASIG, periodo: PER, texto: texto, guardar: true}})
+    }}).then(function(r){{ return r.json(); }}).then(function(j){{
+      alert(j.ok ? 'Observación guardada en el boletín' : (j.error||'Error'));
+    }});
+  }};
+}})();
+</script>
+<p style="margin-top:14px"><a href="/docente-escritorio">← Volver al escritorio</a></p>
+"""
+        return page("EduAura IA · Docente", shell(content))
+
+    # --- Vista institucional (Rectoría / Coordinación / Soporte) ---
     data = eduaura_datos(rango_dias=rango)
     filas = "".join(f"""
 <tr>
-<td><b>{estudiante_nombre(x['e'])}</b><br><span class='mini-text'>Código {x['e'].codigo} · Doc {x['e'].documento or 'Sin documento'}</span></td>
-<td>{x['e'].grado}</td><td>{x['tardes']}</td><td>{x['ausencias']}</td><td><span class='{x['clase']}'>{x['nivel']}</span><div class='aura-score'><span style='width:{x['score']}%'></span></div><span class='mini-text'>{x['score']} / 100</span></td>
+<td><b>{estudiante_nombre(x['e'])}</b><br><span class='mini-text'>Código {x['e'].codigo}</span></td>
+<td>{x['e'].grado}</td><td>{x['tardes']}</td><td>{x['ausencias']}</td>
+<td><span class='{x['clase']}'>{x['nivel']}</span><div class='aura-score'><span style='width:{x['score']}%'></span></div><span class='mini-text'>{x['score']} / 100</span></td>
 <td><a href='/eduaura/historial/{x['e'].id}'>Ver historial</a></td>
 </tr>""" for x in data['criticos'])
-    grados = "".join(f"<tr><td>{g}</td><td>{v['est']}</td><td>{v['tardes']}</td><td>{v['aus']}</td><td>{round(v['score']/max(v['est'],1),1)}</td></tr>" for g,v in data['grados'][:8])
-    recomendacion = "La información aún es limitada. EduAura recomienda acumular más registros antes de tomar decisiones institucionales fuertes."
+    grados = "".join(
+        f"<tr><td>{g}</td><td>{v['est']}</td><td>{v['tardes']}</td><td>{v['aus']}</td><td>{round(v['score']/max(v['est'],1),1)}</td></tr>"
+        for g, v in data['grados'][:8]
+    )
+    recomendacion = "La información aún es limitada. EduAura recomienda acumular más registros antes de decisiones institucionales fuertes."
     if data['tasa_puntualidad'] >= 90:
-        recomendacion = "La puntualidad general es favorable. Mantener el control QR y revisar solo estudiantes con seguimiento medio o alto."
+        recomendacion = "La puntualidad general es favorable. Revisar solo estudiantes con seguimiento medio o alto."
     elif data['tasa_puntualidad'] >= 70:
-        recomendacion = "La puntualidad es aceptable, pero conviene revisar grados con mayor acumulación de tardanzas y posibles causas de transporte."
+        recomendacion = "Puntualidad aceptable; conviene revisar grados con más tardanzas."
     elif data['registros']:
-        recomendacion = "La puntualidad requiere seguimiento. Se recomienda intervención de coordinación y revisión por grado."
+        recomendacion = "La puntualidad requiere seguimiento de coordinación por grado."
     content = f"""
 <section class='eduaura-hero'>
-  <span class='aura-badge'>EduAura IA · Analítica institucional verificable</span>
+  <span class='aura-badge'>EduAura IA · Analítica institucional</span>
   <h1>Centro EduAura IA</h1>
-  <p>Motor de análisis con datos reales de asistencia, novedades y citaciones. No reemplaza decisiones humanas: prioriza casos para seguimiento.</p>
+  <p>Análisis con datos reales de asistencia, novedades y citaciones. Prioriza casos para seguimiento (no reemplaza el criterio humano).</p>
 </section>
 <form class='glass-toolbar' method='GET'>
-  <div class='form-row'><div><label><b>Rango de análisis</b></label><select name='rango'><option value='7' {'selected' if rango==7 else ''}>Últimos 7 días</option><option value='30' {'selected' if rango==30 else ''}>Últimos 30 días</option><option value='60' {'selected' if rango==60 else ''}>Últimos 60 días</option></select></div><div style='display:flex;align-items:end'><button>Analizar con EduAura</button></div></div>
+  <div class='form-row'>
+    <div><label><b>Rango de análisis</b></label>
+      <select name='rango'>
+        <option value='7' {'selected' if rango==7 else ''}>Últimos 7 días</option>
+        <option value='30' {'selected' if rango==30 else ''}>Últimos 30 días</option>
+        <option value='60' {'selected' if rango==60 else ''}>Últimos 60 días</option>
+      </select>
+    </div>
+    <div style='display:flex;align-items:end'><button>Analizar con EduAura</button></div>
+  </div>
 </form>
 <div class='role-cards'>
-  <div class='role-card'><h3>{data['total']}</h3><p>Estudiantes analizados</p></div>
-  <div class='role-card green'><h3>{data['tasa_puntualidad']}%</h3><p>Puntualidad registrada</p></div>
-  <div class='role-card yellow'><h3>{data['tarde']}</h3><p>Llegadas tarde</p></div>
-  <div class='role-card red'><h3>{len([x for x in data['criticos'] if x['nivel']=='Alto'])}</h3><p>Seguimiento alto</p></div>
+  <div class='role-card'><h3>{data['total']}</h3><p>Estudiantes</p></div>
+  <div class='role-card'><h3>{data['registros']}</h3><p>Registros</p></div>
+  <div class='role-card yellow'><h3>{data['tarde']}</h3><p>Tardes</p></div>
+  <div class='role-card green'><h3>{data['tasa_puntualidad']}%</h3><p>Puntualidad</p></div>
 </div>
 <section class='role-grid'>
-  <div class='role-panel'><h2>Estudiantes para seguimiento</h2><table><tr><th>Estudiante</th><th>Grado</th><th>Tardes</th><th>Ausencias estimadas</th><th>Nivel</th><th>Acción</th></tr>{filas if filas else '<tr><td colspan="6">No hay datos suficientes.</td></tr>'}</table></div>
-  <div class='role-panel'><h2>Lectura EduAura</h2><p>{recomendacion}</p><div class='security-note'>Precisión operativa: basada en {data['dias_analizados']} días con actividad registrada. Para predicción institucional avanzada se requiere histórico suficiente y validación humana.</div><h3>Grados con mayor seguimiento</h3><table><tr><th>Grado</th><th>Est.</th><th>Tardes</th><th>Aus. estimadas</th><th>Índice prom.</th></tr>{grados if grados else '<tr><td colspan="5">Sin datos.</td></tr>'}</table></div>
+  <div class='role-panel'><h2>Prioridad de seguimiento</h2>
+    <table><tr><th>Estudiante</th><th>Grado</th><th>Tardes</th><th>Ausencias</th><th>Nivel</th><th>Acción</th></tr>
+    {filas if filas else '<tr><td colspan="6">No hay datos suficientes.</td></tr>'}
+    </table>
+  </div>
+  <div class='role-panel'><h2>Lectura EduAura</h2><p>{recomendacion}</p>
+    <div class='security-note'>Basada en {data['dias_analizados']} días con actividad. Validación humana obligatoria.</div>
+    <h3>Grados con mayor seguimiento</h3>
+    <table><tr><th>Grado</th><th>Est.</th><th>Tardes</th><th>Aus.</th><th>Índice</th></tr>
+    {grados if grados else '<tr><td colspan="5">Sin datos.</td></tr>'}
+    </table>
+  </div>
 </section>
 """
     return page("EduAura IA", shell(content))
+
+
+@app.route("/api/eduaura/observacion", methods=["POST"])
+def api_eduaura_observacion():
+    """Redacta observación pedagógica con notas y faltas reales del estudiante."""
+    if not requiere_login():
+        return jsonify({"ok": False, "error": "No autenticado"}), 401
+    if rol_actual() not in ("Docente", "Soporte", "Coordinación", "Rectoría", "Administrador"):
+        return jsonify({"ok": False, "error": "Sin permiso"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        est_id = int(data.get("estudiante_id") or 0)
+    except Exception:
+        return jsonify({"ok": False, "error": "Estudiante inválido"})
+    e = Estudiante.query.get(est_id)
+    if not e:
+        return jsonify({"ok": False, "error": "Estudiante no encontrado"})
+    # Multi-tenant: mismo colegio
+    iid = institucion_id_actual()
+    if iid is not None and e.institucion_id is not None and int(e.institucion_id) != int(iid):
+        return jsonify({"ok": False, "error": "Estudiante de otra institución"}), 403
+    asignatura = (data.get("asignatura") or "").strip() or "la asignatura"
+    periodo = (data.get("periodo") or periodo_actual() or "Periodo 1").strip()
+    # Si envían texto para guardar
+    if data.get("guardar") and (data.get("texto") or "").strip():
+        texto = (data.get("texto") or "").strip()
+        try:
+            obs = ObservacionBoletin.query.filter_by(
+                estudiante_id=est_id, periodo=periodo, institucion_id=iid
+            ).first()
+            if not obs:
+                obs = ObservacionBoletin(
+                    institucion_id=iid, estudiante_id=est_id, periodo=periodo
+                )
+                db.session.add(obs)
+            obs.texto = texto
+            if hasattr(obs, "generado_auto"):
+                obs.generado_auto = True
+            if hasattr(obs, "docente"):
+                obs.docente = session.get("usuario") or ""
+            if hasattr(obs, "actualizado"):
+                obs.actualizado = f"{fecha_hoy()} {hora_actual()}"
+            db.session.commit()
+            return jsonify({"ok": True, "texto": texto, "guardado": True})
+        except Exception as ex:
+            db.session.rollback()
+            return jsonify({"ok": False, "error": str(ex)})
+
+    # Calcular promedio y faltas
+    prom = None
+    n_notas = 0
+    try:
+        regs = NotaRegistro.query.filter(
+            NotaRegistro.estudiante_id == est_id,
+            NotaRegistro.periodo == periodo,
+            NotaRegistro.asignatura == asignatura,
+            NotaRegistro.valor.isnot(None),
+        ).all()
+        vals = [float(r.valor) for r in regs if r.valor is not None]
+        n_notas = len(vals)
+        if vals:
+            prom = round(sum(vals) / len(vals), 2)
+    except Exception:
+        pass
+    nf = 0
+    try:
+        f = FaltaPlanilla.query.filter_by(
+            estudiante_id=est_id, periodo=periodo, asignatura=asignatura
+        ).first()
+        if f:
+            nf = int(f.nj or 0) + int(f.fj or 0) + int(f.ac or 0)
+    except Exception:
+        pass
+
+    nombre = estudiante_nombre(e)
+    if prom is None:
+        nivel = "sin calificaciones registradas aún"
+        consejo = "Se recomienda iniciar el registro de evidencias en planilla y acompañar el proceso de adaptación."
+    elif prom < 3.0:
+        nivel = f"rendimiento académico bajo (promedio {prom} / 5.0)"
+        consejo = "Se recomienda plan de refuerzo prioritario, citación a acudiente y seguimiento semanal de logros no alcanzados."
+    elif prom < 4.0:
+        nivel = f"rendimiento básico (promedio {prom} / 5.0)"
+        consejo = "Conviene consolidar hábitos de estudio y practicar los logros con menor desempeño antes del cierre del periodo."
+    else:
+        nivel = f"rendimiento alto (promedio {prom} / 5.0)"
+        consejo = "Se sugiere mantener el nivel con retos de profundización y liderazgo en el aula."
+    faltas_txt = f" Registra {nf} falla(s) de asistencia en el periodo." if nf else " Su asistencia en el periodo es favorable."
+    texto = (
+        f"El/la estudiante {nombre} presenta un {nivel} en {asignatura} durante {periodo}. "
+        f"Se analizaron {n_notas} registro(s) de evaluación en planilla SIEE.{faltas_txt} {consejo}"
+    )
+    return jsonify({
+        "ok": True,
+        "texto": texto,
+        "estudiante": nombre,
+        "promedio": prom,
+        "faltas": nf,
+    })
+
+
+@app.route("/eduaura/plan-mejoramiento/<int:estudiante_id>")
+def eduaura_plan_mejoramiento(estudiante_id):
+    """PDF guía de plan de mejoramiento según notas bajas del estudiante."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Docente", "Soporte", "Coordinación", "Rectoría", "Administrador"):
+        return acceso_denegado()
+    e = Estudiante.query.get(estudiante_id)
+    if not e:
+        return "Estudiante no encontrado", 404
+    iid = institucion_id_actual()
+    if iid is not None and e.institucion_id is not None and int(e.institucion_id) != int(iid):
+        return acceso_denegado("Estudiante de otra institución")
+    asignatura = (request.args.get("asignatura") or "Asignatura").strip()
+    periodo = (request.args.get("periodo") or periodo_actual() or "Periodo 1").strip()
+    grado = (request.args.get("grado") or e.grado or "").strip()
+
+    prom = None
+    bajos = []
+    try:
+        regs = NotaRegistro.query.filter(
+            NotaRegistro.estudiante_id == e.id,
+            NotaRegistro.periodo == periodo,
+            NotaRegistro.asignatura == asignatura,
+            NotaRegistro.valor.isnot(None),
+        ).all()
+        vals = []
+        for r in regs:
+            try:
+                v = float(r.valor)
+            except Exception:
+                continue
+            vals.append(v)
+            if v < 3.0:
+                bajos.append(v)
+        if vals:
+            prom = round(sum(vals) / len(vals), 2)
+    except Exception:
+        pass
+
+    from io import BytesIO
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
+    except Exception:
+        return "ReportLab no disponible", 500
+
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    w, h = letter
+    y = h - 2 * cm
+    c.setFillColorRGB(0.05, 0.11, 0.22)
+    c.rect(0, h - 2.2 * cm, w, 2.2 * cm, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(2 * cm, h - 1.3 * cm, "PROCSIS · EduTrack — Plan de mejoramiento")
+    c.setFont("Helvetica", 9)
+    c.drawString(2 * cm, h - 1.8 * cm, f"Generado {fecha_hoy()} {hora_actual()} · EduAura IA")
+    y = h - 3.2 * cm
+    c.setFillColorRGB(0.05, 0.11, 0.22)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(2 * cm, y, f"Estudiante: {estudiante_nombre(e)}")
+    y -= 0.6 * cm
+    c.setFont("Helvetica", 10)
+    c.drawString(2 * cm, y, f"Código: {e.codigo or '—'}  |  Grado: {grado}  |  Materia: {asignatura}  |  {periodo}")
+    y -= 0.8 * cm
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(2 * cm, y, "1. Diagnóstico")
+    y -= 0.55 * cm
+    c.setFont("Helvetica", 10)
+    diag = f"Promedio actual: {prom if prom is not None else 'sin datos'} / 5.0. "
+    if prom is not None and prom < 3.0:
+        diag += "El estudiante no alcanza el desempeño mínimo (3.0)."
+    elif prom is not None:
+        diag += "El estudiante alcanza el mínimo; se propone consolidación."
+    else:
+        diag += "Aún no hay evidencias suficientes en planilla."
+    for line in _wrap_text_simple(diag, 95):
+        c.drawString(2 * cm, y, line)
+        y -= 0.45 * cm
+    y -= 0.3 * cm
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(2 * cm, y, "2. Logros a reforzar")
+    y -= 0.55 * cm
+    c.setFont("Helvetica", 10)
+    if bajos:
+        c.drawString(2 * cm, y, f"Se detectaron {len(bajos)} nota(s) por debajo de 3.0. Priorizar recuperación de esas evidencias.")
+        y -= 0.45 * cm
+    guias = [
+        "Revisar cuaderno y talleres del periodo con el docente en tutoría.",
+        "Resolver una guía de 10 ejercicios de los temas con menor nota.",
+        "Presentar evidencia de estudio (resumen o mapa conceptual) en 8 días hábiles.",
+        "Asistir a refuerzo programado por la institución (si aplica).",
+        "Compromiso de acudiente: revisar avances semanalmente.",
+    ]
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(2 * cm, y, "3. Guía de estudio sugerida")
+    y -= 0.55 * cm
+    c.setFont("Helvetica", 10)
+    for i, g in enumerate(guias, 1):
+        c.drawString(2.2 * cm, y, f"{i}. {g}")
+        y -= 0.5 * cm
+        if y < 3 * cm:
+            c.showPage()
+            y = h - 2 * cm
+    y -= 0.4 * cm
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(2 * cm, y, "4. Compromiso")
+    y -= 1.2 * cm
+    c.line(2 * cm, y, 9 * cm, y)
+    c.line(11 * cm, y, 18 * cm, y)
+    y -= 0.4 * cm
+    c.setFont("Helvetica", 8)
+    c.drawString(2 * cm, y, "Firma estudiante")
+    c.drawString(11 * cm, y, "Firma acudiente / docente")
+    y -= 1 * cm
+    c.setFont("Helvetica", 8)
+    c.setFillColorRGB(0.4, 0.45, 0.5)
+    c.drawString(2 * cm, y, "Documento de apoyo pedagógico · EduAura IA · PROCSIS. No reemplaza el SIEE ni la evaluación oficial del docente.")
+    c.save()
+    buf.seek(0)
+    fname = f"Plan_Mejoramiento_{e.codigo or estudiante_id}_{asignatura[:20].replace(' ','_')}.pdf"
+    return send_file(buf, as_attachment=True, download_name=fname, mimetype="application/pdf")
+
+
+def _wrap_text_simple(text, width=90):
+    words = (text or "").split()
+    lines, cur = [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if len(trial) <= width:
+            cur = trial
+        else:
+            if cur:
+                lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines or [""]
 
 
 @app.route("/radar-predictivo")
