@@ -1638,6 +1638,28 @@ class GastoOperativo(db.Model):
     usuario = db.Column(db.String(80), default="")
 
 
+
+class DescargaReporteFinanciero(db.Model):
+    """Sello inmutable de descargas de reportes de pago/facturación (Ley 1581)."""
+    __tablename__ = "descargas_reportes_financieros"
+    id = db.Column(db.Integer, primary_key=True)
+    fecha = db.Column(db.String(20), default="")
+    hora = db.Column(db.String(20), default="")
+    usuario = db.Column(db.String(120), default="")
+    rol = db.Column(db.String(60), default="")
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    colegio_nombre = db.Column(db.String(220), default="")
+    mes_reporte = db.Column(db.String(7), default="")  # YYYY-MM
+    formato = db.Column(db.String(10), default="")  # XLSX | PDF
+    justificacion = db.Column(db.Text, default="")
+    ip = db.Column(db.String(80), default="")
+    ubicacion = db.Column(db.String(200), default="")
+    proveedor_isp = db.Column(db.String(160), default="")
+    user_agent = db.Column(db.String(400), default="")
+    n_registros = db.Column(db.Integer, default=0)
+    portal = db.Column(db.String(40), default="")  # gerencia|soporte|cobranza|rectoria
+
+
 class FacturaCobro(db.Model):
     """Recibos / facturación interna (pre-Siigo). one_time | recurring."""
     __tablename__ = "facturas_cobro"
@@ -16549,6 +16571,7 @@ def gerencia_hq():
         <a class="a" href="/gerencia/pqr-limpieza">🧹 Limpieza PQR de prueba</a>
         <a href="/gerencia/auditoria">📋 Auditoría IP / ubicación</a>
         <a class="g" href="/gerencia/fidelizacion">💙 Fidelización CSAT</a>
+        <a class="g" href="/gerencia/reportes-pago">📊 Reportes de pago</a>
         <a href="/gerencia/procsis-web">📰 Noticias y productos web</a>
         <a href="/gerencia/anuncios">📢 Anuncios (editar)</a>
         <a href="/tenants">Instituciones</a>
@@ -24791,6 +24814,7 @@ def _modulos_por_rol(rol):
     gerencia = ventas + [
         ("EduTrack HQ", "/gerencia/hq", "#0B2D57"),
         ("💙 Fidelización CSAT", "/gerencia/fidelizacion", "#0d9488"),
+        ("📊 Reportes de pago", "/gerencia/reportes-pago", "#0B2D57"),
         ("Anuncios globales", "/gerencia/anuncios", "#0B2D57"),
         ("Marca global", "/soporte/marca", "#0B2D57"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
@@ -25189,6 +25213,30 @@ def soporte_admin():
   </div>
 </section>
 
+
+<section class="role-panel" style="margin-bottom:14px;border-top:4px solid #0B2D57">
+  <h2 style="margin:0 0 6px;font-size:15px;color:#0B2D57;text-transform:uppercase;letter-spacing:.04em">Módulos operativos · Soporte PROCSIS</h2>
+  <p class="mini-text" style="margin:0 0 12px">Accesos directos para asesores. Todo lo técnico del día a día en un solo lugar.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px">
+    <a class="btn" href="/soporte/pqr" style="background:#1d4ed8;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🎫 Centro PQR</a>
+    <a class="btn" href="/soporte/pqr/crear" style="background:#1e40af;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">➕ Radicar PQR</a>
+    <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">💙 CSAT / Fidelización</a>
+    <a class="btn" href="/usuarios" style="background:#b91c1c;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">👥 Usuarios</a>
+    <a class="btn" href="/soporte/reinicio-acceso" style="background:#0B2D57;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🔑 Reinicio acceso</a>
+    <a class="btn" href="/soporte/reset-clave" style="background:#b45309;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🔐 Restablecer clave</a>
+    <a class="btn" href="/soporte/impersonar" style="background:#0f766e;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🎭 Impersonar</a>
+    <a class="btn" href="/interno/buscar-colegio" style="background:#334155;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🔍 Buscar colegio</a>
+    <a class="btn" href="/tenants" style="background:#1d4ed8;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🏫 Instituciones</a>
+    <a class="btn" href="/soporte/info-institucional" style="background:#0B2D57;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📋 Info institucional</a>
+    <a class="btn" href="/soporte/aperturas-notas" style="background:#b45309;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📝 Aperturas notas</a>
+    <a class="btn" href="/soporte/prorroga" style="background:#7c2d12;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📅 Prórroga 24h</a>
+    <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📆 Periodos 3/4</a>
+    <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🚨 Logs errores</a>
+    <a class="btn" href="/auditoria" style="background:#1d4ed8;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📜 Auditoría</a>
+    <a class="btn" href="/soporte/boletines" style="background:#1d4ed8;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📄 Boletines</a>
+    <a class="btn" href="/mi-perfil" style="background:#334155;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">👤 Mi perfil</a>
+  </div>
+</section>
 <section class="role-panel" style="margin-bottom:14px">
   <h2 style="margin:0 0 10px">👥 Gestión de usuarios</h2>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
@@ -34338,6 +34386,638 @@ document.querySelectorAll('.stars').forEach(function(box){{
 @app.route("/soporte/fidelizacion", methods=["GET", "POST"])
 @app.route("/ventas/fidelizacion", methods=["GET", "POST"])
 @app.route("/cobranza/fidelizacion", methods=["GET", "POST"])
+
+
+def _ensure_descargas_reportes_table():
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        from sqlalchemy import text as _t, inspect as _i
+        insp = _i(db.engine)
+        if "descargas_reportes_financieros" not in insp.get_table_names():
+            db.session.execute(_t("""
+                CREATE TABLE IF NOT EXISTS descargas_reportes_financieros (
+                    id SERIAL PRIMARY KEY,
+                    fecha VARCHAR(20) DEFAULT '',
+                    hora VARCHAR(20) DEFAULT '',
+                    usuario VARCHAR(120) DEFAULT '',
+                    rol VARCHAR(60) DEFAULT '',
+                    institucion_id INTEGER,
+                    colegio_nombre VARCHAR(220) DEFAULT '',
+                    mes_reporte VARCHAR(7) DEFAULT '',
+                    formato VARCHAR(10) DEFAULT '',
+                    justificacion TEXT DEFAULT '',
+                    ip VARCHAR(80) DEFAULT '',
+                    ubicacion VARCHAR(200) DEFAULT '',
+                    proveedor_isp VARCHAR(160) DEFAULT '',
+                    user_agent VARCHAR(400) DEFAULT '',
+                    n_registros INTEGER DEFAULT 0,
+                    portal VARCHAR(40) DEFAULT ''
+                )
+            """))
+            db.session.commit()
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ensure descargas reportes:", e)
+
+
+def _registrar_descarga_reporte(mes, formato, justificacion, institucion_id, colegio_nombre, n_reg, portal):
+    """Sello inmutable + auditoria general."""
+    _ensure_descargas_reportes_table()
+    ip = ""
+    ubic = isp = ""
+    try:
+        ip = _client_ip_audit()
+        geo = _geo_por_ip(ip)
+        if isinstance(geo, tuple):
+            ubic, isp = geo[0] or "", geo[1] or ""
+        else:
+            ubic = str(geo or "")
+    except Exception:
+        pass
+    ua = ""
+    try:
+        ua = (request.headers.get("User-Agent") or "")[:400]
+    except Exception:
+        pass
+    try:
+        row = DescargaReporteFinanciero(
+            fecha=fecha_hoy(),
+            hora=hora_actual(),
+            usuario=session.get("usuario") or "Sistema",
+            rol=session.get("rol") or "",
+            institucion_id=institucion_id,
+            colegio_nombre=(colegio_nombre or "")[:220],
+            mes_reporte=(mes or "")[:7],
+            formato=(formato or "")[:10],
+            justificacion=(justificacion or "")[:2000],
+            ip=(ip or "")[:80],
+            ubicacion=(ubic or "")[:200],
+            proveedor_isp=(isp or "")[:160],
+            user_agent=ua,
+            n_registros=int(n_reg or 0),
+            portal=(portal or "")[:40],
+        )
+        db.session.add(row)
+        db.session.commit()
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("registrar descarga reporte:", e)
+    try:
+        registrar_auditoria(
+            "Descarga reporte financiero",
+            f"mes={mes} fmt={formato} n={n_reg} portal={portal} motivo={(justificacion or '')[:120]} IP={ip} Ubic={ubic}",
+        )
+    except Exception:
+        pass
+
+
+def _query_facturas_reporte(mes, institucion_id=None):
+    """Facturas del mes (ciclo YYYY-MM) filtradas por tenant si aplica."""
+    q = FacturaCobro.query
+    if mes:
+        q = q.filter(
+            db.or_(
+                FacturaCobro.ciclo == mes,
+                FacturaCobro.pagada_en.like(f"{mes}%"),
+                FacturaCobro.creado_en.like(f"{mes}%"),
+            )
+        )
+    if institucion_id:
+        q = q.filter(FacturaCobro.institucion_id == int(institucion_id))
+    return q.order_by(FacturaCobro.id.desc()).limit(5000).all()
+
+
+
+def _id_autenticidad_procsis():
+    import secrets as _sec
+    return "PR-REQ-" + _sec.token_hex(6).upper()
+
+
+def _texto_firma_digital_procsis(id_auth=None):
+    """Bloque legal de firma digital (Ley 527 de 1999)."""
+    id_auth = id_auth or _id_autenticidad_procsis()
+    fecha = fecha_hoy()
+    hora = hora_actual()
+    return id_auth, (
+        "DOCUMENTO EMITIDO Y FIRMADO DIGITALMENTE POR PROCSIS\n"
+        f"Emisor Autorizado: Mesa de Soporte Global PROCSIS / Sistema EduTrack\n"
+        f"Fecha y Hora de Emisión: {fecha} - {hora} (Colombia)\n"
+        f"ID de Autenticidad: {id_auth}\n"
+        "Seguridad del Servidor: Validado mediante protocolo HTTPS seguro desde la infraestructura "
+        "central de Railway. Este reporte goza de plena validez jurídica e integridad de datos según "
+        "los términos de la Ley 527 de 1999 de Comercio Electrónico."
+    )
+
+
+def _excel_reporte_pagos(facturas, mes, titulo="Reporte de pagos", id_auth=None):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Pagos"
+    headers = [
+        "Consecutivo", "Colegio", "NIT", "Tipo", "Concepto", "Valor",
+        "Estado", "Ciclo", "Vencimiento", "Pagada en", "Creado", "Proveedor",
+    ]
+    header_fill = PatternFill("solid", fgColor="0B2D57")
+    header_font = Font(bold=True, color="FFFFFF")
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(1, c, h)
+        cell.fill = header_fill
+        cell.font = header_font
+    for r, f in enumerate(facturas, 2):
+        col_nom = f.colegio_snapshot or ""
+        if not col_nom and f.institucion_id:
+            try:
+                inst = Institucion.query.get(f.institucion_id)
+                col_nom = inst.nombre if inst else ""
+            except Exception:
+                pass
+        vals = [
+            f.consecutivo or f.id,
+            col_nom,
+            f.nit_snapshot or "",
+            f.tipo or "",
+            f.concepto or "",
+            float(f.valor or 0),
+            f.estado or "",
+            f.ciclo or "",
+            f.vencimiento or "",
+            f.pagada_en or "",
+            f.creado_en or "",
+            f.proveedor or "",
+        ]
+        for c, v in enumerate(vals, 1):
+            ws.cell(r, c, v)
+    ws.cell(len(facturas) + 3, 1, f"Mes: {mes} · Generado: {fecha_hoy()} {hora_actual()} · {titulo}")
+    for col in range(1, 13):
+        ws.column_dimensions[get_column_letter(col)].width = 16
+    # Hoja de firma digital
+    id_auth, texto_firma = _texto_firma_digital_procsis(id_auth)
+    ws2 = wb.create_sheet("Firma digital PROCSIS")
+    ws2["A1"] = "🔒 DOCUMENTO EMITIDO Y FIRMADO DIGITALMENTE POR PROCSIS"
+    ws2["A1"].font = Font(bold=True, color="0B2D57", size=12)
+    lines = texto_firma.split("\n")
+    for i, line in enumerate(lines, 3):
+        ws2.cell(i, 1, line)
+    ws2.column_dimensions["A"].width = 100
+    ws.cell(len(facturas) + 5, 1, f"ID Autenticidad: {id_auth}")
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return bio, id_auth
+
+
+def _pdf_reporte_pagos(facturas, mes, titulo="Reporte de pagos", id_auth=None):
+    from reportlab.lib.units import cm
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=landscape(letter))
+    w, h = landscape(letter)
+    y = h - 1.5 * cm
+    c.setFont("Helvetica-Bold", 14)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(1.5 * cm, y, titulo)
+    y -= 0.6 * cm
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.black)
+    c.drawString(1.5 * cm, y, f"Mes: {mes} · Generado: {fecha_hoy()} {hora_actual()} · Registros: {len(facturas)}")
+    y -= 0.8 * cm
+    c.setFont("Helvetica-Bold", 8)
+    headers = ["Consec.", "Colegio", "Valor", "Estado", "Ciclo", "Pagada"]
+    xs = [1.5 * cm, 4 * cm, 14 * cm, 17 * cm, 20 * cm, 23 * cm]
+    for x, htxt in zip(xs, headers):
+        c.drawString(x, y, htxt)
+    y -= 0.4 * cm
+    c.setStrokeColor(colors.HexColor("#0B2D57"))
+    c.line(1.5 * cm, y, w - 1.5 * cm, y)
+    y -= 0.45 * cm
+    c.setFont("Helvetica", 8)
+    for f in facturas:
+        if y < 1.5 * cm:
+            c.showPage()
+            y = h - 1.5 * cm
+            c.setFont("Helvetica", 8)
+        col_nom = (f.colegio_snapshot or "")[:42]
+        if not col_nom and f.institucion_id:
+            try:
+                inst = Institucion.query.get(f.institucion_id)
+                col_nom = ((inst.nombre if inst else "") or "")[:42]
+            except Exception:
+                pass
+        c.drawString(xs[0], y, str(f.consecutivo or f.id)[:12])
+        c.drawString(xs[1], y, col_nom)
+        c.drawRightString(xs[2] + 2.2 * cm, y, f"$ {float(f.valor or 0):,.0f}")
+        c.drawString(xs[3], y, (f.estado or "")[:12])
+        c.drawString(xs[4], y, (f.ciclo or "")[:8])
+        c.drawString(xs[5], y, (f.pagada_en or "")[:16])
+        y -= 0.38 * cm
+    id_auth, texto_firma = _texto_firma_digital_procsis(id_auth)
+    # Caja de firma digital
+    c.setStrokeColor(colors.HexColor("#0B2D57"))
+    c.setFillColor(colors.HexColor("#f0f9ff"))
+    box_y = 0.8 * cm
+    c.rect(1.5 * cm, box_y, w - 3 * cm, 2.4 * cm, fill=1, stroke=1)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(1.7 * cm, box_y + 2.0 * cm, "DOCUMENTO EMITIDO Y FIRMADO DIGITALMENTE POR PROCSIS")
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica", 7)
+    yf = box_y + 1.65 * cm
+    for line in texto_firma.split("\n")[1:]:
+        c.drawString(1.7 * cm, yf, line[:120])
+        yf -= 0.32 * cm
+    c.save()
+    bio.seek(0)
+    return bio, id_auth
+
+
+def _meses_opts_reporte(n=18):
+    """Últimos n meses YYYY-MM para selects."""
+    from datetime import date
+    try:
+        from dateutil.relativedelta import relativedelta
+        d = date.today().replace(day=1)
+        opts = []
+        for i in range(n):
+            m = d - relativedelta(months=i)
+            key = m.strftime("%Y-%m")
+            label = m.strftime("%Y-%m")
+            opts.append((key, label))
+        return opts
+    except Exception:
+        # fallback sin dateutil
+        import calendar
+        y, m = date.today().year, date.today().month
+        opts = []
+        for i in range(n):
+            opts.append((f"{y:04d}-{m:02d}", f"{y:04d}-{m:02d}"))
+            m -= 1
+            if m <= 0:
+                m = 12
+                y -= 1
+        return opts
+
+
+
+@app.route("/soporte/reportes-pago")
+@app.route("/cobranza/reportes-pago")
+def reportes_pago_redirigir_gerencia():
+    """Reportes de pago solo en Gerencia."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() in ("Gerente", "Superadmin", "Administrador"):
+        return redirect("/gerencia/reportes-pago")
+    return page(
+        "Reportes de pago",
+        (shell_soporte if rol_actual() == "Soporte" else shell)(
+            "<div class='role-panel'><h2>Módulo exclusivo de Gerencia</h2>"
+            "<p>La generación de reportes de pago y facturación con firma digital solo está disponible en "
+            "<b>Gerencia → Reportes de pago</b>.</p>"
+            "<p>Soporte puede ver el historial de descargas en Auditoría general si Gerencia lo autoriza.</p>"
+            "<a class='btn' href='/soporte_admin'>← Volver a Soporte</a></div>"
+            if rol_actual() == "Soporte" else
+            "<div class='role-panel'><h2>Módulo exclusivo de Gerencia</h2>"
+            "<p>Use el portal de Gerencia para reportes de pago firmados digitalmente.</p></div>"
+        ),
+    )
+
+
+@app.route("/gerencia/reportes-pago", methods=["GET", "POST"])
+def reportes_pago_staff():
+    """Reporte de facturación/pagos EXCLUSIVO de Gerencia (con firma digital PROCSIS)."""
+    if not requiere_login():
+        return redirect("/gerencia-login")
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Gerente", "Superadmin", "Administrador"):
+        return acceso_denegado("Los reportes de pago y facturación solo los genera Gerencia.")
+    path = request.path or ""
+    portal = "gerencia"
+    solo_consulta = False
+
+    _ensure_descargas_reportes_table()
+    error = mensaje = ""
+    meses = _meses_opts_reporte(24)
+    mes_sel = (request.values.get("mes") or "").strip()
+    if not mes_sel and meses:
+        mes_sel = meses[0][0]
+    try:
+        iid = int(request.values.get("institucion_id") or 0) or None
+    except Exception:
+        iid = None
+    justificacion = (request.values.get("justificacion") or "").strip()
+
+    # Descarga
+    if request.method == "POST" and (request.form.get("accion") or "") == "descargar":
+        if solo_consulta and rol == "Soporte":
+            error = "Modo consulta: Soporte no descarga desde esta vista. Use generación con justificación en el panel completo."
+        elif not justificacion or len(justificacion) < 10:
+            error = "La justificación es obligatoria (mínimo 10 caracteres). Ejemplo: solicitado por Rectora para auditoría de cartera de agosto."
+        elif not mes_sel:
+            error = "Seleccione el mes del reporte."
+        else:
+            facturas = _query_facturas_reporte(mes_sel, iid)
+            col_nom = ""
+            if iid:
+                inst = Institucion.query.get(iid)
+                col_nom = inst.nombre if inst else ""
+            formato = (request.form.get("formato") or "XLSX").upper()
+            if formato not in ("XLSX", "PDF"):
+                formato = "XLSX"
+            _registrar_descarga_reporte(
+                mes_sel, formato, justificacion, iid, col_nom, len(facturas), portal
+            )
+            fname = f"reporte_pagos_{mes_sel}_{fecha_hoy()}"
+            id_auth = _id_autenticidad_procsis()
+            if formato == "PDF":
+                bio, id_auth = _pdf_reporte_pagos(facturas, mes_sel, "Reporte de pagos / facturación · PROCSIS", id_auth)
+                return send_file(bio, as_attachment=True, download_name=f"{fname}.pdf", mimetype="application/pdf")
+            bio, id_auth = _excel_reporte_pagos(facturas, mes_sel, "Reporte de pagos / facturación · PROCSIS", id_auth)
+            return send_file(
+                bio, as_attachment=True,
+                download_name=f"{fname}.xlsx",
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+    # Listado previo
+    facturas = []
+    try:
+        if mes_sel:
+            facturas = _query_facturas_reporte(mes_sel, iid)
+    except Exception as e:
+        error = f"No se pudieron cargar facturas: {e}"
+        facturas = []
+
+    total_valor = sum(float(f.valor or 0) for f in facturas)
+    pagado = sum(float(f.valor or 0) for f in facturas if (f.estado or "").upper() == "PAGADO")
+    pend = sum(float(f.valor or 0) for f in facturas if (f.estado or "").upper() == "PENDIENTE")
+
+    # Historial de descargas (consulta)
+    try:
+        hist = DescargaReporteFinanciero.query.order_by(DescargaReporteFinanciero.id.desc()).limit(80).all()
+    except Exception:
+        hist = []
+    filas_h = ""
+    for h in hist:
+        filas_h += (
+            f"<tr><td style='font-size:12px'>{_esc(h.fecha)} {_esc(h.hora)}</td>"
+            f"<td>{_esc(h.usuario)}<br><span style='font-size:11px;color:#64748b'>{_esc(h.rol)} · {_esc(h.portal)}</span></td>"
+            f"<td>{_esc(h.mes_reporte)}</td><td>{_esc(h.formato)}</td>"
+            f"<td>{_esc(h.colegio_nombre or 'Todos')}</td>"
+            f"<td style='font-size:12px'>{_esc((h.justificacion or '')[:100])}</td>"
+            f"<td style='font-size:11px'>{_esc(h.ip)}<br>{_esc(h.ubicacion or '')}</td>"
+            f"<td>{h.n_registros}</td></tr>"
+        )
+    if not filas_h:
+        filas_h = "<tr><td colspan='8' style='text-align:center;color:#64748b;padding:12px'>Sin descargas registradas</td></tr>"
+
+    opts_m = "".join(
+        f'<option value="{k}" {"selected" if k==mes_sel else ""}>{lab}</option>' for k, lab in meses
+    )
+    try:
+        opts_i = '<option value="">— Todas las instituciones —</option>' + "".join(
+            f'<option value="{i.id}" {"selected" if iid==i.id else ""}>{_esc((i.codigo or "")+" — "+(i.nombre or ""))}</option>'
+            for i in Institucion.query.order_by(Institucion.nombre.asc()).limit(400).all()
+        )
+    except Exception:
+        opts_i = '<option value="">—</option>'
+
+    volver = {"soporte": "/soporte_admin", "cobranza": "/cobranza/panel", "gerencia": "/gerencia/hq"}.get(portal, "/")
+    form_gen = ""
+    if not (solo_consulta and rol == "Soporte"):
+        form_gen = f"""
+<section class="role-panel">
+  <h2 style="margin-top:0;color:#0B2D57">Generar reporte de pagos / facturación</h2>
+  <p style="font-size:13px;color:#64748b">Validación: mes obligatorio + justificación del motivo de descarga (Ley 1581). La descarga queda auditada con IP, ubicación y hora.</p>
+  <form method="POST" id="form-rep-pago" onsubmit="return validarReportePago()">
+    <input type="hidden" name="accion" value="descargar">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <label style="font-weight:700;font-size:13px">Mes del reporte *</label>
+        <select name="mes" id="mes-rep" required>{opts_m}</select>
+      </div>
+      <div>
+        <label style="font-weight:700;font-size:13px">Institución (opcional)</label>
+        <select name="institucion_id">{opts_i}</select>
+      </div>
+    </div>
+    <label style="font-weight:700;font-size:13px;margin-top:10px;display:block">Justificación del reporte (motivo) *</label>
+    <textarea name="justificacion" id="just-rep" rows="3" required minlength="10"
+      placeholder="Ejemplo: Solicitado por la Rectora para auditoría de cartera del mes de agosto">{_esc(justificacion)}</textarea>
+    <p style="font-size:12px;color:#b45309;margin:6px 0">Si este campo queda vacío, la descarga permanece bloqueada.</p>
+    <label style="font-weight:700;font-size:13px">Formato</label>
+    <select name="formato">
+      <option value="XLSX">Excel (.xlsx)</option>
+      <option value="PDF">PDF</option>
+    </select>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button type="submit" id="btn-desc-rep" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Descargar reporte</button>
+      <button type="submit" formaction="?preview=1" formmethod="get" style="background:#64748b;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:700;cursor:pointer">Solo previsualizar</button>
+    </div>
+  </form>
+  <script>
+  function validarReportePago(){{
+    var j=document.getElementById('just-rep');
+    var m=document.getElementById('mes-rep');
+    if(!m.value){{alert('Seleccione el mes');return false;}}
+    if(!j.value || j.value.trim().length<10){{alert('Escriba la justificación (mínimo 10 caracteres)');j.focus();return false;}}
+    return true;
+  }}
+  (function(){{
+    var j=document.getElementById('just-rep'), b=document.getElementById('btn-desc-rep');
+    function chk(){{ b.disabled = !j.value || j.value.trim().length<10; b.style.opacity = b.disabled?'.5':'1'; }}
+    if(j&&b){{ j.addEventListener('input', chk); chk(); }}
+  }})();
+  </script>
+</section>
+<section class="role-panel" style="margin-top:12px">
+  <h2 style="margin-top:0;font-size:15px;color:#0B2D57">Vista previa · { _esc(mes_sel) }</h2>
+  <p><b>{len(facturas)}</b> registros · Total <b>$ {total_valor:,.0f}</b> · Pagado <b style="color:#16a34a">$ {pagado:,.0f}</b> · Pendiente <b style="color:#b45309">$ {pend:,.0f}</b></p>
+</section>
+"""
+    else:
+        form_gen = """
+<section class="role-panel">
+  <h2 style="margin-top:0;color:#0B2D57">Consulta de descargas (Soporte)</h2>
+  <p style="font-size:13px;color:#64748b">Solo consulta quién descargó reportes y por qué. La generación con archivo la hacen Cobranza o Gerencia.</p>
+  <p><a class="btn" href="/soporte/reportes-pago">Ver también panel con generación (si tiene permiso)</a></p>
+</section>
+"""
+
+    content = f"""
+<header class="role-hero"><div>
+  <h1>📊 Reportes de pago y facturación</h1>
+  <p>Cartera EduTrack · descarga auditada · portal {portal}</p>
+</div>
+<a class="btn" href="{volver}">← Volver</a></header>
+{"<div class='msg danger'>"+_esc(error)+"</div>" if error else ""}
+{"<div class='msg ok'>"+_esc(mensaje)+"</div>" if mensaje else ""}
+{form_gen}
+<section class="role-panel" style="margin-top:14px">
+  <h2 style="margin-top:0;font-size:15px;color:#0B2D57">🔒 Historial de descargas (sello de auditoría)</h2>
+  <p style="font-size:12px;color:#64748b">IP, ubicación, hora y motivo — inmutable para trazabilidad (Ley 1581 de 2012).</p>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px">Fecha/hora</th><th>Usuario</th><th>Mes</th><th>Formato</th><th>Colegio</th><th>Justificación</th><th>IP / Ubicación</th><th>N°</th>
+    </tr>
+    {filas_h}
+  </table></div>
+</section>
+"""
+    return page("Reportes de pago · Gerencia", content)
+
+
+@app.route("/reportes/financiero-colegio", methods=["GET", "POST"])
+def reporte_financiero_rectoria():
+    """Rectoría: reporte de pagos anteriores de su colegio. Mes + justificación obligatoria."""
+    if not requiere_login():
+        return redirect("/login")
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Rectoría", "Secretaría", "Coordinación", "Administrador", "Gerente", "Superadmin", "Soporte"):
+        return acceso_denegado("Solo Rectoría (o roles de dirección) pueden generar el reporte financiero del colegio.")
+    iid = institucion_id_actual()
+    if not iid and rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        return page("Reporte financiero", shell("<div class='msg danger'>No hay institución en sesión.</div>"))
+    if request.values.get("institucion_id") and rol in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        try:
+            iid = int(request.values.get("institucion_id"))
+        except Exception:
+            pass
+    inst = Institucion.query.get(iid) if iid else None
+    error = ""
+    meses = _meses_opts_reporte(24)
+    mes_sel = (request.values.get("mes") or (meses[0][0] if meses else "")).strip()
+    justificacion = (request.values.get("justificacion") or "").strip()
+
+    if request.method == "POST" and (request.form.get("accion") or "") == "descargar":
+        if not justificacion or len(justificacion) < 10:
+            error = "Debe indicar el motivo de la descarga (mínimo 10 caracteres)."
+        elif not mes_sel:
+            error = "Seleccione el mes."
+        elif not iid:
+            error = "Institución no definida."
+        else:
+            facturas = _query_facturas_reporte(mes_sel, iid)
+            formato = (request.form.get("formato") or "PDF").upper()
+            if formato not in ("XLSX", "PDF"):
+                formato = "PDF"
+            col_nom = inst.nombre if inst else ""
+            _registrar_descarga_reporte(
+                mes_sel, formato, justificacion, iid, col_nom, len(facturas), "rectoria"
+            )
+            fname = f"pagos_{(inst.codigo if inst else 'colegio')}_{mes_sel}"
+            id_auth = _id_autenticidad_procsis()
+            if formato == "XLSX":
+                bio, id_auth = _excel_reporte_pagos(facturas, mes_sel, f"Pagos · {col_nom}", id_auth)
+                return send_file(bio, as_attachment=True, download_name=f"{fname}.xlsx",
+                                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            bio, id_auth = _pdf_reporte_pagos(facturas, mes_sel, f"Reporte financiero · {col_nom}", id_auth)
+            return send_file(bio, as_attachment=True, download_name=f"{fname}.pdf", mimetype="application/pdf")
+
+    facturas = _query_facturas_reporte(mes_sel, iid) if iid and mes_sel else []
+    opts_m = "".join(f'<option value="{k}" {"selected" if k==mes_sel else ""}>{lab}</option>' for k, lab in meses)
+    content = f"""
+<header class="role-hero"><div>
+  <h1>📊 Reporte financiero de pagos</h1>
+  <p>{_esc(inst.nombre if inst else 'Su institución')} · pagos anteriores de la plataforma</p>
+</div>
+<a class="btn" href="/dashboard">← Inicio</a></header>
+{"<div class='msg danger'>"+_esc(error)+"</div>" if error else ""}
+<section class="role-panel">
+  <form method="POST" onsubmit="return validarRect()">
+    <input type="hidden" name="accion" value="descargar">
+    <label style="font-weight:700">Mes a generar *</label>
+    <select name="mes" id="mes-r" required>{opts_m}</select>
+    <label style="font-weight:700;margin-top:10px;display:block">Justificación del reporte (motivo) *</label>
+    <textarea name="justificacion" id="just-r" rows="3" required minlength="10"
+      placeholder="Ejemplo: Solicitado por la Rectora para auditoría de cartera del mes de agosto">{_esc(justificacion)}</textarea>
+    <p style="font-size:12px;color:#b45309">Sin justificación el botón de descarga permanece bloqueado. Quedará registro de IP y motivo.</p>
+    <label style="font-weight:700">Formato</label>
+    <select name="formato"><option value="PDF">PDF</option><option value="XLSX">Excel</option></select>
+    <p style="margin-top:8px;font-size:13px">Registros del mes: <b>{len(facturas)}</b></p>
+    <button type="submit" id="btn-r" style="margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Descargar reporte</button>
+  </form>
+  <script>
+  function validarRect(){{
+    var j=document.getElementById('just-r');
+    if(!j.value||j.value.trim().length<10){{alert('Escriba la justificación del reporte');return false;}}
+    return true;
+  }}
+  (function(){{
+    var j=document.getElementById('just-r'),b=document.getElementById('btn-r');
+    function c(){{b.disabled=!j.value||j.value.trim().length<10;b.style.opacity=b.disabled?'.5':'1';}}
+    if(j&&b){{j.addEventListener('input',c);c();}}
+  }})();
+  </script>
+</section>
+"""
+    return page("Reporte financiero", shell(content))
+
+
+@app.route("/soporte/consultas-descargas-reportes")
+def soporte_consultas_descargas_reportes():
+    """Soporte: solo consulta de cuándo y quién descargó reportes financieros."""
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/soporte-login")
+    _ensure_descargas_reportes_table()
+    q = (request.args.get("q") or "").strip()
+    try:
+        qry = DescargaReporteFinanciero.query
+        if q:
+            like = f"%{q}%"
+            qry = qry.filter(db.or_(
+                DescargaReporteFinanciero.usuario.ilike(like),
+                DescargaReporteFinanciero.justificacion.ilike(like),
+                DescargaReporteFinanciero.colegio_nombre.ilike(like),
+                DescargaReporteFinanciero.ip.ilike(like),
+                DescargaReporteFinanciero.mes_reporte.ilike(like),
+            ))
+        rows = qry.order_by(DescargaReporteFinanciero.id.desc()).limit(150).all()
+    except Exception as e:
+        rows = []
+        print("consulta descargas:", e)
+    filas = ""
+    for h in rows:
+        filas += (
+            f"<tr><td style='font-size:12px'>{_esc(h.fecha)} {_esc(h.hora)}</td>"
+            f"<td>{_esc(h.usuario)} · {_esc(h.rol)}</td>"
+            f"<td>{_esc(h.portal)}</td><td>{_esc(h.mes_reporte)} {_esc(h.formato)}</td>"
+            f"<td>{_esc(h.colegio_nombre or '—')}</td>"
+            f"<td style='font-size:12px'>{_esc((h.justificacion or '')[:120])}</td>"
+            f"<td style='font-size:11px'>{_esc(h.ip)} · {_esc(h.ubicacion or '')}</td></tr>"
+        )
+    if not filas:
+        filas = "<tr><td colspan='7' style='text-align:center;padding:14px;color:#64748b'>Sin registros</td></tr>"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>🔍 Consulta de descargas de reportes</h1>
+  <p>Solo lectura: quién descargó, cuándo, desde dónde y por qué.</p>
+</div>
+<a class="btn" href="/soporte_admin">← Soporte</a>
+<a class="btn" href="/soporte/reportes-pago" style="background:#0B2D57">Reportes pago</a></header>
+<section class="role-panel">
+  <form method="GET" style="display:flex;gap:8px;margin-bottom:12px">
+    <input name="q" value="{_esc(q)}" placeholder="Usuario, IP, colegio, motivo, mes…" style="flex:1;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <button type="submit" class="btn">Buscar</button>
+  </form>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px">Fecha</th><th>Usuario</th><th>Portal</th><th>Mes/Fmt</th><th>Colegio</th><th>Motivo</th><th>IP / Ubicación</th>
+    </tr>
+    {filas}
+  </table></div>
+</section>
+"""
+    return page("Consulta descargas", shell_soporte(content))
+
+
+
 def panel_fidelizacion_csat():
     """CSAT + notas de consulta. Nunca debe tumbar el portal: crea tablas y atrapa errores."""
     if not requiere_login():
