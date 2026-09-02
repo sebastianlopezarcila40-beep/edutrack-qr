@@ -2164,7 +2164,6 @@ def menu_items_por_rol():
             ("/soporte/actualizaciones", "Actualizaciones"),
             ("/soporte/marca", "Marca y contacto"),
             ("/sedes", "Sedes (colegios)"),
-            ("/auditoria", "Auditoría"),
             ("/soporte/pqr", "Centro PQR"),
             ("/feature_flags", "Funciones"),
             ("/servidores", "Servidores"),
@@ -5244,6 +5243,66 @@ def _crear_encuesta_csat_para_ticket(t):
         db.session.rollback()
         print("crear encuesta csat:", e)
         return None, _url_encuesta_csat(t)
+
+
+def _divipola_json():
+    try:
+        from colombia_divipola import COLOMBIA_DEPARTAMENTOS
+        return json.dumps(COLOMBIA_DEPARTAMENTOS, ensure_ascii=False)
+    except Exception as e:
+        print("divipola:", e)
+        return "{}"
+
+
+def _opts_departamentos_html(selected=""):
+    try:
+        from colombia_divipola import options_departamentos
+        return options_departamentos(selected)
+    except Exception:
+        return '<option value="">— Departamento —</option>'
+
+
+SUBTIPOS_PQR = {
+    "Petición": [
+        "Información general", "Certificados / constancias", "Acceso a plataforma",
+        "Cambio de datos", "Soporte técnico", "Soporte interno", "Otro",
+    ],
+    "Queja": [
+        "Atención al usuario", "Docente / académico", "Convivencia escolar",
+        "Facturación / cobros", "Demora en respuesta", "Calidad del servicio", "Otro",
+    ],
+    "Reclamo": [
+        "Cobro indebido", "Servicio no prestado", "Error en notas / boletín",
+        "Falla técnica recurrente", "Incumplimiento de plazos", "Otro",
+    ],
+    "Sugerencia": ["Mejora de la plataforma", "Nuevo módulo", "Capacitación", "Otro"],
+    "Felicitación": ["Atención del asesor", "Experiencia general", "Otro"],
+}
+
+
+def _subtipos_pqr_json():
+    return json.dumps(SUBTIPOS_PQR, ensure_ascii=False)
+
+
+def _script_divipola_subtipos():
+    return (
+        "<script>window.DIVIPOLA=" + _divipola_json() + ";"
+        "window.SUBTIPOS_PQR=" + _subtipos_pqr_json() + ";"
+        "function fillMun(depId,munId){var d=document.getElementById(depId),m=document.getElementById(munId);"
+        "if(!d||!m)return;var list=(window.DIVIPOLA&&window.DIVIPOLA[d.value])||[];"
+        "var cur=m.getAttribute('data-sel')||m.value||'';m.innerHTML='<option value=\"\">— Municipio —</option>';"
+        "list.forEach(function(x){var o=document.createElement('option');o.value=x;o.textContent=x;if(x===cur)o.selected=true;m.appendChild(o);});}"
+        "function fillSubtipos(tipoId,subId){var t=document.getElementById(tipoId),s=document.getElementById(subId);"
+        "if(!t||!s)return;var list=(window.SUBTIPOS_PQR&&window.SUBTIPOS_PQR[t.value])||['Otro'];"
+        "var cur=s.getAttribute('data-sel')||s.value||'';s.innerHTML='<option value=\"\">— Subtipo —</option>';"
+        "list.forEach(function(x){var o=document.createElement('option');o.value=x;o.textContent=x;if(x===cur)o.selected=true;s.appendChild(o);});"
+        "if(!s.value&&list.length)s.value=list[0];}"
+        "document.addEventListener('DOMContentLoaded',function(){"
+        "document.querySelectorAll('select[data-dep]').forEach(function(el){fillMun(el.id,el.getAttribute('data-dep'));});"
+        "document.querySelectorAll('select[data-sub]').forEach(function(el){fillSubtipos(el.id,el.getAttribute('data-sub'));});"
+        "});</script>"
+    )
+
 
 def enviar_notificacion_pqr_estilo_tigo(destino, t):
     """Correo de notificación con el mismo patrón que usan las telcos (Tigo, Claro,
@@ -14410,6 +14469,22 @@ def _aislar_paneles_internos():
     # Headers anti-caché en portales internos (botón atrás no reusa página de otro rol)
     return None
 
+
+
+@app.before_request
+def _bloquear_auditoria_boletines_soporte():
+    """Auditoría y boletines no son de Soporte: solo Gerencia."""
+    try:
+        if not session.get("usuario"):
+            return None
+        rol = (session.get("rol") or "").strip()
+        if rol != "Soporte":
+            return None
+        p = request.path or ""
+        if p.startswith("/auditoria") or p.startswith("/soporte/boletines") or p.startswith("/gerencia/auditoria"):
+            return acceso_denegado("Auditoría y boletines son exclusivos de Gerencia. Soporte no tiene acceso a este módulo.")
+    except Exception:
+        return None
 
 @app.after_request
 def _no_cache_portales_internos(resp):
@@ -24786,12 +24861,10 @@ def _modulos_por_rol(rol):
         ("Consulta PQR validada", "/soporte/pqr/consulta", "#1d4ed8"),
         ("💙 Fidelización CSAT", "/soporte/fidelizacion", "#0d9488"),
         ("Aperturas de notas", "/soporte/aperturas-notas", "#b45309"),
-        ("Auditoría", "/auditoria", "#1d4ed8"),
         ("Actualizaciones / login", "/soporte/actualizaciones", "#1d4ed8"),
         ("Servidores", "/servidores", "#1d4ed8"),
         ("Modo prueba", "/modo_prueba", "#64748b"),
         ("Planilla accesos Excel", "/soporte/planilla-accesos", "#0f766e"),
-        ("Boletines e informes", "/soporte/boletines", "#1d4ed8"),
         ("Seguridad empleados", "/soporte/seguridad-empleados", "#7c2d12"),
     ]
     ventas = [
@@ -24833,7 +24906,6 @@ def _modulos_por_rol(rol):
         ("Retención (validar)", "/retencion", "#7c2d12"),
         ("Cancelaciones de servicio", "/gerencia/cancelaciones", "#7c2d12"),
         ("Cancelaciones técnicas", "/soporte/cancelaciones", "#64748b"),
-        ("Auditoría", "/auditoria", "#1d4ed8"),
         ("Soporte completo", "/soporte_admin", "#0B2D57"),
     ]
     cobranza = [
@@ -25232,8 +25304,6 @@ def soporte_admin():
     <a class="btn" href="/soporte/prorroga" style="background:#7c2d12;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📅 Prórroga 24h</a>
     <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📆 Periodos 3/4</a>
     <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🚨 Logs errores</a>
-    <a class="btn" href="/auditoria" style="background:#1d4ed8;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📜 Auditoría</a>
-    <a class="btn" href="/soporte/boletines" style="background:#1d4ed8;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📄 Boletines</a>
     <a class="btn" href="/mi-perfil" style="background:#334155;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">👤 Mi perfil</a>
   </div>
 </section>
@@ -32376,8 +32446,14 @@ button{{width:100%;margin-top:14px;padding:12px;border:0;border-radius:12px;back
       <div><label>Teléfono / celular</label><input name="telefono" placeholder="Opcional"></div>
     </div>
     <div class="row">
-      <div><label>Departamento</label><input name="departamento"></div>
-      <div><label>Ciudad</label><input name="ciudad"></div>
+      <div><label>Departamento *</label>
+        <select name="departamento" id="pqr_dep" required data-dep="pqr_mun" onchange="fillMun('pqr_dep','pqr_mun')">
+          {_opts_departamentos_html()}
+        </select></div>
+      <div><label>Municipio / Ciudad *</label>
+        <select name="ciudad" id="pqr_mun" required>
+          <option value="">— Elija departamento —</option>
+        </select></div>
     </div>
     <label>Tipo de solicitud *</label>
     <select name="tipo_pqr">
@@ -32950,8 +33026,14 @@ a{{color:#1e40af}}
       <div><label>NIT colegio (si aplica)</label><input name="nit_colegio"></div>
     </div>
     <div class="row">
-      <div><label>Departamento</label><input name="departamento"></div>
-      <div><label>Ciudad</label><input name="ciudad"></div>
+      <div><label>Departamento *</label>
+        <select name="departamento" id="pqr2_dep" required onchange="fillMun('pqr2_dep','pqr2_mun')">
+          {_opts_departamentos_html()}
+        </select></div>
+      <div><label>Municipio / Ciudad *</label>
+        <select name="ciudad" id="pqr2_mun" required>
+          <option value="">— Elija departamento —</option>
+        </select></div>
     </div>
     <div class="row">
       <div><label>Tipo PQR</label>
@@ -33354,9 +33436,13 @@ def soporte_anuncios():
 
 @app.route("/soporte/boletines", methods=["GET", "POST"])
 def soporte_boletines():
-    """Desde soporte: elegir colegio y generar boletín / informe final / ficha de un estudiante."""
-    if not requiere_login() or rol_actual() != "Soporte":
+    """Boletines: solo Gerencia (Soporte no tiene este módulo)."""
+    if not requiere_login():
         return redirect("/soporte-login")
+    if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        return acceso_denegado("Los boletines e informes institucionales los gestiona Gerencia, no Soporte.")
+    if rol_actual() == "Soporte":
+        return redirect("/soporte_admin")
     inst_id = request.values.get("institucion_id", type=int)
     grado = (request.values.get("grado") or "").strip()
     q = (request.values.get("q") or "").strip()
@@ -33993,12 +34079,24 @@ def soporte_pqr_centro():
         return redirect("/soporte-login")
     bucket = (request.args.get("bucket") or "abiertas").strip().lower()
     qtxt = (request.args.get("q") or "").strip()
+    f_subtipo = (request.args.get("subtipo") or "").strip()
+    f_ciudad = (request.args.get("ciudad") or "").strip()
+    f_dep = (request.args.get("departamento") or "").strip()
+    f_tipo = (request.args.get("tipo_pqr") or "").strip()
     q = TicketPQR.query
     if bucket in _PQR_BUCKETS:
         q = q.filter(TicketPQR.estado.in_(_PQR_BUCKETS[bucket][0]))
     elif bucket != "todas":
         # por defecto ocultar cerradas/resueltas
         q = q.filter(~TicketPQR.estado.in_(["RESUELTA", "CERRADA", "CERRADO", "ANULADA"]))
+    if f_subtipo:
+        q = q.filter(TicketPQR.subtipo.ilike(f"%{f_subtipo}%"))
+    if f_ciudad:
+        q = q.filter(TicketPQR.ciudad.ilike(f"%{f_ciudad}%"))
+    if f_dep:
+        q = q.filter(TicketPQR.departamento.ilike(f"%{f_dep}%"))
+    if f_tipo:
+        q = q.filter(TicketPQR.tipo_pqr == f_tipo)
     if qtxt:
         like = f"%{qtxt}%"
         q = q.filter(or_(
@@ -34009,6 +34107,9 @@ def soporte_pqr_centro():
             TicketPQR.nombre_colegio.ilike(like),
             TicketPQR.ticket.ilike(like),
             TicketPQR.razon_social.ilike(like),
+            TicketPQR.subtipo.ilike(like),
+            TicketPQR.ciudad.ilike(like),
+            TicketPQR.departamento.ilike(like),
         ))
     rows = q.order_by(TicketPQR.id.desc()).limit(150).all()
     filas = ""
@@ -34032,11 +34133,32 @@ def soporte_pqr_centro():
   <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488">💙 CSAT</a>
 </header>
 <div class="role-panel" style="margin-bottom:12px">
-  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+  {_script_divipola_subtipos()}
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end">
     {("<input type='hidden' name='bucket' value='"+bucket+"'>") if bucket else ""}
-    <input name="q" value="{_esc(qtxt)}" placeholder="Buscar por radicado, cédula del profesor, NIT o código DANE del colegio" style="flex:1;min-width:260px;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
-    <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button>
+    <input name="q" value="{_esc(qtxt)}" placeholder="Radicado, cédula, NIT, colegio…" style="flex:1;min-width:200px;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+    <select name="tipo_pqr" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <option value="">Tipo (todos)</option>
+      <option value="Petición" {"selected" if f_tipo=="Petición" else ""}>Petición</option>
+      <option value="Queja" {"selected" if f_tipo=="Queja" else ""}>Queja</option>
+      <option value="Reclamo" {"selected" if f_tipo=="Reclamo" else ""}>Reclamo</option>
+      <option value="Sugerencia" {"selected" if f_tipo=="Sugerencia" else ""}>Sugerencia</option>
+      <option value="Felicitación" {"selected" if f_tipo=="Felicitación" else ""}>Felicitación</option>
+    </select>
+    <input name="subtipo" value="{_esc(f_subtipo)}" placeholder="Subtipo" list="lista-subtipos" style="min-width:140px;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+    <datalist id="lista-subtipos">
+      <option value="Soporte interno"><option value="Soporte técnico"><option value="Facturación / cobros">
+      <option value="Atención al usuario"><option value="Acceso a plataforma"><option value="Otro">
+    </datalist>
+    <select name="departamento" id="fil_dep" data-dep="fil_mun" onchange="fillMun('fil_dep','fil_mun')" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1;max-width:180px">
+      {_opts_departamentos_html(f_dep)}
+    </select>
+    <select name="ciudad" id="fil_mun" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1;max-width:180px">
+      <option value="">Municipio / Ciudad</option>
+    </select>
+    <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Filtrar</button>
   </form>
+  <script>document.addEventListener('DOMContentLoaded',function(){{var m=document.getElementById('fil_mun');if(m)m.setAttribute('data-sel','{_esc(f_ciudad)}');fillMun('fil_dep','fil_mun');}});</script>
   <div>{tabs}{limpiar}</div>
 </div>
 <div class="role-panel" style="overflow:auto">
@@ -34073,8 +34195,9 @@ def soporte_pqr_crear():
             email=email_cli,
             direccion=(f.get("direccion") or "").strip()[:255],
             ciudad=(f.get("ciudad") or "").strip()[:80],
+            departamento=(f.get("departamento") or "").strip()[:80],
             tipo_pqr=(f.get("tipo_pqr") or "Petición").strip()[:60],
-            subtipo=(f.get("subtipo") or "Interna").strip()[:80],
+            subtipo=(f.get("subtipo") or "Interna").strip()[:120],
             objeto=(f.get("objeto") or "").strip()[:1500],
             hechos=(f.get("hechos") or "").strip()[:1500],
             motivo=((f.get("objeto") or ""))[:255],
@@ -34109,13 +34232,27 @@ def soporte_pqr_crear():
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
 <div class="role-panel">
 <form method="POST">
+  {_script_divipola_subtipos()}
   <label>Documento / NIT</label><input name="numero_documento" required>
   <label>Razón social</label><input name="razon_social" required>
   <label>Email</label><input name="email" type="email">
-  <label>Dirección / Municipio</label><input name="direccion" placeholder="Dirección y municipio de la institución">
-  <label>Ciudad</label><input name="ciudad">
-  <label>Tipo</label><select name="tipo_pqr"><option>Petición</option><option>Queja</option><option>Reclamo</option></select>
-  <label>Subtipo</label><input name="subtipo" value="Soporte interno">
+  <label>Dirección</label><input name="direccion" placeholder="Dirección de la institución">
+  <label>Departamento *</label>
+  <select name="departamento" id="sop_dep" required data-dep="sop_mun" onchange="fillMun('sop_dep','sop_mun')">
+    {_opts_departamentos_html()}
+  </select>
+  <label>Municipio / Ciudad *</label>
+  <select name="ciudad" id="sop_mun" required>
+    <option value="">— Primero elija departamento —</option>
+  </select>
+  <label>Tipo</label>
+  <select name="tipo_pqr" id="sop_tipo" data-sub="sop_sub" onchange="fillSubtipos('sop_tipo','sop_sub')">
+    <option>Petición</option><option>Queja</option><option>Reclamo</option><option>Sugerencia</option><option>Felicitación</option>
+  </select>
+  <label>Subtipo *</label>
+  <select name="subtipo" id="sop_sub" required>
+    <option value="">— Elija tipo primero —</option>
+  </select>
   <label>Prioridad</label><select name="prioridad"><option>MEDIA</option><option>ALTA</option><option>CRITICA</option><option>BAJA</option></select>
   <label>Medio de ingreso</label>
   <select name="medio_ingreso">
