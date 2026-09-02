@@ -6,6 +6,7 @@
 
 from datetime import datetime, timedelta
 from io import BytesIO
+from pathlib import Path
 import os
 import json
 import random
@@ -5245,21 +5246,77 @@ def _crear_encuesta_csat_para_ticket(t):
         return None, _url_encuesta_csat(t)
 
 
-def _divipola_json():
+def _cargar_divipola():
+    """Carga departamentos/municipios de Colombia (archivo junto a app.py)."""
     try:
         from colombia_divipola import COLOMBIA_DEPARTAMENTOS
-        return json.dumps(COLOMBIA_DEPARTAMENTOS, ensure_ascii=False)
+        if COLOMBIA_DEPARTAMENTOS:
+            return COLOMBIA_DEPARTAMENTOS
+    except Exception:
+        pass
+    try:
+        import importlib.util
+        try:
+            base = Path(__file__).resolve().parent
+        except Exception:
+            base = Path(".")
+        for candidate in (
+            base / "colombia_divipola.py",
+            Path("/home/workdir/artifacts/colombia_divipola.py"),
+            Path("colombia_divipola.py"),
+        ):
+            if candidate.is_file():
+                spec = importlib.util.spec_from_file_location("colombia_divipola", str(candidate))
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                return getattr(mod, "COLOMBIA_DEPARTAMENTOS", {}) or {}
     except Exception as e:
-        print("divipola:", e)
+        print("divipola load:", e)
+    return {}
+
+
+def _divipola_json():
+    try:
+        return json.dumps(_cargar_divipola(), ensure_ascii=False)
+    except Exception as e:
+        print("divipola json:", e)
         return "{}"
 
 
 def _opts_departamentos_html(selected=""):
-    try:
-        from colombia_divipola import options_departamentos
-        return options_departamentos(selected)
-    except Exception:
-        return '<option value="">— Departamento —</option>'
+    data = _cargar_divipola()
+    opts = ['<option value="">— Departamento —</option>']
+    for d in sorted(data.keys()):
+        sel = " selected" if d == (selected or "") else ""
+        opts.append(f'<option value="{_esc(d)}"{sel}>{_esc(d)}</option>')
+    return "\n".join(opts)
+
+
+def _html_campos_dep_mun(dep_name="departamento", mun_name="municipio", dep_val="", mun_val="", required=True, label_mun="Municipio / Ciudad"):
+    """Selects Departamento + Municipio (DIVIPOLA). Usar en cualquier formulario de activación/colegio."""
+    uid = secrets.token_hex(3)
+    dep_id = f"dep_{uid}"
+    mun_id = f"mun_{uid}"
+    req = " required" if required else ""
+    return f"""
+{_script_divipola_subtipos()}
+<label>Departamento{" *" if required else ""}</label>
+<select name="{dep_name}" id="{dep_id}"{req} onchange="fillMun('{dep_id}','{mun_id}')">
+{_opts_departamentos_html(dep_val)}
+</select>
+<label>{label_mun}{" *" if required else ""}</label>
+<select name="{mun_name}" id="{mun_id}"{req} data-sel="{_esc(mun_val)}">
+  <option value="">— Elija departamento primero —</option>
+</select>
+<script>
+(function(){{
+  var d=document.getElementById('{dep_id}'), m=document.getElementById('{mun_id}');
+  if(m) m.setAttribute('data-sel', '{_esc(mun_val)}');
+  if(typeof fillMun==='function') fillMun('{dep_id}','{mun_id}');
+  document.addEventListener('DOMContentLoaded', function(){{ if(typeof fillMun==='function') fillMun('{dep_id}','{mun_id}'); }});
+}})();
+</script>
+"""
 
 
 SUBTIPOS_PQR = {
@@ -12552,8 +12609,7 @@ def sedes_colegios():
         </div>
       </div>
       <div class="row">
-        <div><label>Departamento</label><input name="departamento" id="f_departamento"></div>
-        <div><label>Municipio</label><input name="municipio" id="f_municipio"></div>
+        <div style="grid-column:1/-1">{_html_campos_dep_mun("departamento", "municipio", required=False)}</div>
       </div>
       <label>Dirección</label>
       <input name="direccion" id="f_direccion" placeholder="Calle / vereda / km">
@@ -15501,10 +15557,7 @@ def ventas_comprar():
         <input name="telefono">
         <label>Correo</label>
         <input name="correo" type="email">
-        <label>Municipio</label>
-        <input name="ciudad">
-        <label>Departamento</label>
-        <input name="departamento">
+        {_html_campos_dep_mun("departamento", "ciudad", label_mun="Municipio / Ciudad")}
         <label>Sede principal</label>
         <input name="sede" placeholder="Principal">
         <label>Periodos académicos del colegio *</label>
@@ -15587,10 +15640,7 @@ def _ventas_comprar_legacy_placeholder():
     <input name="dane" placeholder="Código DANE">
     <label>Sede</label>
     <input name="sede" placeholder="Principal / Urbana / Rural">
-    <label>Ciudad</label>
-    <input name="ciudad">
-    <label>Departamento</label>
-    <input name="departamento">
+    {_html_campos_dep_mun("departamento", "ciudad", label_mun="Municipio / Ciudad")}
     <label>Rector / representante</label>
     <input name="rector">
     <label>Teléfono</label>
@@ -19018,7 +19068,7 @@ def demo_invitar_registro(token):
     <label style="font-size:12px;font-weight:700">Teléfono / WhatsApp</label>
     <input name="telefono" style="width:100%;padding:10px;margin:4px 0 10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box">
     <label style="font-size:12px;font-weight:700">Municipio</label>
-    <input name="municipio" style="width:100%;padding:10px;margin:4px 0 10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box">
+    {_html_campos_dep_mun("departamento", "municipio", required=False)}
     <label style="font-size:12px;font-weight:700">Código DANE (opcional)</label>
     <input name="dane" style="width:100%;padding:10px;margin:4px 0 10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box">
     <button style="width:100%;background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:12px;font-weight:800">Crear mi cuenta demo</button>
@@ -25617,8 +25667,7 @@ def soporte_institucion(id):
     <div><label><b>NIT</b></label><input name='nit' value='{(inst.nit or "").replace(chr(39),"")}'></div>
   </div>
   <div class='form-row'>
-    <div><label><b>Municipio</b></label><input name='municipio' value='{(inst.municipio or "").replace(chr(39),"")}'></div>
-    <div><label><b>Departamento</b></label><input name='departamento' value='{(inst.departamento or "").replace(chr(39),"")}'></div>
+    <div style="grid-column:1/-1">{_html_campos_dep_mun("departamento", "municipio", dep_val=(inst.departamento or ""), mun_val=(inst.municipio or ""), required=False)}</div>
   </div>
   <label><b>Dirección</b></label><input name='direccion' value='{(inst.direccion or "").replace(chr(39),"")}'>
   <label><b>Resolución</b></label><input name='resolucion' value='{(inst.resolucion or "").replace(chr(39),"")}'>
@@ -26303,8 +26352,7 @@ def nueva_institucion():
     <div><label><b>NIT</b></label><input name='nit'></div>
   </div>
   <div class='form-row'>
-    <div><label><b>Municipio</b></label><input name='municipio'></div>
-    <div><label><b>Departamento</b></label><input name='departamento'></div>
+    <div style="grid-column:1/-1">{_html_campos_dep_mun("departamento", "municipio", label_mun="Municipio")}</div>
   </div>
   <label><b>Dirección</b></label><input name='direccion'>
   <label><b>Resolución</b></label><input name='resolucion'>
@@ -26448,8 +26496,7 @@ def editar_institucion(id):
     <div><label><b>NIT</b></label><input name='nit' value='{(inst.nit or "").replace(chr(39),"")}'></div>
   </div>
   <div class='form-row'>
-    <div><label><b>Municipio</b></label><input name='municipio' value='{(inst.municipio or "").replace(chr(39),"")}'></div>
-    <div><label><b>Departamento</b></label><input name='departamento' value='{(inst.departamento or "").replace(chr(39),"")}'></div>
+    <div style="grid-column:1/-1">{_html_campos_dep_mun("departamento", "municipio", dep_val=(inst.departamento or ""), mun_val=(inst.municipio or ""), required=False)}</div>
   </div>
   <label><b>Dirección</b></label><input name='direccion' value='{(inst.direccion or "").replace(chr(39),"")}'>
   <label><b>Resolución</b></label><input name='resolucion' value='{(inst.resolucion or "").replace(chr(39),"")}'>
