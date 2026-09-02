@@ -17,6 +17,7 @@ import csv
 import difflib
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
+from urllib.parse import quote, quote_plus
 
 import qrcode
 from docx import Document
@@ -2375,7 +2376,7 @@ def shell(content):
     <span class="role-tag">{rol}</span>
   </div>
   <nav class="role-icons">{icon_html}</nav>
-  <div class="role-welcome">Bienvenido(a) a <b>{APP_NAME}</b>. Gestión académica institucional · Procsis</div>
+  <div class="role-welcome">Bienvenido(a) a <b>{APP_NAME}</b>. Gestión académica institucional · PROCSIS</div>
   <main class="role-main">{banner_licencia_html()}{content}{footer()}</main>
 </div>
 """
@@ -6494,7 +6495,7 @@ def _html_lideres_login():
         '<section class="lp-section ldr-wrap" id="lideres">'
         '<div class="ldr-head">'
         '<h2>Nuestros líderes</h2>'
-        '<p class="ldr-sub">El equipo detrás de EduTrack · Procsis</p>'
+        '<p class="ldr-sub">El equipo detrás de EduTrack · PROCSIS</p>'
         '</div>'
         '<div class="ldr-grid">'
         + "".join(cards)
@@ -6560,7 +6561,7 @@ def _nav_public_html(active=""):
 </style>
 <nav class="pn">
   <div class="pn-in">
-    <a class="pn-brand" href="/login">EduTrack · Procsis</a>
+    <a class="pn-brand" href="/login">EduTrack · PROCSIS</a>
     <div class="pn-links">
       <div class="pn-drop">
         <button type="button">Soluciones ▾</button>
@@ -6619,7 +6620,7 @@ def _public_shell(title, body_html, active=""):
     footer = """
 <footer style="background:#0B2D57;color:#e2e8f0;padding:28px 16px;margin-top:40px;font-family:Segoe UI,system-ui,sans-serif">
   <div style="max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;font-size:13px">
-    <div><b style="color:#fff">EduTrack · Procsis</b><p style="margin:8px 0 0;opacity:.85">Plataforma de gestión académica multi-institucional para colegios de Colombia.</p></div>
+    <div><b style="color:#fff">EduTrack · PROCSIS</b><p style="margin:8px 0 0;opacity:.85">Plataforma de gestión académica multi-institucional para colegios de Colombia.</p></div>
     <div><b style="color:#fff">Explorar</b><p style="margin:8px 0 0"><a href="/soluciones" style="color:#bfdbfe">Soluciones</a><br><a href="/quienes-somos" style="color:#bfdbfe">Quiénes somos</a><br><a href="/eventos-virtuales" style="color:#bfdbfe">Eventos</a></p></div>
     <div><b style="color:#fff">Acceso</b><p style="margin:8px 0 0"><a href="/login" style="color:#bfdbfe">Instituciones (todos los roles)</a><br><a href="/familia-login" style="color:#bfdbfe">Portal familiar (padres)</a><br><a href="/ayuda" style="color:#bfdbfe">Centro de ayuda</a></p></div>
   </div>
@@ -6738,7 +6739,7 @@ def pagina_quienes_somos():
   </div>
 </div>
 """
-    return _public_shell("Quiénes somos · Procsis", body, "nosotros")
+    return _public_shell("Quiénes somos · PROCSIS", body, "nosotros")
 
 
 @app.route("/eventos-virtuales")
@@ -6832,7 +6833,7 @@ def pagina_trabaja_con_nosotros():
   </div>
 </div>
 """
-    return _public_shell("Trabaja con nosotros · Procsis", body, "nosotros")
+    return _public_shell("Trabaja con nosotros · PROCSIS", body, "nosotros")
 
 
 @app.route("/casos-exito")
@@ -6886,7 +6887,7 @@ def pagina_historias_decision():
   </div>
 </div>
 """
-    return _public_shell("Historias de decisión · Procsis", body, "nosotros")
+    return _public_shell("Historias de decisión · PROCSIS", body, "nosotros")
 
 
 def _politica_page(titulo, cuerpo):
@@ -6904,7 +6905,7 @@ def _politica_page(titulo, cuerpo):
         '<a href="/politicas/aviso-privacidad" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Aviso de privacidad</a>'
         "</div>" + cuerpo + "</div></div>"
     )
-    return _public_shell(titulo + " · Procsis", body, "nosotros")
+    return _public_shell(titulo + " · PROCSIS", body, "nosotros")
 
 
 @app.route("/politicas")
@@ -7159,7 +7160,7 @@ def login():
         slides_html += (
             f'<div class="sinai-slide" data-i="{i}">'
             f'<img src="{img}" alt="Slide {i+1}" loading="eager">'
-            f'<div class="sinai-slide-cap"><b>{cap}</b><span>EduTrack · Procsis</span></div>'
+            f'<div class="sinai-slide-cap"><b>{cap}</b><span>EduTrack · PROCSIS</span></div>'
             f"</div>"
         )
         dots_html += f'<button type="button" class="sinai-dot{" is-on" if i==0 else ""}" data-i="{i}" aria-label="Slide {i+1}"></button>'
@@ -7313,7 +7314,7 @@ def login():
     <div class="lp-topnav-inner">
       <a class="brand" href="/login">
         <img src="{datos['logo']}" alt="EduTrack">
-        <span>EduTrack · Procsis</span>
+        <span>EduTrack · PROCSIS</span>
       </a>
       <div class="lp-topnav-links">
         <a href="/procsis">Procsis</a>
@@ -7563,7 +7564,7 @@ def login():
 <footer class="corp-footer">
     <div class="corp-footer-inner">
       <div>
-        <div class="corp-footer-brand">EduTrack · Procsis</div>
+        <div class="corp-footer-brand">EduTrack · PROCSIS</div>
         <a href="/legal">Privacidad y protección de datos</a>
         <a href="/cookies">Cookies</a>
       </div>
@@ -7578,7 +7579,7 @@ def login():
         <p>Gestión académica multi-institucional para colegios de Colombia.</p>
       </div>
     </div>
-    <div class="corp-copy">© {anio} EduTrack · Procsis. Todos los derechos reservados.</div>
+    <div class="corp-copy">© {anio} EduTrack · PROCSIS. Todos los derechos reservados.</div>
   </footer>
 """)
 
@@ -7602,7 +7603,7 @@ def recuperar():
 </style>
 <div class="rec-wrap">
   <div class="rec-card">
-    <div class="rec-brand">EduTrack · Procsis</div>
+    <div class="rec-brand">EduTrack · PROCSIS</div>
     <h1>¿Tienes problemas para ingresar?</h1>
     <p>Por seguridad, <b>EduTrack no restablece contraseñas desde este formulario</b>. Comunícate con:</p>
     <ul>
@@ -14696,7 +14697,7 @@ def centro_ayuda():
       </ul>
     </div>
   </div>
-  <div class="ah-foot">EduTrack · Procsis — Centro de ayuda para instituciones educativas</div>
+  <div class="ah-foot">EduTrack · PROCSIS — Centro de ayuda para instituciones educativas</div>
 </div>
 """
     return page("Centro de ayuda", body)
@@ -14768,7 +14769,7 @@ def portal_whatsapp_soporte():
       Martes a viernes: {hor_sem}
     </div>
   </div>
-  <div class="w-foot">EduTrack · Procsis — Soporte para instituciones educativas</div>
+  <div class="w-foot">EduTrack · PROCSIS — Soporte para instituciones educativas</div>
 </div>
 """
     return page("WhatsApp Soporte", body)
@@ -25162,32 +25163,73 @@ def soporte_aprovisionamiento():
     mensaje = ""
     if request.method == "POST" and inst:
         accion = request.form.get("accion", "")
-        if accion == "limpiar_cache":
-            n = LoginChallenge.query.join(Usuario, LoginChallenge.usuario_id == Usuario.id).filter(
-                Usuario.institucion_id == inst.id
-            ).delete(synchronize_session=False)
-            db.session.commit()
-            mensaje = f"Caché de sesión limpiada: {n} reto(s) de login pendientes eliminados para {inst.codigo}."
-            registrar_auditoria("Aprovisionamiento: limpiar caché", f"{inst.codigo} — {n} retos eliminados")
-        elif accion == "resync_alumnos":
-            total = Estudiante.query.filter_by(institucion_id=inst.id).count()
-            inst.ultima_sincronizacion = f"{fecha_hoy()} {hora_actual()}"
-            db.session.commit()
-            mensaje = f"Base de alumnos re-sincronizada: {total} estudiante(s) verificados en {inst.codigo}."
-            registrar_auditoria("Aprovisionamiento: re-sync alumnos", f"{inst.codigo} — {total} estudiantes")
-        elif accion == "reset_permisos_docentes":
-            docentes = Usuario.query.filter_by(institucion_id=inst.id, rol="Docente").all()
-            n = 0
-            for d in docentes:
-                if not d.activo:
-                    d.activo = True
-                    n += 1
-            db.session.query(LoginChallenge).join(Usuario, LoginChallenge.usuario_id == Usuario.id).filter(
-                Usuario.institucion_id == inst.id, Usuario.rol == "Docente"
-            ).delete(synchronize_session=False)
-            db.session.commit()
-            mensaje = f"Permisos de profesores reiniciados: {len(docentes)} docente(s) revisados, {n} reactivado(s)."
-            registrar_auditoria("Aprovisionamiento: reset permisos docentes", f"{inst.codigo} — {n} reactivados")
+        try:
+            if accion == "limpiar_cache":
+                n = 0
+                try:
+                    # Borrar challenges de usuarios del colegio (compatible PG/SQLite)
+                    uids = [u.id for u in Usuario.query.filter_by(institucion_id=inst.id).all()]
+                    if uids:
+                        n = LoginChallenge.query.filter(LoginChallenge.usuario_id.in_(uids)).delete(synchronize_session=False)
+                    # También limpia session flags típicos
+                    db.session.commit()
+                except Exception as e1:
+                    db.session.rollback()
+                    print("limpiar_cache challenges:", e1)
+                    n = 0
+                    try:
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                mensaje = f"Caché de sesión limpiada para {inst.codigo}: {n} reto(s) de login eliminados. Los usuarios deberán volver a iniciar sesión con normalidad."
+                try:
+                    registrar_auditoria("Aprovisionamiento: limpiar caché", f"{inst.codigo} — {n} retos")
+                except Exception:
+                    pass
+            elif accion == "resync_alumnos":
+                total = Estudiante.query.filter_by(institucion_id=inst.id).count()
+                try:
+                    inst.ultima_sincronizacion = f"{fecha_hoy()} {hora_actual()}"
+                except Exception:
+                    pass
+                db.session.commit()
+                mensaje = f"Base de alumnos re-sincronizada: {total} estudiante(s) verificados en {inst.codigo}."
+                try:
+                    registrar_auditoria("Aprovisionamiento: re-sync alumnos", f"{inst.codigo} — {total}")
+                except Exception:
+                    pass
+            elif accion == "reset_permisos_docentes":
+                docentes = Usuario.query.filter(
+                    Usuario.institucion_id == inst.id,
+                    Usuario.rol.in_(["Docente", "DOCENTE"]),
+                ).all()
+                n = 0
+                for d in docentes:
+                    try:
+                        if hasattr(d, "activo") and not d.activo:
+                            d.activo = True
+                            n += 1
+                    except Exception:
+                        pass
+                try:
+                    uids = [d.id for d in docentes]
+                    if uids:
+                        LoginChallenge.query.filter(LoginChallenge.usuario_id.in_(uids)).delete(synchronize_session=False)
+                except Exception as e2:
+                    print("reset permisos challenges:", e2)
+                db.session.commit()
+                mensaje = f"Permisos de profesores reiniciados: {len(docentes)} docente(s) revisados, {n} reactivado(s)."
+                try:
+                    registrar_auditoria("Aprovisionamiento: reset permisos docentes", f"{inst.codigo} — {n}")
+                except Exception:
+                    pass
+        except Exception as e_post:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            mensaje = f"No se pudo completar la acción: {e_post}"
+            print("aprovisionamiento POST:", e_post)
 
     r_html = ""
     if q and not inst:
@@ -27590,7 +27632,7 @@ td.g{{background:#e8eef6;font-weight:800;color:#0B2D57}}
     {rows or '<tr><td colspan="7">Sin grupos</td></tr>'}
   </table>
   <div class="notes"><h3>Notas / acompañamiento</h3>{notas_p or '<p>Sin notas.</p>'}</div>
-  <div class="foot">{APP_NAME} · Documento institucional · Procsis</div>
+  <div class="foot">{APP_NAME} · Documento institucional · PROCSIS</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
@@ -28076,65 +28118,100 @@ def soporte_cancelaciones():
 
 @app.route("/docente-escritorio")
 def docente_escritorio():
-    """Escritorio docente elegante: notas, asistencia, estudiantes e IA."""
+    """Escritorio docente corporativo PROCSIS · EduTrack."""
     if not requiere_login():
         return redirect("/login")
     if rol_actual() not in ["Docente", "Administrador", "Rectoría", "Coordinación", "Soporte"]:
         return acceso_denegado()
     nombre = (session.get("usuario") or "Docente").upper()
+    try:
+        inst = get_institucion()
+        col_nom = (inst.nombre if inst else "") or "Institución"
+        sede = (getattr(inst, "sede", None) or "PRINCIPAL") if inst else "PRINCIPAL"
+    except Exception:
+        col_nom, sede = "Institución", "PRINCIPAL"
+    try:
+        per = (periodo_actual() or "").strip()
+        if per.lower().startswith("periodo"):
+            per_label = per
+        else:
+            per_label = ("Periodo " + per) if per else "Periodo actual"
+        per_label = per_label.replace("Periodo Periodo", "Periodo")
+    except Exception:
+        per_label = "Periodo actual"
+
     tools = [
-        ("/notas/planilla", "Notas", "Planilla por materia", "#2563eb"),
-        ("/notas/logros", "Logros", "Banco de logros", "#0ea5e9"),
-        ("/notas/refuerzos", "Refuerzos", "Recuperaciones", "#8b5cf6"),
-        ("/notas/ficha", "Ficha", "Seguimiento alumno", "#10b981"),
-        ("/notas/faltas", "Faltas", "Asistencia del día", "#f59e0b"),
-        ("/docente-movil", "Asistencia", "QR en aula", "#ef4444"),
-        ("/docente", "Grupo", "Lista por grado", "#f97316"),
-        ("/buscar_estudiantes", "Buscar", "Consultar alumno", "#64748b"),
-        ("/estudiantes_grupo", "Grupos", "Ver por grado", "#475569"),
-        ("/eduaura", "EduAura IA", "Alertas y apoyo", "#7c3aed"),
-        ("/horarios", "Horarios", "Mi jornada", "#0369a1"),
+        ("/notas/planilla", "Notas", "Planilla por materia", "#0B2D57", "N"),
+        ("/notas/logros", "Logros", "Banco de logros", "#0369a1", "L"),
+        ("/notas/refuerzos", "Refuerzos", "Recuperaciones", "#5b21b6", "R"),
+        ("/notas/ficha", "Ficha", "Seguimiento alumno", "#0f766e", "F"),
+        ("/notas/faltas", "Faltas", "Registro del día", "#b45309", "F"),
+        ("/docente-movil", "Asistencia QR", "Proyectar QR en aula", "#b91c1c", "A"),
+        ("/estudiantes_grupo", "Grupos", "Lista por grado", "#1e3a5f", "G"),
+        ("/buscar_estudiantes", "Buscar", "Consultar alumno", "#334155", "B"),
+        ("/eduaura", "EduAura IA", "Observaciones y riesgo de reprobación", "#6d28d9", "E"),
+        ("/horarios", "Horarios", "Mi jornada", "#0B2D57", "H"),
+        ("/pqr", "Soporte PROCSIS", "PQR docente · fallas técnicas", "#4c1d95", "P"),
     ]
-    if puede_componentes():
-        tools.insert(1, ("/notas/componentes", "Componentes", "Casillas de evaluación", "#1d4ed8"))
+    try:
+        if puede_componentes():
+            tools.insert(1, ("/notas/componentes", "Componentes", "Casillas de evaluación", "#1d4ed8", "C"))
+    except Exception:
+        pass
+
     cards = []
-    for url, titulo, desc, color in tools:
+    for url, titulo, desc, color, letra in tools:
         cards.append(
             '<a class="de-card" href="' + url + '">'
-            '<span class="de-ico" style="background:' + color + '">' + titulo[0] + '</span>'
+            '<span class="de-ico" style="background:' + color + '">' + letra + '</span>'
             '<b>' + titulo + '</b><small>' + desc + '</small></a>'
         )
     cards_html = "".join(cards)
     content = f"""
 <style>
-.de-hero{{background:linear-gradient(135deg,#0B2D57 0%,#1e40af 55%,#0ea5e9 100%);color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:18px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}}
-.de-hero h1{{margin:0;font-size:22px}}
-.de-hero p{{margin:6px 0 0;opacity:.9;font-size:13px}}
-.de-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}}
-.de-card{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:16px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;text-decoration:none;color:#0f172a;box-shadow:0 4px 14px rgba(15,23,42,.04);transition:.15s}}
-.de-card:hover{{transform:translateY(-2px);border-color:#93c5fd;box-shadow:0 10px 24px rgba(37,99,235,.12)}}
-.de-ico{{width:48px;height:48px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px}}
-.de-card b{{font-size:13px}}
-.de-card small{{font-size:11px;color:#64748b;line-height:1.2}}
+.de-wrap{{max-width:1100px;margin:0 auto}}
+.de-hero{{background:linear-gradient(135deg,#0B1220 0%,#0B2D57 50%,#1e3a5f 100%);color:#fff;border-radius:18px;padding:22px 24px;margin-bottom:16px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;border-top:4px solid #c9a227}}
+.de-hero h1{{margin:0;font-size:22px;letter-spacing:.02em}}
+.de-hero p{{margin:6px 0 0;opacity:.92;font-size:13px}}
+.de-hero .tag{{display:inline-block;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;margin-top:8px}}
+.de-actions{{display:flex;gap:8px;flex-wrap:wrap}}
+.de-actions a{{background:#fff;color:#0B2D57;padding:10px 14px;border-radius:10px;font-weight:800;text-decoration:none;font-size:13px}}
+.de-actions a.sec{{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25)}}
+.de-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}}
+.de-card{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:16px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;text-decoration:none;color:#0f172a;box-shadow:0 4px 14px rgba(15,23,42,.05);transition:.15s;min-height:120px}}
+.de-card:hover{{transform:translateY(-2px);border-color:#93c5fd;box-shadow:0 10px 24px rgba(11,45,87,.12)}}
+.de-ico{{width:48px;height:48px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px}}
+.de-card b{{font-size:13px;color:#0B2D57}}
+.de-card small{{font-size:11px;color:#64748b;line-height:1.3}}
+.de-foot{{margin-top:16px;text-align:center;font-size:12px;color:#94a3b8}}
+.de-tip{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#334155}}
+.de-tip b{{color:#0B2D57}}
 </style>
-<div class="de-hero">
-  <div>
-    <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.85">Escritorio docente</div>
-    <h1>{nombre}</h1>
-    <p>{INST_NOMBRE} · Sede {INST_SEDE} · Periodo {periodo_actual()}</p>
+<div class="de-wrap">
+  <div class="de-hero">
+    <div>
+      <div style="font-size:11px;opacity:.85;letter-spacing:.08em;text-transform:uppercase">Escritorio docente</div>
+      <h1>{_esc(nombre)}</h1>
+      <p>{_esc(col_nom)} · Sede {_esc(sede)} · {_esc(per_label)}</p>
+      <span class="tag">EduTrack · PROCSIS</span>
+    </div>
+    <div class="de-actions">
+      <a href="/notas/planilla">Abrir planilla</a>
+      <a class="sec" href="/docente-movil">Asistencia QR</a>
+    </div>
   </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <a class="btn" href="/notas/planilla" style="background:#fff;color:#0B2D57">Abrir planilla</a>
-    <a class="btn" href="/docente-movil" style="background:#fbbf24;color:#0f172a">Asistencia QR</a>
+  <div class="de-tip">
+    <b>EduAura IA</b> le ayuda a redactar observaciones pedagógicas y a detectar estudiantes en riesgo de reprobación.
+    Use <b>Asistencia QR</b> para proyectar un código grande en el tablero y marcar el ingreso al aula en segundos.
+    Si tiene una falla técnica con notas o permisos, abra <b>Soporte PROCSIS</b> (PQR docente) sin salir del panel.
   </div>
+  <div class="de-grid">{cards_html}</div>
+  <p class="de-foot">PROCSIS · EduTrack — Gestión académica institucional</p>
 </div>
-<div class="de-grid">{cards_html}</div>
-<p class="mini-text" style="margin-top:14px">Notas por materia, asistencia, estudiantes e IA. En la planilla, al desplazar horizontalmente, N° / Código / Estudiante quedan fijos.</p>
 """
     return page("Escritorio docente", shell(content))
 
 
-@app.route("/notas")
 def notas_hub():
     """Centro de notas rediseñado: simple para docentes y completo para directivos."""
     if not requiere_login():
@@ -28917,7 +28994,7 @@ def notas_boletin_pdf(id):
     y -= 16
     pdf.setFont("Helvetica", 6)
     pdf.setFillColor(colors.HexColor("#555555"))
-    pdf.drawCentredString(w / 2, 28, f"EduTrack · Procsis  ·  Generado {ahora().strftime('%d/%m/%Y %H:%M')}  ·  Documento informativo institucional")
+    pdf.drawCentredString(w / 2, 28, f"EduTrack · PROCSIS  ·  Generado {ahora().strftime('%d/%m/%Y %H:%M')}  ·  Documento informativo institucional")
 
     pdf.save()
     buf.seek(0)
@@ -29084,7 +29161,7 @@ def notas_informe_final_pdf(id):
     pdf.drawString(24, y, "Firma director de grupo")
     pdf.drawString(280, y, "Firma rectoría")
     pdf.setFont("Helvetica", 6)
-    pdf.drawCentredString(w / 2, 16, "EduTrack · Informe final de desempeño · Procsis")
+    pdf.drawCentredString(w / 2, 16, "EduTrack · Informe final de desempeño · PROCSIS")
     pdf.save()
     buf.seek(0)
     return send_file(buf, as_attachment=True, download_name=f"informe_final_{e.codigo}_{ahora().year}.pdf", mimetype="application/pdf")
@@ -29158,7 +29235,7 @@ def ficha_estudiante_pdf(id):
     pdf.setFont("Helvetica", 9)
     pdf.drawCentredString(w / 2, y - 200, f"Sede: {sede}")
     pdf.drawCentredString(w / 2, y - 216, f"Año lectivo: {ahora().year}")
-    pdf.drawCentredString(w / 2, y - 240, "EduTrack · Procsis")
+    pdf.drawCentredString(w / 2, y - 240, "EduTrack · PROCSIS")
     pdf.showPage()
 
     # ---- HOJA 2: Información del estudiante ----
@@ -29284,7 +29361,7 @@ def ficha_estudiante_pdf(id):
                 pdf.showPage()
                 y = h - 50
     pdf.setFont("Helvetica", 7)
-    pdf.drawCentredString(w / 2, 30, "EduTrack · Ficha del estudiante · Procsis")
+    pdf.drawCentredString(w / 2, 30, "EduTrack · Ficha del estudiante · PROCSIS")
     pdf.save()
     buf.seek(0)
     return send_file(buf, as_attachment=True, download_name=f"ficha_{e.codigo}.pdf", mimetype="application/pdf")
@@ -31916,7 +31993,7 @@ def _pdf_pre_matricula(pm, inst=None):
     pdf.drawString(50, y - 12, "Firma acudiente")
     pdf.drawString(320, y - 12, "Sello / Secretaría")
     pdf.setFont("Helvetica", 8)
-    pdf.drawString(40, 36, "EduTrack · Procsis · Tecnología para una educación moderna y responsable")
+    pdf.drawString(40, 36, "EduTrack · PROCSIS · Tecnología para una educación moderna y responsable")
     pdf.save()
     b.seek(0)
     return b
@@ -33954,7 +34031,7 @@ def soporte_config_notas():
             "efp_minima": (request.form.get("efp_minima") or "3.0").strip(),
             "nota_minima_aprueba": (request.form.get("nota_minima_aprueba") or "3.0").strip(),
             "boletin_titulo": (request.form.get("boletin_titulo") or "Informe Periódico de Desempeño").strip()[:120],
-            "boletin_footer": (request.form.get("boletin_footer") or "EduTrack · Procsis").strip()[:160],
+            "boletin_footer": (request.form.get("boletin_footer") or "EduTrack · PROCSIS").strip()[:160],
         }
         # persist as JSON-ish in plataforma.notas under marker
         import json
@@ -33982,7 +34059,7 @@ def soporte_config_notas():
         "efp_minima": "3.0",
         "nota_minima_aprueba": "3.0",
         "boletin_titulo": "Informe Periódico de Desempeño",
-        "boletin_footer": "EduTrack · Procsis",
+        "boletin_footer": "EduTrack · PROCSIS",
     }
     try:
         import json, re
@@ -37834,7 +37911,7 @@ def soporte_reinicio_acceso():
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
 {"<div class='msg' style='color:#b91c1c'>"+_esc(error)+"</div>" if error else ""}
 <div class="w32-box">
-  <div class="w32-title">Reinicio de acceso · Procsis</div>
+  <div class="w32-title">Reinicio de acceso · PROCSIS</div>
   <div class="w32-field">
     <b>IP actual:</b> {_esc(ip_actual)}
     <form method="POST" style="margin-top:8px">
