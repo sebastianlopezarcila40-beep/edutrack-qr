@@ -1818,6 +1818,49 @@ class LoginChallenge(db.Model):
     foto_validacion = db.Column(db.String(300), default="")
 
 
+
+class WatiConfig(db.Model):
+    """Credenciales WATI / WhatsApp Business (configurables desde Gerencia)."""
+    __tablename__ = "wati_config"
+    id = db.Column(db.Integer, primary_key=True)
+    endpoint = db.Column(db.String(300), default="")
+    token_enc = db.Column(db.Text, default="")  # token cifrado
+    numero_conectado = db.Column(db.String(40), default="")
+    estado = db.Column(db.String(30), default="DESCONECTADO")  # CONECTADO | DESCONECTADO | ERROR
+    ultimo_check = db.Column(db.String(30), default="")
+    ultimo_error = db.Column(db.String(300), default="")
+    actualizado_por = db.Column(db.String(120), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
+class WhatsAppChat(db.Model):
+    """Conversación WhatsApp (cliente ↔ mesa PROCSIS)."""
+    __tablename__ = "whatsapp_chats"
+    id = db.Column(db.Integer, primary_key=True)
+    telefono = db.Column(db.String(40), nullable=False, index=True)  # E.164 sin +
+    nombre = db.Column(db.String(160), default="")
+    foto_url = db.Column(db.String(400), default="")
+    ultimo_mensaje = db.Column(db.String(500), default="")
+    ultimo_en = db.Column(db.String(30), default="", index=True)
+    no_leidos = db.Column(db.Integer, default=0)
+    canal = db.Column(db.String(20), default="soporte")  # soporte | ventas
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    activo = db.Column(db.Boolean, default=True)
+
+
+class WhatsAppMensaje(db.Model):
+    """Mensaje individual de un chat WhatsApp."""
+    __tablename__ = "whatsapp_mensajes"
+    id = db.Column(db.Integer, primary_key=True)
+    chat_id = db.Column(db.Integer, db.ForeignKey("whatsapp_chats.id"), nullable=False, index=True)
+    direccion = db.Column(db.String(10), default="in")  # in | out
+    texto = db.Column(db.Text, default="")
+    wati_id = db.Column(db.String(80), default="")
+    estado = db.Column(db.String(20), default="enviado")  # enviado | entregado | leido | error
+    asesor = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="", index=True)
+
+
 class AccesoExtraordinario(db.Model):
     """Autorización temporal para entrar fuera de horario laboral."""
     __tablename__ = "accesos_extraordinarios"
@@ -25727,6 +25770,7 @@ def _modulos_por_rol(rol):
         ("Nueva institución", "/nueva_institucion", "#15803d"),
         ("Bloqueo y Seguridad", "/soporte/info-institucional", "#dc2626"),
         ("Centro PQR / tickets", "/soporte/pqr", "#1d4ed8"),
+        ("💬 Inbox WhatsApp", "/whatsapp/inbox?canal=soporte", "#25D366"),
         ("Radicar PQR interna", "/soporte/pqr/crear", "#1d4ed8"),
         ("Consulta PQR validada", "/soporte/pqr/consulta", "#1d4ed8"),
         ("💙 Fidelización CSAT", "/soporte/fidelizacion", "#0d9488"),
@@ -25747,6 +25791,7 @@ def _modulos_por_rol(rol):
         ("Registrar institución", "/ventas/comprar", "#dc2626"),
         ("Verificación de identidad · Rector", "/ventas/verificacion", "#7c2d12"),
         ("Notas de cliente", "/notas-cliente", "#0f766e"),
+        ("💬 Inbox WhatsApp", "/whatsapp/inbox?canal=ventas", "#25D366"),
         ("💙 Fidelización CSAT", "/ventas/fidelizacion", "#0d9488"),
         ("Historial de comisiones", "/ventas/comisiones", "#0f766e"),
         ("Propuesta comercial (PDF)", "/ventas/propuesta-pdf", "#b45309"),
@@ -25769,6 +25814,7 @@ def _modulos_por_rol(rol):
         ("💳 Facturación y Cobranza", "/gerencia/facturacion-cobranza", "#b45309"),
         ("📧 Correo de Soporte", "/gerencia/correo-soporte", "#0f766e"),
         ("📧 Correo de Notificaciones", "/gerencia/correo-notificaciones", "#0f766e"),
+        ("🔌 Mesa de Conexión API (WATI)", "/gerencia/wati-conexion", "#25D366"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Facturación", "/gerencia/facturacion", "#0B2D57"),
         ("Gastos", "/gerencia/gastos", "#0B2D57"),
@@ -40959,6 +41005,504 @@ def pagina_tecnologia_edutrack():
 </div>
 """
     return page("Tecnología EduTrack", body)
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WhatsApp / WATI — Mesa de Conexión (Gerencia) + Inbox (Soporte / Ventas)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _wati_fernet():
+    """Clave Fernet derivada del secret_key de la app (cifrado de token)."""
+    try:
+        from cryptography.fernet import Fernet
+        import base64, hashlib
+        raw = (app.secret_key or "edutrack-wati").encode("utf-8")
+        key = base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
+        return Fernet(key)
+    except Exception:
+        return None
+
+
+def _wati_encrypt(token: str) -> str:
+    token = (token or "").strip()
+    if not token:
+        return ""
+    f = _wati_fernet()
+    if not f:
+        # fallback reversible simple (no ideal, pero evita texto plano obvio)
+        import base64
+        return "b64:" + base64.b64encode(token.encode("utf-8")).decode("ascii")
+    return f.encrypt(token.encode("utf-8")).decode("ascii")
+
+
+def _wati_decrypt(token_enc: str) -> str:
+    token_enc = (token_enc or "").strip()
+    if not token_enc:
+        return ""
+    if token_enc.startswith("b64:"):
+        import base64
+        try:
+            return base64.b64decode(token_enc[4:].encode("ascii")).decode("utf-8")
+        except Exception:
+            return ""
+    f = _wati_fernet()
+    if not f:
+        return ""
+    try:
+        return f.decrypt(token_enc.encode("ascii")).decode("utf-8")
+    except Exception:
+        return ""
+
+
+def _wati_get_config():
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    cfg = WatiConfig.query.order_by(WatiConfig.id.asc()).first()
+    if not cfg:
+        cfg = WatiConfig()
+        db.session.add(cfg)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            cfg = WatiConfig.query.first()
+    return cfg
+
+
+def _wati_api_headers(token: str):
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+
+def _wati_normalize_endpoint(endpoint: str) -> str:
+    e = (endpoint or "").strip().rstrip("/")
+    return e
+
+
+def _wati_verify_connection(endpoint: str, token: str):
+    """Prueba rápida contra WATI. Devuelve (ok: bool, detalle: str)."""
+    import urllib.request
+    import urllib.error
+    import json as _json
+    endpoint = _wati_normalize_endpoint(endpoint)
+    if not endpoint or not token:
+        return False, "Endpoint y token son obligatorios"
+    # Varias rutas habituales de health/getContacts en WATI
+    candidates = [
+        f"{endpoint}/api/v1/getContacts?pageSize=1",
+        f"{endpoint}/api/v1/getMessageTemplates",
+        endpoint,
+    ]
+    last_err = ""
+    for url in candidates:
+        try:
+            req = urllib.request.Request(url, headers=_wati_api_headers(token), method="GET")
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                code = getattr(resp, "status", 200)
+                if 200 <= int(code) < 300:
+                    return True, f"OK HTTP {code}"
+                last_err = f"HTTP {code}"
+        except urllib.error.HTTPError as he:
+            last_err = f"HTTP {he.code}"
+            # 401/403 = credenciales malas; otras rutas pueden 404
+            if he.code in (401, 403):
+                return False, f"No autorizado ({he.code}). Revise el token."
+            if he.code == 404:
+                continue
+        except Exception as ex:
+            last_err = str(ex)[:180]
+    return False, last_err or "No se pudo verificar"
+
+
+def _wati_send_text(telefono: str, texto: str):
+    """Envía mensaje de sesión por WATI. Devuelve (ok, wati_id_or_error)."""
+    import urllib.request
+    import urllib.error
+    import json as _json
+    cfg = _wati_get_config()
+    if not cfg or (cfg.estado or "") != "CONECTADO":
+        return False, "API WATI no conectada. Configure en Gerencia → Mesa de Conexión API."
+    token = _wati_decrypt(cfg.token_enc)
+    endpoint = _wati_normalize_endpoint(cfg.endpoint)
+    tel = "".join(ch for ch in str(telefono or "") if ch.isdigit())
+    if not tel or not texto:
+        return False, "Teléfono o texto vacío"
+    # WATI: POST /api/v1/sendSessionMessage/{whatsappNumber}
+    url = f"{endpoint}/api/v1/sendSessionMessage/{tel}"
+    body = _json.dumps({"messageText": texto}).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=body, headers=_wati_api_headers(token), method="POST")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode("utf-8", errors="ignore")
+            try:
+                data = _json.loads(raw) if raw else {}
+            except Exception:
+                data = {}
+            mid = str(data.get("messageId") or data.get("id") or data.get("result") or "ok")
+            return True, mid
+    except urllib.error.HTTPError as he:
+        err_body = ""
+        try:
+            err_body = he.read().decode("utf-8", errors="ignore")[:200]
+        except Exception:
+            pass
+        return False, f"HTTP {he.code}: {err_body or he.reason}"
+    except Exception as ex:
+        return False, str(ex)[:200]
+
+
+def _wa_now():
+    try:
+        return f"{fecha_hoy()} {hora_actual()}"
+    except Exception:
+        from datetime import datetime as _dt
+        return _dt.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _wa_upsert_chat(telefono, nombre="", texto="", direccion="in", canal="soporte"):
+    tel = "".join(ch for ch in str(telefono or "") if ch.isdigit())
+    if not tel:
+        return None
+    chat = WhatsAppChat.query.filter_by(telefono=tel).first()
+    if not chat:
+        chat = WhatsAppChat(telefono=tel, nombre=nombre or tel, canal=canal)
+        db.session.add(chat)
+    if nombre:
+        chat.nombre = nombre
+    if texto:
+        chat.ultimo_mensaje = (texto or "")[:500]
+        chat.ultimo_en = _wa_now()
+        if direccion == "in":
+            chat.no_leidos = int(chat.no_leidos or 0) + 1
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return chat
+
+
+@app.route("/gerencia/wati-conexion", methods=["GET", "POST"])
+def gerencia_wati_conexion():
+    """Mesa de Conexión API WATI — solo Gerencia / Superadmin."""
+    if not requiere_login():
+        return redirect("/gerencia-login")
+    if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        return acceso_denegado("Solo Gerencia configura la API de WhatsApp.")
+    cfg = _wati_get_config()
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "guardar").strip()
+        if accion == "desconectar":
+            cfg.estado = "DESCONECTADO"
+            cfg.ultimo_error = ""
+            cfg.actualizado_por = session.get("usuario") or ""
+            cfg.actualizado_en = _wa_now()
+            db.session.commit()
+            msg = "API desconectada."
+        else:
+            endpoint = (request.form.get("wati_api_endpoint") or "").strip()
+            token = (request.form.get("wati_auth_token") or "").strip()
+            numero = (request.form.get("numero_conectado") or "").strip()
+            if not endpoint or not token or not numero:
+                err = "Complete Endpoint, Token y Número conectado."
+            else:
+                ok, detalle = _wati_verify_connection(endpoint, token)
+                cfg.endpoint = endpoint
+                if token and not token.startswith("••••"):
+                    cfg.token_enc = _wati_encrypt(token)
+                cfg.numero_conectado = numero
+                cfg.ultimo_check = _wa_now()
+                cfg.actualizado_por = session.get("usuario") or ""
+                cfg.actualizado_en = _wa_now()
+                if ok:
+                    cfg.estado = "CONECTADO"
+                    cfg.ultimo_error = ""
+                    msg = f"Estado: CONECTADO Y TRANSMITIENDO · {detalle}"
+                    try:
+                        registrar_auditoria("WATI conectado", f"{numero} · {endpoint[:60]}")
+                    except Exception:
+                        pass
+                else:
+                    cfg.estado = "ERROR"
+                    cfg.ultimo_error = detalle
+                    err = f"No se pudo verificar la API: {detalle}"
+                db.session.commit()
+    conectado = (cfg.estado or "") == "CONECTADO"
+    token_mask = "••••••••" if (cfg.token_enc or "") else ""
+    content = f"""
+<style>
+.wa-box{{max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px;box-shadow:0 8px 24px rgba(15,23,42,.06)}}
+.wa-box label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:12px 0 4px}}
+.wa-box input{{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-size:14px}}
+.wa-status{{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-weight:800;font-size:13px}}
+.wa-on{{background:#dcfce7;color:#15803d}}
+.wa-off{{background:#fee2e2;color:#b91c1c}}
+.wa-err{{background:#fff7ed;color:#c2410c}}
+</style>
+<header class="role-hero"><div>
+  <h1>Mesa de Conexión API · WATI</h1>
+  <p>Enchufe de WhatsApp Business. Las credenciales se guardan cifradas — no van en el código de Railway.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<div class="wa-box">
+  <div style="margin-bottom:14px">
+    {"<span class='wa-status wa-on'>● ESTADO: CONECTADO Y TRANSMITIENDO</span>" if conectado else ""}
+    {"<span class='wa-status wa-off'>● ESTADO: DESCONECTADO</span>" if (cfg.estado or '')=='DESCONECTADO' else ""}
+    {"<span class='wa-status wa-err'>● ESTADO: ERROR DE CONEXIÓN</span>" if (cfg.estado or '')=='ERROR' else ""}
+  </div>
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  {"<p class='mini-text' style='color:#b91c1c'>Último error: "+_esc(cfg.ultimo_error or "")+"</p>" if cfg.ultimo_error else ""}
+  <form method="POST">
+    <input type="hidden" name="accion" value="guardar">
+    <label>WATI_API_ENDPOINT *</label>
+    <input name="wati_api_endpoint" required placeholder="https://live-server.wati.io/XXXX" value="{_esc(cfg.endpoint or '')}">
+    <label>WATI_AUTH_TOKEN * (Bearer)</label>
+    <input name="wati_auth_token" required placeholder="Token de autorización WATI" value="{token_mask}" autocomplete="off">
+    <p class="mini-text">Si deja los puntos, se conserva el token actual. Pegue uno nuevo solo para cambiarlo.</p>
+    <label>NUMERO_CONECTADO * (celular corporativo)</label>
+    <input name="numero_conectado" required placeholder="57300XXXXXXX" value="{_esc(cfg.numero_conectado or '')}">
+    <button type="submit" style="margin-top:16px;width:100%;background:#25D366;color:#fff;border:0;padding:12px;border-radius:10px;font-weight:800;cursor:pointer">
+      🔌 Verificar y Conectar API
+    </button>
+  </form>
+  <form method="POST" style="margin-top:10px">
+    <input type="hidden" name="accion" value="desconectar">
+    <button type="submit" style="width:100%;background:#e2e8f0;color:#0f172a;border:0;padding:10px;border-radius:10px;font-weight:700;cursor:pointer">Desconectar</button>
+  </form>
+  <p class="mini-text" style="margin-top:14px">
+    Última verificación: {_esc(cfg.ultimo_check or "—")} · Por: {_esc(cfg.actualizado_por or "—")}<br>
+    Webhook de entrada (WATI → EduTrack): <code>{_esc((os.environ.get("APP_BASE_URL") or request.host_url.rstrip("/")))}/api/webhooks/wati</code>
+  </p>
+</div>
+"""
+    return page("Mesa de Conexión API", shell(content))
+
+
+@app.route("/whatsapp/inbox")
+def whatsapp_inbox():
+    """Clon visual de WhatsApp Web para Soporte y Ventas."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Soporte", "Comercial", "Ventas", "Gerente", "Superadmin", "Administrador"):
+        return acceso_denegado("Solo mesa de soporte / ventas.")
+    canal = (request.args.get("canal") or "soporte").strip().lower()
+    if canal not in ("soporte", "ventas"):
+        canal = "soporte"
+    chat_id = request.args.get("chat", type=int)
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    cfg = _wati_get_config()
+    conectado = (cfg.estado or "") == "CONECTADO"
+    chats = (
+        WhatsAppChat.query.filter_by(activo=True)
+        .order_by(WhatsAppChat.ultimo_en.desc())
+        .limit(80)
+        .all()
+    )
+    # Prefer canal but show all if few
+    chats_canal = [c for c in chats if (c.canal or "soporte") == canal] or chats
+    activo = None
+    mensajes = []
+    if chat_id:
+        activo = WhatsAppChat.query.get(chat_id)
+        if activo:
+            mensajes = (
+                WhatsAppMensaje.query.filter_by(chat_id=activo.id)
+                .order_by(WhatsAppMensaje.id.asc())
+                .limit(200)
+                .all()
+            )
+            if int(activo.no_leidos or 0) > 0:
+                activo.no_leidos = 0
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+    lista = ""
+    for c in chats_canal:
+        on = " on" if activo and activo.id == c.id else ""
+        badge = f"<span class='wa-badge'>{int(c.no_leidos)}</span>" if int(c.no_leidos or 0) > 0 else ""
+        inicial = (c.nombre or c.telefono or "?")[:1].upper()
+        lista += f"""
+        <a class="wa-item{on}" href="/whatsapp/inbox?canal={canal}&chat={c.id}">
+          <div class="wa-avatar">{_esc(inicial)}</div>
+          <div class="wa-meta">
+            <div class="wa-name">{_esc(c.nombre or c.telefono)} {badge}</div>
+            <div class="wa-preview">{_esc((c.ultimo_mensaje or "")[:60])}</div>
+          </div>
+          <div class="wa-time">{_esc((c.ultimo_en or "")[-8:])}</div>
+        </a>"""
+    if not lista:
+        lista = "<div class='wa-empty'>Sin conversaciones aún. Llegarán aquí cuando un padre o rector escriba al número conectado.</div>"
+    burbujas = ""
+    for m in mensajes:
+        cls = "out" if m.direccion == "out" else "in"
+        burbujas += f"""
+        <div class="wa-bubble {cls}">
+          <div class="wa-txt">{_esc(m.texto or "")}</div>
+          <div class="wa-ts">{_esc(m.creado_en or "")}{" · "+_esc(m.asesor) if m.asesor else ""}</div>
+        </div>"""
+    if activo and not burbujas:
+        burbujas = "<div class='wa-empty'>Sin mensajes en este chat.</div>"
+    if not activo:
+        burbujas = "<div class='wa-empty'>Seleccione un chat a la izquierda para responder.</div>"
+    volver = "/soporte_admin" if canal == "soporte" else "/ventas/panel"
+    content = f"""
+<style>
+.wa-app{{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 120px);min-height:480px;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;background:#fff;font-family:Segoe UI,system-ui,sans-serif}}
+@media(max-width:800px){{.wa-app{{grid-template-columns:1fr;height:auto}}}}
+.wa-left{{border-right:1px solid #e2e8f0;background:#f8fafc;display:flex;flex-direction:column}}
+.wa-left-h{{padding:12px 14px;background:#0B2D57;color:#fff;font-weight:800}}
+.wa-list{{overflow-y:auto;flex:1}}
+.wa-item{{display:flex;gap:10px;padding:12px 14px;text-decoration:none;color:#0f172a;border-bottom:1px solid #e2e8f0;align-items:center}}
+.wa-item:hover,.wa-item.on{{background:#e0f2fe}}
+.wa-avatar{{width:42px;height:42px;border-radius:50%;background:#0B2D57;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}}
+.wa-meta{{flex:1;min-width:0}}
+.wa-name{{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}}
+.wa-preview{{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.wa-time{{font-size:10px;color:#94a3b8}}
+.wa-badge{{background:#25D366;color:#fff;border-radius:999px;font-size:10px;font-weight:800;padding:2px 6px}}
+.wa-right{{display:flex;flex-direction:column;background:#ece5dd}}
+.wa-right-h{{padding:12px 16px;background:#0B2D57;color:#fff;font-weight:700}}
+.wa-thread{{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}}
+.wa-bubble{{max-width:75%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4}}
+.wa-bubble.in{{align-self:flex-start;background:#fff;border-top-left-radius:2px}}
+.wa-bubble.out{{align-self:flex-end;background:#dbeafe;border-top-right-radius:2px;color:#0B2D57}}
+.wa-ts{{font-size:10px;color:#94a3b8;margin-top:4px;text-align:right}}
+.wa-compose{{display:flex;gap:8px;padding:10px;background:#f0f2f5;border-top:1px solid #e2e8f0}}
+.wa-compose input{{flex:1;padding:12px 14px;border:0;border-radius:24px;font-size:14px}}
+.wa-compose button{{background:#0B2D57;color:#fff;border:0;border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer}}
+.wa-empty{{padding:24px;color:#64748b;text-align:center;font-size:13px}}
+.wa-banner{{padding:8px 12px;font-size:12px;font-weight:700}}
+.wa-banner.on{{background:#dcfce7;color:#15803d}}
+.wa-banner.off{{background:#fee2e2;color:#b91c1c}}
+</style>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+  <div>
+    <h1 style="margin:0;font-size:20px;color:#0B2D57">Inbox WhatsApp · {canal.upper()}</h1>
+    <p class="mini-text" style="margin:4px 0 0">Respuestas de la mesa PROCSIS vía WATI</p>
+  </div>
+  <div>
+    <a class="btn" href="{volver}">← Volver</a>
+    {"<a class='btn' href='/gerencia/wati-conexion' style='background:#25D366'>API</a>" if rol_actual() in ("Gerente","Superadmin","Administrador") else ""}
+  </div>
+</div>
+<div class="wa-banner {"on" if conectado else "off"}">
+  {"● API CONECTADA · " + _esc(cfg.numero_conectado or "") if conectado else "● API DESCONECTADA — configure en Gerencia → Mesa de Conexión API"}
+</div>
+<div class="wa-app">
+  <div class="wa-left">
+    <div class="wa-left-h">Chats activos</div>
+    <div class="wa-list">{lista}</div>
+  </div>
+  <div class="wa-right">
+    <div class="wa-right-h">{_esc((activo.nombre if activo else "Conversación") or "")} {"· +"+_esc(activo.telefono) if activo else ""}</div>
+    <div class="wa-thread" id="wa-thread">{burbujas}</div>
+    {"<form class='wa-compose' method='POST' action='/whatsapp/enviar'><input type='hidden' name='chat_id' value='"+str(activo.id)+"'><input type='hidden' name='canal' value='"+canal+"'><input name='texto' placeholder='Escriba un mensaje' required autocomplete='off'><button type='submit' title='Enviar'>✈</button></form>" if activo and conectado else ("<div class='wa-empty'>Conecte la API para responder.</div>" if activo else "")}
+  </div>
+</div>
+<script>var t=document.getElementById('wa-thread'); if(t) t.scrollTop=t.scrollHeight;</script>
+"""
+    return page("Inbox WhatsApp", shell(content))
+
+
+@app.route("/whatsapp/enviar", methods=["POST"])
+def whatsapp_enviar():
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Soporte", "Comercial", "Ventas", "Gerente", "Superadmin", "Administrador"):
+        return acceso_denegado()
+    chat_id = request.form.get("chat_id", type=int)
+    texto = (request.form.get("texto") or "").strip()
+    canal = (request.form.get("canal") or "soporte").strip()
+    chat = WhatsAppChat.query.get(chat_id) if chat_id else None
+    if not chat or not texto:
+        return redirect(f"/whatsapp/inbox?canal={canal}")
+    ok, mid = _wati_send_text(chat.telefono, texto)
+    msg = WhatsAppMensaje(
+        chat_id=chat.id,
+        direccion="out",
+        texto=texto,
+        wati_id=str(mid)[:80],
+        estado="enviado" if ok else "error",
+        asesor=session.get("usuario") or "",
+        creado_en=_wa_now(),
+    )
+    db.session.add(msg)
+    chat.ultimo_mensaje = texto[:500]
+    chat.ultimo_en = _wa_now()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    if not ok:
+        flash_msg = mid
+        # still redirect; error visible if we stored estado
+        print("wati send error:", mid)
+    return redirect(f"/whatsapp/inbox?canal={canal}&chat={chat.id}")
+
+
+@app.route("/api/webhooks/wati", methods=["GET", "POST"])
+def api_webhooks_wati():
+    """Webhook público para mensajes entrantes de WATI."""
+    if request.method == "GET":
+        return jsonify({"ok": True, "service": "edutrack-wati-webhook"}), 200
+    data = request.get_json(silent=True) or {}
+    # WATI payload shapes vary; try common fields
+    texto = (
+        data.get("text")
+        or data.get("message")
+        or (data.get("payload") or {}).get("text")
+        or data.get("waText")
+        or ""
+    )
+    if isinstance(texto, dict):
+        texto = texto.get("body") or texto.get("text") or str(texto)
+    telefono = (
+        data.get("waId")
+        or data.get("whatsappNumber")
+        or data.get("from")
+        or data.get("sender")
+        or (data.get("payload") or {}).get("sender")
+        or ""
+    )
+    nombre = data.get("senderName") or data.get("name") or ""
+    if not telefono:
+        # sometimes nested
+        telefono = str((data.get("contact") or {}).get("wa_id") or "")
+    telefono = "".join(ch for ch in str(telefono) if ch.isdigit())
+    if not telefono:
+        return jsonify({"ok": False, "error": "sin telefono"}), 400
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    chat = _wa_upsert_chat(telefono, nombre=nombre, texto=str(texto)[:500], direccion="in", canal="soporte")
+    if chat and texto:
+        db.session.add(WhatsAppMensaje(
+            chat_id=chat.id,
+            direccion="in",
+            texto=str(texto)[:4000],
+            wati_id=str(data.get("id") or data.get("messageId") or "")[:80],
+            estado="recibido",
+            creado_en=_wa_now(),
+        ))
+        try:
+            db.session.commit()
+        except Exception as ex:
+            db.session.rollback()
+            print("wati webhook save:", ex)
+    return jsonify({"ok": True})
+
 
 
 if __name__ == "__main__":
