@@ -2146,9 +2146,9 @@ def footer():
 def menu_items_por_rol():
     """
     Matriz limpia por rol (colegio):
-    - Rectoría: dirección — reportes, alertas, consulta, novedades, citaciones, licencia
+    - Rectoría: control y estrategia — PQR, reportes MEN, documentos, licencia, convivencia (ver), notas/horarios solo lectura
     - Coordinación: convivencia — novedades, citaciones, ingreso QR/manual, grupos, notas (ver/imprimir), reportes, alertas
-    - Secretaría: matrícula — estudiantes, carné, Excel/SIMAT, listas, admisiones, notas (ver/imprimir)
+    - Secretaría: operación — matrícula, citaciones, periodos/cierres, sedes, alertas, notas (ver/imprimir). NO vaciar BD
     - Docente: aula — escritorio, planilla (editar sus materias), asistencia, buscar en sus grupos
     - (Sin Administrador operativo) Usuarios y config sensible: solo Soporte
     - Soporte: multi-colegio, sedes, auditoría (código), marca, PQR
@@ -2201,39 +2201,28 @@ def menu_items_por_rol():
         ]
 
     elif rol == "Rectoría":
+        # Control y estrategia: monitorear y firmar (sin digitar notas ni operar matrícula)
         items += [
-            ("/periodo", "Cambiar periodo"),
-            ("/estudiantes/retirados", "Estudiantes retirados"),
-            ("/estudiantes/eliminar_todos", "Vaciar estudiantes"),
-            ("/roles_institucion", "Roles y permisos"),
-            ("/reportes", "Reportes"),
-            ("/reportes_padres", "Reportes padres"),
-            ("/panel_convivencia", "Convivencia"),
-            ("/convivencia/nueva", "Registrar falta"),
-            ("/sedes", "Sedes del colegio"),
-            ("/cierres-periodo", "Cierre de periodos"),
-            ("/secretaria/documentos", "📜 Documentos legales y reportes MEN"),
-            ("/soporte/logs-notas", "Auditoría de notas"),
-            ("/rectoria/tareas", "Monitoreo tareas"),
-            ("/alertas", "Alertas / estadísticas"),
-            ("/buscar_estudiantes", "Buscar estudiante"),
-            ("/secretaria/editar-estudiante", "✏️ Editar estudiante"),
-            ("/secretaria/retirar-estudiante", "⛔ Retirar estudiante"),
-            ("/estudiantes_grupo", "Grupos (consulta)"),
-            ("/notas", "Notas (ver / imprimir)"),
-            ("/historial_novedades", "Novedades"),
-            ("/citaciones", "Citaciones"),
-            ("/mi_licencia", "Mi licencia"),
-            ("/horarios", "Horarios (consulta)"),
             ("/pqr-colegio", "PQR de padres"),
+            ("/pqr", "PQR a PROCSIS"),
+            ("/reportes", "Reportes MEN / estadísticas"),
+            ("/reportes_padres", "Reportes padres"),
+            ("/reportes/financiero-colegio", "Reporte financiero pagos"),
+            ("/secretaria/documentos", "Documentos legales y MEN"),
+            ("/mi_licencia", "Mi licencia del sistema"),
+            ("/panel_convivencia", "Convivencia (supervisión)"),
+            ("/historial_novedades", "Historial de novedades"),
+            ("/notas", "Ver notas (solo lectura)"),
+            ("/buscar_estudiantes", "Ver historial estudiante"),
+            ("/horarios", "Ver horarios"),
+            ("/alertas", "Alertas / estadísticas"),
+            ("/roles_institucion", "Roles y permisos"),
             ("/enlaces-publicos", "Enlaces públicos"),
-            ("/pqr", "PQR"),
             ("/contacto", "Contacto"),
         ]
 
     elif rol == "Coordinación":
         items += [
-            ("/periodo", "Cambiar periodo"),
             ("/pqr-colegio", "PQR de padres"),
             ("/enlaces-publicos", "Enlaces públicos"),
             ("/panel_convivencia", "Convivencia"),
@@ -2253,26 +2242,32 @@ def menu_items_por_rol():
         ]
 
     elif rol == "Secretaría":
+        # Operación administrativa: matrícula, citaciones, periodos (NO vaciar base de datos)
         items += [
             ("/periodo", "Cambiar periodo"),
-            ("/docentes", "Docentes y asignaciones"),
-            ("/notas/componentes", "Componentes evaluación"),
-            ("/estudiantes/retirados", "Estudiantes retirados"),
-            ("/secretaria/editar-estudiante", "✏️ Editar estudiante"),
-            ("/secretaria/retirar-estudiante", "⛔ Retirar estudiante"),
+            ("/cierres-periodo", "Cierre de periodos"),
             ("/registrar_estudiante", "Registrar estudiante"),
             ("/buscar_estudiantes", "Buscar estudiante"),
-            ("/estudiantes_grupo", "Listas por grado"),
+            ("/secretaria/editar-estudiante", "Editar estudiante"),
+            ("/secretaria/retirar-estudiante", "Retirar estudiante"),
+            ("/estudiantes/retirados", "Estudiantes retirados"),
+            ("/estudiantes_grupo", "Grupos / listas"),
+            ("/sedes", "Sedes del colegio"),
+            ("/citaciones", "Citaciones"),
+            ("/historial_novedades", "Novedades / anotaciones"),
+            ("/convivencia/nueva", "Registrar falta / anotación"),
+            ("/panel_convivencia", "Convivencia"),
+            ("/alertas", "Alertas de asistencia"),
+            ("/rectoria/tareas", "Monitoreo de tareas"),
             ("/carnes", "Carnés y QR"),
             ("/importar_estudiantes", "Importar Excel"),
-            ("/exportar_simat", "Exportar SIMAT (matrícula)"),
-            ("/secretaria/documentos", "📜 Documentos legales y reportes MEN"),
+            ("/exportar_simat", "Exportar SIMAT"),
             ("/exportar_estudiantes", "Exportar Excel"),
             ("/admisiones", "Admisiones / Matrícula"),
-            ("/sedes", "Sedes del colegio"),
-            ("/cierres-periodo", "Cierre de periodos"),
+            ("/docentes", "Docentes y asignaciones"),
+            ("/notas/componentes", "Componentes evaluación"),
             ("/notas", "Notas (ver / imprimir)"),
-            ("/panel_convivencia", "Convivencia (imprimir)"),
+            ("/secretaria/documentos", "Documentos legales y MEN"),
             ("/excusas", "Excusas"),
             ("/pqr-colegio", "PQR de padres"),
             ("/enlaces-publicos", "Enlaces públicos"),
@@ -6169,7 +6164,7 @@ def puede_buscar_estudiantes(): return rol_actual() in ["Rectoría", "Coordinaci
 def puede_ingreso_manual(): return rol_actual() in ["Coordinación", "Administrador", "Soporte"]
 def puede_novedades(): return rol_actual() in ["Rectoría", "Coordinación", "Administrador", "Soporte"]
 def puede_gestionar_novedades(): return rol_actual() in ["Coordinación", "Administrador", "Soporte"]
-def puede_citaciones(): return rol_actual() in ["Rectoría", "Coordinación", "Administrador", "Soporte"]
+def puede_citaciones(): return rol_actual() in ["Secretaría", "Coordinación", "Administrador", "Soporte"]
 def puede_reportes(): return rol_actual() in ["Rectoría", "Coordinación", "Administrador", "Soporte"]
 def puede_reportes_padres(): return rol_actual() in ["Rectoría", "Coordinación", "Administrador", "Soporte"]
 def puede_ver_notas(): return rol_actual() in ["Docente", "Rectoría", "Coordinación", "Secretaría", "Administrador", "Soporte"]
@@ -6285,12 +6280,12 @@ def generar_observacion_por_nota(nota):
         return "Desempeño insuficiente; requiere mayor compromiso, refuerzo escolar y acompañamiento familiar para superar las dificultades."
     return "Desempeño crítico; se recomienda plan de mejoramiento, refuerzo pedagógico y seguimiento cercano del acudiente."
 def puede_componentes(): return rol_actual() in ["Secretaría", "Coordinación", "Rectoría", "Administrador", "Soporte"]
-def puede_cambiar_periodo(): return rol_actual() in ["Secretaría", "Coordinación", "Rectoría", "Administrador", "Soporte"]
+def puede_cambiar_periodo(): return rol_actual() in ["Secretaría", "Administrador", "Soporte"]
 def puede_notas(): return puede_ver_notas()
 def puede_usuarios(): return rol_actual() in ["Soporte"]
 def puede_gestionar_docentes(): return rol_actual() in ["Secretaría", "Coordinación", "Rectoría", "Administrador", "Soporte"]
 def puede_simat(): return rol_actual() in ["Secretaría", "Administrador", "Soporte"]
-def puede_alertas(): return rol_actual() in ["Rectoría", "Coordinación", "Administrador", "Soporte"]
+def puede_alertas(): return rol_actual() in ["Rectoría", "Secretaría", "Coordinación", "Administrador", "Soporte"]
 def puede_auditoria(): return rol_actual() in ["Soporte", "Gerente", "Administrador", "Superadmin"]  # Soporte ve solo lo suyo (ver auditoria())
 
 def periodos_del_colegio(institucion_id=None):
@@ -7998,7 +7993,6 @@ def dashboard():
             <h2>Accesos rápidos</h2>
             <ul>
               <li><a href="/sedes">📍 Sedes del colegio</a></li>
-              <li><a href="/cierres-periodo">Cierre de periodos</a></li>
               <li><a href="/panel_convivencia">Convivencia</a></li>
               <li><a href="/alertas">Alertas / estadísticas</a></li>
             </ul>
@@ -10297,11 +10291,15 @@ def secretaria_arreglar_nombres():
 
 @app.route("/estudiantes/eliminar_todos", methods=["GET", "POST"])
 def eliminar_todos_estudiantes():
-    """Secretaría / dirección: borrar todos los estudiantes del colegio actual."""
+    """EXCLUSIVO Soporte Global PROCSIS. Rectoría/Secretaría NO pueden vaciar la base."""
     if not requiere_login():
         return redirect("/login")
-    if rol_actual() not in ("Secretaría", "Rectoría", "Administrador", "Soporte"):
-        return acceso_denegado("Solo Secretaría o Rectoría pueden vaciar la lista de estudiantes.")
+    if rol_actual() != "Soporte":
+        return acceso_denegado(
+            "Vaciar estudiantes está prohibido para el colegio. "
+            "Solo Soporte Global PROCSIS puede hacerlo, con validación de seguridad. "
+            "Contacte a la mesa de ayuda si necesita depurar datos de prueba."
+        )
     iid = institucion_id_actual()
     if not iid and rol_actual() != "Soporte":
         return acceso_denegado("Debes estar en una institución.")
@@ -31292,8 +31290,8 @@ def cierres_periodo():
     """Calendario de cierre de periodos + solicitud de apertura extraordinaria."""
     if not requiere_login():
         return redirect("/login")
-    if rol_actual() not in ["Rectoría", "Secretaría", "Administrador", "Soporte"]:
-        return acceso_denegado()
+    if rol_actual() not in ["Secretaría", "Administrador", "Soporte"]:
+        return acceso_denegado("El cierre de periodos es exclusivo de Secretaría.")
     iid = institucion_id_actual()
     if not iid and rol_actual() != "Soporte":
         return acceso_denegado("Sin institución.")
@@ -31304,7 +31302,7 @@ def cierres_periodo():
     msg = err = ""
     if request.method == "POST":
         accion = request.form.get("accion") or "guardar"
-        if accion == "guardar" and rol_actual() in ["Rectoría", "Secretaría", "Administrador", "Soporte"]:
+        if accion == "guardar" and rol_actual() in ["Secretaría", "Administrador", "Soporte"]:
             for n in (1, 2, 3):
                 per = f"Periodo {n}"
                 fc = (request.form.get(f"fc_{n}") or "").strip()
