@@ -8856,15 +8856,60 @@ def secretaria_editar_estudiante(id):
 
 # ── Planilla de asistencia / notas por grupo (Secretaría y Coordinación) ─────
 
-def _grupos_de_docente(usuario_id, iid):
-    """[(grado, grupo)] únicos donde el docente tiene asignación o dirige grupo, con estudiantes reales."""
-    asigns = AsignacionDocente.query.filter_by(usuario_id=usuario_id, activa=True).all()
-    grados = sorted({(a.grado or "").strip() for a in asigns if (a.grado or "").strip()})
+def _grupos_de_docente(usuario_id, iid, grado_filtro=None, grupo_filtro=None):
+    """[(grado, grupo)] con estudiantes reales.
+    Fuentes: AsignacionDocente, grados_clase del usuario, o filtro manual de secretaría.
+    """
+    grados = set()
+    # 1) Asignaciones formales
+    try:
+        asigns = AsignacionDocente.query.filter_by(usuario_id=usuario_id, activa=True).all()
+        for a in asigns:
+            g = (a.grado or "").strip()
+            if g:
+                grados.add(g)
+    except Exception:
+        pass
+    # 2) Fallback grados_clase en Usuario
+    try:
+        u = Usuario.query.get(usuario_id)
+        if u:
+            try:
+                for g in normalizar_lista_grados(getattr(u, "grados_clase", "") or ""):
+                    if g:
+                        grados.add(g)
+            except Exception:
+                raw = (getattr(u, "grados_clase", None) or "")
+                for g in str(raw).replace(";", ",").split(","):
+                    g = g.strip()
+                    if g:
+                        grados.add(g)
+            # Director de grupo
+            try:
+                for dg in DirectorGrupo.query.filter_by(usuario_id=usuario_id).all():
+                    g = (getattr(dg, "grado", None) or "").strip()
+                    if g:
+                        grados.add(g)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    # 3) Filtro manual (secretaría elige grado)
+    if grado_filtro:
+        grados = {grado_filtro.strip()}
+    if not grados and not grado_filtro:
+        # Último recurso: todos los grados con estudiantes del colegio (secretaría imprime)
+        q0 = Estudiante.query
+        if iid is not None:
+            q0 = q0.filter(Estudiante.institucion_id == iid)
+        grados = {(e.grado or "").strip() for e in q0.with_entities(Estudiante.grado).distinct().all() if (e.grado or "").strip()}
     if not grados:
         return []
-    q = Estudiante.query.filter(Estudiante.grado.in_(grados))
+    q = Estudiante.query.filter(Estudiante.grado.in_(list(grados)))
     if iid is not None:
         q = q.filter(Estudiante.institucion_id == iid)
+    if grupo_filtro:
+        q = q.filter(Estudiante.grupo == grupo_filtro.strip())
     combos = sorted({(e.grado or "", (e.grupo or "").strip()) for e in q.all()})
     return combos
 
@@ -8882,28 +8927,74 @@ def secretaria_planilla_grupo():
     opciones = "".join(
         f'<option value="{u.id}">{_esc(u.nombre_completo or u.usuario)}</option>' for u in docentes
     )
+    # Grados y grupos reales del colegio (para filtro)
+    try:
+        qe = q_estudiantes() if iid is not None else Estudiante.query
+        grados_real = sorted({(e.grado or "").strip() for e in qe.with_entities(Estudiante.grado).distinct().all() if (e.grado or "").strip()})
+        grupos_real = sorted({(e.grupo or "").strip() for e in qe.with_entities(Estudiante.grupo).distinct().all() if (e.grupo or "").strip()})
+    except Exception:
+        try:
+            grados_real = grados_disponibles() or []
+        except Exception:
+            grados_real = []
+        grupos_real = ["01", "02", "A", "B"]
+    g_opts = "".join(f'<option value="{_esc(g)}">{_esc(g)}</option>' for g in grados_real)
+    gr_opts = "".join(f'<option value="{_esc(g)}">{_esc(g)}</option>' for g in grupos_real)
+    anio_def = ""
+    try:
+        anio_def = str(ahora().year)
+    except Exception:
+        anio_def = "2026"
     content = f"""
 <header class="role-hero"><div>
-  <h1>🗒️ Planilla de asistencia / notas por grupo</h1>
-  <p>Genera la hoja física (para imprimir) con el listado real de estudiantes de cada grupo que dicta un docente.</p>
+  <h1>Planilla de asistencia / notas por grupo</h1>
+  <p>Elige docente, grado y grupo. Se genera un PDF listo para imprimir con el listado real de estudiantes.</p>
 </div>
 <a class="btn" href="/secretaria/documentos">Volver</a></header>
-<section class="role-panel">
+<section class="role-panel" style="max-width:640px">
   <form method="GET" action="/secretaria/planilla-grupo/generar" target="_blank">
     <label><b>Docente</b></label>
-    <select name="usuario_id" required>{opciones}</select>
-    <label style="margin-top:10px;display:block"><b>Tipo de planilla</b></label>
-    <select name="tipo">
-      <option value="asistencia">Asistencia (casillas por día)</option>
+    <select name="usuario_id" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <option value="">— Seleccionar docente —</option>
+      {opciones}
+    </select>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+      <div>
+        <label><b>Grado *</b></label>
+        <select name="grado" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+          <option value="">— Seleccionar grado —</option>
+          {g_opts}
+        </select>
+      </div>
+      <div>
+        <label><b>Grupo</b> (opcional)</label>
+        <select name="grupo" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+          <option value="">Todos los grupos del grado</option>
+          {gr_opts}
+        </select>
+      </div>
+    </div>
+
+    <label style="margin-top:12px;display:block"><b>Tipo de planilla</b></label>
+    <select name="tipo" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <option value="asistencia">Asistencia (casillas por día del mes)</option>
       <option value="notas">Notas (columnas en blanco por periodo)</option>
     </select>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-      <div><label><b>Mes</b></label><input name="mes" placeholder="Ej. Enero" required></div>
-      <div><label><b>Año escolar</b></label><input name="anio" value="{ahora().year if hasattr(ahora(),'year') else ''}" required></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+      <div><label><b>Mes</b></label><input name="mes" placeholder="Ej. Marzo" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+      <div><label><b>Año escolar</b></label><input name="anio" value="{anio_def}" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
     </div>
-    <button type="submit" style="margin-top:14px">Generar planillas (PDF, una hoja por grupo)</button>
+
+    <button type="submit" style="margin-top:16px;width:100%;background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:10px;font-weight:800;cursor:pointer">
+      Generar planilla PDF
+    </button>
   </form>
-  <p class="mini-text" style="margin-top:8px">Si el docente dicta en varios grados (ej. 6°, 7°, 8°, 9°), se genera automáticamente una hoja distinta por cada grupo real que tenga estudiantes.</p>
+  <p class="mini-text" style="margin-top:10px">
+    Si deja <b>Grupo</b> vacío, se genera una hoja por cada grupo del grado que tenga estudiantes matriculados.
+    El docente se imprime en el encabezado (aunque aún no tenga asignaciones cargadas en el sistema).
+  </p>
 </section>
 """
     return page("Planilla por grupo", shell(content))
@@ -8921,13 +9012,28 @@ def secretaria_planilla_grupo_generar():
     tipo = (request.args.get("tipo") or "asistencia").strip()
     mes = (request.args.get("mes") or "").strip()[:40]
     anio = (request.args.get("anio") or "").strip()[:10]
+    grado_f = (request.args.get("grado") or "").strip()
+    grupo_f = (request.args.get("grupo") or "").strip()
     docente = Usuario.query.get(usuario_id) if usuario_id else None
-    if not docente or docente.rol != "Docente":
+    if not docente or (docente.rol or "") not in ("Docente", "DOCENTE"):
         return page("Planilla", shell("<div class='msg err'>Docente no válido. <a href='/secretaria/planilla-grupo'>Volver</a></div>"))
     iid = institucion_id_actual()
-    combos = _grupos_de_docente(docente.id, iid)
+    combos = _grupos_de_docente(docente.id, iid, grado_filtro=grado_f or None, grupo_filtro=grupo_f or None)
+    if not combos and grado_f:
+        # Forzar combo aunque no haya grupo: buscar estudiantes del grado
+        q = Estudiante.query.filter(Estudiante.grado == grado_f)
+        if iid is not None:
+            q = q.filter(Estudiante.institucion_id == iid)
+        if grupo_f:
+            q = q.filter(Estudiante.grupo == grupo_f)
+        combos = sorted({(e.grado or grado_f, (e.grupo or "").strip()) for e in q.all()})
     if not combos:
-        return page("Planilla", shell(f"<div class='msg err'>{_esc(docente.nombre_completo or docente.usuario)} no tiene grupos con estudiantes asignados. <a href='/secretaria/planilla-grupo'>Volver</a></div>"))
+        return page("Planilla", shell(
+            f"<div class='msg err'>No hay estudiantes matriculados en el grado/grupo seleccionado "
+            f"({_esc(grado_f or '—')} / {_esc(grupo_f or 'todos')}). "
+            f"Importe estudiantes o elija otro grado. "
+            f"<a href='/secretaria/planilla-grupo'>Volver</a></div>"
+        ))
     inst = Institucion.query.get(iid) if iid else None
     nom_inst = (inst.nombre if inst else None) or INST_NOMBRE or "Institución educativa"
     from reportlab.lib.pagesizes import landscape, letter
@@ -28791,6 +28897,7 @@ def docente_escritorio():
     return page("Escritorio docente", shell(content))
 
 
+@app.route("/notas")
 def notas_hub():
     """Centro de notas rediseñado: simple para docentes y completo para directivos."""
     if not requiere_login():
