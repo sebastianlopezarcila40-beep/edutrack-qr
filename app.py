@@ -301,6 +301,35 @@ PLANES_EDUTRACK = {
             "foros", "tareas", "examenes", "clases_virtuales", "offline_notas",
         ],
     },
+    "qr_basico": {
+        "nombre": "QR Básico",
+        "descripcion": "Solo escaneo QR de ingreso, reportes del día y panel portería. Sin notas ni planilla.",
+        "linea": "qr",
+        "modulos": [
+            "asistencia_qr", "estudiantes", "reportes_basicos", "ingreso_manual",
+            "portal_porteria", "calendario",
+        ],
+    },
+    "qr_plus": {
+        "nombre": "QR Plus",
+        "descripcion": "QR entrada/salida + aviso WhatsApp al acudiente + Excel de reportes.",
+        "linea": "qr",
+        "modulos": [
+            "asistencia_qr", "estudiantes", "reportes_basicos", "ingreso_manual",
+            "portal_porteria", "aviso_ingreso_whatsapp", "reportes_excel", "calendario",
+            "carnes",
+        ],
+    },
+    "qr_institucional": {
+        "nombre": "QR Institucional",
+        "descripcion": "Multi-sede, entrada/salida/receso, avisos, historial padres y reportes avanzados.",
+        "linea": "qr",
+        "modulos": [
+            "asistencia_qr", "estudiantes", "reportes_basicos", "ingreso_manual",
+            "portal_porteria", "aviso_ingreso_whatsapp", "reportes_excel", "calendario",
+            "carnes", "multi_sede", "historial_padres", "alertas_impuntualidad",
+        ],
+    },
 }
 
 SLOGAN = "Tecnología para una educación moderna y responsable"
@@ -1697,6 +1726,22 @@ class LiderEmpresa(db.Model):
     foto_path = db.Column(db.String(255), default="")
     orden = db.Column(db.Integer, default=0)
     activo = db.Column(db.Boolean, default=True)
+    creado_en = db.Column(db.String(30), default="")
+
+
+
+class CalendarioEvento(db.Model):
+    """Eventos del calendario escolar (hasta 2040). Multi-tenant."""
+    __tablename__ = "calendario_eventos"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    titulo = db.Column(db.String(200), default="")
+    descripcion = db.Column(db.Text, default="")
+    fecha = db.Column(db.String(10), default="", index=True)  # YYYY-MM-DD
+    fecha_fin = db.Column(db.String(10), default="")
+    tipo = db.Column(db.String(40), default="institucional")  # institucional|academico|festivo|reunion
+    color = db.Column(db.String(20), default="#0B2D57")
+    creado_por = db.Column(db.String(120), default="")
     creado_en = db.Column(db.String(30), default="")
 
 
@@ -4245,7 +4290,14 @@ def plan_institucion(inst=None):
     if inst is None:
         iid = institucion_id_actual()
         inst = Institucion.query.get(iid) if iid else None
-    plan = (inst.plan if inst else None) or "Basico"
+    plan = (inst.plan if inst else None) or (getattr(inst, "plan_codigo", None) if inst else None) or "Basico"
+    if plan not in PLANES_EDUTRACK:
+        mapa = {
+            "basico": "Basico", "básico": "Basico", "demo": "Basico", "piloto": "Basico",
+            "institucional": "Institucional", "pro": "Premium", "premium": "Premium",
+            "qr_basico": "qr_basico", "qr_plus": "qr_plus", "qr_institucional": "qr_institucional",
+        }
+        plan = mapa.get(str(plan).strip().lower(), plan)
     if plan not in PLANES_EDUTRACK:
         plan = "Basico"
     return plan
@@ -6511,7 +6563,7 @@ def session_idle_timeout():
     from flask import request as _req
     # rutas públicas
     path = (_req.path or "")
-    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/static") or path in ("/login", "/soporte-login", "/pqr", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
+    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/api/health") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/static") or path in ("/login", "/soporte-login", "/pqr", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
         return
     if path.startswith("/colegio/") or path.startswith("/pqr") or path.startswith("/matricula") or path.startswith("/politicas") or path.startswith("/trabaja") or path.startswith("/casos") or path.startswith("/historias"):
         return
@@ -24001,7 +24053,45 @@ def gerencia_planes():
         pass
     msg = ""
     edit_id = request.args.get("edit") or request.form.get("plan_id")
-    if request.method == "POST" and request.form.get("plan_id"):
+    if request.method == "POST" and request.form.get("accion") == "crear":
+        cod = (request.form.get("codigo") or "").strip().lower().replace(" ", "_")[:40]
+        if not cod:
+            msg = "Código de plan obligatorio."
+        elif PlanComercial.query.filter_by(codigo=cod).first():
+            msg = "Ya existe un plan con código %s." % cod
+        else:
+            try:
+                precio_base = float(request.form.get("precio") or 0)
+                descuento_pct = float(request.form.get("descuento_pct") or 0)
+                descuento_pct = max(0, min(100, descuento_pct))
+                precio_m = round(precio_base * (1 - descuento_pct / 100.0), 2) if descuento_pct else precio_base
+                p = PlanComercial(
+                    codigo=cod,
+                    nombre=(request.form.get("nombre") or cod)[:80],
+                    precio_mensual=precio_m,
+                    precio_lista=precio_base,
+                    descuento_pct=descuento_pct,
+                    fee_implementacion=float(request.form.get("fee") or 0),
+                    max_estudiantes=int(request.form.get("max_e") or 300),
+                    max_sedes=int(request.form.get("max_s") or 1),
+                    features_json=__import__("json").dumps(
+                        [x.strip() for x in (request.form.get("features") or "").split("|") if x.strip()],
+                        ensure_ascii=False,
+                    ),
+                    activo=True,
+                    orden=int(request.form.get("orden") or 99),
+                )
+                db.session.add(p)
+                db.session.commit()
+                msg = "Plan %s creado. Facturación: mensual $%s · fee $%s." % (p.nombre, precio_m, p.fee_implementacion)
+                try:
+                    registrar_auditoria("Plan comercial creado", "%s · $%s" % (cod, precio_m))
+                except Exception:
+                    pass
+            except Exception as ex:
+                db.session.rollback()
+                msg = "Error al crear plan: %s" % ex
+    elif request.method == "POST" and request.form.get("plan_id"):
         try:
             pid = int(request.form.get("plan_id"))
         except ValueError:
@@ -25650,6 +25740,48 @@ def _catalogo_planes_oficial():
             "excluidos": [],
             "nota_qr": "Asistencia QR y Carné digital QR: en validación de implementación (aún no a la venta).",
         },
+        {
+            "codigo": "qr_basico", "nombre": "QR Básico", "precio": 0, "fee": 0,
+            "max_e": 300, "max_s": 1, "orden": 10, "badge": "SOLO QR",
+            "tagline": "Escaneo de ingreso, reportes del día y portería. Sin notas.",
+            "soporte": "Estándar",
+            "vigencia": "Mensual",
+            "linea": "qr",
+            "incluidos": [
+                "Portal portería (lector QR)", "Estudiantes + grupos",
+                "Reporte de ingresos del día", "Ingreso manual", "Calendario escolar",
+            ],
+            "excluidos": ["Notas / planilla SIEE", "Boletines", "PQR", "EduAura IA"],
+            "nota_qr": "Línea solo escaneo QR. Precios de capacitación y mensual: editar en Gerencia.",
+        },
+        {
+            "codigo": "qr_plus", "nombre": "QR Plus", "precio": 0, "fee": 0,
+            "max_e": 1000, "max_s": 2, "orden": 11, "badge": "QR + AVISOS",
+            "tagline": "Entrada/salida + WhatsApp al acudiente + Excel.",
+            "soporte": "Preferente",
+            "vigencia": "Mensual",
+            "linea": "qr",
+            "incluidos": [
+                "Todo QR Básico", "Entrada y salida", "Aviso WhatsApp al acudiente",
+                "Export Excel reportes", "Carné digital QR", "Hasta 2 sedes",
+            ],
+            "excluidos": ["Notas / planilla SIEE", "Boletines", "EduAura IA"],
+            "nota_qr": "Requiere WATI conectado para avisos al acudiente.",
+        },
+        {
+            "codigo": "qr_institucional", "nombre": "QR Institucional", "precio": 0, "fee": 0,
+            "max_e": 0, "max_s": 10, "orden": 12, "badge": "QR MULTI-SEDE",
+            "tagline": "Multi-sede, historial padres, alertas de impuntualidad.",
+            "soporte": "24/5 prioritario",
+            "vigencia": "Mensual",
+            "linea": "qr",
+            "incluidos": [
+                "Todo QR Plus", "Multi-sede (hasta 10)", "Historial 30 días padres",
+                "Alertas de no llegada", "Reportes avanzados rectoría",
+            ],
+            "excluidos": ["Notas / planilla SIEE"],
+            "nota_qr": "Producto acceso escolar completo sin módulo académico.",
+        },
     ]
 
 
@@ -25686,7 +25818,7 @@ def _seed_planes_comerciales():
             force = True
         if bas and int(bas.max_sedes or 0) < 20:
             force = True
-        if PlanComercial.query.filter_by(activo=True).count() < 5:
+        if PlanComercial.query.filter_by(activo=True).count() < 8:
             force = True
     except Exception:
         force = True
@@ -25933,6 +26065,25 @@ def soporte_info_institucional():
 <header class="role-hero"><div><h1>Información Institucional</h1><p>Nombre, DANE, NIT, rector, estado y plan — sin datos financieros</p></div>
   <a class="btn" href="/soporte_admin">← Panel soporte</a>
 </header>
+
+<div class="role-panel" style="margin:16px 0;border:2px dashed #25D366;border-radius:14px;padding:16px">
+  <h2 style="margin:0 0 8px;color:#15803d">+ Crear plan nuevo (EduTrack completo o Solo QR)</h2>
+  <p class="mini-text">Precio mensual y fee de capacitacion quedan ligados a facturacion. Puede dejar 0 y editar despues.</p>
+  <form method="POST" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;align-items:end">
+    <input type="hidden" name="accion" value="crear">
+    <div><label><b>Codigo *</b></label><input name="codigo" required placeholder="qr_basico"></div>
+    <div><label><b>Nombre *</b></label><input name="nombre" required placeholder="QR Basico"></div>
+    <div><label><b>Precio lista mensual</b></label><input name="precio" type="number" step="0.01" value="0"></div>
+    <div><label><b>Descuento %</b></label><input name="descuento_pct" type="number" step="0.01" value="0"></div>
+    <div><label><b>Fee capacitacion / impl.</b></label><input name="fee" type="number" step="0.01" value="0"></div>
+    <div><label><b>Max. estudiantes</b></label><input name="max_e" type="number" value="300"></div>
+    <div><label><b>Max. sedes</b></label><input name="max_s" type="number" value="1"></div>
+    <div style="grid-column:1/-1"><label><b>Funciones</b> (separadas por |)</label>
+      <input name="features" style="width:100%" placeholder="Portal porteria QR | Reportes del dia | Aviso WhatsApp"></div>
+    <div><button type="submit" style="background:#25D366;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer">Crear y enlazar a facturacion</button></div>
+  </form>
+</div>
+
 <div class="role-panel">
   <form method="GET" style="display:flex;gap:8px">
     <input name="q" value="{_esc(q)}" placeholder="Buscar por código DANE, NIT o nombre del colegio" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
@@ -27693,7 +27844,31 @@ def servidores():
 <section class='role-panel'>
   <h2>Métricas en vivo</h2>
   <p><b>Instituciones:</b> {total_i} · <b>Usuarios:</b> {total_u} · <b>Estudiantes:</b> {total_e}</p>
-  <p>Railway/Render: variables de entorno (<code>DATABASE_URL</code>, <code>SECRET_KEY</code>) se gestionan en el panel del hosting. Datos del colegio (nombre, logo, DANE) se editan en la app.</p>
+  <p>Railway/Render: variables de entorno (<code>DATABASE_URL</code>, <code>SECRET_KEY</code>) se gestionan en el panel del hosting.</p>
+</section>
+<section class='role-panel' style="border-top:4px solid #0B2D57">
+  <h2>Monitoreo Railway · estado del servicio</h2>
+  <p class="mini-text">Soporte vigila carga sin entrar al dashboard de Railway. API: <code>/api/health/railway</code></p>
+  <div id="rw-status" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:10px">
+    <div style="background:#f8fafc;border-radius:12px;padding:12px"><b>Estado</b><div id="rw-estado">…</div></div>
+    <div style="background:#f8fafc;border-radius:12px;padding:12px"><b>Latencia</b><div id="rw-lat">…</div></div>
+    <div style="background:#f8fafc;border-radius:12px;padding:12px"><b>Instituciones</b><div id="rw-i">…</div></div>
+    <div style="background:#f8fafc;border-radius:12px;padding:12px"><b>Estudiantes</b><div id="rw-e">…</div></div>
+  </div>
+  <p style="margin-top:10px" class="mini-text"><span style="color:#15803d">● Estable</span> · <span style="color:#b45309">● Carga media</span> · <span style="color:#b91c1c">● Sobrecargado</span></p>
+  <script>
+  function rwLoad(){{
+    fetch('/api/health/railway').then(function(r){{return r.json();}}).then(function(d){{
+      var map={{estable:['#15803d','Estable'],carga_media:['#b45309','Carga media'],sobrecargado:['#b91c1c','Sobrecargado'],error:['#b91c1c','Error']}};
+      var m=map[d.estado]||['#64748b',d.estado||'—'];
+      document.getElementById('rw-estado').innerHTML='<span style="color:'+m[0]+';font-weight:800">● '+m[1]+'</span>';
+      document.getElementById('rw-lat').textContent=(d.latencia_ms||'—')+' ms';
+      document.getElementById('rw-i').textContent=(d.instituciones!=null?d.instituciones:'—');
+      document.getElementById('rw-e').textContent=(d.estudiantes!=null?d.estudiantes:'—');
+    }}).catch(function(){{ document.getElementById('rw-estado').textContent='Sin respuesta'; }});
+  }}
+  rwLoad(); setInterval(rwLoad, 30000);
+  </script>
 </section>
 """
     return page("Servidores", shell(content))
@@ -41782,6 +41957,244 @@ def api_webhooks_wati():
             db.session.rollback()
             print("wati webhook save:", ex)
     return jsonify({"ok": True})
+
+
+
+
+@app.route("/api/health/railway")
+def api_health_railway():
+    """Health check JSON para monitoreo Soporte / uptime."""
+    import time as _t
+    t0 = _t.time()
+    info = {"ok": True, "servicio": "EduTrack", "estado": "estable"}
+    try:
+        total_i = Institucion.query.count()
+        total_e = Estudiante.query.count()
+        total_u = Usuario.query.count()
+        info.update({"instituciones": total_i, "estudiantes": total_e, "usuarios": total_u})
+        if total_e > 50000 or total_i > 200:
+            info["estado"] = "sobrecargado"
+        elif total_e > 15000 or total_i > 80:
+            info["estado"] = "carga_media"
+        else:
+            info["estado"] = "estable"
+    except Exception as ex:
+        info = {"ok": False, "estado": "error", "detalle": str(ex)[:160]}
+    info["latencia_ms"] = int((_t.time() - t0) * 1000)
+    try:
+        info["hora"] = fecha_hoy() + " " + hora_actual()
+    except Exception:
+        info["hora"] = ""
+    return jsonify(info)
+
+
+@app.route("/calendario", methods=["GET", "POST"])
+def calendario_escolar():
+    """Calendario escolar 2024-2040 para Docente, Secretaria, Rectoria y Coordinacion."""
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    roles_ok = (
+        "Docente", "Secretaría", "Rectoría", "Rector", "Coordinación", "Coordinador",
+        "Soporte", "Gerente", "Administrador", "Superadmin", "Comercial",
+    )
+    if rol not in roles_ok:
+        return acceso_denegado("Calendario para Docente, Secretaria, Rectoria y Coordinacion.")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    iid = institucion_id_actual()
+    msg = ""
+    puede_editar = rol in (
+        "Secretaría", "Rectoría", "Rector", "Coordinación", "Coordinador",
+        "Soporte", "Gerente", "Administrador", "Superadmin",
+    )
+    festivos_base = {
+        "01-01": "Ano Nuevo",
+        "05-01": "Dia del Trabajo",
+        "07-20": "Independencia de Colombia",
+        "08-07": "Batalla de Boyaca",
+        "12-08": "Inmaculada Concepcion",
+        "12-25": "Navidad",
+    }
+    if request.method == "POST" and puede_editar:
+        acc = (request.form.get("accion") or "crear").strip()
+        if acc == "borrar":
+            eid = request.form.get("evento_id", type=int)
+            ev = CalendarioEvento.query.get(eid) if eid else None
+            if ev and (ev.institucion_id is None or (iid and int(ev.institucion_id) == int(iid))):
+                db.session.delete(ev)
+                try:
+                    db.session.commit()
+                    msg = "Evento eliminado."
+                except Exception:
+                    db.session.rollback()
+        else:
+            titulo = (request.form.get("titulo") or "").strip()[:200]
+            fecha = (request.form.get("fecha") or "").strip()[:10]
+            fecha_fin = (request.form.get("fecha_fin") or "").strip()[:10]
+            tipo = (request.form.get("tipo") or "institucional").strip()[:40]
+            desc = (request.form.get("descripcion") or "").strip()[:2000]
+            if titulo and fecha:
+                colores = {
+                    "festivo": "#b91c1c",
+                    "academico": "#1d4ed8",
+                    "reunion": "#0f766e",
+                    "institucional": "#0B2D57",
+                }
+                try:
+                    ahora_txt = fecha_hoy() + " " + hora_actual()
+                except Exception:
+                    ahora_txt = fecha
+                db.session.add(CalendarioEvento(
+                    institucion_id=iid,
+                    titulo=titulo,
+                    descripcion=desc,
+                    fecha=fecha,
+                    fecha_fin=fecha_fin,
+                    tipo=tipo,
+                    color=colores.get(tipo, "#0B2D57"),
+                    creado_por=session.get("usuario") or "",
+                    creado_en=ahora_txt,
+                ))
+                try:
+                    db.session.commit()
+                    msg = "Evento guardado en el calendario."
+                except Exception as ex:
+                    db.session.rollback()
+                    msg = "Error: %s" % ex
+            else:
+                msg = "Titulo y fecha son obligatorios."
+    try:
+        anio = int(request.args.get("anio") or fecha_hoy()[:4])
+    except Exception:
+        anio = 2026
+    anio = max(2024, min(2040, anio))
+    try:
+        mes = int(request.args.get("mes") or fecha_hoy()[5:7])
+    except Exception:
+        mes = 1
+    mes = max(1, min(12, mes))
+    pref = "%04d-%02d" % (anio, mes)
+    q = CalendarioEvento.query.filter(CalendarioEvento.fecha.like(pref + "%"))
+    if iid is not None:
+        q = q.filter((CalendarioEvento.institucion_id == iid) | (CalendarioEvento.institucion_id.is_(None)))
+    eventos_bd = q.order_by(CalendarioEvento.fecha.asc()).all()
+    by_day = {}
+    for ev in eventos_bd:
+        by_day.setdefault(ev.fecha, []).append(ev)
+    for md, nom in festivos_base.items():
+        f = "%04d-%s" % (anio, md)
+        if f.startswith(pref):
+            by_day.setdefault(f, []).append(
+                type("F", (), {"titulo": nom, "tipo": "festivo", "color": "#b91c1c", "id": None})()
+            )
+    import calendar as _cal
+    weeks = _cal.Calendar(firstweekday=0).monthdayscalendar(anio, mes)
+    meses_nom = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                 "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    prev_m, prev_y = (mes - 1, anio) if mes > 1 else (12, anio - 1)
+    next_m, next_y = (mes + 1, anio) if mes < 12 else (1, anio + 1)
+    if prev_y < 2024:
+        prev_y, prev_m = 2024, 1
+    if next_y > 2040:
+        next_y, next_m = 2040, 12
+    anios_opts = "".join(
+        '<option value="%s"%s>%s</option>' % (a, " selected" if a == anio else "", a)
+        for a in range(2024, 2041)
+    )
+    grid = []
+    for week in weeks:
+        row = ["<tr>"]
+        for d in week:
+            if d == 0:
+                row.append('<td class="cal-empty"></td>')
+                continue
+            key = "%04d-%02d-%02d" % (anio, mes, d)
+            chips = []
+            for e in by_day.get(key, [])[:4]:
+                chips.append(
+                    '<div class="cal-chip" style="background:%s">%s</div>'
+                    % (getattr(e, "color", None) or "#0B2D57", _esc((getattr(e, "titulo", None) or "")[:28]))
+                )
+            row.append(
+                '<td class="cal-day"><div class="cal-num">%s</div>%s</td>' % (d, "".join(chips))
+            )
+        row.append("</tr>")
+        grid.append("".join(row))
+    lista_ev = []
+    for e in eventos_bd:
+        item = "<li><b>%s</b> — %s" % (_esc(e.fecha), _esc(e.titulo))
+        if puede_editar and e.id:
+            item += (
+                ' <form method="POST" style="display:inline" onsubmit="return confirm(\'Borrar?\')">'
+                '<input type="hidden" name="accion" value="borrar">'
+                '<input type="hidden" name="evento_id" value="%s">'
+                '<button style="font-size:11px;padding:2px 8px">Borrar</button></form>' % e.id
+            )
+        item += "</li>"
+        lista_ev.append(item)
+    if not lista_ev:
+        lista_ev = ["<li class='mini-text'>Sin eventos propios este mes (se muestran festivos nacionales).</li>"]
+    form_html = ""
+    if puede_editar:
+        form_html = (
+            '<div class="role-panel" style="margin-top:14px">'
+            "<h3 style=\"margin:0 0 8px\">Agregar evento</h3>"
+            '<form method="POST" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
+            '<input type="hidden" name="accion" value="crear">'
+            '<div><label>Titulo *</label><input name="titulo" required></div>'
+            '<div><label>Fecha *</label><input type="date" name="fecha" required min="2024-01-01" max="2040-12-31"></div>'
+            '<div><label>Fecha fin</label><input type="date" name="fecha_fin" min="2024-01-01" max="2040-12-31"></div>'
+            '<div><label>Tipo</label><select name="tipo">'
+            '<option value="institucional">Institucional</option>'
+            '<option value="academico">Academico</option>'
+            '<option value="reunion">Reunion</option>'
+            '<option value="festivo">Festivo / descanso</option>'
+            "</select></div>"
+            '<div style="grid-column:1/-1"><label>Descripcion</label><input name="descripcion" style="width:100%"></div>'
+            '<div><button type="submit">Guardar evento</button></div>'
+            "</form></div>"
+        )
+    volver = {
+        "Docente": "/docente", "Secretaría": "/secretaria", "Rectoría": "/rectoria",
+        "Rector": "/rectoria", "Coordinación": "/coordinacion", "Coordinador": "/coordinacion",
+    }.get(rol, "/dashboard")
+    content = (
+        "<style>"
+        ".cal-wrap{background:#fff;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden}"
+        ".cal-nav{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0B2D57;color:#fff;flex-wrap:wrap;gap:8px}"
+        ".cal-nav a{color:#fff;font-weight:700;text-decoration:none}"
+        ".cal-table{width:100%;border-collapse:collapse;table-layout:fixed}"
+        ".cal-table th{background:#e2e8f0;padding:8px;font-size:12px}"
+        ".cal-day{vertical-align:top;height:92px;border:1px solid #e2e8f0;padding:4px}"
+        ".cal-num{font-weight:800;font-size:12px;color:#0f172a}"
+        ".cal-chip{color:#fff;font-size:10px;border-radius:4px;padding:2px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+        ".cal-empty{background:#f8fafc;border:1px solid #e2e8f0}"
+        "</style>"
+        '<header class="role-hero"><div>'
+        "<h1>Calendario escolar</h1>"
+        "<p>Vista institucional · anos 2024 a 2040 · festivos Colombia + eventos del colegio</p>"
+        '</div><a class="btn" href="%s">← Volver</a></header>' % volver
+        + (('<div class="msg ok">%s</div>' % _esc(msg)) if msg else "")
+        + '<div class="cal-wrap"><div class="cal-nav">'
+        '<a href="/calendario?anio=%s&mes=%s">← Anterior</a>' % (prev_y, prev_m)
+        + '<form method="GET" style="display:flex;gap:8px;align-items:center;margin:0">'
+        + "<strong>%s </strong>" % meses_nom[mes]
+        + '<select name="anio" onchange="this.form.submit()">%s</select>' % anios_opts
+        + '<input type="hidden" name="mes" value="%s">' % mes
+        + "</form>"
+        + '<a href="/calendario?anio=%s&mes=%s">Siguiente →</a>' % (next_y, next_m)
+        + "</div>"
+        + '<table class="cal-table"><thead><tr>'
+        "<th>Lun</th><th>Mar</th><th>Mie</th><th>Jue</th><th>Vie</th><th>Sab</th><th>Dom</th>"
+        "</tr></thead><tbody>%s</tbody></table></div>" % "".join(grid)
+        + '<div class="role-panel" style="margin-top:14px"><h3 style="margin:0 0 8px">Eventos del mes</h3>'
+        + "<ul>%s</ul></div>" % "".join(lista_ev)
+        + form_html
+    )
+    return page("Calendario escolar", shell(content))
 
 
 
