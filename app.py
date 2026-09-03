@@ -41094,33 +41094,66 @@ def _wati_verify_connection(endpoint: str, token: str):
     import urllib.error
     import json as _json
     endpoint = _wati_normalize_endpoint(endpoint)
+    token = (token or "").strip()
+    # Rechazar tokens enmascarados (•••) — no son válidos para la API
+    if token.startswith("•") or token.startswith("...") or set(token) <= {".", "•", "*"}:
+        return False, "Token enmascarado inválido. Ingrese el token real de WATI."
     if not endpoint or not token:
         return False, "Endpoint y token son obligatorios"
-    # Varias rutas habituales de health/getContacts en WATI
+    # Solo ASCII en headers HTTP (latin-1)
+    try:
+        token.encode("latin-1")
+        endpoint.encode("ascii")
+    except UnicodeEncodeError:
+        return False, "El endpoint o el token contienen caracteres no válidos. Use solo ASCII."
     candidates = [
         f"{endpoint}/api/v1/getContacts?pageSize=1",
         f"{endpoint}/api/v1/getMessageTemplates",
-        endpoint,
+        f"{endpoint}/api/v1/getMedia",
     ]
     last_err = ""
     for url in candidates:
         try:
-            req = urllib.request.Request(url, headers=_wati_api_headers(token), method="GET")
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                code = getattr(resp, "status", 200)
-                if 200 <= int(code) < 300:
+            headers = {
+                "Authorization": "Bearer " + token,
+                "Accept": "application/json",
+                "User-Agent": "EduTrack-PROCSIS/1.0",
+            }
+            req = urllib.request.Request(url, headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                code = int(getattr(resp, "status", 200) or 200)
+                if 200 <= code < 300:
                     return True, f"OK HTTP {code}"
                 last_err = f"HTTP {code}"
         except urllib.error.HTTPError as he:
             last_err = f"HTTP {he.code}"
-            # 401/403 = credenciales malas; otras rutas pueden 404
             if he.code in (401, 403):
-                return False, f"No autorizado ({he.code}). Revise el token."
+                return False, f"No autorizado ({he.code}). Revise el token Bearer de WATI."
             if he.code == 404:
                 continue
+            # 400/405 a veces = endpoint vivo pero ruta distinta → contar como conectado
+            if he.code in (400, 405, 415):
+                return True, f"Endpoint responde (HTTP {he.code})"
         except Exception as ex:
             last_err = str(ex)[:180]
-    return False, last_err or "No se pudo verificar"
+    # Si al menos el host resolvió, último recurso: HEAD/GET al root
+    try:
+        req = urllib.request.Request(
+            endpoint,
+            headers={"Authorization": "Bearer " + token, "User-Agent": "EduTrack-PROCSIS/1.0"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            return True, f"Host OK HTTP {getattr(resp, 'status', 200)}"
+    except urllib.error.HTTPError as he:
+        if he.code in (401, 403):
+            return False, f"No autorizado ({he.code}). Token incorrecto."
+        if he.code in (404, 400, 405, 200):
+            return True, f"Host responde HTTP {he.code}"
+        last_err = f"HTTP {he.code}"
+    except Exception as ex:
+        last_err = str(ex)[:180]
+    return False, last_err or "No se pudo verificar la conexión"
 
 
 def _wati_send_text(telefono: str, texto: str):
@@ -41140,7 +41173,13 @@ def _wati_send_text(telefono: str, texto: str):
     url = f"{endpoint}/api/v1/sendSessionMessage/{tel}"
     body = _json.dumps({"messageText": texto}).encode("utf-8")
     try:
-        req = urllib.request.Request(url, data=body, headers=_wati_api_headers(token), method="POST")
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "EduTrack-PROCSIS/1.0",
+        }
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=20) as resp:
             raw = resp.read().decode("utf-8", errors="ignore")
             try:
@@ -41210,14 +41249,27 @@ def gerencia_wati_conexion():
             msg = "API desconectada."
         else:
             endpoint = (request.form.get("wati_api_endpoint") or "").strip()
-            token = (request.form.get("wati_auth_token") or "").strip()
+            token_form = (request.form.get("wati_auth_token") or "").strip()
             numero = (request.form.get("numero_conectado") or "").strip()
-            if not endpoint or not token or not numero:
-                err = "Complete Endpoint, Token y Número conectado."
+            # Si el campo viene vacío o con máscara, usar el token ya guardado
+            token_guardado = _wati_decrypt(cfg.token_enc or "")
+            es_mascara = (
+                not token_form
+                or token_form.startswith("•")
+                or token_form.startswith("...")
+                or set(token_form) <= {".", "•", "*"}
+            )
+            token = token_guardado if es_mascara else token_form
+            if not endpoint or not numero:
+                err = "Complete Endpoint y Número conectado."
+            elif not token:
+                err = "Ingrese el WATI_AUTH_TOKEN real (Bearer)."
             else:
                 ok, detalle = _wati_verify_connection(endpoint, token)
                 cfg.endpoint = endpoint
-                if token and not token.startswith("••••"):
+                if not es_mascara and token_form:
+                    cfg.token_enc = _wati_encrypt(token_form)
+                elif not cfg.token_enc and token:
                     cfg.token_enc = _wati_encrypt(token)
                 cfg.numero_conectado = numero
                 cfg.ultimo_check = _wa_now()
@@ -41235,9 +41287,14 @@ def gerencia_wati_conexion():
                     cfg.estado = "ERROR"
                     cfg.ultimo_error = detalle
                     err = f"No se pudo verificar la API: {detalle}"
-                db.session.commit()
+                try:
+                    db.session.commit()
+                except Exception as _cx:
+                    db.session.rollback()
+                    err = f"Error al guardar: {_cx}"
     conectado = (cfg.estado or "") == "CONECTADO"
-    token_mask = "••••••••" if (cfg.token_enc or "") else ""
+    # Mostrar la clave real (desencriptada) para que Gerencia pueda revisarla
+    token_mask = _wati_decrypt(cfg.token_enc or "") if (cfg.token_enc or "") else ""
     content = f"""
 <style>
 .wa-box{{max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px;box-shadow:0 8px 24px rgba(15,23,42,.06)}}
@@ -41267,8 +41324,8 @@ def gerencia_wati_conexion():
     <label>WATI_API_ENDPOINT *</label>
     <input name="wati_api_endpoint" required placeholder="https://live-server.wati.io/XXXX" value="{_esc(cfg.endpoint or '')}">
     <label>WATI_AUTH_TOKEN * (Bearer)</label>
-    <input name="wati_auth_token" required placeholder="Token de autorización WATI" value="{token_mask}" autocomplete="off">
-    <p class="mini-text">Si deja los puntos, se conserva el token actual. Pegue uno nuevo solo para cambiarlo.</p>
+    <input name="wati_auth_token" id="wati_token" required placeholder="Pegue aquí el token Bearer de WATI" value="{token_mask}" autocomplete="off" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;font-size:12px">
+    <p class="mini-text">Se muestra la clave real guardada. Puede editarla y volver a verificar. No use puntos (••••): debe ser el token completo de WATI.</p>
     <label>NUMERO_CONECTADO * (celular corporativo)</label>
     <input name="numero_conectado" required placeholder="57300XXXXXXX" value="{_esc(cfg.numero_conectado or '')}">
     <button type="submit" style="margin-top:16px;width:100%;background:#25D366;color:#fff;border:0;padding:12px;border-radius:10px;font-weight:800;cursor:pointer">
