@@ -41027,6 +41027,22 @@ def _wati_fernet():
         return None
 
 
+
+def _wati_clean_token(token: str) -> str:
+    """Quita 'Bearer ' si el usuario lo pegó junto al JWT y limpia espacios."""
+    t = (token or "").strip()
+    # Quitar comillas accidentales
+    if (t.startswith('"') and t.endswith('"')) or (t.startswith("'") and t.endswith("'")):
+        t = t[1:-1].strip()
+    low = t.lower()
+    if low.startswith("bearer "):
+        t = t[7:].strip()
+    # Máscaras inválidas
+    if not t or t.startswith("•") or set(t) <= {".", "•", "*"}:
+        return ""
+    return t
+
+
 def _wati_encrypt(token: str) -> str:
     token = (token or "").strip()
     if not token:
@@ -41094,12 +41110,9 @@ def _wati_verify_connection(endpoint: str, token: str):
     import urllib.error
     import json as _json
     endpoint = _wati_normalize_endpoint(endpoint)
-    token = (token or "").strip()
-    # Rechazar tokens enmascarados (•••) — no son válidos para la API
-    if token.startswith("•") or token.startswith("...") or set(token) <= {".", "•", "*"}:
-        return False, "Token enmascarado inválido. Ingrese el token real de WATI."
+    token = _wati_clean_token(token)
     if not endpoint or not token:
-        return False, "Endpoint y token son obligatorios"
+        return False, "Endpoint y token son obligatorios. Pegue solo el JWT (sin la palabra Bearer)."
     # Solo ASCII en headers HTTP (latin-1)
     try:
         token.encode("latin-1")
@@ -41164,7 +41177,7 @@ def _wati_send_text(telefono: str, texto: str):
     cfg = _wati_get_config()
     if not cfg or (cfg.estado or "") != "CONECTADO":
         return False, "API WATI no conectada. Configure en Gerencia → Mesa de Conexión API."
-    token = _wati_decrypt(cfg.token_enc)
+    token = _wati_clean_token(_wati_decrypt(cfg.token_enc))
     endpoint = _wati_normalize_endpoint(cfg.endpoint)
     tel = "".join(ch for ch in str(telefono or "") if ch.isdigit())
     if not tel or not texto:
@@ -41249,25 +41262,21 @@ def gerencia_wati_conexion():
             msg = "API desconectada."
         else:
             endpoint = (request.form.get("wati_api_endpoint") or "").strip()
-            token_form = (request.form.get("wati_auth_token") or "").strip()
+            token_form = _wati_clean_token(request.form.get("wati_auth_token") or "")
             numero = (request.form.get("numero_conectado") or "").strip()
-            # Si el campo viene vacío o con máscara, usar el token ya guardado
-            token_guardado = _wati_decrypt(cfg.token_enc or "")
-            es_mascara = (
-                not token_form
-                or token_form.startswith("•")
-                or token_form.startswith("...")
-                or set(token_form) <= {".", "•", "*"}
-            )
-            token = token_guardado if es_mascara else token_form
+            # Si el campo viene vacío, usar el token ya guardado (también limpio)
+            token_guardado = _wati_clean_token(_wati_decrypt(cfg.token_enc or ""))
+            es_vacio = not token_form
+            token = token_guardado if es_vacio else token_form
             if not endpoint or not numero:
                 err = "Complete Endpoint y Número conectado."
             elif not token:
-                err = "Ingrese el WATI_AUTH_TOKEN real (Bearer)."
+                err = "Ingrese el token JWT de WATI (solo el código, SIN escribir la palabra Bearer)."
             else:
                 ok, detalle = _wati_verify_connection(endpoint, token)
                 cfg.endpoint = endpoint
-                if not es_mascara and token_form:
+                # Guardar siempre limpio (sin "Bearer ")
+                if token_form:
                     cfg.token_enc = _wati_encrypt(token_form)
                 elif not cfg.token_enc and token:
                     cfg.token_enc = _wati_encrypt(token)
@@ -41294,7 +41303,7 @@ def gerencia_wati_conexion():
                     err = f"Error al guardar: {_cx}"
     conectado = (cfg.estado or "") == "CONECTADO"
     # Mostrar la clave real (desencriptada) para que Gerencia pueda revisarla
-    token_mask = _wati_decrypt(cfg.token_enc or "") if (cfg.token_enc or "") else ""
+    token_mask = _wati_clean_token(_wati_decrypt(cfg.token_enc or "")) if (cfg.token_enc or "") else ""
     content = f"""
 <style>
 .wa-box{{max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px;box-shadow:0 8px 24px rgba(15,23,42,.06)}}
@@ -41325,7 +41334,7 @@ def gerencia_wati_conexion():
     <input name="wati_api_endpoint" required placeholder="https://live-server.wati.io/XXXX" value="{_esc(cfg.endpoint or '')}">
     <label>WATI_AUTH_TOKEN * (Bearer)</label>
     <input name="wati_auth_token" id="wati_token" required placeholder="Pegue aquí el token Bearer de WATI" value="{token_mask}" autocomplete="off" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;font-size:12px">
-    <p class="mini-text">Se muestra la clave real guardada. Puede editarla y volver a verificar. No use puntos (••••): debe ser el token completo de WATI.</p>
+    <p class="mini-text">Pegue <b>solo el JWT</b> (empieza por eyJ...). <b>No</b> escriba la palabra Bearer ni puntos. Si en WATI copia “Bearer eyJ…”, borre “Bearer ” y deje solo eyJ…</p>
     <label>NUMERO_CONECTADO * (celular corporativo)</label>
     <input name="numero_conectado" required placeholder="57300XXXXXXX" value="{_esc(cfg.numero_conectado or '')}">
     <button type="submit" style="margin-top:16px;width:100%;background:#25D366;color:#fff;border:0;padding:12px;border-radius:10px;font-weight:800;cursor:pointer">
