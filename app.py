@@ -31340,18 +31340,22 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 .px-status .dot{{width:10px;height:10px;border-radius:50%;background:#94a3b8;display:inline-block}}
 .px-status.ok .dot{{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.25)}}
 .px-wrap{{
-  overflow-x:scroll!important;
+  overflow-x:auto!important;
   overflow-y:auto!important;
-  height:calc(100vh - 150px);
+  height:calc(100vh - 170px);
   min-height:280px;
   background:#fff;
   width:100%;
   max-width:100vw;
   -webkit-overflow-scrolling:touch;
-  scrollbar-gutter:stable both-edges;
-  scrollbar-width:auto;
-  scrollbar-color:#64748b #e2e8f0;
+  /* Una sola barra: la inferior (.px-scroll-bar). Ocultar nativa horizontal */
+  scrollbar-width:none;
 }}
+.px-wrap::-webkit-scrollbar{{height:0!important;width:8px}}
+.px-wrap::-webkit-scrollbar:horizontal{{height:0!important;display:none}}
+.px-wrap::-webkit-scrollbar:vertical{{width:8px}}
+.px-wrap::-webkit-scrollbar-thumb:vertical{{background:#94a3b8;border-radius:6px}}
+
 /* Barra horizontal siempre visible (con o sin estudiantes) */
 .px-wrap::-webkit-scrollbar{{height:18px;width:14px;display:block!important}}
 .px-wrap::-webkit-scrollbar-thumb{{background:#64748b;border-radius:10px;border:2px solid #e2e8f0;min-width:48px}}
@@ -31362,9 +31366,9 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 .px-table thead th,.px-table tbody td{{white-space:nowrap}}
 /* Pista inferior fija visual cuando hay pocas filas */
 .px-scroll-bar{{
-  height:22px;width:100%;overflow-x:scroll!important;overflow-y:hidden;display:block!important;
-  background:#cbd5e1;border-top:2px solid #0B2D57;
-  scrollbar-width:auto;scrollbar-color:#0B2D57 #e2e8f0;
+  height:18px;width:100%;overflow-x:scroll!important;overflow-y:hidden;display:block!important;
+  background:#e2e8f0;border-top:1px solid #94a3b8;
+  scrollbar-width:thin;scrollbar-color:#0B2D57 #e2e8f0;
   position:sticky;bottom:0;z-index:30;flex-shrink:0;
 }}
 .px-scroll-bar::-webkit-scrollbar{{height:20px}}
@@ -31452,7 +31456,7 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 </form>
 
 <div class="px-status" id="px-status" style="justify-content:space-between">
-  <span><span class="dot"></span> <span id="px-status-text">Notas por materia · Auto-guardado · Cola offline activa</span></span>
+  <span><span class="dot"></span> <span id="px-status-text">Comprobando conexión…</span></span>
   <button type="button" id="btn-sync-notas" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:8px;border:0;background:#0B2D57;color:#fff;cursor:pointer">Subir / sincronizar notas</button>
 </div>
 
@@ -31636,18 +31640,42 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
     const body={{estudiante_id:parseInt(est),criterio_id:parseInt(crit),periodo:PER,asignatura:ASIG}};
     if(isLog) body.logro=inp.value; else body.valor=inp.value===''?null:inp.value;
     setStatus(false, 'Guardando…');
-    fetch('/api/notas/guardar',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}})
-      .then(r=>r.json()).then(j=>{{
+    fetch('/api/notas/guardar',{{
+      method:'POST',
+      headers:{{'Content-Type':'application/json','Accept':'application/json'}},
+      credentials:'same-origin',
+      body:JSON.stringify(body)
+    }})
+      .then(async r=>{{
+        let j={{}};
+        const txt = await r.text();
+        try {{ j = txt ? JSON.parse(txt) : {{}}; }} catch(e) {{
+          throw new Error(r.status===401||r.status===403 ? 'Sesión o permiso: recargue e inicie de nuevo' : ('Respuesta inválida HTTP '+r.status));
+        }}
+        if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+        return j;
+      }})
+      .then(j=>{{
         if(j.ok){{
           inp.classList.add('saved');inp.classList.remove('error');
           setTimeout(()=>inp.classList.remove('saved'),600);
-          setStatus(true, '✓ Auto-guardado');
+          setStatus(true, '✓ En línea · auto-guardado');
           if(!isLog) recalc(est);
         }} else {{
           inp.classList.add('error');
           setStatus(false, j.error||'Error al guardar');
         }}
-      }}).catch(()=>{{inp.classList.add('error'); try{{const k='edutrack_notas_offline';const a=JSON.parse(localStorage.getItem(k)||'[]');a.push(body);localStorage.setItem(k,JSON.stringify(a.slice(-500)));}}catch(e){{}} setStatus(false,'Sin conexión — nota en cola local');}});
+      }})
+      .catch(err=>{{
+        inp.classList.add('error');
+        const offline = (typeof navigator!=='undefined' && navigator.onLine===false);
+        if(offline){{
+          try{{const k='edutrack_notas_offline';const a=JSON.parse(localStorage.getItem(k)||'[]');a.push(body);localStorage.setItem(k,JSON.stringify(a.slice(-500)));}}catch(e){{}}
+          setStatus(false,'Sin conexión — nota en cola local');
+        }} else {{
+          setStatus(false, (err && err.message) ? err.message : 'Error al guardar (servidor)');
+        }}
+      }});
   }}
   function formatNota(raw){{
     if(raw===''||raw==null) return '';
@@ -31684,8 +31712,9 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
     const left=[];
     for(const body of arr){{
       try{{
-        const r=await fetch('/api/notas/guardar',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}});
-        const j=await r.json(); if(!j.ok) left.push(body);
+        const r=await fetch('/api/notas/guardar',{{method:'POST',headers:{{'Content-Type':'application/json','Accept':'application/json'}},credentials:'same-origin',body:JSON.stringify(body)}});
+        const txt=await r.text(); let j={{}}; try{{j=txt?JSON.parse(txt):{{}};}}catch(e){{left.push(body);continue;}}
+        if(!r.ok||!j.ok) left.push(body);
       }}catch(e){{ left.push(body); }}
     }}
     localStorage.setItem(k, JSON.stringify(left));
@@ -31693,7 +31722,20 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
   }}
   const btnSync=document.getElementById('btn-sync-notas');
   if(btnSync) btnSync.onclick=()=>flushOffline();
-  window.addEventListener('online',()=>flushOffline());
+  window.addEventListener('online',function(){{ setStatus(true,'✓ En línea'); flushOffline(); }});
+  window.addEventListener('offline',function(){{ setStatus(false,'Sin conexión — las notas quedarán en cola local'); }});
+  (function initConn(){{
+    try {{
+      const k='edutrack_notas_offline';
+      let n=0; try{{ n=(JSON.parse(localStorage.getItem(k)||'[]')||[]).length; }}catch(e){{}}
+      if(typeof navigator!=='undefined' && navigator.onLine===false){{
+        setStatus(false, n?('Sin conexión · '+n+' en cola local'):'Sin conexión');
+      }} else {{
+        setStatus(true, n?('✓ En línea · '+n+' pendientes por sincronizar'):'✓ En línea · auto-guardado listo');
+        if(n) flushOffline();
+      }}
+    }} catch(e) {{ setStatus(true,'✓ En línea'); }}
+  }})();
   document.querySelectorAll('.px-cell').forEach(inp=>{{
     // No type=number: permite teclear 34 y formatear a 3.4
     try {{ inp.setAttribute('inputmode','decimal'); inp.setAttribute('type','text'); }} catch(e){{}}
@@ -31740,7 +31782,10 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
         .then(j=>{{
           if(j.ok){{ inp.classList.add('saved'); setTimeout(()=>inp.classList.remove('saved'),600); setStatus(true,'✓ Faltas guardadas'); }}
           else {{ setStatus(false, j.error||'Error faltas'); }}
-        }}).catch(err=>setStatus(false, (err&&err.message)?err.message:'Sin conexión'));
+        }}).catch(err=>{{
+          const offline=(typeof navigator!=='undefined'&&navigator.onLine===false);
+          setStatus(false, offline?'Sin conexión':((err&&err.message)?err.message:'Error al guardar faltas'));
+        }});
     }});
   }});
   document.getElementById('px-table').addEventListener('keydown',function(ev){{
