@@ -41354,6 +41354,202 @@ def gerencia_wati_conexion():
     return page("Mesa de Conexión API", shell(content))
 
 
+
+def _wati_http_get(path_or_url, query=None):
+    """GET autenticado a WATI. path_or_url puede ser ruta relativa o URL completa."""
+    import urllib.request
+    import urllib.error
+    import urllib.parse
+    import json as _json
+    cfg = _wati_get_config()
+    if not cfg or (cfg.estado or "") != "CONECTADO":
+        return None, "API no conectada"
+    token = _wati_clean_token(_wati_decrypt(cfg.token_enc or ""))
+    endpoint = _wati_normalize_endpoint(cfg.endpoint)
+    if not token or not endpoint:
+        return None, "Sin credenciales"
+    if path_or_url.startswith("http"):
+        url = path_or_url
+    else:
+        url = endpoint.rstrip("/") + "/" + path_or_url.lstrip("/")
+    if query:
+        url += ("&" if "?" in url else "?") + urllib.parse.urlencode(query)
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": "Bearer " + token,
+                "Accept": "application/json",
+                "User-Agent": "EduTrack-PROCSIS/1.0",
+            },
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode("utf-8", errors="ignore")
+            try:
+                return _json.loads(raw) if raw else {}, None
+            except Exception:
+                return {"raw": raw[:500]}, None
+    except urllib.error.HTTPError as he:
+        body = ""
+        try:
+            body = he.read().decode("utf-8", errors="ignore")[:200]
+        except Exception:
+            pass
+        return None, f"HTTP {he.code}: {body or he.reason}"
+    except Exception as ex:
+        return None, str(ex)[:200]
+
+
+def _wati_sync_contacts(canal="soporte", limit=50):
+    """Trae contactos de WATI y los guarda como chats locales. Devuelve (n_nuevos, error)."""
+    data, err = _wati_http_get("/api/v1/getContacts", {"pageSize": limit, "pageNumber": 1})
+    if err:
+        # Algunos tenants usan page size distinto
+        data, err = _wati_http_get("/api/v1/getContacts", {"pageSize": 20, "pageNumber": 1})
+    if err:
+        return 0, err
+    if not isinstance(data, dict):
+        return 0, "Respuesta inválida de WATI"
+    # Formatos posibles: contact_list / contacts / result / items
+    items = (
+        data.get("contact_list")
+        or data.get("contacts")
+        or data.get("result")
+        or data.get("items")
+        or data.get("data")
+        or []
+    )
+    if isinstance(items, dict):
+        items = items.get("items") or items.get("contacts") or []
+    if not isinstance(items, list):
+        items = []
+    n = 0
+    for c in items:
+        if not isinstance(c, dict):
+            continue
+        tel = (
+            c.get("wAid")
+            or c.get("waId")
+            or c.get("whatsappNumber")
+            or c.get("phone")
+            or c.get("id")
+            or ""
+        )
+        tel = "".join(ch for ch in str(tel) if ch.isdigit())
+        if not tel or len(tel) < 8:
+            continue
+        nombre = (
+            c.get("fullName")
+            or c.get("name")
+            or c.get("firstName")
+            or c.get("contactName")
+            or tel
+        )
+        last_msg = (
+            c.get("lastMessage")
+            or c.get("last_message")
+            or c.get("lastText")
+            or ""
+        )
+        if isinstance(last_msg, dict):
+            last_msg = last_msg.get("text") or last_msg.get("body") or ""
+        chat = WhatsAppChat.query.filter_by(telefono=tel).first()
+        if not chat:
+            chat = WhatsAppChat(telefono=tel, nombre=str(nombre)[:160], canal=canal, activo=True)
+            db.session.add(chat)
+            n += 1
+        else:
+            if nombre:
+                chat.nombre = str(nombre)[:160]
+            chat.activo = True
+        if last_msg:
+            chat.ultimo_mensaje = str(last_msg)[:500]
+        # fecha
+        last_at = c.get("lastUpdated") or c.get("created") or c.get("updatedAt") or ""
+        if last_at:
+            chat.ultimo_en = str(last_at)[:30]
+        elif not chat.ultimo_en:
+            chat.ultimo_en = _wa_now()
+    try:
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        return n, str(ex)[:120]
+    return n, None
+
+
+def _wati_sync_messages(chat, limit=40):
+    """Baja historial de mensajes de un número desde WATI."""
+    if not chat or not chat.telefono:
+        return 0, "Sin teléfono"
+    data, err = _wati_http_get(
+        f"/api/v1/getMessages/{chat.telefono}",
+        {"pageSize": limit, "pageNumber": 1},
+    )
+    if err:
+        return 0, err
+    if not isinstance(data, dict):
+        return 0, "Respuesta inválida"
+    items = (
+        data.get("messages")
+        or data.get("message_list")
+        or data.get("result")
+        or data.get("items")
+        or data.get("data")
+        or []
+    )
+    if isinstance(items, dict):
+        items = items.get("items") or items.get("messages") or []
+    if not isinstance(items, list):
+        items = []
+    n = 0
+    for m in items:
+        if not isinstance(m, dict):
+            continue
+        mid = str(m.get("id") or m.get("messageId") or m.get("whatsappMessageId") or "")[:80]
+        texto = (
+            m.get("text")
+            or m.get("body")
+            or m.get("message")
+            or m.get("caption")
+            or ""
+        )
+        if isinstance(texto, dict):
+            texto = texto.get("body") or texto.get("text") or str(texto)
+        texto = str(texto or "").strip()
+        if not texto:
+            continue
+        # owner: true = enviado por el negocio (out)
+        owner = m.get("owner")
+        if owner is None:
+            owner = m.get("isOwner") or m.get("fromMe")
+        direccion = "out" if owner in (True, "true", 1, "1", "yes") else "in"
+        if mid:
+            exists = WhatsAppMensaje.query.filter_by(chat_id=chat.id, wati_id=mid).first()
+            if exists:
+                continue
+        # evitar duplicados por texto+tiempo reciente
+        creado = str(m.get("created") or m.get("timestamp") or m.get("time") or _wa_now())[:30]
+        db.session.add(WhatsAppMensaje(
+            chat_id=chat.id,
+            direccion=direccion,
+            texto=texto[:4000],
+            wati_id=mid,
+            estado="sync",
+            creado_en=creado,
+        ))
+        n += 1
+        chat.ultimo_mensaje = texto[:500]
+        chat.ultimo_en = creado
+    try:
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        return n, str(ex)[:120]
+    return n, None
+
+
 @app.route("/whatsapp/inbox")
 def whatsapp_inbox():
     """Clon visual de WhatsApp Web para Soporte y Ventas."""
@@ -41365,12 +41561,23 @@ def whatsapp_inbox():
     if canal not in ("soporte", "ventas"):
         canal = "soporte"
     chat_id = request.args.get("chat", type=int)
+    do_sync = (request.args.get("sync") or "") in ("1", "true", "si", "yes")
     try:
         db.create_all()
     except Exception:
         pass
     cfg = _wati_get_config()
     conectado = (cfg.estado or "") == "CONECTADO"
+    sync_msg = ""
+    # Sincronizar contactos de WATI (manual con ?sync=1 o si la lista local está vacía)
+    if conectado:
+        n_local = WhatsAppChat.query.filter_by(activo=True).count()
+        if do_sync or n_local == 0:
+            n_new, serr = _wati_sync_contacts(canal=canal, limit=80)
+            if serr:
+                sync_msg = f"Sync WATI: {serr}"
+            else:
+                sync_msg = f"Sincronizados {n_new} contactos nuevos desde WATI."
     chats = (
         WhatsAppChat.query.filter_by(activo=True)
         .order_by(WhatsAppChat.ultimo_en.desc())
@@ -41384,6 +41591,8 @@ def whatsapp_inbox():
     if chat_id:
         activo = WhatsAppChat.query.get(chat_id)
         if activo:
+            if conectado:
+                _wati_sync_messages(activo, limit=50)
             mensajes = (
                 WhatsAppMensaje.query.filter_by(chat_id=activo.id)
                 .order_by(WhatsAppMensaje.id.asc())
@@ -41460,11 +41669,13 @@ def whatsapp_inbox():
     <h1 style="margin:0;font-size:20px;color:#0B2D57">Inbox WhatsApp · {canal.upper()}</h1>
     <p class="mini-text" style="margin:4px 0 0">Respuestas de la mesa PROCSIS vía WATI</p>
   </div>
-  <div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a class="btn" href="{volver}">← Volver</a>
-    {"<a class='btn' href='/gerencia/wati-conexion' style='background:#25D366'>API</a>" if rol_actual() in ("Gerente","Superadmin","Administrador") else ""}
+    <a class="btn" href="/whatsapp/inbox?canal={canal}&sync=1" style="background:#25D366">↻ Sincronizar chats WATI</a>
+    {"<a class='btn' href='/gerencia/wati-conexion' style='background:#0B2D57'>API</a>" if rol_actual() in ("Gerente","Superadmin","Administrador") else ""}
   </div>
 </div>
+{"<div class='msg ok' style='margin:8px 0'>"+_esc(sync_msg)+"</div>" if sync_msg else ""}
 <div class="wa-banner {"on" if conectado else "off"}">
   {"● API CONECTADA · " + _esc(cfg.numero_conectado or "") if conectado else "● API DESCONECTADA — configure en Gerencia → Mesa de Conexión API"}
 </div>
