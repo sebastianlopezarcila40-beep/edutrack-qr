@@ -2256,6 +2256,7 @@ def menu_items_por_rol():
             ("/soporte/marca", "Marca y contacto"),
             ("/sedes", "Sedes (colegios)"),
             ("/soporte/pqr", "Centro PQR"),
+            ("/calendario", "Calendario escolar"),
             ("/feature_flags", "Funciones"),
             ("/servidores", "Servidores"),
             ("/cookies_admin", "Cookies"),
@@ -2304,6 +2305,7 @@ def menu_items_por_rol():
             ("/notas", "Ver notas (solo lectura)"),
             ("/buscar_estudiantes", "Ver historial estudiante"),
             ("/horarios", "Ver horarios"),
+            ("/calendario", "Calendario escolar"),
             ("/alertas", "Alertas / estadísticas"),
             ("/roles_institucion", "Roles y permisos"),
             ("/enlaces-publicos", "Enlaces públicos"),
@@ -2326,6 +2328,7 @@ def menu_items_por_rol():
             ("/reportes", "Reportes por grupo"),
             ("/alertas", "Alertas"),
             ("/horarios", "Horarios"),
+            ("/calendario", "Calendario escolar"),
             ("/excusas", "Justificaciones"),
             ("/pqr", "PQR"),
         ]
@@ -2356,6 +2359,7 @@ def menu_items_por_rol():
             ("/docentes", "Docentes y asignaciones"),
             ("/notas/componentes", "Componentes evaluación"),
             ("/notas", "Notas (ver / imprimir)"),
+            ("/calendario", "Calendario escolar"),
             ("/secretaria/documentos", "Documentos legales y MEN"),
             ("/excusas", "Excusas"),
             ("/pqr-colegio", "PQR de padres"),
@@ -2373,6 +2377,8 @@ def menu_items_por_rol():
             ("/buscar_estudiantes", "Buscar estudiante"),
             ("/estudiantes_grupo", "Mis grupos"),
             ("/horarios", "Mis horarios"),
+            ("/calendario", "Calendario escolar"),
+            ("/pqr", "Soporte PROCSIS"),
         ]
 
     items.append(("/logout", "Cerrar sesión"))
@@ -17621,6 +17627,7 @@ def gerencia_hq():
         <a class="own" href="/gerencia/correo-soporte">📧 Conectar Gmail · Soporte</a>
         <a class="own" href="/gerencia/correo-notificaciones">📧 Conectar Gmail · Notificaciones</a>
         <a class="g" href="/gerencia/wati-conexion" style="background:#25D366;color:#fff">🔌 Conectar WhatsApp · API WATI</a>
+        <a class="t" href="/calendario">📅 Calendario escolar</a>
         <a class="g" href="/whatsapp/inbox?canal=soporte" style="background:#128C7E;color:#fff">💬 Inbox WhatsApp</a>
       </div>
     </div>
@@ -25905,6 +25912,7 @@ def _modulos_por_rol(rol):
         ("Nueva institución", "/nueva_institucion", "#15803d"),
         ("Bloqueo y Seguridad", "/soporte/info-institucional", "#dc2626"),
         ("Centro PQR / tickets", "/soporte/pqr", "#1d4ed8"),
+        ("📅 Calendario escolar", "/calendario", "#0B2D57"),
         ("💬 Inbox WhatsApp", "/whatsapp/inbox?canal=soporte", "#25D366"),
         ("Radicar PQR interna", "/soporte/pqr/crear", "#1d4ed8"),
         ("Consulta PQR validada", "/soporte/pqr/consulta", "#1d4ed8"),
@@ -25918,6 +25926,7 @@ def _modulos_por_rol(rol):
     ]
     ventas = [
         ("Panel ventas", "/ventas/panel", "#0B2D57"),
+        ("📅 Calendario escolar", "/calendario", "#0B2D57"),
         ("CRM · Embudo", "/ventas/crm", "#1d4ed8"),
         ("Crear link demo", "/ventas/panel", "#15803d"),
         ("Demos caducidad", "/ventas/demos", "#0f766e"),
@@ -29123,6 +29132,7 @@ def docente_escritorio():
         ("/buscar_estudiantes", "Buscar", "Consultar alumno", "#334155", "B"),
         ("/eduaura", "EduAura IA", "Observaciones y riesgo de reprobación", "#6d28d9", "E"),
         ("/horarios", "Horarios", "Mi jornada", "#0B2D57", "H"),
+        ("/calendario", "Calendario", "Agenda escolar 2024–2040", "#0f766e", "C"),
         ("/pqr", "Soporte PROCSIS", "PQR docente · fallas técnicas", "#4c1d95", "P"),
     ]
     try:
@@ -29227,7 +29237,8 @@ def notas_hub():
 <div class="nh-cols">
   <div class="nh-box">
     <h2>{"Mi trabajo en el aula" if es_docente else "Trabajo académico"}</h2>
-    <a class="nh-link nh-primary" href="/notas/planilla">
+    <a class="nh-link" href="/calendario" style="border-color:#0B2D57">📅 Calendario escolar</a>
+<a class="nh-link nh-primary" href="/notas/planilla">
       <div class="nh-ico">▦</div>
       <div><b>Planilla de notas</b><span>Por materia · diseño Excel · Seguimiento 40% + Otros 60%</span></div>
     </a>
@@ -35734,9 +35745,6 @@ def pqr_pdf_publico(codigo):
     )
 
 
-@app.route("/soporte/pqr/<int:id>", methods=["GET", "POST"])
-
-
 @app.route("/encuesta/<token>", methods=["GET", "POST"])
 def encuesta_csat_publica(token):
     """Encuesta CSAT sin login. Registra IP / ubicación / ISP (Ley 1581)."""
@@ -36904,10 +36912,17 @@ def panel_fidelizacion_csat():
 
 
 
+@app.route("/soporte/pqr/<int:id>", methods=["GET", "POST"])
 def soporte_pqr_detalle(id):
     if not requiere_login() or rol_actual() != "Soporte":
         return redirect("/soporte-login")
-    t = TicketPQR.query.get_or_404(id)
+    try:
+        t = TicketPQR.query.get_or_404(id)
+    except Exception as e404:
+        return page("Detalle PQR", shell(
+            f"<div class='msg danger'>Ticket no encontrado ({_esc(str(e404)[:120])})</div>"
+            "<p><a class='btn' href='/soporte/pqr'>← Centro PQR</a></p>"
+        ))
     mensaje = ""
     cerrado = (t.estado or "").upper() in ("CERRADA", "CERRADO", "RESUELTA")
     if request.method == "POST":
