@@ -2030,9 +2030,8 @@ class PreMatricula(db.Model):
 
 
 def html_anuncio_global():
-    """Modal de anuncio: se muestra UNA vez por sesión de login.
-    Al cerrar con X no vuelve a salir al cambiar de módulo.
-    Vuelve a salir solo tras cerrar sesión e ingresar de nuevo (o si Gerencia publica nueva versión)."""
+    """Modal institucional estilo PROCSIS (diseño corporativo con equipo).
+    Se muestra UNA vez por sesión de login; al cerrar con X no reaparece al navegar."""
     try:
         p = plataforma()
     except Exception:
@@ -2040,64 +2039,129 @@ def html_anuncio_global():
     if not getattr(p, "anuncio_activo", False):
         return ""
     ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")
-    # Ya cerrado en esta sesión de login → no renderizar
     try:
         if str(session.get("anuncio_dismissed_ver") or "") == ver:
             return ""
     except Exception:
         pass
-    titulo = _esc(getattr(p, "anuncio_titulo", None) or "Aviso importante")
-    cuerpo_raw = getattr(p, "anuncio_cuerpo", None) or ""
-    cuerpo = cuerpo_raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+    titulo = _esc(getattr(p, "anuncio_titulo", None) or "¡Bienvenidos a la fase de evaluación de EduTrack!")
+    cuerpo_raw = getattr(p, "anuncio_cuerpo", None) or (
+        "Estimada comunidad educativa, de la mano de PROCSIS y su dueño Sebastián López, nos complace "
+        "darles la bienvenida a la plataforma. Como empresa joven y tecnológica, nos encontramos "
+        "finalizando las evaluaciones técnicas para garantizar un entorno digital moderno, seguro y de "
+        "alta fidelidad. Durante este periodo, agradecemos reportar cualquier sugerencia o novedad "
+        "directamente al equipo de soporte técnico para continuar optimizando la experiencia."
+    )
+    cuerpo = (
+        cuerpo_raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+    )
     cuenta = _esc(getattr(p, "anuncio_cuenta", None) or "")
     imgs = []
     for attr in ("anuncio_img1", "anuncio_img2"):
-        path = (getattr(p, attr, None) or "").strip()
-        if path:
-            imgs.append(path)
-    imgs_html = ""
+        src = (getattr(p, attr, None) or "").strip()
+        if src:
+            imgs.append(src)
+
+    # Bloque visual izquierdo (foto del anuncio o ilustración corporativa)
     if imgs:
-        parts = []
-        for src_img in imgs:
-            parts.append(
-                '<img src="' + src_img + '" alt="Anuncio" style="width:100%;max-height:220px;object-fit:cover;'
-                'border-radius:12px;margin:10px 0 0;display:block;background:#e2e8f0">'
-            )
-        imgs_html = '<div style="margin-top:8px">' + "".join(parts) + "</div>"
+        visual = (
+            '<div style="position:relative;border-radius:14px;overflow:hidden;min-height:140px;'
+            'background:linear-gradient(135deg,#0B2D57 0%,#1e40af 60%,#38bdf8 100%)">'
+            '<img src="' + imgs[0] + '" alt="" style="width:100%;height:160px;object-fit:cover;display:block;opacity:.92">'
+            '<div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(11,45,87,.15),rgba(11,45,87,.55))"></div>'
+            "</div>"
+        )
+    else:
+        visual = (
+            '<div style="position:relative;border-radius:14px;overflow:hidden;min-height:150px;'
+            'background:linear-gradient(135deg,#0B2D57 0%,#1e3a8a 45%,#2563eb 100%);'
+            'display:flex;align-items:center;justify-content:center;padding:16px">'
+            '<div style="position:absolute;inset:0;opacity:.18;'
+            'background-image:radial-gradient(circle at 20% 30%,#fff 0 2px,transparent 3px),'
+            'radial-gradient(circle at 80% 70%,#fff 0 2px,transparent 3px);background-size:40px 40px"></div>'
+            '<div style="position:relative;z-index:1;color:#fff;text-align:center">'
+            '<div style="font-size:34px;line-height:1">🎓</div>'
+            '<div style="font-size:12px;font-weight:800;letter-spacing:.06em;margin-top:6px;opacity:.95">EDUTRACK · PROCSIS</div>'
+            '<div style="font-size:11px;opacity:.8;margin-top:4px">Innovación que gestiona</div>'
+            "</div></div>"
+        )
+
+    # Tarjeta EL EQUIPO (diseño del mockup)
+    equipo = (
+        '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px;'
+        'box-shadow:0 4px 16px rgba(15,23,42,.06)">'
+        '<div style="font-size:10px;letter-spacing:.12em;color:#64748b;font-weight:700">MEET THE TEAM</div>'
+        '<div style="font-size:15px;font-weight:800;color:#0B2D57;margin:2px 0 10px">EL EQUIPO</div>'
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 12px">'
+        # Fila 1
+        '<div style="display:flex;gap:8px;align-items:center">'
+        '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0B2D57,#2563eb);'
+        'color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">SL</div>'
+        '<div style="min-width:0"><div style="font-size:11px;font-weight:800;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Sebastián López</div>'
+        '<div style="font-size:10px;color:#64748b">Founder &amp; CEO</div></div></div>'
+        '<div style="display:flex;gap:8px;align-items:center">'
+        '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0f766e,#14b8a6);'
+        'color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">ST</div>'
+        '<div style="min-width:0"><div style="font-size:11px;font-weight:800;color:#0f172a">Soporte Técnico</div>'
+        '<div style="font-size:10px;color:#64748b">Mesa PROCSIS</div></div></div>'
+        '<div style="display:flex;gap:8px;align-items:center">'
+        '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1d4ed8,#60a5fa);'
+        'color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">DV</div>'
+        '<div style="min-width:0"><div style="font-size:11px;font-weight:800;color:#0f172a">Desarrollo</div>'
+        '<div style="font-size:10px;color:#64748b">EduTrack Core</div></div></div>'
+        '<div style="display:flex;gap:8px;align-items:center">'
+        '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#a78bfa);'
+        'color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">QA</div>'
+        '<div style="min-width:0"><div style="font-size:11px;font-weight:800;color:#0f172a">Calidad</div>'
+        '<div style="font-size:10px;color:#64748b">Pruebas y estabilidad</div></div></div>'
+        "</div></div>"
+    )
+
     cuenta_html = ""
     if cuenta:
         cuenta_html = (
-            '<div style="margin-top:16px;padding:14px 16px;background:#ecfdf5;border:1px solid #86efac;border-radius:12px;text-align:left">'
-            '<div style="font-size:12px;font-weight:800;color:#065f46;margin-bottom:4px">DATOS PARA DONACIÓN / APOYO</div>'
-            '<div style="font-size:15px;font-weight:700;color:#14532d">' + cuenta + "</div></div>"
+            '<div style="margin-top:12px;padding:12px 14px;background:#ecfdf5;border:1px solid #86efac;border-radius:12px">'
+            '<div style="font-size:11px;font-weight:800;color:#065f46;margin-bottom:4px">DATOS / CONTACTO</div>'
+            '<div style="font-size:14px;font-weight:700;color:#14532d">' + cuenta + "</div></div>"
         )
+
     return (
-        '<div id="anuncio-global" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.72);'
-        "backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;font-family:Segoe UI,Arial,sans-serif\">"
-        '<div style="position:relative;max-width:600px;width:100%;background:#fff;border-radius:18px;'
-        'box-shadow:0 25px 60px rgba(0,0,0,.35);overflow:hidden;max-height:92vh;overflow-y:auto">'
-        '<button type="button" id="anuncio-cerrar" aria-label="Cerrar" style="position:absolute;top:12px;right:12px;'
-        "width:36px;height:36px;border:0;border-radius:50%;background:#f1f5f9;color:#0f172a;font-size:22px;"
-        'font-weight:800;cursor:pointer;line-height:36px;z-index:2">×</button>'
-        '<div style="background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:22px 28px 18px;padding-right:48px">'
-        '<div style="font-size:11px;letter-spacing:1px;opacity:.85">PROCSIS · AVISO INSTITUCIONAL</div>'
-        '<h2 style="margin:8px 0 0;font-size:20px;line-height:1.3">' + titulo + "</h2></div>"
-        '<div style="padding:18px 28px 26px;color:#334155;font-size:14px;line-height:1.55">'
-        + imgs_html
-        + '<div style="margin-top:12px">' + cuerpo + "</div>" + cuenta_html
-        + '<p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Cierre con la X. No volverá a mostrarse hasta su próximo inicio de sesión.</p>'
+        '<div id="anuncio-global" style="display:none;position:fixed;inset:0;z-index:100000;'
+        "background:rgba(15,23,42,.55);backdrop-filter:blur(6px);align-items:center;justify-content:center;"
+        'padding:16px;font-family:Segoe UI,Arial,sans-serif">'
+        '<div style="position:relative;max-width:720px;width:100%;background:#fff;border-radius:20px;'
+        'box-shadow:0 28px 70px rgba(0,0,0,.28);overflow:hidden;max-height:92vh;overflow-y:auto">'
+        # Header azul
+        '<div style="background:linear-gradient(90deg,#0B2D57 0%,#1e40af 55%,#2563eb 100%);'
+        'color:#fff;padding:18px 56px 16px 22px;position:relative">'
+        '<div style="font-size:11px;letter-spacing:.14em;opacity:.88;font-weight:600">PROCSIS · AVISO INSTITUCIONAL</div>'
+        '<h2 style="margin:6px 0 0;font-size:22px;line-height:1.25;font-weight:800">' + titulo + "</h2>"
+        '<button type="button" id="anuncio-cerrar" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;'
+        "width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;"
+        'font-size:20px;font-weight:700;cursor:pointer;line-height:34px;backdrop-filter:blur(4px)">×</button>'
+        "</div>"
+        # Cuerpo
+        '<div style="padding:18px 22px 10px;color:#1e293b;font-size:14.5px;line-height:1.6">'
+        + '<div style="margin-bottom:14px">' + cuerpo + "</div>"
+        + cuenta_html
+        # Fila visual + equipo
+        + '<div style="display:grid;grid-template-columns:1.05fr 1fr;gap:14px;align-items:stretch;margin-top:6px">'
+        + visual + equipo
+        + "</div>"
+        + '<p style="margin:14px 0 6px;font-size:12px;color:#94a3b8;text-align:left">'
+        "Cierre con la X. No volverá a mostrarse hasta su próximo inicio de sesión.</p>"
         "</div></div></div>"
         '<script>(function(){var ver="' + ver + '";'
         'var el=document.getElementById("anuncio-global");if(!el)return;el.style.display="flex";'
-        "var btn=document.getElementById(\"anuncio-cerrar\");"
+        'var btn=document.getElementById("anuncio-cerrar");'
         'if(btn)btn.onclick=function(){el.style.display="none";'
         'try{fetch("/anuncio/cerrar",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},'
         'body:"ver="+encodeURIComponent(ver),credentials:"same-origin"});}catch(e){}};'
         "})();</script>"
+        # Responsive: apilar en móvil
+        "<style>@media(max-width:640px){#anuncio-global div[style*=grid-template-columns]{"
+        "grid-template-columns:1fr!important}}</style>"
     )
-
-
-
 
 
 @app.route("/anuncio/cerrar", methods=["POST", "GET"])
@@ -42050,106 +42114,184 @@ def api_health_railway():
 
 @app.route("/calendario", methods=["GET", "POST"])
 def calendario_escolar():
-    """Calendario escolar 2024-2040 para Docente, Secretaria, Rectoria y Coordinacion."""
+    """Calendario escolar 2024-2040. Robusto: crea tabla si falta."""
     if not requiere_login():
         return redirect("/login")
-    rol = rol_actual()
-    roles_ok = (
+    rol = (rol_actual() or "").strip()
+    roles_ok = {
         "Docente", "Secretaría", "Rectoría", "Rector", "Coordinación", "Coordinador",
-        "Soporte", "Gerente", "Administrador", "Superadmin", "Comercial",
-    )
+        "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin", "Comercial", "Ventas",
+    }
     if rol not in roles_ok:
-        return acceso_denegado("Calendario para Docente, Secretaria, Rectoria y Coordinacion.")
+        return acceso_denegado("Calendario para roles del colegio, soporte y gerencia.")
+
+    # Asegurar tabla (Railway / Postgres / SQLite)
     try:
-        db.create_all()
+        from sqlalchemy import text as sa_text, inspect as sa_inspect
+        insp = sa_inspect(db.engine)
+        if "calendario_eventos" not in insp.get_table_names():
+            try:
+                db.create_all()
+            except Exception as _ca:
+                print("calendario create_all:", _ca)
+                try:
+                    with db.engine.begin() as conn:
+                        conn.execute(sa_text(
+                            "CREATE TABLE IF NOT EXISTS calendario_eventos ("
+                            "id SERIAL PRIMARY KEY,"
+                            "institucion_id INTEGER,"
+                            "titulo VARCHAR(200) DEFAULT '',"
+                            "descripcion TEXT DEFAULT '',"
+                            "fecha VARCHAR(10) DEFAULT '',"
+                            "fecha_fin VARCHAR(10) DEFAULT '',"
+                            "tipo VARCHAR(40) DEFAULT 'institucional',"
+                            "color VARCHAR(20) DEFAULT '#0B2D57',"
+                            "creado_por VARCHAR(120) DEFAULT '',"
+                            "creado_en VARCHAR(30) DEFAULT ''"
+                            ")"
+                        ))
+                except Exception as _sql:
+                    # SQLite fallback
+                    try:
+                        with db.engine.begin() as conn:
+                            conn.execute(sa_text(
+                                "CREATE TABLE IF NOT EXISTS calendario_eventos ("
+                                "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                                "institucion_id INTEGER,"
+                                "titulo VARCHAR(200) DEFAULT '',"
+                                "descripcion TEXT DEFAULT '',"
+                                "fecha VARCHAR(10) DEFAULT '',"
+                                "fecha_fin VARCHAR(10) DEFAULT '',"
+                                "tipo VARCHAR(40) DEFAULT 'institucional',"
+                                "color VARCHAR(20) DEFAULT '#0B2D57',"
+                                "creado_por VARCHAR(120) DEFAULT '',"
+                                "creado_en VARCHAR(30) DEFAULT ''"
+                                ")"
+                            ))
+                    except Exception as _sq2:
+                        print("calendario SQL create:", _sq2)
+    except Exception as _te:
+        print("calendario table ensure:", _te)
+
+    iid = None
+    try:
+        iid = institucion_id_actual()
     except Exception:
-        pass
-    iid = institucion_id_actual()
+        iid = session.get("institucion_id")
+
     msg = ""
-    puede_editar = rol in (
+    puede_editar = rol in {
         "Secretaría", "Rectoría", "Rector", "Coordinación", "Coordinador",
-        "Soporte", "Gerente", "Administrador", "Superadmin",
-    )
+        "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin",
+    }
     festivos_base = {
-        "01-01": "Ano Nuevo",
-        "05-01": "Dia del Trabajo",
+        "01-01": "Año Nuevo",
+        "05-01": "Día del Trabajo",
         "07-20": "Independencia de Colombia",
-        "08-07": "Batalla de Boyaca",
-        "12-08": "Inmaculada Concepcion",
+        "08-07": "Batalla de Boyacá",
+        "12-08": "Inmaculada Concepción",
         "12-25": "Navidad",
     }
-    if request.method == "POST" and puede_editar:
-        acc = (request.form.get("accion") or "crear").strip()
-        if acc == "borrar":
-            eid = request.form.get("evento_id", type=int)
-            ev = CalendarioEvento.query.get(eid) if eid else None
-            if ev and (ev.institucion_id is None or (iid and int(ev.institucion_id) == int(iid))):
-                db.session.delete(ev)
-                try:
-                    db.session.commit()
-                    msg = "Evento eliminado."
-                except Exception:
-                    db.session.rollback()
-        else:
-            titulo = (request.form.get("titulo") or "").strip()[:200]
-            fecha = (request.form.get("fecha") or "").strip()[:10]
-            fecha_fin = (request.form.get("fecha_fin") or "").strip()[:10]
-            tipo = (request.form.get("tipo") or "institucional").strip()[:40]
-            desc = (request.form.get("descripcion") or "").strip()[:2000]
-            if titulo and fecha:
-                colores = {
-                    "festivo": "#b91c1c",
-                    "academico": "#1d4ed8",
-                    "reunion": "#0f766e",
-                    "institucional": "#0B2D57",
-                }
-                try:
-                    ahora_txt = fecha_hoy() + " " + hora_actual()
-                except Exception:
-                    ahora_txt = fecha
-                db.session.add(CalendarioEvento(
-                    institucion_id=iid,
-                    titulo=titulo,
-                    descripcion=desc,
-                    fecha=fecha,
-                    fecha_fin=fecha_fin,
-                    tipo=tipo,
-                    color=colores.get(tipo, "#0B2D57"),
-                    creado_por=session.get("usuario") or "",
-                    creado_en=ahora_txt,
-                ))
-                try:
-                    db.session.commit()
-                    msg = "Evento guardado en el calendario."
-                except Exception as ex:
-                    db.session.rollback()
-                    msg = "Error: %s" % ex
-            else:
-                msg = "Titulo y fecha son obligatorios."
+
     try:
-        anio = int(request.args.get("anio") or fecha_hoy()[:4])
+        if request.method == "POST" and puede_editar:
+            acc = (request.form.get("accion") or "crear").strip()
+            if acc == "borrar":
+                try:
+                    eid = int(request.form.get("evento_id") or 0)
+                except Exception:
+                    eid = 0
+                if eid:
+                    try:
+                        ev = CalendarioEvento.query.get(eid)
+                        if ev and (ev.institucion_id is None or (iid is not None and int(ev.institucion_id) == int(iid))):
+                            db.session.delete(ev)
+                            db.session.commit()
+                            msg = "Evento eliminado."
+                    except Exception as ex:
+                        db.session.rollback()
+                        msg = "No se pudo eliminar: %s" % str(ex)[:120]
+            else:
+                titulo = (request.form.get("titulo") or "").strip()[:200]
+                fecha = (request.form.get("fecha") or "").strip()[:10]
+                fecha_fin = (request.form.get("fecha_fin") or "").strip()[:10]
+                tipo = (request.form.get("tipo") or "institucional").strip()[:40]
+                desc = (request.form.get("descripcion") or "").strip()[:2000]
+                if titulo and fecha:
+                    colores = {
+                        "festivo": "#b91c1c", "academico": "#1d4ed8",
+                        "reunion": "#0f766e", "institucional": "#0B2D57",
+                    }
+                    try:
+                        ahora_txt = fecha_hoy() + " " + hora_actual()
+                    except Exception:
+                        ahora_txt = fecha
+                    try:
+                        db.session.add(CalendarioEvento(
+                            institucion_id=iid,
+                            titulo=titulo,
+                            descripcion=desc,
+                            fecha=fecha,
+                            fecha_fin=fecha_fin,
+                            tipo=tipo,
+                            color=colores.get(tipo, "#0B2D57"),
+                            creado_por=session.get("usuario") or "",
+                            creado_en=ahora_txt,
+                        ))
+                        db.session.commit()
+                        msg = "Evento guardado."
+                    except Exception as ex:
+                        db.session.rollback()
+                        msg = "No se pudo guardar: %s" % str(ex)[:120]
+                else:
+                    msg = "Título y fecha son obligatorios."
+    except Exception as ex_post:
+        print("calendario POST:", ex_post)
+        msg = "Error al procesar: %s" % str(ex_post)[:120]
+
+    try:
+        hoy = fecha_hoy()
+    except Exception:
+        from datetime import date as _date
+        hoy = _date.today().isoformat()
+    try:
+        anio = int(request.args.get("anio") or hoy[:4])
     except Exception:
         anio = 2026
     anio = max(2024, min(2040, anio))
     try:
-        mes = int(request.args.get("mes") or fecha_hoy()[5:7])
+        mes = int(request.args.get("mes") or hoy[5:7])
     except Exception:
         mes = 1
     mes = max(1, min(12, mes))
     pref = "%04d-%02d" % (anio, mes)
-    q = CalendarioEvento.query.filter(CalendarioEvento.fecha.like(pref + "%"))
-    if iid is not None:
-        q = q.filter((CalendarioEvento.institucion_id == iid) | (CalendarioEvento.institucion_id.is_(None)))
-    eventos_bd = q.order_by(CalendarioEvento.fecha.asc()).all()
+
+    eventos_bd = []
+    try:
+        q = CalendarioEvento.query.filter(CalendarioEvento.fecha.like(pref + "%"))
+        if iid is not None:
+            q = q.filter(
+                (CalendarioEvento.institucion_id == iid) | (CalendarioEvento.institucion_id.is_(None))
+            )
+        eventos_bd = q.order_by(CalendarioEvento.fecha.asc()).all()
+    except Exception as ex_q:
+        print("calendario query:", ex_q)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        eventos_bd = []
+
     by_day = {}
     for ev in eventos_bd:
-        by_day.setdefault(ev.fecha, []).append(ev)
+        by_day.setdefault(ev.fecha or "", []).append(ev)
     for md, nom in festivos_base.items():
         f = "%04d-%s" % (anio, md)
         if f.startswith(pref):
             by_day.setdefault(f, []).append(
                 type("F", (), {"titulo": nom, "tipo": "festivo", "color": "#b91c1c", "id": None})()
             )
+
     import calendar as _cal
     weeks = _cal.Calendar(firstweekday=0).monthdayscalendar(anio, mes)
     meses_nom = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -42160,84 +42302,98 @@ def calendario_escolar():
         prev_y, prev_m = 2024, 1
     if next_y > 2040:
         next_y, next_m = 2040, 12
+
     anios_opts = "".join(
         '<option value="%s"%s>%s</option>' % (a, " selected" if a == anio else "", a)
         for a in range(2024, 2041)
     )
-    grid = []
+
+    def _h(s):
+        try:
+            return _esc(s)
+        except Exception:
+            return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    grid_rows = []
     for week in weeks:
-        row = ["<tr>"]
+        cells = []
         for d in week:
             if d == 0:
-                row.append('<td class="cal-empty"></td>')
+                cells.append('<td class="cal-empty"></td>')
                 continue
             key = "%04d-%02d-%02d" % (anio, mes, d)
             chips = []
             for e in by_day.get(key, [])[:4]:
-                chips.append(
-                    '<div class="cal-chip" style="background:%s">%s</div>'
-                    % (getattr(e, "color", None) or "#0B2D57", _esc((getattr(e, "titulo", None) or "")[:28]))
-                )
-            row.append(
+                tit = _h((getattr(e, "titulo", None) or "")[:28])
+                col = getattr(e, "color", None) or "#0B2D57"
+                chips.append('<div class="cal-chip" style="background:%s">%s</div>' % (col, tit))
+            cells.append(
                 '<td class="cal-day"><div class="cal-num">%s</div>%s</td>' % (d, "".join(chips))
             )
-        row.append("</tr>")
-        grid.append("".join(row))
+        grid_rows.append("<tr>%s</tr>" % "".join(cells))
+
     lista_ev = []
     for e in eventos_bd:
-        item = "<li><b>%s</b> — %s" % (_esc(e.fecha), _esc(e.titulo))
-        if puede_editar and e.id:
+        item = "<li><b>%s</b> — %s" % (_h(e.fecha), _h(e.titulo))
+        if puede_editar and getattr(e, "id", None):
             item += (
-                ' <form method="POST" style="display:inline" onsubmit="return confirm(\'Borrar?\')">'
+                ' <form method="POST" style="display:inline" onsubmit="return confirm(\'¿Borrar?\')">'
                 '<input type="hidden" name="accion" value="borrar">'
                 '<input type="hidden" name="evento_id" value="%s">'
-                '<button style="font-size:11px;padding:2px 8px">Borrar</button></form>' % e.id
+                '<button type="submit" style="font-size:11px;padding:2px 8px">Borrar</button></form>' % e.id
             )
         item += "</li>"
         lista_ev.append(item)
     if not lista_ev:
-        lista_ev = ["<li class='mini-text'>Sin eventos propios este mes (se muestran festivos nacionales).</li>"]
+        lista_ev = ["<li style='color:#64748b'>Sin eventos propios este mes (se muestran festivos nacionales).</li>"]
+
     form_html = ""
     if puede_editar:
         form_html = (
             '<div class="role-panel" style="margin-top:14px">'
-            "<h3 style=\"margin:0 0 8px\">Agregar evento</h3>"
+            '<h3 style="margin:0 0 8px">Agregar evento</h3>'
             '<form method="POST" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
             '<input type="hidden" name="accion" value="crear">'
-            '<div><label>Titulo *</label><input name="titulo" required></div>'
+            '<div><label>Título *</label><input name="titulo" required></div>'
             '<div><label>Fecha *</label><input type="date" name="fecha" required min="2024-01-01" max="2040-12-31"></div>'
             '<div><label>Fecha fin</label><input type="date" name="fecha_fin" min="2024-01-01" max="2040-12-31"></div>'
             '<div><label>Tipo</label><select name="tipo">'
             '<option value="institucional">Institucional</option>'
-            '<option value="academico">Academico</option>'
-            '<option value="reunion">Reunion</option>'
+            '<option value="academico">Académico</option>'
+            '<option value="reunion">Reunión</option>'
             '<option value="festivo">Festivo / descanso</option>'
-            "</select></div>"
-            '<div style="grid-column:1/-1"><label>Descripcion</label><input name="descripcion" style="width:100%"></div>'
+            '</select></div>'
+            '<div style="grid-column:1/-1"><label>Descripción</label>'
+            '<input name="descripcion" style="width:100%"></div>'
             '<div><button type="submit">Guardar evento</button></div>'
-            "</form></div>"
+            '</form></div>'
         )
+
     volver = {
-        "Docente": "/docente", "Secretaría": "/secretaria", "Rectoría": "/rectoria",
-        "Rector": "/rectoria", "Coordinación": "/coordinacion", "Coordinador": "/coordinacion",
+        "Docente": "/docente-escritorio", "Secretaría": "/dashboard", "Rectoría": "/dashboard",
+        "Rector": "/dashboard", "Coordinación": "/dashboard", "Coordinador": "/dashboard",
+        "Soporte": "/soporte_admin", "Gerente": "/gerencia/hq", "Gerencia": "/gerencia/hq",
+        "Comercial": "/ventas/panel", "Ventas": "/ventas/panel",
     }.get(rol, "/dashboard")
+
     content = (
         "<style>"
-        ".cal-wrap{background:#fff;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden}"
+        ".cal-wrap{background:#fff;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden;margin-top:12px}"
         ".cal-nav{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0B2D57;color:#fff;flex-wrap:wrap;gap:8px}"
         ".cal-nav a{color:#fff;font-weight:700;text-decoration:none}"
         ".cal-table{width:100%;border-collapse:collapse;table-layout:fixed}"
         ".cal-table th{background:#e2e8f0;padding:8px;font-size:12px}"
         ".cal-day{vertical-align:top;height:92px;border:1px solid #e2e8f0;padding:4px}"
         ".cal-num{font-weight:800;font-size:12px;color:#0f172a}"
-        ".cal-chip{color:#fff;font-size:10px;border-radius:4px;padding:2px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+        ".cal-chip{color:#fff;font-size:10px;border-radius:4px;padding:2px 4px;margin-top:2px;"
+        "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
         ".cal-empty{background:#f8fafc;border:1px solid #e2e8f0}"
         "</style>"
         '<header class="role-hero"><div>'
         "<h1>Calendario escolar</h1>"
-        "<p>Vista institucional · anos 2024 a 2040 · festivos Colombia + eventos del colegio</p>"
+        "<p>Vista institucional · años 2024 a 2040 · festivos Colombia + eventos del colegio</p>"
         '</div><a class="btn" href="%s">← Volver</a></header>' % volver
-        + (('<div class="msg ok">%s</div>' % _esc(msg)) if msg else "")
+        + (('<div class="msg ok">%s</div>' % _h(msg)) if msg else "")
         + '<div class="cal-wrap"><div class="cal-nav">'
         '<a href="/calendario?anio=%s&mes=%s">← Anterior</a>' % (prev_y, prev_m)
         + '<form method="GET" style="display:flex;gap:8px;align-items:center;margin:0">'
@@ -42248,13 +42404,17 @@ def calendario_escolar():
         + '<a href="/calendario?anio=%s&mes=%s">Siguiente →</a>' % (next_y, next_m)
         + "</div>"
         + '<table class="cal-table"><thead><tr>'
-        "<th>Lun</th><th>Mar</th><th>Mie</th><th>Jue</th><th>Vie</th><th>Sab</th><th>Dom</th>"
-        "</tr></thead><tbody>%s</tbody></table></div>" % "".join(grid)
+        "<th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th>"
+        "</tr></thead><tbody>%s</tbody></table></div>" % "".join(grid_rows)
         + '<div class="role-panel" style="margin-top:14px"><h3 style="margin:0 0 8px">Eventos del mes</h3>'
         + "<ul>%s</ul></div>" % "".join(lista_ev)
         + form_html
     )
-    return page("Calendario escolar", shell(content))
+    try:
+        return page("Calendario escolar", shell(content))
+    except Exception as e_shell:
+        print("calendario shell:", e_shell)
+        return page("Calendario escolar", content)
 
 
 
