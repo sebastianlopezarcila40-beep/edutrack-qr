@@ -6633,7 +6633,7 @@ def session_idle_timeout():
     from flask import request as _req
     # rutas públicas
     path = (_req.path or "")
-    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/api/health") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/pagar") or path.startswith("/static") or path in ("/login", "/soporte-login", "/pqr", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
+    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/api/health") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/pagar") or path.startswith("/static") or path in ("/login", "/soporte-login", "/pqr", "/ayuda", "/centro-ayuda", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
         return
     if path.startswith("/colegio/") or path.startswith("/pqr") or path.startswith("/matricula") or path.startswith("/politicas") or path.startswith("/trabaja") or path.startswith("/casos") or path.startswith("/historias"):
         return
@@ -15561,103 +15561,181 @@ def instituciones():
 @app.route("/ayuda")
 @app.route("/centro-ayuda")
 def centro_ayuda():
-    """Centro de ayuda público: cómo usar EduTrack y contactar soporte."""
+    """Centro de ayuda público estilo operadora, marca PROCSIS / EduTrack."""
+    from urllib.parse import quote
+    q = (request.args.get("q") or "").strip()
     try:
         p = plataforma()
-        tel = (getattr(p, "contacto_publico_tel", None) or "—").strip() or "—"
-        email = (getattr(p, "contacto_publico_email", None) or "—").strip() or "—"
-        logo = (getattr(p, "logo_path", None) or "/static/img/logo-edutrack.png")
+        tel = (getattr(p, "contacto_publico_tel", None) or getattr(p, "telefono_soporte", None) or "").strip() or "3000000000"
+        email = (getattr(p, "contacto_publico_email", None) or getattr(p, "email_soporte", None) or "").strip() or "soporte@procsis.com"
+        empresa = (getattr(p, "empresa", None) or "PROCSIS").strip()
+        logo = (getattr(p, "logo_path", None) or "/static/img/logo-procsis.jpeg")
     except Exception:
-        tel, email, logo = "—", "—", "/static/img/logo-edutrack.png"
+        tel, email, empresa, logo = "3000000000", "soporte@procsis.com", "PROCSIS", "/static/img/logo-procsis.jpeg"
+    tel_wa = "".join(c for c in tel if c.isdigit()) or "573000000000"
+    if not tel_wa.startswith("57") and len(tel_wa) == 10:
+        tel_wa = "57" + tel_wa
+    wa = f"https://wa.me/{tel_wa}?text=" + quote("Hola, necesito ayuda con EduTrack / PROCSIS")
+
+    # FAQ / busqueda simple
+    faqs = [
+        ("login", "Acceso e inicio de sesión", "Use el portal /login con el usuario que le asignó secretaría o soporte. Si olvidó la clave, contacte a rectoría o a soporte PROCSIS; no se restablece solo desde la web."),
+        ("password", "Olvidé mi contraseña", "Por seguridad EduTrack no cambia claves desde un formulario público. El rector o secretaría solicitan el restablecimiento a Mesa de Soporte PROCSIS."),
+        ("pqr", "Cómo radicar una PQR", "Ingrese a /pqr o al módulo PQR de su rol. Recibirá un radicado y la fecha máxima de respuesta según la norma colombiana."),
+        ("factura", "Pagar factura / licencia", "Use /pagar con el NIT o código del colegio. Si hay link Wompi configurado, podrá pagar en línea. También puede escribir a cartera."),
+        ("qr", "Asistencia y códigos QR", "Portería usa el lector en /portal. Los padres ven ingresos en el portal familiar si el plan lo incluye."),
+        ("notas", "Planilla de notas del docente", "El docente solo ve materias y grados asignados. Las notas se auto-guardan; use punto decimal (3.5)."),
+        ("familia", "Portal de padres", "Acceso en /familia-login con cédula del acudiente. Ve resumen de notas e ingresos QR según el plan del colegio."),
+        ("planes", "Planes EduTrack y Solo QR", "Consulte tarifas en /ventas (solo consulta). La activación la hace el equipo comercial PROCSIS."),
+        ("whatsapp", "WhatsApp soporte", "Canal oficial de mesa de ayuda. Desde aquí puede abrir el chat con el número corporativo configurado."),
+        ("datos", "Ley 1581 y datos personales", "EduTrack aplica habeas data: accesos auditados, roles y tratamiento conforme a la política de privacidad de PROCSIS."),
+    ]
+    resultados = []
+    if q:
+        ql = q.lower()
+        for key, tit, txt in faqs:
+            if ql in key or ql in tit.lower() or ql in txt.lower() or any(w in tit.lower() for w in ql.split() if len(w) > 2):
+                resultados.append((tit, txt))
+        if not resultados:
+            resultados.append(("Sin coincidencias exactas", "Pruebe otra palabra o use los atajos de abajo. También puede escribir por WhatsApp a soporte."))
+
+    res_html = ""
+    if q:
+        items = "".join(
+            f'<div class="faq-item"><h3>{_esc(t)}</h3><p>{_esc(x)}</p></div>' for t, x in resultados
+        )
+        res_html = f'<div class="search-results"><h2>Resultados para “{_esc(q)}”</h2>{items}</div>'
+
     body = f"""
+<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Centro de ayuda · {empresa} EduTrack</title>
 <style>
-.ah{{background:#f8fafc;min-height:100vh;font-family:Segoe UI,system-ui,Arial,sans-serif;color:#0f172a}}
-.ah-nav{{background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}}
-.ah-nav a{{color:#0B2D57;text-decoration:none;font-weight:700;margin-left:12px;font-size:13px}}
-.ah-hero{{max-width:900px;margin:0 auto;padding:28px 20px 10px}}
-.ah-hero h1{{color:#0B2D57;margin:0 0 8px;font-size:28px}}
-.ah-hero p{{color:#64748b;margin:0;line-height:1.5}}
-.ah-grid{{max-width:900px;margin:0 auto;padding:16px 20px 40px;display:grid;gap:14px}}
-.ah-card{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;box-shadow:0 4px 14px rgba(15,23,42,.04)}}
-.ah-card h2{{margin:0 0 8px;color:#0B2D57;font-size:17px}}
-.ah-card p,.ah-card li{{color:#475569;font-size:14px;line-height:1.5}}
-.ah-card ol,.ah-card ul{{margin:8px 0 0;padding-left:20px}}
-.ah-btns{{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}}
-.ah-btns a{{display:inline-block;padding:10px 14px;border-radius:10px;font-weight:800;font-size:13px;text-decoration:none}}
-.ah-g{{background:#16a34a;color:#fff}}
-.ah-b{{background:#0B2D57;color:#fff}}
-.ah-o{{background:#e2e8f0;color:#0B2D57}}
-.ah-foot{{text-align:center;padding:16px;color:#94a3b8;font-size:12px;background:#0B2D57}}
-</style>
-<div class="ah">
-  <nav class="ah-nav">
-    <div style="display:flex;align-items:center;gap:10px;font-weight:800;color:#0B2D57">
-      <img src="{logo}" style="height:34px;border-radius:6px" alt=""> Centro de ayuda EduTrack
+*{{box-sizing:border-box}}
+body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#eef5fb;color:#0f172a}}
+.nav{{background:#0B2D57;color:#fff;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}}
+.nav .brand{{display:flex;align-items:center;gap:10px;font-weight:900;font-size:18px;text-decoration:none;color:#fff}}
+.nav .brand img{{height:36px;border-radius:6px;background:#fff;padding:2px}}
+.nav-links a{{color:#e2e8f0;text-decoration:none;font-size:13px;font-weight:600;margin-left:16px}}
+.hero{{text-align:center;padding:42px 16px 28px}}
+.hero h1{{margin:0 0 18px;font-size:clamp(22px,4vw,32px);color:#0B2D57;font-weight:900}}
+.search-box{{max-width:640px;margin:0 auto;background:#fff;border-radius:16px;padding:18px 18px 14px;box-shadow:0 10px 40px rgba(11,45,87,.12)}}
+.search-row{{display:flex;gap:8px;flex-wrap:wrap}}
+.search-row input{{flex:1;min-width:200px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:12px;font-size:15px}}
+.search-row button{{background:#0ea5e9;color:#fff;border:0;padding:14px 20px;border-radius:12px;font-weight:800;cursor:pointer}}
+.chips{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}}
+.chips a{{background:#f8fafc;border:1px solid #e2e8f0;color:#0B2D57;text-decoration:none;font-size:12px;font-weight:700;padding:8px 12px;border-radius:999px}}
+.chips a:hover{{border-color:#0ea5e9;background:#e0f2fe}}
+.wrap{{max-width:1080px;margin:0 auto;padding:8px 16px 48px}}
+.cats{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin:28px 0 8px}}
+.cat{{background:#fff;border-radius:14px;padding:18px 12px;text-align:center;text-decoration:none;color:#0B2D57;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(15,23,42,.05);border:1px solid #e8eef5}}
+.cat span{{display:block;font-size:28px;margin-bottom:8px}}
+.section-title{{color:#0B2D57;font-size:20px;font-weight:900;margin:28px 0 14px}}
+.pop{{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}}
+.pop a{{background:#fff;border-radius:14px;padding:16px 18px;text-decoration:none;color:#0f172a;border:1px solid #e8eef5;box-shadow:0 4px 12px rgba(15,23,42,.04);display:flex;justify-content:space-between;align-items:center;gap:10px}}
+.pop a b{{display:block;color:#0B2D57;font-size:14px;margin-bottom:4px}}
+.pop a span{{font-size:12px;color:#64748b}}
+.pop a .ic{{width:36px;height:36px;border-radius:50%;background:#e0f2fe;display:flex;align-items:center;justify-content:center;flex-shrink:0}}
+.banner{{background:linear-gradient(135deg,#0B2D57,#0369a1);color:#fff;border-radius:18px;padding:28px 24px;margin:32px 0;display:grid;grid-template-columns:1.1fr 1fr;gap:20px}}
+@media(max-width:800px){{.banner{{grid-template-columns:1fr}}}}
+.banner h2{{margin:0 0 8px;font-size:22px}}
+.banner p{{margin:0;opacity:.9;font-size:14px;line-height:1.5}}
+.banner-grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+.banner-grid a{{background:rgba(255,255,255,.12);border-radius:12px;padding:12px 14px;text-decoration:none;color:#fff;font-size:13px}}
+.banner-grid a b{{display:block;margin-bottom:2px}}
+.search-results{{background:#fff;border-radius:14px;padding:18px;margin:16px 0;border:1px solid #e2e8f0}}
+.faq-item{{border-bottom:1px solid #f1f5f9;padding:12px 0}}
+.faq-item h3{{margin:0 0 6px;color:#0B2D57;font-size:15px}}
+.faq-item p{{margin:0;color:#475569;font-size:14px;line-height:1.5}}
+.foot{{background:#0B2D57;color:#94a3b8;padding:28px 16px;font-size:13px}}
+.foot-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px}}
+.foot a{{color:#bfdbfe;text-decoration:none}}
+.foot b{{color:#fff;display:block;margin-bottom:8px}}
+</style></head><body>
+<nav class="nav">
+  <a class="brand" href="/ayuda"><img src="{logo}" alt="" onerror="this.style.display='none'"> {empresa} · Ayuda</a>
+  <div class="nav-links">
+    <a href="/ventas">Planes</a>
+    <a href="/pagar">Pagar</a>
+    <a href="/login">Mi EduTrack</a>
+    <a href="/familia-login">Familias</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <h1>¿Tienes dudas? Resuélvelas aquí</h1>
+  <div class="search-box">
+    <form class="search-row" method="GET" action="/ayuda">
+      <input name="q" value="{_esc(q)}" placeholder="Ingresa aquí tu consulta" autocomplete="off">
+      <button type="submit">🔍 BUSCAR</button>
+    </form>
+    <div class="chips">
+      <a href="/ayuda?q=login">Iniciar sesión</a>
+      <a href="/ayuda?q=password">Contraseña</a>
+      <a href="/pagar">Pagar factura</a>
+      <a href="/ayuda?q=pqr">Radicar PQR</a>
+      <a href="/ayuda?q=qr">Asistencia QR</a>
+      <a href="/ayuda?q=familia">Portal padres</a>
+      <a href="/ayuda?q=notas">Notas docente</a>
+      <a href="{wa}" target="_blank" rel="noopener">Soporte técnico</a>
     </div>
+  </div>
+  {res_html}
+</section>
+
+<div class="wrap">
+  <div class="section-title">Explora temas por servicio</div>
+  <div class="cats">
+    <a class="cat" href="/ayuda?q=login"><span>🔐</span>Acceso</a>
+    <a class="cat" href="/ayuda?q=notas"><span>📝</span>Notas</a>
+    <a class="cat" href="/ayuda?q=qr"><span>📷</span>QR / Portería</a>
+    <a class="cat" href="/ayuda?q=familia"><span>👨‍👩‍👧</span>Familias</a>
+    <a class="cat" href="/pagar"><span>💳</span>Pagos</a>
+    <a class="cat" href="/ayuda?q=pqr"><span>🎫</span>PQR</a>
+    <a class="cat" href="/ayuda?q=planes"><span>📦</span>Planes</a>
+    <a class="cat" href="/ayuda?q=datos"><span>🛡️</span>Datos / 1581</a>
+  </div>
+
+  <div class="section-title">Lo que más consultan nuestros usuarios</div>
+  <div class="pop">
+    <a href="/ayuda?q=login"><div><b>Acceso</b><span>Cómo ingresar al colegio</span></div><div class="ic">🔑</div></a>
+    <a href="/ayuda?q=password"><div><b>Contraseña</b><span>Olvidé mi clave</span></div><div class="ic">🔒</div></a>
+    <a href="/pagar"><div><b>Facturación</b><span>Pagar licencia EduTrack</span></div><div class="ic">📄</div></a>
+    <a href="/ayuda?q=qr"><div><b>Asistencia QR</b><span>Ingreso de estudiantes</span></div><div class="ic">📱</div></a>
+    <a href="/ayuda?q=familia"><div><b>Portal padres</b><span>Notas e ingresos</span></div><div class="ic">👪</div></a>
+    <a href="/ayuda?q=pqr"><div><b>PQR</b><span>Radicar petición o queja</span></div><div class="ic">📨</div></a>
+  </div>
+
+  <div class="banner">
     <div>
-      <a href="/login">Inicio</a>
-      <a href="/whatsapp">WhatsApp</a>
-      <a href="/ventas">Ventas</a>
-      <a href="/contacto">Contacto</a>
+      <h2>Resuelve tus solicitudes sin filas ni llamadas</h2>
+      <p>Canales digitales de {empresa}: WhatsApp, portal EduTrack, pagos en línea y PQR con radicado legal.</p>
+      <p style="margin-top:12px;font-size:13px;opacity:.85">Correo: {_esc(email)} · Tel: {_esc(tel)}</p>
     </div>
-  </nav>
-  <div class="ah-hero">
-    <h1>¿Cómo le ayudamos?</h1>
-    <p>Guía clara para colegios: acceso, uso básico y contacto con servicio al cliente Procsis.</p>
-  </div>
-  <div class="ah-grid">
-    <div class="ah-card">
-      <h2>1. ¿Qué es EduTrack?</h2>
-      <p>Plataforma de gestión escolar multi-institucional: estudiantes, asistencia, notas SIEE, boletines, horarios y PQR. Cada colegio ve solo su información.</p>
-    </div>
-    <div class="ah-card">
-      <h2>2. ¿Por dónde ingreso?</h2>
-      <ul>
-        <li><b>Colegio (todos los roles):</b> <a href="/login">/login</a> — rectoría, coordinación, secretaría y docente.</li>
-        <li><b>Ventas / planes:</b> <a href="/ventas">/ventas</a></li>
-        <li><b>WhatsApp soporte:</b> <a href="/whatsapp">/whatsapp</a></li>
-      </ul>
-    </div>
-    <div class="ah-card">
-      <h2>3. Primeros pasos en el colegio</h2>
-      <ol>
-        <li>Inicie sesión y verifique su rol (Rectoría, Coordinación, Secretaría o Docente).</li>
-        <li>Secretaría: registre o importe estudiantes.</li>
-        <li>Docentes: ingresen notas en la planilla de sus materias.</li>
-        <li>Secretaría/Rectoría: generen boletines e informes.</li>
-      </ol>
-    </div>
-    <div class="ah-card">
-      <h2>4. Contactar servicio al cliente (paso a paso)</h2>
-      <ol>
-        <li>Entre a <a href="/whatsapp"><b>WhatsApp soporte</b></a>.</li>
-        <li>Pulse <b>Abrir WhatsApp con soporte</b>.</li>
-        <li>Complete el mensaje con el nombre del colegio, su usuario y la duda o error.</li>
-        <li>Envíe. También puede escribir a <b>{email}</b> o llamar a <b>{tel}</b>.</li>
-      </ol>
-      <div class="ah-btns">
-        <a class="ah-g" href="/whatsapp">💬 WhatsApp soporte</a>
-        <a class="ah-b" href="/ventas">Portal ventas</a>
-        <a class="ah-o" href="/login">Volver al login</a>
-      </div>
-    </div>
-    <div class="ah-card">
-      <h2>5. No puedo ingresar</h2>
-      <p>Por seguridad, EduTrack no restablece contraseñas desde el formulario público. Solicite el restablecimiento a <b>Soporte Procsis</b> (WhatsApp/correo) o pida a rectoría/secretaría que lo gestionen con Soporte.</p>
-    </div>
-    <div class="ah-card">
-      <h2>6. Seguridad</h2>
-      <ul>
-        <li>No comparta su contraseña.</li>
-        <li>Cierre sesión al terminar.</li>
-        <li>Solo Soporte Procsis crea usuarios y roles del sistema.</li>
-      </ul>
+    <div class="banner-grid">
+      <a href="{wa}" target="_blank" rel="noopener"><b>WhatsApp</b>Mesa de soporte PROCSIS</a>
+      <a href="/login"><b>Portal EduTrack</b>Ingreso instituciones</a>
+      <a href="/pagar"><b>Pago digital</b>Facturas con Wompi</a>
+      <a href="/pqr"><b>Radicar PQR</b>Seguimiento con radicado</a>
     </div>
   </div>
-  <div class="ah-foot">EduTrack · PROCSIS — Centro de ayuda para instituciones educativas</div>
 </div>
+
+<footer class="foot">
+  <div class="foot-in">
+    <div><b>Conócenos</b><a href="/quienes-somos">Quiénes somos</a><br><a href="/ventas">Planes</a></div>
+    <div><b>Legal</b><a href="/privacidad">Privacidad</a><br><a href="/tratamiento-datos">Tratamiento de datos</a></div>
+    <div><b>Servicios</b><a href="/login">EduTrack</a><br><a href="/familia-login">Familias</a></div>
+    <div><b>Ayuda</b><a href="/ayuda">Centro de ayuda</a><br><a href="{wa}">WhatsApp</a></div>
+    <div><b>Contacto</b>{_esc(email)}<br>{_esc(tel)}</div>
+  </div>
+  <p style="text-align:center;margin:20px 0 0;opacity:.7">{empresa} · EduTrack · Innovación que gestiona · Colombia</p>
+</footer>
+</body></html>
 """
-    return page("Centro de ayuda", body)
+    return body
+
 
 
 
