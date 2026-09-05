@@ -16082,7 +16082,8 @@ def portal_ventas():
             o.codigo, o.nombre, o.precio_mensual, o.fee_implementacion = cod, nom, prec, fee
             o.max_estudiantes, o.max_sedes, o.imagen_path, o.id = me, ms, "", 0
             planes.append(o)
-    cards = ""
+    cards_full = ""
+    cards_qr = ""
     for p in planes:
         cod = (p.codigo or "").lower()
         feats = {}
@@ -16092,15 +16093,19 @@ def portal_ventas():
                 feats = {"incluidos": feats}
         except Exception:
             feats = {}
-        badge = feats.get("badge") or ("PRUEBA" if cod in ("demo", "piloto") else ("RECOMENDADO" if cod == "pro" else ("MÁS COMPLETO" if cod == "premium" else "PLAN")))
+        badge = feats.get("badge") or (
+            "PRUEBA" if cod in ("demo", "piloto") else
+            ("RECOMENDADO" if cod == "pro" else
+             ("MAS COMPLETO" if cod == "premium" else
+              ("SOLO QR" if cod.startswith("qr") else "PLAN")))
+        )
         est_lbl = _plan_label_estudiantes(p.max_estudiantes)
         sedes_lbl = f"Hasta {p.max_sedes or 12} sedes"
-        img = ""
         if getattr(p, "imagen_path", None):
             img = f'<div class="pl-img"><img src="{p.imagen_path}" alt=""></div>'
         else:
-            img = f'<div class="pl-img pl-ph"><span>EduTrack</span><b>{p.nombre}</b></div>'
-        href = f"/ventas/comprar?plan={p.codigo}" if getattr(p, "codigo", None) else "/ventas/comprar"
+            label_img = "QR" if cod.startswith("qr") else "EduTrack"
+            img = f'<div class="pl-img pl-ph"><span>{label_img}</span><b>{p.nombre}</b></div>'
         try:
             p_lista = float(getattr(p, "precio_lista", None) or 0) or 0.0
         except Exception:
@@ -16123,15 +16128,20 @@ def portal_ventas():
             else:
                 precio_html = f'<div class="pl-price">{_cop(p_mes)} <small>/ mes</small></div>'
         else:
-            precio_html = '<div class="pl-price pl-ask">Consultar precio</div><div class="pl-old">Defina tarifa en Gerencia - Planes</div>'
+            precio_html = '<div class="pl-price pl-ask">Consultar precio</div><div class="pl-old">Tarifa definida por Gerencia</div>'
         try:
             fee_v = float(getattr(p, "fee_implementacion", None) or 0) or 0.0
         except Exception:
             fee_v = 0.0
         fee_html = _cop(fee_v) if fee_v > 0 else "Incluida / a cotizar"
-        tag_linea = '<div class="pl-line">Solo QR · Acceso escolar</div>' if cod.startswith("qr") else '<div class="pl-line">EduTrack completo</div>'
-        cards += f"""
-        <article class="pl-card{' qr' if cod.startswith('qr') else ''}">
+        es_qr = cod.startswith("qr") or (feats.get("linea") or "") == "qr"
+        tag_linea = (
+            '<div class="pl-line">Solo QR · Acceso escolar</div>'
+            if es_qr else
+            '<div class="pl-line">EduTrack completo</div>'
+        )
+        card_html = f"""
+        <article class="pl-card{' qr' if es_qr else ''} view-only">
           <div class="pl-badge">{badge}</div>
           {img}
           <h3>{p.nombre}</h3>
@@ -16143,8 +16153,17 @@ def portal_ventas():
             <li>{sedes_lbl}</li>
             <li>{(feats.get('soporte') or 'Soporte PROCSIS')}</li>
           </ul>
-          <a class="pl-cta" href="{href}">Solicitar este plan</a>
+          <div class="pl-view">Solo consulta · Sin activación en línea</div>
         </article>"""
+        if es_qr:
+            cards_qr += card_html
+        else:
+            cards_full += card_html
+    if not cards_full:
+        cards_full = '<p class="lead">No hay planes EduTrack completo publicados.</p>'
+    if not cards_qr:
+        cards_qr = '<p class="lead">No hay planes Solo QR publicados.</p>'
+
     body = f"""
 <style>
 .lv{{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a;background:#fff;margin:0}}
@@ -16234,9 +16253,14 @@ def portal_ventas():
   </section>
 
   <section class="lv-section" id="planes">
-    <h2>Elige el plan para tu colegio</h2>
-    <p class="lead">Desliza con la vista · precios en pesos colombianos (COP) · sin letra pequeña confusa</p>
-    <div class="lv-plans">{cards}</div>
+    <h2>Planes EduTrack completo</h2>
+    <p class="lead">Solo consulta de tarifas · la activación la hace el equipo PROCSIS / Ventas</p>
+    <div class="lv-plans">{cards_full}</div>
+  </section>
+  <section class="lv-section" id="planes-qr" style="background:#f0f9ff;padding-top:32px;padding-bottom:40px">
+    <h2 style="color:#0369a1">Planes Solo QR · Acceso escolar</h2>
+    <p class="lead">Control de ingreso por código QR, reportes y portal de padres · separado del plan académico completo</p>
+    <div class="lv-plans">{cards_qr}</div>
   </section>
 
   <section class="lv-section" id="pasate" style="background:#f8fafc;padding-top:28px;padding-bottom:8px">
@@ -16260,7 +16284,7 @@ def portal_ventas():
   <section class="lv-section" id="servicios" style="padding-top:12px">
     <h2 style="text-align:center;color:#0B2D57;margin:0 0 16px">Gestiona tus servicios aqui</h2>
     <div style="max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:0 16px 28px">
-      <a href="/ventas/comprar" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Activar plan</a>
+      <a href="#planes" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Ver planes</a>
       <a href="/familia-login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Portal padres</a>
       <a href="/portal" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Lector QR</a>
       <a href="/pqr" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Radicar PQR</a>
