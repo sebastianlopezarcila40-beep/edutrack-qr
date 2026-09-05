@@ -6633,7 +6633,7 @@ def session_idle_timeout():
     from flask import request as _req
     # rutas públicas
     path = (_req.path or "")
-    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/api/health") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/static") or path in ("/login", "/soporte-login", "/pqr", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
+    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/api/health") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/pagar") or path.startswith("/static") or path in ("/login", "/soporte-login", "/pqr", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
         return
     if path.startswith("/colegio/") or path.startswith("/pqr") or path.startswith("/matricula") or path.startswith("/politicas") or path.startswith("/trabaja") or path.startswith("/casos") or path.startswith("/historias"):
         return
@@ -16231,6 +16231,7 @@ def portal_ventas():
       <a href="#planes">Planes</a>
       <a href="#beneficios">Beneficios</a>
       <a href="#contacto">Contacto</a>
+      <a href="/pagar">Pagar factura</a>
       <a href="/backoffice">Acceso interno</a>
     </div>
     <div class="tel">Línea ventas · {tel}</div>
@@ -16288,6 +16289,7 @@ def portal_ventas():
       <a href="/familia-login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Portal padres</a>
       <a href="/portal" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Lector QR</a>
       <a href="/pqr" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Radicar PQR</a>
+      <a href="/pagar" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Pagar factura</a>
       <a href="/login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Acceso colegio</a>
       <a href="{wa}" target="_blank" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Hablar con ventas</a>
     </div>
@@ -42805,6 +42807,185 @@ def ventas_solicitud_detalle(lid):
 </div>
 """
     return page("Solicitud detalle", shell(content) if "shell" in dir() else content)
+
+
+
+
+@app.route("/pagar", methods=["GET", "POST"])
+def portal_pagar_servicios():
+    """Portal público tipo 'Paga tus servicios': consulta facturas y abre Wompi."""
+    error = ""
+    facturas = []
+    inst = None
+    paso = "buscar"  # buscar | lista
+    doc = (request.values.get("documento") or "").strip()
+    correo = (request.values.get("correo") or "").strip()
+    ref_pago = (request.values.get("referencia") or "").strip()
+    tipo_doc = (request.values.get("tipo_doc") or "NIT").strip()
+
+    if request.method == "POST" or (doc and request.method == "GET" and request.args.get("buscar")):
+        # Buscar institución por NIT / código / nombre parcial
+        q = Institucion.query
+        cand = None
+        doc_n = "".join(c for c in doc if c.isalnum())
+        if doc_n:
+            for i in q.limit(5000).all():
+                nit = "".join(c for c in str(getattr(i, "nit", "") or "") if c.isalnum())
+                cod = (i.codigo or "").strip().upper()
+                if doc_n == nit or doc_n.upper() == cod or doc.upper() == (i.codigo or "").upper():
+                    cand = i
+                    break
+                if doc_n and nit and (doc_n in nit or nit in doc_n):
+                    cand = i
+                    break
+        if not cand and ref_pago:
+            fref = _buscar_factura_por_referencia(ref_pago)
+            if fref:
+                cand = Institucion.query.get(fref.institucion_id)
+                if fref not in facturas:
+                    facturas = [fref]
+        if not cand:
+            error = "No encontramos un colegio con ese NIT, código o referencia. Verifique o escriba a cartera."
+        else:
+            inst = cand
+            paso = "lista"
+            try:
+                facturas = (
+                    FacturaCobro.query.filter_by(institucion_id=inst.id)
+                    .filter(FacturaCobro.estado.in_(["PENDIENTE", "VENCIDO"]))
+                    .order_by(FacturaCobro.id.desc())
+                    .limit(20)
+                    .all()
+                )
+            except Exception as ex:
+                print("pagar facturas:", ex)
+                facturas = []
+            if correo and getattr(inst, "correo", None):
+                # soft match only informational
+                pass
+
+    # Tesorería / link Wompi
+    link_tpl = ""
+    try:
+        data = _leer_tesoreria()
+        link_tpl = (data.get("link_pago") or data.get("wompi_link") or "").strip()
+    except Exception:
+        link_tpl = ""
+
+    def _url_wompi(f):
+        if not link_tpl or not f:
+            return ""
+        try:
+            val = str(int(round(float(f.valor or 0))))
+            ref = str(f.consecutivo or f"REC-{f.id}").replace(" ", "")
+            cents = str(int(round(float(f.valor or 0) * 100)))
+            return (
+                link_tpl.replace("{valor}", val).replace("{ref}", ref)
+                .replace("{consecutivo}", ref)
+                .replace("{amount_in_cents}", cents)
+            )
+        except Exception:
+            return link_tpl
+
+    cards_f = ""
+    for f in facturas:
+        url = _url_wompi(f)
+        btn = (
+            f'<a href="{_esc(url)}" target="_blank" rel="noopener" '
+            f'style="display:inline-block;background:#0B2D57;color:#fff;padding:12px 18px;border-radius:10px;'
+            f'font-weight:800;text-decoration:none">Pagar con Wompi</a>'
+            if url else
+            '<span style="color:#b45309;font-size:13px">Configure el link de pago en Gerencia → Tesorería</span>'
+        )
+        cards_f += f"""
+        <div style="border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:0 0 12px;background:#fff">
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+            <div>
+              <div style="font-size:12px;color:#64748b">{_esc(f.consecutivo or ('#'+str(f.id)))} · {_esc(f.estado)}</div>
+              <div style="font-weight:800;color:#0B2D57;font-size:16px">{_esc(f.concepto or 'Mensualidad EduTrack')}</div>
+              <div style="font-size:13px;color:#475569">Vence: {_esc(f.vencimiento or '—')} · Ciclo {_esc(f.ciclo or '—')}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:22px;font-weight:900;color:#0B2D57">{_cop(f.valor)}</div>
+              {btn}
+            </div>
+          </div>
+        </div>
+        """
+
+    lista_html = ""
+    if paso == "lista" and inst:
+        lista_html = f"""
+        <div style="margin-top:20px">
+          <div style="background:#eff6ff;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+            <b style="color:#0B2D57">{_esc(inst.nombre)}</b>
+            <div style="font-size:13px;color:#475569">Código {_esc(inst.codigo)} · NIT {_esc(getattr(inst,'nit',None) or '—')}</div>
+          </div>
+          {"<p style='color:#64748b'>No hay facturas pendientes. Si acaba de pagar, el estado se actualiza cuando Wompi confirma (webhook).</p>" if not facturas else cards_f}
+          <p style="font-size:12px;color:#94a3b8;margin-top:12px">
+            Tras pagar en Wompi, la factura pasa a PAGADO automáticamente si el webhook está configurado:
+            <code>/api/webhooks/wompi</code>
+          </p>
+          <a href="/pagar" style="font-size:13px;color:#0B2D57">← Consultar otro colegio</a>
+        </div>
+        """
+
+    body = f"""
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pagar servicios · PROCSIS EduTrack</title>
+<style>
+body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f4f7fb;color:#0f172a}}
+.top{{background:#0B2D57;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}}
+.top a{{color:#fff;text-decoration:none;font-weight:700}}
+.box{{max-width:560px;margin:32px auto;background:#fff;border-radius:16px;padding:28px 24px;box-shadow:0 8px 30px rgba(15,23,42,.08)}}
+h1{{font-size:18px;color:#0B2D57;margin:0 0 18px;display:flex;align-items:center;gap:8px}}
+.tabs{{display:flex;gap:10px;margin-bottom:18px}}
+.tab{{flex:1;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center;font-size:13px;font-weight:700;color:#334155;background:#fff}}
+.tab.on{{border-color:#38bdf8;background:#e0f2fe;color:#0369a1}}
+label{{font-size:12px;font-weight:700;color:#475569;display:block;margin:10px 0 4px}}
+.row{{display:flex;gap:8px}}
+input,select{{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px;font-size:14px;box-sizing:border-box}}
+button{{width:100%;margin-top:16px;padding:14px;border:0;border-radius:12px;background:#0B2D57;color:#fff;font-weight:800;font-size:15px;cursor:pointer}}
+button:disabled{{background:#cbd5e1;cursor:not-allowed}}
+.err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:10px;margin-bottom:12px;font-size:13px}}
+.foot{{text-align:center;font-size:11px;color:#94a3b8;margin:24px 16px}}
+</style></head><body>
+<div class="top">
+  <a href="/ventas">PROCSIS · EduTrack</a>
+  <a href="/login" style="font-size:13px;opacity:.9">Portal colegios</a>
+</div>
+<div class="box">
+  <h1>💳 Paga tus servicios EduTrack</h1>
+  <div class="tabs">
+    <div class="tab on">Colegio con factura<br><span style="font-weight:600;font-size:11px;color:#64748b">NIT o código</span></div>
+    <div class="tab">Referencia de pago<br><span style="font-weight:600;font-size:11px;color:#64748b">REC-0001</span></div>
+  </div>
+  {"<div class='err'>"+_esc(error)+"</div>" if error else ""}
+  <form method="POST" action="/pagar">
+    <label>Tipo de búsqueda</label>
+    <div class="row">
+      <select name="tipo_doc" style="max-width:110px">
+        <option {"selected" if tipo_doc=="NIT" else ""}>NIT</option>
+        <option {"selected" if tipo_doc=="CODIGO" else ""}>CODIGO</option>
+      </select>
+      <input name="documento" value="{_esc(doc)}" placeholder="NIT o código del colegio" required>
+    </div>
+    <label>Referencia de pago (opcional)</label>
+    <input name="referencia" value="{_esc(ref_pago)}" placeholder="Ej: REC-0004">
+    <label>Correo de contacto</label>
+    <input name="correo" type="email" value="{_esc(correo)}" placeholder="correo@colegio.edu.co">
+    <button type="submit">CONTINUAR</button>
+  </form>
+  {lista_html}
+</div>
+<div class="foot">
+  Pagos procesados de forma segura con Wompi cuando la pasarela está configurada en Gerencia → Tesorería.<br>
+  PROCSIS · Innovación que gestiona · EduTrack
+</div>
+</body></html>
+"""
+    return body
 
 
 
