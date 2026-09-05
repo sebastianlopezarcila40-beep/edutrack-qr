@@ -6607,13 +6607,11 @@ def puede_sedes():
 def puede_ver_historial(): return rol_actual() in ["Rectoría", "Coordinación", "Secretaría", "Administrador", "Admin", "Soporte"]
 
 def dentro_horario_docente():
-    actual = ahora().time()
-    inicio = datetime.strptime(HORA_INICIO_ASISTENCIA, "%H:%M").time()
-    fin = datetime.strptime(HORA_FIN_ASISTENCIA_DOCENTE, "%H:%M").time()
-    return inicio <= actual <= fin
+    """Siempre habilitado: el docente puede registrar asistencia en cualquier horario."""
+    return True
 
 def aviso_horario_docente():
-    return f"El registro docente está habilitado únicamente de {HORA_INICIO_ASISTENCIA} a {HORA_FIN_ASISTENCIA_DOCENTE}. Después de ese horario solo Coordinación puede registrar o corregir asistencia."
+    return "Registro de asistencia disponible."
 
 def verificar_codigo_auditoria(codigo):
     return check_password_hash(AUDITORIA_DELETE_HASH, codigo or "")
@@ -10453,7 +10451,22 @@ def consulta_estudiantes_filtrada():
 
 
 def tabla_estudiantes(estudiantes_filtrados):
-    filas = ''.join(f"""<tr>
+    es_doc = (rol_actual() or "") == "Docente"
+    filas_list = []
+    for e in estudiantes_filtrados:
+        if es_doc:
+            # Docente: solo consulta, sin QR/ficha/eliminar (eso es Secretaría)
+            filas_list.append(f"""<tr>
+<td><span class="student-pill">{e.codigo}</span></td>
+<td><b>{e.nombre} {e.apellido}</b></td>
+<td>{e.grado}</td>
+<td>{e.acudiente or '-'}</td>
+<td>{e.telefono_acudiente or '-'}</td>
+<td>—</td>
+<td><span class="mini-text">Solo consulta</span></td>
+</tr>""")
+        else:
+            filas_list.append(f"""<tr>
 <td><span class="student-pill">{e.codigo}</span></td>
 <td><b>{e.nombre} {e.apellido}</b><br><span class="mini-text">Doc: {e.documento or 'Sin documento'}</span></td>
 <td>{e.grado}</td>
@@ -10467,8 +10480,8 @@ def tabla_estudiantes(estudiantes_filtrados):
   <a href="/historial/{e.id}">Historial</a> ·
   <a class="danger-link" href="/eliminar_estudiante/{e.id}">Eliminar</a>
 </td>
-</tr>""" for e in estudiantes_filtrados)
-    return filas
+</tr>""")
+    return "".join(filas_list)
 
 
 @app.route("/buscar_estudiantes")
@@ -30841,14 +30854,29 @@ def notas_ficha():
     lista = []
     if grado:
         try:
+            g_norm = str(grado).replace("°", "").replace("º", "").strip()
+            try:
+                if g_norm.isdigit():
+                    g_norm = str(int(g_norm))
+            except Exception:
+                pass
+            from sqlalchemy import or_
             lista = (
                 q_estudiantes()
-                .filter(Estudiante.grado == grado)
+                .filter(
+                    or_(
+                        Estudiante.grado == grado,
+                        Estudiante.grado == g_norm,
+                        Estudiante.grado.like(g_norm + "%"),
+                        Estudiante.grado.like(g_norm + "°%"),
+                    )
+                )
                 .order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc())
                 .limit(300)
                 .all()
             )
-        except Exception:
+        except Exception as _lf:
+            print("ficha lista:", _lf)
             lista = []
 
     opts_g = "".join(
@@ -30970,43 +30998,181 @@ def notas_ficha():
 
 
 
-@app.route("/notas/faltas")
+@app.route("/notas/faltas", methods=["GET", "POST"])
 def notas_faltas():
+    """Faltas: filtro por grado + marcar Presente / Ausente / Tarde / Excusa."""
     if not requiere_login():
         return redirect("/login")
-    grado = (request.args.get("grado") or "").strip()
-    fecha = (request.args.get("fecha") or fecha_hoy()).strip()
-    opts = "".join(f'<option value="{g}" {"selected" if g==grado else ""}>{g}</option>' for g in grados_disponibles())
-    ests = q_estudiantes()
+    if rol_actual() not in ["Docente", "Coordinación", "Rectoría", "Rector", "Secretaría", "Administrador", "Soporte"]:
+        return acceso_denegado()
+    msg = ""
+    fecha = (request.form.get("fecha") or request.args.get("fecha") or fecha_hoy()).strip()
+    grado = (request.form.get("grado") or request.args.get("grado") or "").strip()
+
+    if request.method == "POST" and request.form.get("accion") == "guardar":
+        try:
+            ids = request.form.getlist("est_id")
+            for sid in ids:
+                try:
+                    eid = int(sid)
+                except Exception:
+                    continue
+                estado = (request.form.get("estado_%s" % eid) or "").strip()
+                obs = (request.form.get("obs_%s" % eid) or "").strip()[:200]
+                if not estado or estado == "—":
+                    continue
+                # Map UI -> IngresoPorteria
+                mapa = {
+                    "Presente": "Temprano",
+                    "Ausente": "No llegó",
+                    "Tarde": "Tarde",
+                    "Excusa": "Excusa",
+                    "Temprano": "Temprano",
+                    "No llegó": "No llegó",
+                }
+                est_db = mapa.get(estado, estado)
+                ing = IngresoPorteria.query.filter_by(estudiante_id=eid, fecha=fecha).first()
+                if not ing:
+                    try:
+                        h = hora_actual()
+                    except Exception:
+                        h = "00:00"
+                    try:
+                        from datetime import datetime as _dt
+                        dia = _dt.strptime(fecha, "%Y-%m-%d").strftime("%A")
+                    except Exception:
+                        dia = ""
+                    ing = IngresoPorteria(
+                        estudiante_id=eid,
+                        fecha=fecha,
+                        hora=h,
+                        dia=dia or "—",
+                        estado=est_db,
+                        periodo=periodo_actual() or "Periodo 1",
+                        registrado_por=session.get("usuario") or "Docente",
+                    )
+                    db.session.add(ing)
+                else:
+                    ing.estado = est_db
+                    try:
+                        ing.registrado_por = session.get("usuario") or ing.registrado_por
+                    except Exception:
+                        pass
+                if estado == "Excusa":
+                    try:
+                        e = Estudiante.query.get(eid)
+                        if e:
+                            db.session.add(Excusa(
+                                estudiante_id=eid,
+                                fecha=fecha,
+                                motivo=obs or "Excusa registrada por docente",
+                                registrado_por=session.get("usuario") or "",
+                                periodo=periodo_actual() or "",
+                            ))
+                    except Exception as ex_e:
+                        print("excusa faltas:", ex_e)
+            db.session.commit()
+            msg = "Asistencia / faltas guardadas para " + fecha
+            try:
+                registrar_auditoria("Faltas docente", "Guardó estados " + fecha)
+            except Exception:
+                pass
+        except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            msg = "Error al guardar: " + str(ex)[:120]
+
+    # Grados (docente: los suyos)
+    try:
+        if rol_actual() == "Docente":
+            grs = list(grados_docente_actual() or []) or grados_disponibles()
+        else:
+            grs = grados_disponibles()
+    except Exception:
+        grs = grados_disponibles()
+
+    opts = "".join(
+        '<option value="%s"%s>%s</option>' % (g, " selected" if str(g) == grado else "", g)
+        for g in (grs or [])
+    )
+
+    ests_q = q_estudiantes()
     if grado:
-        ests = ests.filter(Estudiante.grado == grado)
-    ests = ests.order_by(Estudiante.apellido.asc()).all()
-    filas = ""
+        g_norm = str(grado).replace("°", "").replace("º", "").strip()
+        try:
+            g_norm = str(int(g_norm)) if g_norm.isdigit() else g_norm
+        except Exception:
+            pass
+        from sqlalchemy import or_
+        ests_q = ests_q.filter(
+            or_(
+                Estudiante.grado == grado,
+                Estudiante.grado == g_norm,
+                Estudiante.grado.like(g_norm + "%"),
+                Estudiante.grado.like(g_norm + "°%"),
+            )
+        )
+    ests = ests_q.order_by(Estudiante.apellido.asc()).limit(400).all()
+
+    filas = []
     for e in ests:
         ing = IngresoPorteria.query.filter_by(estudiante_id=e.id, fecha=fecha).first()
-        est_txt = ing.estado if ing else "Sin registro"
-        cls = ""
-        if not ing or (ing and ing.estado in ("No llegó", "Ausente")):
-            cls = "style='background:#fef2f2'"
-        filas += f"<tr {cls}><td>{e.codigo}</td><td>{e.apellido} {e.nombre}</td><td>{e.grado}</td><td>{est_txt}</td></tr>"
+        actual = "—"
+        if ing:
+            if ing.estado in ("Temprano", "Presente"):
+                actual = "Presente"
+            elif ing.estado in ("No llegó", "Ausente"):
+                actual = "Ausente"
+            elif ing.estado == "Tarde":
+                actual = "Tarde"
+            elif ing.estado == "Excusa":
+                actual = "Excusa"
+            else:
+                actual = ing.estado or "—"
+        opts_e = ""
+        for op in ("—", "Presente", "Ausente", "Tarde", "Excusa"):
+            sel = " selected" if op == actual else ""
+            opts_e += '<option value="%s"%s>%s</option>' % (op, sel, op)
+        bg = " style='background:#fef2f2'" if actual in ("Ausente", "Sin registro") else ""
+        filas.append(
+            "<tr%s><td>%s</td><td>%s %s</td><td>%s</td>"
+            "<td><input type='hidden' name='est_id' value='%s'>"
+            "<select name='estado_%s'>%s</select></td>"
+            "<td><input name='obs_%s' placeholder='Obs.' style='width:100%%;min-width:90px'></td></tr>"
+            % (bg, e.codigo or "", e.apellido or "", e.nombre or "", e.grado or "", e.id, e.id, opts_e, e.id)
+        )
     if not filas:
-        filas = "<tr><td colspan='4'>Sin estudiantes</td></tr>"
-    content = f"""
-<div style="display:flex;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-  <div><h1 style="margin:0;font-size:20px">Faltas de asistencia</h1>
-  <p class="mini-text">Cruce con control QR / portería</p></div>
-  <a class="btn" href="/docente-escritorio">← Inicio panel</a>
-</div>
-<form method="GET" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-  <div><label><b>Grado</b></label><select name="grado"><option value="">Todos</option>{opts}</select></div>
-  <div><label><b>Fecha</b></label><input type="date" name="fecha" value="{fecha}"></div>
-  <button>Ver</button>
-</form>
-<section class="table-card">
-<table><tr><th>Código</th><th>Estudiante</th><th>Grado</th><th>Estado el día</th></tr>{filas}</table>
-</section>
-"""
+        filas = ["<tr><td colspan='5'>Sin estudiantes (elija grado o verifique que existan en el colegio).</td></tr>"]
+
+    back = "/docente-escritorio" if rol_actual() == "Docente" else "/notas"
+    content = (
+        '<div style="display:flex;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
+        '<div><h1 style="margin:0;font-size:20px">Faltas de asistencia</h1>'
+        '<p class="mini-text">Marque Presente, Ausente, Tarde o Excusa · Filtro por grado</p></div>'
+        '<a class="btn" href="' + back + '">← Inicio panel</a></div>'
+    )
+    if msg:
+        content += '<div class="msg ok">' + msg.replace("<", "") + "</div>"
+    content += (
+        '<form method="GET" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:end">'
+        '<div><label><b>Grado</b></label><select name="grado"><option value="">Todos</option>' + opts + "</select></div>"
+        '<div><label><b>Fecha</b></label><input type="date" name="fecha" value="' + fecha + '"></div>'
+        "<button>Ver</button></form>"
+        '<form method="POST">'
+        '<input type="hidden" name="accion" value="guardar">'
+        '<input type="hidden" name="fecha" value="' + fecha + '">'
+        '<input type="hidden" name="grado" value="' + (grado or "") + '">'
+        '<section class="table-card">'
+        "<table><tr><th>Código</th><th>Estudiante</th><th>Grado</th><th>Estado</th><th>Obs.</th></tr>"
+        + "".join(filas)
+        + "</table>"
+        '<p style="margin-top:12px"><button type="submit">Guardar faltas / asistencia</button></p>'
+        "</section></form>"
+    )
     return page("Faltas", shell(content))
+
 
 
 @app.route("/notas/descargar")
