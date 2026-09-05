@@ -26309,23 +26309,6 @@ def soporte_info_institucional():
   <a class="btn" href="/soporte_admin">← Panel soporte</a>
 </header>
 
-<div class="role-panel" style="margin:16px 0;border:2px dashed #25D366;border-radius:14px;padding:16px">
-  <h2 style="margin:0 0 8px;color:#15803d">+ Crear plan nuevo (EduTrack completo o Solo QR)</h2>
-  <p class="mini-text">Precio mensual y fee de capacitacion quedan ligados a facturacion. Puede dejar 0 y editar despues.</p>
-  <form method="POST" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;align-items:end">
-    <input type="hidden" name="accion" value="crear">
-    <div><label><b>Codigo *</b></label><input name="codigo" required placeholder="qr_basico"></div>
-    <div><label><b>Nombre *</b></label><input name="nombre" required placeholder="QR Basico"></div>
-    <div><label><b>Precio lista mensual</b></label><input name="precio" type="number" step="0.01" value="0"></div>
-    <div><label><b>Descuento %</b></label><input name="descuento_pct" type="number" step="0.01" value="0"></div>
-    <div><label><b>Fee capacitacion / impl.</b></label><input name="fee" type="number" step="0.01" value="0"></div>
-    <div><label><b>Max. estudiantes</b></label><input name="max_e" type="number" value="300"></div>
-    <div><label><b>Max. sedes</b></label><input name="max_s" type="number" value="1"></div>
-    <div style="grid-column:1/-1"><label><b>Funciones</b> (separadas por |)</label>
-      <input name="features" style="width:100%" placeholder="Portal porteria QR | Reportes del dia | Aviso WhatsApp"></div>
-    <div><button type="submit" style="background:#25D366;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer">Crear y enlazar a facturacion</button></div>
-  </form>
-</div>
 
 <div class="role-panel">
   <form method="GET" style="display:flex;gap:8px">
