@@ -41299,13 +41299,14 @@ def pagina_corporativa_procsis():
         empresa_pts = empresa_pts.replace("\\n", chr(10))
     lis_emp = "".join(f"<li>{_esc(x.strip())}</li>" for x in (empresa_pts or "").replace("\\n", "\n").splitlines() if x.strip())
     btn1_t, btn2_t, btn3_t = _esc(btn1_t), _esc(btn2_t), _esc(btn3_t)
-    hero_bg_style = (
-        "background-image:linear-gradient(105deg,rgba(255,255,255,.92) 0%,rgba(248,250,252,.78) 42%,rgba(15,23,42,.35) 100%),url('%s');"
-        "background-size:cover;background-position:center right;color:#0f172a;"
-        % hero_fondo
-        if hero_fondo
-        else "background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 45%,#cbd5e1 100%);color:#0f172a;"
-    )
+    if hero_fondo:
+        hero_bg_style = (
+            "background-image:linear-gradient(105deg,rgba(255,255,255,.92) 0%,rgba(248,250,252,.78) 42%,rgba(15,23,42,.35) 100%),url('"
+            + str(hero_fondo).replace("'", "")
+            + "');background-size:cover;background-position:center right;color:#0f172a;"
+        )
+    else:
+        hero_bg_style = "background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 45%,#cbd5e1 100%);color:#0f172a;"
 
     top_der, barra_extra = _esc(top_der), _esc(barra_extra)
     nos_tit, nos_txt = _esc(nos_tit), _esc(nos_txt)
