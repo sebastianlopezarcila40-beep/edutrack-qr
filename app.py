@@ -16212,7 +16212,7 @@ def portal_ventas():
 .lv-info a{{color:#0B2D57;font-weight:800;text-decoration:none}}
 .lv-cta{{background:#f1f5f9;padding:40px 16px;text-align:center}}
 .lv-cta h2{{color:#0B2D57;margin:0 0 12px}}
-.lv-cta form{{max-width:520px;margin:16px auto;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}}
+.lv-cta form{{max-width:560px;margin:16px auto}}
 .lv-cta input[type=email]{{flex:1;min-width:200px;padding:12px;border:1px solid #e2e8f0;border-radius:10px}}
 .lv-cta button{{background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800}}
 .lv-foot{{background:#e2e8f0;padding:28px 16px;font-size:13px;color:#475569}}
@@ -16317,12 +16317,52 @@ def portal_ventas():
 
   <section class="lv-cta" id="contacto">
     <h2>Recibe más información sobre EduTrack</h2>
-    <p style="color:#64748b">Escríbenos y un asesor de {empresa} te orienta en planes e implementación.</p>
-    <form action="{wa}" method="get" onsubmit="return true;">
-      <input type="email" name="correo" placeholder="Deja aquí el correo del colegio" style="pointer-events:none;opacity:.7" disabled>
-      <a class="btn" href="{wa}" style="display:inline-block;background:#0B2D57;color:#fff;padding:12px 18px;border-radius:10px;font-weight:800;text-decoration:none">¡Envíame más información!</a>
+    <p style="color:#64748b">Deja tus datos y un asesor de {empresa} te orienta en planes e implementación.</p>
+    {"<div style='max-width:520px;margin:12px auto;background:#ecfdf5;color:#065f46;padding:12px;border-radius:10px;font-weight:700'>✓ Solicitud enviada. Un asesor te contactará pronto.</div>" if request.args.get("ok")=="1" else ""}
+    {"<div style='max-width:520px;margin:12px auto;background:#fef2f2;color:#991b1b;padding:12px;border-radius:10px'>"+(_esc(request.args.get("err") or ""))+"</div>" if request.args.get("err") else ""}
+    <form method="POST" action="/ventas/solicitud" style="max-width:560px;margin:16px auto;display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left">
+      <div style="grid-column:1/-1">
+        <label style="font-size:12px;font-weight:700;color:#334155">Nombre del colegio *</label>
+        <input name="colegio" required placeholder="I.E. o colegio" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700;color:#334155">Tu nombre *</label>
+        <input name="nombre" required placeholder="Rector / contacto" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700;color:#334155">Celular / WhatsApp *</label>
+        <input name="telefono" required placeholder="300 000 0000" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700;color:#334155">Correo *</label>
+        <input name="correo" type="email" required placeholder="correo@colegio.edu.co" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700;color:#334155">Municipio</label>
+        <input name="municipio" placeholder="Ciudad" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+      </div>
+      <div style="grid-column:1/-1">
+        <label style="font-size:12px;font-weight:700;color:#334155">Plan de interés</label>
+        <select name="plan_interes" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+          <option value="">Por definir</option>
+          <option>EduTrack Básico</option>
+          <option>EduTrack Estándar</option>
+          <option>EduTrack Pro</option>
+          <option>EduTrack Premium</option>
+          <option>QR Básico</option>
+          <option>QR Plus</option>
+          <option>QR Institucional</option>
+        </select>
+      </div>
+      <div style="grid-column:1/-1">
+        <label style="font-size:12px;font-weight:700;color:#334155">Mensaje / qué necesitas</label>
+        <textarea name="mensaje" rows="2" placeholder="Ej: queremos demo, solo QR, multi-sede..." style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px"></textarea>
+      </div>
+      <div style="grid-column:1/-1;text-align:center">
+        <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:14px 22px;border-radius:10px;font-weight:800;cursor:pointer;font-size:15px">¡Envíame más información!</button>
+      </div>
     </form>
-    <p style="font-size:12px;color:#94a3b8;margin-top:12px">Al contactarnos autorizas el tratamiento de datos conforme a la política de {empresa} / EduTrack.</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:12px">Al contactarnos autorizas el tratamiento de datos conforme a la política de {empresa} / EduTrack (Ley 1581 de 2012).</p>
   </section>
 
   <footer class="lv-foot">
@@ -26119,6 +26159,7 @@ def _modulos_por_rol(rol):
         ("Panel ventas", "/ventas/panel", "#0B2D57"),
         ("📅 Calendario escolar", "/calendario", "#0B2D57"),
         ("CRM · Embudo", "/ventas/crm", "#1d4ed8"),
+        ("Solicitudes web", "/ventas/solicitudes", "#dc2626"),
         ("Crear link demo", "/ventas/panel", "#15803d"),
         ("Demos caducidad", "/ventas/demos", "#0f766e"),
         ("Plantillas de Prospección", "/ventas/kit-mensajes", "#7c3aed"),
@@ -42542,6 +42583,228 @@ def calendario_escolar():
     except Exception as e_shell:
         print("calendario shell:", e_shell)
         return page("Calendario escolar", content)
+
+
+
+
+@app.route("/ventas/solicitud", methods=["POST"])
+def ventas_solicitud_publica():
+    """Formulario público de la landing: crea lead en embudo CONTACTO / solicitudes web."""
+    colegio = (request.form.get("colegio") or "").strip()[:200]
+    nombre = (request.form.get("nombre") or "").strip()[:160]
+    telefono = (request.form.get("telefono") or "").strip()[:40]
+    correo = (request.form.get("correo") or "").strip()[:160]
+    municipio = (request.form.get("municipio") or "").strip()[:80]
+    plan = (request.form.get("plan_interes") or "").strip()[:80]
+    mensaje = (request.form.get("mensaje") or "").strip()[:2000]
+    if not colegio or not nombre or not telefono or not correo:
+        return redirect("/ventas?err=" + __import__("urllib.parse").quote("Completa colegio, nombre, celular y correo.") + "#contacto")
+    try:
+        try:
+            db.create_all()
+        except Exception:
+            pass
+        try:
+            ahora = fecha_hoy() + " " + hora_actual()
+        except Exception:
+            ahora = ""
+        notas = "[SOLICITUD WEB LANDING]\n" + (mensaje or "Pidió más información desde /ventas")
+        lead = LeadCRM(
+            colegio=colegio,
+            rector=nombre,
+            telefono=telefono,
+            correo=correo,
+            municipio=municipio,
+            etapa="CONTACTO",
+            plan_interes=plan or "Por definir",
+            notas=notas,
+            vendedor="Web pública",
+            creado_en=ahora,
+            actualizado=ahora,
+        )
+        db.session.add(lead)
+        db.session.commit()
+        try:
+            registrar_auditoria("Solicitud ventas web", f"{colegio} · {correo} · {telefono}")
+        except Exception:
+            pass
+        return redirect("/ventas?ok=1#contacto")
+    except Exception as ex:
+        print("ventas_solicitud:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return redirect("/ventas?err=" + __import__("urllib.parse").quote("No se pudo guardar. Intente de nuevo o WhatsApp.") + "#contacto")
+
+
+@app.route("/ventas/solicitudes", methods=["GET", "POST"])
+def ventas_solicitudes():
+    """Módulo Ventas: solicitudes de información llegadas desde la web y embudo CONTACTO."""
+    if not requiere_login():
+        return redirect("/ventas-login")
+    rol = rol_actual()
+    if rol not in ("Comercial", "Ventas", "Gerente", "Gerencia", "Administrador", "Superadmin", "Soporte"):
+        return acceso_denegado("Solo equipo comercial / gerencia.")
+    msg = ""
+    if request.method == "POST":
+        acc = (request.form.get("accion") or "").strip()
+        try:
+            lid = int(request.form.get("lead_id") or 0)
+        except Exception:
+            lid = 0
+        lead = LeadCRM.query.get(lid) if lid else None
+        if lead and acc == "actualizar":
+            lead.rector = (request.form.get("nombre") or lead.rector or "")[:160]
+            lead.correo = (request.form.get("correo") or lead.correo or "")[:160]
+            lead.telefono = (request.form.get("telefono") or lead.telefono or "")[:40]
+            lead.colegio = (request.form.get("colegio") or lead.colegio or "")[:200]
+            lead.municipio = (request.form.get("municipio") or lead.municipio or "")[:80]
+            lead.plan_interes = (request.form.get("plan_interes") or lead.plan_interes or "")[:80]
+            lead.etapa = (request.form.get("etapa") or lead.etapa or "CONTACTO")[:40]
+            extra = (request.form.get("notas_extra") or "").strip()
+            if extra:
+                lead.notas = ((lead.notas or "") + "\n---\n" + extra)[:5000]
+            try:
+                lead.actualizado = fecha_hoy() + " " + hora_actual()
+            except Exception:
+                pass
+            lead.vendedor = session.get("usuario") or lead.vendedor or ""
+            db.session.commit()
+            msg = "Solicitud actualizada."
+        elif lead and acc == "pedir_datos":
+            # Marca que se pidió info de activación
+            try:
+                stamp = fecha_hoy() + " " + hora_actual()
+            except Exception:
+                stamp = ""
+            lead.notas = ((lead.notas or "") + f"\n[{stamp}] Se solicitó información de activación (nombre, correo institucional, NIT, sede).").strip()[:5000]
+            lead.etapa = "NEGOCIACION" if lead.etapa == "CONTACTO" else lead.etapa
+            lead.actualizado = stamp
+            db.session.commit()
+            msg = "Quedó registrado el pedido de datos de activación."
+    # Listar solicitudes web + contactos recientes
+    try:
+        q = LeadCRM.query.order_by(LeadCRM.id.desc()).limit(200).all()
+    except Exception:
+        q = []
+    filas = []
+    for L in q:
+        es_web = "SOLICITUD WEB" in (L.notas or "").upper()
+        badge = '<span style="background:#dbeafe;color:#1e40af;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px">WEB</span>' if es_web else ""
+        filas.append(
+            f"<tr>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'>{L.id} {badge}<br><span style='font-size:11px;color:#94a3b8'>{_esc(L.creado_en)}</span></td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'><b>{_esc(L.colegio)}</b><br><span style='font-size:12px'>{_esc(L.municipio)}</span></td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'>{_esc(L.rector)}<br>"
+            f"<a href='mailto:{_esc(L.correo)}'>{_esc(L.correo)}</a><br>{_esc(L.telefono)}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'>{_esc(L.plan_interes)}<br><b>{_esc(L.etapa)}</b></td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px;max-width:220px'>{_esc((L.notas or '')[:180])}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'><a class='btn' href='/ventas/solicitudes/{L.id}' style='font-size:12px;padding:6px 10px'>Ver / completar</a></td>"
+            f"</tr>"
+        )
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Solicitudes de información</h1>
+  <p>Llegan desde el formulario público de /ventas · también contactos del embudo</p>
+</div>
+<a class="btn" href="/ventas/crm">CRM embudo</a>
+<a class="btn" href="/ventas/panel">Panel ventas</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<div class="role-panel" style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff;text-align:left">
+      <th style="padding:8px">ID</th><th style="padding:8px">Colegio</th><th style="padding:8px">Contacto</th>
+      <th style="padding:8px">Plan / etapa</th><th style="padding:8px">Notas</th><th style="padding:8px"></th>
+    </tr>
+    {''.join(filas) if filas else "<tr><td colspan='6' style='padding:16px;color:#64748b'>Aún no hay solicitudes.</td></tr>"}
+  </table>
+</div>
+"""
+    return page("Solicitudes ventas", shell(content) if "shell" in dir() else content)
+
+
+@app.route("/ventas/solicitudes/<int:lid>", methods=["GET", "POST"])
+def ventas_solicitud_detalle(lid):
+    """Detalle: ver todo y pedir / completar datos de activación."""
+    if not requiere_login():
+        return redirect("/ventas-login")
+    if rol_actual() not in ("Comercial", "Ventas", "Gerente", "Gerencia", "Administrador", "Superadmin", "Soporte"):
+        return acceso_denegado()
+    lead = LeadCRM.query.get_or_404(lid)
+    msg = ""
+    if request.method == "POST":
+        lead.colegio = (request.form.get("colegio") or lead.colegio or "")[:200]
+        lead.rector = (request.form.get("nombre") or lead.rector or "")[:160]
+        lead.correo = (request.form.get("correo") or lead.correo or "")[:160]
+        lead.telefono = (request.form.get("telefono") or lead.telefono or "")[:40]
+        lead.municipio = (request.form.get("municipio") or lead.municipio or "")[:80]
+        lead.plan_interes = (request.form.get("plan_interes") or lead.plan_interes or "")[:80]
+        lead.etapa = (request.form.get("etapa") or lead.etapa or "CONTACTO")[:40]
+        nit = (request.form.get("nit") or "").strip()
+        sede = (request.form.get("sede") or "").strip()
+        extra = (request.form.get("notas_extra") or "").strip()
+        bloque = []
+        if nit:
+            bloque.append("NIT: " + nit)
+        if sede:
+            bloque.append("Sede: " + sede)
+        if extra:
+            bloque.append(extra)
+        if bloque:
+            try:
+                stamp = fecha_hoy() + " " + hora_actual()
+            except Exception:
+                stamp = ""
+            lead.notas = ((lead.notas or "") + "\n[" + stamp + "] " + " | ".join(bloque)).strip()[:5000]
+        try:
+            lead.actualizado = fecha_hoy() + " " + hora_actual()
+        except Exception:
+            pass
+        lead.vendedor = session.get("usuario") or lead.vendedor or ""
+        db.session.commit()
+        msg = "Datos guardados."
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Solicitud #{lead.id}</h1>
+  <p>{_esc(lead.colegio)} · {_esc(lead.etapa)}</p>
+</div>
+<a class="btn" href="/ventas/solicitudes">← Listado</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<div class="role-panel">
+  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:720px">
+    <div style="grid-column:1/-1"><label><b>Colegio</b></label>
+      <input name="colegio" value="{_esc(lead.colegio)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    <div><label><b>Nombre contacto</b></label>
+      <input name="nombre" value="{_esc(lead.rector)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    <div><label><b>Teléfono</b></label>
+      <input name="telefono" value="{_esc(lead.telefono)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    <div><label><b>Correo</b></label>
+      <input name="correo" type="email" value="{_esc(lead.correo)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    <div><label><b>Municipio</b></label>
+      <input name="municipio" value="{_esc(lead.municipio)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    <div><label><b>Plan de interés</b></label>
+      <input name="plan_interes" value="{_esc(lead.plan_interes)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    <div><label><b>Etapa</b></label>
+      <select name="etapa" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+        {''.join('<option%s>%s</option>' % (' selected' if lead.etapa==e else '', e) for e in ['CONTACTO','DEMO','NEGOCIACION','GANADO','PERDIDO'])}
+      </select></div>
+    <div><label><b>NIT (activación)</b></label>
+      <input name="nit" placeholder="Para activar el colegio" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    <div><label><b>Sede principal</b></label>
+      <input name="sede" placeholder="Sede" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    <div style="grid-column:1/-1"><label><b>Agregar nota / pedir más info</b></label>
+      <textarea name="notas_extra" rows="3" placeholder="Ej: Se pidió NIT, logo y usuarios de rectoría/secretaría" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></textarea></div>
+    <div style="grid-column:1/-1">
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar y completar datos</button>
+      <a class="btn" href="/ventas/crm" style="margin-left:8px">Ver en CRM</a>
+    </div>
+  </form>
+  <h3 style="margin-top:20px">Historial de notas</h3>
+  <pre style="white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px;font-size:12px">{_esc(lead.notas or '—')}</pre>
+</div>
+"""
+    return page("Solicitud detalle", shell(content) if "shell" in dir() else content)
 
 
 
