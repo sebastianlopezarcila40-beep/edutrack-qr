@@ -1051,6 +1051,15 @@ class Plataforma(db.Model):
     corp_footer_texto = db.Column(db.Text, default="Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.")
     corp_portafolio_titulo = db.Column(db.String(160), default="Portafolio de soluciones")
     corp_portafolio_texto = db.Column(db.Text, default="Productos y servicios para la gestión académica y administrativa de instituciones educativas.")
+    corp_hero_fondo = db.Column(db.String(255), default="")  # imagen de fondo del hero /procsis
+    corp_caracteristicas = db.Column(db.Text, default="")  # lineas: titulo|descripcion por fila
+    corp_empresa_puntos = db.Column(db.Text, default="")  # puntos de la empresa
+    corp_btn1_texto = db.Column(db.String(80), default="Conocer PROCSIS")
+    corp_btn1_url = db.Column(db.String(160), default="#nosotros")
+    corp_btn2_texto = db.Column(db.String(80), default="Hablar con un asesor")
+    corp_btn2_url = db.Column(db.String(160), default="")
+    corp_btn3_texto = db.Column(db.String(80), default="Entrar al sistema")
+    corp_btn3_url = db.Column(db.String(160), default="/login")
 
 
 class ProductoProcsis(db.Model):
@@ -2918,6 +2927,15 @@ def migrar_columnas():
         ("plataforma", "corp_barra_extra", "ALTER TABLE plataforma ADD COLUMN corp_barra_extra VARCHAR(255) DEFAULT ''"),
         ("plataforma", "corp_brand_nombre", "ALTER TABLE plataforma ADD COLUMN corp_brand_nombre VARCHAR(80) DEFAULT 'EduTrack'"),
         ("plataforma", "corp_brand_sub", "ALTER TABLE plataforma ADD COLUMN corp_brand_sub VARCHAR(80) DEFAULT 'Soluciones digitales'"),
+        ("plataforma", "corp_hero_fondo", "ALTER TABLE plataforma ADD COLUMN corp_hero_fondo VARCHAR(255) DEFAULT ''"),
+        ("plataforma", "corp_caracteristicas", "ALTER TABLE plataforma ADD COLUMN corp_caracteristicas TEXT"),
+        ("plataforma", "corp_empresa_puntos", "ALTER TABLE plataforma ADD COLUMN corp_empresa_puntos TEXT"),
+        ("plataforma", "corp_btn1_texto", "ALTER TABLE plataforma ADD COLUMN corp_btn1_texto VARCHAR(80) DEFAULT 'Conocer PROCSIS'"),
+        ("plataforma", "corp_btn1_url", "ALTER TABLE plataforma ADD COLUMN corp_btn1_url VARCHAR(160) DEFAULT '#nosotros'"),
+        ("plataforma", "corp_btn2_texto", "ALTER TABLE plataforma ADD COLUMN corp_btn2_texto VARCHAR(80) DEFAULT 'Hablar con un asesor'"),
+        ("plataforma", "corp_btn2_url", "ALTER TABLE plataforma ADD COLUMN corp_btn2_url VARCHAR(160) DEFAULT ''"),
+        ("plataforma", "corp_btn3_texto", "ALTER TABLE plataforma ADD COLUMN corp_btn3_texto VARCHAR(80) DEFAULT 'Entrar al sistema'"),
+        ("plataforma", "corp_btn3_url", "ALTER TABLE plataforma ADD COLUMN corp_btn3_url VARCHAR(160) DEFAULT '/login'"),
         ("plataforma", "corp_nosotros_titulo", "ALTER TABLE plataforma ADD COLUMN corp_nosotros_titulo VARCHAR(120) DEFAULT ''"),
         ("plataforma", "corp_nosotros_texto", "ALTER TABLE plataforma ADD COLUMN corp_nosotros_texto TEXT DEFAULT ''"),
         ("plataforma", "corp_cta_titulo", "ALTER TABLE plataforma ADD COLUMN corp_cta_titulo VARCHAR(160) DEFAULT ''"),
@@ -21357,6 +21375,48 @@ def gerencia_web_corporativa():
         p.corp_footer_texto = (request.form.get("corp_footer_texto") or "").strip()
         p.corp_portafolio_titulo = (request.form.get("corp_portafolio_titulo") or "").strip()[:160]
         p.corp_portafolio_texto = (request.form.get("corp_portafolio_texto") or "").strip()
+        p.corp_caracteristicas = (request.form.get("corp_caracteristicas") or "").strip()
+        p.corp_empresa_puntos = (request.form.get("corp_empresa_puntos") or "").strip()
+        p.corp_btn1_texto = (request.form.get("corp_btn1_texto") or "Conocer PROCSIS").strip()[:80]
+        p.corp_btn1_url = (request.form.get("corp_btn1_url") or "#nosotros").strip()[:160]
+        p.corp_btn2_texto = (request.form.get("corp_btn2_texto") or "Hablar con un asesor").strip()[:80]
+        p.corp_btn2_url = (request.form.get("corp_btn2_url") or "").strip()[:160]
+        p.corp_btn3_texto = (request.form.get("corp_btn3_texto") or "Entrar al sistema").strip()[:80]
+        p.corp_btn3_url = (request.form.get("corp_btn3_url") or "/login").strip()[:160]
+        try:
+            fimg = request.files.get("corp_hero_fondo_file")
+            if fimg and getattr(fimg, "filename", ""):
+                import os as _os
+                from werkzeug.utils import secure_filename
+                folder = _os.path.join(app.root_path, "static", "uploads", "corp")
+                _os.makedirs(folder, exist_ok=True)
+                fn = secure_filename(fimg.filename)
+                ext = (fn.rsplit(".", 1)[-1] if "." in fn else "jpg").lower()
+                if ext in ("jpg", "jpeg", "png", "webp", "gif"):
+                    out = "hero_fondo." + ext
+                    fimg.save(_os.path.join(folder, out))
+                    p.corp_hero_fondo = "/static/uploads/corp/" + out
+            elif (request.form.get("corp_hero_fondo_url") or "").strip():
+                p.corp_hero_fondo = (request.form.get("corp_hero_fondo_url") or "").strip()[:255]
+            if request.form.get("quitar_fondo") == "1":
+                p.corp_hero_fondo = ""
+        except Exception as _hf:
+            print("hero fondo:", _hf)
+        try:
+            flogo = request.files.get("corp_logo_file")
+            if flogo and getattr(flogo, "filename", ""):
+                import os as _os
+                from werkzeug.utils import secure_filename
+                folder = _os.path.join(app.root_path, "static", "uploads", "corp")
+                _os.makedirs(folder, exist_ok=True)
+                fn = secure_filename(flogo.filename)
+                ext = (fn.rsplit(".", 1)[-1] if "." in fn else "png").lower()
+                if ext in ("jpg", "jpeg", "png", "webp", "gif"):
+                    out = "logo_procsis_web." + ext
+                    flogo.save(_os.path.join(folder, out))
+                    p.logo_path = "/static/uploads/corp/" + out
+        except Exception as _lg:
+            print("corp logo:", _lg)
         db.session.commit()
         mensaje = "Página corporativa guardada. Los cambios se ven de inmediato en /procsis y /portafolio."
         try:
@@ -21392,7 +21452,7 @@ def gerencia_web_corporativa():
   <h1>Web corporativa</h1>
   <p class="sub">Todo el contenido público de la página tipo Pacsis se edita aquí. No hace falta tocar código.</p>
   {'<div class="msg">'+mensaje+'</div>' if mensaje else ''}
-  <form method="POST">
+  <form method="POST" enctype="multipart/form-data">
     <div class="box">
       <h2>Barra superior (contactos)</h2>
       <div class="row">
@@ -21463,6 +21523,32 @@ def gerencia_web_corporativa():
       <input name="corp_portafolio_titulo" value="{_v('corp_portafolio_titulo', 'Portafolio de soluciones')}">
       <label>Texto intro portafolio</label>
       <textarea name="corp_portafolio_texto">{getattr(p,'corp_portafolio_texto',None) or 'Productos y servicios para la gestión académica y administrativa de instituciones educativas.'}</textarea>
+    </div>
+        <div class="box">
+      <h2>Logo, fondo hero y botones</h2>
+      <label>Logo PROCSIS (archivo)</label>
+      <input type="file" name="corp_logo_file" accept="image/*">
+      <p class="mini-text">Actual: {_esc(getattr(p,'logo_path',None) or '—')}</p>
+      <label>Fondo del hero (archivo)</label>
+      <input type="file" name="corp_hero_fondo_file" accept="image/*">
+      <label>O URL de fondo</label>
+      <input name="corp_hero_fondo_url" value="{_esc(getattr(p,'corp_hero_fondo',None) or '')}">
+      <label><input type="checkbox" name="quitar_fondo" value="1"> Quitar fondo</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+        <div><label>Botón 1 texto</label><input name="corp_btn1_texto" value="{_v('corp_btn1_texto','Conocer PROCSIS')}"></div>
+        <div><label>Botón 1 URL</label><input name="corp_btn1_url" value="{_v('corp_btn1_url','#nosotros')}"></div>
+        <div><label>Botón 2 texto</label><input name="corp_btn2_texto" value="{_v('corp_btn2_texto','Hablar con un asesor')}"></div>
+        <div><label>Botón 2 URL (vacío=WA)</label><input name="corp_btn2_url" value="{_v('corp_btn2_url','')}"></div>
+        <div><label>Botón 3 texto</label><input name="corp_btn3_texto" value="{_v('corp_btn3_texto','Entrar al sistema')}"></div>
+        <div><label>Botón 3 URL</label><input name="corp_btn3_url" value="{_v('corp_btn3_url','/login')}"></div>
+      </div>
+    </div>
+    <div class="box">
+      <h2>Características del software</h2>
+      <p class="mini-text">Formato: Título | Descripción (una por línea)</p>
+      <textarea name="corp_caracteristicas" rows="8">{getattr(p,'corp_caracteristicas',None) or "Notas SIEE | Evaluación cognitiva, procedimental y actitudinal\nAsistencia QR | Control de ingreso y salida\nBoletines PDF | Diseño institucional\nPortal padres | Notas e ingresos\nPQR legal | Radicado Colombia\nMulti-inquilino | Datos por colegio\nReportes | Coordinación y rectoría\nSoporte PROCSIS | Mesa de ayuda"}</textarea>
+      <h2>Características de la empresa</h2>
+      <textarea name="corp_empresa_puntos" rows="6">{getattr(p,'corp_empresa_puntos',None) or "Empresa colombiana de software educativo\nLey 1581 de 2012 Habeas Data\nImplementación y capacitación\nSoporte técnico y PQR\nPlanes EduTrack y Solo QR\nInnovación que gestiona"}</textarea>
     </div>
     <button type="submit">Guardar página corporativa</button>
   </form>
@@ -41115,6 +41201,15 @@ def pagina_corporativa_procsis():
     # Ver planes solo Ventas / Soporte / Gerencia
     _rol = (session.get("rol") or "").strip()
     _puede_planes = _rol in ("Soporte", "Comercial", "Gerente", "Superadmin", "Administrador")
+    hero_fondo = ""
+    caract_raw = ""
+    empresa_pts = ""
+    btn1_t, btn1_u = "Conocer PROCSIS", "#nosotros"
+    btn2_t, btn2_u = "Hablar con un asesor", "/contacto"
+    btn3_t, btn3_u = "Entrar al sistema", "/login"
+    cards_soft = ""
+    lis_emp = ""
+    hero_bg_style = ""
     try:
         _pp = plataforma()
         corp_tel = (getattr(_pp, "contacto_publico_tel", None) or "—").strip() or "—"
@@ -41140,6 +41235,15 @@ def pagina_corporativa_procsis():
         corp_tag = (getattr(_pp, "corp_tag", None) or "SOLUCIONES DIGITALES · COLOMBIA").strip()
         hero_tit = (getattr(_pp, "corp_hero_titulo", None) or "Software y solución digital para instituciones educativas").strip()
         hero_txt = (getattr(_pp, "corp_hero_texto", None) or "Diseñamos y operamos plataformas serias para colegios: gestión académica, reportes de coordinación, boletines y acompañamiento a directivos y docentes.").strip()
+        hero_fondo = (getattr(_pp, "corp_hero_fondo", None) or "").strip()
+        caract_raw = (getattr(_pp, "corp_caracteristicas", None) or "").strip()
+        empresa_pts = (getattr(_pp, "corp_empresa_puntos", None) or "").strip()
+        btn1_t = (getattr(_pp, "corp_btn1_texto", None) or "Conocer PROCSIS").strip()
+        btn1_u = (getattr(_pp, "corp_btn1_url", None) or "#nosotros").strip()
+        btn2_t = (getattr(_pp, "corp_btn2_texto", None) or "Hablar con un asesor").strip()
+        btn2_u = (getattr(_pp, "corp_btn2_url", None) or "").strip() or wa_link
+        btn3_t = (getattr(_pp, "corp_btn3_texto", None) or "Entrar al sistema").strip()
+        btn3_u = (getattr(_pp, "corp_btn3_url", None) or "/login").strip()
         top_der = (getattr(_pp, "corp_top_derecha", None) or "Software para instituciones educativas · Colombia").strip()
         barra_extra = (getattr(_pp, "corp_barra_extra", None) or "Facturación / Cartera / Ventas").strip()
         nos_tit = (getattr(_pp, "corp_nosotros_titulo", None) or "Quiénes somos").strip()
@@ -41177,6 +41281,29 @@ def pagina_corporativa_procsis():
         return (s or "").replace("<", "&lt;").replace(">", "&gt;")
     brand_nom, brand_sub = _esc(brand_nom), _esc(brand_sub)
     corp_tag, hero_tit, hero_txt = _esc(corp_tag), _esc(hero_tit), _esc(hero_txt)
+    if not caract_raw:
+        caract_raw = "Notas SIEE | Evaluación cognitiva, procedimental y actitudinal\nAsistencia QR | Control de ingreso y salida\nBoletines PDF | Diseño institucional\nPortal padres | Notas e ingresos\nPQR legal | Radicado Colombia\nMulti-inquilino | Datos por colegio\nReportes | Coordinación y rectoría\nSoporte PROCSIS | Mesa de ayuda"
+        caract_raw = caract_raw.replace("\\n", chr(10))
+    cards_soft = ""
+    for line in (caract_raw or "").replace("\\n", "\n").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if "|" in line:
+            t, d = line.split("|", 1)
+        else:
+            t, d = line, ""
+        cards_soft += f'<div class="pc-card"><div class="ico">✓</div><h3>{_esc(t.strip())}</h3><p>{_esc(d.strip())}</p></div>'
+    if not empresa_pts:
+        empresa_pts = "Empresa colombiana de software educativo\nCumplimiento Ley 1581 de 2012\nImplementación y capacitación\nSoporte técnico continuo\nPlanes EduTrack y Solo QR\nInnovación que gestiona"
+        empresa_pts = empresa_pts.replace("\\n", chr(10))
+    lis_emp = "".join(f"<li>{_esc(x.strip())}</li>" for x in (empresa_pts or "").replace("\\n", "\n").splitlines() if x.strip())
+    btn1_t, btn2_t, btn3_t = _esc(btn1_t), _esc(btn2_t), _esc(btn3_t)
+    hero_bg_style = (
+        "background-image:linear-gradient(120deg,rgba(7,26,51,.88),rgba(11,45,87,.82)),url('%s');background-size:cover;background-position:center;" % hero_fondo
+        if hero_fondo else ""
+    )
+
     top_der, barra_extra = _esc(top_der), _esc(barra_extra)
     nos_tit, nos_txt = _esc(nos_tit), _esc(nos_txt)
     cta_tit, cta_txt, foot_txt = _esc(cta_tit), _esc(cta_txt), _esc(foot_txt)
@@ -41277,7 +41404,7 @@ def pagina_corporativa_procsis():
       </div>
     </div>
   </nav>
-  <header class="pc-hero">
+  <header class="pc-hero" style="{hero_bg_style}">
     <div class="pc-hero-in">
       <div class="tag">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -41286,9 +41413,9 @@ def pagina_corporativa_procsis():
       <h1>{hero_tit}</h1>
       <p>{hero_txt}</p>
       <div class="pc-hero-btns">
-        <a class="pc-btn-w" href="/tecnologia">Conocer {brand_nom}</a>
-        <a class="pc-btn-g" href="{wa_link}" target="_blank" rel="noopener">Hablar con un asesor</a>
-        <a class="pc-btn-o" href="/login">Entrar al sistema</a>
+        <a class="pc-btn-w" href="{btn1_u}">{btn1_t}</a>
+        <a class="pc-btn-g" href="{btn2_u}" target="_blank" rel="noopener">{btn2_t}</a>
+        <a class="pc-btn-o" href="{btn3_u}">{btn3_t}</a>
       </div>
     </div>
   </header>
@@ -41344,6 +41471,22 @@ def pagina_corporativa_procsis():
         {link_planes_cta}
         <a href="{wa_link}" target="_blank" rel="noopener">WhatsApp comercial</a>
       </div>
+    </div>
+  </section>
+    <section class="pc-sec" id="caracteristicas-software" style="background:#f8fafc">
+    <h2>Características del software</h2>
+    <p class="sub">EduTrack by PROCSIS — lo que incluye la plataforma</p>
+    <div class="pc-grid3">
+      {cards_soft}
+    </div>
+  </section>
+  <section class="pc-sec" id="empresa-procsis">
+    <h2>Características de la empresa</h2>
+    <p class="sub">Por qué instituciones confían en PROCSIS</p>
+    <div class="pc-card" style="max-width:720px;margin:0 auto">
+      <ul style="margin:0;padding-left:20px;color:#334155;line-height:1.8;font-size:15px">
+        {lis_emp}
+      </ul>
     </div>
   </section>
   <section class="pc-sec" id="productos-procsis">
