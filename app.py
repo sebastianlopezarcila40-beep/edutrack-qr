@@ -8674,6 +8674,49 @@ def familia_dashboard():
     if not cards:
         cards = '<div class="empty">Aún no hay notas registradas en este periodo. Consulte más adelante o elija otro periodo.</div>'
     acu = e.acudiente or "Acudiente"
+    ingresos_html = ""
+    try:
+        ings = (
+            IngresoPorteria.query.filter_by(estudiante_id=e.id)
+            .order_by(IngresoPorteria.id.desc())
+            .limit(30)
+            .all()
+        )
+        hoy = fecha_hoy()
+        hoy_rows = [x for x in ings if (x.fecha or "")[:10] == hoy]
+        if hoy_rows:
+            u = hoy_rows[0]
+            resumen_hoy = "<b>Hoy:</b> %s a las %s" % (_esc(u.estado), _esc(u.hora or "-"))
+        else:
+            resumen_hoy = "<b>Hoy:</b> aun sin registro de ingreso en porteria."
+        filas_ing = []
+        for x in ings[:15]:
+            filas_ing.append(
+                "<tr><td style='padding:6px 8px;border-bottom:1px solid #e2e8f0'>%s</td>"
+                "<td style='padding:6px 8px;border-bottom:1px solid #e2e8f0'>%s</td>"
+                "<td style='padding:6px 8px;border-bottom:1px solid #e2e8f0'><b>%s</b></td></tr>"
+                % (_esc(x.fecha), _esc(x.hora), _esc(x.estado))
+            )
+        if not filas_ing:
+            filas_ing = ["<tr><td colspan='3' style='padding:10px;color:#64748b'>Sin ingresos registrados aun.</td></tr>"]
+        ingresos_html = (
+            "<div style='background:#fff;border:1px solid #bfdbfe;border-radius:14px;padding:14px 16px;margin:0 0 14px'>"
+            "<div style='font-size:11px;letter-spacing:.08em;color:#1d4ed8;font-weight:800'>ACCESO ESCOLAR · QR</div>"
+            "<h3 style='margin:4px 0 8px;color:#0B2D57;font-size:16px'>Ingresos y salidas</h3>"
+            "<p style='margin:0 0 10px;font-size:13px;color:#334155'>" + resumen_hoy + "</p>"
+            "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'>"
+            "<tr style='background:#eff6ff;color:#0B2D57;text-align:left'>"
+            "<th style='padding:6px 8px'>Fecha</th><th style='padding:6px 8px'>Hora</th>"
+            "<th style='padding:6px 8px'>Estado</th></tr>"
+            + "".join(filas_ing)
+            + "</table></div>"
+            "<p style='margin:10px 0 0;font-size:11px;color:#94a3b8'>Ultimos registros de porteria / lector QR.</p></div>"
+        )
+    except Exception as _ing_ex:
+        print("familia ingresos:", _ing_ex)
+        ingresos_html = ""
+
+
     body = f"""
 <style>
 *{{box-sizing:border-box}} body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f1f5f9;min-height:100vh;padding-bottom:90px}}
@@ -8708,6 +8751,7 @@ def familia_dashboard():
   </form>
   <p style="font-size:13px;color:#475569;margin:0 0 12px">Periodo activo: <b>{periodo}</b> · Resumen instantáneo de calificaciones</p>
   {cards}
+  {ingresos_html}
 </div>
 {f'''
 <div style="background:#fef2f2;color:#991b1b;padding:12px;border-radius:12px;margin:12px 0;font-size:13px">
@@ -16057,17 +16101,47 @@ def portal_ventas():
         else:
             img = f'<div class="pl-img pl-ph"><span>EduTrack</span><b>{p.nombre}</b></div>'
         href = f"/ventas/comprar?plan={p.codigo}" if getattr(p, "codigo", None) else "/ventas/comprar"
+        try:
+            p_lista = float(getattr(p, "precio_lista", None) or 0) or 0.0
+        except Exception:
+            p_lista = 0.0
+        try:
+            p_mes = float(getattr(p, "precio_mensual", None) or 0) or 0.0
+        except Exception:
+            p_mes = 0.0
+        try:
+            desc = float(getattr(p, "descuento_pct", None) or 0) or 0.0
+        except Exception:
+            desc = 0.0
+        if p_mes <= 0 and p_lista > 0:
+            p_mes = round(p_lista * (1 - desc / 100.0), 2) if desc else p_lista
+        if p_lista <= 0 and p_mes > 0:
+            p_lista = p_mes
+        if p_mes > 0:
+            if desc > 0 and p_lista > p_mes:
+                precio_html = f'<div class="pl-price">{_cop(p_mes)} <small>/ mes</small></div><div class="pl-old">{_cop(p_lista)} · -{desc:.0f}%</div>'
+            else:
+                precio_html = f'<div class="pl-price">{_cop(p_mes)} <small>/ mes</small></div>'
+        else:
+            precio_html = '<div class="pl-price pl-ask">Consultar precio</div><div class="pl-old">Defina tarifa en Gerencia - Planes</div>'
+        try:
+            fee_v = float(getattr(p, "fee_implementacion", None) or 0) or 0.0
+        except Exception:
+            fee_v = 0.0
+        fee_html = _cop(fee_v) if fee_v > 0 else "Incluida / a cotizar"
+        tag_linea = '<div class="pl-line">Solo QR · Acceso escolar</div>' if cod.startswith("qr") else '<div class="pl-line">EduTrack completo</div>'
         cards += f"""
-        <article class="pl-card">
+        <article class="pl-card{' qr' if cod.startswith('qr') else ''}">
           <div class="pl-badge">{badge}</div>
           {img}
           <h3>{p.nombre}</h3>
-          <div class="pl-price">{_cop(p.precio_mensual)} <small>/ mes</small></div>
+          {tag_linea}
+          {precio_html}
           <ul>
-            <li>Implementación: {_cop(p.fee_implementacion)}</li>
+            <li>Implementación: {fee_html}</li>
             <li>{est_lbl}</li>
             <li>{sedes_lbl}</li>
-            <li>{(feats.get('soporte') or 'Soporte Procsis')}</li>
+            <li>{(feats.get('soporte') or 'Soporte PROCSIS')}</li>
           </ul>
           <a class="pl-cta" href="{href}">Solicitar este plan</a>
         </article>"""
@@ -16165,6 +16239,35 @@ def portal_ventas():
     <div class="lv-plans">{cards}</div>
   </section>
 
+  <section class="lv-section" id="pasate" style="background:#f8fafc;padding-top:28px;padding-bottom:8px">
+    <h2 style="text-align:center;color:#0B2D57;margin:0 0 8px">Pasate ahora si aun no eres cliente</h2>
+    <p class="lead" style="text-align:center">Elige EduTrack completo o Solo QR para control de acceso</p>
+    <div style="max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:8px 16px 24px">
+      <a href="#planes" style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:block;box-shadow:0 4px 14px rgba(15,23,42,.04)">
+        <span style="background:#0B2D57;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px">Completo</span>
+        <div style="color:#0f172a;font-size:14px;margin-top:8px;line-height:1.4"><b>EduTrack completo</b><br><span style="color:#64748b">Notas, boletines, QR y mas</span></div>
+      </a>
+      <a href="#planes" style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:block;box-shadow:0 4px 14px rgba(15,23,42,.04)">
+        <span style="background:#0284c7;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px">Solo QR</span>
+        <div style="color:#0f172a;font-size:14px;margin-top:8px;line-height:1.4"><b>Acceso y asistencia</b><br><span style="color:#64748b">Escaneo, reportes y avisos</span></div>
+      </a>
+      <a href="/familia-login" style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:block;box-shadow:0 4px 14px rgba(15,23,42,.04)">
+        <span style="background:#ca8a04;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px">Familias</span>
+        <div style="color:#0f172a;font-size:14px;margin-top:8px;line-height:1.4"><b>Portal de padres</b><br><span style="color:#64748b">Ingresos y seguimiento</span></div>
+      </a>
+    </div>
+  </section>
+  <section class="lv-section" id="servicios" style="padding-top:12px">
+    <h2 style="text-align:center;color:#0B2D57;margin:0 0 16px">Gestiona tus servicios aqui</h2>
+    <div style="max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:0 16px 28px">
+      <a href="/ventas/comprar" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Activar plan</a>
+      <a href="/familia-login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Portal padres</a>
+      <a href="/portal" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Lector QR</a>
+      <a href="/pqr" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Radicar PQR</a>
+      <a href="/login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Acceso colegio</a>
+      <a href="{wa}" target="_blank" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Hablar con ventas</a>
+    </div>
+  </section>
   <section class="lv-section" id="beneficios">
     <h2>Todo lo que incluye EduTrack</h2>
     <p class="lead">Módulos pensados para colegios colombianos</p>
