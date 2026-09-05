@@ -41300,8 +41300,11 @@ def pagina_corporativa_procsis():
     lis_emp = "".join(f"<li>{_esc(x.strip())}</li>" for x in (empresa_pts or "").replace("\\n", "\n").splitlines() if x.strip())
     btn1_t, btn2_t, btn3_t = _esc(btn1_t), _esc(btn2_t), _esc(btn3_t)
     hero_bg_style = (
-        "background-image:linear-gradient(120deg,rgba(7,26,51,.88),rgba(11,45,87,.82)),url('%s');background-size:cover;background-position:center;" % hero_fondo
-        if hero_fondo else ""
+        "background-image:linear-gradient(105deg,rgba(255,255,255,.92) 0%,rgba(248,250,252,.78) 42%,rgba(15,23,42,.35) 100%),url('%s');"
+        "background-size:cover;background-position:center right;color:#0f172a;"
+        % hero_fondo
+        if hero_fondo
+        else "background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 45%,#cbd5e1 100%);color:#0f172a;"
     )
 
     top_der, barra_extra = _esc(top_der), _esc(barra_extra)
@@ -41335,18 +41338,18 @@ def pagina_corporativa_procsis():
 .pc-links a:hover{{background:rgba(255,255,255,.1);color:#fff}}
 .pc-links a.on{{color:#fff;box-shadow:inset 0 -2px 0 #60a5fa}}
 .pc-links a.cta{{background:#fff;color:#0B2D57!important;border-radius:999px;padding:8px 14px}}
-.pc-hero{{background:linear-gradient(135deg,#071a33 0%,#0B2D57 48%,#0e4d8a 100%);color:#fff;position:relative;overflow:hidden}}
-.pc-hero::after{{content:"";position:absolute;right:-80px;top:-40px;width:380px;height:380px;border-radius:50%;background:rgba(255,255,255,.06)}}
+.pc-hero{{background:linear-gradient(135deg,#f1f5f9 0%,#e8eef5 50%,#dbe3ee 100%);color:#0f172a;position:relative;overflow:hidden;min-height:420px}}
+.pc-hero::after{{content:"";position:absolute;right:-60px;top:-30px;width:320px;height:320px;border-radius:50%;background:rgba(11,45,87,.04);pointer-events:none}}
 .pc-hero-in{{max-width:1120px;margin:0 auto;padding:64px 20px 72px;position:relative;z-index:1}}
-.pc-hero .tag{{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;letter-spacing:.04em;margin-bottom:16px}}
+.pc-hero .tag{{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#0B2D57;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(15,23,42,.06);-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;letter-spacing:.04em;margin-bottom:16px}}
 .pc-hero .tag svg{{width:16px;height:16px;stroke:#93c5fd}}
-.pc-hero h1{{margin:0 0 14px;font-size:42px;line-height:1.12;font-weight:800;max-width:640px}}
-.pc-hero p{{margin:0 0 22px;font-size:17px;line-height:1.5;opacity:.92;max-width:560px}}
+.pc-hero h1{{margin:0 0 14px;font-size:42px;line-height:1.12;font-weight:800;max-width:640px;color:#0B2D57}}
+.pc-hero p{{margin:0 0 22px;font-size:16px;line-height:1.55;max-width:520px;color:#475569}}
 .pc-hero-btns{{display:flex;flex-wrap:wrap;gap:12px}}
 .pc-hero-btns a{{padding:13px 20px;border-radius:10px;font-weight:800;font-size:14px}}
-.pc-btn-w{{background:#fff;color:#0B2D57}}
+.pc-btn-w{{background:#0B2D57;color:#fff;box-shadow:0 6px 16px rgba(11,45,87,.2)}}
 .pc-btn-g{{background:#16a34a;color:#fff}}
-.pc-btn-o{{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.45)}}
+.pc-btn-o{{background:#fff;color:#0B2D57;border:1px solid #cbd5e1}}.pc-btn-w{{background:#0B2D57;color:#fff}}.pc-btn-g{{background:#15803d;color:#fff}}
 .pc-sec{{max-width:1120px;margin:0 auto;padding:48px 20px}}
 .pc-sec h2{{margin:0 0 8px;font-size:28px;color:#0B2D57;text-align:center}}
 .pc-sec .sub{{text-align:center;color:#64748b;margin:0 0 28px;font-size:15px}}
