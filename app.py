@@ -2464,15 +2464,17 @@ def menu_items_por_rol():
         ]
 
     elif rol == "Docente":
-        items += [
-            ("/docente-escritorio", "Mi escritorio"),
-            ("/notas", "Planilla de notas"),
-            ("/notas/observaciones", "Observaciones 🪄"),
-            ("/docente-movil", "Asistencia en aula"),
-            ("/buscar_estudiantes", "Buscar estudiante"),
-            ("/estudiantes_grupo", "Mis grupos"),
-            ("/horarios", "Mis horarios"),
-            ("/calendario", "Calendario escolar"),
+        # Inicio del menú ya es /dashboard (redirige a escritorio). Accesos esenciales limpios.
+        items = [
+            ("/docente-escritorio", "Inicio"),
+            ("/notas/planilla", "Planilla de notas"),
+            ("/notas/ficha", "Ficha seguimiento"),
+            ("/docente-movil", "Asistencia QR"),
+            ("/notas/faltas", "Faltas"),
+            ("/horarios", "Horarios"),
+            ("/calendario", "Calendario"),
+            ("/eduaura", "EduAura IA"),
+            ("/notas/refuerzos", "Refuerzo"),
             ("/pqr", "Soporte PROCSIS"),
         ]
 
@@ -8318,7 +8320,7 @@ def dashboard():
         </section>
         """
     elif rol == "Docente":
-        return redirect("/docente-movil")
+        return redirect("/docente-escritorio")
     else:
         body = "<div class='role-panel'><h2>Rol no reconocido</h2><p>Contacta al soporte técnico.</p></div>"
     return page("Dashboard", shell(top + body))
@@ -14128,14 +14130,18 @@ def eduaura():
     if es_docente:
         ests = []
         if grado:
-            ests = (
-                q_estudiantes()
-                .filter(Estudiante.grado == grado)
-                .order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc())
-                .limit(200)
-                .all()
-            )
-        # Promedios y faltas por estudiante en la materia
+            try:
+                ests = (
+                    q_estudiantes()
+                    .filter(Estudiante.grado == grado)
+                    .order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc())
+                    .limit(200)
+                    .all()
+                )
+            except Exception as _eq:
+                print("eduaura ests:", _eq)
+                ests = []
+        # Promedios y faltas por estudiante (aunque no haya notas aún)
         iid = institucion_id_actual()
         proms = {}
         faltas_map = {}
@@ -14243,7 +14249,7 @@ def eduaura():
                 </td>
                 </tr>"""
             )
-        filas_html = "".join(filas) or '<tr><td colspan="5">Seleccione grado y materia para ver su grupo.</td></tr>'
+        filas_html = "".join(filas) or '<tr><td colspan="5">Seleccione grado (y materia si desea promedios por asignatura). Si ya eligió grado, la lista de estudiantes debe aparecer abajo aunque aún no tengan notas.</td></tr>'
 
         kpi_prom = f"{prom_grupo:.1f} / 5.0" if prom_grupo is not None else "—"
         content = f"""
@@ -14283,8 +14289,8 @@ def eduaura():
   <div><label>Grado / grupo *</label><select name="grado" required>
     <option value="">— Seleccionar grado —</option>{grados_opts}
   </select></div>
-  <div><label>Materia *</label><select name="asignatura" required>
-    <option value="">— Seleccionar materia —</option>{mats_opts}
+  <div><label>Materia (opcional para listar)</label><select name="asignatura">
+    <option value="">— Todas / sin filtro de materia —</option>{mats_opts}
   </select></div>
   <div><label>Periodo</label><select name="periodo">{per_opts}</select></div>
   <button type="submit">Analizar con EduAura</button>
@@ -29604,6 +29610,9 @@ def notas_hub():
         return redirect("/login")
     if rol_actual() not in ["Administrador", "Rectoría", "Coordinación", "Docente", "Secretaría", "Soporte"]:
         return acceso_denegado()
+    # Docente: ir directo a la planilla (menos clics)
+    if rol_actual() == "Docente":
+        return redirect("/notas/planilla")
     plan = plan_institucion()
     if plan == "Basico" and rol_actual() != "Soporte":
         return page("Notas", shell("""
@@ -29737,7 +29746,7 @@ def notas_logros():
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
   <div><h1 style="margin:0;font-size:20px">Banco de logros</h1>
   <p class="mini-text" style="margin:4px 0 0">Códigos cortos para planilla y boletines</p></div>
-  <a class="btn" href="/notas">← Notas</a>
+  <a class="btn" href="/docente-escritorio">← Inicio panel</a>
 </div>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
 <section class="role-panel" style="margin-bottom:14px">
@@ -29797,7 +29806,7 @@ def notas_refuerzos():
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
   <div><h1 style="margin:0;font-size:20px">Refuerzos académicos</h1>
   <p class="mini-text" style="margin:4px 0 0">Seguimiento de recuperación</p></div>
-  <a class="btn" href="/notas">← Notas</a>
+  <a class="btn" href="/docente-escritorio">← Inicio panel</a>
 </div>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje and 'registrado' in mensaje else ""}
 {"<div class='msg danger'>"+mensaje+"</div>" if mensaje and 'registrado' not in mensaje else ""}
@@ -29843,7 +29852,7 @@ def notas_informes():
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
   <div><h1 style="margin:0;font-size:20px">Boletines e informes</h1>
   <p class="mini-text" style="margin:4px 0 0">PDF listo para imprimir o guardar</p></div>
-  <a class="btn" href="/notas">← Notas</a>
+  <a class="btn" href="/docente-escritorio">← Inicio panel</a>
 </div>
 <form method="GET" style="margin-bottom:12px;display:flex;gap:8px;align-items:end">
   <div><label><b>Grado</b></label><select name="grado" onchange="this.form.submit()"><option value="">Todos</option>{opts}</select></div>
@@ -30755,53 +30764,210 @@ def ficha_estudiante_pdf(id):
 
 
 
-@app.route("/notas/ficha")
+@app.route("/notas/ficha", methods=["GET", "POST"])
 def notas_ficha():
+    """Ficha de seguimiento docente: lista por grado + proceso disciplinario / metas / falencias."""
     if not requiere_login():
         return redirect("/login")
+    if rol_actual() not in ["Docente", "Coordinación", "Rectoría", "Rector", "Secretaría", "Administrador", "Soporte"]:
+        return acceso_denegado()
+    rol = rol_actual()
+    es_doc = rol == "Docente"
+    back = "/docente-escritorio" if es_doc else "/notas"
+    msg = ""
+
+    # Guardar anotación de seguimiento
+    if request.method == "POST":
+        try:
+            est_id = int(request.form.get("estudiante_id") or 0)
+            tipo = (request.form.get("tipo") or "observacion").strip()[:40]
+            texto = (request.form.get("texto") or "").strip()[:2000]
+            meta = (request.form.get("meta") or "").strip()[:500]
+            falencia = (request.form.get("falencia") or "").strip()[:500]
+            if est_id and (texto or meta or falencia):
+                e = Estudiante.query.get(est_id)
+                if e and (not es_doc or True):
+                    cuerpo = texto
+                    if meta:
+                        cuerpo = (cuerpo + "\nMeta: " + meta).strip()
+                    if falencia:
+                        cuerpo = (cuerpo + "\nFalencia: " + falencia).strip()
+                    # Reutilizar ObservacionBoletin o tabla genérica si existe
+                    try:
+                        from datetime import datetime as _dt
+                        obs = ObservacionBoletin(
+                            estudiante_id=est_id,
+                            institucion_id=institucion_id_actual(),
+                            periodo=periodo_actual() or "Periodo 1",
+                            texto=("[%s] " % tipo.upper()) + cuerpo,
+                            docente=session.get("usuario") or "",
+                            actualizado=fecha_hoy() + " " + hora_actual(),
+                            generado_auto=False,
+                        )
+                        db.session.add(obs)
+                        db.session.commit()
+                        msg = "Registro de seguimiento guardado."
+                    except Exception as ex_s:
+                        # Fallback: convivencia-style if available
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        print("ficha save:", ex_s)
+                        msg = "No se pudo guardar: " + str(ex_s)[:100]
+            else:
+                msg = "Seleccione estudiante y escriba el seguimiento."
+        except Exception as ex:
+            msg = "Error: " + str(ex)[:100]
+
+    grado = (request.args.get("grado") or "").strip()
     est_id = request.args.get("est")
-    codigo = (request.args.get("codigo") or "").strip()
     e = None
     if est_id:
         try:
             e = Estudiante.query.get(int(est_id))
         except Exception:
             e = None
-    if not e and codigo:
-        e = q_estudiantes().filter(func.lower(Estudiante.codigo) == codigo.lower()).first()
-    body = """
-<div style="display:flex;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-  <h1 style="margin:0;font-size:20px">Ficha de seguimiento</h1>
-  <a class="btn" href="/notas">← Notas</a>
-</div>
-<form method="GET" style="display:flex;gap:8px;margin-bottom:14px">
-  <input name="codigo" placeholder="Código del estudiante" value="">
-  <button>Buscar</button>
-</form>
-"""
+
+    # Grados disponibles (docente: solo los suyos)
+    try:
+        if es_doc:
+            grs = list(grados_docente_actual() or []) or grados_disponibles()
+        else:
+            grs = grados_disponibles()
+    except Exception:
+        grs = grados_disponibles() if "grados_disponibles" in dir() else []
+
+    lista = []
+    if grado:
+        try:
+            lista = (
+                q_estudiantes()
+                .filter(Estudiante.grado == grado)
+                .order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc())
+                .limit(300)
+                .all()
+            )
+        except Exception:
+            lista = []
+
+    opts_g = "".join(
+        '<option value="%s"%s>%s</option>' % (
+            str(g).replace('"', ""),
+            " selected" if str(g) == grado else "",
+            str(g),
+        )
+        for g in (grs or [])
+    )
+
+    filas = ""
+    for st in lista:
+        filas += (
+            "<tr><td>%s %s</td><td>%s</td><td>%s</td>"
+            "<td><a class='btn' style='padding:4px 10px;font-size:12px' href='/notas/ficha?grado=%s&est=%s'>Abrir ficha</a></td></tr>"
+            % (
+                (st.apellido or ""),
+                (st.nombre or ""),
+                st.codigo or "",
+                st.grado or "",
+                str(grado).replace(" ", "%20"),
+                st.id,
+            )
+        )
+    if grado and not filas:
+        filas = "<tr><td colspan='4'>No hay estudiantes en este grado.</td></tr>"
+    if not grado:
+        filas = "<tr><td colspan='4'>Seleccione un grado para listar el grupo.</td></tr>"
+
+    detalle = ""
     if e:
-        iid = institucion_id_actual()
-        regs = NotaRegistro.query.filter_by(estudiante_id=e.id, institucion_id=iid).order_by(NotaRegistro.periodo.desc()).limit(50).all()
-        ingresos = IngresoPorteria.query.filter_by(estudiante_id=e.id).order_by(IngresoPorteria.fecha.desc()).limit(30).all()
+        try:
+            iid = institucion_id_actual()
+            regs = NotaRegistro.query.filter_by(estudiante_id=e.id).order_by(NotaRegistro.periodo.desc()).limit(40).all()
+        except Exception:
+            regs = []
+        try:
+            ingresos = IngresoPorteria.query.filter_by(estudiante_id=e.id).order_by(IngresoPorteria.fecha.desc()).limit(20).all()
+        except Exception:
+            ingresos = []
+        try:
+            obs_list = ObservacionBoletin.query.filter_by(estudiante_id=e.id).order_by(ObservacionBoletin.id.desc()).limit(15).all()
+        except Exception:
+            obs_list = []
         filas_n = "".join(
-            f"<tr><td>{r.periodo}</td><td>{r.asignatura or '—'}</td><td>{r.valor if r.valor is not None else '—'}</td><td>{r.actualizado or ''}</td></tr>"
+            "<tr><td>%s</td><td>%s</td><td>%s</td></tr>"
+            % (r.periodo or "", r.asignatura or "—", r.valor if r.valor is not None else "—")
             for r in regs
-        ) or "<tr><td colspan='4'>Sin notas</td></tr>"
+        ) or "<tr><td colspan='3'>Sin notas aún</td></tr>"
         filas_a = "".join(
-            f"<tr><td>{i.fecha}</td><td>{i.hora}</td><td>{i.estado}</td></tr>" for i in ingresos
-        ) or "<tr><td colspan='3'>Sin registros de ingreso</td></tr>"
-        body += f"""
-<section class="role-panel" style="margin-bottom:12px">
-  <h2 style="margin-top:0">{e.apellido} {e.nombre}</h2>
-  <p>Código <b>{e.codigo}</b> · Grado <b>{e.grado}</b> · Director <b>{e.director or '—'}</b></p>
-  <a class="btn" href="/notas/boletin/{e.id}">Descargar boletín PDF</a>
+            "<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (i.fecha or "", i.hora or "", i.estado or "")
+            for i in ingresos
+        ) or "<tr><td colspan='3'>Sin ingresos QR</td></tr>"
+        filas_o = "".join(
+            "<tr><td>%s</td><td>%s</td></tr>"
+            % (
+                getattr(o, "creado_en", None) or getattr(o, "periodo", "") or "",
+                (getattr(o, "texto", None) or "")[:200],
+            )
+            for o in obs_list
+        ) or "<tr><td colspan='2'>Sin registros de seguimiento</td></tr>"
+
+        detalle = f"""
+<section class="role-panel" style="margin:14px 0">
+  <h2 style="margin-top:0">{e.apellido or ''} {e.nombre or ''}</h2>
+  <p>Código <b>{e.codigo or ''}</b> · Grado <b>{e.grado or ''}</b></p>
+  <h3>Registrar seguimiento (disciplinario / meta / falencia)</h3>
+  <form method="POST" style="display:grid;gap:8px;max-width:640px">
+    <input type="hidden" name="estudiante_id" value="{e.id}">
+    <div><label><b>Tipo</b></label>
+      <select name="tipo">
+        <option value="disciplinario">Proceso disciplinario</option>
+        <option value="meta">Meta de mejora</option>
+        <option value="falencia">Falencia / dificultad</option>
+        <option value="observacion">Cómo le va (observación)</option>
+      </select>
+    </div>
+    <div><label><b>Descripción</b></label><textarea name="texto" rows="3" style="width:100%" placeholder="Detalle del seguimiento"></textarea></div>
+    <div><label><b>Meta (opcional)</b></label><input name="meta" style="width:100%" placeholder="Ej. Subir promedio a 3.5"></div>
+    <div><label><b>Falencia (opcional)</b></label><input name="falencia" style="width:100%" placeholder="Ej. Bajo rendimiento en operaciones"></div>
+    <button type="submit">Guardar en ficha</button>
+  </form>
 </section>
+<section class="table-card" style="margin-bottom:12px"><h2>Historial de seguimiento</h2>
+<table><tr><th>Fecha</th><th>Registro</th></tr>{filas_o}</table></section>
 <section class="table-card" style="margin-bottom:12px"><h2>Notas recientes</h2>
-<table><tr><th>Periodo</th><th>Asignatura</th><th>Nota</th><th>Actualizado</th></tr>{filas_n}</table></section>
-<section class="table-card"><h2>Asistencia (últimos ingresos)</h2>
+<table><tr><th>Periodo</th><th>Materia</th><th>Nota</th></tr>{filas_n}</table></section>
+<section class="table-card"><h2>Asistencia (ingresos)</h2>
 <table><tr><th>Fecha</th><th>Hora</th><th>Estado</th></tr>{filas_a}</table></section>
 """
-    return page("Ficha", shell(body))
+
+    content = f"""
+<header class="role-hero">
+  <div><h1>Ficha de seguimiento</h1>
+  <p>Filtre por grado, abra un estudiante y registre procesos, metas o falencias.</p></div>
+  <a class="btn" href="{back}">← Inicio panel</a>
+</header>
+{"<div class='msg ok'>" + msg + "</div>" if msg else ""}
+<div class="role-panel">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+    <div><label><b>Grado / grupo</b></label>
+      <select name="grado" onchange="this.form.submit()">
+        <option value="">— Seleccionar —</option>{opts_g}
+      </select>
+    </div>
+    <button type="submit">Ver estudiantes</button>
+  </form>
+</div>
+<div class="table-card" style="margin-top:12px">
+  <table>
+    <tr><th>Estudiante</th><th>Código</th><th>Grado</th><th></th></tr>
+    {filas}
+  </table>
+</div>
+{detalle}
+"""
+    return page("Ficha de seguimiento", shell(content))
+
 
 
 @app.route("/notas/faltas")
@@ -30829,7 +30995,7 @@ def notas_faltas():
 <div style="display:flex;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
   <div><h1 style="margin:0;font-size:20px">Faltas de asistencia</h1>
   <p class="mini-text">Cruce con control QR / portería</p></div>
-  <a class="btn" href="/notas">← Notas</a>
+  <a class="btn" href="/docente-escritorio">← Inicio panel</a>
 </div>
 <form method="GET" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
   <div><label><b>Grado</b></label><select name="grado"><option value="">Todos</option>{opts}</select></div>
@@ -30871,7 +31037,7 @@ def notas_descargar():
     content = f"""
 <div style="display:flex;justify-content:space-between;margin-bottom:14px">
   <h1 style="margin:0;font-size:20px">Descargar notas</h1>
-  <a class="btn" href="/notas">← Notas</a>
+  <a class="btn" href="/docente-escritorio">← Inicio panel</a>
 </div>
 <section class="role-panel">
   <p>Periodo actual: <b>{periodo}</b></p>
@@ -31851,7 +32017,7 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
     <a class="btn-exp" href="/notas/planilla/exportar?{qbase}">⬇ Exportar Excel</a>
     <button type="button" class="btn-imp" onclick="document.getElementById('import-panel').classList.add('on')">⬆ Importar notas</button>
     {('<a class="btn-comp" href="/notas/componentes?asignatura=' + asignatura.replace(chr(39),'') + '">Componentes</a>') if puede_componentes() else ''}
-    <a class="btn-back" href="/notas">← Regresar al panel</a>
+    <a class="btn-back" href="/docente-escritorio">← Inicio panel</a>
   </div>
 </div>
 <div class="siee-bar">Trabajos 30% · Tareas 20% · Talleres/Quices 20% · Eval. Final 15% · Actitudinal 15% · Cláusula: Eval.&lt;3.0 pierde periodo · Definitiva al cerrar Eval+Actitudinal · NM = mínimo próximo{" · <b style='color:#b45309'>MODO CONSULTA — no se pueden editar notas</b>" if solo_lectura else ""}</div>
@@ -42529,308 +42695,260 @@ def api_health_railway():
 
 @app.route("/calendario", methods=["GET", "POST"])
 def calendario_escolar():
-    """Calendario escolar 2024-2040. Robusto: crea tabla si falta."""
-    if not requiere_login():
-        return redirect("/login")
-    rol = (rol_actual() or "").strip()
-    roles_ok = {
-        "Docente", "Secretaría", "Rectoría", "Rector", "Coordinación", "Coordinador",
-        "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin", "Comercial", "Ventas",
-    }
-    if rol not in roles_ok:
-        return acceso_denegado("Calendario para roles del colegio, soporte y gerencia.")
-
-    # Asegurar tabla (Railway / Postgres / SQLite)
+    """Calendario escolar 2024-2040. A prueba de fallos (tabla, rol, tenant)."""
     try:
-        from sqlalchemy import text as sa_text, inspect as sa_inspect
-        insp = sa_inspect(db.engine)
-        if "calendario_eventos" not in insp.get_table_names():
-            try:
-                db.create_all()
-            except Exception as _ca:
-                print("calendario create_all:", _ca)
+        if not requiere_login():
+            return redirect("/login")
+        rol = (rol_actual() or "").strip()
+        roles_ok = {
+            "Docente", "Secretaría", "Rectoría", "Rector", "Coordinación", "Coordinador",
+            "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin", "Comercial", "Ventas",
+        }
+        if rol not in roles_ok:
+            return acceso_denegado("Calendario para roles del colegio, soporte y gerencia.")
+
+        # Crear tabla si no existe
+        try:
+            from sqlalchemy import inspect as sa_inspect, text as sa_text
+            insp = sa_inspect(db.engine)
+            if "calendario_eventos" not in (insp.get_table_names() or []):
                 try:
+                    db.create_all()
+                except Exception:
+                    pass
+                if "calendario_eventos" not in (sa_inspect(db.engine).get_table_names() or []):
                     with db.engine.begin() as conn:
-                        conn.execute(sa_text(
-                            "CREATE TABLE IF NOT EXISTS calendario_eventos ("
-                            "id SERIAL PRIMARY KEY,"
-                            "institucion_id INTEGER,"
-                            "titulo VARCHAR(200) DEFAULT '',"
-                            "descripcion TEXT DEFAULT '',"
-                            "fecha VARCHAR(10) DEFAULT '',"
-                            "fecha_fin VARCHAR(10) DEFAULT '',"
-                            "tipo VARCHAR(40) DEFAULT 'institucional',"
-                            "color VARCHAR(20) DEFAULT '#0B2D57',"
-                            "creado_por VARCHAR(120) DEFAULT '',"
-                            "creado_en VARCHAR(30) DEFAULT ''"
-                            ")"
-                        ))
-                except Exception as _sql:
-                    # SQLite fallback
-                    try:
-                        with db.engine.begin() as conn:
+                        dialect = db.engine.dialect.name
+                        if dialect == "postgresql":
                             conn.execute(sa_text(
                                 "CREATE TABLE IF NOT EXISTS calendario_eventos ("
-                                "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                                "institucion_id INTEGER,"
-                                "titulo VARCHAR(200) DEFAULT '',"
-                                "descripcion TEXT DEFAULT '',"
-                                "fecha VARCHAR(10) DEFAULT '',"
-                                "fecha_fin VARCHAR(10) DEFAULT '',"
-                                "tipo VARCHAR(40) DEFAULT 'institucional',"
-                                "color VARCHAR(20) DEFAULT '#0B2D57',"
-                                "creado_por VARCHAR(120) DEFAULT '',"
-                                "creado_en VARCHAR(30) DEFAULT ''"
-                                ")"
+                                "id SERIAL PRIMARY KEY, institucion_id INTEGER, titulo VARCHAR(200) DEFAULT '',"
+                                "descripcion TEXT DEFAULT '', fecha VARCHAR(10) DEFAULT '', fecha_fin VARCHAR(10) DEFAULT '',"
+                                "tipo VARCHAR(40) DEFAULT 'institucional', color VARCHAR(20) DEFAULT '#0B2D57',"
+                                "creado_por VARCHAR(120) DEFAULT '', creado_en VARCHAR(30) DEFAULT '')"
                             ))
-                    except Exception as _sq2:
-                        print("calendario SQL create:", _sq2)
-    except Exception as _te:
-        print("calendario table ensure:", _te)
+                        else:
+                            conn.execute(sa_text(
+                                "CREATE TABLE IF NOT EXISTS calendario_eventos ("
+                                "id INTEGER PRIMARY KEY AUTOINCREMENT, institucion_id INTEGER, titulo VARCHAR(200) DEFAULT '',"
+                                "descripcion TEXT DEFAULT '', fecha VARCHAR(10) DEFAULT '', fecha_fin VARCHAR(10) DEFAULT '',"
+                                "tipo VARCHAR(40) DEFAULT 'institucional', color VARCHAR(20) DEFAULT '#0B2D57',"
+                                "creado_por VARCHAR(120) DEFAULT '', creado_en VARCHAR(30) DEFAULT '')"
+                            ))
+        except Exception as te:
+            print("calendario ensure table:", te)
 
-    iid = None
-    try:
-        iid = institucion_id_actual()
-    except Exception:
-        iid = session.get("institucion_id")
+        iid = None
+        try:
+            iid = institucion_id_actual()
+        except Exception:
+            iid = session.get("institucion_id")
 
-    msg = ""
-    puede_editar = rol in {
-        "Secretaría", "Rectoría", "Rector", "Coordinación", "Coordinador",
-        "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin",
-    }
-    festivos_base = {
-        "01-01": "Año Nuevo",
-        "05-01": "Día del Trabajo",
-        "07-20": "Independencia de Colombia",
-        "08-07": "Batalla de Boyacá",
-        "12-08": "Inmaculada Concepción",
-        "12-25": "Navidad",
-    }
+        msg = ""
+        puede_editar = rol in {
+            "Secretaría", "Rectoría", "Rector", "Coordinación", "Coordinador",
+            "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin",
+        }
+        festivos_base = {
+            "01-01": "Año Nuevo", "05-01": "Día del Trabajo", "07-20": "Independencia de Colombia",
+            "08-07": "Batalla de Boyacá", "12-08": "Inmaculada Concepción", "12-25": "Navidad",
+        }
 
-    try:
         if request.method == "POST" and puede_editar:
-            acc = (request.form.get("accion") or "crear").strip()
-            if acc == "borrar":
-                try:
+            try:
+                acc = (request.form.get("accion") or "crear").strip()
+                if acc == "borrar":
                     eid = int(request.form.get("evento_id") or 0)
-                except Exception:
-                    eid = 0
-                if eid:
-                    try:
+                    if eid:
                         ev = CalendarioEvento.query.get(eid)
                         if ev and (ev.institucion_id is None or (iid is not None and int(ev.institucion_id) == int(iid))):
                             db.session.delete(ev)
                             db.session.commit()
                             msg = "Evento eliminado."
-                    except Exception as ex:
-                        db.session.rollback()
-                        msg = "No se pudo eliminar: %s" % str(ex)[:120]
-            else:
-                titulo = (request.form.get("titulo") or "").strip()[:200]
-                fecha = (request.form.get("fecha") or "").strip()[:10]
-                fecha_fin = (request.form.get("fecha_fin") or "").strip()[:10]
-                tipo = (request.form.get("tipo") or "institucional").strip()[:40]
-                desc = (request.form.get("descripcion") or "").strip()[:2000]
-                if titulo and fecha:
-                    colores = {
-                        "festivo": "#b91c1c", "academico": "#1d4ed8",
-                        "reunion": "#0f766e", "institucional": "#0B2D57",
-                    }
-                    try:
-                        ahora_txt = fecha_hoy() + " " + hora_actual()
-                    except Exception:
-                        ahora_txt = fecha
-                    try:
+                else:
+                    titulo = (request.form.get("titulo") or "").strip()[:200]
+                    fecha = (request.form.get("fecha") or "").strip()[:10]
+                    fecha_fin = (request.form.get("fecha_fin") or "").strip()[:10]
+                    tipo = (request.form.get("tipo") or "institucional").strip()[:40]
+                    desc = (request.form.get("descripcion") or "").strip()[:2000]
+                    if titulo and fecha:
+                        colores = {"festivo": "#b91c1c", "academico": "#1d4ed8", "reunion": "#7c3aed", "institucional": "#0B2D57"}
+                        try:
+                            ahora_txt = fecha_hoy() + " " + hora_actual()
+                        except Exception:
+                            ahora_txt = ""
                         db.session.add(CalendarioEvento(
-                            institucion_id=iid,
-                            titulo=titulo,
-                            descripcion=desc,
-                            fecha=fecha,
-                            fecha_fin=fecha_fin,
-                            tipo=tipo,
-                            color=colores.get(tipo, "#0B2D57"),
-                            creado_por=session.get("usuario") or "",
-                            creado_en=ahora_txt,
+                            institucion_id=iid, titulo=titulo, descripcion=desc, fecha=fecha,
+                            fecha_fin=fecha_fin, tipo=tipo, color=colores.get(tipo, "#0B2D57"),
+                            creado_por=session.get("usuario") or "", creado_en=ahora_txt,
                         ))
                         db.session.commit()
                         msg = "Evento guardado."
-                    except Exception as ex:
-                        db.session.rollback()
-                        msg = "No se pudo guardar: %s" % str(ex)[:120]
-                else:
-                    msg = "Título y fecha son obligatorios."
-    except Exception as ex_post:
-        print("calendario POST:", ex_post)
-        msg = "Error al procesar: %s" % str(ex_post)[:120]
+                    else:
+                        msg = "Título y fecha son obligatorios."
+            except Exception as ex_post:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                print("calendario POST:", ex_post)
+                msg = "Error al procesar: " + str(ex_post)[:120]
 
-    try:
-        hoy = fecha_hoy()
-    except Exception:
-        from datetime import date as _date
-        hoy = _date.today().isoformat()
-    try:
-        anio = int(request.args.get("anio") or hoy[:4])
-    except Exception:
-        anio = 2026
-    anio = max(2024, min(2040, anio))
-    try:
-        mes = int(request.args.get("mes") or hoy[5:7])
-    except Exception:
-        mes = 1
-    mes = max(1, min(12, mes))
-    pref = "%04d-%02d" % (anio, mes)
-
-    eventos_bd = []
-    try:
-        q = CalendarioEvento.query.filter(CalendarioEvento.fecha.like(pref + "%"))
-        if iid is not None:
-            q = q.filter(
-                (CalendarioEvento.institucion_id == iid) | (CalendarioEvento.institucion_id.is_(None))
-            )
-        eventos_bd = q.order_by(CalendarioEvento.fecha.asc()).all()
-    except Exception as ex_q:
-        print("calendario query:", ex_q)
         try:
-            db.session.rollback()
+            hoy = fecha_hoy()
         except Exception:
-            pass
+            from datetime import date as _date
+            hoy = _date.today().isoformat()
+        try:
+            anio = int(request.args.get("anio") or hoy[:4])
+        except Exception:
+            anio = 2026
+        anio = max(2024, min(2040, anio))
+        try:
+            mes = int(request.args.get("mes") or hoy[5:7])
+        except Exception:
+            mes = 1
+        mes = max(1, min(12, mes))
+        pref = "%04d-%02d" % (anio, mes)
+
         eventos_bd = []
-
-    by_day = {}
-    for ev in eventos_bd:
-        by_day.setdefault(ev.fecha or "", []).append(ev)
-    for md, nom in festivos_base.items():
-        f = "%04d-%s" % (anio, md)
-        if f.startswith(pref):
-            by_day.setdefault(f, []).append(
-                type("F", (), {"titulo": nom, "tipo": "festivo", "color": "#b91c1c", "id": None})()
-            )
-
-    import calendar as _cal
-    weeks = _cal.Calendar(firstweekday=0).monthdayscalendar(anio, mes)
-    meses_nom = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-                 "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-    prev_m, prev_y = (mes - 1, anio) if mes > 1 else (12, anio - 1)
-    next_m, next_y = (mes + 1, anio) if mes < 12 else (1, anio + 1)
-    if prev_y < 2024:
-        prev_y, prev_m = 2024, 1
-    if next_y > 2040:
-        next_y, next_m = 2040, 12
-
-    anios_opts = "".join(
-        '<option value="%s"%s>%s</option>' % (a, " selected" if a == anio else "", a)
-        for a in range(2024, 2041)
-    )
-
-    def _h(s):
         try:
-            return _esc(s)
-        except Exception:
+            q = CalendarioEvento.query.filter(CalendarioEvento.fecha.like(pref + "%"))
+            if iid is not None:
+                from sqlalchemy import or_
+                q = q.filter(or_(CalendarioEvento.institucion_id == iid, CalendarioEvento.institucion_id.is_(None)))
+            eventos_bd = q.order_by(CalendarioEvento.fecha.asc()).all()
+        except Exception as ex_q:
+            print("calendario query:", ex_q)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            eventos_bd = []
+
+        by_day = {}
+        for ev in eventos_bd:
+            by_day.setdefault(ev.fecha or "", []).append(ev)
+        for md, nom in festivos_base.items():
+            f = "%04d-%s" % (anio, md)
+            if f.startswith(pref):
+                by_day.setdefault(f, []).append(
+                    type("F", (), {"titulo": nom, "tipo": "festivo", "color": "#b91c1c", "id": None})()
+                )
+
+        import calendar as _cal
+        weeks = _cal.Calendar(firstweekday=0).monthdayscalendar(anio, mes)
+        meses_nom = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+        prev_m, prev_y = (mes - 1, anio) if mes > 1 else (12, anio - 1)
+        next_m, next_y = (mes + 1, anio) if mes < 12 else (1, anio + 1)
+        if prev_y < 2024:
+            prev_y, prev_m = 2024, 1
+        if next_y > 2040:
+            next_y, next_m = 2040, 12
+
+        def _h(s):
             return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-    grid_rows = []
-    for week in weeks:
-        cells = []
-        for d in week:
-            if d == 0:
-                cells.append('<td class="cal-empty"></td>')
-                continue
-            key = "%04d-%02d-%02d" % (anio, mes, d)
-            chips = []
-            for e in by_day.get(key, [])[:4]:
-                tit = _h((getattr(e, "titulo", None) or "")[:28])
-                col = getattr(e, "color", None) or "#0B2D57"
-                chips.append('<div class="cal-chip" style="background:%s">%s</div>' % (col, tit))
-            cells.append(
-                '<td class="cal-day"><div class="cal-num">%s</div>%s</td>' % (d, "".join(chips))
-            )
-        grid_rows.append("<tr>%s</tr>" % "".join(cells))
+        grid_rows = []
+        for week in weeks:
+            cells = []
+            for d in week:
+                if d == 0:
+                    cells.append('<td class="cal-empty"></td>')
+                    continue
+                key = "%04d-%02d-%02d" % (anio, mes, d)
+                chips = []
+                for e in by_day.get(key, [])[:4]:
+                    tit = _h((getattr(e, "titulo", None) or "")[:28])
+                    col = getattr(e, "color", None) or "#0B2D57"
+                    chips.append('<div class="cal-chip" style="background:%s">%s</div>' % (col, tit))
+                cells.append('<td class="cal-day"><div class="cal-num">%s</div>%s</td>' % (d, "".join(chips)))
+            grid_rows.append("<tr>%s</tr>" % "".join(cells))
 
-    lista_ev = []
-    for e in eventos_bd:
-        item = "<li><b>%s</b> — %s" % (_h(e.fecha), _h(e.titulo))
-        if puede_editar and getattr(e, "id", None):
-            item += (
-                ' <form method="POST" style="display:inline" onsubmit="return confirm(\'¿Borrar?\')">'
-                '<input type="hidden" name="accion" value="borrar">'
-                '<input type="hidden" name="evento_id" value="%s">'
-                '<button type="submit" style="font-size:11px;padding:2px 8px">Borrar</button></form>' % e.id
-            )
-        item += "</li>"
-        lista_ev.append(item)
-    if not lista_ev:
-        lista_ev = ["<li style='color:#64748b'>Sin eventos propios este mes (se muestran festivos nacionales).</li>"]
+        lista_ev = []
+        for e in eventos_bd:
+            item = "<li><b>%s</b> — %s" % (_h(e.fecha), _h(e.titulo))
+            if puede_editar and getattr(e, "id", None):
+                item += (
+                    ' <form method="POST" style="display:inline" onsubmit="return confirm(\'¿Borrar?\')">'
+                    '<input type="hidden" name="accion" value="borrar">'
+                    '<input type="hidden" name="evento_id" value="%s">'
+                    '<button type="submit" style="font-size:11px;padding:2px 8px">Borrar</button></form>' % e.id
+                )
+            item += "</li>"
+            lista_ev.append(item)
+        if not lista_ev:
+            lista_ev = ["<li style='color:#64748b'>Sin eventos propios este mes (se muestran festivos nacionales).</li>"]
 
-    form_html = ""
-    if puede_editar:
-        form_html = (
-            '<div class="role-panel" style="margin-top:14px">'
-            '<h3 style="margin:0 0 8px">Agregar evento</h3>'
-            '<form method="POST" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
-            '<input type="hidden" name="accion" value="crear">'
-            '<div><label>Título *</label><input name="titulo" required></div>'
-            '<div><label>Fecha *</label><input type="date" name="fecha" required min="2024-01-01" max="2040-12-31"></div>'
-            '<div><label>Fecha fin</label><input type="date" name="fecha_fin" min="2024-01-01" max="2040-12-31"></div>'
-            '<div><label>Tipo</label><select name="tipo">'
-            '<option value="institucional">Institucional</option>'
-            '<option value="academico">Académico</option>'
-            '<option value="reunion">Reunión</option>'
-            '<option value="festivo">Festivo / descanso</option>'
-            '</select></div>'
-            '<div style="grid-column:1/-1"><label>Descripción</label>'
-            '<input name="descripcion" style="width:100%"></div>'
-            '<div><button type="submit">Guardar evento</button></div>'
-            '</form></div>'
+        form_html = ""
+        if puede_editar:
+            form_html = (
+                '<div class="role-panel" style="margin-top:14px">'
+                "<h3 style=\"margin:0 0 8px\">Agregar evento</h3>"
+                '<form method="POST" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
+                '<input type="hidden" name="accion" value="crear">'
+                '<div><label>Título</label><input name="titulo" required></div>'
+                '<div><label>Fecha</label><input type="date" name="fecha" required></div>'
+                '<div><label>Fin (opcional)</label><input type="date" name="fecha_fin"></div>'
+                '<div><label>Tipo</label><select name="tipo">'
+                '<option value="institucional">Institucional</option>'
+                '<option value="academico">Académico</option>'
+                '<option value="reunion">Reunión</option>'
+                '<option value="festivo">Festivo</option></select></div>'
+                '<div style="grid-column:1/-1"><label>Descripción</label><input name="descripcion" style="width:100%"></div>'
+                '<div><button type="submit">Guardar evento</button></div></form></div>'
+            )
+
+        back_href = "/docente-escritorio" if rol == "Docente" else "/dashboard"
+        content = (
+            '<style>'
+            '.cal-table{width:100%;border-collapse:collapse;background:#fff;table-layout:fixed}'
+            '.cal-table th{background:#0B2D57;color:#fff;padding:8px;font-size:12px}'
+            '.cal-day{border:1px solid #e2e8f0;vertical-align:top;height:88px;padding:4px}'
+            '.cal-empty{border:1px solid #f1f5f9;background:#f8fafc}'
+            '.cal-num{font-weight:800;font-size:12px;color:#0f172a;margin-bottom:4px}'
+            '.cal-chip{font-size:10px;color:#fff;border-radius:4px;padding:2px 4px;margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+            '.cal-nav a{display:inline-block;padding:8px 12px;background:#0B2D57;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;margin:0 4px}'
+            '</style>'
+            '<header class="role-hero"><div><h1>Calendario escolar</h1>'
+            '<p>Vista %s %s · Festivos Colombia · Eventos del colegio</p></div>'
+            '<a class="btn" href="%s">← Volver</a></header>' % (_h(meses_nom[mes]), anio, back_href)
+            + ('<div class="msg ok">%s</div>' % _h(msg) if msg else '')
+            + '<div class="role-panel" style="margin:12px 0">'
+            + '<div class="cal-nav" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">'
+            + '<a href="/calendario?anio=%s&mes=%s">← Anterior</a>' % (prev_y, prev_m)
+            + '<form method="GET" style="display:flex;gap:6px;align-items:center">'
+            + '<select name="anio" onchange="this.form.submit()">%s</select>' % (
+                "".join('<option value="%s"%s>%s</option>' % (a, " selected" if a == anio else "", a) for a in range(2024, 2041))
+            )
+            + '<select name="mes" onchange="this.form.submit()">%s</select></form>' % (
+                "".join('<option value="%s"%s>%s</option>' % (m, " selected" if m == mes else "", meses_nom[m]) for m in range(1, 13))
+            )
+            + '<a href="/calendario?anio=%s&mes=%s">Siguiente →</a></div>' % (next_y, next_m)
+            + '<table class="cal-table"><thead><tr>'
+            "<th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th>"
+            "</tr></thead><tbody>%s</tbody></table></div>" % "".join(grid_rows)
+            + '<div class="role-panel" style="margin-top:14px"><h3 style="margin:0 0 8px">Eventos del mes</h3>'
+            + "<ul>%s</ul></div>" % "".join(lista_ev)
+            + form_html
         )
-
-    volver = {
-        "Docente": "/docente-escritorio", "Secretaría": "/dashboard", "Rectoría": "/dashboard",
-        "Rector": "/dashboard", "Coordinación": "/dashboard", "Coordinador": "/dashboard",
-        "Soporte": "/soporte_admin", "Gerente": "/gerencia/hq", "Gerencia": "/gerencia/hq",
-        "Comercial": "/ventas/panel", "Ventas": "/ventas/panel",
-    }.get(rol, "/dashboard")
-
-    content = (
-        "<style>"
-        ".cal-wrap{background:#fff;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden;margin-top:12px}"
-        ".cal-nav{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0B2D57;color:#fff;flex-wrap:wrap;gap:8px}"
-        ".cal-nav a{color:#fff;font-weight:700;text-decoration:none}"
-        ".cal-table{width:100%;border-collapse:collapse;table-layout:fixed}"
-        ".cal-table th{background:#e2e8f0;padding:8px;font-size:12px}"
-        ".cal-day{vertical-align:top;height:92px;border:1px solid #e2e8f0;padding:4px}"
-        ".cal-num{font-weight:800;font-size:12px;color:#0f172a}"
-        ".cal-chip{color:#fff;font-size:10px;border-radius:4px;padding:2px 4px;margin-top:2px;"
-        "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
-        ".cal-empty{background:#f8fafc;border:1px solid #e2e8f0}"
-        "</style>"
-        '<header class="role-hero"><div>'
-        "<h1>Calendario escolar</h1>"
-        "<p>Vista institucional · años 2024 a 2040 · festivos Colombia + eventos del colegio</p>"
-        '</div><a class="btn" href="%s">← Volver</a></header>' % volver
-        + (('<div class="msg ok">%s</div>' % _h(msg)) if msg else "")
-        + '<div class="cal-wrap"><div class="cal-nav">'
-        '<a href="/calendario?anio=%s&mes=%s">← Anterior</a>' % (prev_y, prev_m)
-        + '<form method="GET" style="display:flex;gap:8px;align-items:center;margin:0">'
-        + "<strong>%s </strong>" % meses_nom[mes]
-        + '<select name="anio" onchange="this.form.submit()">%s</select>' % anios_opts
-        + '<input type="hidden" name="mes" value="%s">' % mes
-        + "</form>"
-        + '<a href="/calendario?anio=%s&mes=%s">Siguiente →</a>' % (next_y, next_m)
-        + "</div>"
-        + '<table class="cal-table"><thead><tr>'
-        "<th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th>"
-        "</tr></thead><tbody>%s</tbody></table></div>" % "".join(grid_rows)
-        + '<div class="role-panel" style="margin-top:14px"><h3 style="margin:0 0 8px">Eventos del mes</h3>'
-        + "<ul>%s</ul></div>" % "".join(lista_ev)
-        + form_html
-    )
-    try:
-        return page("Calendario escolar", shell(content))
-    except Exception as e_shell:
-        print("calendario shell:", e_shell)
-        return page("Calendario escolar", content)
-
+        try:
+            return page("Calendario escolar", shell(content))
+        except Exception as e_shell:
+            print("calendario shell:", e_shell)
+            return page("Calendario escolar", content)
+    except Exception as e_all:
+        print("calendario fatal:", e_all)
+        import traceback
+        traceback.print_exc()
+        return page(
+            "Calendario escolar",
+            "<div class='role-panel'><h2>Calendario</h2>"
+            "<p>No se pudo cargar el calendario. Intente de nuevo o contacte a soporte.</p>"
+            "<p style='font-size:12px;color:#94a3b8'>%s</p>"
+            "<p><a href='/docente-escritorio'>← Volver</a></p></div>" % str(e_all)[:200],
+        )
 
 
 
