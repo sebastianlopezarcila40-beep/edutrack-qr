@@ -42695,7 +42695,7 @@ def api_health_railway():
 
 @app.route("/calendario", methods=["GET", "POST"])
 def calendario_escolar():
-    """Calendario escolar 2024-2040. Sin operador % (evita choque con CSS 100%)."""
+    """Calendario escolar 2024-2040. HTML armado por partes (sin % ni .format sobre CSS)."""
     try:
         if not requiere_login():
             return redirect("/login")
@@ -42709,8 +42709,7 @@ def calendario_escolar():
 
         try:
             from sqlalchemy import inspect as sa_inspect, text as sa_text
-            insp = sa_inspect(db.engine)
-            names = insp.get_table_names() or []
+            names = sa_inspect(db.engine).get_table_names() or []
             if "calendario_eventos" not in names:
                 try:
                     db.create_all()
@@ -42785,7 +42784,7 @@ def calendario_escolar():
                         db.session.commit()
                         msg = "Evento guardado."
                     else:
-                        msg = "Título y fecha son obligatorios."
+                        msg = "Titulo y fecha son obligatorios."
             except Exception as ex_post:
                 try:
                     db.session.rollback()
@@ -42861,21 +42860,23 @@ def calendario_escolar():
                 chips = []
                 for e in by_day.get(key, [])[:4]:
                     tit = _h((getattr(e, "titulo", None) or "")[:28])
-                    col = getattr(e, "color", None) or "#0B2D57"
-                    chips.append('<div class="cal-chip" style="background:{0}">{1}</div>'.format(col, tit))
-                cells.append('<td class="cal-day"><div class="cal-num">{0}</div>{1}</td>'.format(d, "".join(chips)))
-            grid_rows.append("<tr>{0}</tr>".format("".join(cells)))
+                    col = _h(getattr(e, "color", None) or "#0B2D57")
+                    chips.append('<div class="cal-chip" style="background:' + col + '">' + tit + "</div>")
+                cells.append(
+                    '<td class="cal-day"><div class="cal-num">' + str(d) + "</div>" + "".join(chips) + "</td>"
+                )
+            grid_rows.append("<tr>" + "".join(cells) + "</tr>")
 
         lista_ev = []
         for e in eventos_bd:
-            item = "<li><b>{0}</b> — {1}".format(_h(e.fecha), _h(e.titulo))
+            item = "<li><b>" + _h(e.fecha) + "</b> — " + _h(e.titulo)
             if puede_editar and getattr(e, "id", None):
                 item += (
-                    ' <form method="POST" style="display:inline" onsubmit="return confirm(\'Borrar?\')">' 
+                    ' <form method="POST" style="display:inline" onsubmit="return confirm(\'Borrar?\')">'
                     '<input type="hidden" name="accion" value="borrar">'
-                    '<input type="hidden" name="evento_id" value="{0}">'
+                    '<input type="hidden" name="evento_id" value="' + str(e.id) + '">'
                     '<button type="submit" style="font-size:11px;padding:2px 8px">Borrar</button></form>'
-                ).format(e.id)
+                )
             item += "</li>"
             lista_ev.append(item)
         if not lista_ev:
@@ -42888,30 +42889,31 @@ def calendario_escolar():
                 '<h3 style="margin:0 0 8px">Agregar evento</h3>'
                 '<form method="POST" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
                 '<input type="hidden" name="accion" value="crear">'
-                '<div><label>Título</label><input name="titulo" required></div>'
+                '<div><label>Titulo</label><input name="titulo" required></div>'
                 '<div><label>Fecha</label><input type="date" name="fecha" required></div>'
                 '<div><label>Fin (opcional)</label><input type="date" name="fecha_fin"></div>'
                 '<div><label>Tipo</label><select name="tipo">'
                 '<option value="institucional">Institucional</option>'
-                '<option value="academico">Académico</option>'
-                '<option value="reunion">Reunión</option>'
+                '<option value="academico">Academico</option>'
+                '<option value="reunion">Reunion</option>'
                 '<option value="festivo">Festivo</option></select></div>'
-                '<div style="grid-column:1/-1"><label>Descripción</label><input name="descripcion" style="width:100%"></div>'
+                '<div style="grid-column:1/-1"><label>Descripcion</label><input name="descripcion" style="width:100%"></div>'
                 '<div><button type="submit">Guardar evento</button></div></form></div>'
             )
 
-        anios_opts = "".join(
-            '<option value="{0}"{1}>{0}</option>'.format(a, " selected" if a == anio else "")
-            for a in range(2024, 2041)
-        )
-        meses_opts = "".join(
-            '<option value="{0}"{1}>{2}</option>'.format(m, " selected" if m == mes else "", meses_nom[m])
-            for m in range(1, 13)
-        )
+        anios_opts = []
+        for a in range(2024, 2041):
+            sel = " selected" if a == anio else ""
+            anios_opts.append('<option value="' + str(a) + '"' + sel + ">" + str(a) + "</option>")
+        meses_opts = []
+        for m in range(1, 13):
+            sel = " selected" if m == mes else ""
+            meses_opts.append('<option value="' + str(m) + '"' + sel + ">" + meses_nom[m] + "</option>")
+
         back_href = "/docente-escritorio" if rol == "Docente" else "/dashboard"
         mes_nom = _h(meses_nom[mes])
 
-        content = (
+        css = (
             "<style>"
             ".cal-table{width:100%;border-collapse:collapse;background:#fff;table-layout:fixed}"
             ".cal-table th{background:#0B2D57;color:#fff;padding:8px;font-size:12px}"
@@ -42923,31 +42925,26 @@ def calendario_escolar():
             ".cal-nav a{display:inline-block;padding:8px 12px;background:#0B2D57;color:#fff;"
             "border-radius:8px;text-decoration:none;font-weight:700;margin:0 4px}"
             "</style>"
-            '<header class="role-hero"><div><h1>Calendario escolar</h1>'
-            "<p>Vista {mes} {anio} · Festivos Colombia · Eventos del colegio</p></div>"
-            '<a class="btn" href="{back}">← Volver</a></header>'
-        ).format(mes=mes_nom, anio=anio, back=back_href)
-
-        if msg:
-            content += '<div class="msg ok">{0}</div>'.format(_h(msg))
-
-        content += (
-            '<div class="role-panel" style="margin:12px 0">'
-            '<div class="cal-nav" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">'
-            '<a href="/calendario?anio={py}&mes={pm}">← Anterior</a>'
-            '<form method="GET" style="display:flex;gap:6px;align-items:center">'
-            '<select name="anio" onchange="this.form.submit()">{ao}</select>'
-            '<select name="mes" onchange="this.form.submit()">{mo}</select></form>'
-            '<a href="/calendario?anio={ny}&mes={nm}">Siguiente →</a></div>'
-            '<table class="cal-table"><thead><tr>'
-            "<th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th>"
-            "</tr></thead><tbody>{grid}</tbody></table></div>"
-            '<div class="role-panel" style="margin-top:14px"><h3 style="margin:0 0 8px">Eventos del mes</h3>'
-            "<ul>{lista}</ul></div>"
-        ).format(
-            py=prev_y, pm=prev_m, ao=anios_opts, mo=meses_opts,
-            ny=next_y, nm=next_m, grid="".join(grid_rows), lista="".join(lista_ev),
         )
+
+        content = css
+        content += '<header class="role-hero"><div><h1>Calendario escolar</h1>'
+        content += "<p>Vista " + mes_nom + " " + str(anio) + " · Festivos Colombia · Eventos del colegio</p></div>"
+        content += '<a class="btn" href="' + back_href + '">← Volver</a></header>'
+        if msg:
+            content += '<div class="msg ok">' + _h(msg) + "</div>"
+        content += '<div class="role-panel" style="margin:12px 0">'
+        content += '<div class="cal-nav" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">'
+        content += '<a href="/calendario?anio=' + str(prev_y) + "&mes=" + str(prev_m) + '">← Anterior</a>'
+        content += '<form method="GET" style="display:flex;gap:6px;align-items:center">'
+        content += '<select name="anio" onchange="this.form.submit()">' + "".join(anios_opts) + "</select>"
+        content += '<select name="mes" onchange="this.form.submit()">' + "".join(meses_opts) + "</select></form>"
+        content += '<a href="/calendario?anio=' + str(next_y) + "&mes=" + str(next_m) + '">Siguiente →</a></div>'
+        content += '<table class="cal-table"><thead><tr>'
+        content += "<th>Lun</th><th>Mar</th><th>Mie</th><th>Jue</th><th>Vie</th><th>Sab</th><th>Dom</th>"
+        content += "</tr></thead><tbody>" + "".join(grid_rows) + "</tbody></table></div>"
+        content += '<div class="role-panel" style="margin-top:14px"><h3 style="margin:0 0 8px">Eventos del mes</h3>'
+        content += "<ul>" + "".join(lista_ev) + "</ul></div>"
         content += form_html
 
         try:
