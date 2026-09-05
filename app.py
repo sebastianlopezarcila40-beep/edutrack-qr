@@ -1042,8 +1042,8 @@ class Plataforma(db.Model):
     corp_hero_texto = db.Column(db.Text, default="Diseñamos y operamos plataformas serias para colegios: gestión académica, reportes de coordinación, boletines y acompañamiento a directivos y docentes.")
     corp_top_derecha = db.Column(db.String(160), default="Software para instituciones educativas · Colombia")
     corp_barra_extra = db.Column(db.String(255), default="Facturación / Cartera / Ventas")
-    corp_brand_nombre = db.Column(db.String(80), default="EduTrack")
-    corp_brand_sub = db.Column(db.String(80), default="Soluciones digitales")
+    corp_brand_nombre = db.Column(db.String(80), default="PROCSIS")
+    corp_brand_sub = db.Column(db.String(80), default="Innovación que gestiona")
     corp_nosotros_titulo = db.Column(db.String(120), default="Quiénes somos")
     corp_nosotros_texto = db.Column(db.Text, default="Equipo enfocado en software educativo confiable, claro y listo para operar en colegios reales.")
     corp_cta_titulo = db.Column(db.String(160), default="¿Listo para ver EduTrack en su colegio?")
@@ -2285,7 +2285,29 @@ window.addEventListener('pageshow', function (event) {
   }
 });
 </script>"""
-    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EduTrack | {title}</title><link rel="icon" type="image/png" href="/static/img/favicon.png?v=7"><link rel="shortcut icon" href="/static/img/favicon.png?v=7"><link rel="apple-touch-icon" href="/static/img/favicon.png?v=7">{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}</body></html>"""
+    try:
+        _path = (request.path or "").lower()
+    except Exception:
+        _path = ""
+    _corp = any(
+        _path.startswith(p)
+        for p in (
+            "/procsis",
+            "/empresa",
+            "/quienes-somos",
+            "/portafolio",
+            "/tecnologia",
+            "/soluciones",
+            "/contacto",
+        )
+    )
+    if _corp or (title or "").upper().startswith("PROCSIS"):
+        _tab = f"PROCSIS | {title}" if title and "PROCSIS" not in (title or "").upper() else (title or "PROCSIS")
+        _icon = "/static/img/logo-procsis.jpeg"
+    else:
+        _tab = f"EduTrack | {title}"
+        _icon = "/static/img/favicon.png?v=7"
+    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}">{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}</body></html>"""
 
 
 
@@ -21319,8 +21341,8 @@ def gerencia_web_corporativa():
         p.corp_barra_extra = (request.form.get("corp_barra_extra") or "").strip()[:255]
         p.corp_top_derecha = (request.form.get("corp_top_derecha") or "").strip()[:160]
         # Marca
-        p.corp_brand_nombre = (request.form.get("corp_brand_nombre") or "EduTrack").strip()[:80]
-        p.corp_brand_sub = (request.form.get("corp_brand_sub") or "Soluciones digitales").strip()[:80]
+        p.corp_brand_nombre = (request.form.get("corp_brand_nombre") or "PROCSIS").strip()[:80]
+        p.corp_brand_sub = (request.form.get("corp_brand_sub") or "Innovación que gestiona").strip()[:80]
         p.corp_tag = (request.form.get("corp_tag") or "SOLUCIONES DIGITALES · COLOMBIA").strip()[:120]
         # Hero
         p.corp_hero_titulo = (request.form.get("corp_hero_titulo") or "").strip()[:255]
@@ -21401,7 +21423,7 @@ def gerencia_web_corporativa():
       <div class="row">
         <div>
           <label>Nombre marca</label>
-          <input name="corp_brand_nombre" value="{_v('corp_brand_nombre', 'EduTrack')}">
+          <input name="corp_brand_nombre" value="{_v('corp_brand_nombre', 'PROCSIS')}">
         </div>
         <div>
           <label>Subtítulo marca</label>
@@ -41103,9 +41125,18 @@ def pagina_corporativa_procsis():
             f"https://wa.me/{wa_num}?text={_uq('Hola, deseo información sobre EduTrack para mi institución.')}"
             if wa_num else "/contacto"
         )
-        logo = (getattr(_pp, "logo_path", None) or "/static/img/logo-edutrack.png")
-        brand_nom = (getattr(_pp, "corp_brand_nombre", None) or getattr(_pp, "nombre_producto", None) or "EduTrack").strip() or "EduTrack"
-        brand_sub = (getattr(_pp, "corp_brand_sub", None) or "Soluciones digitales").strip() or "Soluciones digitales"
+        # Marca corporativa PROCSIS (no EduTrack) en /procsis y /empresa
+        _lp = (getattr(_pp, "logo_path", None) or "").strip()
+        if (not _lp) or ("edutrack" in _lp.lower()) or ("logo-colegio" in _lp.lower()):
+            logo = "/static/img/logo-procsis.jpeg"
+        else:
+            logo = _lp
+        _bn = (getattr(_pp, "corp_brand_nombre", None) or "").strip()
+        if (not _bn) or _bn.lower() in ("edutrack", "edutrack | edutrack"):
+            brand_nom = "PROCSIS"
+        else:
+            brand_nom = _bn
+        brand_sub = (getattr(_pp, "corp_brand_sub", None) or "Innovación que gestiona").strip() or "Innovación que gestiona"
         corp_tag = (getattr(_pp, "corp_tag", None) or "SOLUCIONES DIGITALES · COLOMBIA").strip()
         hero_tit = (getattr(_pp, "corp_hero_titulo", None) or "Software y solución digital para instituciones educativas").strip()
         hero_txt = (getattr(_pp, "corp_hero_texto", None) or "Diseñamos y operamos plataformas serias para colegios: gestión académica, reportes de coordinación, boletines y acompañamiento a directivos y docentes.").strip()
@@ -41169,7 +41200,7 @@ def pagina_corporativa_procsis():
 .pc-nav-in{{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}}
 .pc-brand{{display:flex;align-items:center;gap:10px;color:#fff}}
 .pc-brand .globe{{display:flex;align-items:center;justify-content:center;width:44px;height:44px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}}
-.pc-brand img{{height:42px;width:auto;object-fit:contain;display:none}}
+.pc-brand img{{height:42px;width:auto;object-fit:contain;display:block;background:#fff;border-radius:10px;padding:3px}}.pc-brand .globe{{display:none}}
 .pc-brand b{{font-size:17px;display:block;line-height:1.1;color:#fff}}
 .pc-brand small{{font-size:10px;color:#93c5fd;font-weight:600;letter-spacing:.04em;text-transform:uppercase}}
 .pc-links{{display:flex;flex-wrap:wrap;gap:2px 4px;align-items:center}}
@@ -41230,6 +41261,7 @@ def pagina_corporativa_procsis():
   <nav class="pc-nav">
     <div class="pc-nav-in">
       <a class="pc-brand" href="/procsis">
+        <img src="{logo}" alt="PROCSIS" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         <span class="globe">{globe_svg}</span>
         <span><b>{brand_nom}</b><small>{brand_sub}</small></span>
       </a>
@@ -41374,17 +41406,22 @@ def pagina_portafolio():
     """Portafolio de productos y soluciones (página independiente). Textos desde Gerencia."""
     try:
         _pp = plataforma()
-        logo = (getattr(_pp, "logo_path", None) or "/static/img/logo-edutrack.png")
+        _lp = (getattr(_pp, "logo_path", None) or "").strip()
+        if (not _lp) or ("edutrack" in _lp.lower()):
+            logo = "/static/img/logo-procsis.jpeg"
+        else:
+            logo = _lp
         corp_email = (getattr(_pp, "contacto_publico_email", None) or "contacto@procsis.com").strip()
         corp_tel = (getattr(_pp, "contacto_publico_tel", None) or "—").strip() or "—"
-        brand_nom = (getattr(_pp, "corp_brand_nombre", None) or "EduTrack").strip() or "EduTrack"
-        brand_sub = (getattr(_pp, "corp_brand_sub", None) or "Soluciones digitales").strip()
+        _bn = (getattr(_pp, "corp_brand_nombre", None) or "").strip()
+        brand_nom = "PROCSIS" if (not _bn or _bn.lower() == "edutrack") else _bn
+        brand_sub = (getattr(_pp, "corp_brand_sub", None) or "Innovación que gestiona").strip()
         pf_tit = (getattr(_pp, "corp_portafolio_titulo", None) or "Portafolio de soluciones").strip()
         pf_txt = (getattr(_pp, "corp_portafolio_texto", None) or "Productos y servicios para la gestión académica y administrativa de instituciones educativas.").strip()
         top_der = (getattr(_pp, "corp_top_derecha", None) or "Software para instituciones educativas · Colombia").strip()
     except Exception:
-        logo, corp_email, corp_tel = "/static/img/logo-edutrack.png", "contacto@procsis.com", "—"
-        brand_nom, brand_sub = "EduTrack", "Soluciones digitales"
+        logo, corp_email, corp_tel = "/static/img/logo-procsis.jpeg", "contacto@procsis.com", "—"
+        brand_nom, brand_sub = "PROCSIS", "Innovación que gestiona"
         pf_tit, pf_txt = "Portafolio de soluciones", "Productos y servicios para la gestión académica y administrativa de instituciones educativas."
         top_der = "Software para instituciones educativas · Colombia"
     try:
