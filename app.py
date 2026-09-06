@@ -5902,9 +5902,17 @@ def pqr_notificacion_pdf_publico(token):
     return send_file(b, as_attachment=True, download_name=f"Respuesta_{t.ticket or t.id}.pdf", mimetype="application/pdf")
 
 
-def enviar_correo_respuesta_pqr(destino, t, texto_solucion):
-    """Correo formal con la solución / descripción de cierre."""
+def enviar_correo_respuesta_pqr(destino, t, texto_solucion=None):
+    """Compatibilidad: siempre usa el diseño VER RESPUESTA (no envía el texto plano)."""
     if not destino:
+        return False
+    try:
+        return enviar_notificacion_pqr_estilo_tigo(destino, t)
+    except Exception as ex:
+        print("enviar_correo_respuesta_pqr→tigo:", ex)
+        return False
+    # --- código legacy desactivado (diseño plano) ---
+    if False and not destino:
         return False
     correo_envio, password = _credenciales_smtp("soporte")
     if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not correo_envio or not password):
@@ -37810,11 +37818,15 @@ def soporte_pqr_detalle(id):
                         # Al cerrar/resolver el caso se envía automáticamente el aviso
                         # estilo Tigo (link a la landing pública); en otros estados
                         # intermedios se manda el correo directo con la respuesta.
-                        mail_ok = (
-                            enviar_notificacion_pqr_estilo_tigo(t.email, t)
-                            if cierra_caso else
-                            enviar_correo_respuesta_pqr(t.email, t, resp)
-                        )
+                        # Siempre diseño corporativo con botón VER RESPUESTA
+                        # (no enviar el texto de la solución en el cuerpo del correo).
+                        mail_ok = enviar_notificacion_pqr_estilo_tigo(t.email, t)
+                        if not mail_ok:
+                            # Reintento: canal soporte por si notificaciones falló
+                            try:
+                                mail_ok = enviar_notificacion_pqr_estilo_tigo(t.email, t)
+                            except Exception:
+                                mail_ok = False
                     except Exception as ex:
                         print("mail respuesta:", ex)
                 if resp and t.email and enviar_mail:
