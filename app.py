@@ -4376,17 +4376,56 @@ def _comprimir_imagen_bytes(raw, max_side=200, max_kb=50):
 
 
 def guardar_logo_institucional(file_storage, institucion_id=None):
-    """Guarda logo subido (png/jpg/webp) y devuelve ruta web /static/uploads/logos/..."""
+    """Guarda logo: archivo local + data URI en DB (Railway no pierde el logo al redeploy)."""
     if not file_storage or not getattr(file_storage, "filename", ""):
         return None
     nombre = file_storage.filename or ""
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif"]:
         return None
-    seguro = f"logo_{institucion_id or 'inst'}_{fecha_hoy().replace('-', '')}_{random.randint(1000,9999)}{ext}"
-    dest = os.path.join(LOGO_DIR, seguro)
-    file_storage.save(dest)
-    return "/" + dest.replace("\\", "/")
+    try:
+        raw = file_storage.read()
+        if hasattr(file_storage, "seek"):
+            try:
+                file_storage.seek(0)
+            except Exception:
+                pass
+    except Exception:
+        raw = b""
+    if not raw:
+        try:
+            file_storage.seek(0)
+            raw = file_storage.read()
+        except Exception:
+            return None
+    # Limitar tamaño ~1.5 MB para no inflar la BD
+    if len(raw) > 1_500_000:
+        try:
+            from PIL import Image
+            import io as _io
+            im = Image.open(_io.BytesIO(raw))
+            im.thumbnail((512, 512))
+            buf = _io.BytesIO()
+            fmt = "PNG" if ext == ".png" else "JPEG"
+            im.save(buf, format=fmt, quality=85)
+            raw = buf.getvalue()
+            ext = ".png" if fmt == "PNG" else ".jpg"
+        except Exception:
+            raw = raw[:1_500_000]
+    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp", ".gif": "image/gif"}.get(ext, "image/png")
+    import base64 as _b64
+    data_uri = "data:" + mime + ";base64," + _b64.b64encode(raw).decode("ascii")
+    # También intentar disco (opcional, puede desaparecer en Railway)
+    try:
+        seguro = "logo_%s_%s_%s%s" % (institucion_id or "inst", fecha_hoy().replace("-", ""), random.randint(1000, 9999), ext)
+        dest = os.path.join(LOGO_DIR, seguro)
+        with open(dest, "wb") as fh:
+            fh.write(raw)
+    except Exception as _fs:
+        print("logo disco:", _fs)
+    # Preferir data URI para persistencia en PostgreSQL
+    return data_uri
 
 
 def periodo_actual():
@@ -16636,10 +16675,20 @@ def ventas_comprar():
                     # Guardar logo obligatorio
                     try:
                         path_logo = guardar_logo_institucional(foto, inst.id)
-                        if path_logo and hasattr(inst, "logo_path"):
-                            inst.logo_path = path_logo
-                        elif path_logo and hasattr(inst, "logo"):
-                            inst.logo = path_logo
+                        if path_logo:
+                            if hasattr(inst, "logo"):
+                                inst.logo = path_logo
+                            if hasattr(inst, "logo_path"):
+                                try:
+                                    inst.logo_path = path_logo
+                                except Exception:
+                                    pass
+                            try:
+                                cfg_l = Configuracion.query.filter_by(institucion_id=inst.id).first()
+                                if cfg_l:
+                                    cfg_l.logo_path = path_logo
+                            except Exception:
+                                pass
                     except Exception as _lg:
                         error = f"No se pudo guardar el logo: {_lg}"
                         db.session.rollback()
@@ -29544,19 +29593,16 @@ def docente_escritorio():
         per_label = "Periodo actual"
 
     tools = [
-        ("/notas/planilla", "Notas", "Planilla por materia", "#0B2D57", "N"),
-        ("/notas/logros", "Logros", "Banco de logros", "#0369a1", "L"),
-        ("/notas/refuerzos", "Refuerzos", "Recuperaciones", "#5b21b6", "R"),
-        ("/notas/ficha", "Ficha", "Seguimiento alumno", "#0f766e", "F"),
-        ("/notas/faltas", "Faltas", "Registro del día", "#b45309", "F"),
-        ("/docente-movil", "Asistencia QR", "Proyectar QR en aula", "#b91c1c", "A"),
-        ("/estudiantes_grupo", "Grupos", "Lista por grado", "#1e3a5f", "G"),
-        ("/buscar_estudiantes", "Buscar", "Consultar alumno", "#334155", "B"),
-        ("/eduaura", "EduAura IA", "Observaciones y riesgo de reprobación", "#6d28d9", "E"),
-        ("/horarios", "Horarios", "Mi jornada", "#0B2D57", "H"),
-        ("/calendario", "Calendario", "Agenda escolar 2024–2040", "#0f766e", "C"),
-        ("/pqr", "Soporte PROCSIS", "PQR docente · fallas técnicas", "#4c1d95", "P"),
+        ("/notas/planilla", "Planilla", "Notas por materia y periodo", "#0B2D57", "N"),
+        ("/notas/ficha", "Ficha", "Seguimiento y disciplina", "#0f766e", "F"),
+        ("/notas/faltas", "Faltas", "Presente / ausente / tarde", "#c2410c", "A"),
+        ("/docente-movil", "Asistencia QR", "QR en el aula", "#b91c1c", "Q"),
+        ("/eduaura", "EduAura IA", "Observaciones y riesgo", "#6d28d9", "E"),
+        ("/horarios", "Horarios", "Mi jornada", "#1e3a5f", "H"),
+        ("/calendario", "Calendario", "Agenda escolar", "#0B2D57", "C"),
+        ("/pqr", "Soporte", "PQR y fallas técnicas", "#4c1d95", "P"),
     ]
+
     try:
         if puede_componentes():
             tools.insert(1, ("/notas/componentes", "Componentes", "Casillas de evaluación", "#1d4ed8", "C"))
@@ -30779,17 +30825,17 @@ def ficha_estudiante_pdf(id):
 
 @app.route("/notas/ficha", methods=["GET", "POST"])
 def notas_ficha():
-    """Ficha de seguimiento docente: lista por grado + proceso disciplinario / metas / falencias."""
+    """Ficha de seguimiento: lista por grado + detalle del estudiante al abrir."""
     if not requiere_login():
         return redirect("/login")
     if rol_actual() not in ["Docente", "Coordinación", "Rectoría", "Rector", "Secretaría", "Administrador", "Soporte"]:
         return acceso_denegado()
+    from urllib.parse import quote as _q
     rol = rol_actual()
     es_doc = rol == "Docente"
     back = "/docente-escritorio" if es_doc else "/notas"
     msg = ""
 
-    # Guardar anotación de seguimiento
     if request.method == "POST":
         try:
             est_id = int(request.form.get("estudiante_id") or 0)
@@ -30797,41 +30843,41 @@ def notas_ficha():
             texto = (request.form.get("texto") or "").strip()[:2000]
             meta = (request.form.get("meta") or "").strip()[:500]
             falencia = (request.form.get("falencia") or "").strip()[:500]
+            grado_post = (request.form.get("grado") or "").strip()
             if est_id and (texto or meta or falencia):
-                e = Estudiante.query.get(est_id)
-                if e and (not es_doc or True):
-                    cuerpo = texto
-                    if meta:
-                        cuerpo = (cuerpo + "\nMeta: " + meta).strip()
-                    if falencia:
-                        cuerpo = (cuerpo + "\nFalencia: " + falencia).strip()
-                    # Reutilizar ObservacionBoletin o tabla genérica si existe
+                cuerpo = texto
+                if meta:
+                    cuerpo = (cuerpo + " | Meta: " + meta).strip()
+                if falencia:
+                    cuerpo = (cuerpo + " | Falencia: " + falencia).strip()
+                try:
+                    obs = ObservacionBoletin(
+                        estudiante_id=est_id,
+                        institucion_id=institucion_id_actual(),
+                        periodo=periodo_actual() or "Periodo 1",
+                        texto=("[" + tipo.upper() + "] ") + cuerpo,
+                        docente=session.get("usuario") or "",
+                        actualizado=fecha_hoy() + " " + hora_actual(),
+                        generado_auto=False,
+                    )
+                    db.session.add(obs)
+                    db.session.commit()
+                    msg = "Registro de seguimiento guardado."
+                except Exception as ex_s:
                     try:
-                        from datetime import datetime as _dt
-                        obs = ObservacionBoletin(
-                            estudiante_id=est_id,
-                            institucion_id=institucion_id_actual(),
-                            periodo=periodo_actual() or "Periodo 1",
-                            texto=("[%s] " % tipo.upper()) + cuerpo,
-                            docente=session.get("usuario") or "",
-                            actualizado=fecha_hoy() + " " + hora_actual(),
-                            generado_auto=False,
-                        )
-                        db.session.add(obs)
-                        db.session.commit()
-                        msg = "Registro de seguimiento guardado."
-                    except Exception as ex_s:
-                        # Fallback: convivencia-style if available
-                        try:
-                            db.session.rollback()
-                        except Exception:
-                            pass
-                        print("ficha save:", ex_s)
-                        msg = "No se pudo guardar: " + str(ex_s)[:100]
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    print("ficha save:", ex_s)
+                    msg = "No se pudo guardar: " + str(ex_s)[:100]
+                return redirect("/notas/ficha?grado=" + _q(grado_post) + "&est=" + str(est_id) + "&ok=1")
             else:
                 msg = "Seleccione estudiante y escriba el seguimiento."
         except Exception as ex:
             msg = "Error: " + str(ex)[:100]
+
+    if request.args.get("ok"):
+        msg = msg or "Registro de seguimiento guardado."
 
     grado = (request.args.get("grado") or "").strip()
     est_id = request.args.get("est")
@@ -30841,25 +30887,26 @@ def notas_ficha():
             e = Estudiante.query.get(int(est_id))
         except Exception:
             e = None
+        if e is None:
+            try:
+                e = q_estudiantes().filter(Estudiante.id == int(est_id)).first()
+            except Exception:
+                e = None
 
-    # Grados disponibles (docente: solo los suyos)
     try:
         if es_doc:
             grs = list(grados_docente_actual() or []) or grados_disponibles()
         else:
             grs = grados_disponibles()
     except Exception:
-        grs = grados_disponibles() if "grados_disponibles" in dir() else []
+        grs = grados_disponibles()
 
     lista = []
     if grado:
         try:
             g_norm = str(grado).replace("°", "").replace("º", "").strip()
-            try:
-                if g_norm.isdigit():
-                    g_norm = str(int(g_norm))
-            except Exception:
-                pass
+            if g_norm.isdigit():
+                g_norm = str(int(g_norm))
             from sqlalchemy import or_
             lista = (
                 q_estudiantes()
@@ -30879,43 +30926,35 @@ def notas_ficha():
             print("ficha lista:", _lf)
             lista = []
 
+    def _h(s):
+        return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
     opts_g = "".join(
-        '<option value="%s"%s>%s</option>' % (
-            str(g).replace('"', ""),
-            " selected" if str(g) == grado else "",
-            str(g),
-        )
+        '<option value="' + _h(g) + '"' + (" selected" if str(g) == grado else "") + ">" + _h(g) + "</option>"
         for g in (grs or [])
     )
 
-    filas = ""
+    filas = []
     for st in lista:
-        filas += (
-            "<tr><td>%s %s</td><td>%s</td><td>%s</td>"
-            "<td><a class='btn' style='padding:4px 10px;font-size:12px' href='/notas/ficha?grado=%s&est=%s'>Abrir ficha</a></td></tr>"
-            % (
-                (st.apellido or ""),
-                (st.nombre or ""),
-                st.codigo or "",
-                st.grado or "",
-                str(grado).replace(" ", "%20"),
-                st.id,
-            )
+        link = "/notas/ficha?grado=" + _q(grado) + "&est=" + str(st.id)
+        filas.append(
+            "<tr><td>" + _h(st.apellido) + " " + _h(st.nombre) + "</td><td>" + _h(st.codigo)
+            + "</td><td>" + _h(st.grado) + "</td>"
+            + "<td><a class='btn' style='padding:4px 10px;font-size:12px' href='" + link + "'>Abrir ficha</a></td></tr>"
         )
     if grado and not filas:
-        filas = "<tr><td colspan='4'>No hay estudiantes en este grado.</td></tr>"
+        filas = ["<tr><td colspan='4'>No hay estudiantes en este grado.</td></tr>"]
     if not grado:
-        filas = "<tr><td colspan='4'>Seleccione un grado para listar el grupo.</td></tr>"
+        filas = ["<tr><td colspan='4'>Seleccione un grado para listar el grupo.</td></tr>"]
 
     detalle = ""
     if e:
         try:
-            iid = institucion_id_actual()
-            regs = NotaRegistro.query.filter_by(estudiante_id=e.id).order_by(NotaRegistro.periodo.desc()).limit(40).all()
+            regs = NotaRegistro.query.filter_by(estudiante_id=e.id).order_by(NotaRegistro.id.desc()).limit(40).all()
         except Exception:
             regs = []
         try:
-            ingresos = IngresoPorteria.query.filter_by(estudiante_id=e.id).order_by(IngresoPorteria.fecha.desc()).limit(20).all()
+            ingresos = IngresoPorteria.query.filter_by(estudiante_id=e.id).order_by(IngresoPorteria.id.desc()).limit(20).all()
         except Exception:
             ingresos = []
         try:
@@ -30923,77 +30962,66 @@ def notas_ficha():
         except Exception:
             obs_list = []
         filas_n = "".join(
-            "<tr><td>%s</td><td>%s</td><td>%s</td></tr>"
-            % (r.periodo or "", r.asignatura or "—", r.valor if r.valor is not None else "—")
+            "<tr><td>" + _h(r.periodo) + "</td><td>" + _h(r.asignatura or "—") + "</td><td>"
+            + _h(r.valor if r.valor is not None else "—") + "</td></tr>"
             for r in regs
         ) or "<tr><td colspan='3'>Sin notas aún</td></tr>"
         filas_a = "".join(
-            "<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (i.fecha or "", i.hora or "", i.estado or "")
+            "<tr><td>" + _h(i.fecha) + "</td><td>" + _h(i.hora) + "</td><td>" + _h(i.estado) + "</td></tr>"
             for i in ingresos
         ) or "<tr><td colspan='3'>Sin ingresos QR</td></tr>"
         filas_o = "".join(
-            "<tr><td>%s</td><td>%s</td></tr>"
-            % (
-                getattr(o, "creado_en", None) or getattr(o, "periodo", "") or "",
-                (getattr(o, "texto", None) or "")[:200],
-            )
+            "<tr><td>" + _h(getattr(o, "actualizado", None) or getattr(o, "periodo", "") or "")
+            + "</td><td>" + _h((getattr(o, "texto", None) or "")[:220]) + "</td></tr>"
             for o in obs_list
         ) or "<tr><td colspan='2'>Sin registros de seguimiento</td></tr>"
 
-        detalle = f"""
-<section class="role-panel" style="margin:14px 0">
-  <h2 style="margin-top:0">{e.apellido or ''} {e.nombre or ''}</h2>
-  <p>Código <b>{e.codigo or ''}</b> · Grado <b>{e.grado or ''}</b></p>
-  <h3>Registrar seguimiento (disciplinario / meta / falencia)</h3>
-  <form method="POST" style="display:grid;gap:8px;max-width:640px">
-    <input type="hidden" name="estudiante_id" value="{e.id}">
-    <div><label><b>Tipo</b></label>
-      <select name="tipo">
-        <option value="disciplinario">Proceso disciplinario</option>
-        <option value="meta">Meta de mejora</option>
-        <option value="falencia">Falencia / dificultad</option>
-        <option value="observacion">Cómo le va (observación)</option>
-      </select>
-    </div>
-    <div><label><b>Descripción</b></label><textarea name="texto" rows="3" style="width:100%" placeholder="Detalle del seguimiento"></textarea></div>
-    <div><label><b>Meta (opcional)</b></label><input name="meta" style="width:100%" placeholder="Ej. Subir promedio a 3.5"></div>
-    <div><label><b>Falencia (opcional)</b></label><input name="falencia" style="width:100%" placeholder="Ej. Bajo rendimiento en operaciones"></div>
-    <button type="submit">Guardar en ficha</button>
-  </form>
-</section>
-<section class="table-card" style="margin-bottom:12px"><h2>Historial de seguimiento</h2>
-<table><tr><th>Fecha</th><th>Registro</th></tr>{filas_o}</table></section>
-<section class="table-card" style="margin-bottom:12px"><h2>Notas recientes</h2>
-<table><tr><th>Periodo</th><th>Materia</th><th>Nota</th></tr>{filas_n}</table></section>
-<section class="table-card"><h2>Asistencia (ingresos)</h2>
-<table><tr><th>Fecha</th><th>Hora</th><th>Estado</th></tr>{filas_a}</table></section>
-"""
+        detalle = (
+            '<section id="ficha-detalle" class="role-panel" style="margin:14px 0;border:2px solid #0B2D57;border-radius:14px;padding:16px">'
+            "<h2 style=\"margin-top:0\">" + _h(e.apellido) + " " + _h(e.nombre) + "</h2>"
+            "<p>Código <b>" + _h(e.codigo) + "</b> · Grado <b>" + _h(e.grado) + "</b></p>"
+            "<h3>Registrar seguimiento (disciplinario / meta / falencia)</h3>"
+            '<form method="POST" style="display:grid;gap:8px;max-width:640px">'
+            '<input type="hidden" name="estudiante_id" value="' + str(e.id) + '">'
+            '<input type="hidden" name="grado" value="' + _h(grado or e.grado or "") + '">'
+            '<div><label><b>Tipo</b></label><select name="tipo">'
+            '<option value="disciplinario">Proceso disciplinario</option>'
+            '<option value="meta">Meta de mejora</option>'
+            '<option value="falencia">Falencia / dificultad</option>'
+            '<option value="observacion">Como le va (observacion)</option>'
+            "</select></div>"
+            '<div><label><b>Descripcion</b></label><textarea name="texto" rows="3" style="width:100%" placeholder="Detalle del seguimiento"></textarea></div>'
+            '<div><label><b>Meta (opcional)</b></label><input name="meta" style="width:100%"></div>'
+            '<div><label><b>Falencia (opcional)</b></label><input name="falencia" style="width:100%"></div>'
+            '<button type="submit">Guardar en ficha</button></form></section>'
+            '<section class="table-card" style="margin-bottom:12px"><h2>Historial de seguimiento</h2>'
+            "<table><tr><th>Fecha</th><th>Registro</th></tr>" + filas_o + "</table></section>"
+            '<section class="table-card" style="margin-bottom:12px"><h2>Notas recientes</h2>'
+            "<table><tr><th>Periodo</th><th>Materia</th><th>Nota</th></tr>" + filas_n + "</table></section>"
+            '<section class="table-card"><h2>Asistencia (ingresos)</h2>'
+            "<table><tr><th>Fecha</th><th>Hora</th><th>Estado</th></tr>" + filas_a + "</table></section>"
+        )
 
-    content = f"""
-<header class="role-hero">
-  <div><h1>Ficha de seguimiento</h1>
-  <p>Filtre por grado, abra un estudiante y registre procesos, metas o falencias.</p></div>
-  <a class="btn" href="{back}">← Inicio panel</a>
-</header>
-{"<div class='msg ok'>" + msg + "</div>" if msg else ""}
-<div class="role-panel">
-  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
-    <div><label><b>Grado / grupo</b></label>
-      <select name="grado" onchange="this.form.submit()">
-        <option value="">— Seleccionar —</option>{opts_g}
-      </select>
-    </div>
-    <button type="submit">Ver estudiantes</button>
-  </form>
-</div>
-<div class="table-card" style="margin-top:12px">
-  <table>
-    <tr><th>Estudiante</th><th>Código</th><th>Grado</th><th></th></tr>
-    {filas}
-  </table>
-</div>
-{detalle}
-"""
+    content = (
+        '<header class="role-hero"><div><h1>Ficha de seguimiento</h1>'
+        "<p>Filtre por grado, abra un estudiante y registre procesos, metas o falencias.</p></div>"
+        '<a class="btn" href="' + back + '">← Inicio panel</a></header>'
+    )
+    if msg:
+        content += '<div class="msg ok">' + _h(msg) + "</div>"
+    # Detalle PRIMERO al abrir estudiante
+    content += detalle
+    content += (
+        '<div class="role-panel"><form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">'
+        '<div><label><b>Grado / grupo</b></label>'
+        '<select name="grado"><option value="">— Seleccionar —</option>' + opts_g + "</select></div>"
+        '<button type="submit">Ver estudiantes</button></form></div>'
+        '<div class="table-card" style="margin-top:12px"><table>'
+        "<tr><th>Estudiante</th><th>Código</th><th>Grado</th><th></th></tr>"
+        + "".join(filas) + "</table></div>"
+    )
+    if e:
+        content += '<script>try{document.getElementById("ficha-detalle").scrollIntoView({behavior:"smooth",block:"start"});}catch(e){}</script>'
     return page("Ficha de seguimiento", shell(content))
 
 
