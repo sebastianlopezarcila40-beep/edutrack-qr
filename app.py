@@ -1009,8 +1009,8 @@ class Plataforma(db.Model):
     anuncio_cuerpo = db.Column(db.Text, default="")
     anuncio_cuenta = db.Column(db.String(255), default="")
     anuncio_version = db.Column(db.String(40), default="1")
-    anuncio_img1 = db.Column(db.String(255), default="")
-    anuncio_img2 = db.Column(db.String(255), default="")
+    anuncio_img1 = db.Column(db.Text, default="")
+    anuncio_img2 = db.Column(db.Text, default="")
     tema_fuente = db.Column(db.String(80), default="Segoe UI")
     tema_color_primario = db.Column(db.String(20), default="#0B2D57")
     tema_color_acento = db.Column(db.String(20), default="#1e40af")
@@ -1634,6 +1634,28 @@ class VerificacionRector(db.Model):
     gerencia_motivo = db.Column(db.Text, default="")
     gerencia_por = db.Column(db.String(120), default="")
     gerencia_fecha = db.Column(db.String(30), default="")
+    # Bandeja Gerencia — estados oficiales de venta
+    # ESPERANDO_CONFIRMACION | APROBADO_POR_GERENCIA | RECHAZADO_NO_VENDER | LIBRE
+    estado_validacion = db.Column(db.String(40), default="LIBRE", index=True)
+    ubicacion = db.Column(db.String(160), default="")  # ciudad / ISP si se captura
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+
+
+class RectorInstitucion(db.Model):
+    """Datos del rector / representante legal al activar un colegio (CRM + soporte)."""
+    __tablename__ = "rectores_institucion"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True, nullable=False)
+    nombres = db.Column(db.String(160), default="")
+    apellidos = db.Column(db.String(160), default="")
+    tipo_id = db.Column(db.String(20), default="C.C.")  # C.C. | C.E. | Pasaporte
+    numero_id = db.Column(db.String(40), index=True, default="")
+    direccion = db.Column(db.String(255), default="")
+    telefono = db.Column(db.String(40), default="")
+    correo = db.Column(db.String(160), default="")
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(120), default="")
+    actualizado_en = db.Column(db.String(30), default="")
 
 
 class DirectorioMEN(db.Model):
@@ -3000,6 +3022,9 @@ def migrar_columnas():
         ("verificaciones_rector", "gerencia_motivo", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_motivo TEXT DEFAULT ''"),
         ("verificaciones_rector", "gerencia_por", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_por VARCHAR(120) DEFAULT ''"),
         ("verificaciones_rector", "gerencia_fecha", "ALTER TABLE verificaciones_rector ADD COLUMN gerencia_fecha VARCHAR(30) DEFAULT ''"),
+        ("verificaciones_rector", "estado_validacion", "ALTER TABLE verificaciones_rector ADD COLUMN estado_validacion VARCHAR(40) DEFAULT 'LIBRE'"),
+        ("verificaciones_rector", "ubicacion", "ALTER TABLE verificaciones_rector ADD COLUMN ubicacion VARCHAR(160) DEFAULT ''"),
+        ("verificaciones_rector", "institucion_id", "ALTER TABLE verificaciones_rector ADD COLUMN institucion_id INTEGER"),
         ("tickets_pqr", "fecha_estimada", "ALTER TABLE tickets_pqr ADD COLUMN fecha_estimada VARCHAR(20) DEFAULT ''"),
         ("tickets_pqr", "estado_cun", "ALTER TABLE tickets_pqr ADD COLUMN estado_cun VARCHAR(40) DEFAULT ''"),
         ("tickets_pqr", "medio_ingreso", "ALTER TABLE tickets_pqr ADD COLUMN medio_ingreso VARCHAR(60) DEFAULT 'Web'"),
@@ -17577,13 +17602,13 @@ def gerencia_verificaciones_pendientes():
             ahora_txt = f"{fecha_hoy()} {hora_actual()}"
             if accion == "aprobar_venta":
                 v.gerencia_decision = "APROBADO"
+                v.estado_validacion = "APROBADO_POR_GERENCIA"
                 v.gerencia_motivo = motivo or "Venta autorizada por Gerencia"
                 v.gerencia_por = quien
                 v.gerencia_fecha = ahora_txt
                 if v.es_pep and not (v.pep_aprobado_por or "").strip():
                     v.pep_aprobado_por = quien
                     v.pep_aprobado_fecha = ahora_txt
-                # Deja de contar como pendiente en HQ
                 try:
                     v.ofac_alerta = False
                 except Exception:
@@ -17599,6 +17624,7 @@ def gerencia_verificaciones_pendientes():
                 mensaje = f"Venta APROBADA para {_esc(v.nombre_rector)} · {_esc(v.nombre_colegio or v.nit_colegio)}."
             else:
                 v.gerencia_decision = "RECHAZADO"
+                v.estado_validacion = "RECHAZADO_NO_VENDER"
                 v.gerencia_motivo = motivo or "Venta no autorizada por Gerencia"
                 v.gerencia_por = quien
                 v.gerencia_fecha = ahora_txt
@@ -17730,6 +17756,279 @@ def gerencia_verificaciones_pendientes():
 </section>
 """
     return page("Autorización ventas PEP/OFAC", shell(content))
+
+
+
+@app.route("/gerencia/validaciones-ventas", methods=["GET", "POST"])
+def gerencia_validaciones_ventas():
+    """Bandeja de validaciones de identidad / ventas (alias de pendientes + estados oficiales)."""
+    return gerencia_verificaciones_pendientes()
+
+
+@app.route("/api/validaciones", methods=["POST"])
+def api_validaciones_crear():
+    """Asesor registra solicitud de validación (API)."""
+    if not requiere_login() or rol_actual() not in ("Comercial", "Ventas", "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin"):
+        return {"ok": False, "error": "No autorizado"}, 403
+    data = request.get_json(silent=True) or request.form
+    nombre = (data.get("nombre_rector") or data.get("identidad") or "").strip()[:160]
+    cedula = (data.get("cedula_rector") or data.get("documento") or "").strip()[:30]
+    colegio = (data.get("nombre_colegio") or "").strip()[:220]
+    if not nombre:
+        return {"ok": False, "error": "Falta identidad"}, 400
+    v = VerificacionRector(
+        nombre_rector=nombre,
+        cedula_rector=cedula,
+        nombre_colegio=colegio,
+        consultado_por=session.get("usuario") or "",
+        fecha=fecha_hoy(),
+        hora=hora_actual(),
+        ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80],
+        estado_validacion="ESPERANDO_CONFIRMACION",
+    )
+    db.session.add(v)
+    db.session.commit()
+    return {"ok": True, "id": v.id, "estado": v.estado_validacion}
+
+
+@app.route("/api/validaciones/<int:vid>/aprobar", methods=["PUT", "POST"])
+def api_validaciones_aprobar(vid):
+    if not requiere_login() or rol_actual() not in ("Gerente", "Gerencia", "Administrador", "Superadmin", "Soporte"):
+        return {"ok": False, "error": "No autorizado"}, 403
+    v = VerificacionRector.query.get(vid)
+    if not v:
+        return {"ok": False, "error": "No existe"}, 404
+    data = request.get_json(silent=True) or request.form
+    accion = (data.get("accion") or "aprobar").strip().lower()
+    quien = session.get("usuario") or "gerencia"
+    ahora_txt = fecha_hoy() + " " + hora_actual()
+    if accion in ("rechazar", "rechazar_venta", "no"):
+        v.gerencia_decision = "RECHAZADO"
+        v.estado_validacion = "RECHAZADO_NO_VENDER"
+    else:
+        v.gerencia_decision = "APROBADO"
+        v.estado_validacion = "APROBADO_POR_GERENCIA"
+    v.gerencia_por = quien
+    v.gerencia_fecha = ahora_txt
+    v.gerencia_motivo = (data.get("motivo") or "")[:800]
+    db.session.commit()
+    return {"ok": True, "estado": v.estado_validacion}
+
+
+@app.route("/soporte/rectores", methods=["GET", "POST"])
+@app.route("/gerencia/rectores", methods=["GET", "POST"])
+def modulo_rectores():
+    """CRM de rectores / representantes legales por institución."""
+    if not requiere_login() or rol_actual() not in (
+        "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin", "Comercial", "Ventas"
+    ):
+        return redirect("/login")
+    msg = err = ""
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    if request.method == "POST":
+        try:
+            iid = int(request.form.get("institucion_id") or 0)
+        except Exception:
+            iid = 0
+        nombres = (request.form.get("nombres") or "").strip()[:160]
+        apellidos = (request.form.get("apellidos") or "").strip()[:160]
+        tipo_id = (request.form.get("tipo_id") or "C.C.").strip()[:20]
+        numero_id = (request.form.get("numero_id") or "").strip()[:40]
+        direccion = (request.form.get("direccion") or "").strip()[:255]
+        telefono = (request.form.get("telefono") or "").strip()[:40]
+        correo = (request.form.get("correo") or "").strip()[:160]
+        if not iid or not nombres or not numero_id:
+            err = "Institución, nombres y número de identificación son obligatorios."
+        else:
+            r = RectorInstitucion.query.filter_by(institucion_id=iid).first()
+            if not r:
+                r = RectorInstitucion(institucion_id=iid, creado_en=fecha_hoy() + " " + hora_actual(),
+                                      creado_por=session.get("usuario") or "")
+                db.session.add(r)
+            r.nombres = nombres
+            r.apellidos = apellidos
+            r.tipo_id = tipo_id
+            r.numero_id = numero_id
+            r.direccion = direccion
+            r.telefono = telefono
+            r.correo = correo
+            r.actualizado_en = fecha_hoy() + " " + hora_actual()
+            # Espejo en Institucion.rector
+            inst = Institucion.query.get(iid)
+            if inst:
+                inst.rector = (nombres + " " + apellidos).strip()[:160]
+            db.session.commit()
+            msg = "Datos del rector guardados."
+            try:
+                registrar_auditoria("Rector CRM", "inst=%s %s %s" % (iid, nombres, numero_id))
+            except Exception:
+                pass
+
+    q = (request.args.get("q") or "").strip()
+    lista = RectorInstitucion.query.order_by(RectorInstitucion.id.desc()).limit(200).all()
+    if q:
+        like = "%" + q + "%"
+        lista = RectorInstitucion.query.filter(
+            db.or_(
+                RectorInstitucion.nombres.ilike(like),
+                RectorInstitucion.apellidos.ilike(like),
+                RectorInstitucion.numero_id.ilike(like),
+                RectorInstitucion.correo.ilike(like),
+            )
+        ).order_by(RectorInstitucion.id.desc()).limit(200).all()
+
+    opts_inst = "".join(
+        '<option value="%s">%s</option>' % (i.id, (i.nombre or i.codigo or str(i.id))[:60])
+        for i in Institucion.query.order_by(Institucion.nombre.asc()).limit(500).all()
+    )
+    filas = []
+    for r in lista:
+        inst = Institucion.query.get(r.institucion_id)
+        filas.append(
+            "<tr><td>%s</td><td>%s %s</td><td>%s %s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+                (inst.nombre if inst else r.institucion_id),
+                r.nombres or "", r.apellidos or "",
+                r.tipo_id or "", r.numero_id or "",
+                r.telefono or "", r.correo or "",
+                r.actualizado_en or r.creado_en or "",
+            )
+        )
+    if not filas:
+        filas = ["<tr><td colspan='6'>Sin registros de rectores aún.</td></tr>"]
+
+    content = """
+<header class="role-hero"><div><h1>Información de Rectores</h1>
+<p>Base CRM para soporte y gerencia · datos al activar servicio</p></div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+%s%s
+<section class="role-panel">
+  <h2 style="margin-top:0">Registrar / actualizar rector</h2>
+  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:820px">
+    <div style="grid-column:1/-1"><label><b>Institución *</b></label>
+      <select name="institucion_id" required><option value="">— Seleccione —</option>%s</select></div>
+    <div><label><b>Nombres *</b></label><input name="nombres" required></div>
+    <div><label><b>Apellidos *</b></label><input name="apellidos" required></div>
+    <div><label><b>Tipo ID *</b></label>
+      <select name="tipo_id"><option>C.C.</option><option>C.E.</option><option>Pasaporte</option></select></div>
+    <div><label><b>Número ID *</b></label><input name="numero_id" required></div>
+    <div style="grid-column:1/-1"><label><b>Dirección</b></label><input name="direccion" style="width:100%"></div>
+    <div><label><b>Teléfono</b></label><input name="telefono"></div>
+    <div><label><b>Correo corporativo</b></label><input name="correo" type="email"></div>
+    <div style="grid-column:1/-1"><button type="submit">Guardar rector</button></div>
+  </form>
+</section>
+<section class="role-panel" style="margin-top:14px">
+  <form method="GET" style="margin-bottom:10px"><input name="q" placeholder="Buscar nombre, cédula o correo" value="%s">
+  <button>Buscar</button></form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff"><th>Colegio</th><th>Rector</th><th>Identificación</th><th>Teléfono</th><th>Correo</th><th>Actualizado</th></tr>
+    %s
+  </table>
+</section>
+""" % (
+        ("<div class='msg ok'>" + msg + "</div>") if msg else "",
+        ("<div class='msg danger'>" + err + "</div>") if err else "",
+        opts_inst,
+        q.replace('"', ""),
+        "".join(filas),
+    )
+    return page("Rectores CRM", shell(content))
+
+
+@app.route("/api/rectores", methods=["POST"])
+def api_rectores_crear():
+    if not requiere_login() or rol_actual() not in (
+        "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin", "Comercial", "Ventas"
+    ):
+        return {"ok": False, "error": "No autorizado"}, 403
+    data = request.get_json(silent=True) or request.form
+    try:
+        iid = int(data.get("institucion_id") or 0)
+    except Exception:
+        iid = 0
+    if not iid:
+        return {"ok": False, "error": "institucion_id requerido"}, 400
+    r = RectorInstitucion.query.filter_by(institucion_id=iid).first()
+    if not r:
+        r = RectorInstitucion(institucion_id=iid, creado_en=fecha_hoy() + " " + hora_actual(),
+                              creado_por=session.get("usuario") or "")
+        db.session.add(r)
+    r.nombres = (data.get("nombres") or "")[:160]
+    r.apellidos = (data.get("apellidos") or "")[:160]
+    r.tipo_id = (data.get("tipo_id") or "C.C.")[:20]
+    r.numero_id = (data.get("numero_id") or "")[:40]
+    r.direccion = (data.get("direccion") or "")[:255]
+    r.telefono = (data.get("telefono") or "")[:40]
+    r.correo = (data.get("correo") or "")[:160]
+    r.actualizado_en = fecha_hoy() + " " + hora_actual()
+    inst = Institucion.query.get(iid)
+    if inst:
+        inst.rector = (r.nombres + " " + r.apellidos).strip()[:160]
+    db.session.commit()
+    return {"ok": True, "id": r.id}
+
+
+@app.route("/activar_colegio/<int:id>/rector", methods=["GET", "POST"])
+def activar_colegio_rector(id):
+    """Formulario obligatorio de rector al pasar el colegio a ACTIVA."""
+    if not requiere_login() or rol_actual() not in (
+        "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin", "Comercial", "Ventas"
+    ):
+        return redirect("/login")
+    inst = Institucion.query.get_or_404(id)
+    msg = err = ""
+    if request.method == "POST":
+        nombres = (request.form.get("nombres") or "").strip()[:160]
+        apellidos = (request.form.get("apellidos") or "").strip()[:160]
+        tipo_id = (request.form.get("tipo_id") or "C.C.").strip()[:20]
+        numero_id = (request.form.get("numero_id") or "").strip()[:40]
+        direccion = (request.form.get("direccion") or "").strip()[:255]
+        telefono = (request.form.get("telefono") or "").strip()[:40]
+        correo = (request.form.get("correo") or "").strip()[:160]
+        if not nombres or not apellidos or not numero_id or not telefono or not correo:
+            err = "Complete nombres, apellidos, identificación, teléfono y correo."
+        else:
+            r = RectorInstitucion.query.filter_by(institucion_id=inst.id).first()
+            if not r:
+                r = RectorInstitucion(institucion_id=inst.id, creado_en=fecha_hoy() + " " + hora_actual(),
+                                      creado_por=session.get("usuario") or "")
+                db.session.add(r)
+            r.nombres, r.apellidos, r.tipo_id, r.numero_id = nombres, apellidos, tipo_id, numero_id
+            r.direccion, r.telefono, r.correo = direccion, telefono, correo
+            r.actualizado_en = fecha_hoy() + " " + hora_actual()
+            inst.rector = (nombres + " " + apellidos).strip()[:160]
+            if (inst.estado or "").upper() != "ACTIVA":
+                inst.estado = "ACTIVA"
+            db.session.commit()
+            msg = "Colegio activo y datos del rector registrados."
+            return redirect("/soporte/rectores" if rol_actual() == "Soporte" else "/gerencia/rectores")
+    content = """
+<header class="role-hero"><div><h1>Activación · Datos del rector</h1>
+<p>Colegio: <b>%s</b> · Obligatorio antes de operar</p></div></header>
+%s%s
+<section class="role-panel" style="max-width:640px">
+<form method="POST" style="display:grid;gap:10px">
+  <div><label><b>Nombres *</b></label><input name="nombres" required></div>
+  <div><label><b>Apellidos *</b></label><input name="apellidos" required></div>
+  <div><label><b>Tipo de identificación *</b></label>
+    <select name="tipo_id"><option>C.C.</option><option>C.E.</option><option>Pasaporte</option></select></div>
+  <div><label><b>Número de identificación *</b></label><input name="numero_id" required></div>
+  <div><label><b>Dirección institución / domicilio *</b></label><input name="direccion" required></div>
+  <div><label><b>Teléfono *</b></label><input name="telefono" required></div>
+  <div><label><b>Correo corporativo *</b></label><input name="correo" type="email" required></div>
+  <button type="submit">Activar y guardar rector</button>
+</form>
+</section>
+""" % (
+        (inst.nombre or inst.codigo or str(inst.id)),
+        ("<div class='msg ok'>" + msg + "</div>") if msg else "",
+        ("<div class='msg danger'>" + err + "</div>") if err else "",
+    )
+    return page("Activación rector", shell(content))
+
 
 
 @app.route("/gerencia")
@@ -18074,6 +18373,8 @@ def gerencia_hq():
         <a class="g" href="/gerencia/reportes-pago">📊 Reportes de pago</a>
         <a href="/gerencia/procsis-web">📰 Noticias y productos web</a>
         <a href="/gerencia/anuncios">📢 Anuncios (editar)</a>
+        <a class="g" href="/gerencia/verificaciones-pendientes">✅ Validaciones de venta</a>
+        <a href="/gerencia/rectores">🎓 Rectores CRM</a>
         <a href="/tenants">Instituciones</a>
         <a href="/auditoria">Auditoría</a>
         <a class="t" href="/gerencia/lideres">Líderes / equipo web</a>
@@ -20069,12 +20370,23 @@ def ventas_verificacion_rector():
             nit = (request.form.get("nit_colegio") or "").strip()
             colegio = (request.form.get("nombre_colegio") or "").strip()
             alerta_ofac, detalle_ofac = _consultar_ofac(nombre)
+            ubica = ""
+            try:
+                # Reutiliza helper de auditoría si existe
+                if "capturar_geo_cliente" in dir():
+                    g = capturar_geo_cliente() or {}
+                    ubica = ((g.get("ciudad") or "") + " · " + (g.get("isp") or ""))[:160]
+            except Exception:
+                ubica = ""
+            estado_ini = "ESPERANDO_CONFIRMACION" if alerta_ofac else "LIBRE"
             v = VerificacionRector(
                 nombre_rector=nombre, cedula_rector=cedula, nit_colegio=nit,
                 nombre_colegio=colegio, consultado_por=session.get("usuario", ""),
                 fecha=fecha_hoy(), hora=hora_actual(),
                 ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80],
                 ofac_alerta=alerta_ofac, ofac_detalle=detalle_ofac,
+                estado_validacion=estado_ini,
+                ubicacion=ubica,
             )
             db.session.add(v)
             db.session.commit()
@@ -20094,6 +20406,7 @@ def ventas_verificacion_rector():
             v = VerificacionRector.query.get(int(vid)) if vid else None
             if v:
                 v.es_pep = True
+                v.estado_validacion = "ESPERANDO_CONFIRMACION"
                 db.session.commit()
                 registrar_auditoria("Rector marcado como PEP", f"{v.nombre_rector} — pendiente de aprobación de Gerencia")
                 try:
@@ -28080,6 +28393,14 @@ def editar_institucion(id):
             mensaje = "Institución actualizada (logo, datos y plan)."
             if logo_err:
                 mensaje = logo_err
+            # Si quedó ACTIVA y no hay rector CRM, pedir datos obligatorios
+            try:
+                if (inst.estado or "").upper() == "ACTIVA":
+                    tiene = RectorInstitucion.query.filter_by(institucion_id=inst.id).first()
+                    if not tiene or not (tiene.numero_id or "").strip():
+                        return redirect("/activar_colegio/%s/rector" % inst.id)
+            except Exception as _re:
+                print("redirect rector:", _re)
         if getattr(inst, "plan_pendiente", None):
             mensaje += f" Plan pendiente: {inst.plan_pendiente} a partir de {inst.fecha_corte_plan}."
     logo = logo_actual(inst.id)
@@ -35591,37 +35912,65 @@ def soporte_anuncios():
             p.anuncio_titulo = (request.form.get("titulo") or "").strip()[:220]
             p.anuncio_cuerpo = (request.form.get("cuerpo") or "").strip()
             p.anuncio_cuenta = (request.form.get("cuenta") or "").strip()[:255]
-            # Fotos del anuncio (máx. 2)
+            # Fotos del anuncio (máx. 2) — data URI para no perderlas en Railway
             try:
-                upload_dir = os.path.join(app.root_path, "static", "uploads", "anuncios")
-                os.makedirs(upload_dir, exist_ok=True)
+                import base64 as _b64
+                import io as _io
                 for key, attr in (("foto1", "anuncio_img1"), ("foto2", "anuncio_img2")):
                     f = request.files.get(key)
                     if f and f.filename:
                         ext = (f.filename.rsplit(".", 1)[-1] or "jpg").lower()
                         if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
                             continue
-                        fname = f"anuncio_{attr}_{int(__import__('time').time())}.{ext}"
-                        path = os.path.join(upload_dir, fname)
-                        f.save(path)
-                        setattr(p, attr, f"/static/uploads/anuncios/{fname}")
+                        try:
+                            f.seek(0)
+                        except Exception:
+                            pass
+                        raw = f.read() or b""
+                        if not raw:
+                            continue
+                        try:
+                            from PIL import Image
+                            im = Image.open(_io.BytesIO(raw))
+                            if im.mode in ("RGBA", "P"):
+                                bg = Image.new("RGB", im.size, (255, 255, 255))
+                                if im.mode == "P":
+                                    im = im.convert("RGBA")
+                                bg.paste(im, mask=im.split()[-1] if im.mode == "RGBA" else None)
+                                im = bg
+                            elif im.mode != "RGB":
+                                im = im.convert("RGB")
+                            im.thumbnail((900, 900))
+                            buf = _io.BytesIO()
+                            im.save(buf, format="JPEG", quality=78, optimize=True)
+                            raw = buf.getvalue()
+                            mime = "image/jpeg"
+                        except Exception:
+                            mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                                    "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/jpeg")
+                        setattr(p, attr, "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii")))
                 if request.form.get("quitar_foto1") == "1":
                     p.anuncio_img1 = ""
                 if request.form.get("quitar_foto2") == "1":
                     p.anuncio_img2 = ""
             except Exception as ex:
                 print("anuncio upload:", ex)
-            if request.form.get("forzar_nueva") == "1":
-                try:
-                    p.anuncio_version = str(int(p.anuncio_version or "1") + 1)
-                except Exception:
-                    p.anuncio_version = "2"
+            # Siempre nueva versión → todos los usuarios vuelven a ver el anuncio
+            try:
+                p.anuncio_version = str(int(str(p.anuncio_version or "1").strip() or "1") + 1)
+            except Exception:
+                p.anuncio_version = str(__import__("time").time())
+            # Limpiar dismiss de esta sesión de gerencia para previsualizar
+            try:
+                session.pop("anuncio_dismissed_ver", None)
+            except Exception:
+                pass
             db.session.commit()
             try:
                 registrar_auditoria("Anuncio global", f"{rol}: activo={p.anuncio_activo} titulo={p.anuncio_titulo[:60]}")
             except Exception:
                 pass
-            mensaje = "Anuncio guardado." + (" (Activo en login)" if p.anuncio_activo else " (Inactivo)")
+            mensaje = "Anuncio guardado (v%s). " % (getattr(p, "anuncio_version", "") or "") + ("Activo en todas las pantallas." if p.anuncio_activo else "(Inactivo)")
     volver_href = "/soporte_admin" if (rol == "Soporte" or session.get("soporte")) else "/gerencia/hq"
     content = f"""
 <header class="role-hero"><div>
