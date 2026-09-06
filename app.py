@@ -831,7 +831,7 @@ class Institucion(db.Model):
     resolucion = db.Column(db.String(160), default="")
     municipio = db.Column(db.String(120), default="")
     departamento = db.Column(db.String(120), default="")
-    logo = db.Column(db.String(255), default="/static/img/logo-edutrack.png")
+    logo = db.Column(db.Text, default="/static/img/logo-edutrack.png")
     estado = db.Column(db.String(30), default="ACTIVA")  # ACTIVA, SUSPENDIDA, MANTENIMIENTO, CANCELACION_PENDIENTE, ARCHIVADA
     plan = db.Column(db.String(40), default="Basico")  # Basico | Institucional | Premium
     fecha_creacion = db.Column(db.String(20), default="")
@@ -881,7 +881,7 @@ class Configuracion(db.Model):
     inst_resolucion = db.Column(db.String(160), default=DEFAULT_INST_RESOLUCION)
     inst_municipio = db.Column(db.String(120), default="")
     inst_departamento = db.Column(db.String(120), default="")
-    logo_path = db.Column(db.String(255), default="/static/img/logo-edutrack.png")
+    logo_path = db.Column(db.Text, default="/static/img/logo-edutrack.png")
     hora_inicio_asistencia = db.Column(db.String(10), default="06:00")
     hora_fin_asistencia_docente = db.Column(db.String(10), default="07:20")
     contacto_soporte = db.Column(db.String(120), default="")
@@ -962,7 +962,7 @@ class Plataforma(db.Model):
     empresa = db.Column(db.String(160), default="Procsis")
     nombre_producto = db.Column(db.String(160), default="EduTrack")  # nombre global del producto
     slogan = db.Column(db.String(255), default="Tecnología para una educación moderna y responsable")
-    logo_path = db.Column(db.String(255), default="/static/img/logo-edutrack.png")
+    logo_path = db.Column(db.Text, default="/static/img/logo-edutrack.png")
     desarrollador = db.Column(db.String(120), default="Sebastián López")
     telefono_soporte = db.Column(db.String(40), default="3105615621")
     email_soporte = db.Column(db.String(160), default="soporte@procsis.com")
@@ -3372,6 +3372,21 @@ def inicializar_bd():
         migrar_columnas()
     except Exception:
         pass
+    # Ampliar columnas de logo a TEXT (data URI no cabe en VARCHAR 255)
+    try:
+        from sqlalchemy import text as sa_text
+        with db.engine.begin() as conn:
+            dialect = db.engine.dialect.name
+            if dialect == "postgresql":
+                conn.execute(sa_text("ALTER TABLE instituciones ALTER COLUMN logo TYPE TEXT"))
+                try:
+                    conn.execute(sa_text("ALTER TABLE configuracion ALTER COLUMN logo_path TYPE TEXT"))
+                except Exception:
+                    pass
+            elif dialect == "sqlite":
+                pass  # SQLite type affinity is flexible
+    except Exception as _al:
+        print("migrate logo TEXT:", _al)
     # Forzar logo marca EduTrack (no colegio) en tabla plataforma
     try:
         p = Plataforma.query.first()
@@ -4376,7 +4391,7 @@ def _comprimir_imagen_bytes(raw, max_side=200, max_kb=50):
 
 
 def guardar_logo_institucional(file_storage, institucion_id=None):
-    """Guarda logo: archivo local + data URI en DB (Railway no pierde el logo al redeploy)."""
+    """Guarda logo comprimido como data URI (TEXT en BD). Sobrevive redeploy en Railway."""
     if not file_storage or not getattr(file_storage, "filename", ""):
         return None
     nombre = file_storage.filename or ""
@@ -4384,48 +4399,60 @@ def guardar_logo_institucional(file_storage, institucion_id=None):
     if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif"]:
         return None
     try:
-        raw = file_storage.read()
         if hasattr(file_storage, "seek"):
             try:
                 file_storage.seek(0)
             except Exception:
                 pass
-    except Exception:
-        raw = b""
+        raw = file_storage.read()
+    except Exception as e:
+        print("logo read:", e)
+        return None
     if not raw:
-        try:
-            file_storage.seek(0)
-            raw = file_storage.read()
-        except Exception:
-            return None
-    # Limitar tamaño ~1.5 MB para no inflar la BD
-    if len(raw) > 1_500_000:
-        try:
-            from PIL import Image
-            import io as _io
-            im = Image.open(_io.BytesIO(raw))
-            im.thumbnail((512, 512))
-            buf = _io.BytesIO()
-            fmt = "PNG" if ext == ".png" else "JPEG"
-            im.save(buf, format=fmt, quality=85)
-            raw = buf.getvalue()
-            ext = ".png" if fmt == "PNG" else ".jpg"
-        except Exception:
-            raw = raw[:1_500_000]
-    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-            ".webp": "image/webp", ".gif": "image/gif"}.get(ext, "image/png")
-    import base64 as _b64
-    data_uri = "data:" + mime + ";base64," + _b64.b64encode(raw).decode("ascii")
-    # También intentar disco (opcional, puede desaparecer en Railway)
+        return None
+    # Comprimir a max ~80 KB para no saturar VARCHAR antiguos ni la BD
     try:
-        seguro = "logo_%s_%s_%s%s" % (institucion_id or "inst", fecha_hoy().replace("-", ""), random.randint(1000, 9999), ext)
+        from PIL import Image
+        import io as _io
+        im = Image.open(_io.BytesIO(raw))
+        if im.mode in ("RGBA", "P"):
+            fondo = Image.new("RGB", im.size, (255, 255, 255))
+            if im.mode == "P":
+                im = im.convert("RGBA")
+            fondo.paste(im, mask=im.split()[-1] if im.mode == "RGBA" else None)
+            im = fondo
+        elif im.mode != "RGB":
+            im = im.convert("RGB")
+        im.thumbnail((320, 320))
+        buf = _io.BytesIO()
+        im.save(buf, format="JPEG", quality=72, optimize=True)
+        raw = buf.getvalue()
+        mime = "image/jpeg"
+        ext = ".jpg"
+    except Exception as e:
+        print("logo compress:", e)
+        if len(raw) > 200_000:
+            raw = raw[:200_000]
+        mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp", ".gif": "image/gif"}.get(ext, "image/jpeg")
+    import base64 as _b64
+    data_uri = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+    # Disco opcional (puede perderse en Railway)
+    try:
+        os.makedirs(LOGO_DIR, exist_ok=True)
+        seguro = "logo_%s_%s_%s%s" % (
+            institucion_id or "inst",
+            fecha_hoy().replace("-", ""),
+            random.randint(1000, 9999),
+            ext,
+        )
         dest = os.path.join(LOGO_DIR, seguro)
         with open(dest, "wb") as fh:
             fh.write(raw)
     except Exception as _fs:
         print("logo disco:", _fs)
-    # Preferir data URI para persistencia en PostgreSQL
     return data_uri
+
 
 
 def periodo_actual():
@@ -27971,32 +27998,80 @@ def editar_institucion(id):
             if request.form.get("cancelar_plan_pendiente") == "1":
                 inst.plan_pendiente = ""
                 inst.fecha_corte_plan = ""
-        inst.notas = (request.form.get("notas") or "").strip()
-        logo_file = request.files.get("logo")
-        if logo_file and logo_file.filename:
-            nueva = guardar_logo_institucional(logo_file, inst.id)
-            if nueva:
-                inst.logo = nueva
-        cfg = Configuracion.query.filter_by(institucion_id=inst.id).first()
-        if cfg:
-            cfg.inst_nombre = inst.nombre
-            cfg.inst_sede = inst.sede
-            cfg.inst_dane = inst.dane
-            cfg.inst_nit = inst.nit
-            cfg.inst_direccion = inst.direccion
-            cfg.inst_resolucion = inst.resolucion
-            cfg.inst_municipio = inst.municipio
-            cfg.inst_departamento = inst.departamento
-            if logo_file and logo_file.filename and inst.logo:
-                cfg.logo_path = inst.logo
-        db.session.commit()
-        # Si la fecha de corte ya llegó, aplicar ahora
         try:
-            aplicar_cambios_plan_pendientes()
+            if hasattr(inst, "notas"):
+                inst.notas = (request.form.get("notas") or "").strip()
         except Exception:
             pass
-        registrar_auditoria("Editar institución", f"{inst.codigo} - {inst.nombre}")
-        mensaje = "Institución actualizada (logo, datos y plan)."
+        logo_file = request.files.get("logo")
+        logo_err = ""
+        if logo_file and logo_file.filename:
+            try:
+                # Asegurar columna TEXT antes de guardar data URI
+                try:
+                    from sqlalchemy import text as sa_text
+                    with db.engine.begin() as conn:
+                        if db.engine.dialect.name == "postgresql":
+                            conn.execute(sa_text("ALTER TABLE instituciones ALTER COLUMN logo TYPE TEXT"))
+                            try:
+                                conn.execute(sa_text("ALTER TABLE configuracion ALTER COLUMN logo_path TYPE TEXT"))
+                            except Exception:
+                                pass
+                except Exception as _m:
+                    print("alter logo:", _m)
+                nueva = guardar_logo_institucional(logo_file, inst.id)
+                if nueva:
+                    inst.logo = nueva
+                else:
+                    logo_err = "No se pudo procesar la imagen (use PNG o JPG menor a 2 MB)."
+            except Exception as ex_logo:
+                print("editar_institucion logo:", ex_logo)
+                logo_err = "Error al guardar logo: " + str(ex_logo)[:120]
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+        try:
+            cfg = Configuracion.query.filter_by(institucion_id=inst.id).first()
+            if cfg:
+                cfg.inst_nombre = inst.nombre
+                cfg.inst_sede = inst.sede
+                if hasattr(cfg, "inst_dane"):
+                    cfg.inst_dane = inst.dane
+                if hasattr(cfg, "inst_nit"):
+                    cfg.inst_nit = inst.nit
+                if hasattr(cfg, "inst_direccion"):
+                    cfg.inst_direccion = inst.direccion
+                if hasattr(cfg, "inst_resolucion"):
+                    cfg.inst_resolucion = inst.resolucion
+                if hasattr(cfg, "inst_municipio"):
+                    cfg.inst_municipio = inst.municipio
+                if hasattr(cfg, "inst_departamento"):
+                    cfg.inst_departamento = inst.departamento
+                if logo_file and logo_file.filename and getattr(inst, "logo", None):
+                    cfg.logo_path = inst.logo
+            db.session.commit()
+        except Exception as ex_c:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            print("editar_institucion commit:", ex_c)
+            mensaje = "No se pudo guardar: " + str(ex_c)[:150]
+            # re-load page with error - fall through to GET render
+            logo_err = mensaje
+        else:
+            try:
+                aplicar_cambios_plan_pendientes()
+            except Exception:
+                pass
+            try:
+                registrar_auditoria("Editar institución", "%s - %s" % (inst.codigo, inst.nombre))
+            except Exception:
+                pass
+            mensaje = "Institución actualizada (logo, datos y plan)."
+            if logo_err:
+                mensaje = logo_err
         if getattr(inst, "plan_pendiente", None):
             mensaje += f" Plan pendiente: {inst.plan_pendiente} a partir de {inst.fecha_corte_plan}."
     logo = logo_actual(inst.id)
