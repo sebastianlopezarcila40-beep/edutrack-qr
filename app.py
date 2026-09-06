@@ -2067,7 +2067,7 @@ class PreMatricula(db.Model):
 
 
 def html_anuncio_global():
-    """Modal institucional estilo PROCSIS (diseño corporativo con equipo).
+    """Modal institucional PROCSIS: título, texto e imágenes (sin bloque EL EQUIPO).
     Se muestra UNA vez por sesión de login; al cerrar con X no reaparece al navegar."""
     try:
         p = plataforma()
@@ -2081,13 +2081,10 @@ def html_anuncio_global():
             return ""
     except Exception:
         pass
-    titulo = _esc(getattr(p, "anuncio_titulo", None) or "¡Bienvenidos a la fase de evaluación de EduTrack!")
+    titulo = _esc(getattr(p, "anuncio_titulo", None) or "Aviso institucional EduTrack")
     cuerpo_raw = getattr(p, "anuncio_cuerpo", None) or (
-        "Estimada comunidad educativa, de la mano de PROCSIS y su dueño Sebastián López, nos complace "
-        "darles la bienvenida a la plataforma. Como empresa joven y tecnológica, nos encontramos "
-        "finalizando las evaluaciones técnicas para garantizar un entorno digital moderno, seguro y de "
-        "alta fidelidad. Durante este periodo, agradecemos reportar cualquier sugerencia o novedad "
-        "directamente al equipo de soporte técnico para continuar optimizando la experiencia."
+        "Estimada comunidad educativa, le informamos un aviso institucional de PROCSIS / EduTrack. "
+        "Si tiene dudas, comuniquese con soporte tecnico."
     )
     cuerpo = (
         cuerpo_raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
@@ -2099,94 +2096,56 @@ def html_anuncio_global():
         if src:
             imgs.append(src)
 
-    # Bloque visual izquierdo (foto del anuncio o ilustración corporativa)
+    # Imagenes: object-fit cover + object-position center (rostro centrado, sin estirar)
+    visual = ""
     if imgs:
-        visual = (
-            '<div style="position:relative;border-radius:14px;overflow:hidden;min-height:140px;'
-            'background:linear-gradient(135deg,#0B2D57 0%,#1e40af 60%,#38bdf8 100%)">'
-            '<img src="' + imgs[0] + '" alt="" style="width:100%;height:160px;object-fit:cover;display:block;opacity:.92">'
-            '<div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(11,45,87,.15),rgba(11,45,87,.55))"></div>'
-            "</div>"
-        )
-    else:
-        visual = (
-            '<div style="position:relative;border-radius:14px;overflow:hidden;min-height:150px;'
-            'background:linear-gradient(135deg,#0B2D57 0%,#1e3a8a 45%,#2563eb 100%);'
-            'display:flex;align-items:center;justify-content:center;padding:16px">'
-            '<div style="position:absolute;inset:0;opacity:.18;'
-            'background-image:radial-gradient(circle at 20% 30%,#fff 0 2px,transparent 3px),'
-            'radial-gradient(circle at 80% 70%,#fff 0 2px,transparent 3px);background-size:40px 40px"></div>'
-            '<div style="position:relative;z-index:1;color:#fff;text-align:center">'
-            '<div style="font-size:34px;line-height:1">🎓</div>'
-            '<div style="font-size:12px;font-weight:800;letter-spacing:.06em;margin-top:6px;opacity:.95">EDUTRACK · PROCSIS</div>'
-            '<div style="font-size:11px;opacity:.8;margin-top:4px">Innovación que gestiona</div>'
-            "</div></div>"
-        )
-
-    # Tarjeta EL EQUIPO (diseño del mockup)
-    equipo = (
-        '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px;'
-        'box-shadow:0 4px 16px rgba(15,23,42,.06)">'
-        '<div style="font-size:10px;letter-spacing:.12em;color:#64748b;font-weight:700">MEET THE TEAM</div>'
-        '<div style="font-size:15px;font-weight:800;color:#0B2D57;margin:2px 0 10px">EL EQUIPO</div>'
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 12px">'
-        # Fila 1
-        '<div style="display:flex;gap:8px;align-items:center">'
-        '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0B2D57,#2563eb);'
-        'color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">SL</div>'
-        '<div style="min-width:0"><div style="font-size:11px;font-weight:800;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Sebastián López</div>'
-        '<div style="font-size:10px;color:#64748b">Founder &amp; CEO</div></div></div>'
-        '<div style="display:flex;gap:8px;align-items:center">'
-        '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0f766e,#14b8a6);'
-        'color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">ST</div>'
-        '<div style="min-width:0"><div style="font-size:11px;font-weight:800;color:#0f172a">Soporte Técnico</div>'
-        '<div style="font-size:10px;color:#64748b">Mesa PROCSIS</div></div></div>'
-        '<div style="display:flex;gap:8px;align-items:center">'
-        '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1d4ed8,#60a5fa);'
-        'color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">DV</div>'
-        '<div style="min-width:0"><div style="font-size:11px;font-weight:800;color:#0f172a">Desarrollo</div>'
-        '<div style="font-size:10px;color:#64748b">EduTrack Core</div></div></div>'
-        '<div style="display:flex;gap:8px;align-items:center">'
-        '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#a78bfa);'
-        'color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">QA</div>'
-        '<div style="min-width:0"><div style="font-size:11px;font-weight:800;color:#0f172a">Calidad</div>'
-        '<div style="font-size:10px;color:#64748b">Pruebas y estabilidad</div></div></div>'
-        "</div></div>"
-    )
+        cards = []
+        for src in imgs[:2]:
+            cards.append(
+                '<div style="border-radius:14px;overflow:hidden;background:#0f172a;'
+                'aspect-ratio:4/3;max-height:280px;box-shadow:0 8px 24px rgba(15,23,42,.12)">'
+                '<img src="' + src + '" alt="Anuncio PROCSIS" '
+                'style="width:100%;height:100%;object-fit:cover;object-position:center top;'
+                'display:block;image-rendering:auto">'
+                "</div>"
+            )
+        if len(cards) == 1:
+            visual = '<div style="margin-top:12px">' + cards[0] + "</div>"
+        else:
+            visual = (
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">'
+                + "".join(cards)
+                + "</div>"
+            )
 
     cuenta_html = ""
     if cuenta:
         cuenta_html = (
-            '<div style="margin-top:12px;padding:12px 14px;background:#ecfdf5;border:1px solid #86efac;border-radius:12px">'
-            '<div style="font-size:11px;font-weight:800;color:#065f46;margin-bottom:4px">DATOS / CONTACTO</div>'
-            '<div style="font-size:14px;font-weight:700;color:#14532d">' + cuenta + "</div></div>"
+            '<p style="margin:0 0 10px;font-size:13px;color:#0B2D57;font-weight:600">'
+            + cuenta
+            + "</p>"
         )
 
     return (
         '<div id="anuncio-global" style="display:none;position:fixed;inset:0;z-index:100000;'
         "background:rgba(15,23,42,.55);backdrop-filter:blur(6px);align-items:center;justify-content:center;"
         'padding:16px;font-family:Segoe UI,Arial,sans-serif">'
-        '<div style="position:relative;max-width:720px;width:100%;background:#fff;border-radius:20px;'
+        '<div style="position:relative;max-width:680px;width:100%;background:#fff;border-radius:20px;'
         'box-shadow:0 28px 70px rgba(0,0,0,.28);overflow:hidden;max-height:92vh;overflow-y:auto">'
-        # Header azul
         '<div style="background:linear-gradient(90deg,#0B2D57 0%,#1e40af 55%,#2563eb 100%);'
         'color:#fff;padding:18px 56px 16px 22px;position:relative">'
         '<div style="font-size:11px;letter-spacing:.14em;opacity:.88;font-weight:600">PROCSIS · AVISO INSTITUCIONAL</div>'
         '<h2 style="margin:6px 0 0;font-size:22px;line-height:1.25;font-weight:800">' + titulo + "</h2>"
         '<button type="button" id="anuncio-cerrar" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;'
         "width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;"
-        'font-size:20px;font-weight:700;cursor:pointer;line-height:34px;backdrop-filter:blur(4px)">×</button>'
+        'font-size:20px;font-weight:700;cursor:pointer;line-height:34px">×</button>'
         "</div>"
-        # Cuerpo
-        '<div style="padding:18px 22px 10px;color:#1e293b;font-size:14.5px;line-height:1.6">'
-        + '<div style="margin-bottom:14px">' + cuerpo + "</div>"
+        '<div style="padding:18px 22px 14px;color:#1e293b;font-size:14.5px;line-height:1.6">'
+        + '<div style="margin-bottom:8px">' + cuerpo + "</div>"
         + cuenta_html
-        # Fila visual + equipo
-        + '<div style="display:grid;grid-template-columns:1.05fr 1fr;gap:14px;align-items:stretch;margin-top:6px">'
-        + visual + equipo
-        + "</div>"
-        + '<p style="margin:14px 0 6px;font-size:12px;color:#94a3b8;text-align:left">'
-        "Cierre con la X. No volverá a mostrarse hasta su próximo inicio de sesión.</p>"
+        + visual
+        + '<p style="margin:14px 0 6px;font-size:12px;color:#94a3b8">'
+        "Cierre con la X. No volvera a mostrarse hasta su proximo inicio de sesion.</p>"
         "</div></div></div>"
         '<script>(function(){var ver="' + ver + '";'
         'var el=document.getElementById("anuncio-global");if(!el)return;el.style.display="flex";'
@@ -2195,7 +2154,6 @@ def html_anuncio_global():
         'try{fetch("/anuncio/cerrar",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},'
         'body:"ver="+encodeURIComponent(ver),credentials:"same-origin"});}catch(e){}};'
         "})();</script>"
-        # Responsive: apilar en móvil
         "<style>@media(max-width:640px){#anuncio-global div[style*=grid-template-columns]{"
         "grid-template-columns:1fr!important}}</style>"
     )
