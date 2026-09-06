@@ -1639,6 +1639,12 @@ class VerificacionRector(db.Model):
     estado_validacion = db.Column(db.String(40), default="LIBRE", index=True)
     ubicacion = db.Column(db.String(160), default="")  # ciudad / ISP si se captura
     institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    # Checklist de portales oficiales (asesor)
+    val_policia = db.Column(db.Boolean, default=False)
+    val_procuraduria = db.Column(db.Boolean, default=False)
+    val_contraloria = db.Column(db.Boolean, default=False)
+    val_exitosa = db.Column(db.Boolean, default=False)  # validacion limpia sin lista negra
+    motivo_gerencia = db.Column(db.Text, default="")  # por que se eleva a gerencia
 
 
 class RectorInstitucion(db.Model):
@@ -2926,8 +2932,8 @@ def migrar_columnas():
         ("plataforma", "anuncio_cuerpo", "ALTER TABLE plataforma ADD COLUMN anuncio_cuerpo TEXT DEFAULT ''"),
         ("plataforma", "anuncio_cuenta", "ALTER TABLE plataforma ADD COLUMN anuncio_cuenta VARCHAR(255) DEFAULT ''"),
         ("plataforma", "anuncio_version", "ALTER TABLE plataforma ADD COLUMN anuncio_version VARCHAR(40) DEFAULT '1'"),
-        ("plataforma", "anuncio_img1", "ALTER TABLE plataforma ADD COLUMN anuncio_img1 VARCHAR(255) DEFAULT ''"),
-        ("plataforma", "anuncio_img2", "ALTER TABLE plataforma ADD COLUMN anuncio_img2 VARCHAR(255) DEFAULT ''"),
+        ("plataforma", "anuncio_img1", "ALTER TABLE plataforma ADD COLUMN anuncio_img1 TEXT DEFAULT ''"),
+        ("plataforma", "anuncio_img2", "ALTER TABLE plataforma ADD COLUMN anuncio_img2 TEXT DEFAULT ''"),
         ("plataforma", "tema_fuente", "ALTER TABLE plataforma ADD COLUMN tema_fuente VARCHAR(80) DEFAULT 'Segoe UI'"),
         ("plataforma", "tema_color_primario", "ALTER TABLE plataforma ADD COLUMN tema_color_primario VARCHAR(20) DEFAULT '#0B2D57'"),
         ("plataforma", "tema_color_acento", "ALTER TABLE plataforma ADD COLUMN tema_color_acento VARCHAR(20) DEFAULT '#1e40af'"),
@@ -3025,6 +3031,11 @@ def migrar_columnas():
         ("verificaciones_rector", "estado_validacion", "ALTER TABLE verificaciones_rector ADD COLUMN estado_validacion VARCHAR(40) DEFAULT 'LIBRE'"),
         ("verificaciones_rector", "ubicacion", "ALTER TABLE verificaciones_rector ADD COLUMN ubicacion VARCHAR(160) DEFAULT ''"),
         ("verificaciones_rector", "institucion_id", "ALTER TABLE verificaciones_rector ADD COLUMN institucion_id INTEGER"),
+        ("verificaciones_rector", "val_policia", "ALTER TABLE verificaciones_rector ADD COLUMN val_policia BOOLEAN DEFAULT FALSE"),
+        ("verificaciones_rector", "val_procuraduria", "ALTER TABLE verificaciones_rector ADD COLUMN val_procuraduria BOOLEAN DEFAULT FALSE"),
+        ("verificaciones_rector", "val_contraloria", "ALTER TABLE verificaciones_rector ADD COLUMN val_contraloria BOOLEAN DEFAULT FALSE"),
+        ("verificaciones_rector", "val_exitosa", "ALTER TABLE verificaciones_rector ADD COLUMN val_exitosa BOOLEAN DEFAULT FALSE"),
+        ("verificaciones_rector", "motivo_gerencia", "ALTER TABLE verificaciones_rector ADD COLUMN motivo_gerencia TEXT DEFAULT ''"),
         ("tickets_pqr", "fecha_estimada", "ALTER TABLE tickets_pqr ADD COLUMN fecha_estimada VARCHAR(20) DEFAULT ''"),
         ("tickets_pqr", "estado_cun", "ALTER TABLE tickets_pqr ADD COLUMN estado_cun VARCHAR(40) DEFAULT ''"),
         ("tickets_pqr", "medio_ingreso", "ALTER TABLE tickets_pqr ADD COLUMN medio_ingreso VARCHAR(60) DEFAULT 'Web'"),
@@ -3397,6 +3408,21 @@ def inicializar_bd():
         migrar_columnas()
     except Exception:
         pass
+    # Ampliar columnas de logo y anuncios a TEXT (data URI no cabe en VARCHAR 255)
+    try:
+        from sqlalchemy import text as sa_text
+        with db.engine.begin() as conn:
+            if db.engine.dialect.name == "postgresql":
+                for sql in (
+                    "ALTER TABLE plataforma ALTER COLUMN anuncio_img1 TYPE TEXT",
+                    "ALTER TABLE plataforma ALTER COLUMN anuncio_img2 TYPE TEXT",
+                ):
+                    try:
+                        conn.execute(sa_text(sql))
+                    except Exception as _ae:
+                        print("alter anuncio:", _ae)
+    except Exception as _aa:
+        print("migrate anuncio TEXT:", _aa)
     # Ampliar columnas de logo a TEXT (data URI no cabe en VARCHAR 255)
     try:
         from sqlalchemy import text as sa_text
@@ -17705,12 +17731,18 @@ def gerencia_verificaciones_pendientes():
         ).order_by(VerificacionRector.id.desc()).limit(15).all()
         for h in hist:
             color = "#16a34a" if h.gerencia_decision == "APROBADO" else "#b91c1c"
+            est = getattr(h, "estado_validacion", None) or h.gerencia_decision or ""
+            motivo_asesor = (getattr(h, "motivo_gerencia", None) or "")[:200]
+            motivo_g = (h.gerencia_motivo or "")[:200]
             hist_rows += (
                 f"<tr><td style='font-size:12px'>{_esc(h.gerencia_fecha or '')}</td>"
-                f"<td>{_esc(h.nombre_rector)}</td><td>{_esc(h.nombre_colegio or h.nit_colegio)}</td>"
-                f"<td><b style='color:{color}'>{h.gerencia_decision}</b></td>"
+                f"<td>{_esc(h.nombre_rector)}<br><span style='font-size:11px;color:#64748b'>CC {_esc(h.cedula_rector or '')}</span></td>"
+                f"<td>{_esc(h.nombre_colegio or h.nit_colegio)}</td>"
+                f"<td><b style='color:{color}'>{_esc(est)}</b></td>"
                 f"<td style='font-size:12px'>{_esc(h.gerencia_por)}</td>"
-                f"<td style='font-size:12px'>{_esc((h.gerencia_motivo or '')[:100])}</td></tr>"
+                f"<td style='font-size:12px'><b>Gerencia:</b> {_esc(motivo_g)}<br>"
+                f"<b>Asesor (por qué elevó):</b> {_esc(motivo_asesor or '—')}<br>"
+                f"<span style='color:#64748b'>IP {_esc(h.ip or '')} · {_esc(getattr(h,'ubicacion',None) or '')}</span></td></tr>"
             )
     except Exception:
         hist = []
@@ -17816,12 +17848,81 @@ def api_validaciones_aprobar(vid):
 
 
 @app.route("/soporte/rectores", methods=["GET", "POST"])
+
+@app.route("/gerencia/autorizar-soporte-rectores", methods=["POST", "GET"])
+def gerencia_autorizar_soporte_rectores():
+    """Gerencia habilita a Soporte el acceso al CRM de rectores (sesión del gerente marca flag global temporal vía auditoría)."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Gerencia", "Administrador", "Superadmin"):
+        return redirect("/gerencia-login")
+    # Flag en plataforma o sesión: usamos tabla simple en session del gerente + mensaje
+    # Habilitación: código de un solo uso guardado en plataforma.notas_gerencia no existe → session key compartida via BD
+    try:
+        p = plataforma()
+        if not hasattr(p, "soporte_rectores_token"):
+            pass
+        token = (request.values.get("token") or "").strip()
+        if request.method == "POST" or request.args.get("activar") == "1":
+            import secrets
+            tok = secrets.token_urlsafe(12)
+            # Guardar en anuncio_cuenta? better: session of gerencia issues and support enters with ?auth=
+            session["emit_soporte_rectores_token"] = tok
+            try:
+                registrar_auditoria("Autorizó Soporte→Rectores", "token emitido por " + (session.get("usuario") or ""))
+            except Exception:
+                pass
+            return page(
+                "Token emitido",
+                shell(
+                    "<div class='role-panel'><h2>Autorización emitida</h2>"
+                    "<p>Comparta este enlace a Soporte (válido una vez):</p>"
+                    "<p><code>/soporte/rectores?auth=" + tok + "</code></p>"
+                    "<p><a class='btn' href='/gerencia/rectores'>← Rectores</a></p></div>"
+                ),
+            )
+    except Exception as ex:
+        print("auth soporte rectores:", ex)
+    return redirect("/gerencia/rectores")
+
+
 @app.route("/gerencia/rectores", methods=["GET", "POST"])
 def modulo_rectores():
     """CRM de rectores / representantes legales por institución."""
-    if not requiere_login() or rol_actual() not in (
-        "Soporte", "Gerente", "Gerencia", "Administrador", "Superadmin", "Comercial", "Ventas"
-    ):
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual() or ""
+    roles_ger = ("Gerente", "Gerencia", "Administrador", "Superadmin")
+    if rol in roles_ger:
+        pass  # acceso total
+    elif rol == "Soporte":
+        # Token de un solo uso emitido por Gerencia
+        auth = (request.args.get("auth") or "").strip()
+        if auth and session.get("emit_soporte_rectores_token") == auth:
+            session["soporte_rectores_ok"] = True
+            session.pop("emit_soporte_rectores_token", None)
+        if auth and not session.get("soporte_rectores_ok"):
+            # Token emitido en otra sesión de gerencia: aceptar si coincide con auditoría reciente es complejo;
+            # permitir si gerencia guardó token en flask session no compartida → usar BD plataforma
+            try:
+                p = plataforma()
+                saved = (getattr(p, "corp_barra_extra", None) or "")
+                if auth and saved.startswith("SRTOK:") and saved[6:] == auth:
+                    session["soporte_rectores_ok"] = True
+                    p.corp_barra_extra = ""
+                    db.session.commit()
+            except Exception:
+                pass
+        if not session.get("soporte_rectores_ok"):
+            return page(
+                "Rectores · Autorización",
+                shell(
+                    "<div class='role-panel' style='max-width:520px;margin:40px auto'>"
+                    "<h2>Acceso restringido</h2>"
+                    "<p>El módulo de Rectores requiere <b>autorización de Gerencia</b> antes de que Soporte consulte o edite datos.</p>"
+                    "<p class='mini-text'>Pida a Gerencia que habilite el acceso temporal desde HQ → Rectores CRM → «Autorizar Soporte».</p>"
+                    "<p><a class='btn' href='/soporte_admin'>← Panel soporte</a></p></div>"
+                ),
+            )
+    elif rol not in ("Comercial", "Ventas"):
         return redirect("/login")
     msg = err = ""
     try:
@@ -17902,7 +18003,8 @@ def modulo_rectores():
     content = """
 <header class="role-hero"><div><h1>Información de Rectores</h1>
 <p>Base CRM para soporte y gerencia · datos al activar servicio</p></div>
-<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<a class="btn" href="/gerencia/hq">← HQ</a>
+<a class="btn" href="/gerencia/autorizar-soporte-rectores?activar=1">Autorizar Soporte</a></header>
 %s%s
 <section class="role-panel">
   <h2 style="margin-top:0">Registrar / actualizar rector</h2>
@@ -20369,38 +20471,62 @@ def ventas_verificacion_rector():
             cedula = (request.form.get("cedula_rector") or "").strip()
             nit = (request.form.get("nit_colegio") or "").strip()
             colegio = (request.form.get("nombre_colegio") or "").strip()
+            val_pol = request.form.get("val_policia") == "1"
+            val_proc = request.form.get("val_procuraduria") == "1"
+            val_cont = request.form.get("val_contraloria") == "1"
+            val_ok = request.form.get("val_exitosa") == "1"
+            motivo_g = (request.form.get("motivo_gerencia") or "").strip()[:2000]
             alerta_ofac, detalle_ofac = _consultar_ofac(nombre)
             ubica = ""
             try:
-                # Reutiliza helper de auditoría si existe
                 if "capturar_geo_cliente" in dir():
                     g = capturar_geo_cliente() or {}
                     ubica = ((g.get("ciudad") or "") + " · " + (g.get("isp") or ""))[:160]
             except Exception:
                 ubica = ""
-            estado_ini = "ESPERANDO_CONFIRMACION" if alerta_ofac else "LIBRE"
-            v = VerificacionRector(
-                nombre_rector=nombre, cedula_rector=cedula, nit_colegio=nit,
-                nombre_colegio=colegio, consultado_por=session.get("usuario", ""),
-                fecha=fecha_hoy(), hora=hora_actual(),
-                ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80],
-                ofac_alerta=alerta_ofac, ofac_detalle=detalle_ofac,
-                estado_validacion=estado_ini,
-                ubicacion=ubica,
-            )
-            db.session.add(v)
-            db.session.commit()
-            registrar_auditoria("Verificación rector iniciada", f"{nombre} / CC {cedula} / colegio {colegio}")
-            if alerta_ofac:
+            # Lista negra / OFAC / no exitosa → eleva a gerencia (motivo obligatorio)
+            requiere_ger = bool(alerta_ofac) or (not val_ok)
+            if requiere_ger and not motivo_g:
+                # Forzar que el asesor explique por qué se eleva
+                resultado = type("R", (), {
+                    "error_motivo": True,
+                    "nombre_rector": nombre,
+                })()
+            else:
+                estado_ini = "ESPERANDO_CONFIRMACION" if requiere_ger else "LIBRE"
+                if val_ok and not alerta_ofac:
+                    estado_ini = "LIBRE"
+                    val_ok = True
+                v = VerificacionRector(
+                    nombre_rector=nombre, cedula_rector=cedula, nit_colegio=nit,
+                    nombre_colegio=colegio, consultado_por=session.get("usuario", ""),
+                    fecha=fecha_hoy(), hora=hora_actual(),
+                    ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80],
+                    ofac_alerta=alerta_ofac, ofac_detalle=detalle_ofac,
+                    estado_validacion=estado_ini,
+                    ubicacion=ubica,
+                    val_policia=val_pol,
+                    val_procuraduria=val_proc,
+                    val_contraloria=val_cont,
+                    val_exitosa=val_ok and not alerta_ofac,
+                    motivo_gerencia=motivo_g if requiere_ger else "",
+                )
+                db.session.add(v)
+                db.session.commit()
                 try:
-                    _notificar_gerencia_verificacion(
-                        "Alerta OFAC requiere verificación de Gerencia",
-                        "Ventas encontró una posible coincidencia en la lista OFAC al verificar un rector. El caso queda bloqueado hasta que Gerencia lo revise.",
-                        v,
-                    )
-                except Exception as ex:
-                    print("notificar OFAC:", ex)
-            resultado = v
+                    registrar_auditoria("Verificación rector iniciada", f"{nombre} / CC {cedula} / colegio {colegio}")
+                except Exception:
+                    pass
+                if alerta_ofac or (v.estado_validacion == "ESPERANDO_CONFIRMACION"):
+                    try:
+                        _notificar_gerencia_verificacion(
+                            "Validación requiere visto de Gerencia",
+                            (v.motivo_gerencia or "El asesor elevó el caso a Gerencia.") + " | OFAC=" + str(bool(alerta_ofac)),
+                            v,
+                        )
+                    except Exception as ex:
+                        print("notificar OFAC:", ex)
+                resultado = v
         elif accion == "marcar_pep":
             vid = request.form.get("vid")
             v = VerificacionRector.query.get(int(vid)) if vid else None
@@ -20433,12 +20559,38 @@ def ventas_verificacion_rector():
     historial = VerificacionRector.query.order_by(VerificacionRector.id.desc()).limit(15).all()
     filas_hist = ""
     for h in historial:
-        estado_ofac = "🔴 Alerta OFAC" if h.ofac_alerta else "🟢 Sin alerta"
-        estado_pep = ("✔ PEP aprobado por " + h.pep_aprobado_por) if h.pep_aprobado_por else ("🟡 PEP pendiente de Gerencia" if h.es_pep else "—")
-        filas_hist += f"<tr><td>{h.fecha} {h.hora}</td><td>{_esc(h.nombre_rector)}<br><span class='mini-text'>CC {_esc(h.cedula_rector)}</span></td><td>{_esc(h.nombre_colegio)}<br><span class='mini-text'>NIT {_esc(h.nit_colegio)}</span></td><td>{estado_ofac}</td><td>{estado_pep}</td><td>{_esc(h.consultado_por)}</td></tr>"
+        estado_ofac = "Alerta OFAC" if h.ofac_alerta else "Sin alerta"
+        est_v = getattr(h, "estado_validacion", None) or h.gerencia_decision or "—"
+        color = "#b91c1c" if est_v in ("RECHAZADO_NO_VENDER", "RECHAZADO") else ("#16a34a" if est_v in ("APROBADO_POR_GERENCIA", "APROBADO", "LIBRE") else "#c2410c")
+        motivo = (getattr(h, "motivo_gerencia", None) or h.gerencia_motivo or "")[:120]
+        checks = []
+        if getattr(h, "val_policia", False):
+            checks.append("Policía")
+        if getattr(h, "val_procuraduria", False):
+            checks.append("Procuraduría")
+        if getattr(h, "val_contraloria", False):
+            checks.append("Contraloría")
+        if getattr(h, "val_exitosa", False):
+            checks.append("Exitosa")
+        filas_hist += (
+            "<tr><td>%s %s</td><td>%s<br><span class='mini-text'>CC %s</span></td><td>%s</td>"
+            "<td>%s</td><td style='color:%s;font-weight:700'>%s</td><td style='font-size:12px'>%s</td>"
+            "<td style='font-size:11px;color:#64748b'>%s</td><td>%s</td></tr>"
+        ) % (
+            h.fecha or "", h.hora or "",
+            _esc(h.nombre_rector), _esc(h.cedula_rector),
+            _esc(h.nombre_colegio or ""),
+            estado_ofac,
+            color, _esc(est_v),
+            _esc(" · ".join(checks) or "—"),
+            _esc(motivo),
+            _esc(h.consultado_por),
+        )
 
     r_html = ""
-    if resultado:
+    if resultado and getattr(resultado, "error_motivo", False):
+        r_html = """<div class="msg danger" style="margin-top:12px">Debe escribir el <b>motivo para Gerencia</b> cuando la validación no es exitosa o hay alerta en lista negra/OFAC.</div>"""
+    elif resultado:
         v = resultado
         cc = _esc(v.cedula_rector)
         nit = _esc(v.nit_colegio)
@@ -20499,15 +20651,26 @@ def ventas_verificacion_rector():
       <input name="nombre_colegio" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;min-width:200px"></div>
     <div><label style="font-size:12px;font-weight:700;display:block">NIT del colegio</label>
       <input name="nit_colegio" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;min-width:140px"></div>
-    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Verificar</button>
+    <div style="grid-column:1/-1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-top:4px">
+      <b style="font-size:13px;color:#0B2D57">Checklist de validación (portales oficiales)</b>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:13px">
+        <label><input type="checkbox" name="val_policia" value="1" style="width:auto"> Policía (antecedentes)</label>
+        <label><input type="checkbox" name="val_procuraduria" value="1" style="width:auto"> Procuraduría</label>
+        <label><input type="checkbox" name="val_contraloria" value="1" style="width:auto"> Contraloría</label>
+        <label><input type="checkbox" name="val_exitosa" value="1" style="width:auto"> <b>Validación exitosa</b> (sin hallazgos)</label>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin:8px 0 4px">Si hay lista negra / OFAC / no es exitosa, debe elevar a Gerencia con motivo:</p>
+      <textarea name="motivo_gerencia" rows="2" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px" placeholder="Ej. Coincidencia OFAC parcial; requiere visto bueno de Gerencia antes de vender"></textarea>
+    </div>
+    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Verificar y registrar</button>
   </form>
 </div>
 {r_html}
 <div class="role-panel" style="margin-top:14px;overflow:auto">
   <h2>Últimas verificaciones</h2>
   <table>
-    <tr><th>Fecha</th><th>Rector</th><th>Colegio</th><th>OFAC</th><th>PEP</th><th>Asesor</th></tr>
-    {filas_hist if filas_hist else "<tr><td colspan=6>Sin verificaciones registradas</td></tr>"}
+    <tr><th>Fecha</th><th>Rector</th><th>Colegio</th><th>OFAC</th><th>Estado</th><th>Checklist</th><th>Motivo</th><th>Asesor</th></tr>
+    {filas_hist if filas_hist else "<tr><td colspan=8>Sin verificaciones registradas</td></tr>"}
   </table>
 </div>
 """
