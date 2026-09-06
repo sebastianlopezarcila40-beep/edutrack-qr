@@ -17579,8 +17579,19 @@ def gerencia_verificaciones_pendientes():
             vid = 0
         motivo = (request.form.get("motivo") or "").strip()[:800]
         v = VerificacionRector.query.get(vid) if vid else None
-        if not v:
+        if not v and accion != "eliminar_hist_masivo":
             error = "Registro no encontrado."
+        elif accion == "eliminar":
+            try:
+                registrar_auditoria(
+                    "Eliminó validación venta",
+                    "vid=%s rector=%s decision=%s" % (vid, getattr(v, "nombre_rector", ""), getattr(v, "gerencia_decision", "")),
+                )
+            except Exception:
+                pass
+            db.session.delete(v)
+            db.session.commit()
+            mensaje = "Registro eliminado del historial."
         elif accion in ("aprobar_venta", "rechazar_venta"):
             quien = session.get("usuario") or "gerencia"
             ahora_txt = f"{fecha_hoy()} {hora_actual()}"
@@ -17700,7 +17711,14 @@ def gerencia_verificaciones_pendientes():
                 f"<td style='font-size:12px'>{_esc(h.gerencia_por)}</td>"
                 f"<td style='font-size:12px'><b>Gerencia:</b> {_esc(motivo_g)}<br>"
                 f"<b>Asesor (por qué elevó):</b> {_esc(motivo_asesor or '—')}<br>"
-                f"<span style='color:#64748b'>IP {_esc(h.ip or '')} · {_esc(getattr(h,'ubicacion',None) or '')}</span></td></tr>"
+                f"<span style='color:#64748b'>IP {_esc(h.ip or '')} · {_esc(getattr(h,'ubicacion',None) or '')}</span>"
+                f"<div style='margin-top:6px'>"
+                f"<a class='btn' style='font-size:11px;padding:4px 8px' href='/gerencia/validaciones/{h.id}/pdf-rechazo'>PDF decisión</a> "
+                f"<form method='POST' style='display:inline' onsubmit='return confirm(&quot;Eliminar este registro?&quot;)'>"
+                f"<input type='hidden' name='vid' value='{h.id}'>"
+                f"<input type='hidden' name='accion' value='eliminar'>"
+                f"<button type='submit' style='font-size:11px;padding:4px 8px;background:#b91c1c;color:#fff;border:0;border-radius:6px;cursor:pointer'>Eliminar</button>"
+                f"</form></div></td></tr>"
             )
     except Exception:
         hist = []
@@ -17746,6 +17764,108 @@ def gerencia_verificaciones_pendientes():
 </section>
 """
     return page("Autorización ventas PEP/OFAC", shell(content))
+
+
+
+@app.route("/gerencia/validaciones/<int:vid>/pdf-rechazo")
+def gerencia_validacion_pdf_rechazo(vid):
+    """PDF formal del por qué se aprobó o rechazó la venta."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Gerencia", "Administrador", "Superadmin"):
+        return redirect("/gerencia-login")
+    v = VerificacionRector.query.get_or_404(vid)
+    try:
+        registrar_auditoria("PDF decisión venta", "vid=%s" % vid)
+    except Exception:
+        pass
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
+        import io as _io
+        buf = _io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=letter)
+        w, h = letter
+        y = h - 2 * cm
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(2 * cm, y, "PROCSIS · Registro de decisión comercial (PEP / OFAC / validación)")
+        y -= 0.7 * cm
+        c.setFont("Helvetica", 10)
+        c.drawString(2 * cm, y, "Emitido: %s %s | Por consulta de: %s" % (fecha_hoy(), hora_actual(), session.get("usuario") or ""))
+        y -= 1 * cm
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(2 * cm, y, "1. Identidad validada")
+        y -= 0.5 * cm
+        c.setFont("Helvetica", 10)
+        for line in (
+            "Rector / solicitante: %s" % (v.nombre_rector or ""),
+            "Documento: %s" % (v.cedula_rector or ""),
+            "Colegio: %s | NIT: %s" % (v.nombre_colegio or "", v.nit_colegio or ""),
+            "Asesor ventas: %s | Fecha consulta: %s %s" % (v.consultado_por or "", v.fecha or "", v.hora or ""),
+            "IP asesor: %s | Ubicación: %s" % (v.ip or "", getattr(v, "ubicacion", "") or ""),
+        ):
+            c.drawString(2 * cm, y, line[:100])
+            y -= 0.45 * cm
+        y -= 0.3 * cm
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(2 * cm, y, "2. Checklist y notas de Ventas")
+        y -= 0.5 * cm
+        c.setFont("Helvetica", 10)
+        checks = []
+        if getattr(v, "val_policia", False):
+            checks.append("Policía OK")
+        if getattr(v, "val_procuraduria", False):
+            checks.append("Procuraduría OK")
+        if getattr(v, "val_contraloria", False):
+            checks.append("Contraloría OK")
+        if getattr(v, "val_exitosa", False):
+            checks.append("Validación exitosa")
+        if v.ofac_alerta:
+            checks.append("ALERTA OFAC")
+        if v.es_pep:
+            checks.append("Marcado PEP")
+        c.drawString(2 * cm, y, "Checks: %s" % (", ".join(checks) if checks else "—"))
+        y -= 0.5 * cm
+        motivo_a = (getattr(v, "motivo_gerencia", None) or "—")
+        # wrap text
+        c.drawString(2 * cm, y, "Motivo del asesor (por qué elevó a Gerencia):")
+        y -= 0.45 * cm
+        for i in range(0, min(len(motivo_a), 360), 90):
+            c.drawString(2.3 * cm, y, motivo_a[i : i + 90])
+            y -= 0.4 * cm
+        if v.ofac_detalle:
+            y -= 0.2 * cm
+            c.drawString(2 * cm, y, "Detalle OFAC: %s" % (v.ofac_detalle or "")[:90])
+            y -= 0.45 * cm
+        y -= 0.3 * cm
+        c.setFont("Helvetica-Bold", 11)
+        est = getattr(v, "estado_validacion", None) or v.gerencia_decision or "—"
+        c.drawString(2 * cm, y, "3. Decisión de Gerencia: %s" % est)
+        y -= 0.5 * cm
+        c.setFont("Helvetica", 10)
+        c.drawString(2 * cm, y, "Decidido por: %s | Fecha: %s" % (v.gerencia_por or "", v.gerencia_fecha or ""))
+        y -= 0.5 * cm
+        motivo_g = v.gerencia_motivo or "—"
+        c.drawString(2 * cm, y, "Fundamento / respuesta formal:")
+        y -= 0.45 * cm
+        for i in range(0, min(len(motivo_g), 450), 90):
+            c.drawString(2.3 * cm, y, motivo_g[i : i + 90])
+            y -= 0.4 * cm
+        y -= 0.8 * cm
+        c.setFont("Helvetica", 8)
+        c.drawString(2 * cm, y, "Documento de uso interno PROCSIS · Ley 1581 de 2012 · No constituye autorización de venta si el estado es RECHAZADO.")
+        c.showPage()
+        c.save()
+        from flask import Response
+        return Response(
+            buf.getvalue(),
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": "attachment; filename=decision_venta_%s.pdf" % vid,
+                "Cache-Control": "no-store",
+            },
+        )
+    except Exception as ex:
+        return page("Error", shell("<p>%s</p><a href='/gerencia/verificaciones-pendientes'>Volver</a>" % _esc(str(ex)[:150])))
 
 
 
@@ -18074,6 +18194,9 @@ def modulo_rectores():
             "<td>" + _esc(r.telefono or "") + "</td>"
             "<td>" + _esc(r.correo or "") + "</td>"
             "<td style='font-size:12px'>" + _esc(r.actualizado_en or r.creado_en or "") + "</td>"
+            "<td style='white-space:nowrap;font-size:12px'>"
+            "<a href='/gerencia/rectores/" + str(r.id) + "/pdf'>PDF</a> · "
+            "<a href='/gerencia/rectores/" + str(r.id) + "/excel'>Excel</a></td>"
             "</tr>"
         )
     if not filas:
@@ -18129,11 +18252,191 @@ def modulo_rectores():
         "<button>Buscar</button></form>"
         '<table style="width:100%;border-collapse:collapse;font-size:13px">'
         '<tr style="background:#0B2D57;color:#fff">'
-        "<th>Colegio</th><th>Rector</th><th>Identificación</th><th>Teléfono</th><th>Correo</th><th>Actualizado</th></tr>"
+        "<th>Colegio</th><th>Rector</th><th>Identificación</th><th>Teléfono</th>"
+        "<th>Correo</th><th>Actualizado</th><th>Descarga</th></tr>"
         + "".join(filas)
         + "</table></section>"
     )
     return page("Rectores CRM", shell(content))
+
+
+@app.route("/gerencia/rectores/<int:rid>/pdf", methods=["GET", "POST"])
+@app.route("/soporte/rectores/<int:rid>/pdf", methods=["GET", "POST"])
+def rector_descarga_pdf(rid):
+    """PDF individual del rector + institución. Exige motivo y para quién."""
+    if not requiere_login() or rol_actual() not in (
+        "Gerente", "Gerencia", "Administrador", "Superadmin", "Soporte", "Comercial", "Ventas"
+    ):
+        return redirect("/login")
+    if rol_actual() == "Soporte" and not session.get("soporte_rectores_ok"):
+        return redirect("/soporte/rectores")
+    r = RectorInstitucion.query.get_or_404(rid)
+    inst = Institucion.query.get(r.institucion_id)
+    if request.method == "GET":
+        content = (
+            '<div class="role-panel" style="max-width:520px;margin:24px auto">'
+            "<h2>Descargar ficha rector (PDF)</h2>"
+            "<p><b>" + _esc((r.nombres or "") + " " + (r.apellidos or "")) + "</b><br>"
+            + _esc(inst.nombre if inst else "") + "</p>"
+            '<form method="POST">'
+            '<label><b>Motivo *</b></label><input name="motivo" required style="width:100%;margin-bottom:8px">'
+            '<label><b>Para quién *</b></label><input name="para_quien" required style="width:100%;margin-bottom:8px">'
+            '<button type="submit">Generar PDF</button> '
+            '<a class="btn" href="/gerencia/rectores">Cancelar</a></form></div>'
+        )
+        return page("PDF rector", shell(content))
+    motivo = (request.form.get("motivo") or "").strip()
+    para = (request.form.get("para_quien") or "").strip()
+    if not motivo or not para:
+        return redirect(request.path)
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+    try:
+        registrar_auditoria(
+            "Descarga PDF rector",
+            "rid=%s motivo=%s para=%s ip=%s por=%s"
+            % (rid, motivo[:150], para[:80], ip, session.get("usuario") or ""),
+        )
+    except Exception:
+        pass
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
+        import io as _io
+        buf = _io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=letter)
+        w, h = letter
+        y = h - 2 * cm
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(2 * cm, y, "PROCSIS · EduTrack — Ficha de Rector")
+        y -= 0.8 * cm
+        c.setFont("Helvetica", 10)
+        c.drawString(2 * cm, y, "Documento emitido: %s %s" % (fecha_hoy(), hora_actual()))
+        y -= 0.5 * cm
+        c.drawString(2 * cm, y, "Solicitado por: %s | Para: %s" % (session.get("usuario") or "", para[:60]))
+        y -= 0.5 * cm
+        c.drawString(2 * cm, y, "Motivo: %s" % motivo[:90])
+        y -= 0.5 * cm
+        c.drawString(2 * cm, y, "IP: %s" % ip)
+        y -= 1 * cm
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(2 * cm, y, "Institución")
+        y -= 0.6 * cm
+        c.setFont("Helvetica", 10)
+        for line in (
+            "Nombre: %s" % ((inst.nombre if inst else "") or "—"),
+            "Código: %s | Estado: %s" % ((inst.codigo if inst else ""), (inst.estado if inst else "")),
+            "NIT: %s | DANE: %s" % (getattr(inst, "nit", "") if inst else "", getattr(inst, "dane", "") if inst else ""),
+            "Municipio: %s | Depto: %s" % (getattr(inst, "municipio", "") if inst else "", getattr(inst, "departamento", "") if inst else ""),
+            "Dirección sede: %s" % (getattr(inst, "direccion", "") if inst else ""),
+        ):
+            c.drawString(2 * cm, y, line[:95])
+            y -= 0.45 * cm
+        y -= 0.4 * cm
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(2 * cm, y, "Representante legal / Rector")
+        y -= 0.6 * cm
+        c.setFont("Helvetica", 10)
+        for line in (
+            "Nombres: %s" % (r.nombres or ""),
+            "Apellidos: %s" % (r.apellidos or ""),
+            "Identificación: %s %s" % (r.tipo_id or "", r.numero_id or ""),
+            "Dirección: %s" % (r.direccion or ""),
+            "Teléfono: %s" % (r.telefono or ""),
+            "Correo: %s" % (r.correo or ""),
+            "Actualizado: %s" % (r.actualizado_en or r.creado_en or ""),
+        ):
+            c.drawString(2 * cm, y, line[:95])
+            y -= 0.45 * cm
+        y -= 1 * cm
+        c.setFont("Helvetica", 8)
+        c.drawString(2 * cm, y, "Ley 1581 de 2012 · Uso interno PROCSIS · No redistribuir sin autorización")
+        c.showPage()
+        c.save()
+        from flask import Response
+        return Response(
+            buf.getvalue(),
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": "attachment; filename=rector_%s.pdf" % rid,
+                "Cache-Control": "no-store",
+            },
+        )
+    except Exception as ex:
+        return page("Error PDF", shell("<p>No se pudo generar PDF: %s</p><a href='/gerencia/rectores'>Volver</a>" % _esc(str(ex)[:120])))
+
+
+@app.route("/gerencia/rectores/<int:rid>/excel", methods=["GET", "POST"])
+@app.route("/soporte/rectores/<int:rid>/excel", methods=["GET", "POST"])
+def rector_descarga_excel(rid):
+    """Excel/CSV individual del rector."""
+    if not requiere_login() or rol_actual() not in (
+        "Gerente", "Gerencia", "Administrador", "Superadmin", "Soporte", "Comercial", "Ventas"
+    ):
+        return redirect("/login")
+    if rol_actual() == "Soporte" and not session.get("soporte_rectores_ok"):
+        return redirect("/soporte/rectores")
+    r = RectorInstitucion.query.get_or_404(rid)
+    inst = Institucion.query.get(r.institucion_id)
+    if request.method == "GET":
+        content = (
+            '<div class="role-panel" style="max-width:520px;margin:24px auto">'
+            "<h2>Descargar ficha rector (Excel/CSV)</h2>"
+            "<p><b>" + _esc((r.nombres or "") + " " + (r.apellidos or "")) + "</b></p>"
+            '<form method="POST">'
+            '<label><b>Motivo *</b></label><input name="motivo" required style="width:100%;margin-bottom:8px">'
+            '<label><b>Para quién *</b></label><input name="para_quien" required style="width:100%;margin-bottom:8px">'
+            '<button type="submit">Descargar</button> '
+            '<a class="btn" href="/gerencia/rectores">Cancelar</a></form></div>'
+        )
+        return page("Excel rector", shell(content))
+    motivo = (request.form.get("motivo") or "").strip()
+    para = (request.form.get("para_quien") or "").strip()
+    if not motivo or not para:
+        return redirect(request.path)
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+    try:
+        registrar_auditoria(
+            "Descarga Excel rector",
+            "rid=%s motivo=%s para=%s ip=%s" % (rid, motivo[:150], para[:80], ip),
+        )
+    except Exception:
+        pass
+    import csv
+    import io as _io
+    buf = _io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["campo", "valor"])
+    rows = [
+        ("institucion_id", r.institucion_id),
+        ("colegio", inst.nombre if inst else ""),
+        ("codigo", inst.codigo if inst else ""),
+        ("estado", inst.estado if inst else ""),
+        ("nombres", r.nombres or ""),
+        ("apellidos", r.apellidos or ""),
+        ("tipo_id", r.tipo_id or ""),
+        ("numero_id", r.numero_id or ""),
+        ("direccion", r.direccion or ""),
+        ("telefono", r.telefono or ""),
+        ("correo", r.correo or ""),
+        ("actualizado", r.actualizado_en or r.creado_en or ""),
+        ("motivo_descarga", motivo),
+        ("para_quien", para),
+        ("descargado_por", session.get("usuario") or ""),
+        ("fecha_descarga", fecha_hoy() + " " + hora_actual()),
+        ("ip", ip),
+    ]
+    for a, b in rows:
+        w.writerow([a, b])
+    from flask import Response
+    return Response(
+        "\ufeff" + buf.getvalue(),
+        mimetype="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=rector_%s.csv" % rid,
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 
