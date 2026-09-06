@@ -17844,22 +17844,19 @@ def gerencia_autorizar_soporte_rectores():
 
 @app.route("/gerencia/rectores", methods=["GET", "POST"])
 def modulo_rectores():
-    """CRM de rectores / representantes legales por institución."""
+    """CRM de rectores: lista desde BD (colegios + ficha rector) y descarga auditada."""
     if not requiere_login():
         return redirect("/login")
     rol = rol_actual() or ""
     roles_ger = ("Gerente", "Gerencia", "Administrador", "Superadmin")
     if rol in roles_ger:
-        pass  # acceso total
+        pass
     elif rol == "Soporte":
-        # Token de un solo uso emitido por Gerencia
         auth = (request.args.get("auth") or "").strip()
         if auth and session.get("emit_soporte_rectores_token") == auth:
             session["soporte_rectores_ok"] = True
             session.pop("emit_soporte_rectores_token", None)
         if auth and not session.get("soporte_rectores_ok"):
-            # Token emitido en otra sesión de gerencia: aceptar si coincide con auditoría reciente es complejo;
-            # permitir si gerencia guardó token en flask session no compartida → usar BD plataforma
             try:
                 p = plataforma()
                 saved = (getattr(p, "corp_barra_extra", None) or "")
@@ -17875,127 +17872,269 @@ def modulo_rectores():
                 shell(
                     "<div class='role-panel' style='max-width:520px;margin:40px auto'>"
                     "<h2>Acceso restringido</h2>"
-                    "<p>El módulo de Rectores requiere <b>autorización de Gerencia</b> antes de que Soporte consulte o edite datos.</p>"
-                    "<p class='mini-text'>Pida a Gerencia que habilite el acceso temporal desde HQ → Rectores CRM → «Autorizar Soporte».</p>"
-                    "<p><a class='btn' href='/soporte_admin'>← Panel soporte</a></p></div>"
+                    "<p>El módulo de Rectores requiere <b>autorización de Gerencia</b>.</p>"
+                    "<p class='mini-text'>Gerencia → Rectores CRM → Autorizar Soporte.</p>"
+                    "<p><a class='btn' href='/soporte_admin'>Panel soporte</a></p></div>"
                 ),
             )
     elif rol not in ("Comercial", "Ventas"):
         return redirect("/login")
+
     msg = err = ""
     try:
         db.create_all()
     except Exception:
         pass
-    if request.method == "POST":
+
+    # Sincronizar Institucion.rector → RectorInstitucion si falta ficha
+    try:
+        for inst in Institucion.query.order_by(Institucion.id.asc()).limit(800).all():
+            nombre_r = (getattr(inst, "rector", None) or "").strip()
+            if not nombre_r:
+                continue
+            existe = RectorInstitucion.query.filter_by(institucion_id=inst.id).first()
+            if not existe:
+                partes = nombre_r.split(None, 1)
+                r0 = RectorInstitucion(
+                    institucion_id=inst.id,
+                    nombres=partes[0][:160] if partes else nombre_r[:160],
+                    apellidos=(partes[1][:160] if len(partes) > 1 else ""),
+                    creado_en=fecha_hoy() + " " + hora_actual(),
+                    creado_por="sync-sistema",
+                )
+                db.session.add(r0)
+        db.session.commit()
+    except Exception as _sx:
         try:
-            iid = int(request.form.get("institucion_id") or 0)
+            db.session.rollback()
         except Exception:
-            iid = 0
-        nombres = (request.form.get("nombres") or "").strip()[:160]
-        apellidos = (request.form.get("apellidos") or "").strip()[:160]
-        tipo_id = (request.form.get("tipo_id") or "C.C.").strip()[:20]
-        numero_id = (request.form.get("numero_id") or "").strip()[:40]
-        direccion = (request.form.get("direccion") or "").strip()[:255]
-        telefono = (request.form.get("telefono") or "").strip()[:40]
-        correo = (request.form.get("correo") or "").strip()[:160]
-        if not iid or not nombres or not numero_id:
-            err = "Institución, nombres y número de identificación son obligatorios."
+            pass
+        print("sync rectores:", _sx)
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "guardar").strip()
+        if accion == "descargar":
+            motivo = (request.form.get("motivo") or "").strip()
+            para_quien = (request.form.get("para_quien") or "").strip()
+            if not motivo or not para_quien:
+                err = "Para descargar indique motivo y para quién es el documento."
+            else:
+                ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+                try:
+                    registrar_auditoria(
+                        "Descarga CRM rectores",
+                        "motivo=%s | para=%s | por=%s | ip=%s | %s %s"
+                        % (
+                            motivo[:200],
+                            para_quien[:120],
+                            session.get("usuario") or "",
+                            ip,
+                            fecha_hoy(),
+                            hora_actual(),
+                        ),
+                    )
+                except Exception:
+                    pass
+                # Generar CSV
+                import csv
+                import io as _io
+                buf = _io.StringIO()
+                w = csv.writer(buf)
+                w.writerow(
+                    [
+                        "institucion_id",
+                        "colegio",
+                        "codigo",
+                        "estado",
+                        "nombres",
+                        "apellidos",
+                        "tipo_id",
+                        "numero_id",
+                        "direccion",
+                        "telefono",
+                        "correo",
+                        "actualizado",
+                    ]
+                )
+                for r in RectorInstitucion.query.order_by(RectorInstitucion.id.asc()).all():
+                    inst = Institucion.query.get(r.institucion_id)
+                    w.writerow(
+                        [
+                            r.institucion_id,
+                            (inst.nombre if inst else ""),
+                            (inst.codigo if inst else ""),
+                            (inst.estado if inst else ""),
+                            r.nombres or "",
+                            r.apellidos or "",
+                            r.tipo_id or "",
+                            r.numero_id or "",
+                            r.direccion or "",
+                            r.telefono or "",
+                            r.correo or "",
+                            r.actualizado_en or r.creado_en or "",
+                        ]
+                    )
+                from flask import Response
+                data = "\ufeff" + buf.getvalue()
+                return Response(
+                    data,
+                    mimetype="text/csv; charset=utf-8",
+                    headers={
+                        "Content-Disposition": "attachment; filename=rectores_crm_%s.csv"
+                        % fecha_hoy().replace("-", ""),
+                        "Cache-Control": "no-store",
+                    },
+                )
         else:
-            r = RectorInstitucion.query.filter_by(institucion_id=iid).first()
-            if not r:
-                r = RectorInstitucion(institucion_id=iid, creado_en=fecha_hoy() + " " + hora_actual(),
-                                      creado_por=session.get("usuario") or "")
-                db.session.add(r)
-            r.nombres = nombres
-            r.apellidos = apellidos
-            r.tipo_id = tipo_id
-            r.numero_id = numero_id
-            r.direccion = direccion
-            r.telefono = telefono
-            r.correo = correo
-            r.actualizado_en = fecha_hoy() + " " + hora_actual()
-            # Espejo en Institucion.rector
-            inst = Institucion.query.get(iid)
-            if inst:
-                inst.rector = (nombres + " " + apellidos).strip()[:160]
-            db.session.commit()
-            msg = "Datos del rector guardados."
             try:
-                registrar_auditoria("Rector CRM", "inst=%s %s %s" % (iid, nombres, numero_id))
+                iid = int(request.form.get("institucion_id") or 0)
             except Exception:
-                pass
+                iid = 0
+            nombres = (request.form.get("nombres") or "").strip()[:160]
+            apellidos = (request.form.get("apellidos") or "").strip()[:160]
+            tipo_id = (request.form.get("tipo_id") or "C.C.").strip()[:20]
+            numero_id = (request.form.get("numero_id") or "").strip()[:40]
+            direccion = (request.form.get("direccion") or "").strip()[:255]
+            telefono = (request.form.get("telefono") or "").strip()[:40]
+            correo = (request.form.get("correo") or "").strip()[:160]
+            if not iid or not nombres or not numero_id:
+                err = "Institución, nombres y número de identificación son obligatorios."
+            else:
+                r = RectorInstitucion.query.filter_by(institucion_id=iid).first()
+                if not r:
+                    r = RectorInstitucion(
+                        institucion_id=iid,
+                        creado_en=fecha_hoy() + " " + hora_actual(),
+                        creado_por=session.get("usuario") or "",
+                    )
+                    db.session.add(r)
+                r.nombres = nombres
+                r.apellidos = apellidos
+                r.tipo_id = tipo_id
+                r.numero_id = numero_id
+                r.direccion = direccion
+                r.telefono = telefono
+                r.correo = correo
+                r.actualizado_en = fecha_hoy() + " " + hora_actual()
+                inst = Institucion.query.get(iid)
+                if inst:
+                    inst.rector = (nombres + " " + apellidos).strip()[:160]
+                db.session.commit()
+                msg = "Datos del rector guardados."
+                try:
+                    registrar_auditoria(
+                        "Rector CRM",
+                        "inst=%s %s %s" % (iid, nombres, numero_id),
+                    )
+                except Exception:
+                    pass
 
     q = (request.args.get("q") or "").strip()
-    lista = RectorInstitucion.query.order_by(RectorInstitucion.id.desc()).limit(200).all()
-    if q:
-        like = "%" + q + "%"
-        lista = RectorInstitucion.query.filter(
-            db.or_(
-                RectorInstitucion.nombres.ilike(like),
-                RectorInstitucion.apellidos.ilike(like),
-                RectorInstitucion.numero_id.ilike(like),
-                RectorInstitucion.correo.ilike(like),
+    try:
+        lista = RectorInstitucion.query.order_by(RectorInstitucion.id.desc()).limit(300).all()
+        if q:
+            like = "%" + q + "%"
+            lista = (
+                RectorInstitucion.query.filter(
+                    db.or_(
+                        RectorInstitucion.nombres.ilike(like),
+                        RectorInstitucion.apellidos.ilike(like),
+                        RectorInstitucion.numero_id.ilike(like),
+                        RectorInstitucion.correo.ilike(like),
+                    )
+                )
+                .order_by(RectorInstitucion.id.desc())
+                .limit(300)
+                .all()
             )
-        ).order_by(RectorInstitucion.id.desc()).limit(200).all()
+    except Exception as _lq:
+        print("lista rectores:", _lq)
+        lista = []
 
-    opts_inst = "".join(
-        '<option value="%s">%s</option>' % (i.id, (i.nombre or i.codigo or str(i.id))[:60])
-        for i in Institucion.query.order_by(Institucion.nombre.asc()).limit(500).all()
-    )
+    opts_inst = []
+    try:
+        for inst in Institucion.query.order_by(Institucion.nombre.asc()).limit(500).all():
+            label = (inst.nombre or inst.codigo or str(inst.id))[:60].replace("<", "")
+            opts_inst.append(
+                '<option value="' + str(inst.id) + '">' + _esc(label) + "</option>"
+            )
+    except Exception:
+        pass
+
     filas = []
     for r in lista:
         inst = Institucion.query.get(r.institucion_id)
+        col = (inst.nombre if inst else str(r.institucion_id)) or ""
+        est = (inst.estado if inst else "") or ""
         filas.append(
-            "<tr><td>%s</td><td>%s %s</td><td>%s %s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
-                (inst.nombre if inst else r.institucion_id),
-                r.nombres or "", r.apellidos or "",
-                r.tipo_id or "", r.numero_id or "",
-                r.telefono or "", r.correo or "",
-                r.actualizado_en or r.creado_en or "",
-            )
+            "<tr>"
+            "<td>" + _esc(col) + "<br><span class='mini-text'>" + _esc(est) + "</span></td>"
+            "<td>" + _esc((r.nombres or "") + " " + (r.apellidos or "")) + "</td>"
+            "<td>" + _esc((r.tipo_id or "") + " " + (r.numero_id or "")) + "</td>"
+            "<td>" + _esc(r.telefono or "") + "</td>"
+            "<td>" + _esc(r.correo or "") + "</td>"
+            "<td style='font-size:12px'>" + _esc(r.actualizado_en or r.creado_en or "") + "</td>"
+            "</tr>"
         )
     if not filas:
-        filas = ["<tr><td colspan='6'>Sin registros de rectores aún.</td></tr>"]
+        filas = [
+            "<tr><td colspan='6' style='text-align:center;color:#94a3b8;padding:16px'>"
+            "Sin fichas de rector aún. Al activar un colegio o completar el formulario, aparecen aquí."
+            "</td></tr>"
+        ]
 
-    content = """
-<header class="role-hero"><div><h1>Información de Rectores</h1>
-<p>Base CRM para soporte y gerencia · datos al activar servicio</p></div>
-<a class="btn" href="/gerencia/hq">← HQ</a>
-<a class="btn" href="/gerencia/autorizar-soporte-rectores?activar=1">Autorizar Soporte</a></header>
-%s%s
-<section class="role-panel">
-  <h2 style="margin-top:0">Registrar / actualizar rector</h2>
-  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:820px">
-    <div style="grid-column:1/-1"><label><b>Institución *</b></label>
-      <select name="institucion_id" required><option value="">— Seleccione —</option>%s</select></div>
-    <div><label><b>Nombres *</b></label><input name="nombres" required></div>
-    <div><label><b>Apellidos *</b></label><input name="apellidos" required></div>
-    <div><label><b>Tipo ID *</b></label>
-      <select name="tipo_id"><option>C.C.</option><option>C.E.</option><option>Pasaporte</option></select></div>
-    <div><label><b>Número ID *</b></label><input name="numero_id" required></div>
-    <div style="grid-column:1/-1"><label><b>Dirección</b></label><input name="direccion" style="width:100%"></div>
-    <div><label><b>Teléfono</b></label><input name="telefono"></div>
-    <div><label><b>Correo corporativo</b></label><input name="correo" type="email"></div>
-    <div style="grid-column:1/-1"><button type="submit">Guardar rector</button></div>
-  </form>
-</section>
-<section class="role-panel" style="margin-top:14px">
-  <form method="GET" style="margin-bottom:10px"><input name="q" placeholder="Buscar nombre, cédula o correo" value="%s">
-  <button>Buscar</button></form>
-  <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th>Colegio</th><th>Rector</th><th>Identificación</th><th>Teléfono</th><th>Correo</th><th>Actualizado</th></tr>
-    %s
-  </table>
-</section>
-""" % (
-        ("<div class='msg ok'>" + msg + "</div>") if msg else "",
-        ("<div class='msg danger'>" + err + "</div>") if err else "",
-        opts_inst,
-        q.replace('"', ""),
-        "".join(filas),
+    msg_html = ("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else ""
+    err_html = ("<div class='msg danger'>" + _esc(err) + "</div>") if err else ""
+    q_safe = _esc(q)
+
+    content = (
+        '<header class="role-hero"><div><h1>Información de Rectores</h1>'
+        "<p>CRM · datos recolectados al activar colegios · descarga con auditoría</p></div>"
+        '<a class="btn" href="/gerencia/hq">HQ</a> '
+        '<a class="btn" href="/gerencia/autorizar-soporte-rectores?activar=1">Autorizar Soporte</a></header>'
+        + msg_html
+        + err_html
+        + '<section class="role-panel">'
+        '<h2 style="margin-top:0">Registrar / actualizar rector</h2>'
+        '<form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:820px">'
+        '<div style="grid-column:1/-1"><label><b>Institución *</b></label>'
+        '<select name="institucion_id" required><option value="">— Seleccione —</option>'
+        + "".join(opts_inst)
+        + "</select></div>"
+        '<div><label><b>Nombres *</b></label><input name="nombres" required></div>'
+        '<div><label><b>Apellidos *</b></label><input name="apellidos" required></div>'
+        '<div><label><b>Tipo ID *</b></label>'
+        '<select name="tipo_id"><option>C.C.</option><option>C.E.</option><option>Pasaporte</option></select></div>'
+        '<div><label><b>Número ID *</b></label><input name="numero_id" required></div>'
+        '<div style="grid-column:1/-1"><label><b>Dirección</b></label>'
+        '<input name="direccion" style="width:100%"></div>'
+        '<div><label><b>Teléfono</b></label><input name="telefono"></div>'
+        '<div><label><b>Correo corporativo</b></label><input name="correo" type="email"></div>'
+        '<div style="grid-column:1/-1"><button type="submit" name="accion" value="guardar">Guardar rector</button></div>'
+        "</form></section>"
+        '<section class="role-panel" style="margin-top:14px">'
+        "<h2 style='margin-top:0'>Descarga auditada (CSV)</h2>"
+        "<p class='mini-text'>Obligatorio: motivo, para quién. Se registra fecha, hora, usuario e IP en auditoría.</p>"
+        '<form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:720px">'
+        '<input type="hidden" name="accion" value="descargar">'
+        '<div><label><b>Motivo *</b></label>'
+        '<input name="motivo" required placeholder="Ej. Auditoría comercial mes septiembre"></div>'
+        '<div><label><b>Para quién *</b></label>'
+        '<input name="para_quien" required placeholder="Ej. Gerencia / Contabilidad"></div>'
+        '<div style="grid-column:1/-1"><button type="submit">Descargar listado CSV</button></div>'
+        "</form></section>"
+        '<section class="role-panel" style="margin-top:14px">'
+        '<form method="GET" style="margin-bottom:10px">'
+        '<input name="q" placeholder="Buscar nombre, cédula o correo" value="' + q_safe + '"> '
+        "<button>Buscar</button></form>"
+        '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+        '<tr style="background:#0B2D57;color:#fff">'
+        "<th>Colegio</th><th>Rector</th><th>Identificación</th><th>Teléfono</th><th>Correo</th><th>Actualizado</th></tr>"
+        + "".join(filas)
+        + "</table></section>"
     )
     return page("Rectores CRM", shell(content))
+
 
 
 @app.route("/api/rectores", methods=["POST"])
