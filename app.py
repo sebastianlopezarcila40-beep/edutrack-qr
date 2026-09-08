@@ -2089,19 +2089,43 @@ class PreMatricula(db.Model):
 
 def html_anuncio_global():
     """Modal institucional PROCSIS: título, texto e imágenes (sin bloque EL EQUIPO).
-    Se muestra UNA vez por sesión de login; al cerrar con X no reaparece al navegar."""
+    En páginas de login siempre se muestra la versión activa actualizada.
+    Dentro del sistema (ya autenticado) solo una vez por versión de anuncio."""
     try:
         p = plataforma()
+        try:
+            db.session.expire(p)
+            p = plataforma()
+        except Exception:
+            pass
     except Exception:
         return ""
     if not getattr(p, "anuncio_activo", False):
         return ""
     ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")
+    # Login / portales de acceso: siempre mostrar el anuncio vigente (así se ve al actualizar)
+    path = ""
     try:
-        if str(session.get("anuncio_dismissed_ver") or "") == ver:
-            return ""
+        path = (request.path or "").rstrip("/") or "/"
     except Exception:
-        pass
+        path = ""
+    rutas_login = (
+        "/login",
+        "/ventas-login",
+        "/soporte-login",
+        "/gerencia-login",
+        "/docente-login",
+        "/cobranza-login",
+        "/backoffice",
+        "/edutrack-backoffice",
+    )
+    en_login = path in rutas_login or path.endswith("-login")
+    if not en_login:
+        try:
+            if str(session.get("anuncio_dismissed_ver") or "") == ver:
+                return ""
+        except Exception:
+            pass
     titulo = _esc(getattr(p, "anuncio_titulo", None) or "Aviso institucional EduTrack")
     cuerpo_raw = getattr(p, "anuncio_cuerpo", None) or (
         "Estimada comunidad educativa, le informamos un aviso institucional de PROCSIS / EduTrack. "
@@ -36593,10 +36617,17 @@ def soporte_anuncios():
                 pass
             db.session.commit()
             try:
+                db.session.refresh(p)
+            except Exception:
+                pass
+            try:
                 registrar_auditoria("Anuncio global", f"{rol}: activo={p.anuncio_activo} titulo={p.anuncio_titulo[:60]}")
             except Exception:
                 pass
-            mensaje = "Anuncio guardado (v%s). " % (getattr(p, "anuncio_version", "") or "") + ("Activo en todas las pantallas." if p.anuncio_activo else "(Inactivo)")
+            mensaje = (
+                "Anuncio guardado (v%s). " % (getattr(p, "anuncio_version", "") or "")
+                + ("Ya está activo: se verá al abrir /login y portales de acceso." if p.anuncio_activo else "(Inactivo — marque «Anuncio activo» para publicarlo)")
+            )
     volver_href = "/soporte_admin" if (rol == "Soporte" or session.get("soporte")) else "/gerencia/hq"
     content = f"""
 <header class="role-hero"><div>
