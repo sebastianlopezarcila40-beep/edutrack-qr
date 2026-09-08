@@ -1969,6 +1969,27 @@ class SesionEmpleado(db.Model):
     activa = db.Column(db.Boolean, default=True)
 
 
+
+class TurnoLaboral(db.Model):
+    """Apertura/cierre de turno de trabajo (Ventas, Soporte, Cobranza).
+    Se registra al iniciar sesion con nombre, CC o codigo interno; queda en auditoria y modulo Turnos."""
+    __tablename__ = "turnos_laborales"
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, index=True, nullable=True)
+    usuario_login = db.Column(db.String(80), default="")
+    nombre_completo = db.Column(db.String(160), default="")
+    documento = db.Column(db.String(40), default="")  # CC o codigo interno
+    area = db.Column(db.String(40), default="", index=True)  # Ventas | Soporte | Cobranza | Gerencia
+    estado = db.Column(db.String(20), default="ABIERTO", index=True)  # ABIERTO | CERRADO
+    abierto_en = db.Column(db.String(30), default="")
+    cerrado_en = db.Column(db.String(30), default="")
+    ip = db.Column(db.String(80), default="")
+    ubicacion = db.Column(db.String(160), default="")
+    nota_apertura = db.Column(db.Text, default="")
+    nota_cierre = db.Column(db.Text, default="")
+
+
+
 class Novedad(db.Model):
     __tablename__ = "novedades"
     id = db.Column(db.Integer, primary_key=True)
@@ -2994,6 +3015,7 @@ def migrar_columnas():
         ("verificaciones_rector", "val_contraloria", "ALTER TABLE verificaciones_rector ADD COLUMN val_contraloria BOOLEAN DEFAULT FALSE"),
         ("verificaciones_rector", "val_exitosa", "ALTER TABLE verificaciones_rector ADD COLUMN val_exitosa BOOLEAN DEFAULT FALSE"),
         ("verificaciones_rector", "motivo_gerencia", "ALTER TABLE verificaciones_rector ADD COLUMN motivo_gerencia TEXT DEFAULT ''"),
+        ("turnos_laborales", "_create", "CREATE TABLE IF NOT EXISTS turnos_laborales (id SERIAL PRIMARY KEY, usuario_id INTEGER, usuario_login VARCHAR(80), nombre_completo VARCHAR(160), documento VARCHAR(40), area VARCHAR(40), estado VARCHAR(20) DEFAULT 'ABIERTO', abierto_en VARCHAR(30), cerrado_en VARCHAR(30), ip VARCHAR(80), ubicacion VARCHAR(160), nota_apertura TEXT, nota_cierre TEXT)"),
         ("tickets_pqr", "fecha_estimada", "ALTER TABLE tickets_pqr ADD COLUMN fecha_estimada VARCHAR(20) DEFAULT ''"),
         ("tickets_pqr", "estado_cun", "ALTER TABLE tickets_pqr ADD COLUMN estado_cun VARCHAR(40) DEFAULT ''"),
         ("tickets_pqr", "medio_ingreso", "ALTER TABLE tickets_pqr ADD COLUMN medio_ingreso VARCHAR(60) DEFAULT 'Web'"),
@@ -5055,6 +5077,27 @@ def _mfa_nuevo_secret():
     import secrets, base64
     raw = secrets.token_bytes(20)
     return base64.b32encode(raw).decode("ascii").replace("=", "")
+
+
+def turno_abierto_actual(usuario_id=None, usuario_login=None, area=None):
+    """Devuelve el turno ABIERTO del empleado si existe."""
+    try:
+        q = TurnoLaboral.query.filter_by(estado="ABIERTO")
+        if usuario_id:
+            q = q.filter_by(usuario_id=int(usuario_id))
+        elif usuario_login:
+            q = q.filter_by(usuario_login=str(usuario_login))
+        if area:
+            q = q.filter_by(area=area)
+        return q.order_by(TurnoLaboral.id.desc()).first()
+    except Exception:
+        return None
+
+
+def requiere_turno_laboral():
+    """True si el rol debe abrir turno antes de operar (Ventas/Soporte/Cobranza)."""
+    rol = (rol_actual() or "").strip()
+    return rol in ("Comercial", "Soporte", "Cobranza")
 
 
 def registrar_sesion_empleado(u):
@@ -17346,6 +17389,13 @@ def ventas_login():
                         pass
                     registrar_auditoria("Login ventas", user.usuario)
                     _rate_limit_ok(portal="ventas")
+                    # Obligatorio abrir turno laboral antes del panel
+                    try:
+                        if not turno_abierto_actual(usuario_id=user.id, area="Ventas"):
+                            session["turno_pending_redirect"] = "/ventas/panel"
+                            return redirect("/abrir-turno")
+                    except Exception as _te:
+                        print("turno ventas:", _te)
                     return redirect("/ventas/panel")
             else:
                 _rate_limit_fail(portal="ventas")
@@ -25701,6 +25751,13 @@ def soporte_verificar_pin(token):
                 except Exception:
                     pass
                 registrar_auditoria("Login soporte", f"{u.rol} {u.usuario} desde /soporte-login (PIN)")
+                try:
+                    area_t = "Soporte" if (u.rol or "") == "Soporte" else ("Ventas" if (u.rol or "") == "Comercial" else "Soporte")
+                    if (u.rol or "").strip() in ("Soporte", "Comercial", "Cobranza") and not turno_abierto_actual(usuario_id=u.id, area=area_t):
+                        session["turno_pending_redirect"] = dest
+                        return redirect("/abrir-turno")
+                except Exception as _te:
+                    print("turno pin:", _te)
                 return redirect(dest)
     nombre = (u.usuario if u else "colaborador")
     body = f"""
@@ -26187,6 +26244,12 @@ def soporte_login():
                 except Exception as _ex:
                     print("sesion:", _ex)
                 registrar_auditoria("Login soporte", f"{user.rol} {user.usuario} desde /soporte-login")
+                try:
+                    if (user.rol or "").strip() == "Soporte" and not turno_abierto_actual(usuario_id=user.id, area="Soporte"):
+                        session["turno_pending_redirect"] = "/soporte_admin"
+                        return redirect("/abrir-turno")
+                except Exception as _te:
+                    print("turno soporte:", _te)
                 return redirect("/soporte_admin")
         elif user:
             error = f"Esta cuenta tiene rol «{user.rol}». El portal de soporte solo admite roles internos (Soporte, Admin, etc.)."
@@ -40334,13 +40397,170 @@ def gerencia_facturacion_cron():
 
 
 
+
+@app.route("/abrir-turno", methods=["GET", "POST"])
+def abrir_turno_laboral():
+    """Tras login Ventas/Soporte: formulario obligatorio de apertura de turno (nombre + CC/código)."""
+    if not requiere_login():
+        return redirect("/login")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Comercial", "Soporte", "Cobranza", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/dashboard")
+    area = "Ventas" if rol == "Comercial" else ("Cobranza" if rol == "Cobranza" else "Soporte")
+    dest = session.get("turno_pending_redirect") or (
+        "/ventas/panel" if area == "Ventas" else ("/cobranza" if area == "Cobranza" else "/soporte_admin")
+    )
+    uid = session.get("uid")
+    login = session.get("usuario") or ""
+    # Ya tiene turno abierto → panel
+    try:
+        t_ab = turno_abierto_actual(usuario_id=uid, area=area)
+        if t_ab and request.method == "GET" and not request.args.get("forzar"):
+            return redirect(dest)
+    except Exception:
+        t_ab = None
+
+    error = msg = ""
+    # Prefill
+    nombre_pref = ""
+    doc_pref = ""
+    try:
+        u = Usuario.query.get(int(uid)) if uid else None
+        if u:
+            nombre_pref = (u.nombre_completo or u.usuario or "")[:160]
+    except Exception:
+        pass
+
+    if request.method == "POST":
+        nombre = (request.form.get("nombre_completo") or "").strip()[:160]
+        documento = (request.form.get("documento") or "").strip()[:40]
+        nota = (request.form.get("nota_apertura") or "").strip()[:500]
+        if not nombre or not documento:
+            error = "Nombre completo y cédula o código interno son obligatorios."
+        else:
+            ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+            ubica = ""
+            try:
+                if "capturar_geo_cliente" in globals():
+                    g = capturar_geo_cliente() or {}
+                    ubica = ((g.get("ciudad") or "") + " · " + (g.get("isp") or ""))[:160]
+            except Exception:
+                pass
+            # Cerrar turnos abiertos previos del mismo usuario
+            try:
+                TurnoLaboral.query.filter_by(usuario_id=int(uid or 0), estado="ABIERTO").update(
+                    {"estado": "CERRADO", "cerrado_en": fecha_hoy() + " " + hora_actual(), "nota_cierre": "Cerrado al abrir nuevo turno"}
+                )
+            except Exception:
+                pass
+            t = TurnoLaboral(
+                usuario_id=int(uid or 0),
+                usuario_login=login,
+                nombre_completo=nombre,
+                documento=documento,
+                area=area,
+                estado="ABIERTO",
+                abierto_en=fecha_hoy() + " " + hora_actual(),
+                ip=ip,
+                ubicacion=ubica,
+                nota_apertura=nota,
+            )
+            db.session.add(t)
+            db.session.commit()
+            session["turno_id"] = t.id
+            session["turno_nombre"] = nombre
+            session["turno_documento"] = documento
+            session["turno_area"] = area
+            try:
+                registrar_auditoria(
+                    "Apertura de turno",
+                    "area=%s nombre=%s doc=%s login=%s ip=%s id=%s"
+                    % (area, nombre, documento, login, ip, t.id),
+                )
+            except Exception:
+                pass
+            session.pop("turno_pending_redirect", None)
+            return redirect(dest)
+
+    content = (
+        '<div style="max-width:480px;margin:40px auto;font-family:Segoe UI,system-ui,sans-serif">'
+        '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px 24px;'
+        'box-shadow:0 12px 40px rgba(15,23,42,.08)">'
+        '<div style="font-size:11px;letter-spacing:.12em;color:#64748b;font-weight:700">PROCSIS · CONTROL DE TURNO</div>'
+        '<h1 style="margin:8px 0 6px;font-size:22px;color:#0B2D57">Abrir turno de trabajo</h1>'
+        '<p style="font-size:13px;color:#64748b;margin:0 0 16px">Área: <b>' + area + '</b> · Usuario: <b>' + _esc(login) + '</b></p>'
+        + (('<div class="msg danger">' + _esc(error) + "</div>") if error else "")
+        + '<form method="POST" style="display:grid;gap:12px">'
+        '<div><label style="font-size:12px;font-weight:700">Nombre completo *</label>'
+        '<input name="nombre_completo" required value="' + _esc(nombre_pref) + '" '
+        'style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" placeholder="Como figura en cédula"></div>'
+        '<div><label style="font-size:12px;font-weight:700">Cédula o código interno *</label>'
+        '<input name="documento" required value="' + _esc(doc_pref) + '" '
+        'style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" placeholder="CC 1038063108 o código PROCSIS"></div>'
+        '<div><label style="font-size:12px;font-weight:700">Nota de apertura (opcional)</label>'
+        '<textarea name="nota_apertura" rows="2" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" '
+        'placeholder="Ej. Turno mañana mesa de ventas"></textarea></div>'
+        '<button type="submit" style="background:#0B2D57;color:#fff;border:0;border-radius:10px;padding:12px;font-weight:800;cursor:pointer">'
+        "Confirmar y abrir turno</button>"
+        "</form>"
+        '<p style="font-size:11px;color:#94a3b8;margin:14px 0 0">Queda registrado en auditoría y en el módulo Turnos y notas (Gerencia).</p>'
+        "</div></div>"
+    )
+    return page("Abrir turno", content)
+
+
+@app.route("/cerrar-turno", methods=["GET", "POST"])
+def cerrar_turno_laboral():
+    """Cierra el turno abierto del empleado actual."""
+    if not requiere_login():
+        return redirect("/login")
+    uid = session.get("uid")
+    t = turno_abierto_actual(usuario_id=uid)
+    if not t:
+        return redirect(session.get("turno_pending_redirect") or "/dashboard")
+    if request.method == "POST" or request.args.get("ok") == "1":
+        nota = (request.form.get("nota_cierre") or "").strip()[:500]
+        t.estado = "CERRADO"
+        t.cerrado_en = fecha_hoy() + " " + hora_actual()
+        t.nota_cierre = nota
+        db.session.commit()
+        try:
+            registrar_auditoria(
+                "Cierre de turno",
+                "id=%s area=%s nombre=%s doc=%s" % (t.id, t.area, t.nombre_completo, t.documento),
+            )
+        except Exception:
+            pass
+        for k in ("turno_id", "turno_nombre", "turno_documento", "turno_area"):
+            session.pop(k, None)
+        return redirect(_login_portal(rol_actual()) if "_login_portal" in dir() else "/logout")
+    content = (
+        '<div class="role-panel" style="max-width:420px;margin:40px auto">'
+        "<h2>Cerrar turno</h2>"
+        "<p>" + _esc(t.nombre_completo or "") + " · " + _esc(t.area or "") + "<br>"
+        "Abierto: " + _esc(t.abierto_en or "") + "</p>"
+        '<form method="POST"><textarea name="nota_cierre" rows="2" style="width:100%" placeholder="Nota de cierre (opcional)"></textarea>'
+        '<button type="submit" style="margin-top:10px">Confirmar cierre</button></form></div>'
+    )
+    return page("Cerrar turno", shell(content))
+
+
+
 @app.route("/gerencia/turnos", methods=["GET", "POST"])
 @app.route("/cobranza/turnos", methods=["GET", "POST"])
 @app.route("/soporte/turnos", methods=["GET", "POST"])
+@app.route("/ventas/turnos", methods=["GET", "POST"])
 @app.route("/interno/turnos", methods=["GET", "POST"])
 def modulo_turnos():
     """Módulo de turnos: notas con fecha/hora automática, filtro por estado y reasignación."""
-    if not requiere_login() or (rol_actual() not in ROLES_INTERNOS and rol_actual() != "Soporte"):
+    if not requiere_login() or (
+        rol_actual() not in ROLES_INTERNOS
+        and rol_actual() not in ("Soporte", "Comercial", "Cobranza")
+    ):
         return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
     rol = rol_actual()
     path = request.path or ""
@@ -40349,13 +40569,17 @@ def modulo_turnos():
         area = "Cobranza"
         if rol not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
             return redirect(_home_portal(rol))
+    elif path.startswith("/ventas") or rol == "Comercial":
+        area = "Ventas"
+        if rol not in ("Comercial", "Gerente", "Superadmin", "Administrador"):
+            return redirect(_home_portal(rol))
     elif path.startswith("/soporte") or rol == "Soporte":
         area = "Soporte"
         if rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
             return redirect(_home_portal(rol))
     else:
         area = "Gerencia"
-        if rol not in ("Gerente", "Superadmin", "Administrador"):
+        if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte", "Comercial"):
             return redirect(_home_portal(rol))
 
     try:
@@ -40546,6 +40770,50 @@ def modulo_turnos():
         pass
 
     volver = _home_portal(rol)
+
+    # Panel de turnos laborales abiertos / recientes
+    turnos_html = ""
+    try:
+        q_t = TurnoLaboral.query
+        if area in ("Ventas", "Soporte", "Cobranza") and rol not in ("Gerente", "Superadmin", "Administrador"):
+            q_t = q_t.filter_by(area=area)
+        elif area != "Gerencia" and rol not in ("Gerente", "Superadmin", "Administrador"):
+            q_t = q_t.filter_by(area=area)
+        turnos_list = q_t.order_by(TurnoLaboral.id.desc()).limit(40).all()
+        filas_t = []
+        for t in turnos_list:
+            color = "#16a34a" if t.estado == "ABIERTO" else "#64748b"
+            filas_t.append(
+                "<tr>"
+                "<td style='font-size:12px'>" + _esc(t.abierto_en or "") + "</td>"
+                "<td><b>" + _esc(t.nombre_completo or "") + "</b><br><span class='mini-text'>" + _esc(t.usuario_login or "") + "</span></td>"
+                "<td>" + _esc(t.documento or "") + "</td>"
+                "<td>" + _esc(t.area or "") + "</td>"
+                "<td style='color:" + color + ";font-weight:700'>" + _esc(t.estado or "") + "</td>"
+                "<td style='font-size:11px;color:#64748b'>" + _esc(t.ip or "") + "<br>" + _esc(t.ubicacion or "") + "</td>"
+                "<td style='font-size:11px'>" + _esc((t.nota_apertura or "")[:80]) + "</td>"
+                "<td style='font-size:11px'>" + _esc(t.cerrado_en or "—") + "</td>"
+                "</tr>"
+            )
+        if not filas_t:
+            filas_t = ["<tr><td colspan='8' style='text-align:center;color:#94a3b8;padding:12px'>Sin turnos registrados aún. Se crean al iniciar sesión en Ventas/Soporte.</td></tr>"]
+        turnos_html = (
+            '<section class="role-panel" style="margin-bottom:16px;overflow:auto">'
+            '<h2 style="margin-top:0;font-size:16px;color:#0B2D57">Turnos laborales (apertura con CC / código)</h2>'
+            '<p class="mini-text">Cada asesor al ingresar confirma nombre y documento. Queda auditado.</p>'
+            '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+            '<tr style="background:#0B2D57;color:#fff">'
+            "<th>Apertura</th><th>Nombre</th><th>CC / Código</th><th>Área</th><th>Estado</th><th>IP / Ubicación</th><th>Nota</th><th>Cierre</th></tr>"
+            + "".join(filas_t)
+            + "</table>"
+            '<p style="margin-top:10px"><a class="btn" href="/abrir-turno?forzar=1">Abrir / renovar mi turno</a> '
+            '<a class="btn" href="/cerrar-turno">Cerrar mi turno</a></p>'
+            "</section>"
+        )
+    except Exception as _th:
+        print("turnos panel:", _th)
+        turnos_html = ""
+
     content = f"""
 <style>
 .tu-wrap{{font-family:Segoe UI,Tahoma,sans-serif}}
@@ -40563,6 +40831,7 @@ def modulo_turnos():
 </div><a class="btn" href="{volver}">Volver</a></header>
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
 {"<div class='msg' style='background:#fef2f2;color:#b91c1c'>"+_esc(error)+"</div>" if error else ""}
+{turnos_html}
 
 <section class="tu-filt" style="margin:10px 0">
   <b style="margin-right:8px">Filtrar estado:</b>
