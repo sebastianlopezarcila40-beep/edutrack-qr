@@ -2088,9 +2088,10 @@ class PreMatricula(db.Model):
 
 
 def html_anuncio_global():
-    """Modal institucional PROCSIS: título, texto e imágenes (sin bloque EL EQUIPO).
-    En páginas de login siempre se muestra la versión activa actualizada.
-    Dentro del sistema (ya autenticado) solo una vez por versión de anuncio."""
+    """Aviso institucional: se muestra una sola vez por versión.
+    Al cerrar con X se guarda en localStorage (y sesión servidor) para que no
+    vuelva a salir al cambiar de pestaña o navegar. Si Gerencia publica una
+    nueva versión del anuncio, vuelve a mostrarse una vez."""
     try:
         p = plataforma()
         try:
@@ -2102,30 +2103,14 @@ def html_anuncio_global():
         return ""
     if not getattr(p, "anuncio_activo", False):
         return ""
-    ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")
-    # Login / portales de acceso: siempre mostrar el anuncio vigente (así se ve al actualizar)
-    path = ""
+    ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")[:40]
+    # Respaldo servidor: si ya cerró esta versión en esta sesión Flask, no inyectar HTML
     try:
-        path = (request.path or "").rstrip("/") or "/"
+        if str(session.get("anuncio_dismissed_ver") or "") == ver:
+            return ""
     except Exception:
-        path = ""
-    rutas_login = (
-        "/login",
-        "/ventas-login",
-        "/soporte-login",
-        "/gerencia-login",
-        "/docente-login",
-        "/cobranza-login",
-        "/backoffice",
-        "/edutrack-backoffice",
-    )
-    en_login = path in rutas_login or path.endswith("-login")
-    if not en_login:
-        try:
-            if str(session.get("anuncio_dismissed_ver") or "") == ver:
-                return ""
-        except Exception:
-            pass
+        pass
+
     titulo = _esc(getattr(p, "anuncio_titulo", None) or "Aviso institucional EduTrack")
     cuerpo_raw = getattr(p, "anuncio_cuerpo", None) or (
         "Estimada comunidad educativa, le informamos un aviso institucional de PROCSIS / EduTrack. "
@@ -2141,7 +2126,6 @@ def html_anuncio_global():
         if src:
             imgs.append(src)
 
-    # Imagenes: object-fit cover + object-position center (rostro centrado, sin estirar)
     visual = ""
     if imgs:
         cards = []
@@ -2150,8 +2134,7 @@ def html_anuncio_global():
                 '<div style="border-radius:14px;overflow:hidden;background:#0f172a;'
                 'aspect-ratio:4/3;max-height:280px;box-shadow:0 8px 24px rgba(15,23,42,.12)">'
                 '<img src="' + src + '" alt="Anuncio PROCSIS" '
-                'style="width:100%;height:100%;object-fit:cover;object-position:center top;'
-                'display:block;image-rendering:auto">'
+                'style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block">'
                 "</div>"
             )
         if len(cards) == 1:
@@ -2170,6 +2153,9 @@ def html_anuncio_global():
             + cuenta
             + "</p>"
         )
+
+    # LS key por versión: al publicar anuncio nuevo (versión +1) vuelve a salir una vez
+    ls_key = "procsis_anuncio_visto_v" + ver
 
     return (
         '<div id="anuncio-global" style="display:none;position:fixed;inset:0;z-index:100000;'
@@ -2190,14 +2176,26 @@ def html_anuncio_global():
         + cuenta_html
         + visual
         + '<p style="margin:14px 0 6px;font-size:12px;color:#94a3b8">'
-        "Cierre con la X. No volvera a mostrarse hasta su proximo inicio de sesion.</p>"
+        "Al cerrar con la X no volverá a mostrarse al navegar. Solo si se publica un aviso nuevo.</p>"
         "</div></div></div>"
-        '<script>(function(){var ver="' + ver + '";'
-        'var el=document.getElementById("anuncio-global");if(!el)return;el.style.display="flex";'
-        'var btn=document.getElementById("anuncio-cerrar");'
-        'if(btn)btn.onclick=function(){el.style.display="none";'
+        "<script>(function(){"
+        'var ver="' + ver + '";'
+        'var lsKey="' + ls_key + '";'
+        'var el=document.getElementById("anuncio-global");'
+        "if(!el)return;"
+        "try{"
+        "if(window.localStorage&&localStorage.getItem(lsKey)==='1'){el.remove();return;}"
+        "}catch(e){}"
+        'el.style.display="flex";'
+        'function cerrarAnuncio(){'
+        'el.style.display="none";'
+        "try{if(window.localStorage)localStorage.setItem(lsKey,'1');}catch(e){}"
         'try{fetch("/anuncio/cerrar",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},'
-        'body:"ver="+encodeURIComponent(ver),credentials:"same-origin"});}catch(e){}};'
+        'body:"ver="+encodeURIComponent(ver),credentials:"same-origin"});}catch(e){}'
+        "}"
+        'var btn=document.getElementById("anuncio-cerrar");'
+        "if(btn)btn.onclick=cerrarAnuncio;"
+        "el.addEventListener('click',function(ev){if(ev.target===el)cerrarAnuncio();});"
         "})();</script>"
         "<style>@media(max-width:640px){#anuncio-global div[style*=grid-template-columns]{"
         "grid-template-columns:1fr!important}}</style>"
