@@ -19907,25 +19907,25 @@ def _doc_pdf_bytes(titulo, html_body, confidencial=True):
 
     def header_block(y0):
         y = y0
+        # Un solo logo (izq.) + fecha centrada (estilo comunicado)
         logo_path = _resolve_logo_filesystem()
         if logo_path:
             try:
-                c.drawImage(ImageReader(logo_path), margin, y - 40, width=46, height=46, mask="auto", preserveAspectRatio=True)
+                c.drawImage(ImageReader(logo_path), margin, y - 48, width=52, height=52, mask="auto", preserveAspectRatio=True)
             except Exception:
                 pass
-        c.setFillColorRGB(*navy)
+        try:
+            fecha_txt = _doc_fecha_larga(fecha_hoy())
+        except Exception:
+            fecha_txt = fecha_hoy()
+        c.setFillColorRGB(0, 0, 0)
         c.setFont(font_b, 11)
-        c.drawString(margin + 56, y - 10, "PROCSIS")
-        c.setFont(font_r, 8)
-        c.setFillColorRGB(*gray)
-        c.drawString(margin + 56, y - 24, "DOCUMENTO CORPORATIVO · EDUTRACK")
-        c.setFillColorRGB(*navy)
-        c.setFont(font_r, 9)
-        c.drawRightString(w - margin, y - 10, "Colombia")
+        c.drawCentredString(w / 2.0, y - 22, fecha_txt)
         c.setFont(font_r, 8)
         c.setFillColorRGB(*gray)
         tipo = "CONFIDENCIAL" if confidencial else "DOCUMENTO PÚBLICO"
-        c.drawRightString(w - margin, y - 24, f"{tipo} · {fecha_hoy()}")
+        c.drawRightString(w - margin, y - 14, tipo)
+        c.drawRightString(w - margin, y - 28, "PROCSIS · Colombia")
         y -= 56
         c.setStrokeColorRGB(*navy)
         c.setLineWidth(2.4)
@@ -20168,145 +20168,86 @@ def _doc_extract_lugar(html_body, default="Colombia"):
     return default
 
 
+def _doc_fecha_larga(fecha_iso=None):
+    """Fecha en español: 04 de septiembre de 2026."""
+    meses = (
+        "", "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    )
+    try:
+        raw = (fecha_iso or fecha_hoy() or "").strip()[:10]
+        y, m, d = raw.split("-")
+        return "%s de %s de %s" % (str(int(d)).zfill(2), meses[int(m)], y)
+    except Exception:
+        return fecha_iso or fecha_hoy() or ""
+
+
 def _doc_corp_shell_html(titulo, cuerpo_html, logo_src, confidencial=True, extra_top="", fecha=None, lugar=None):
-    """
-    Plantilla corporativa Procsis (opinión pública):
-    azul navy + cyan del logo + gris plata. Sin emojis.
-    """
+    """Plantilla tipo comunicado formal: un solo logo, fecha centrada, texto justificado."""
     fecha = fecha or fecha_hoy()
+    try:
+        fecha_txt = _doc_fecha_larga(fecha)
+    except Exception:
+        fecha_txt = str(fecha)
     if not lugar:
-        lugar = _doc_extract_lugar(cuerpo_html, "Colombia")
-    cyan = "#00A3E0"
-    navy = "#0B2D57"
-    silver = "#94A3B8"
-    badge = "DOCUMENTO CONFIDENCIAL" if confidencial else f"DOCUMENTO PÚBLICO · {fecha}"
-    badge_color = "#b91c1c" if confidencial else cyan
-    return f"""
-<style>
-.corp-page{{max-width:760px;margin:0 auto;padding:24px 28px 40px;background:#f4f6f9;font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;color:#0f172a}}
-.corp-doc{{
-  position:relative;background:#fff;overflow:hidden;
-  box-shadow:0 12px 40px rgba(11,45,87,.12);border:1px solid #e2e8f0;
-}}
-.corp-doc::before{{
-  content:'';position:absolute;top:0;right:0;width:0;height:0;
-  border-style:solid;border-width:0 140px 90px 0;
-  border-color:transparent {navy} transparent transparent;z-index:1;
-}}
-.corp-doc::after{{
-  content:'';position:absolute;top:0;right:0;width:0;height:0;
-  border-style:solid;border-width:0 100px 64px 0;
-  border-color:transparent {cyan} transparent transparent;z-index:2;
-}}
-.corp-inner{{position:relative;z-index:3;padding:32px 48px 0}}
-.corp-brand-row{{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}}
-.corp-brand-row img{{height:56px;width:auto;max-width:180px;object-fit:contain}}
-.corp-brand-txt .co{{font-size:11px;font-weight:700;color:{navy};letter-spacing:.06em;text-transform:uppercase;margin-top:4px}}
-.corp-brand-txt .sub{{font-size:12px;color:{silver};margin-top:2px}}
-.corp-badge{{
-  display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;
-  color:{badge_color};margin:8px 0 20px;
-}}
-.corp-title{{
-  font-size:26px;font-weight:900;color:{navy};margin:0 0 10px;line-height:1.15;
-  letter-spacing:-.02em;text-transform:uppercase;
-}}
-.corp-title-line{{width:72px;height:4px;background:{cyan};border-radius:2px;margin:0 0 18px}}
-.corp-kicker{{
-  display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:{navy};margin:0 0 16px;
-}}
-.corp-content{{font-size:14.5px;line-height:1.65;color:#1e293b;padding:8px 8px 24px;max-width:100%;box-sizing:border-box}}
-.corp-content p{{margin:0 0 12px}}
-.corp-content b,.corp-content strong{{color:{navy};font-weight:700}}
-.corp-content h2{{font-size:15px;color:{navy};margin:16px 0 8px}}
-.corp-meta-row{{
-  display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;
-  font-size:13px;color:#334155;padding:12px 0;margin:4px 0 14px;
-  border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;
-}}
-.corp-meta-row span{{display:inline-flex;align-items:center;gap:6px}}
-.corp-meta-row .lbl{{color:{cyan};font-weight:700}}
-.corp-sign{{margin:22px 0 8px}}
-.corp-sign-line{{width:120px;height:3px;background:{cyan};border-radius:2px;margin:8px 0 14px}}
-.corp-sign-row{{display:flex;align-items:center;gap:14px}}
-.corp-sign-logo{{
-  width:56px;height:56px;border-radius:50%;border:2px solid {cyan};
-  display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;flex-shrink:0;
-}}
-.corp-sign-logo img{{width:42px;height:42px;object-fit:contain}}
-.corp-sign-name{{
-  font-family:Georgia,'Times New Roman',serif;font-size:20px;font-style:italic;
-  font-weight:700;color:{navy};margin:0;
-}}
-.corp-sign-role{{font-size:13px;color:#334155;margin:2px 0 0}}
-.corp-sign-team{{font-size:12px;color:{silver};margin:2px 0 0}}
-.corp-footer{{
-  margin-top:28px;background:{navy};color:#e2e8f0;
-  padding:16px 48px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
-  position:relative;overflow:hidden;
-}}
-.corp-footer::after{{
-  content:'';position:absolute;bottom:0;right:0;width:0;height:0;
-  border-style:solid;border-width:0 0 70px 90px;
-  border-color:transparent transparent {cyan} transparent;opacity:.95;
-}}
-.corp-footer-left{{display:flex;align-items:center;gap:12px;position:relative;z-index:1}}
-.corp-footer-left img{{height:28px;width:28px;object-fit:contain;background:#fff;border-radius:50%;padding:2px}}
-.corp-footer-txt{{font-size:12px;line-height:1.35}}
-.corp-footer-txt b{{color:#fff;font-weight:700}}
-</style>
-{extra_top}
-<div class="corp-page">
-<div class="corp-doc" id="capture">
-  <div class="corp-inner">
-    <div class="corp-brand-row">
-      <img src="{logo_src}" alt="Procsis" onerror="this.style.display='none'">
-      <div class="corp-brand-txt">
-        <div class="co">Documento corporativo · EduTrack</div>
-        <div class="sub">Colombia</div>
-      </div>
-    </div>
-    <div class="corp-badge">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{badge_color}" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      {badge}
-    </div>
-    <h1 class="corp-title">{titulo or 'Documento'}</h1>
-    <div class="corp-title-line"></div>
-    <div class="corp-kicker">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{cyan}" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      PROCSIS — DOCUMENTO CORPORATIVO / {"CONFIDENCIAL" if confidencial else "OPINIÓN PÚBLICA"}
-    </div>
-    <div class="corp-meta-row">
-      <span><span class="lbl">Fecha de publicación:</span>&nbsp;{fecha}</span>
-      <span style="color:#cbd5e1">|</span>
-      <span><span class="lbl">Lugar:</span>&nbsp;{lugar}</span>
-    </div>
-    <div class="corp-content">{cuerpo_html or ''}</div>
-    <div class="corp-sign">
-      <div style="font-size:14px;font-weight:700;color:{navy}">Con visión, tecnología y compromiso,</div>
-      <div class="corp-sign-line"></div>
-      <div class="corp-sign-row">
-        <div class="corp-sign-logo"><img src="{logo_src}" alt="" onerror="this.parentNode.innerHTML='P'"></div>
-        <div>
-          <div class="corp-sign-name">Sebastián López</div>
-          <div class="corp-sign-role">Fundador y Dirección General</div>
-          <div class="corp-sign-team">Y todo el equipo de PROCSIS – Innovación que gestiona</div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="corp-footer">
-    <div class="corp-footer-left">
-      <img src="{logo_src}" alt="" onerror="this.style.display='none'">
-      <div class="corp-footer-txt">
-        <b>PROCSIS — Innovación que gestiona · EduTrack</b><br>
-        Dirección General y Gerencia HQ
-      </div>
-    </div>
-  </div>
-</div>
-</div>
-"""
+        try:
+            lugar = _doc_extract_lugar(cuerpo_html, "Colombia")
+        except Exception:
+            lugar = "Colombia"
+    logo = (logo_src or "/static/img/logo-procsis.jpeg").replace('"', "").strip() or "/static/img/logo-procsis.jpeg"
+    tit = (titulo or "COMUNICADO").strip()
+    badge = ""
+    if confidencial:
+        badge = (
+            '<div style="font-size:11px;font-weight:700;color:#b91c1c;margin:0 0 18px;'
+            'letter-spacing:.04em">DOCUMENTO CONFIDENCIAL · USO INTERNO</div>'
+        )
+    css = (
+        "<style>"
+        ".pagina-documento{max-width:750px;margin:0 auto;padding:50px 60px 60px;background:#fff;"
+        "font-family:Arial,Helvetica,sans-serif;color:#000;line-height:1.6;box-sizing:border-box;"
+        "border:1px solid #e5e7eb;box-shadow:0 8px 28px rgba(15,23,42,.08)}"
+        ".cabecera-logos{display:flex;justify-content:space-between;align-items:center;"
+        "margin-bottom:48px;gap:20px}"
+        ".logo-lateral{width:96px;height:auto;max-height:100px;object-fit:contain;flex-shrink:0}"
+        ".fecha-central{font-size:14px;font-weight:700;text-align:center;flex:1;color:#111;"
+        "letter-spacing:.02em}"
+        ".cabecera-spacer{width:96px;flex-shrink:0}"
+        ".titulo-comunicado{font-size:15px;font-weight:700;text-align:left;margin:0 0 32px;"
+        "text-transform:uppercase;letter-spacing:.5px;color:#000}"
+        ".cuerpo-texto{font-size:13.5px;text-align:justify;color:#111;line-height:1.65}"
+        ".cuerpo-texto p{margin:0 0 18px}"
+        ".cuerpo-texto h2{font-size:14px;font-weight:700;margin:22px 0 10px;text-align:left;color:#000}"
+        ".cuerpo-texto ul{margin:0 0 18px 1.2em;padding:0}"
+        ".cuerpo-texto li{margin:0 0 8px}"
+        ".pie-firma{margin-top:48px;font-size:13.5px;text-align:left;line-height:1.8;color:#000}"
+        ".firma-bold{font-weight:700;text-transform:uppercase;margin:4px 0}"
+        ".pie-lugar{margin-top:28px;font-size:13px}"
+        "@media print{.pagina-documento{box-shadow:none;border:0;max-width:100%;padding:40px 50px}}"
+        "@media(max-width:640px){.pagina-documento{padding:28px 20px}"
+        ".logo-lateral,.cabecera-spacer{width:64px}.fecha-central{font-size:12px}}"
+        "</style>"
+    )
+    html = (
+        (extra_top or "")
+        + css
+        + '<div class="pagina-documento">'
+        + '<div class="cabecera-logos">'
+        + '<img src="' + logo + '" alt="PROCSIS" class="logo-lateral">'
+        + '<div class="fecha-central">' + _esc(fecha_txt) + "</div>"
+        + '<div class="cabecera-spacer" aria-hidden="true"></div>'
+        + "</div>"
+        + badge
+        + '<div class="titulo-comunicado">' + _esc(tit) + "</div>"
+        + '<div class="cuerpo-texto">' + (cuerpo_html or "") + "</div>"
+        + '<div class="pie-firma">'
+        + '<p style="margin:0 0 6px">Firmado.</p>'
+        + '<p class="firma-bold">PROCSIS · DIRECCIÓN GENERAL</p>'
+        + '<p class="firma-bold" style="font-weight:600;text-transform:none">EduTrack · Innovación que gestiona</p>'
+        + '<p class="pie-lugar">' + _esc(lugar or "Colombia") + ".</p>"
+        + "</div></div>"
+    )
+    return html
 
 
 def _doc_word_bytes(titulo, html_body, confidencial=True, lugar=None):
