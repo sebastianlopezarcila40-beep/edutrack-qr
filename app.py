@@ -1211,7 +1211,7 @@ class Plataforma(db.Model):
     corp_footer_texto = db.Column(db.Text, default="Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.")
     corp_portafolio_titulo = db.Column(db.String(160), default="Portafolio de soluciones")
     corp_portafolio_texto = db.Column(db.Text, default="Productos y servicios para la gestión académica y administrativa de instituciones educativas.")
-    corp_hero_fondo = db.Column(db.String(255), default="")  # imagen de fondo del hero /procsis
+    corp_hero_fondo = db.Column(db.Text, default="")  # data URI o URL — persiste en BD (Railway no borra)
     corp_caracteristicas = db.Column(db.Text, default="")  # lineas: titulo|descripcion por fila
     corp_empresa_puntos = db.Column(db.Text, default="")  # puntos de la empresa
     corp_btn1_texto = db.Column(db.String(80), default="Conocer PROCSIS")
@@ -1229,7 +1229,7 @@ class ProductoProcsis(db.Model):
     nombre = db.Column(db.String(160), nullable=False, default="")
     descripcion = db.Column(db.Text, default="")
     estado = db.Column(db.String(30), default="Disponible")  # Disponible | En desarrollo | Próximamente
-    imagen = db.Column(db.String(255), default="")
+    imagen = db.Column(db.Text, default="")  # data URI persistente
     orden = db.Column(db.Integer, default=0)
     activo = db.Column(db.Boolean, default=True)
     creado_en = db.Column(db.String(20), default="")
@@ -1241,7 +1241,7 @@ class NoticiaProcsis(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     titulo = db.Column(db.String(200), nullable=False, default="")
     cuerpo = db.Column(db.Text, default="")
-    imagen = db.Column(db.String(255), default="")
+    imagen = db.Column(db.Text, default="")  # data URI persistente
     fecha = db.Column(db.String(20), default="")
     activo = db.Column(db.Boolean, default=True)
 
@@ -3699,6 +3699,10 @@ def inicializar_bd():
                 for sql in (
                     "ALTER TABLE plataforma ALTER COLUMN anuncio_img1 TYPE TEXT",
                     "ALTER TABLE plataforma ALTER COLUMN anuncio_img2 TYPE TEXT",
+                    "ALTER TABLE plataforma ALTER COLUMN corp_hero_fondo TYPE TEXT",
+                    "ALTER TABLE plataforma ALTER COLUMN logo_path TYPE TEXT",
+                    "ALTER TABLE productos_procsis ALTER COLUMN imagen TYPE TEXT",
+                    "ALTER TABLE noticias_procsis ALTER COLUMN imagen TYPE TEXT",
                 ):
                     try:
                         conn.execute(sa_text(sql))
@@ -4268,6 +4272,45 @@ def corp_valor(p, attr, default=""):
     if val is None or (isinstance(val, str) and not val.strip()):
         return default
     return val
+
+
+def _archivo_a_data_uri(file_storage, max_bytes=2_500_000):
+    """Convierte upload a data URI para guardarlo en BD (persiste en Railway)."""
+    if not file_storage or not getattr(file_storage, "filename", None):
+        return None
+    try:
+        raw = file_storage.read()
+        if not raw or len(raw) > max_bytes:
+            return None
+        import base64 as _b64
+        fn = (file_storage.filename or "img.jpg").lower()
+        if fn.endswith(".png"):
+            mime = "image/png"
+        elif fn.endswith(".webp"):
+            mime = "image/webp"
+        elif fn.endswith(".gif"):
+            mime = "image/gif"
+        else:
+            mime = "image/jpeg"
+            # re-encode jpeg smaller if possible
+            try:
+                from PIL import Image
+                from io import BytesIO
+                im = Image.open(BytesIO(raw))
+                if im.mode in ("RGBA", "P"):
+                    im = im.convert("RGB")
+                im.thumbnail((1600, 900), Image.Resampling.LANCZOS)
+                buf = BytesIO()
+                im.save(buf, format="JPEG", quality=82)
+                raw = buf.getvalue()
+                mime = "image/jpeg"
+            except Exception:
+                pass
+        return "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+    except Exception as ex:
+        print("data_uri:", ex)
+        return None
+
 
 
 def plataforma():
@@ -23304,18 +23347,14 @@ def gerencia_web_corporativa():
         try:
             fimg = request.files.get("corp_hero_fondo_file")
             if fimg and getattr(fimg, "filename", ""):
-                import os as _os
-                from werkzeug.utils import secure_filename
-                folder = _os.path.join(app.root_path, "static", "uploads", "corp")
-                _os.makedirs(folder, exist_ok=True)
-                fn = secure_filename(fimg.filename)
-                ext = (fn.rsplit(".", 1)[-1] if "." in fn else "jpg").lower()
-                if ext in ("jpg", "jpeg", "png", "webp", "gif"):
-                    out = "hero_fondo." + ext
-                    fimg.save(_os.path.join(folder, out))
-                    p.corp_hero_fondo = "/static/uploads/corp/" + out
-            elif (request.form.get("corp_hero_fondo_url") or "").strip():
-                p.corp_hero_fondo = (request.form.get("corp_hero_fondo_url") or "").strip()[:255]
+                data_uri = _archivo_a_data_uri(fimg, max_bytes=3_000_000)
+                if data_uri:
+                    p.corp_hero_fondo = data_uri
+            else:
+                url_f = (request.form.get("corp_hero_fondo_url") or "").strip()
+                # Solo URL http(s); no pisar data URI con texto vacío o truncado del form
+                if url_f.startswith("http://") or url_f.startswith("https://"):
+                    p.corp_hero_fondo = url_f[:500]
             if request.form.get("quitar_fondo") == "1":
                 p.corp_hero_fondo = ""
         except Exception as _hf:
@@ -23323,16 +23362,9 @@ def gerencia_web_corporativa():
         try:
             flogo = request.files.get("corp_logo_file")
             if flogo and getattr(flogo, "filename", ""):
-                import os as _os
-                from werkzeug.utils import secure_filename
-                folder = _os.path.join(app.root_path, "static", "uploads", "corp")
-                _os.makedirs(folder, exist_ok=True)
-                fn = secure_filename(flogo.filename)
-                ext = (fn.rsplit(".", 1)[-1] if "." in fn else "png").lower()
-                if ext in ("jpg", "jpeg", "png", "webp", "gif"):
-                    out = "logo_procsis_web." + ext
-                    flogo.save(_os.path.join(folder, out))
-                    p.logo_path = "/static/uploads/corp/" + out
+                data_uri = _archivo_a_data_uri(flogo, max_bytes=1_500_000)
+                if data_uri:
+                    p.logo_path = data_uri
         except Exception as _lg:
             print("corp logo:", _lg)
         db.session.commit()
@@ -23450,7 +23482,8 @@ def gerencia_web_corporativa():
       <label>Fondo del hero (archivo)</label>
       <input type="file" name="corp_hero_fondo_file" accept="image/*">
       <label>O URL de fondo</label>
-      <input name="corp_hero_fondo_url" value="{_esc(getattr(p,'corp_hero_fondo',None) or '')}">
+      <input name="corp_hero_fondo_url" value="{_esc((getattr(p,'corp_hero_fondo',None) or '') if not str(getattr(p,'corp_hero_fondo',None) or '').startswith('data:') else '')}" placeholder="https://… o suba archivo (se guarda en BD)">
+      {('<p style="font-size:12px;color:#166534;margin:6px 0 0">Fondo actual guardado en base de datos (no se borra al reiniciar Railway).</p><img src="'+str(getattr(p,'corp_hero_fondo',None))+'" style="max-width:100%;max-height:120px;border-radius:8px;margin-top:6px" alt="fondo">') if str(getattr(p,'corp_hero_fondo',None) or '').startswith('data:') or str(getattr(p,'corp_hero_fondo',None) or '').startswith('http') else ''}
       <label><input type="checkbox" name="quitar_fondo" value="1"> Quitar fondo</label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
         <div><label>Botón 1 texto</label><input name="corp_btn1_texto" value="{_v('corp_btn1_texto','Conocer PROCSIS')}"></div>
@@ -25380,9 +25413,9 @@ def gerencia_procsis_web():
             if archivo and archivo.filename:
                 up_dir = os.path.join(app.root_path, "static", "uploads", "procsis")
                 os.makedirs(up_dir, exist_ok=True)
-                fname = f"prod_{int(__import__('time').time())}_{archivo.filename}"[:120]
-                archivo.save(os.path.join(up_dir, fname))
-                p.imagen = f"/static/uploads/procsis/{fname}"
+                data_uri = _archivo_a_data_uri(archivo, max_bytes=2_000_000)
+                if data_uri:
+                    p.imagen = data_uri
             db.session.add(p)
             db.session.commit()
             registrar_auditoria("Producto Procsis creado", p.nombre)
@@ -25404,9 +25437,9 @@ def gerencia_procsis_web():
             if archivo and archivo.filename:
                 up_dir = os.path.join(app.root_path, "static", "uploads", "procsis")
                 os.makedirs(up_dir, exist_ok=True)
-                fname = f"news_{int(__import__('time').time())}_{archivo.filename}"[:120]
-                archivo.save(os.path.join(up_dir, fname))
-                n.imagen = f"/static/uploads/procsis/{fname}"
+                data_uri = _archivo_a_data_uri(archivo, max_bytes=2_000_000)
+                if data_uri:
+                    n.imagen = data_uri
             db.session.add(n)
             db.session.commit()
             registrar_auditoria("Noticia Procsis creada", n.titulo)
