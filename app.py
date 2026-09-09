@@ -16575,6 +16575,8 @@ def ventas_panel():
     <div class="vp-kpi"><div class="l">En demo</div><div class="v">{n_demo}</div><div class="s">Prueba activa</div></div>
   </div>
 
+  {seccion_planes}
+
   <div style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin:12px 0 16px">
     <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE VENTAS / COMERCIAL · LEADS</div>
     <div style="overflow-x:auto">
@@ -16601,7 +16603,7 @@ def ventas_panel():
     </form>
   </div>
 
-  {seccion_planes}
+  
   {"<div style='background:#f0fdf4;border:1px solid #bbf7d0;padding:12px;border-radius:10px;margin-bottom:12px;font-size:13px'><b>Link demo generado</b> (envíelo por WhatsApp al rector):<br><code style='word-break:break-all'>"+inv_msg+"</code><br><a target='_blank' href='https://wa.me/?text="+quote("Rector, le dejo este link para que registre su colegio y pruebe EduTrack gratis 15 días: "+inv_msg)+"'>Enviar por WhatsApp</a></div>" if inv_msg else ""}
 
   <div class="sec-title">Embudo comercial</div>
@@ -28272,7 +28274,6 @@ def _modulos_por_rol(rol):
         ("Seguridad empleados", "/soporte/seguridad-empleados", "#7c2d12"),
     ]
     ventas = [
-        ("Panel ventas", "/ventas/panel", "#0B2D57"),
         ("📅 Calendario escolar", "/calendario", "#0B2D57"),
         ("CRM · Embudo", "/ventas/crm", "#1d4ed8"),
         ("Solicitudes web", "/ventas/solicitudes", "#dc2626"),
