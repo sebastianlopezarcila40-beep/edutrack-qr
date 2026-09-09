@@ -332,6 +332,166 @@ PLANES_EDUTRACK = {
     },
 }
 
+# Rutas → módulo de plan (para bloquear en planes Solo QR)
+_RUTA_MODULO_PLAN = {
+    "/notas": "notas_basico",
+    "/notas/planilla": "notas_basico",
+    "/notas/ficha": "notas_basico",
+    "/notas/faltas": "asistencia_qr",
+    "/notas/refuerzos": "notas_basico",
+    "/eduaura": "eduaura",
+    "/radar-predictivo": "eduaura",
+    "/boletines": "boletines_pdf",
+    "/siee": "siee",
+    "/panel_convivencia": "novedades",
+    "/convivencia": "novedades",
+    "/historial_novedades": "novedades",
+    "/citaciones": "citaciones",
+    "/horarios": "horarios",
+    "/admisiones": "estudiantes",
+    "/migracion-historica": "import_excel",
+    "/exportar_simat": "import_excel",
+    "/importar_estudiantes": "import_excel",
+    "/pqr-colegio": "contacto",
+    "/reportes_padres": "reportes_padres",
+    "/reportes/financiero-colegio": "reportes_basicos",
+    "/carnes": "carnes",
+    "/portal": "asistencia_qr",
+    "/docente-movil": "asistencia_qr",
+    "/ingreso_manual": "ingreso_manual",
+    "/calendario": "calendario",
+    "/alertas": "alertas_impuntualidad",
+    "/sedes": "multi_sede",
+    "/estudiantes": "estudiantes",
+    "/registrar_estudiante": "estudiantes",
+    "/buscar_estudiantes": "estudiantes",
+    "/estudiantes_grupo": "estudiantes",
+    "/reportes": "reportes_basicos",
+}
+
+
+def _codigo_plan_inst(inst=None):
+    """Código de plan del colegio (qr_basico, basico, pro, …)."""
+    try:
+        if inst is None:
+            from flask import g
+            inst = getattr(g, "institucion", None)
+        if inst is None:
+            iid = session.get("institucion_id")
+            if iid:
+                inst = Institucion.query.get(iid)
+        if not inst:
+            return ""
+        raw = (getattr(inst, "plan", None) or getattr(inst, "plan_codigo", None) or "").strip()
+        if not raw:
+            return ""
+        low = raw.lower().replace(" ", "_")
+        # Normalizar nombres legibles → código
+        mapa = {
+            "qr_basico": "qr_basico", "qr basico": "qr_basico", "qr-básico": "qr_basico", "qr básico": "qr_basico",
+            "qr_plus": "qr_plus", "qr plus": "qr_plus", "qr-plus": "qr_plus",
+            "qr_institucional": "qr_institucional", "qr institucional": "qr_institucional",
+            "basico": "basico", "básico": "basico", "basic": "basico",
+            "institucional": "institucional", "pro": "pro", "premium": "premium", "piloto": "piloto",
+        }
+        if low in mapa:
+            return mapa[low]
+        if low.startswith("qr"):
+            if "inst" in low:
+                return "qr_institucional"
+            if "plus" in low:
+                return "qr_plus"
+            return "qr_basico"
+        return low
+    except Exception:
+        return ""
+
+
+def es_plan_solo_qr(inst=None):
+    """True si el colegio tiene un plan de la línea Solo QR (funciones limitadas)."""
+    cod = _codigo_plan_inst(inst)
+    if cod in ("qr_basico", "qr_plus", "qr_institucional"):
+        return True
+    meta = PLANES_EDUTRACK.get(cod) or PLANES_EDUTRACK.get(cod.replace("_", " ").title())
+    if isinstance(meta, dict) and meta.get("linea") == "qr":
+        return True
+    # también por features_json del PlanComercial
+    try:
+        pc = PlanComercial.query.filter(
+            db.or_(PlanComercial.codigo == cod, PlanComercial.nombre.ilike(cod))
+        ).first()
+        if pc:
+            import json as _json
+            feats = _json.loads(pc.features_json or "{}")
+            if isinstance(feats, dict) and (feats.get("linea") == "qr" or "Solo QR" in str(feats.get("tagline") or "")):
+                return True
+            if isinstance(feats, dict) and any("qr" in str(x).lower() for x in (feats.get("incluidos") or [])[:3]) and "notas" in str(feats.get("excluidos") or "").lower():
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def modulos_plan_actual(inst=None):
+    """Lista de módulos habilitados según el plan del colegio."""
+    cod = _codigo_plan_inst(inst)
+    meta = PLANES_EDUTRACK.get(cod)
+    if not meta:
+        # buscar por nombre aproximado
+        for k, v in PLANES_EDUTRACK.items():
+            if k.lower() == cod or (v.get("nombre") or "").lower() == cod:
+                meta = v
+                break
+    if meta and meta.get("modulos"):
+        return list(meta["modulos"])
+    if es_plan_solo_qr(inst):
+        return list((PLANES_EDUTRACK.get("qr_basico") or {}).get("modulos") or [
+            "asistencia_qr", "estudiantes", "reportes_basicos", "ingreso_manual", "portal_porteria", "calendario"
+        ])
+    # plan académico completo por defecto
+    return list((PLANES_EDUTRACK.get("Premium") or {}).get("modulos") or [])
+
+
+def plan_permite_ruta(path=None, inst=None):
+    """False si la ruta exige un módulo que el plan Solo QR no incluye."""
+    if not es_plan_solo_qr(inst):
+        return True
+    path = (path or (request.path if request else "") or "").split("?")[0]
+    mods = set(modulos_plan_actual(inst))
+    # rutas siempre permitidas
+    always = ("/dashboard", "/logout", "/mi_licencia", "/contacto", "/login", "/perfil", "/cambiar-clave")
+    if path in always or path.startswith("/static"):
+        return True
+    for pref, mod in _RUTA_MODULO_PLAN.items():
+        if path == pref or path.startswith(pref + "/"):
+            # módulos QR: asistencia_qr cubre faltas; reportes sin excel si no tiene
+            if mod == "reportes_excel" and "reportes_excel" not in mods and "reportes_basicos" in mods:
+                if path.rstrip("/").endswith("excel"):
+                    return False
+                return True
+            if mod in mods:
+                return True
+            # excepciones: faltas con asistencia_qr
+            if mod == "asistencia_qr" and "asistencia_qr" in mods:
+                return True
+            return False
+    # docente planilla bloqueada en QR
+    if path.startswith("/notas") or path.startswith("/docente-escritorio"):
+        return "notas_basico" in mods or "portal_docente" in mods
+    return True
+
+
+def mensaje_plan_qr_limitado():
+    return (
+        "<div class='msg danger' style='max-width:640px;margin:24px auto;padding:18px;border-radius:12px'>"
+        "<b>Plan Solo QR</b><br>Esta función no está incluida en su plan actual "
+        "(asistencia QR / ingreso / reportes de acceso). "
+        "Para notas, boletines o SIEE active un plan académico EduTrack con el equipo comercial PROCSIS."
+        "<br><br><a href='/dashboard'>← Volver al inicio</a> · <a href='/mi_licencia'>Ver mi licencia</a></div>"
+    )
+
+
+
 SLOGAN = "Tecnología para una educación moderna y responsable"
 
 # Valores por defecto (se sobreescriben desde la base de datos / panel de configuración)
@@ -2572,6 +2732,63 @@ def menu_items_por_rol():
         ]
 
     items.append(("/logout", "Cerrar sesión"))
+    # Plan Solo QR: menú reducido a funciones de acceso escolar
+    try:
+        if es_plan_solo_qr():
+            mods = set(modulos_plan_actual())
+            permitidas = {
+                "/dashboard", "/logout", "/mi_licencia", "/contacto", "/calendario",
+                "/portal", "/ingreso_manual", "/docente-movil", "/carnes", "/reportes",
+                "/registrar_estudiante", "/buscar_estudiantes", "/estudiantes_grupo",
+                "/estudiantes", "/importar_estudiantes", "/alertas", "/sedes",
+                "/reportes_padres", "/enlaces-publicos",
+            }
+            # map módulos → rutas extra
+            if "asistencia_qr" in mods or "portal_porteria" in mods:
+                permitidas.update({"/portal", "/docente-movil", "/ingreso_manual", "/notas/faltas"})
+            if "estudiantes" in mods:
+                permitidas.update({"/registrar_estudiante", "/buscar_estudiantes", "/estudiantes_grupo", "/estudiantes"})
+            if "carnes" in mods:
+                permitidas.add("/carnes")
+            if "reportes_basicos" in mods or "reportes_excel" in mods:
+                permitidas.add("/reportes")
+            if "calendario" in mods:
+                permitidas.add("/calendario")
+            if "multi_sede" in mods:
+                permitidas.add("/sedes")
+            if "historial_padres" in mods or "reportes_padres" in mods:
+                permitidas.add("/reportes_padres")
+            if "alertas_impuntualidad" in mods:
+                permitidas.add("/alertas")
+            if "import_excel" in mods:
+                permitidas.add("/importar_estudiantes")
+            # Docente en plan QR: solo asistencia / inicio
+            if (rol_actual() or "") == "Docente":
+                items = [
+                    ("/dashboard", "Inicio"),
+                    ("/docente-movil", "Asistencia QR"),
+                    ("/notas/faltas", "Faltas / asistencia"),
+                    ("/calendario", "Calendario"),
+                    ("/contacto", "Contacto"),
+                    ("/logout", "Cerrar sesión"),
+                ]
+                return items
+            filtered = []
+            for href, label in items:
+                base = href.split("?")[0]
+                if base in permitidas or any(base.startswith(p + "/") for p in permitidas):
+                    # bloquear notas / eduaura / convivencia explícitamente
+                    if base.startswith(("/notas/planilla", "/notas/ficha", "/eduaura", "/radar", "/boletines", "/siee", "/panel_convivencia", "/citaciones", "/horarios")):
+                        if "notas_basico" not in mods and "portal_docente" not in mods:
+                            continue
+                    filtered.append((href, label))
+            if not any(h == "/dashboard" for h, _ in filtered):
+                filtered.insert(0, ("/dashboard", "Inicio"))
+            if not any(h == "/logout" for h, _ in filtered):
+                filtered.append(("/logout", "Cerrar sesión"))
+            return filtered
+    except Exception as _ex_qr:
+        print("menu qr filter:", _ex_qr)
     return items
 
 
@@ -6677,6 +6894,31 @@ def grados_docente_actual():
 
 
 def requiere_login(): return "usuario" in session
+
+
+@app.before_request
+def _guard_plan_qr_rutas():
+    """Si el colegio tiene plan Solo QR, bloquea módulos académicos no incluidos."""
+    try:
+        if not session.get("usuario"):
+            return None
+        path = (request.path or "")
+        if path.startswith(("/static", "/api/", "/logout", "/login", "/anuncio")):
+            return None
+        rol = (session.get("rol") or "")
+        if rol in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador") and session.get("soporte"):
+            return None  # backoffice PROCSIS no se limita
+        if not es_plan_solo_qr():
+            return None
+        if plan_permite_ruta(path):
+            return None
+        return page("Plan Solo QR", mensaje_plan_qr_limitado())
+    except Exception as ex:
+        print("guard qr:", ex)
+        return None
+
+
+
 def rol_actual(): return session.get("rol", "")
 def es_admin_tecnico(): return rol_actual() in ["Administrador", "Soporte"]
 def puede_admin(): return rol_actual() in ["Administrador", "Soporte"]
