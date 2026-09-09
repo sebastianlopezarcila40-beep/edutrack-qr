@@ -19512,7 +19512,6 @@ def _catalogo_documentos_corp():
             "categoria": "legal",
             "publico": False,
             "cuerpo": (
-                "<p><b>CONTRATO DE LICENCIAMIENTO SAAS — PLATAFORMA EDUTRACK</b></p>"
                 "<p>Plantilla editable entre PROCSIS (Proveedor) y la institución educativa (Cliente). "
                 "Complete razón social, NIT, plan, vigencia y solicite revisión jurídica antes de firmar.</p>"
                 "<h2>1. Partes y objeto</h2>"
@@ -19713,6 +19712,15 @@ def _doc_html_to_plain_lines(html_body):
                     if s.startswith("[[B]]", j):
                         break
                     if s[j] == "." and j + 1 < len(s) and s[j + 1] in " \t" and j + 2 < len(s) and s[j + 2].isupper():
+                        # No partir numeración de sección (ej. "1. Partes y objeto")
+                        prev = s[i:j].rstrip()
+                        if prev and prev.replace(".", "").replace(" ", "").isdigit():
+                            j += 1
+                            continue
+                        # No partir si es muy corto tipo "1." o "2."
+                        if len(prev) <= 3 and prev[:1].isdigit():
+                            j += 1
+                            continue
                         out.append(s[i:j + 1])
                         out.append("\n\n")
                         i = j + 1
@@ -19735,12 +19743,28 @@ def _doc_html_to_plain_lines(html_body):
     for ln in rebuilt:
         if not ln:
             empty_run += 1
-            if empty_run <= 2:
+            if empty_run <= 1:  # máximo 1 línea en blanco (compacto)
                 out.append("")
         else:
             empty_run = 0
             out.append(ln)
-    return out
+    # Unir "1." suelto con la línea siguiente ("Partes y objeto")
+    import re as _re_merge
+    merged = []
+    i = 0
+    while i < len(out):
+        ln = out[i]
+        if ln and _re_merge.match(r"^\d{1,2}\.?$", ln.strip()):
+            j = i + 1
+            while j < len(out) and not out[j]:
+                j += 1
+            if j < len(out) and out[j]:
+                merged.append(ln.rstrip(".") + ". " + out[j].lstrip())
+                i = j + 1
+                continue
+        merged.append(ln)
+        i += 1
+    return merged
 
 
 def _doc_line_is_bold(line):
@@ -19933,21 +19957,40 @@ def _doc_pdf_bytes(titulo, html_body, confidencial=True):
         return y - 26
 
     y = header_block(h - 1.3 * cm)
+    tit_u = (titulo or "DOCUMENTO").strip()
     c.setFillColorRGB(*navy)
-    c.setFont(font_b, 18)
-    for line in simpleSplit((titulo or "DOCUMENTO").upper(), font_b, 18, w - 2 * margin):
+    c.setFont(font_b, 15)
+    for line in simpleSplit(tit_u.upper(), font_b, 15, w - 2 * margin):
         c.drawString(margin, y, line)
-        y -= 24
-    y -= 8
+        y -= 18
+    y -= 4
     c.setStrokeColorRGB(0.85, 0.88, 0.92)
     c.setLineWidth(0.9)
     c.line(margin, y, w - margin, y)
-    y -= 20
+    y -= 12
 
     lines = _doc_html_to_plain_lines(html_body)
+    # Evitar título duplicado si el cuerpo repite el encabezado
+    tit_norm = " ".join(tit_u.lower().replace("—", "-").replace("–", "-").split())
+    filtered = []
+    for line in lines:
+        plain0 = _doc_strip_bold_marks(line).strip()
+        pnorm = " ".join(plain0.lower().replace("—", "-").replace("–", "-").split())
+        if not plain0:
+            filtered.append(line)
+            continue
+        if pnorm == tit_norm or pnorm.replace("# ", "").replace("## ", "") == tit_norm:
+            continue
+        if plain0.startswith("# ") or plain0.startswith("## "):
+            inner = plain0[2:].strip() if plain0.startswith("# ") else plain0[3:].strip()
+            if " ".join(inner.lower().replace("—", "-").split()) == tit_norm:
+                continue
+        filtered.append(line)
+    lines = filtered
+
     for line in lines:
         if not line:
-            y -= 16
+            y -= 6
             continue
         plain = _doc_strip_bold_marks(line)
         low = plain.lower()
@@ -19956,32 +19999,31 @@ def _doc_pdf_bytes(titulo, html_body, confidencial=True):
         is_sign_role = low.startswith(("fundador", "director", "dirección", "direccion", "y todo el equipo", "gerente"))
         use_bold = _doc_line_is_bold(line) or is_meta or is_sign_name
         if plain.startswith("# "):
-            y -= 12
+            y -= 6
             c.setFillColorRGB(*navy)
-            content, size, font = plain[2:], 14, font_b
+            content, size, font = plain[2:], 12, font_b
         elif plain.startswith("## "):
-            y -= 14
+            y -= 6
             c.setFillColorRGB(*navy)
-            content, size, font = plain[3:], 13, font_b
+            content, size, font = plain[3:], 11, font_b
         elif is_meta or is_sign_name:
             c.setFillColorRGB(*navy)
-            content, size, font = plain, 13 if is_sign_name else 12, font_b
+            content, size, font = plain, 11 if is_sign_name else 10, font_b
         elif is_sign_role:
             c.setFillColorRGB(*gray)
-            content, size, font = plain, 11, font_r
+            content, size, font = plain, 10, font_r
         else:
             c.setFillColorRGB(0.12, 0.16, 0.22)
-            content, size, font = plain, 12, (font_b if use_bold else font_r)
+            content, size, font = plain, 10, (font_b if use_bold else font_r)
         c.setFont(font, size)
         for chunk in simpleSplit(content, font, size, w - 2 * margin):
-            if y < margin + 44:
+            if y < margin + 36:
                 c.showPage()
                 y = header_block(h - 1.3 * cm)
                 c.setFont(font, size)
             c.drawString(margin, y, chunk)
-            y -= size + 7
-        # Firma: menos espacio entre nombre y cargos
-        y -= 4 if is_sign_name or is_sign_role else 10
+            y -= size + 4
+        y -= 2 if is_sign_name or is_sign_role else 4
 
     c.setFont(font_r, 8)
     c.setFillColorRGB(*gray)
@@ -20204,7 +20246,7 @@ def _doc_corp_shell_html(titulo, cuerpo_html, logo_src, confidencial=True, extra
         )
     css = (
         "<style>"
-        ".pagina-documento{max-width:750px;margin:0 auto;padding:50px 60px 60px;background:#fff;"
+        ".pagina-documento{max-width:750px;margin:0 auto;padding:36px 48px 40px;background:#fff;"
         "font-family:Arial,Helvetica,sans-serif;color:#000;line-height:1.6;box-sizing:border-box;"
         "border:1px solid #e5e7eb;box-shadow:0 8px 28px rgba(15,23,42,.08)}"
         ".cabecera-logos{display:flex;justify-content:space-between;align-items:center;"
@@ -20213,11 +20255,11 @@ def _doc_corp_shell_html(titulo, cuerpo_html, logo_src, confidencial=True, extra
         ".fecha-central{font-size:14px;font-weight:700;text-align:center;flex:1;color:#111;"
         "letter-spacing:.02em}"
         ".cabecera-spacer{width:96px;flex-shrink:0}"
-        ".titulo-comunicado{font-size:15px;font-weight:700;text-align:left;margin:0 0 32px;"
+        ".titulo-comunicado{font-size:15px;font-weight:700;text-align:left;margin:0 0 18px;"
         "text-transform:uppercase;letter-spacing:.5px;color:#000}"
-        ".cuerpo-texto{font-size:13.5px;text-align:justify;color:#111;line-height:1.65}"
-        ".cuerpo-texto p{margin:0 0 18px}"
-        ".cuerpo-texto h2{font-size:14px;font-weight:700;margin:22px 0 10px;text-align:left;color:#000}"
+        ".cuerpo-texto{font-size:13.5px;text-align:justify;color:#111;line-height:1.55}.cuerpo-texto h1,.cuerpo-texto h2,.cuerpo-texto h3,.cuerpo-texto li{page-break-inside:avoid;break-inside:avoid}"
+        ".cuerpo-texto p{margin:0 0 12px}"
+        ".cuerpo-texto h2{font-size:14px;font-weight:700;margin:14px 0 6px;text-align:left;color:#000;page-break-inside:avoid;break-inside:avoid}"
         ".cuerpo-texto ul{margin:0 0 18px 1.2em;padding:0}"
         ".cuerpo-texto li{margin:0 0 8px}"
         ".pie-firma{margin-top:48px;font-size:13.5px;text-align:left;line-height:1.8;color:#000}"
@@ -22125,7 +22167,6 @@ def ventas_contrato_digital():
 <a class="btn" href="/ventas/contrato-digital">Volver</a></header>
 <div class="msg err">Colegio y NIT son obligatorios. <a href="/ventas/contrato-digital">Volver a intentar</a></div>"""))
         html_body = (
-            "<p><b>CONTRATO DE LICENCIAMIENTO SAAS — PLATAFORMA EDUTRACK</b></p>"
             "<p>Contrato entre PROCSIS (Proveedor) y la institución educativa (Cliente) que se identifica a continuación. "
             "Documento generado desde el panel comercial; se recomienda revisión jurídica antes de la firma definitiva.</p>"
             "<h2>1. Partes y objeto</h2>"
