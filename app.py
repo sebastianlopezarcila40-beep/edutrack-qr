@@ -16880,7 +16880,6 @@ def portal_ventas():
       <a href="#beneficios">Beneficios</a>
       <a href="#contacto">Contacto</a>
       <a href="/pagar">Pagar factura</a>
-      <a href="/backoffice">Acceso interno</a>
     </div>
     <div class="tel">Línea ventas · {tel}</div>
   </div>
@@ -17025,8 +17024,7 @@ def portal_ventas():
       <div>
         <b>Ventas</b> {tel}<br>
         {email}<br>
-        <a href="/login" style="color:#0B2D57">Portal colegios</a> ·
-        <a href="/backoffice" style="color:#0B2D57">Backoffice</a>
+        <a href="/login" style="color:#0B2D57">Portal colegios</a>
       </div>
     </div>
   </footer>
