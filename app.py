@@ -17062,6 +17062,34 @@ def ventas_comprar():
     fee = float(pc.fee_implementacion if pc else meta.get("fee") or 0)
     max_e = int(pc.max_estudiantes if pc else meta.get("max_e") or 0)
     max_s = int(pc.max_sedes if pc else meta.get("max_s") or 12)
+    # Selector habilitado: todos los planes activos
+    opciones_plan = ""
+    lista_planes_confirm = ""
+    try:
+        for _p in PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden.asc()).all():
+            _cod = (_p.codigo or "").strip()
+            if not _cod:
+                continue
+            _nom = (_p.nombre or _cod).strip()
+            _sel = " selected" if _cod.lower() == plan.lower() else ""
+            _pr = int(float(_p.precio_mensual or 0))
+            _pr_txt = ("$ {:,.0f}/mes".format(_pr)).replace(",", ".") if _pr > 0 else "A definir"
+            opciones_plan += '<option value="' + _esc(_cod) + '"' + _sel + '>' + _esc(_nom) + " — " + _pr_txt + "</option>"
+            _activo = (_cod.lower() == plan.lower())
+            _bg = "#ecfdf5;border:2px solid #16a34a" if _activo else "#fff;border:1px solid #e2e8f0"
+            _badge = '<span style="background:#16a34a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px">PLAN ELEGIDO</span>' if _activo else ""
+            lista_planes_confirm += (
+                '<div style="background:' + _bg + ';border-radius:10px;padding:12px 14px;margin-bottom:8px">'
+                '<div style="font-weight:800;color:#0B2D57;font-size:14px">' + _esc(_nom) + _badge + "</div>"
+                '<div style="font-size:12px;color:#64748b;margin-top:2px">Código: <code>' + _esc(_cod) + "</code> · " + _pr_txt + "</div>"
+                + ('<div style="font-size:12px;color:#166534;margin-top:6px;font-weight:700">Confirmación: este es el plan que se activará al enviar el formulario.</div>' if _activo else "")
+                + "</div>"
+            )
+    except Exception as _e_op:
+        opciones_plan = '<option value="' + _esc(plan) + '" selected>' + _esc(plan_nom) + "</option>"
+        lista_planes_confirm = '<p style="color:#b91c1c">No se pudieron cargar planes: ' + _esc(str(_e_op)[:80]) + "</p>"
+    if not opciones_plan:
+        opciones_plan = '<option value="' + _esc(plan) + '" selected>' + _esc(plan_nom) + "</option>"
     incluidos = feats.get("incluidos") or meta.get("incluidos") or []
     excluidos = feats.get("excluidos") or meta.get("excluidos") or []
     tagline = feats.get("tagline") or meta.get("tagline") or ""
@@ -17309,13 +17337,13 @@ def ventas_comprar():
       <p style="color:#64748b;font-size:13px">Complete los datos. <b>La foto/logo del colegio es obligatoria</b> antes de activar.</p>
       {"<div class='vc-err'>"+error+"</div>" if error else ""}
       {"<div class='vc-ok'>"+ok+"</div>" if ok else ""}
-      <form method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="plan" value="{plan}">
-        <label>Plan</label>
-        <select name="plan" disabled style="opacity:.85">
-          <option selected>{plan_nom}</option>
+      <form method="POST" enctype="multipart/form-data" id="form-activar-plan">
+        <label><b>Plan a contratar *</b></label>
+        <select name="plan" required style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0B2D57;background:#fff"
+          onchange="if(this.value){{ window.location='/ventas/comprar?plan='+encodeURIComponent(this.value); }}">
+          {opciones_plan}
         </select>
-        <input type="hidden" name="plan" value="{plan}">
+        <p style="font-size:12px;color:#64748b;margin:6px 0 12px">Puede cambiar el plan aquí. Al elegir otro se actualiza la ficha de la izquierda.</p>
         <label>Código institución *</label>
         <input name="codigo" required placeholder="Ej: IE001">
         <label>Nombre del colegio *</label>
@@ -17368,6 +17396,11 @@ def ventas_comprar():
         <input name="asesor" value="{session.get('usuario') or ''}">
         <button type="submit">Confirmar y activar plan {plan_nom}</button>
       </form>
+      <div style="margin-top:22px;padding-top:16px;border-top:1px solid #e2e8f0">
+        <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57;font-weight:800">Confirmación · Planes disponibles</h3>
+        <p style="font-size:12px;color:#64748b;margin:0 0 10px">Plan seleccionado ahora: <b>{plan_nom}</b> (<code>{plan}</code>). Lista completa:</p>
+        {lista_planes_confirm}
+      </div>
     </div>
   </div>
 </div>
