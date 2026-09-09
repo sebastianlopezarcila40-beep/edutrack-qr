@@ -1842,7 +1842,65 @@ class NotaInteraccion(db.Model):
     resultado = db.Column(db.String(80), default="")  # Resuelto, Pendiente, Escalar, etc.
 
 
+
+class ContratoPersonal(db.Model):
+    """Gestión de contratos laborales / prestación de servicios (equipo PROCSIS)."""
+    __tablename__ = "contratos_personal"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(40), default="PRESTACION")  # PRESTACION | LABORAL_FIJO | LABORAL_INDEFINIDO | OBRA_LABOR
+    nombres = db.Column(db.String(160), default="")
+    documento = db.Column(db.String(40), index=True, default="")
+    cargo = db.Column(db.String(120), default="")
+    area = db.Column(db.String(80), default="")  # Soporte | Ventas | Desarrollo | Admin
+    fecha_inicio = db.Column(db.String(20), default="")
+    fecha_fin = db.Column(db.String(20), default="")
+    valor_mensual = db.Column(db.String(40), default="")
+    eps = db.Column(db.String(80), default="")
+    afp = db.Column(db.String(80), default="")
+    arl = db.Column(db.String(80), default="")
+    caja = db.Column(db.String(80), default="")
+    riesgo_arl = db.Column(db.String(10), default="1")  # Riesgo 1 software
+    estado = db.Column(db.String(30), default="ACTIVO")  # ACTIVO | TERMINADO | BORRADOR
+    pdf_data = db.Column(db.Text, default="")  # data URI o path
+    pdf_nombre = db.Column(db.String(160), default="")
+    notas = db.Column(db.Text, default="")
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(120), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
+class PlanillaPILA(db.Model):
+    """Historial mensual de planillas PILA / seguridad social."""
+    __tablename__ = "planillas_pila"
+    id = db.Column(db.Integer, primary_key=True)
+    periodo = db.Column(db.String(7), index=True, default="")  # YYYY-MM
+    operador = db.Column(db.String(80), default="")  # Mi Planilla, Aportes en Línea...
+    valor_total = db.Column(db.String(40), default="")
+    trabajadores = db.Column(db.Integer, default=0)
+    archivo_data = db.Column(db.Text, default="")
+    archivo_nombre = db.Column(db.String(160), default="")
+    notas = db.Column(db.Text, default="")
+    subido_en = db.Column(db.String(30), default="")
+    subido_por = db.Column(db.String(120), default="")
+
+
+class EntregaEPP(db.Model):
+    """Matriz de elementos de protección / implementos para visitas a colegios."""
+    __tablename__ = "entregas_epp"
+    id = db.Column(db.Integer, primary_key=True)
+    trabajador = db.Column(db.String(160), default="")
+    documento = db.Column(db.String(40), default="")
+    elemento = db.Column(db.String(160), default="")  # Chaleco, botas, etc.
+    cantidad = db.Column(db.Integer, default=1)
+    fecha_entrega = db.Column(db.String(20), default="")
+    motivo = db.Column(db.String(255), default="")  # Visita colegio X, instalación servidor...
+    firmado = db.Column(db.Boolean, default=False)
+    registrado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
 class CasoTurno(db.Model):
+
     """Cola de trabajo por turnos: cobranza / soporte / gerencia.
     Notas hijas van en NotaInteraccion (institucion_id + area)."""
     __tablename__ = "casos_turno"
@@ -19021,6 +19079,10 @@ def gerencia_hq():
         <a class="t" href="/gerencia/documentos/terminos-condiciones">Términos y condiciones</a>
         <a class="t" href="/gerencia/documentos/politica-datos">Política de datos</a>
         <a class="t" href="/gerencia/documentos/sg-sst">SG-SST simplificado</a>
+        <a class="own" href="/gerencia/talento-legal">Guía contratación · PILA · SG-SST</a>
+        <a class="own" href="/gerencia/contratos-personal">Gestión de contratos</a>
+        <a class="own" href="/gerencia/planillas-pila">Historial planillas PILA</a>
+        <a class="own" href="/gerencia/matriz-epp">Matriz EPP / visitas colegios</a>
         <a class="g" href="/docs/opinion-publica" target="_blank">Vista pública · Opinión</a>
         <a class="g" href="/docs/comunicado-prensa" target="_blank">Vista pública · Prensa</a>
         <a class="g" href="/docs/terminos-condiciones" target="_blank">Vista pública · Términos</a>
@@ -20336,6 +20398,474 @@ def _doc_word_bytes(titulo, html_body, confidencial=True, lugar=None):
     doc.save(buf)
     buf.seek(0)
     return buf.read()
+
+
+
+@app.route("/gerencia/talento-legal")
+def gerencia_talento_legal():
+    """Guía legal Colombia: esquemas de contrato, PILA, afiliaciones y SG-SST."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    body = """
+<style>
+.tl{max-width:920px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif;color:#1e293b}
+.tl h1{color:#0B2D57;margin:0 0 8px}
+.tl .sub{color:#64748b;margin-bottom:18px}
+.tl .card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:14px;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+.tl .card h2{margin:0 0 10px;font-size:16px;color:#0B2D57}
+.tl .card h3{margin:12px 0 6px;font-size:14px;color:#1e40af}
+.tl ul{margin:6px 0 6px 18px;line-height:1.55;font-size:14px}
+.tl .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:720px){.tl .grid{grid-template-columns:1fr}}
+.tl a.btn{display:inline-block;background:#0B2D57;color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:13px;margin:4px 6px 4px 0}
+.tl .tag{display:inline-block;background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+</style>
+<div class="tl">
+  <p><a href="/gerencia/hq">← HQ</a></p>
+  <h1>Talento · Contratación legal · Seguridad social</h1>
+  <p class="sub">Marco operativo PROCSIS Colombia. Los registros operativos están en los módulos de contratos, PILA y EPP.</p>
+
+  <div class="card">
+    <h2>1. Esquema de contratación</h2>
+    <div class="grid">
+      <div>
+        <h3><span class="tag">Civil / Comercial</span> Prestación de servicios</h3>
+        <ul>
+          <li>Freelance, diseño por proyecto, asesores externos</li>
+          <li>Sin horario estricto; trabajan con sus equipos</li>
+          <li>PROCSIS paga honorarios; el contratista cotiza PILA (salud, pensión, ARL) y entrega soporte de pago</li>
+        </ul>
+      </div>
+      <div>
+        <h3><span class="tag">Laboral</span> Término fijo / indefinido / obra o labor</h3>
+        <ul>
+          <li>Soporte, ventas o administración con horario</li>
+          <li>La empresa asume carga prestacional</li>
+          <li>Afiliaciones <b>antes</b> de que inicie labores</li>
+        </ul>
+      </div>
+    </div>
+    <p><a class="btn" href="/gerencia/contratos-personal">Abrir Gestión de contratos</a></p>
+  </div>
+
+  <div class="card">
+    <h2>2. Afiliaciones obligatorias (Planilla PILA)</h2>
+    <ul>
+      <li><b>EPS</b> — La elige el trabajador (Sura, Sanitas, Compensar…); empresa afilia como empleador</li>
+      <li><b>AFP</b> — Fondo de pensión/cesantías (Protección, Porvenir, Colfondos…)</li>
+      <li><b>ARL</b> — 100% empresa (Sura, Positiva, Bolívar…). Software/admin: <b>Riesgo 1</b>. Afiliar 24h antes del inicio</li>
+      <li><b>Caja de compensación</b> — Comfama, Comfenalco, Cafam, Colsubsidio según región</li>
+    </ul>
+    <p>Operadores PILA: Mi Planilla, Aportes en Línea, etc. Suba comprobantes mensuales para auditoría.</p>
+    <p><a class="btn" href="/gerencia/planillas-pila">Historial planillas PILA</a></p>
+  </div>
+
+  <div class="card">
+    <h2>3. SG-SST (Res. 0312 de 2019)</h2>
+    <ul>
+      <li><b>Matriz de riesgos</b>: ergonómicos, visuales, fatiga mental (teletrabajo / desarrollo)</li>
+      <li><b>Pausas activas</b> en jornadas de soporte y desarrollo</li>
+      <li><b>COPASST / Vigía</b>: con menos de 10 trabajadores, nombrar Vigía de SST</li>
+    </ul>
+    <p>
+      <a class="btn" href="/gerencia/documentos/sg-sst">Documento SG-SST</a>
+      <a class="btn" href="/gerencia/matriz-epp">Matriz EPP (visitas a colegios)</a>
+    </p>
+  </div>
+</div>
+"""
+    return page("Talento legal PROCSIS", body)
+
+
+@app.route("/gerencia/contratos-personal", methods=["GET", "POST"])
+def gerencia_contratos_personal():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "guardar").strip()
+        if accion == "eliminar":
+            try:
+                cid = int(request.form.get("id") or 0)
+            except Exception:
+                cid = 0
+            c = ContratoPersonal.query.get(cid) if cid else None
+            if c:
+                db.session.delete(c)
+                db.session.commit()
+                msg = "Contrato eliminado."
+                try:
+                    registrar_auditoria("Contrato personal eliminado", "id=%s" % cid)
+                except Exception:
+                    pass
+        else:
+            nombres = (request.form.get("nombres") or "").strip()[:160]
+            documento = (request.form.get("documento") or "").strip()[:40]
+            if not nombres or not documento:
+                err = "Nombres y documento son obligatorios."
+            else:
+                try:
+                    cid = int(request.form.get("id") or 0)
+                except Exception:
+                    cid = 0
+                c = ContratoPersonal.query.get(cid) if cid else None
+                if not c:
+                    c = ContratoPersonal(
+                        creado_en=fecha_hoy() + " " + hora_actual(),
+                        creado_por=session.get("usuario") or "",
+                    )
+                    db.session.add(c)
+                c.tipo = (request.form.get("tipo") or "PRESTACION").strip()[:40]
+                c.nombres = nombres
+                c.documento = documento
+                c.cargo = (request.form.get("cargo") or "").strip()[:120]
+                c.area = (request.form.get("area") or "").strip()[:80]
+                c.fecha_inicio = (request.form.get("fecha_inicio") or "").strip()[:20]
+                c.fecha_fin = (request.form.get("fecha_fin") or "").strip()[:20]
+                c.valor_mensual = (request.form.get("valor_mensual") or "").strip()[:40]
+                c.eps = (request.form.get("eps") or "").strip()[:80]
+                c.afp = (request.form.get("afp") or "").strip()[:80]
+                c.arl = (request.form.get("arl") or "").strip()[:80]
+                c.caja = (request.form.get("caja") or "").strip()[:80]
+                c.riesgo_arl = (request.form.get("riesgo_arl") or "1").strip()[:10]
+                c.estado = (request.form.get("estado") or "ACTIVO").strip()[:30]
+                c.notas = (request.form.get("notas") or "").strip()[:2000]
+                c.actualizado_en = fecha_hoy() + " " + hora_actual()
+                f = request.files.get("pdf")
+                if f and f.filename:
+                    try:
+                        import base64 as _b64
+                        raw = f.read()
+                        if len(raw) > 4_000_000:
+                            err = "PDF máximo 4 MB."
+                        else:
+                            c.pdf_nombre = (f.filename or "contrato.pdf")[:160]
+                            c.pdf_data = "data:application/pdf;base64," + _b64.b64encode(raw).decode("ascii")
+                    except Exception as ex:
+                        err = "Error al cargar PDF: " + str(ex)[:80]
+                if not err:
+                    db.session.commit()
+                    msg = "Contrato guardado."
+                    try:
+                        registrar_auditoria("Contrato personal", "%s %s %s" % (c.tipo, c.nombres, c.documento))
+                    except Exception:
+                        pass
+    rows = ContratoPersonal.query.order_by(ContratoPersonal.id.desc()).limit(100).all()
+    filas = []
+    for c in rows:
+        pdf_l = ("<a href='/gerencia/contratos-personal/%s/pdf' target='_blank'>PDF</a>" % c.id) if c.pdf_data else "—"
+        filas.append(
+            "<tr><td>%s</td><td><b>%s</b><br><span style='font-size:11px;color:#64748b'>%s</span></td>"
+            "<td>%s</td><td>%s</td><td>%s / %s</td><td>%s</td><td>%s</td>"
+            "<td>%s</td>"
+            "<td><form method='POST' style='display:inline' onsubmit='return confirm(\"Eliminar?\")'>"
+            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
+            "<button type='submit' style='font-size:11px;background:#b91c1c;color:#fff;border:0;border-radius:4px;padding:3px 8px'>Eliminar</button></form></td></tr>"
+            % (
+                _esc(c.tipo or ""),
+                _esc(c.nombres or ""),
+                _esc(c.documento or ""),
+                _esc(c.cargo or ""),
+                _esc(c.area or ""),
+                _esc(c.fecha_inicio or ""),
+                _esc(c.fecha_fin or "—"),
+                _esc(c.estado or ""),
+                pdf_l,
+                c.id,
+            )
+        )
+    if not filas:
+        filas = ["<tr><td colspan='9' style='text-align:center;color:#94a3b8'>Sin contratos. Registre el primero abajo.</td></tr>"]
+    body = (
+        "<div style='max-width:1000px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
+        "<p><a href='/gerencia/hq'>← HQ</a> · <a href='/gerencia/talento-legal'>Guía legal</a></p>"
+        "<h1 style='color:#0B2D57'>Gestión de contratos</h1>"
+        "<p style='color:#64748b;font-size:13px'>Prestación de servicios o laboral. Adjunte PDF firmado. Afiliaciones EPS/AFP/ARL/Caja.</p>"
+        + (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "")
+        + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
+        + "<table style='width:100%;border-collapse:collapse;font-size:13px;background:#fff;margin:12px 0'>"
+        "<tr style='background:#0B2D57;color:#fff'><th>Tipo</th><th>Persona</th><th>Cargo</th><th>Área</th>"
+        "<th>Vigencia</th><th>Estado</th><th>Archivo</th><th></th></tr>"
+        + "".join(filas)
+        + "</table>"
+        "<section style='background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-top:12px'>"
+        "<h2 style='margin-top:0;font-size:15px;color:#0B2D57'>Registrar / actualizar</h2>"
+        "<form method='POST' enctype='multipart/form-data' style='display:grid;grid-template-columns:1fr 1fr;gap:10px'>"
+        "<div><label><b>Tipo contrato *</b></label><select name='tipo'>"
+        "<option value='PRESTACION'>Prestación de servicios</option>"
+        "<option value='LABORAL_FIJO'>Laboral término fijo</option>"
+        "<option value='LABORAL_INDEFINIDO'>Laboral indefinido</option>"
+        "<option value='OBRA_LABOR'>Obra o labor</option></select></div>"
+        "<div><label><b>Estado</b></label><select name='estado'><option>ACTIVO</option><option>BORRADOR</option><option>TERMINADO</option></select></div>"
+        "<div><label><b>Nombres *</b></label><input name='nombres' required></div>"
+        "<div><label><b>Documento *</b></label><input name='documento' required></div>"
+        "<div><label><b>Cargo</b></label><input name='cargo'></div>"
+        "<div><label><b>Área</b></label><select name='area'><option>Soporte</option><option>Ventas</option>"
+        "<option>Desarrollo</option><option>Administración</option><option>Otro</option></select></div>"
+        "<div><label><b>Fecha inicio</b></label><input name='fecha_inicio' type='date'></div>"
+        "<div><label><b>Fecha fin</b></label><input name='fecha_fin' type='date'></div>"
+        "<div><label><b>Valor / honorarios</b></label><input name='valor_mensual' placeholder='Ej. 2500000'></div>"
+        "<div><label><b>Riesgo ARL</b></label><select name='riesgo_arl'><option value='1'>1 — Mínimo (software/admin)</option>"
+        "<option value='2'>2</option><option value='3'>3</option></select></div>"
+        "<div><label><b>EPS</b></label><input name='eps' placeholder='Sura, Sanitas…'></div>"
+        "<div><label><b>AFP</b></label><input name='afp' placeholder='Porvenir, Protección…'></div>"
+        "<div><label><b>ARL</b></label><input name='arl' placeholder='Sura, Positiva…'></div>"
+        "<div><label><b>Caja compensación</b></label><input name='caja' placeholder='Comfama, Cafam…'></div>"
+        "<div style='grid-column:1/-1'><label><b>PDF contrato firmado</b></label><input type='file' name='pdf' accept='.pdf,application/pdf'></div>"
+        "<div style='grid-column:1/-1'><label><b>Notas</b></label><textarea name='notas' rows='2'></textarea></div>"
+        "<div style='grid-column:1/-1'><button type='submit'>Guardar contrato</button></div>"
+        "</form></section></div>"
+    )
+    return page("Contratos personal", body)
+
+
+@app.route("/gerencia/contratos-personal/<int:cid>/pdf")
+def gerencia_contrato_pdf(cid):
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    c = ContratoPersonal.query.get_or_404(cid)
+    if not c.pdf_data:
+        return "Sin PDF", 404
+    import base64 as _b64
+    data = c.pdf_data
+    if data.startswith("data:"):
+        data = data.split(",", 1)[-1]
+    raw = _b64.b64decode(data)
+    from flask import Response
+    return Response(
+        raw,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "inline; filename=%s" % (c.pdf_nombre or ("contrato_%s.pdf" % cid))},
+    )
+
+
+@app.route("/gerencia/planillas-pila", methods=["GET", "POST"])
+def gerencia_planillas_pila():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "guardar").strip()
+        if accion == "eliminar":
+            try:
+                pid = int(request.form.get("id") or 0)
+            except Exception:
+                pid = 0
+            row = PlanillaPILA.query.get(pid) if pid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+                msg = "Planilla eliminada."
+        else:
+            periodo = (request.form.get("periodo") or "").strip()[:7]
+            if not periodo:
+                err = "Indique el periodo (YYYY-MM)."
+            else:
+                row = PlanillaPILA(
+                    periodo=periodo,
+                    operador=(request.form.get("operador") or "").strip()[:80],
+                    valor_total=(request.form.get("valor_total") or "").strip()[:40],
+                    trabajadores=int(request.form.get("trabajadores") or 0),
+                    notas=(request.form.get("notas") or "").strip()[:2000],
+                    subido_en=fecha_hoy() + " " + hora_actual(),
+                    subido_por=session.get("usuario") or "",
+                )
+                f = request.files.get("archivo")
+                if f and f.filename:
+                    import base64 as _b64
+                    raw = f.read()
+                    if len(raw) > 5_000_000:
+                        err = "Archivo máximo 5 MB."
+                    else:
+                        row.archivo_nombre = (f.filename or "pila.pdf")[:160]
+                        mime = "application/pdf"
+                        if (f.filename or "").lower().endswith(".png"):
+                            mime = "image/png"
+                        elif (f.filename or "").lower().endswith((".jpg", ".jpeg")):
+                            mime = "image/jpeg"
+                        row.archivo_data = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+                if not err:
+                    db.session.add(row)
+                    db.session.commit()
+                    msg = "Planilla registrada."
+                    try:
+                        registrar_auditoria("Planilla PILA", periodo)
+                    except Exception:
+                        pass
+    rows = PlanillaPILA.query.order_by(PlanillaPILA.periodo.desc()).limit(60).all()
+    filas = []
+    for r in rows:
+        arch = ("<a href='/gerencia/planillas-pila/%s/archivo' target='_blank'>Ver</a>" % r.id) if r.archivo_data else "—"
+        filas.append(
+            "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td style='font-size:12px'>%s<br>%s</td>"
+            "<td>%s</td>"
+            "<td><form method='POST' style='display:inline' onsubmit='return confirm(\"Eliminar?\")'>"
+            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
+            "<button type='submit' style='font-size:11px;background:#b91c1c;color:#fff;border:0;border-radius:4px;padding:3px 8px'>Eliminar</button></form></td></tr>"
+            % (
+                _esc(r.periodo),
+                _esc(r.operador or ""),
+                _esc(r.valor_total or ""),
+                r.trabajadores or 0,
+                arch,
+                _esc(r.subido_en or ""),
+                _esc(r.subido_por or ""),
+                r.id,
+            )
+        )
+    if not filas:
+        filas = ["<tr><td colspan='8' style='text-align:center;color:#94a3b8'>Sin planillas. Suba el comprobante del mes.</td></tr>"]
+    body = (
+        "<div style='max-width:960px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
+        "<p><a href='/gerencia/hq'>← HQ</a> · <a href='/gerencia/talento-legal'>Guía legal</a></p>"
+        "<h1 style='color:#0B2D57'>Historial planillas PILA</h1>"
+        "<p style='color:#64748b;font-size:13px'>Comprobantes mensuales de seguridad social para auditoría.</p>"
+        + (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "")
+        + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
+        + "<table style='width:100%;border-collapse:collapse;font-size:13px;background:#fff'>"
+        "<tr style='background:#0B2D57;color:#fff'><th>Periodo</th><th>Operador</th><th>Valor</th><th>Trabajadores</th>"
+        "<th>Archivo</th><th>Registro</th><th></th></tr>"
+        + "".join(filas)
+        + "</table>"
+        "<form method='POST' enctype='multipart/form-data' style='margin-top:16px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px'>"
+        "<div><label><b>Periodo (YYYY-MM) *</b></label><input name='periodo' placeholder='2026-09' required></div>"
+        "<div><label><b>Operador</b></label><input name='operador' placeholder='Mi Planilla / Aportes en Línea'></div>"
+        "<div><label><b>Valor total</b></label><input name='valor_total'></div>"
+        "<div><label><b>N° trabajadores</b></label><input name='trabajadores' type='number' min='0'></div>"
+        "<div style='grid-column:1/-1'><label><b>Comprobante (PDF/imagen)</b></label><input type='file' name='archivo'></div>"
+        "<div style='grid-column:1/-1'><label><b>Notas</b></label><textarea name='notas' rows='2'></textarea></div>"
+        "<div style='grid-column:1/-1'><button type='submit'>Registrar planilla</button></div>"
+        "</form></div>"
+    )
+    return page("Planillas PILA", body)
+
+
+@app.route("/gerencia/planillas-pila/<int:pid>/archivo")
+def gerencia_pila_archivo(pid):
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    r = PlanillaPILA.query.get_or_404(pid)
+    if not r.archivo_data:
+        return "Sin archivo", 404
+    import base64 as _b64
+    data = r.archivo_data
+    mime = "application/pdf"
+    if data.startswith("data:"):
+        head, data = data.split(",", 1)
+        if "image/png" in head:
+            mime = "image/png"
+        elif "image/jpeg" in head:
+            mime = "image/jpeg"
+    raw = _b64.b64decode(data)
+    from flask import Response
+    return Response(raw, mimetype=mime, headers={"Content-Disposition": "inline; filename=%s" % (r.archivo_nombre or "pila")})
+
+
+@app.route("/gerencia/matriz-epp", methods=["GET", "POST"])
+def gerencia_matriz_epp():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        if (request.form.get("accion") or "") == "eliminar":
+            try:
+                eid = int(request.form.get("id") or 0)
+            except Exception:
+                eid = 0
+            row = EntregaEPP.query.get(eid) if eid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+                msg = "Registro eliminado."
+        else:
+            trabajador = (request.form.get("trabajador") or "").strip()[:160]
+            elemento = (request.form.get("elemento") or "").strip()[:160]
+            if not trabajador or not elemento:
+                err = "Trabajador y elemento son obligatorios."
+            else:
+                row = EntregaEPP(
+                    trabajador=trabajador,
+                    documento=(request.form.get("documento") or "").strip()[:40],
+                    elemento=elemento,
+                    cantidad=int(request.form.get("cantidad") or 1),
+                    fecha_entrega=(request.form.get("fecha_entrega") or fecha_hoy()).strip()[:20],
+                    motivo=(request.form.get("motivo") or "").strip()[:255],
+                    firmado=request.form.get("firmado") == "1",
+                    registrado_por=session.get("usuario") or "",
+                    creado_en=fecha_hoy() + " " + hora_actual(),
+                )
+                db.session.add(row)
+                db.session.commit()
+                msg = "Entrega EPP registrada."
+                try:
+                    registrar_auditoria("EPP", "%s · %s" % (trabajador, elemento))
+                except Exception:
+                    pass
+    rows = EntregaEPP.query.order_by(EntregaEPP.id.desc()).limit(80).all()
+    filas = []
+    for r in rows:
+        filas.append(
+            "<tr><td>%s</td><td>%s</td><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+            "<td><form method='POST' style='display:inline' onsubmit='return confirm(\"Eliminar?\")'>"
+            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
+            "<button type='submit' style='font-size:11px;background:#b91c1c;color:#fff;border:0;border-radius:4px;padding:3px 8px'>X</button></form></td></tr>"
+            % (
+                _esc(r.fecha_entrega or ""),
+                _esc(r.trabajador or ""),
+                _esc(r.elemento or ""),
+                r.cantidad or 1,
+                _esc(r.motivo or ""),
+                "Sí" if r.firmado else "No",
+                _esc(r.registrado_por or ""),
+                r.id,
+            )
+        )
+    if not filas:
+        filas = ["<tr><td colspan='8' style='text-align:center;color:#94a3b8'>Sin entregas. Registre implementos para visitas a colegios.</td></tr>"]
+    body = (
+        "<div style='max-width:960px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
+        "<p><a href='/gerencia/hq'>← HQ</a> · <a href='/gerencia/talento-legal'>Guía legal</a> · "
+        "<a href='/gerencia/documentos/sg-sst'>SG-SST</a></p>"
+        "<h1 style='color:#0B2D57'>Matriz EPP · Visitas a colegios</h1>"
+        "<p style='color:#64748b;font-size:13px'>Entrega de implementos cuando un técnico instala servidores o revisa QR en sede.</p>"
+        + (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "")
+        + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
+        + "<table style='width:100%;border-collapse:collapse;font-size:13px;background:#fff'>"
+        "<tr style='background:#0B2D57;color:#fff'><th>Fecha</th><th>Trabajador</th><th>Elemento</th><th>Cant.</th>"
+        "<th>Motivo / sede</th><th>Firmado</th><th>Por</th><th></th></tr>"
+        + "".join(filas)
+        + "</table>"
+        "<form method='POST' style='margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px'>"
+        "<div><label><b>Trabajador *</b></label><input name='trabajador' required></div>"
+        "<div><label><b>Documento</b></label><input name='documento'></div>"
+        "<div><label><b>Elemento *</b></label><input name='elemento' required placeholder='Chaleco, botas, casco…'></div>"
+        "<div><label><b>Cantidad</b></label><input name='cantidad' type='number' value='1' min='1'></div>"
+        "<div><label><b>Fecha entrega</b></label><input name='fecha_entrega' type='date'></div>"
+        "<div><label><b>Firmó recibido</b></label><select name='firmado'><option value='0'>No</option><option value='1'>Sí</option></select></div>"
+        "<div style='grid-column:1/-1'><label><b>Motivo / colegio</b></label><input name='motivo' style='width:100%' placeholder='Instalación servidor Colegio X'></div>"
+        "<div style='grid-column:1/-1'><button type='submit'>Registrar entrega</button></div>"
+        "</form></div>"
+    )
+    return page("Matriz EPP", body)
+
 
 
 @app.route("/gerencia/documentos")
