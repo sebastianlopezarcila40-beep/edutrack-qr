@@ -2104,7 +2104,13 @@ def html_anuncio_global():
     if not getattr(p, "anuncio_activo", False):
         return ""
     ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")[:40]
-    # Respaldo servidor: si ya cerró esta versión en esta sesión Flask, no inyectar HTML
+    # No mostrar en la web pública PROCSIS (solo login / sistema)
+    try:
+        path_pub = (request.path or "").rstrip("/") or "/"
+        if path_pub in ("/procsis", "/empresa", "/portafolio", "/tecnologia", "/soluciones", "/quienes-somos", "/contacto", "/"):
+            return ""
+    except Exception:
+        pass
     try:
         if str(session.get("anuncio_dismissed_ver") or "") == ver:
             return ""
@@ -3978,7 +3984,19 @@ def _txt_a_html_lista(texto):
     return "".join(partes)
 
 
+def corp_valor(p, attr, default=""):
+    """Lee valor corporativo sin borrarlo: si en BD está vacío, usa default de diseño (solo lectura)."""
+    try:
+        val = getattr(p, attr, None)
+    except Exception:
+        val = None
+    if val is None or (isinstance(val, str) and not val.strip()):
+        return default
+    return val
+
+
 def plataforma():
+
     """Configuración de la empresa de soporte (Procsis), no del colegio."""
     try:
         p = Plataforma.query.first()
@@ -18054,8 +18072,7 @@ def modulo_rectores():
                 saved = (getattr(p, "corp_barra_extra", None) or "")
                 if auth and saved.startswith("SRTOK:") and saved[6:] == auth:
                     session["soporte_rectores_ok"] = True
-                    p.corp_barra_extra = ""
-                    db.session.commit()
+                    # No tocar corp_barra_extra (contenido web solo desde Gerencia)
             except Exception:
                 pass
         if not session.get("soporte_rectores_ok"):
@@ -22407,15 +22424,22 @@ def gerencia_web_corporativa():
         p.contacto_publico_tel = (request.form.get("contacto_publico_tel") or "").strip()[:40]
         p.contacto_publico_email = (request.form.get("contacto_publico_email") or "").strip()[:120]
         p.contacto_whatsapp_ventas = (request.form.get("contacto_whatsapp_ventas") or "").strip()[:40]
-        p.corp_barra_extra = (request.form.get("corp_barra_extra") or "").strip()[:255]
-        p.corp_top_derecha = (request.form.get("corp_top_derecha") or "").strip()[:160]
-        # Marca
-        p.corp_brand_nombre = (request.form.get("corp_brand_nombre") or "PROCSIS").strip()[:80]
-        p.corp_brand_sub = (request.form.get("corp_brand_sub") or "Innovación que gestiona").strip()[:80]
-        p.corp_tag = (request.form.get("corp_tag") or "SOLUCIONES DIGITALES · COLOMBIA").strip()[:120]
-        # Hero
-        p.corp_hero_titulo = (request.form.get("corp_hero_titulo") or "").strip()[:255]
-        p.corp_hero_texto = (request.form.get("corp_hero_texto") or "").strip()
+        # Solo Gerencia cambia estos campos; si el form viene vacío NO se borra lo ya publicado
+        def _set_si(attr, raw, maxlen=None, default_keep=True):
+            val = (raw or "").strip()
+            if maxlen:
+                val = val[:maxlen]
+            if val:
+                setattr(p, attr, val)
+            elif not default_keep:
+                setattr(p, attr, "")
+        _set_si("corp_barra_extra", request.form.get("corp_barra_extra"), 255)
+        _set_si("corp_top_derecha", request.form.get("corp_top_derecha"), 160)
+        _set_si("corp_brand_nombre", request.form.get("corp_brand_nombre") or "PROCSIS", 80)
+        _set_si("corp_brand_sub", request.form.get("corp_brand_sub") or "Innovación que gestiona", 80)
+        _set_si("corp_tag", request.form.get("corp_tag") or "SOLUCIONES DIGITALES · COLOMBIA", 120)
+        _set_si("corp_hero_titulo", request.form.get("corp_hero_titulo"), 255)
+        _set_si("corp_hero_texto", request.form.get("corp_hero_texto"))
         # Nosotros
         p.corp_nosotros_titulo = (request.form.get("corp_nosotros_titulo") or "").strip()[:120]
         p.corp_nosotros_texto = (request.form.get("corp_nosotros_texto") or "").strip()
@@ -22428,12 +22452,15 @@ def gerencia_web_corporativa():
         p.corp_portafolio_texto = (request.form.get("corp_portafolio_texto") or "").strip()
         p.corp_caracteristicas = (request.form.get("corp_caracteristicas") or "").strip()
         p.corp_empresa_puntos = (request.form.get("corp_empresa_puntos") or "").strip()
-        p.corp_btn1_texto = (request.form.get("corp_btn1_texto") or "Conocer PROCSIS").strip()[:80]
-        p.corp_btn1_url = (request.form.get("corp_btn1_url") or "#nosotros").strip()[:160]
-        p.corp_btn2_texto = (request.form.get("corp_btn2_texto") or "Hablar con un asesor").strip()[:80]
-        p.corp_btn2_url = (request.form.get("corp_btn2_url") or "").strip()[:160]
-        p.corp_btn3_texto = (request.form.get("corp_btn3_texto") or "Entrar al sistema").strip()[:80]
-        p.corp_btn3_url = (request.form.get("corp_btn3_url") or "/login").strip()[:160]
+        _set_si("corp_btn1_texto", request.form.get("corp_btn1_texto") or "Conocer PROCSIS", 80)
+        _set_si("corp_btn1_url", request.form.get("corp_btn1_url") or "#nosotros", 160)
+        _set_si("corp_btn2_texto", request.form.get("corp_btn2_texto") or "Hablar con un asesor", 80)
+        # URL botón 2 puede quedar vacía a propósito solo si envían el campo
+        if "corp_btn2_url" in request.form:
+            v2 = (request.form.get("corp_btn2_url") or "").strip()[:160]
+            p.corp_btn2_url = v2
+        _set_si("corp_btn3_texto", request.form.get("corp_btn3_texto") or "Entrar al sistema", 80)
+        _set_si("corp_btn3_url", request.form.get("corp_btn3_url") or "/login", 160)
         try:
             fimg = request.files.get("corp_hero_fondo_file")
             if fimg and getattr(fimg, "filename", ""):
@@ -22469,7 +22496,7 @@ def gerencia_web_corporativa():
         except Exception as _lg:
             print("corp logo:", _lg)
         db.session.commit()
-        mensaje = "Página corporativa guardada. Los cambios se ven de inmediato en /procsis y /portafolio."
+        mensaje = "Página corporativa guardada. Este contenido NO se borra solo: solo cambia cuando Gerencia guarda aquí."
         try:
             registrar_auditoria("Gerencia web corporativa", "Actualizó textos /procsis")
         except Exception:
@@ -42910,8 +42937,8 @@ def pagina_corporativa_procsis():
         foot_txt = (getattr(_pp, "corp_footer_texto", None) or "Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.").strip()
     except Exception:
         corp_tel, corp_email, wa_link = "—", "contacto@procsis.com", "/contacto"
-        logo = "/static/img/logo-edutrack.png"
-        brand_nom, brand_sub = "EduTrack", "Soluciones digitales"
+        logo = "/static/img/logo-procsis.jpeg"
+        brand_nom, brand_sub = "PROCSIS", "Innovación que gestiona"
         corp_tag = "SOLUCIONES DIGITALES · COLOMBIA"
         hero_tit = "Software y solución digital para instituciones educativas"
         hero_txt = "Diseñamos y operamos plataformas serias para colegios: gestión académica, reportes de coordinación, boletines y acompañamiento a directivos y docentes."
