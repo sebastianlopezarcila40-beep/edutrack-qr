@@ -16460,7 +16460,8 @@ def ventas_panel():
             cod = (p.codigo or "").strip()
             if not cod:
                 continue
-            precio = int(float(p.precio_mensual or 0))
+            precio = float(p.precio_mensual or 0) or float(getattr(p, "precio_lista", None) or 0) or 0
+            precio = int(precio)
             if precio > 0:
                 precio_txt = ("$ {:,.0f} COP/mes".format(precio)).replace(",", ".")
             else:
@@ -17060,7 +17061,9 @@ def ventas_comprar():
         except Exception:
             feats = {}
     plan_nom = (pc.nombre if pc else None) or meta.get("nombre") or plan.title()
-    precio = float(pc.precio_mensual if pc else meta.get("precio") or 0)
+    precio = float(pc.precio_mensual if pc else 0) or float(getattr(pc, "precio_lista", None) or 0) if pc else float(meta.get("precio") or 0)
+    if not precio:
+        precio = float(meta.get("precio") or 0)
     fee = float(pc.fee_implementacion if pc else meta.get("fee") or 0)
     max_e = int(pc.max_estudiantes if pc else meta.get("max_e") or 0)
     max_s = int(pc.max_sedes if pc else meta.get("max_s") or 12)
@@ -28169,12 +28172,14 @@ def _seed_planes_comerciales():
     # force_sync una vez si precios aún son los antiguos (detecta Básico != 149950)
     force = False
     try:
+        # Solo forzar estructura (features) si faltan planes QR o no hay basico.
+        # NUNCA forzar solo por diferencia de precio (Gerencia edita precios en vivo).
         bas = PlanComercial.query.filter_by(codigo="basico").first()
-        if bas and abs(float(bas.precio_mensual or 0) - 149950) > 1:
+        if not bas:
             force = True
-        if bas and int(bas.max_sedes or 0) < 20:
+        if PlanComercial.query.filter_by(codigo="qr_basico").first() is None:
             force = True
-        if PlanComercial.query.filter_by(activo=True).count() < 8:
+        if PlanComercial.query.filter_by(activo=True).count() < 3:
             force = True
     except Exception:
         force = True
@@ -28203,13 +28208,45 @@ def _seed_planes_comerciales():
             "badge": d.get("badge") or "PLAN",
         }
         if force_this or not p.features_json:
+            p.nombre = d["nombre"] or p.nombre
+            # NO pisar precios/fee editados en Gerencia (ventas en vivo)
+            try:
+                _pm = float(p.precio_mensual or 0)
+            except Exception:
+                _pm = 0.0
+            try:
+                _fee = float(p.fee_implementacion or 0)
+            except Exception:
+                _fee = 0.0
+            if _pm <= 0 and float(d.get("precio") or 0) > 0:
+                p.precio_mensual = float(d["precio"])
+            if _fee <= 0 and float(d.get("fee") or 0) > 0:
+                p.fee_implementacion = float(d["fee"])
+            # solo completar max si vacío
+            if not p.max_estudiantes:
+                p.max_estudiantes = int(d["max_e"] or 0)
+            if not p.max_sedes or int(p.max_sedes or 0) < 1:
+                p.max_sedes = int(d["max_s"] or 20)
+            if not p.features_json:
+                p.features_json = json.dumps(feats, ensure_ascii=False)
+            elif force_this and not _pm:
+                # solo features si no hay precio comercial
+                try:
+                    import json as _j
+                    cur = _j.loads(p.features_json or "{}")
+                    if not cur or (isinstance(cur, dict) and not cur.get("incluidos")):
+                        p.features_json = json.dumps(feats, ensure_ascii=False)
+                except Exception:
+                    p.features_json = json.dumps(feats, ensure_ascii=False)
+            if not p.orden:
+                p.orden = int(d["orden"])
+        # Alta nueva: sí aplicar catálogo completo
+        if p.id is None or (force_this and float(p.precio_mensual or 0) <= 0 and float(d.get("precio") or 0) >= 0 and not p.nombre):
             p.nombre = d["nombre"]
-            p.precio_mensual = float(d["precio"])
-            p.fee_implementacion = float(d["fee"])
-            p.max_estudiantes = int(d["max_e"] or 0)
-            p.max_sedes = int(d["max_s"] or 20)
-            p.features_json = json.dumps(feats, ensure_ascii=False)
-            p.orden = int(d["orden"])
+            if float(p.precio_mensual or 0) <= 0:
+                p.precio_mensual = float(d.get("precio") or 0)
+            if float(p.fee_implementacion or 0) <= 0:
+                p.fee_implementacion = float(d.get("fee") or 0)
         p.activo = True
         if not p.max_sedes:
             p.max_sedes = 20
@@ -28272,6 +28309,8 @@ def _modulos_por_rol(rol):
         ("Modo prueba", "/modo_prueba", "#64748b"),
         ("Planilla accesos Excel", "/soporte/planilla-accesos", "#0f766e"),
         ("Seguridad empleados", "/soporte/seguridad-empleados", "#7c2d12"),
+        ("👥 Turnos", "/soporte/turnos", "#0B2D57"),
+        ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
     ]
     ventas = [
         ("📅 Calendario escolar", "/calendario", "#0B2D57"),
@@ -28291,6 +28330,8 @@ def _modulos_por_rol(rol):
         ("Generar contrato digital", "/ventas/contrato-digital", "#7c2d12"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
         ("Instituciones (ver / registrar)", "/tenants", "#64748b"),
+        ("👥 Turnos", "/ventas/turnos", "#0B2D57"),
+        ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
     ]
     gerencia = ventas + [
         ("EduTrack HQ", "/gerencia/hq", "#0B2D57"),
@@ -28323,6 +28364,8 @@ def _modulos_por_rol(rol):
         ("💙 Fidelización CSAT", "/cobranza/fidelizacion", "#0d9488"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Instituciones", "/tenants", "#1d4ed8"),
+        ("👥 Turnos", "/cobranza/turnos", "#0B2D57"),
+        ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
     ]
     if rol in ("Comercial", "Ventas"):
@@ -41691,8 +41734,37 @@ def modulo_turnos():
             )
         if not filas_t:
             filas_t = ["<tr><td colspan='8' style='text-align:center;color:#94a3b8;padding:12px'>Sin turnos registrados aún. Se crean al iniciar sesión en Ventas/Soporte.</td></tr>"]
+        # En vivo: quién tiene turno ABIERTO ahora
+        en_vivo = []
+        try:
+            for tv in TurnoLaboral.query.filter_by(estado="ABIERTO").order_by(TurnoLaboral.id.desc()).limit(50).all():
+                en_vivo.append(
+                    '<div style="background:#ecfdf5;border:1px solid #86efac;border-radius:10px;padding:10px 12px;margin:0 0 8px">'
+                    '<b style="color:#166534">' + _esc(tv.nombre_completo or tv.usuario_login or "—") + "</b>"
+                    ' <span style="background:#16a34a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px">EN TURNO</span>'
+                    '<div style="font-size:12px;color:#334155;margin-top:4px">'
+                    + _esc(tv.area or "") + " · Doc: " + _esc(tv.documento or "—")
+                    + " · Desde " + _esc(tv.abierto_en or "—")
+                    + (" · IP " + _esc(tv.ip or "") if tv.ip else "")
+                    + "</div></div>"
+                )
+        except Exception:
+            pass
+        if not en_vivo:
+            en_vivo = ['<p style="color:#94a3b8;font-size:13px;margin:0">Nadie con turno abierto en este momento.</p>']
+        live_box = ""
+        if area == "Gerencia" or (request.path or "").startswith("/gerencia"):
+            live_box = (
+                '<div style="background:#fff;border:2px solid #16a34a;border-radius:12px;padding:14px 16px;margin-bottom:14px">'
+                '<h2 style="margin:0 0 6px;font-size:15px;color:#166534">En vivo · Quién está en turno</h2>'
+                '<p style="margin:0 0 10px;font-size:12px;color:#64748b">Actualice la página para ver el estado al momento. Ventas, Soporte y Cobranza.</p>'
+                + "".join(en_vivo)
+                + '<p style="margin:8px 0 0;font-size:12px"><a href="/gerencia/turnos" style="font-weight:700">Actualizar vista →</a></p>'
+                "</div>"
+            )
         turnos_html = (
-            '<section class="role-panel" style="margin-bottom:16px;overflow:auto">'
+            live_box
+            + '<section class="role-panel" style="margin-bottom:16px;overflow:auto">'
             '<h2 style="margin-top:0;font-size:16px;color:#0B2D57">Turnos laborales (apertura con CC / código)</h2>'
             '<p class="mini-text">Cada asesor al ingresar confirma nombre y documento. Queda auditado.</p>'
             '<table style="width:100%;border-collapse:collapse;font-size:13px">'
@@ -41701,7 +41773,7 @@ def modulo_turnos():
             + "".join(filas_t)
             + "</table>"
             '<p style="margin-top:10px"><a class="btn" href="/abrir-turno?forzar=1">Abrir / renovar mi turno</a> '
-            '<a class="btn" href="/cerrar-turno">Cerrar mi turno</a></p>'
+            '<a class="btn" href="/cerrar-turno" style="background:#b91c1c;color:#fff">Cerrar mi turno</a></p>'
             "</section>"
         )
     except Exception as _th:
