@@ -16454,6 +16454,46 @@ def ventas_panel():
     except Exception as _e:
         mods = f"<p>Error módulos: {_e}</p>"
 
+    cards_activar = []
+    try:
+        for p in PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden.asc()).all():
+            cod = (p.codigo or "").strip()
+            if not cod:
+                continue
+            precio = int(float(p.precio_mensual or 0))
+            if precio > 0:
+                precio_txt = ("$ {:,.0f} COP/mes".format(precio)).replace(",", ".")
+            else:
+                precio_txt = "Precio a definir"
+            fee = int(float(getattr(p, "fee_implementacion", 0) or 0))
+            fee_txt = ((" · Impl. $ {:,.0f}".format(fee)).replace(",", ".")) if fee > 0 else ""
+            nom = _esc(p.nombre or cod)
+            cards_activar.append(
+                '<div style="background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px;'
+                'border-top:4px solid #0B2D57">'
+                '<div style="font-weight:800;color:#0B2D57;font-size:15px">' + nom + '</div>'
+                '<div style="font-size:12px;color:#64748b;margin:4px 0">Código: <code>' + _esc(cod) + '</code></div>'
+                '<div style="font-size:14px;font-weight:700">' + precio_txt + fee_txt + '</div>'
+                '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">'
+                '<a href="/ventas/comprar?plan=' + _esc(cod) + '" style="background:#15803d;color:#fff;padding:9px 14px;'
+                'border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">Activar este plan</a>'
+                '<a href="/ventas" style="background:#e2e8f0;color:#0B2D57;padding:9px 12px;border-radius:8px;'
+                'font-weight:700;font-size:12px;text-decoration:none">Ver precios</a></div></div>'
+            )
+    except Exception as _ep:
+        cards_activar = ['<p style="color:#b91c1c">Error planes: ' + _esc(str(_ep)[:100]) + '</p>']
+    if not cards_activar:
+        cards_activar = ['<p style="color:#b91c1c">No hay planes activos. Publíquelos en Gerencia → Planes.</p>']
+    seccion_planes = (
+        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin:12px 0 16px">'
+        '<h2 style="margin:0 0 4px;font-size:14px;color:#0B2D57;font-weight:800;text-transform:uppercase">Planes · Activar colegio</h2>'
+        '<p style="margin:0 0 12px;font-size:12px;color:#64748b">Active el plan y registre la institución aquí. '
+        'Portal ventas / planes es solo catálogo de precios.</p>'
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">'
+        + "".join(cards_activar)
+        + '</div></div>'
+    )
+
     from urllib.parse import quote
     msg_coaweb = quote(
         "Rector, buenas. Muchos colegios nos cuentan que Coaweb se cae en cierres de periodo "
@@ -16560,6 +16600,8 @@ def ventas_panel():
       <button type="submit" style="background:#1e3a5f">Crear link invitación demo</button>
     </form>
   </div>
+
+  {seccion_planes}
   {"<div style='background:#f0fdf4;border:1px solid #bbf7d0;padding:12px;border-radius:10px;margin-bottom:12px;font-size:13px'><b>Link demo generado</b> (envíelo por WhatsApp al rector):<br><code style='word-break:break-all'>"+inv_msg+"</code><br><a target='_blank' href='https://wa.me/?text="+quote("Rector, le dejo este link para que registre su colegio y pruebe EduTrack gratis 15 días: "+inv_msg)+"'>Enviar por WhatsApp</a></div>" if inv_msg else ""}
 
   <div class="sec-title">Embudo comercial</div>
