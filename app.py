@@ -19472,7 +19472,7 @@ def _catalogo_documentos_corp():
                 "<p>PROCSIS, con operación predominantemente virtual, adopta estándares mínimos del Sistema de "
                 "Gestión de Seguridad y Salud en el Trabajo aplicables a teletrabajo y trabajo en casa "
                 "(Resolución 0312 de 2019 y normas relacionadas).</p>"
-                "<h2>Compromisos</h2>"
+                "<h2>Compromisos:</h2>"
                 "<ul>"
                 "<li>Identificación de peligros y riesgos del trabajo remoto.</li>"
                 "<li>Pausas activas y ergonomía orientativa para el equipo.</li>"
@@ -19579,6 +19579,14 @@ def _seed_documentos_corp():
                 actualizado_por="sistema",
             )
             db.session.add(row)
+    # Pulido de redacción en documentos ya creados (sin pisar ediciones mayores)
+    try:
+        for row in DocumentoCorp.query.all():
+            cuerpo = row.cuerpo_html or ""
+            if "<h2>Compromisos:</h2>" in cuerpo:
+                row.cuerpo_html = cuerpo.replace("<h2>Compromisos:</h2>", "<h2>Compromisos:</h2>")
+    except Exception:
+        pass
     try:
         db.session.commit()
     except Exception:
@@ -19893,7 +19901,7 @@ def _doc_pdf_bytes(titulo, html_body, confidencial=True):
     buf = io.BytesIO()
     c = pdf_canvas.Canvas(buf, pagesize=letter)
     w, h = letter
-    margin = 2.0 * cm
+    margin = 2.8 * cm  # márgenes laterales amplios (estilo ejecutivo)
     navy = (0.043, 0.176, 0.341)
     gray = (0.35, 0.40, 0.45)
 
@@ -20175,7 +20183,7 @@ def _doc_corp_shell_html(titulo, cuerpo_html, logo_src, confidencial=True, extra
     badge_color = "#b91c1c" if confidencial else cyan
     return f"""
 <style>
-.corp-page{{max-width:720px;margin:0 auto;background:#f4f6f9;font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;color:#0f172a}}
+.corp-page{{max-width:760px;margin:0 auto;padding:24px 28px 40px;background:#f4f6f9;font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;color:#0f172a}}
 .corp-doc{{
   position:relative;background:#fff;overflow:hidden;
   box-shadow:0 12px 40px rgba(11,45,87,.12);border:1px solid #e2e8f0;
@@ -20190,7 +20198,7 @@ def _doc_corp_shell_html(titulo, cuerpo_html, logo_src, confidencial=True, extra
   border-style:solid;border-width:0 100px 64px 0;
   border-color:transparent {cyan} transparent transparent;z-index:2;
 }}
-.corp-inner{{position:relative;z-index:3;padding:28px 32px 0}}
+.corp-inner{{position:relative;z-index:3;padding:32px 48px 0}}
 .corp-brand-row{{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}}
 .corp-brand-row img{{height:56px;width:auto;max-width:180px;object-fit:contain}}
 .corp-brand-txt .co{{font-size:11px;font-weight:700;color:{navy};letter-spacing:.06em;text-transform:uppercase;margin-top:4px}}
@@ -20207,7 +20215,7 @@ def _doc_corp_shell_html(titulo, cuerpo_html, logo_src, confidencial=True, extra
 .corp-kicker{{
   display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:{navy};margin:0 0 16px;
 }}
-.corp-content{{font-size:14.5px;line-height:1.6;color:#1e293b}}
+.corp-content{{font-size:14.5px;line-height:1.65;color:#1e293b;padding:8px 8px 24px;max-width:100%;box-sizing:border-box}}
 .corp-content p{{margin:0 0 12px}}
 .corp-content b,.corp-content strong{{color:{navy};font-weight:700}}
 .corp-content h2{{font-size:15px;color:{navy};margin:16px 0 8px}}
@@ -20234,7 +20242,7 @@ def _doc_corp_shell_html(titulo, cuerpo_html, logo_src, confidencial=True, extra
 .corp-sign-team{{font-size:12px;color:{silver};margin:2px 0 0}}
 .corp-footer{{
   margin-top:28px;background:{navy};color:#e2e8f0;
-  padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:16px 48px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
   position:relative;overflow:hidden;
 }}
 .corp-footer::after{{
@@ -20312,10 +20320,10 @@ def _doc_word_bytes(titulo, html_body, confidencial=True, lugar=None):
     doc = Document()
     # Márgenes
     for section in doc.sections:
-        section.top_margin = Inches(0.7)
-        section.bottom_margin = Inches(0.7)
-        section.left_margin = Inches(0.85)
-        section.right_margin = Inches(0.85)
+        section.top_margin = Inches(0.9)
+        section.bottom_margin = Inches(0.9)
+        section.left_margin = Inches(1.15)  # ~2.9 cm laterales
+        section.right_margin = Inches(1.15)
 
     navy = RGBColor(0x0B, 0x2D, 0x57)
     cyan = RGBColor(0x00, 0xA3, 0xE0)
@@ -20964,7 +20972,7 @@ def gerencia_documento_editar(clave):
 .de{{max-width:860px;margin:0 auto;padding:16px 16px 48px;font-family:Segoe UI,system-ui,sans-serif;background:#e8eef5;min-height:100vh}}
 .de-bar{{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:14px}}
 .de-paper{{background:#fff;border:1px solid #dbe3ee;box-shadow:0 8px 28px rgba(15,23,42,.08)}}
-.de-paper .corp-mini{{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:3px solid #0B2D57;background:#f8fafc}}
+.de-paper .corp-mini{{display:flex;align-items:center;justify-content:space-between;padding:16px 48px;border-bottom:3px solid #0B2D57;background:#f8fafc}}
 .de-paper .corp-mini img{{height:40px;width:40px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid #e2e8f0}}
 #editor{{min-height:380px;outline:none;font-size:14.5px;line-height:1.7;color:#334155;padding:22px 28px}}
 #editor h2{{font-size:15px;color:#0B2D57;margin:20px 0 10px;font-weight:800}}
