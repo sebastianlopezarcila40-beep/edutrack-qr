@@ -25363,39 +25363,85 @@ def gerencia_usuarios():
 
 @app.route("/gerencia/datos-empresa", methods=["GET", "POST"])
 def gerencia_datos_empresa():
-    """Datos legales de Procsis (NIT, DANE, dirección) para usar en documentos oficiales
-    como el certificado de admisión de personal."""
+    """Datos legales de Procsis (NIT, DANE, dirección, logo) para documentos y paneles staff."""
     g = _guard_gerencia()
     if g:
         return g
     p = plataforma()
-    mensaje = ""
+    mensaje = err = ""
     if request.method == "POST":
         p.nit = (request.form.get("nit") or "").strip()[:40]
         p.codigo_dane = (request.form.get("codigo_dane") or "").strip()[:40]
         p.direccion = (request.form.get("direccion") or "").strip()[:255]
         p.ciudad = (request.form.get("ciudad") or "").strip()[:120]
         p.representante_legal = (request.form.get("representante_legal") or "").strip()[:160]
+        if (request.form.get("empresa") or "").strip():
+            p.empresa = (request.form.get("empresa") or "").strip()[:160]
+        # Logo PROCSIS → BD (data URI) para que no se borre en Railway
+        flogo = request.files.get("logo_empresa")
+        if flogo and getattr(flogo, "filename", ""):
+            try:
+                data_uri = _archivo_a_data_uri(flogo, max_bytes=1_800_000)
+                if data_uri:
+                    p.logo_path = data_uri
+                    mensaje = "Datos y logo PROCSIS guardados (permanentes en base de datos)."
+                else:
+                    err = "No se pudo procesar el logo (use JPG/PNG menor a 1.5 MB)."
+            except Exception as e_logo:
+                err = "Error al guardar logo: %s" % str(e_logo)[:100]
+        if request.form.get("quitar_logo") == "1":
+            p.logo_path = "/static/img/logo-procsis.png"
+            mensaje = (mensaje + " " if mensaje else "") + "Logo restablecido al predeterminado."
         db.session.commit()
-        registrar_auditoria("Datos de empresa actualizados", f"NIT={p.nit} DANE={p.codigo_dane}")
-        mensaje = "Datos guardados."
+        try:
+            registrar_auditoria("Datos de empresa actualizados", "NIT=%s logo=%s" % (
+                p.nit, "si" if (p.logo_path or "").startswith("data:") else "archivo"))
+        except Exception:
+            pass
+        if not mensaje and not err:
+            mensaje = "Datos guardados."
+    logo_actual = (getattr(p, "logo_path", None) or "").strip()
+    if logo_actual.startswith("data:image"):
+        preview = logo_actual
+        logo_nota = "Logo actual guardado en base de datos (no se pierde al reiniciar Railway)."
+    else:
+        preview = logo_plataforma()
+        logo_nota = "Suba el logo oficial de PROCSIS (PNG o JPG). Se usará en Gerencia, Soporte, Ventas, Cobranza y PDFs."
     content = f"""
 <header class="role-hero"><div>
-  <h1>🏢 Datos de la empresa (Procsis)</h1>
-  <p>Estos datos aparecen en documentos oficiales de la empresa, como el certificado de admisión de personal.</p>
+  <h1>🏢 Datos de la empresa (PROCSIS)</h1>
+  <p>Estos datos y el logo aparecen en documentos oficiales (constancias, comprobantes) y en los paneles internos.</p>
 </div>
 <a class="btn" href="/gerencia/hq">Volver</a></header>
-{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+{"<div class='msg ok'>"+_esc(mensaje)+"</div>" if mensaje else ""}
+{"<div class='msg' style='background:#fef2f2;color:#991b1b'>"+_esc(err)+"</div>" if err else ""}
 <section class="role-panel">
-  <form method="POST">
+  <form method="POST" enctype="multipart/form-data">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label><b>Nombre empresa</b></label><input name="empresa" value="{_esc(getattr(p,'empresa',None) or 'PROCSIS')}" placeholder="PROCSIS"></div>
       <div><label><b>NIT</b></label><input name="nit" value="{_esc(p.nit)}" placeholder="900.999.999-1"></div>
       <div><label><b>Código DANE</b></label><input name="codigo_dane" value="{_esc(p.codigo_dane)}" placeholder="199999999999"></div>
       <div><label><b>Ciudad</b></label><input name="ciudad" value="{_esc(p.ciudad)}" placeholder="Bogotá D.C."></div>
       <div><label><b>Representante legal</b></label><input name="representante_legal" value="{_esc(p.representante_legal)}"></div>
       <div style="grid-column:1/3"><label><b>Dirección</b></label><input name="direccion" value="{_esc(p.direccion)}"></div>
     </div>
-    <button type="submit" style="margin-top:14px">Guardar</button>
+    <div style="margin-top:18px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
+      <label style="font-weight:800;color:#0B2D57;display:block;margin-bottom:8px">Logo oficial PROCSIS</label>
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px">{_esc(logo_nota)}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-width:120px;text-align:center">
+          <img src="{preview}" alt="Logo PROCSIS" style="max-height:72px;max-width:160px;object-fit:contain">
+        </div>
+        <div style="flex:1;min-width:220px">
+          <input type="file" name="logo_empresa" accept="image/png,image/jpeg,image/webp,image/gif"
+            style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff">
+          <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px;color:#64748b">
+            <input type="checkbox" name="quitar_logo" value="1" style="width:auto"> Quitar logo personalizado (volver al predeterminado)
+          </label>
+        </div>
+      </div>
+    </div>
+    <button type="submit" style="margin-top:14px;background:#0B2D57;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer">Guardar datos y logo</button>
   </form>
 </section>
 """
