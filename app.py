@@ -48019,10 +48019,11 @@ def gerencia_req_autoridades():
                     r.entregado_por = str(u)[:120]
                     r.entregado_en = ts
                     import hashlib
-                    h = hashlib.sha256((info + ts + str(r.id)).encode("utf-8")).hexdigest()[:40]
+                    h = hashlib.sha256((info + ts + str(r.id) + (r.codigo or "")).encode("utf-8")).hexdigest()
+                    r.token_descarga = h[:64]
                     db.session.commit()
-                    _req_auth_audit(r.id, "ENTREGAR", "A %s · oficio %s" % (r.funcionario, r.numero_oficio), hash_archivo=h)
-                    msg = "Entrega registrada. Auditoría inmutable guardada (hash %s…)." % h[:12]
+                    _req_auth_audit(r.id, "ENTREGAR", "A %s · oficio %s · acta PDF" % (r.funcionario, r.numero_oficio), hash_archivo=h[:40])
+                    return redirect("/gerencia/requerimientos-autoridades/%s/acta.pdf" % r.id)
             except Exception as e:
                 db.session.rollback()
                 err = str(e)[:200]
@@ -48199,7 +48200,8 @@ def gerencia_req_autoridad_detalle(rid):
   {" · Autorizado por "+_esc(r.autorizado_por)+" · "+_esc(r.autorizado_en) if r.autorizado_por else ""}
   {" · Entregado por "+_esc(r.entregado_por)+" · "+_esc(r.entregado_en) if r.entregado_por else ""}</p>
   {"<p style='color:#b91c1c'><b>Motivo rechazo:</b> "+_esc(r.motivo_rechazo)+"</p>" if r.motivo_rechazo else ""}
-  {"<p><b>Info entregada:</b> "+_esc(r.info_entregada)+"</p>" if r.info_entregada else ""}
+    {"<p><b>Info entregada:</b> "+_esc(r.info_entregada)+"</p>" if r.info_entregada else ""}
+  {('<p style="margin:12px 0"><a href="/gerencia/requerimientos-autoridades/%s/acta.pdf" style="background:#b91c1c;color:#fff;padding:10px 16px;border-radius:8px;font-weight:800;text-decoration:none">⬇ Descargar acta PDF de entrega</a></p>' % r.id) if (r.estado or "") == "ENTREGADO" else ""}
   {checklist}
   {entregar}
   <h3 style="color:#0B2D57">Auditoría de la operación</h3>
@@ -48210,6 +48212,224 @@ def gerencia_req_autoridad_detalle(rid):
 </section>
 """
     return page(r.codigo or "Requerimiento", shell(content))
+
+
+
+@app.route("/gerencia/requerimientos-autoridades/<int:rid>/acta.pdf")
+def gerencia_req_acta_pdf(rid):
+    """Acta formal de entrega controlada — cadena de custodia digital."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    r = ReqAutoridad.query.get_or_404(rid)
+    if (r.estado or "") not in ("ENTREGADO", "AUTORIZADO"):
+        return redirect("/gerencia/requerimientos-autoridades/%s" % rid)
+
+    from reportlab.lib.utils import simpleSplit, ImageReader
+    import base64 as _b64
+
+    meta = _cert_corp_meta() if "_cert_corp_meta" in dir() else {
+        "empresa": "PROCSIS", "nit": "", "ciudad": "Caracolí, Antioquia",
+        "direccion": "", "logo": logo_plataforma() if "logo_plataforma" in dir() else "",
+        "rep": "Sebastián López Arcila", "cargo_rep": "Founder & CEO",
+    }
+    try:
+        dia, mes, anio, fecha_larga = _cert_fecha_larga()
+    except Exception:
+        dia, mes, anio, fecha_larga = 9, "septiembre", 2026, "9 de septiembre de 2026"
+    hora = ""
+    try:
+        hora = (r.entregado_en or "").split(" ")[-1] if r.entregado_en else (hora_actual() if "hora_actual" in dir() else "")
+    except Exception:
+        hora = ""
+
+    # IPs de auditoría
+    ip_rad = ip_aut = "—"
+    try:
+        for a in ReqAutoridadAudit.query.filter_by(req_id=r.id).order_by(ReqAutoridadAudit.id.asc()).all():
+            if a.accion == "RADICAR" and a.ip:
+                ip_rad = a.ip
+            if a.accion == "AUTORIZAR" and a.ip:
+                ip_aut = a.ip
+    except Exception:
+        pass
+
+    hash_ver = (r.token_descarga or "")[:64]
+    if not hash_ver:
+        import hashlib
+        hash_ver = hashlib.sha256(("%s|%s|%s" % (r.codigo, r.entregado_en, r.info_entregada or "")).encode("utf-8")).hexdigest()
+
+    ciudad = meta.get("ciudad") or "Caracolí, Antioquia"
+    nit = meta.get("nit") or "—"
+    emp = "PROCSIS"
+
+    intro = (
+        "En la ciudad de %s, a las %s del día %s, la compañía tecnológica %s, identificada con NIT %s, "
+        "realiza la entrega formal y controlada de la información solicitada por la autoridad competente, "
+        "bajo estricto cumplimiento de los protocolos internos de gobernanza de datos y la legislación "
+        "colombiana vigente (Ley 1581 de 2012 y normas concordantes)."
+        % (ciudad, hora or "—", fecha_larga, emp, nit)
+    )
+
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+
+    # Header
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 78, W, 78, fill=1, stroke=0)
+    x_text = 48
+    try:
+        img = None
+        logo_src = meta.get("logo") or ""
+        if logo_src.startswith("data:image"):
+            img = ImageReader(BytesIO(_b64.b64decode(logo_src.split(",", 1)[-1])))
+        else:
+            try:
+                path_l = _cont_logo_path_for_pdf()
+                if path_l:
+                    img = ImageReader(path_l)
+            except Exception:
+                pass
+        if img:
+            c.setFillColor(colors.white)
+            c.roundRect(36, H - 68, 50, 46, 6, fill=1, stroke=0)
+            c.drawImage(img, 39, H - 64, width=44, height=40, mask="auto", preserveAspectRatio=True, anchor="c")
+            x_text = 98
+    except Exception:
+        pass
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x_text, H - 28, emp)
+    c.setFont("Helvetica", 8)
+    c.drawString(x_text, H - 42, "DOCUMENTO INTERNO · Acta de entrega controlada a autoridad")
+    c.drawString(x_text, H - 54, "Código %s · Oficio %s" % (r.codigo or "", r.numero_oficio or ""))
+    c.setFillColor(colors.HexColor("#C4A035"))
+    c.rect(0, H - 82, W, 4, fill=1, stroke=0)
+
+    left, right = 70, W - 70
+    width = right - left
+    y = H - 120
+
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(W / 2, y, "ACTA DE ENTREGA CONTROLADA DE INFORMACIÓN")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(W / 2, y, "Cadena de custodia digital · Requerimiento %s" % (r.codigo or ""))
+    y -= 24
+
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica", 10)
+    for ln in simpleSplit(intro, "Helvetica", 10, width):
+        c.drawString(left, y, ln)
+        y -= 13
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "DETALLES DEL REQUERIMIENTO AUDITADO")
+    y -= 14
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    detalles = [
+        "Autoridad destinataria: %s" % (r.entidad or "—"),
+        "Funcionario a cargo: %s (%s)" % (r.funcionario or "—", r.cargo_funcionario or "—"),
+        "Identificación institucional: %s" % (r.id_institucional or "—"),
+        "Correo oficial: %s" % (r.correo_oficial or "—"),
+        "Número de oficio: %s · Fecha: %s" % (r.numero_oficio or "—", r.fecha_oficio or "—"),
+        "Proceso / referencia: %s" % (r.proceso_referencia or "—"),
+        "Fundamento legal validado: %s" % (r.fundamento_legal or "—"),
+        "Solicitud: %s" % (r.solicitud_detalle or "—"),
+        "Información entregada: %s" % (r.info_entregada or "—"),
+    ]
+    for d in detalles:
+        for ln in simpleSplit("• " + d, "Helvetica", 9, width):
+            if y < 90:
+                c.showPage()
+                y = H - 50
+            c.drawString(left, y, ln)
+            y -= 12
+        y -= 2
+
+    y -= 8
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "TRAZABILIDAD DE SEGURIDAD (CADENA DE CUSTODIA DIGITAL)")
+    y -= 14
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    trazas = [
+        "Fase 1 — Radicación: registrada por el usuario %s desde la IP %s (%s)." % (
+            r.recibido_por or "—", ip_rad, r.recibido_en or "—"),
+        "Fase 2 — Autorización: verificada y firmada digitalmente por alta gerencia (%s) desde la IP %s (%s), "
+        "tras validar el checklist de identidad, autenticidad, competencia y base legal." % (
+            r.autorizado_por or "—", ip_aut, r.autorizado_en or "—"),
+        "Fase 3 — Entrega: procesada por %s el %s con el detalle consignado en la plataforma interna." % (
+            r.entregado_por or "—", r.entregado_en or "—"),
+    ]
+    for d in trazas:
+        for ln in simpleSplit("• " + d, "Helvetica", 9, width):
+            if y < 90:
+                c.showPage()
+                y = H - 50
+            c.drawString(left, y, ln)
+            y -= 12
+        y -= 3
+
+    y -= 8
+    cierre = (
+        "La información se entrega bajo el principio de finalidad y reserva judicial. Las firmas digitales "
+        "estampadas en el sistema de auditoría interna de PROCSIS validan de forma irrevocable la veracidad "
+        "y legalidad de esta actuación."
+    )
+    for ln in simpleSplit(cierre, "Helvetica", 9, width):
+        if y < 100:
+            c.showPage()
+            y = H - 50
+        c.drawString(left, y, ln)
+        y -= 12
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "Sello de Auditoría Digital PROCSIS")
+    y -= 12
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.drawString(left, y, "Código de verificación:")
+    y -= 11
+    for ln in simpleSplit(hash_ver, "Helvetica", 7, width):
+        c.drawString(left, y, ln)
+        y -= 10
+
+    y -= 30
+    c.setStrokeColor(colors.HexColor("#0f172a"))
+    c.line(left, y, left + 180, y)
+    y -= 12
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(left, y, meta.get("rep") or "Sebastián López Arcila")
+    y -= 11
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#475569"))
+    c.drawString(left, y, meta.get("cargo_rep") or "Founder & CEO")
+    y -= 10
+    c.drawString(left, y, emp)
+
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(left, 28, "Desarrollado por PROCSIS® | Suite Corporativa · Documento interno · No alterar")
+    c.save()
+    bio.seek(0)
+    try:
+        registrar_auditoria("Acta entrega autoridad PDF", "req=%s" % r.codigo)
+    except Exception:
+        pass
+    return send_file(
+        bio, as_attachment=True,
+        download_name="PROCSIS_Acta_Entrega_%s.pdf" % (r.codigo or rid),
+        mimetype="application/pdf",
+    )
 
 
 
