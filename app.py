@@ -19509,6 +19509,7 @@ def gerencia_hq():
         <a class="own" href="/gerencia/contabilidad">📒 Contabilidad · compras/ventas/pagos</a>
         <a class="own" href="/gerencia/contabilidad/partes">Clientes · Proveedores · Dominios</a>
         <a class="own" href="/gerencia/contabilidad/trabajadores">Módulo trabajadores</a>
+        <a class="g" href="/gerencia/certificaciones">📜 Certificaciones corporativas</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -47451,6 +47452,309 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
         bio,
         as_attachment=True,
         download_name="PROCSIS_Certificacion_Empleo_%s.pdf" % safe,
+        mimetype="application/pdf",
+    )
+
+
+
+# ─── Certificaciones corporativas PROCSIS ───────────────────────────────────
+TIPOS_CERT_CORP = [
+    ("prestacion_servicios", "Constancia de Prestación de Servicios"),
+    ("cliente_activo", "Certificación de Cliente Activo"),
+    ("caso_exito", "Caso de Éxito"),
+    ("implementacion", "Certificación de Implementación Tecnológica"),
+]
+
+
+def _cert_corp_meta():
+    try:
+        p = plataforma()
+        return {
+            "empresa": "PROCSIS",
+            "nit": (getattr(p, "nit", None) or "").strip(),
+            "ciudad": (getattr(p, "ciudad", None) or "").strip() or "Caracolí, Antioquia",
+            "direccion": (getattr(p, "direccion", None) or "").strip(),
+            "tel": (getattr(p, "telefono_soporte", None) or "").strip(),
+            "email": (getattr(p, "email_soporte", None) or "").strip(),
+            "rep": (getattr(p, "representante_legal", None) or "").strip() or "Founder & CEO, PROCSIS",
+            "logo": logo_plataforma() if "logo_plataforma" in dir() else "",
+        }
+    except Exception:
+        return {
+            "empresa": "PROCSIS", "nit": "", "ciudad": "Caracolí, Antioquia",
+            "direccion": "", "tel": "", "email": "", "rep": "Founder & CEO, PROCSIS", "logo": "",
+        }
+
+
+def _cert_fecha_larga():
+    try:
+        from datetime import datetime as _dt
+        n = _dt.now()
+        meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio",
+                 "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+        return n.day, meses[n.month - 1], n.year, "%d de %s de %d" % (n.day, meses[n.month - 1], n.year)
+    except Exception:
+        return 9, "septiembre", 2026, "9 de septiembre de 2026"
+
+
+@app.route("/gerencia/certificaciones", methods=["GET", "POST"])
+def gerencia_certificaciones():
+    """Módulo: constancias y certificaciones corporativas con filtro por tipo."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    meta = _cert_corp_meta()
+    tip = (request.values.get("tipo") or "implementacion").strip()
+    if tip not in dict(TIPOS_CERT_CORP):
+        tip = "implementacion"
+    err = msg = ""
+
+    if request.method == "POST" and (request.form.get("accion") or "") == "pdf":
+        return _cert_corp_pdf(request.form, meta)
+
+    # instituciones para selector
+    opts_inst = '<option value="">— Escribir manualmente —</option>'
+    try:
+        for inst in Institucion.query.order_by(Institucion.nombre).limit(400).all():
+            opts_inst += '<option value="%s">%s</option>' % (_esc(inst.nombre or ""), _esc(inst.nombre or ""))
+    except Exception:
+        pass
+
+    chips = ""
+    for code, label in TIPOS_CERT_CORP:
+        on = "background:#0B2D57;color:#fff" if code == tip else "background:#e2e8f0;color:#0B2D57"
+        chips += (
+            '<a href="?tipo=%s" style="%s;padding:8px 12px;border-radius:999px;font-size:12px;'
+            'font-weight:800;text-decoration:none;display:inline-block;margin:2px">%s</a>'
+        ) % (code, on, _esc(label))
+
+    titulos = dict(TIPOS_CERT_CORP)
+    content = f"""
+<header class="role-hero"><div>
+  <h1>📜 Certificaciones corporativas</h1>
+  <p>Constancia de Prestación de Servicios · Cliente Activo · Caso de Éxito · Implementación Tecnológica. Documento interno PROCSIS con logo y doble firma.</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver</a></header>
+<section class="role-panel">
+  <div style="margin-bottom:14px">{chips}</div>
+  <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;max-width:760px">
+    <input type="hidden" name="tipo" value="{_esc(tip)}">
+    <input type="hidden" name="accion" value="pdf">
+    <h3 style="margin:0 0 12px;color:#0B2D57">{_esc(titulos.get(tip, tip))}</h3>
+
+    <label style="font-size:12px;font-weight:700">Institución / colegio (lista)</label>
+    <select name="institucion_sel" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1" onchange="if(this.value)document.getElementById('inst_txt').value=this.value">
+      {opts_inst}
+    </select>
+    <label style="font-size:12px;font-weight:700">Nombre de la institución *</label>
+    <input id="inst_txt" name="institucion" required placeholder="Nombre del colegio" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label style="font-size:12px;font-weight:700">Ciudad de expedición</label>
+        <input name="ciudad" value="{_esc(meta.get('ciudad') or 'Caracolí, Antioquia')}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700">Representante legal / Rector(a) (firma derecha)</label>
+        <input name="rector" placeholder="Nombre del rector o representante" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+      </div>
+    </div>
+
+    <label style="font-size:12px;font-weight:700;margin-top:10px;display:block">Módulo / servicio implementado</label>
+    <input name="modulo" value="Control de Asistencia Escolar mediante Código QR" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+
+    <label style="font-size:12px;font-weight:700">Detalle adicional (opcional)</label>
+    <textarea name="detalle" rows="3" placeholder="Logros, métricas, periodo del piloto, sedes..." style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
+
+    <label style="font-size:12px;font-weight:700">Beneficiario / contratista (solo prestación de servicios)</label>
+    <input name="beneficiario" placeholder="Nombre de la persona o empresa" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+
+    <label style="font-size:12px;font-weight:700">Objeto del servicio / caso de éxito</label>
+    <textarea name="objeto" rows="2" placeholder="Descripción breve del servicio o del caso de éxito" style="width:100%;padding:10px;margin-bottom:14px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
+
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">⬇ Generar PDF documento interno</button>
+  </form>
+</section>
+"""
+    return page("Certificaciones corporativas", shell(content))
+
+
+def _cert_corp_pdf(form, meta):
+    from reportlab.lib.utils import simpleSplit, ImageReader
+    import base64 as _b64
+
+    tip = (form.get("tipo") or "implementacion").strip()
+    inst = (form.get("institucion") or form.get("institucion_sel") or "").strip() or "la institución educativa"
+    ciudad = (form.get("ciudad") or meta.get("ciudad") or "Caracolí, Antioquia").strip()
+    rector = (form.get("rector") or "").strip() or "Rectora / Representante Legal"
+    modulo = (form.get("modulo") or "Control de Asistencia Escolar mediante Código QR").strip()
+    detalle = (form.get("detalle") or "").strip()
+    beneficiario = (form.get("beneficiario") or "").strip()
+    objeto = (form.get("objeto") or "").strip()
+    dia, mes, anio, fecha_larga = _cert_fecha_larga()
+    nit = meta.get("nit") or "—"
+    emp = "PROCSIS"
+    titulos = {
+        "prestacion_servicios": "CONSTANCIA DE PRESTACIÓN DE SERVICIOS",
+        "cliente_activo": "CERTIFICACIÓN DE CLIENTE ACTIVO",
+        "caso_exito": "CASO DE ÉXITO",
+        "implementacion": "CERTIFICACIÓN DE IMPLEMENTACIÓN TECNOLÓGICA",
+    }
+    titulo = titulos.get(tip, "CERTIFICACIÓN CORPORATIVA")
+
+    # Cuerpos por tipo
+    if tip == "prestacion_servicios":
+        cuerpo = (
+            "La empresa %s, identificada con NIT %s, hace constar que %s ha prestado y/o presta "
+            "servicios profesionales a nuestra organización"
+            % (emp, nit, beneficiario or "[nombre del prestador]")
+        )
+        if objeto:
+            cuerpo += ", en el marco de: %s" % objeto
+        cuerpo += (
+            ". Los servicios se ejecutan bajo la modalidad de prestación de servicios, "
+            "con autonomía técnica y cumpliendo los estándares de confidencialidad y protección de datos "
+            "aplicables a PROCSIS y a la plataforma EduTrack."
+        )
+        if detalle:
+            cuerpo += " %s" % detalle
+    elif tip == "cliente_activo":
+        cuerpo = (
+            "La empresa %s, constituida legalmente como proveedor de soluciones de base tecnológica, "
+            "hace constar que la institución educativa %s es cliente activo de nuestro ecosistema digital "
+            "y utiliza oficialmente la plataforma EduTrack para la modernización de sus procesos institucionales."
+            % (emp, inst)
+        )
+        if modulo:
+            cuerpo += (
+                " A la fecha, la institución mantiene activo el servicio de %s, con soporte técnico "
+                "preferente alojado en nuestra infraestructura de producción." % modulo
+            )
+        if detalle:
+            cuerpo += " %s" % detalle
+    elif tip == "caso_exito":
+        cuerpo = (
+            "La empresa %s certifica el caso de éxito de la institución educativa %s en el uso de la plataforma EduTrack. "
+            % (emp, inst)
+        )
+        if modulo:
+            cuerpo += "Se destaca la implementación de %s. " % modulo
+        if objeto:
+            cuerpo += "%s " % objeto
+        if detalle:
+            cuerpo += detalle + " "
+        cuerpo += (
+            "Los resultados evidencian optimización de procesos, trazabilidad de la información y acompañamiento "
+            "continuo por parte del equipo PROCSIS."
+        )
+    else:  # implementacion
+        cuerpo = (
+            "La empresa %s, constituida legalmente como proveedor de soluciones de base tecnológica, "
+            "hace constar que la institución educativa %s es cliente activo de nuestro ecosistema digital "
+            "y utiliza oficialmente la plataforma EduTrack para la modernización de sus procesos institucionales. "
+            "A la fecha, la institución tiene implementado con total éxito el módulo de %s, garantizando la "
+            "optimización de los tiempos de registro en el aula, la trazabilidad segura de los datos de la "
+            "comunidad educativa y el soporte técnico preferente alojado en nuestra infraestructura de producción."
+            % (emp, inst, modulo)
+        )
+        if detalle:
+            cuerpo += " %s" % detalle
+
+    cierre = (
+        "La presente constancia se expide a solicitud de las partes en la ciudad de %s, "
+        "a los %s días del mes de %s de %s."
+        % (ciudad, dia, mes, anio)
+    )
+
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+
+    # Membrete
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 78, W, 78, fill=1, stroke=0)
+    x_text = 48
+    try:
+        img = None
+        logo_src = meta.get("logo") or ""
+        if logo_src.startswith("data:image"):
+            img = ImageReader(BytesIO(_b64.b64decode(logo_src.split(",", 1)[-1])))
+        else:
+            path_l = _cont_logo_path_for_pdf() if "_cont_logo_path_for_pdf" in dir() else None
+            if path_l:
+                img = ImageReader(path_l)
+        if img:
+            c.setFillColor(colors.white)
+            c.roundRect(36, H - 68, 50, 46, 6, fill=1, stroke=0)
+            c.drawImage(img, 39, H - 65, width=44, height=40, mask="auto", preserveAspectRatio=True, anchor="c")
+            x_text = 98
+    except Exception as e:
+        print("cert logo:", e)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(x_text, H - 32, emp)
+    c.setFont("Helvetica", 8)
+    c.drawString(x_text, H - 48, "DOCUMENTO INTERNO · Certificaciones corporativas")
+    if meta.get("nit"):
+        c.drawString(x_text, H - 60, "NIT %s" % meta["nit"])
+    c.setFillColor(colors.HexColor("#C4A035"))
+    c.rect(0, H - 82, W, 4, fill=1, stroke=0)
+
+    left, right = 70, W - 70
+    width = right - left
+    y = H - 115
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.setFont("Helvetica-Bold", 13)
+    for ln in simpleSplit(titulo, "Helvetica-Bold", 13, width):
+        c.drawCentredString(W / 2, y, ln)
+        y -= 16
+    y -= 10
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica", 11)
+    for ln in simpleSplit(cuerpo, "Helvetica", 11, width):
+        c.drawString(left, y, ln)
+        y -= 15
+        if y < 160:
+            c.showPage()
+            y = H - 60
+    y -= 12
+    for ln in simpleSplit(cierre, "Helvetica", 11, width):
+        c.drawString(left, y, ln)
+        y -= 15
+
+    # Doble firma
+    y = min(y - 50, 200)
+    mid = W / 2
+    c.setStrokeColor(colors.HexColor("#0f172a"))
+    c.setLineWidth(0.9)
+    c.line(left, y, left + 200, y)
+    c.line(mid + 20, y, mid + 220, y)
+    y -= 14
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(left, y, meta.get("rep") or "Founder & CEO, PROCSIS")
+    c.drawString(mid + 20, y, rector[:42])
+    y -= 12
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#475569"))
+    c.drawString(left, y, emp)
+    c.drawString(mid + 20, y, "Rectora / Representante Legal")
+    y -= 12
+    c.drawString(mid + 20, y, inst[:40])
+
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(left, 28, "Documento interno PROCSIS · Generado el %s · Verificar autenticidad con gerencia." % fecha_larga)
+    c.save()
+    bio.seek(0)
+    try:
+        registrar_auditoria("Certificación corporativa PDF", "tipo=%s inst=%s" % (tip, inst[:60]))
+    except Exception:
+        pass
+    safe = "".join(ch if ch.isalnum() else "_" for ch in (inst or tip)[:30])
+    return send_file(
+        bio,
+        as_attachment=True,
+        download_name="PROCSIS_%s_%s.pdf" % (tip, safe),
         mimetype="application/pdf",
     )
 
