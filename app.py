@@ -48525,6 +48525,60 @@ def gerencia_req_acta_pdf(rid):
 
 
 
+
+def _hv_a_trabajador(hv):
+    """Si la HV está CONTRATADO, crea o actualiza ContTrabajador."""
+    if not hv:
+        return None
+    if (hv.decision or "").upper() != "CONTRATADO":
+        return None
+    try:
+        doc = (hv.documento or "").strip()
+        nombre = " ".join(
+            [x for x in [hv.nombres, hv.primer_apellido, hv.segundo_apellido] if x]
+        ).strip()
+        if not nombre:
+            return None
+        t = None
+        if doc:
+            t = ContTrabajador.query.filter_by(documento=doc).first()
+        if not t:
+            t = ContTrabajador(
+                nombre=nombre[:160],
+                documento=doc[:40],
+                cargo=(hv.cargo_postula or "")[:120],
+                tipo_contrato="Laboral indefinido",
+                email=(hv.email or "")[:120],
+                telefono=(hv.telefono or "")[:40],
+                direccion=(hv.direccion or "")[:255],
+                fecha_inicio=(fecha_hoy() if "fecha_hoy" in dir() else "")[:40],
+                objeto_funciones=(hv.perfil_breve or hv.habilidades or "")[:2000],
+                activo=True,
+                notas="Alta automática desde HV %s" % (hv.codigo or ""),
+            )
+            db.session.add(t)
+        else:
+            t.nombre = nombre[:160] or t.nombre
+            t.cargo = (hv.cargo_postula or t.cargo or "")[:120]
+            t.email = (hv.email or t.email or "")[:120]
+            t.telefono = (hv.telefono or t.telefono or "")[:40]
+            t.direccion = (hv.direccion or getattr(t, "direccion", "") or "")[:255]
+            t.activo = True
+            if not (t.notas or ""):
+                t.notas = "Vinculado desde HV %s" % (hv.codigo or "")
+            else:
+                t.notas = ((t.notas or "") + " | HV %s contratado" % (hv.codigo or ""))[:1000]
+        db.session.commit()
+        return t
+    except Exception as e:
+        print("hv_a_trabajador:", e)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
 # ─── Hojas de vida / Talento humano ─────────────────────────────────────────
 def _hv_codigo():
     try:
@@ -48691,11 +48745,22 @@ def gerencia_hojas_vida():
             else:
                 db.session.add(hv)
                 db.session.commit()
+                trab = None
                 try:
-                    registrar_auditoria("Hoja de vida registrada", hv.codigo)
+                    trab = _hv_a_trabajador(hv)
+                except Exception as _e:
+                    print("sync trabajador:", _e)
+                try:
+                    registrar_auditoria(
+                        "Hoja de vida registrada",
+                        "%s%s" % (hv.codigo, " · Alta en Trabajadores" if trab else ""),
+                    )
                 except Exception:
                     pass
-                msg = "Hoja de vida %s guardada." % hv.codigo
+                if trab:
+                    msg = "Hoja de vida %s guardada y dada de alta en Trabajadores." % hv.codigo
+                else:
+                    msg = "Hoja de vida %s guardada." % hv.codigo
                 return redirect("/gerencia/hojas-vida/%s" % hv.id)
         except Exception as e:
             db.session.rollback()
@@ -48874,12 +48939,30 @@ def gerencia_hv_nueva():
     return page("Nueva hoja de vida", shell(content))
 
 
-@app.route("/gerencia/hojas-vida/<int:hid>")
+@app.route("/gerencia/hojas-vida/<int:hid>", methods=["GET", "POST"])
 def gerencia_hv_detalle(hid):
     g = _guard_gerencia()
     if g:
         return g
     h = HojaVida.query.get_or_404(hid)
+    if request.method == "POST" and (request.form.get("accion") or "") == "decision":
+        try:
+            h.decision = (request.form.get("decision") or h.decision or "").strip()[:40]
+            h.concepto_entrevistador = (request.form.get("concepto_entrevistador") or h.concepto_entrevistador or "").strip()[:2000]
+            h.resultado_prueba = (request.form.get("resultado_prueba") or h.resultado_prueba or "").strip()[:120]
+            h.fecha_entrevista = (request.form.get("fecha_entrevista") or h.fecha_entrevista or "").strip()[:40]
+            db.session.commit()
+            trab = _hv_a_trabajador(h)
+            try:
+                registrar_auditoria(
+                    "HV decisión",
+                    "%s → %s%s" % (h.codigo, h.decision, " · Trabajadores" if trab else ""),
+                )
+            except Exception:
+                pass
+        except Exception as e:
+            db.session.rollback()
+            print("hv decision:", e)
     import json as _json
     try:
         formacion = _json.loads(h.formacion_json or "[]")
@@ -48921,6 +49004,26 @@ def gerencia_hv_detalle(hid):
   <p><b>Entrevista:</b> {_esc(h.fecha_entrevista)} · {_esc(h.resultado_prueba)}</p>
   <p><b>Concepto:</b> {_esc(h.concepto_entrevistador)}</p>
   <p style="font-size:12px;color:#64748b">Registrado por {_esc(h.registrado_por)} · {_esc(h.creado_en)}</p>
+  <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0">
+  <h3 style="color:#0B2D57;margin:0 0 8px">Actualizar decisión de selección</h3>
+  <p style="font-size:12px;color:#64748b;margin:0 0 10px">Si marcas <b>CONTRATADO</b>, el sistema da de alta al colaborador en <b>Contabilidad → Trabajadores</b> de forma automática.</p>
+  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:640px">
+    <input type="hidden" name="accion" value="decision">
+    <div><label style="font-size:12px;font-weight:700">Decisión</label>
+    <select name="decision" style="width:100%;padding:9px">
+      <option value="PRESELECCIONADO" {"selected" if (h.decision or "")=="PRESELECCIONADO" else ""}>PRESELECCIONADO</option>
+      <option value="CONTRATADO" {"selected" if (h.decision or "")=="CONTRATADO" else ""}>CONTRATADO</option>
+      <option value="NO_CONTINUA" {"selected" if (h.decision or "")=="NO_CONTINUA" else ""}>NO_CONTINUA</option>
+    </select></div>
+    <div><label style="font-size:12px;font-weight:700">Fecha entrevista</label>
+    <input name="fecha_entrevista" value="{_esc(h.fecha_entrevista)}" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Resultado prueba</label>
+    <input name="resultado_prueba" value="{_esc(h.resultado_prueba)}" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Concepto</label>
+    <textarea name="concepto_entrevistador" rows="2" style="width:100%;padding:9px">{_esc(h.concepto_entrevistador)}</textarea></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Guardar decisión</button>
+    <a href="/gerencia/contabilidad/trabajadores" style="margin-left:10px;font-weight:700">Ir a Trabajadores →</a></div>
+  </form>
 </section>
 """
     return page(h.codigo or "HV", shell(content))
