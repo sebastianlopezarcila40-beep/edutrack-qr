@@ -2281,6 +2281,55 @@ class ReqAutoridadAudit(db.Model):
     hash_archivo = db.Column(db.String(80), default="")
     timestamp = db.Column(db.String(40), default="")
 
+
+class HojaVida(db.Model):
+    """Hojas de vida / talento humano PROCSIS."""
+    __tablename__ = "hojas_vida"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), default="", index=True)  # HV-2026-0001
+    # Cargo / vacante
+    cargo_postula = db.Column(db.String(120), default="")
+    codigo_vacante = db.Column(db.String(60), default="")
+    perfil_breve = db.Column(db.Text, default="")
+    # Datos personales
+    primer_apellido = db.Column(db.String(80), default="")
+    segundo_apellido = db.Column(db.String(80), default="")
+    nombres = db.Column(db.String(120), default="")
+    tipo_doc = db.Column(db.String(20), default="C.C.")
+    documento = db.Column(db.String(40), default="", index=True)
+    genero = db.Column(db.String(10), default="")
+    nacionalidad = db.Column(db.String(40), default="Colombiano")
+    fecha_nacimiento = db.Column(db.String(30), default="")
+    lugar_nacimiento = db.Column(db.String(120), default="")
+    direccion = db.Column(db.String(255), default="")
+    ciudad = db.Column(db.String(80), default="")
+    departamento = db.Column(db.String(80), default="")
+    telefono = db.Column(db.String(40), default="")
+    email = db.Column(db.String(120), default="")
+    estado_civil = db.Column(db.String(40), default="")
+    vivienda = db.Column(db.String(40), default="")
+    licencia = db.Column(db.String(40), default="")
+    vehiculo = db.Column(db.String(40), default="")
+    # JSON bloques
+    formacion_json = db.Column(db.Text, default="[]")
+    experiencia_json = db.Column(db.Text, default="[]")
+    idiomas_json = db.Column(db.Text, default="[]")
+    habilidades = db.Column(db.Text, default="")
+    familia_json = db.Column(db.Text, default="[]")
+    referencias_json = db.Column(db.Text, default="[]")
+    # Selección interna
+    fecha_entrevista = db.Column(db.String(40), default="")
+    resultado_prueba = db.Column(db.String(120), default="")
+    concepto_entrevistador = db.Column(db.Text, default="")
+    decision = db.Column(db.String(40), default="PRESELECCIONADO")  # PRESELECCIONADO | CONTRATADO | NO_CONTINUA
+    # Soportes
+    adjunto_pdf = db.Column(db.Text, default="")
+    foto = db.Column(db.Text, default="")
+    # Meta
+    registrado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(40), default="")
+    notas = db.Column(db.Text, default="")
+
 class ContTrabajador(db.Model):
     """Trabajadores / contratistas para control contable-laboral."""
     __tablename__ = "cont_trabajadores"
@@ -19566,6 +19615,7 @@ def gerencia_hq():
         <a class="own" href="/gerencia/contabilidad/trabajadores">Módulo trabajadores</a>
         <a class="g" href="/gerencia/certificaciones">📜 Certificaciones corporativas</a>
         <a class="o" href="/gerencia/requerimientos-autoridades">⚖️ Requerimientos de autoridades</a>
+        <a class="g" href="/gerencia/hojas-vida">📋 Hojas de vida / Talento</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -48472,6 +48522,631 @@ def gerencia_req_acta_pdf(rid):
         download_name="PROCSIS_Acta_Entrega_%s.pdf" % (r.codigo or rid),
         mimetype="application/pdf",
     )
+
+
+
+# ─── Hojas de vida / Talento humano ─────────────────────────────────────────
+def _hv_codigo():
+    try:
+        n = (HojaVida.query.count() or 0) + 1
+    except Exception:
+        n = 1
+    anio = (fecha_hoy() if "fecha_hoy" in dir() else "2026")[:4] or "2026"
+    return "HV-%s-%04d" % (anio, n)
+
+
+def _hv_meta():
+    try:
+        p = plataforma()
+        return {
+            "empresa": "PROCSIS",
+            "nit": (getattr(p, "nit", None) or "").strip() or "—",
+            "ciudad": (getattr(p, "ciudad", None) or "").strip() or "Caracolí, Antioquia",
+            "direccion": (getattr(p, "direccion", None) or "").strip(),
+            "tel": (getattr(p, "telefono_soporte", None) or "").strip() or "3105615621",
+            "email": (getattr(p, "email_soporte", None) or "").strip() or "soporte@procsis.com",
+            "logo": logo_plataforma() if "logo_plataforma" in dir() else "",
+        }
+    except Exception:
+        return {"empresa": "PROCSIS", "nit": "—", "ciudad": "Caracolí, Antioquia",
+                "direccion": "", "tel": "3105615621", "email": "soporte@procsis.com", "logo": ""}
+
+
+def _hv_draw_header(c, W, H, meta, subtitulo="REG-TH-001 · Gestión de Talento Humano"):
+    from reportlab.lib.utils import ImageReader
+    import base64 as _b64
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 70, W, 70, fill=1, stroke=0)
+    x = 44
+    try:
+        img = None
+        logo = meta.get("logo") or ""
+        if logo.startswith("data:image"):
+            img = ImageReader(BytesIO(_b64.b64decode(logo.split(",", 1)[-1])))
+        else:
+            try:
+                pl = _cont_logo_path_for_pdf()
+                if pl:
+                    img = ImageReader(pl)
+            except Exception:
+                pass
+        if img:
+            c.setFillColor(colors.white)
+            c.roundRect(28, H - 60, 46, 42, 6, fill=1, stroke=0)
+            c.drawImage(img, 31, H - 56, width=40, height=34, mask="auto", preserveAspectRatio=True, anchor="c")
+            x = 84
+    except Exception:
+        pass
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(x, H - 26, "PROCSIS")
+    c.setFont("Helvetica", 8)
+    c.drawString(x, H - 38, "NIT %s · %s" % (meta.get("nit") or "—", subtitulo))
+    c.drawString(x, H - 50, "Módulo: Gestión de Talento Humano y Reclutamiento")
+    c.setFillColor(colors.HexColor("#C4A035"))
+    c.rect(0, H - 74, W, 4, fill=1, stroke=0)
+
+
+@app.route("/gerencia/hojas-vida", methods=["GET", "POST"])
+def gerencia_hojas_vida():
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST" and (request.form.get("accion") or "") == "registrar":
+        try:
+            import json as _json
+            formacion = []
+            for i in range(1, 6):
+                mod = (request.form.get("est_mod_%s" % i) or "").strip()
+                tit = (request.form.get("est_tit_%s" % i) or "").strip()
+                if mod or tit:
+                    formacion.append({
+                        "modalidad": mod,
+                        "titulo": tit,
+                        "institucion": (request.form.get("est_inst_%s" % i) or "").strip(),
+                        "graduado": (request.form.get("est_grad_%s" % i) or "").strip(),
+                        "anio": (request.form.get("est_anio_%s" % i) or "").strip(),
+                    })
+            experiencia = []
+            for i in range(1, 4):
+                emp = (request.form.get("emp_nombre_%s" % i) or "").strip()
+                if emp:
+                    experiencia.append({
+                        "empresa": emp,
+                        "telefono": (request.form.get("emp_tel_%s" % i) or "").strip(),
+                        "jefe": (request.form.get("emp_jefe_%s" % i) or "").strip(),
+                        "cargo_jefe": (request.form.get("emp_cargo_jefe_%s" % i) or "").strip(),
+                        "cargo": (request.form.get("emp_cargo_%s" % i) or "").strip(),
+                        "ingreso": (request.form.get("emp_ingreso_%s" % i) or "").strip(),
+                        "retiro": (request.form.get("emp_retiro_%s" % i) or "").strip(),
+                        "sueldo_i": (request.form.get("emp_sueldo_i_%s" % i) or "").strip(),
+                        "sueldo_f": (request.form.get("emp_sueldo_f_%s" % i) or "").strip(),
+                        "motivo": (request.form.get("emp_motivo_%s" % i) or "").strip(),
+                        "funciones": (request.form.get("emp_funciones_%s" % i) or "").strip(),
+                        "verificado": request.form.get("emp_verif_%s" % i) == "1",
+                    })
+            refs = []
+            for i in range(1, 3):
+                nm = (request.form.get("ref_nombre_%s" % i) or "").strip()
+                if nm:
+                    refs.append({
+                        "nombre": nm,
+                        "ocupacion": (request.form.get("ref_ocup_%s" % i) or "").strip(),
+                        "telefono": (request.form.get("ref_tel_%s" % i) or "").strip(),
+                    })
+            adj = ""
+            f = request.files.get("adjunto")
+            if f and getattr(f, "filename", ""):
+                try:
+                    adj = _archivo_a_data_uri(f, max_bytes=4_000_000) or ""
+                except Exception:
+                    adj = ""
+            u = session.get("usuario") or session.get("user") or "gerencia"
+            ts = "%s %s" % (
+                fecha_hoy() if "fecha_hoy" in dir() else "",
+                hora_actual() if "hora_actual" in dir() else "",
+            )
+            hv = HojaVida(
+                codigo=_hv_codigo(),
+                cargo_postula=(request.form.get("cargo_postula") or "").strip()[:120],
+                codigo_vacante=(request.form.get("codigo_vacante") or "").strip()[:60],
+                perfil_breve=(request.form.get("perfil_breve") or "").strip()[:2000],
+                primer_apellido=(request.form.get("primer_apellido") or "").strip()[:80],
+                segundo_apellido=(request.form.get("segundo_apellido") or "").strip()[:80],
+                nombres=(request.form.get("nombres") or "").strip()[:120],
+                tipo_doc=(request.form.get("tipo_doc") or "C.C.").strip()[:20],
+                documento=(request.form.get("documento") or "").strip()[:40],
+                genero=(request.form.get("genero") or "").strip()[:10],
+                nacionalidad=(request.form.get("nacionalidad") or "Colombiano").strip()[:40],
+                fecha_nacimiento=(request.form.get("fecha_nacimiento") or "").strip()[:30],
+                lugar_nacimiento=(request.form.get("lugar_nacimiento") or "").strip()[:120],
+                direccion=(request.form.get("direccion") or "").strip()[:255],
+                ciudad=(request.form.get("ciudad") or "").strip()[:80],
+                departamento=(request.form.get("departamento") or "").strip()[:80],
+                telefono=(request.form.get("telefono") or "").strip()[:40],
+                email=(request.form.get("email") or "").strip()[:120],
+                estado_civil=(request.form.get("estado_civil") or "").strip()[:40],
+                vivienda=(request.form.get("vivienda") or "").strip()[:40],
+                licencia=(request.form.get("licencia") or "").strip()[:40],
+                vehiculo=(request.form.get("vehiculo") or "").strip()[:40],
+                formacion_json=_json.dumps(formacion, ensure_ascii=False),
+                experiencia_json=_json.dumps(experiencia, ensure_ascii=False),
+                habilidades=(request.form.get("habilidades") or "").strip()[:2000],
+                referencias_json=_json.dumps(refs, ensure_ascii=False),
+                fecha_entrevista=(request.form.get("fecha_entrevista") or "").strip()[:40],
+                resultado_prueba=(request.form.get("resultado_prueba") or "").strip()[:120],
+                concepto_entrevistador=(request.form.get("concepto_entrevistador") or "").strip()[:2000],
+                decision=(request.form.get("decision") or "PRESELECCIONADO").strip()[:40],
+                adjunto_pdf=adj,
+                registrado_por=str(u)[:120],
+                creado_en=ts,
+            )
+            if not hv.nombres or not hv.documento:
+                err = "Nombres y documento son obligatorios."
+            else:
+                db.session.add(hv)
+                db.session.commit()
+                try:
+                    registrar_auditoria("Hoja de vida registrada", hv.codigo)
+                except Exception:
+                    pass
+                msg = "Hoja de vida %s guardada." % hv.codigo
+                return redirect("/gerencia/hojas-vida/%s" % hv.id)
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:200]
+
+    filtro = (request.args.get("decision") or "").strip().upper()
+    q = HojaVida.query
+    if filtro:
+        q = q.filter_by(decision=filtro)
+    rows = q.order_by(HojaVida.id.desc()).limit(100).all()
+    filas = ""
+    for h in rows:
+        nom = " ".join([x for x in [h.nombres, h.primer_apellido, h.segundo_apellido] if x])
+        filas += (
+            "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+            "<td><a href='/gerencia/hojas-vida/%s'>Ver</a> · "
+            "<a href='/gerencia/hojas-vida/%s/pdf'>PDF</a></td></tr>"
+        ) % (
+            _esc(h.codigo), _esc(nom), _esc(h.documento), _esc(h.cargo_postula),
+            _esc(h.decision), h.id, h.id,
+        )
+    if not filas:
+        filas = "<tr><td colspan='6' style='text-align:center;color:#94a3b8'>Sin hojas de vida registradas.</td></tr>"
+
+    content = f"""
+<header class="role-hero"><div>
+  <h1>📋 Hojas de vida · Talento humano</h1>
+  <p>Formato imprimible · Registro digital · PDF corporativo PROCSIS · Código REG-TH-001</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+{"<div class='msg' style='background:#fef2f2;color:#991b1b'>"+_esc(err)+"</div>" if err else ""}
+<section class="role-panel">
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+    <a href="/gerencia/hojas-vida/formato.pdf" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;font-weight:800;text-decoration:none">📥 Descargar Formato Hoja de Vida (Imprimir)</a>
+    <a href="/gerencia/hojas-vida/nueva" style="background:#15803d;color:#fff;padding:10px 14px;border-radius:8px;font-weight:800;text-decoration:none">+ Registrar hoja de vida recibida</a>
+    <a href="?decision=CONTRATADO" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Contratados</a>
+    <a href="?decision=PRESELECCIONADO" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Preseleccionados</a>
+    <a href="?" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Todos</a>
+  </div>
+  <div style="overflow:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px;text-align:left">Código</th>
+      <th style="padding:8px;text-align:left">Nombre</th>
+      <th style="padding:8px;text-align:left">Documento</th>
+      <th style="padding:8px;text-align:left">Cargo</th>
+      <th style="padding:8px;text-align:left">Decisión</th>
+      <th style="padding:8px;text-align:left">Acciones</th>
+    </tr>
+    {filas}
+  </table>
+  </div>
+</section>
+"""
+    return page("Hojas de vida", shell(content))
+
+
+@app.route("/gerencia/hojas-vida/nueva", methods=["GET", "POST"])
+def gerencia_hv_nueva():
+    g = _guard_gerencia()
+    if g:
+        return g
+    # POST handled on list route via redirect pattern — use same registrar on this URL
+    if request.method == "POST":
+        # forward by reusing logic: set path behavior - call same by simulating
+        return gerencia_hojas_vida()
+
+    def _est_row(i):
+        return f"""
+        <div style="display:grid;grid-template-columns:1fr 1.2fr 1.2fr 0.7fr 0.6fr;gap:6px;margin-bottom:6px">
+          <select name="est_mod_{i}" style="padding:8px"><option value="">Modalidad</option>
+            <option>Primaria</option><option>Secundaria / Media</option><option>Pregrado</option>
+            <option>Especialización</option><option>Maestría</option><option>Doctorado</option><option>Curso</option></select>
+          <input name="est_tit_{i}" placeholder="Título / programa" style="padding:8px">
+          <input name="est_inst_{i}" placeholder="Institución" style="padding:8px">
+          <select name="est_grad_{i}" style="padding:8px"><option value="">¿Graduado?</option><option>SI</option><option>NO</option></select>
+          <input name="est_anio_{i}" placeholder="Año" style="padding:8px">
+        </div>"""
+
+    def _emp_block(i):
+        return f"""
+        <fieldset style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px">
+          <legend style="font-weight:800;color:#0B2D57">Empleo {i}</legend>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <input name="emp_nombre_{i}" placeholder="Empresa" style="padding:8px">
+            <input name="emp_tel_{i}" placeholder="Teléfono RRHH" style="padding:8px">
+            <input name="emp_cargo_{i}" placeholder="Cargo desempeñado" style="padding:8px">
+            <input name="emp_jefe_{i}" placeholder="Jefe inmediato" style="padding:8px">
+            <input name="emp_cargo_jefe_{i}" placeholder="Cargo del jefe" style="padding:8px">
+            <input name="emp_ingreso_{i}" placeholder="Fecha ingreso" style="padding:8px">
+            <input name="emp_retiro_{i}" placeholder="Fecha retiro" style="padding:8px">
+            <input name="emp_sueldo_i_{i}" placeholder="Sueldo inicial" style="padding:8px">
+            <input name="emp_sueldo_f_{i}" placeholder="Sueldo final" style="padding:8px">
+            <input name="emp_motivo_{i}" placeholder="Motivo del retiro" style="padding:8px">
+          </div>
+          <textarea name="emp_funciones_{i}" rows="2" placeholder="Funciones principales" style="width:100%;padding:8px;margin-top:6px"></textarea>
+          <label style="font-size:12px;display:flex;gap:6px;align-items:center;margin-top:6px">
+            <input type="checkbox" name="emp_verif_{i}" value="1" style="width:auto"> Información verificada correctamente (interno PROCSIS)
+          </label>
+        </fieldset>"""
+
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Registrar hoja de vida recibida</h1>
+  <p>Digitalización permanente · Ley 1581 de 2012</p>
+</div>
+<a class="btn" href="/gerencia/hojas-vida">Volver</a></header>
+<section class="role-panel">
+<form method="POST" action="/gerencia/hojas-vida" enctype="multipart/form-data" style="max-width:900px">
+  <input type="hidden" name="accion" value="registrar">
+  <h3 style="color:#0B2D57">1. Cargo y vacante</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div><label style="font-size:12px;font-weight:700">Cargo al que se postula *</label>
+    <input name="cargo_postula" required placeholder="Ej. Desarrollador, Soporte, Ventas" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Código vacante / proceso</label>
+    <input name="codigo_vacante" placeholder="VAC-2026-01" style="width:100%;padding:9px"></div>
+  </div>
+  <label style="font-size:12px;font-weight:700;margin-top:8px;display:block">Perfil breve</label>
+  <textarea name="perfil_breve" rows="3" style="width:100%;padding:9px" placeholder="Experiencia y habilidades principales..."></textarea>
+
+  <h3 style="color:#0B2D57">2. Datos personales</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <input name="primer_apellido" placeholder="Primer apellido *" required style="padding:9px">
+    <input name="segundo_apellido" placeholder="Segundo apellido" style="padding:9px">
+    <input name="nombres" placeholder="Nombres *" required style="padding:9px">
+    <select name="tipo_doc" style="padding:9px"><option>C.C.</option><option>C.E.</option><option>Pasaporte</option></select>
+    <input name="documento" placeholder="Número documento *" required style="padding:9px">
+    <select name="genero" style="padding:9px"><option value="">Género</option><option>F</option><option>M</option><option>NB</option></select>
+    <select name="nacionalidad" style="padding:9px"><option>Colombiano</option><option>Extranjero</option></select>
+    <input name="fecha_nacimiento" placeholder="Fecha nacimiento" style="padding:9px">
+    <input name="lugar_nacimiento" placeholder="Lugar de nacimiento" style="padding:9px">
+    <input name="direccion" placeholder="Dirección" style="padding:9px;grid-column:1/-1">
+    <input name="ciudad" placeholder="Ciudad" style="padding:9px">
+    <input name="departamento" placeholder="Departamento" style="padding:9px">
+    <input name="telefono" placeholder="Teléfono" style="padding:9px">
+    <input name="email" placeholder="Correo electrónico" style="padding:9px">
+    <select name="estado_civil" style="padding:9px"><option value="">Estado civil</option><option>Soltero</option><option>Casado</option><option>Unión libre</option></select>
+    <select name="vivienda" style="padding:9px"><option value="">Vivienda</option><option>Propia</option><option>Arrendada</option><option>Familiar</option></select>
+    <input name="licencia" placeholder="Licencia (categoría)" style="padding:9px">
+    <select name="vehiculo" style="padding:9px"><option value="">Vehículo</option><option>Ninguno</option><option>Carro</option><option>Moto</option></select>
+  </div>
+
+  <h3 style="color:#0B2D57">3. Formación académica</h3>
+  {_est_row(1)}{_est_row(2)}{_est_row(3)}{_est_row(4)}{_est_row(5)}
+  <label style="font-size:12px;font-weight:700">Habilidades técnicas / aptitudes</label>
+  <textarea name="habilidades" rows="2" placeholder="PostgreSQL, JavaScript, Atención al cliente, AWS..." style="width:100%;padding:9px"></textarea>
+
+  <h3 style="color:#0B2D57">4. Experiencia laboral</h3>
+  {_emp_block(1)}{_emp_block(2)}{_emp_block(3)}
+
+  <h3 style="color:#0B2D57">5. Referencias</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+    <input name="ref_nombre_1" placeholder="Referencia 1 · Nombre" style="padding:9px">
+    <input name="ref_ocup_1" placeholder="Ocupación" style="padding:9px">
+    <input name="ref_tel_1" placeholder="Teléfono" style="padding:9px">
+    <input name="ref_nombre_2" placeholder="Referencia 2 · Nombre" style="padding:9px">
+    <input name="ref_ocup_2" placeholder="Ocupación" style="padding:9px">
+    <input name="ref_tel_2" placeholder="Teléfono" style="padding:9px">
+  </div>
+
+  <h3 style="color:#0B2D57">6. Proceso de selección (Gerencia)</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <input name="fecha_entrevista" placeholder="Fecha entrevista" style="padding:9px">
+    <input name="resultado_prueba" placeholder="Resultado prueba (ej. 85/100 Apto)" style="padding:9px">
+    <select name="decision" style="padding:9px"><option>PRESELECCIONADO</option><option>CONTRATADO</option><option>NO_CONTINUA</option></select>
+  </div>
+  <textarea name="concepto_entrevistador" rows="2" placeholder="Concepto del entrevistador" style="width:100%;padding:9px;margin-top:8px"></textarea>
+
+  <h3 style="color:#0B2D57">7. Soportes</h3>
+  <input type="file" name="adjunto" accept="application/pdf,image/*" style="width:100%;padding:9px;margin-bottom:12px">
+  <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar hoja de vida</button>
+</form>
+</section>
+"""
+    return page("Nueva hoja de vida", shell(content))
+
+
+@app.route("/gerencia/hojas-vida/<int:hid>")
+def gerencia_hv_detalle(hid):
+    g = _guard_gerencia()
+    if g:
+        return g
+    h = HojaVida.query.get_or_404(hid)
+    import json as _json
+    try:
+        formacion = _json.loads(h.formacion_json or "[]")
+    except Exception:
+        formacion = []
+    try:
+        exp = _json.loads(h.experiencia_json or "[]")
+    except Exception:
+        exp = []
+    nom = " ".join([x for x in [h.nombres, h.primer_apellido, h.segundo_apellido] if x])
+    form_html = "".join(
+        "<li>%s — %s (%s) · %s · %s</li>" % (
+            _esc(f.get("modalidad")), _esc(f.get("titulo")), _esc(f.get("institucion")),
+            _esc(f.get("graduado")), _esc(f.get("anio")),
+        ) for f in formacion
+    ) or "<li style='color:#94a3b8'>Sin formación registrada</li>"
+    exp_html = "".join(
+        "<li><b>%s</b> · %s · %s → %s · Motivo: %s</li>" % (
+            _esc(e.get("empresa")), _esc(e.get("cargo")), _esc(e.get("ingreso")),
+            _esc(e.get("retiro")), _esc(e.get("motivo")),
+        ) for e in exp
+    ) or "<li style='color:#94a3b8'>Sin experiencia registrada</li>"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>{_esc(h.codigo)} · {_esc(nom)}</h1>
+  <p>{_esc(h.cargo_postula)} · {_esc(h.decision)}</p>
+</div>
+<div style="display:flex;gap:8px">
+  <a class="btn" href="/gerencia/hojas-vida/{h.id}/pdf">⬇ PDF</a>
+  <a class="btn" href="/gerencia/hojas-vida">Volver</a>
+</div></header>
+<section class="role-panel">
+  <p><b>Documento:</b> {_esc(h.tipo_doc)} {_esc(h.documento)} · <b>Contacto:</b> {_esc(h.telefono)} · {_esc(h.email)}</p>
+  <p><b>Dirección:</b> {_esc(h.direccion)} · {_esc(h.ciudad)} · {_esc(h.departamento)}</p>
+  <p><b>Perfil:</b> {_esc(h.perfil_breve)}</p>
+  <h3>Formación</h3><ul>{form_html}</ul>
+  <h3>Experiencia</h3><ul>{exp_html}</ul>
+  <p><b>Habilidades:</b> {_esc(h.habilidades)}</p>
+  <p><b>Entrevista:</b> {_esc(h.fecha_entrevista)} · {_esc(h.resultado_prueba)}</p>
+  <p><b>Concepto:</b> {_esc(h.concepto_entrevistador)}</p>
+  <p style="font-size:12px;color:#64748b">Registrado por {_esc(h.registrado_por)} · {_esc(h.creado_en)}</p>
+</section>
+"""
+    return page(h.codigo or "HV", shell(content))
+
+
+@app.route("/gerencia/hojas-vida/formato.pdf")
+def gerencia_hv_formato_pdf():
+    """PDF en blanco para llenado manual / impresión."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    meta = _hv_meta()
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    from reportlab.lib.utils import simpleSplit
+
+    def box(x, y, w, h):
+        c.setStrokeColor(colors.HexColor("#94a3b8"))
+        c.setLineWidth(0.6)
+        c.rect(x, y, w, h, stroke=1, fill=0)
+
+    def label(x, y, t, size=7):
+        c.setFont("Helvetica", size)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawString(x, y, t)
+
+    def section(y, num, title):
+        c.setFillColor(colors.HexColor("#0B2D57"))
+        c.roundRect(50, y - 4, 200, 16, 8, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(58, y, "%s  %s" % (num, title))
+        return y - 22
+
+    _hv_draw_header(c, W, H, meta, "REG-TH-001 · Formato para llenado manual")
+    y = H - 95
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(W / 2, y, "HOJA DE VIDA · Persona Natural")
+    y -= 14
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#64748b"))
+    c.drawCentredString(W / 2, y, "PROCSIS · Gestión de Talento Humano · Espacios en blanco para diligenciar")
+    y -= 22
+
+    y = section(y, "1", "DATOS PERSONALES")
+    box(50, y - 70, W - 100, 70)
+    label(55, y - 12, "PRIMER APELLIDO")
+    label(200, y - 12, "SEGUNDO APELLIDO")
+    label(350, y - 12, "NOMBRES")
+    c.setStrokeColor(colors.HexColor("#cbd5e1"))
+    c.line(50, y - 28, W - 50, y - 28)
+    label(55, y - 40, "TIPO DOC.  C.C. ( )  C.E. ( )  PAS ( )     No. _______________")
+    label(320, y - 40, "GÉNERO  F ( )  M ( )  NB ( )")
+    label(55, y - 55, "DIRECCIÓN _______________________________  CIUDAD __________  TEL __________  EMAIL ________________")
+    y -= 90
+
+    y = section(y, "2", "FORMACIÓN ACADÉMICA")
+    box(50, y - 100, W - 100, 100)
+    label(55, y - 12, "MODALIDAD")
+    label(140, y - 12, "INSTITUCIÓN")
+    label(300, y - 12, "TÍTULO OBTENIDO")
+    label(450, y - 12, "AÑO / GRADUADO")
+    for i in range(5):
+        yy = y - 28 - i * 14
+        c.setStrokeColor(colors.HexColor("#e2e8f0"))
+        c.line(55, yy, W - 55, yy)
+    y -= 120
+
+    y = section(y, "3", "EXPERIENCIA LABORAL")
+    for n in range(1, 3):
+        box(50, y - 85, W - 100, 85)
+        label(55, y - 12, "EMPRESA %s ________________________ TEL __________  CARGO ________________" % n)
+        label(55, y - 28, "JEFE INMEDIATO ________________  CARGO JEFE ______________  INGRESO ____ / RETIRO ____")
+        label(55, y - 44, "SUELDO INICIAL __________  SUELDO FINAL __________  MOTIVO RETIRO ____________________")
+        label(55, y - 60, "FUNCIONES: ___________________________________________________________________________")
+        label(55, y - 74, "_____________________________________________________________________________________")
+        y -= 95
+
+    y = section(y, "4", "REFERENCIAS Y AUTORIZACIÓN")
+    box(50, y - 55, W - 100, 55)
+    label(55, y - 14, "REF. 1: NOMBRE ______________ OCUPACIÓN ______________ TEL ______________")
+    label(55, y - 30, "REF. 2: NOMBRE ______________ OCUPACIÓN ______________ TEL ______________")
+    label(55, y - 46, "Autorizo a PROCSIS el tratamiento de mis datos personales (Ley 1581 de 2012) y la verificación de antecedentes.")
+    y -= 80
+    c.setStrokeColor(colors.black)
+    c.line(W - 250, y, W - 50, y)
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.drawRightString(W - 50, y - 12, "Firma del aspirante")
+    c.drawRightString(W - 50, y - 24, "C.C. ________________")
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(50, 28, "PROCSIS · REG-TH-001 · Documento interno · Formato de impresión")
+    c.save()
+    bio.seek(0)
+    return send_file(bio, as_attachment=True, download_name="PROCSIS_Formato_Hoja_de_Vida.pdf", mimetype="application/pdf")
+
+
+@app.route("/gerencia/hojas-vida/<int:hid>/pdf")
+def gerencia_hv_pdf(hid):
+    g = _guard_gerencia()
+    if g:
+        return g
+    h = HojaVida.query.get_or_404(hid)
+    meta = _hv_meta()
+    import json as _json
+    try:
+        formacion = _json.loads(h.formacion_json or "[]")
+    except Exception:
+        formacion = []
+    try:
+        exp = _json.loads(h.experiencia_json or "[]")
+    except Exception:
+        exp = []
+    try:
+        refs = _json.loads(h.referencias_json or "[]")
+    except Exception:
+        refs = []
+
+    from reportlab.lib.utils import simpleSplit
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    _hv_draw_header(c, W, H, meta)
+    left, right = 50, W - 50
+    width = right - left
+    y = H - 95
+    nom = " ".join([x for x in [h.nombres, h.primer_apellido, h.segundo_apellido] if x])
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.setFont("Helvetica-Bold", 13)
+    c.drawCentredString(W / 2, y, "HOJA DE VIDA")
+    y -= 14
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(W / 2, y, "%s · %s · Cargo: %s" % (h.codigo or "", nom, h.cargo_postula or "—"))
+    y -= 20
+
+    def line(label, val):
+        nonlocal y
+        if y < 60:
+            c.showPage()
+            _hv_draw_header(c, W, H, meta)
+            y = H - 90
+        c.setFont("Helvetica-Bold", 8)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawString(left, y, label)
+        c.setFont("Helvetica", 9)
+        c.setFillColor(colors.HexColor("#0f172a"))
+        for i, ln in enumerate(simpleSplit(str(val or "—"), "Helvetica", 9, width - 120)):
+            c.drawString(left + 120, y, ln)
+            if i < len(simpleSplit(str(val or "—"), "Helvetica", 9, width - 120)) - 1:
+                y -= 11
+        y -= 13
+
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "1. PERFIL Y DATOS PERSONALES")
+    y -= 14
+    line("Documento", "%s %s" % (h.tipo_doc, h.documento))
+    line("Género / Nac.", "%s · %s" % (h.genero, h.nacionalidad))
+    line("Nacimiento", "%s · %s" % (h.fecha_nacimiento, h.lugar_nacimiento))
+    line("Dirección", "%s · %s · %s" % (h.direccion, h.ciudad, h.departamento))
+    line("Contacto", "%s · %s" % (h.telefono, h.email))
+    line("Estado civil", "%s · Vivienda: %s" % (h.estado_civil, h.vivienda))
+    line("Perfil", h.perfil_breve)
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "2. FORMACIÓN ACADÉMICA")
+    y -= 14
+    for f in formacion:
+        line(f.get("modalidad") or "Estudio", "%s · %s · Grad: %s · %s" % (
+            f.get("titulo"), f.get("institucion"), f.get("graduado"), f.get("anio")))
+    if not formacion:
+        line("—", "Sin registros")
+    line("Habilidades", h.habilidades)
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "3. EXPERIENCIA LABORAL")
+    y -= 14
+    for e in exp:
+        line(e.get("empresa") or "Empresa", "%s | Jefe: %s | %s → %s | Motivo: %s" % (
+            e.get("cargo"), e.get("jefe"), e.get("ingreso"), e.get("retiro"), e.get("motivo")))
+        if e.get("funciones"):
+            line("Funciones", e.get("funciones"))
+    if not exp:
+        line("—", "Sin registros")
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "4. REFERENCIAS Y SELECCIÓN")
+    y -= 14
+    for r in refs:
+        line("Ref.", "%s · %s · %s" % (r.get("nombre"), r.get("ocupacion"), r.get("telefono")))
+    line("Entrevista", "%s · Prueba: %s · Decisión: %s" % (h.fecha_entrevista, h.resultado_prueba, h.decision))
+    line("Concepto", h.concepto_entrevistador)
+    y -= 16
+    for ln in simpleSplit(
+        "El firmante autoriza expresamente a PROCSIS para realizar el tratamiento de los datos personales "
+        "aquí consignados, así como la verificación de sus antecedentes laborales y académicos, bajo estricto "
+        "cumplimiento de la Ley 1581 de 2012 de Protección de Datos Personales de Colombia.",
+        "Helvetica", 8, width,
+    ):
+        if y < 80:
+            c.showPage()
+            y = H - 60
+        c.setFont("Helvetica", 8)
+        c.setFillColor(colors.HexColor("#475569"))
+        c.drawString(left, y, ln)
+        y -= 11
+    y = max(y - 40, 70)
+    c.setStrokeColor(colors.black)
+    c.line(W - 250, y, W - 50, y)
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.drawRightString(W - 50, y - 12, nom)
+    c.drawRightString(W - 50, y - 24, "%s %s" % (h.tipo_doc or "C.C.", h.documento or ""))
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(left, 24, "PROCSIS · REG-TH-001 · Documento interno · %s" % (h.codigo or ""))
+    c.save()
+    bio.seek(0)
+    safe = "".join(ch if ch.isalnum() else "_" for ch in nom)[:30]
+    return send_file(bio, as_attachment=True, download_name="PROCSIS_HV_%s.pdf" % safe, mimetype="application/pdf")
 
 
 
