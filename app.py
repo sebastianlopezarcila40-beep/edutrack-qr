@@ -47639,9 +47639,9 @@ def gerencia_certificaciones():
     <label style="font-size:12px;font-weight:700">Nombre de la institución *</label>
     <input id="inst_txt" name="institucion" required placeholder="Nombre del colegio" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div><label style="font-size:12px;font-weight:700">NIT de la institución</label>
+      <div><label style="font-size:12px;font-weight:700">NIT del colegio (con guion, ej. 900.000.000-1)</label>
       <input name="nit_inst" placeholder="900.000.000-1" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
-      <div><label style="font-size:12px;font-weight:700">Código DANE</label>
+      <div><label style="font-size:12px;font-weight:700">Código DANE (solo números, ej. 105001000000)</label>
       <input name="dane_inst" placeholder="105001000000" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
     </div>
 
@@ -47683,6 +47683,14 @@ def _cert_corp_pdf(form, meta):
     inst = (form.get("institucion") or form.get("institucion_sel") or "").strip() or "la institución educativa"
     nit_inst = (form.get("nit_inst") or "").strip()
     dane_inst = (form.get("dane_inst") or "").strip()
+    # Corregir cruce típico: DANE suele ser solo dígitos largos; NIT lleva guion o puntos
+    def _solo_digitos(s):
+        return "".join(ch for ch in (s or "") if ch.isdigit())
+    if nit_inst and dane_inst:
+        d_nit, d_dane = _solo_digitos(nit_inst), _solo_digitos(dane_inst)
+        # Si "nit" parece DANE (solo dígitos >= 10) y "dane" parece NIT (tiene formato corto o guion)
+        if len(d_nit) >= 10 and "-" not in nit_inst and ("-" in dane_inst or (len(d_dane) <= 10 and len(d_dane) >= 6)):
+            nit_inst, dane_inst = dane_inst, nit_inst
     ciudad = (form.get("ciudad") or meta.get("ciudad") or "Caracolí, Antioquia").strip()
     rector = (form.get("rector") or "").strip() or "Rectora / Representante Legal"
     modulo = (form.get("modulo") or "Control de Asistencia Escolar mediante Código QR").strip()
@@ -47690,11 +47698,23 @@ def _cert_corp_pdf(form, meta):
     beneficiario = (form.get("beneficiario") or "").strip()
     objeto = (form.get("objeto") or "").strip()
     dia, mes, anio, fecha_larga = _cert_fecha_larga()
-    nit = (meta.get("nit") or "").strip() or "—"
+    # NIT PROCSIS: meta, luego plataforma directa, luego placeholder visible
+    nit = (meta.get("nit") or "").strip()
+    if not nit or nit == "—":
+        try:
+            p = plataforma()
+            nit = (getattr(p, "nit", None) or "").strip()
+        except Exception:
+            pass
+    if not nit:
+        nit = "900.000.000-0"  # completar en Datos de la empresa
     emp = "PROCSIS"
     dir_emp = (meta.get("direccion") or "").strip()
+    tel_emp = (meta.get("tel") or "").strip() or "3105615621"
+    email_emp = (meta.get("email") or "").strip() or "soporte@procsis.com"
     ceo = (meta.get("rep") or "Sebastián López Arcila").strip()
     cargo_ceo = (meta.get("cargo_rep") or "Founder & CEO").strip()
+
     id_inst_txt = ""
     if nit_inst or dane_inst:
         partes = []
@@ -47782,9 +47802,9 @@ def _cert_corp_pdf(form, meta):
     c = canvas.Canvas(bio, pagesize=letter)
     W, H = letter
 
-    # Membrete con logo + dirección
+    # Membrete
     c.setFillColor(colors.HexColor("#0B2D57"))
-    c.rect(0, H - 82, W, 82, fill=1, stroke=0)
+    c.rect(0, H - 78, W, 78, fill=1, stroke=0)
     x_text = 48
     try:
         img = None
@@ -47792,83 +47812,105 @@ def _cert_corp_pdf(form, meta):
         if logo_src.startswith("data:image"):
             img = ImageReader(BytesIO(_b64.b64decode(logo_src.split(",", 1)[-1])))
         else:
-            path_l = _cont_logo_path_for_pdf() if "_cont_logo_path_for_pdf" in globals() or "_cont_logo_path_for_pdf" in dir() else None
             try:
                 path_l = _cont_logo_path_for_pdf()
+                if path_l:
+                    img = ImageReader(path_l)
             except Exception:
-                path_l = None
-            if path_l:
-                img = ImageReader(path_l)
+                pass
         if img:
             c.setFillColor(colors.white)
-            c.roundRect(36, H - 72, 52, 48, 6, fill=1, stroke=0)
-            c.drawImage(img, 40, H - 68, width=44, height=40, mask="auto", preserveAspectRatio=True, anchor="c")
-            x_text = 100
+            c.roundRect(36, H - 68, 50, 46, 6, fill=1, stroke=0)
+            c.drawImage(img, 39, H - 64, width=44, height=40, mask="auto", preserveAspectRatio=True, anchor="c")
+            x_text = 98
     except Exception as e:
         print("cert logo:", e)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 18)
-    c.drawString(x_text, H - 30, emp)
+    c.drawString(x_text, H - 28, emp)
     c.setFont("Helvetica", 8)
-    c.drawString(x_text, H - 44, "DOCUMENTO INTERNO · Certificaciones corporativas")
-    linea_dir = " · ".join([x for x in [dir_emp, ciudad, ("NIT %s" % nit if nit != "—" else "")] if x])
+    c.drawString(x_text, H - 42, "DOCUMENTO INTERNO · Certificaciones corporativas")
+    linea_dir = " · ".join([x for x in [dir_emp, ciudad, "NIT %s" % nit] if x])
     if linea_dir:
-        c.drawString(x_text, H - 56, linea_dir[:100])
-    if meta.get("tel") or meta.get("email"):
-        c.drawString(x_text, H - 68, " · ".join([x for x in [meta.get("tel"), meta.get("email")] if x])[:100])
+        c.drawString(x_text, H - 54, linea_dir[:105])
     c.setFillColor(colors.HexColor("#C4A035"))
-    c.rect(0, H - 86, W, 4, fill=1, stroke=0)
+    c.rect(0, H - 82, W, 4, fill=1, stroke=0)
 
-    left, right = 70, W - 70
+    # Márgenes amplios pero aprovechando la hoja
+    left, right = 55, W - 55
     width = right - left
-    y = H - 130  # más aire bajo la franja dorada
+    y = H - 100
 
+    # Bloque datos (arriba izquierda) bajo la franja
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica", 9)
+    meta_lines = [
+        "CIUDAD: %s" % ciudad,
+        "FECHA: %s" % fecha_larga,
+        "DESTINATARIO: %s / Rectoría" % inst,
+        "CONTACTO: +57 %s" % tel_emp.lstrip("+57 ").lstrip("+57"),
+        "CORREO: %s" % email_emp,
+    ]
+    for ln in meta_lines:
+        c.drawString(left, y, ln)
+        y -= 12
+    y -= 14
+
+    # Título centrado
     c.setFillColor(colors.HexColor("#0B2D57"))
     c.setFont("Helvetica-Bold", 13)
     for ln in simpleSplit(titulo, "Helvetica-Bold", 13, width):
         c.drawCentredString(W / 2, y, ln)
         y -= 16
-    y -= 14
+    y -= 12
 
+    # Cuerpo expandido
     c.setFillColor(colors.HexColor("#0f172a"))
     c.setFont("Helvetica", 11)
     for ln in simpleSplit(cuerpo, "Helvetica", 11, width):
         c.drawString(left, y, ln)
         y -= 15
-        if y < 180:
-            c.showPage()
-            y = H - 60
-    y -= 14
-    for ln in simpleSplit(cierre, "Helvetica", 11, width):
-        c.drawString(left, y, ln)
-        y -= 15
+        if y < 160:
+            break
 
-    # Firmas: 2 columnas, líneas ~200pt, espacio vertical amplio para firma manuscrita
-    y = min(y - 70, 220)
+    # Cierre + firmas anclados abajo de la hoja
+    y_firm_line = 130
+    y_cierre = y_firm_line + 50
+    c.setFont("Helvetica", 11)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    # dibujar cierre justo encima del bloque de firmas
+    cierre_lines = simpleSplit(cierre, "Helvetica", 11, width)
+    y_c = y_cierre + 12 * len(cierre_lines)
+    for ln in cierre_lines:
+        c.drawString(left, y_c, ln)
+        y_c -= 14
+
+    # Firmas
     col_w = 200
     x1 = left
     x2 = right - col_w
     c.setStrokeColor(colors.HexColor("#0f172a"))
     c.setLineWidth(0.9)
-    c.line(x1, y, x1 + col_w, y)
-    c.line(x2, y, x2 + col_w, y)
-    y -= 16
+    c.line(x1, y_firm_line, x1 + col_w, y_firm_line)
+    c.line(x2, y_firm_line, x2 + col_w, y_firm_line)
+    # espacio bajo la línea antes del nombre
+    yn = y_firm_line - 18
     c.setFont("Helvetica-Bold", 9)
     c.setFillColor(colors.HexColor("#0f172a"))
-    c.drawString(x1, y, ceo[:40])
-    c.drawString(x2, y, rector[:40])
-    y -= 12
+    c.drawString(x1, yn, ceo[:40])
+    c.drawString(x2, yn, rector[:40])
+    yn -= 12
     c.setFont("Helvetica", 8)
     c.setFillColor(colors.HexColor("#475569"))
-    c.drawString(x1, y, cargo_ceo)
-    c.drawString(x2, y, "Rectora / Representante Legal")
-    y -= 11
-    c.drawString(x1, y, emp)
-    c.drawString(x2, y, inst[:36])
+    c.drawString(x1, yn, cargo_ceo)
+    c.drawString(x2, yn, "Rectora / Representante Legal")
+    yn -= 11
+    c.drawString(x1, yn, emp)
+    c.drawString(x2, yn, inst[:36])
 
     c.setFont("Helvetica", 7)
     c.setFillColor(colors.HexColor("#94a3b8"))
-    c.drawString(left, 28, "Documento interno PROCSIS · Generado el %s · Verificar autenticidad con gerencia." % fecha_larga)
+    c.drawString(left, 22, "Documento interno PROCSIS · Generado el %s · Verificar autenticidad con gerencia." % fecha_larga)
     c.save()
     bio.seek(0)
     try:
