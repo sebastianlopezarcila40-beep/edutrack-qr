@@ -48941,7 +48941,7 @@ def gerencia_hv_formato_pdf():
     GRAY = colors.HexColor("#94a3b8")
     LINE = colors.HexColor("#cbd5e1")
     NAVY = colors.HexColor("#0B2D57")
-    LABEL = colors.HexColor("#475569")  # gris carbón / azul oscuro suave
+    LABEL = colors.HexColor("#475569")
     M = 40
     usable = W - 2 * M
 
@@ -48953,7 +48953,12 @@ def gerencia_hv_formato_pdf():
         if lab:
             c.setFont("Helvetica", lab_size)
             c.setFillColor(LABEL)
-            c.drawString(x + 3, y + h - 9, lab)
+            # wrap label if needed
+            lines = simpleSplit(lab, "Helvetica", lab_size, w - 6)
+            yy = y + h - 9
+            for ln in lines[:3]:
+                c.drawString(x + 3, yy, ln)
+                yy -= 8
 
     def section_bar(y, text):
         c.setFillColor(NAVY)
@@ -48963,10 +48968,14 @@ def gerencia_hv_formato_pdf():
         c.drawString(M + 6, y + 2, text)
         return y - 18
 
+    def new_page():
+        c.showPage()
+        _hv_draw_header(c, W, H, meta, "REG-TH-001 · Continuación")
+        return H - 90
+
     _hv_draw_header(c, W, H, meta, "REG-TH-001 · Formato para llenado manual")
     y = H - 88
 
-    # Título centrado en recuadro
     c.setStrokeColor(NAVY)
     c.setLineWidth(1.2)
     c.setFillColor(colors.white)
@@ -48979,16 +48988,14 @@ def gerencia_hv_formato_pdf():
     c.drawCentredString(W / 2, y - 20, "PARA SOLICITUD DE EMPLEO · PROCSIS · Talento Humano")
     y -= 40
 
-    # ── I. INFORMACIÓN GENERAL ──
+    # I. INFORMACIÓN GENERAL
     y = section_bar(y, "I. INFORMACIÓN GENERAL")
     photo_w, photo_h = 78, 95
     left_w = usable - photo_w - 4
     row_h = 22
 
-    # Fila cargo / vacante
     cell(M, y - row_h, left_w * 0.62, row_h, "CARGO AL QUE ASPIRA")
     cell(M + left_w * 0.62, y - row_h, left_w * 0.38, row_h, "CÓDIGO VACANTE / PROCESO")
-    # Foto a la derecha (ocupa varias filas)
     c.setStrokeColor(LINE)
     c.setLineWidth(0.9)
     c.setFillColor(colors.HexColor("#f1f5f9"))
@@ -49004,16 +49011,15 @@ def gerencia_hv_formato_pdf():
     cell(M + left_w / 3, y - row_h, left_w / 3, row_h, "SEGUNDO APELLIDO")
     cell(M + 2 * left_w / 3, y - row_h, left_w / 3, row_h, "NOMBRES")
     y -= row_h
-    cell(M, y - row_h, left_w * 0.22, row_h, "TIPO DOC. C.C.( ) C.E.( ) PAS.( )")
-    cell(M + left_w * 0.22, y - row_h, left_w * 0.28, row_h, "No. DOCUMENTO")
-    cell(M + left_w * 0.50, y - row_h, left_w * 0.20, row_h, "GÉNERO F( ) M( ) NB( )")
-    cell(M + left_w * 0.70, y - row_h, left_w * 0.30, row_h, "NACIONALIDAD")
+    cell(M, y - row_h, left_w * 0.28, row_h, "TIPO DOC.  C.C.( )  C.E.( )  PAS.( )")
+    cell(M + left_w * 0.28, y - row_h, left_w * 0.28, row_h, "No. DOCUMENTO")
+    cell(M + left_w * 0.56, y - row_h, left_w * 0.22, row_h, "GÉNERO  F( )  M( )  NB( )")
+    cell(M + left_w * 0.78, y - row_h, left_w * 0.22, row_h, "NACIONALIDAD")
     y -= row_h
-    # remaining height under photo area
     cell(M, y - (photo_h - 3 * row_h), left_w, photo_h - 3 * row_h, "PERFIL BREVE / OBSERVACIONES")
     y = y - (photo_h - 3 * row_h) - 8
 
-    # ── II. INFORMACIÓN PERSONAL ──
+    # II. PERSONAL
     y = section_bar(y, "II. INFORMACIÓN PERSONAL Y DE CONTACTO")
     rh = 20
     cell(M, y - rh, usable * 0.55, rh, "DIRECCIÓN DE RESIDENCIA")
@@ -49024,22 +49030,33 @@ def gerencia_hv_formato_pdf():
     cell(M + usable * 0.28, y - rh, usable * 0.40, rh, "CORREO ELECTRÓNICO")
     cell(M + usable * 0.68, y - rh, usable * 0.32, rh, "FECHA Y LUGAR DE NACIMIENTO")
     y -= rh
-    cell(M, y - rh, usable * 0.25, rh, "ESTADO CIVIL")
-    cell(M + usable * 0.25, y - rh, usable * 0.25, rh, "VIVIENDA (Propia/Arrendada/Familiar)")
-    cell(M + usable * 0.50, y - rh, usable * 0.25, rh, "LICENCIA CONDUCCIÓN")
-    cell(M + usable * 0.75, y - rh, usable * 0.25, rh, "VEHÍCULO (Carro/Moto/Ninguno)")
-    y -= rh + 8
+    # Opciones con ( ) para marcar X
+    cell(M, y - 36, usable * 0.28, 36, "ESTADO CIVIL")
+    c.setFont("Helvetica", 6.5)
+    c.setFillColor(LABEL)
+    c.drawString(M + 4, y - 28, "Soltero ( )   Casado ( )")
+    c.drawString(M + 4, y - 38, "Unión libre ( )   Otro ( )")
+    cell(M + usable * 0.28, y - 36, usable * 0.28, 36, "VIVIENDA")
+    c.drawString(M + usable * 0.28 + 4, y - 28, "Propia ( )   Arrendada ( )")
+    c.drawString(M + usable * 0.28 + 4, y - 38, "Familiar ( )")
+    cell(M + usable * 0.56, y - 36, usable * 0.22, 36, "LICENCIA CONDUCCIÓN")
+    c.drawString(M + usable * 0.56 + 4, y - 28, "Sí ( )   No ( )")
+    c.drawString(M + usable * 0.56 + 4, y - 38, "Cat. ______")
+    cell(M + usable * 0.78, y - 36, usable * 0.22, 36, "VEHÍCULO")
+    c.drawString(M + usable * 0.78 + 4, y - 28, "Ninguno ( )")
+    c.drawString(M + usable * 0.78 + 4, y - 38, "Carro ( )  Moto ( )")
+    y -= 44
 
-    # ── III. FORMACIÓN ──
+    # III. FORMACIÓN
     y = section_bar(y, "III. FORMACIÓN ACADÉMICA")
     headers = [
         (0.18, "MODALIDAD"),
-        (0.30, "INSTITUCIÓN EDUCATIVA"),
-        (0.28, "TÍTULO OBTENIDO / PROGRAMA"),
-        (0.12, "GRADUADO"),
-        (0.12, "AÑO"),
+        (0.28, "INSTITUCIÓN"),
+        (0.28, "TÍTULO / PROGRAMA"),
+        (0.13, "GRADUADO SÍ( ) NO( )"),
+        (0.13, "AÑO"),
     ]
-    hh = 14
+    hh = 16
     x0 = M
     for frac, lab in headers:
         w = usable * frac
@@ -49057,19 +49074,13 @@ def gerencia_hv_formato_pdf():
     cell(M, y - 28, usable, 28, "HABILIDADES TÉCNICAS / APTITUDES / IDIOMAS")
     y -= 36
 
-    # ── IV. EXPERIENCIA (página 1 - un bloque; resto página 2) ──
-    if y < 160:
-        c.showPage()
-        _hv_draw_header(c, W, H, meta, "REG-TH-001 · Continuación")
-        y = H - 90
-
+    # IV. EXPERIENCIA
+    if y < 170:
+        y = new_page()
     y = section_bar(y, "IV. EXPERIENCIA LABORAL (últimos empleos)")
     for n in range(1, 3):
-        if y < 130:
-            c.showPage()
-            _hv_draw_header(c, W, H, meta, "REG-TH-001 · Continuación")
-            y = H - 90
-        # grid 2x2 + full width rows
+        if y < 140:
+            y = new_page()
         cell(M, y - 18, usable * 0.55, 18, "EMPRESA %s" % n)
         cell(M + usable * 0.55, y - 18, usable * 0.45, 18, "TELÉFONO RR.HH. / EMPRESA")
         y -= 18
@@ -49083,46 +49094,56 @@ def gerencia_hv_formato_pdf():
         y -= 18
         cell(M, y - 18, usable, 18, "MOTIVO DEL RETIRO")
         y -= 18
-        cell(M, y - 32, usable, 32, "FUNCIONES PRINCIPALES DESEMPEÑADAS")
-        y -= 40
+        cell(M, y - 30, usable, 30, "FUNCIONES PRINCIPALES DESEMPEÑADAS")
+        y -= 38
+
+    # V + VI + firma: forzar espacio limpio (nueva página si hace falta)
+    if y < 220:
+        y = new_page()
 
     y = section_bar(y, "V. REFERENCIAS PERSONALES")
-    cell(M, y - 18, usable * 0.40, 18, "REFERENCIA 1 · NOMBRE")
-    cell(M + usable * 0.40, y - 18, usable * 0.30, 18, "OCUPACIÓN")
-    cell(M + usable * 0.70, y - 18, usable * 0.30, 18, "TELÉFONO")
-    y -= 18
-    cell(M, y - 18, usable * 0.40, 18, "REFERENCIA 2 · NOMBRE")
-    cell(M + usable * 0.40, y - 18, usable * 0.30, 18, "OCUPACIÓN")
-    cell(M + usable * 0.70, y - 18, usable * 0.30, 18, "TELÉFONO")
+    cell(M, y - 20, usable * 0.40, 20, "REFERENCIA 1 · NOMBRE")
+    cell(M + usable * 0.40, y - 20, usable * 0.30, 20, "OCUPACIÓN")
+    cell(M + usable * 0.70, y - 20, usable * 0.30, 20, "TELÉFONO")
+    y -= 20
+    cell(M, y - 20, usable * 0.40, 20, "REFERENCIA 2 · NOMBRE")
+    cell(M + usable * 0.40, y - 20, usable * 0.30, 20, "OCUPACIÓN")
+    cell(M + usable * 0.70, y - 20, usable * 0.30, 20, "TELÉFONO")
     y -= 28
 
-    y = section_bar(y, "VI. AUTORIZACIÓN LEGAL (Ley 1581 de 2012)")
-    cell(M, y - 42, usable, 42, "")
-    c.setFont("Helvetica", 7)
-    c.setFillColor(LABEL)
+    y = section_bar(y, "VI. AUTORIZACIÓN DE TRATAMIENTO DE DATOS (Ley 1581 de 2012 · Habeas Data)")
+    auth_h = 55
+    cell(M, y - auth_h, usable, auth_h, "")
+    c.setFont("Helvetica", 7.5)
+    c.setFillColor(colors.HexColor("#0f172a"))
     auth = (
-        "El firmante autoriza expresamente a PROCSIS para realizar el tratamiento de los datos personales "
-        "aquí consignados, así como la verificación de sus antecedentes laborales y académicos, bajo estricto "
-        "cumplimiento de la Ley de Protección de Datos Personales de Colombia (Ley 1581 de 2012)."
+        "El firmante autoriza de manera libre, previa, expresa e informada a PROCSIS para recolectar, almacenar, "
+        "usar, circular y eliminar los datos personales consignados en este formato, con la finalidad de adelantar "
+        "procesos de selección, verificación de referencias laborales y académicas, y gestión de talento humano, "
+        "conforme a la Ley 1581 de 2012, el Decreto 1377 de 2013 y demás normas aplicables en Colombia. "
+        "El titular podrá ejercer sus derechos de acceso, corrección, actualización o supresión ante PROCSIS."
     )
     yy = y - 12
-    for ln in simpleSplit(auth, "Helvetica", 7, usable - 10):
-        c.drawString(M + 5, yy, ln)
-        yy -= 9
-    y -= 55
+    for ln in simpleSplit(auth, "Helvetica", 7.5, usable - 12):
+        c.drawString(M + 6, yy, ln)
+        yy -= 10
+    c.setFont("Helvetica", 7)
+    c.setFillColor(LABEL)
+    c.drawString(M + 6, y - auth_h + 8, "Autorizo:  SÍ ( )     NO ( )          Fecha: ____ / ____ / ________")
+    y -= auth_h + 16
 
-    # Firma con amplio espacio
-    y = min(y - 20, 100)
+    # Firma con espacio amplio (no pegada al borde)
+    y = min(y - 25, 95)
     c.setStrokeColor(colors.HexColor("#0f172a"))
-    c.setLineWidth(0.9)
-    c.line(W - 250, y, W - 50, y)
+    c.setLineWidth(1)
+    c.line(W - 260, y, W - 50, y)
     c.setFont("Helvetica", 8)
     c.setFillColor(LABEL)
-    c.drawRightString(W - 50, y - 12, "Firma del aspirante")
-    c.drawRightString(W - 50, y - 24, "C.C. / Documento No. ________________")
+    c.drawRightString(W - 50, y - 14, "Firma del aspirante")
+    c.drawRightString(W - 50, y - 26, "C.C. / Documento No. ________________")
     c.setFont("Helvetica", 6.5)
     c.setFillColor(GRAY)
-    c.drawString(M, 22, "PROCSIS · REG-TH-001 · Documento interno · Formato de impresión para llenado manual")
+    c.drawString(M, 18, "PROCSIS · REG-TH-001 · Documento interno · Formato de impresión para llenado manual")
     c.save()
     bio.seek(0)
     return send_file(bio, as_attachment=True, download_name="PROCSIS_Formato_Hoja_de_Vida.pdf", mimetype="application/pdf")
