@@ -2233,10 +2233,14 @@ class ContTrabajador(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(160), default="")
     documento = db.Column(db.String(40), default="", index=True)
-    cargo = db.Column(db.String(100), default="")
-    tipo_contrato = db.Column(db.String(60), default="")  # Laboral | Prestación de servicios
+    cargo = db.Column(db.String(120), default="")
+    tipo_contrato = db.Column(db.String(60), default="")
     email = db.Column(db.String(120), default="")
     telefono = db.Column(db.String(40), default="")
+    direccion = db.Column(db.String(255), default="")
+    objeto_funciones = db.Column(db.Text, default="")
+    fecha_inicio = db.Column(db.String(40), default="")
+    honorarios = db.Column(db.String(80), default="")
     activo = db.Column(db.Boolean, default=True)
     notas = db.Column(db.Text, default="")
     creado_en = db.Column(db.String(30), default="")
@@ -46044,6 +46048,12 @@ def contabilidad_comercial():
             op = ContOperacion.query.get(oid)
             if op:
                 op.estado = "ANULADO"
+                # Conserva montos históricos en evidencia; saldo operativo a 0 para no afectar balance
+                nota = (op.evidencia or "")
+                op.evidencia = (nota + " | ANULADO: total_original=%s pagado_original=%s" % (op.valor_total, op.valor_pagado))[:2000]
+                op.valor_total = 0
+                op.valor_pagado = 0
+                op.saldo = 0
                 db.session.commit()
                 registrar_auditoria("Contabilidad anular", "op=%s" % op.codigo)
                 msg = "Operación %s anulada." % op.codigo
@@ -46299,6 +46309,94 @@ def contabilidad_nueva():
     return page("Nueva operación", _cont_shell("Nueva operación económica", body))
 
 
+
+@app.route("/gerencia/contabilidad/op/<int:oid>/editar", methods=["GET", "POST"])
+def contabilidad_editar(oid):
+    """Corregir datos de una operación (no elimina; mantiene código OP-...)."""
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    op = ContOperacion.query.get_or_404(oid)
+    if (op.estado or "").upper() == "ANULADO":
+        return redirect("/gerencia/contabilidad/op/%s" % oid)
+    err = ""
+    if request.method == "POST":
+        try:
+            op.tipo = (request.form.get("tipo") or op.tipo).strip().upper()[:40]
+            op.fecha = (request.form.get("fecha") or op.fecha).strip()[:20]
+            op.hora = (request.form.get("hora") or op.hora or "").strip()[:20]
+            op.parte_nombre = (request.form.get("parte_nombre") or "").strip()[:200]
+            op.producto = (request.form.get("producto") or "").strip()[:200]
+            op.descripcion = (request.form.get("descripcion") or "").strip()[:2000]
+            op.cantidad = float(request.form.get("cantidad") or op.cantidad or 1)
+            op.valor_unitario = float(request.form.get("valor_unitario") or 0)
+            op.valor_total = float(request.form.get("valor_total") or 0)
+            op.valor_pagado = float(request.form.get("valor_pagado") or 0)
+            op.saldo = max(0.0, float(op.valor_total or 0) - float(op.valor_pagado or 0))
+            op.medio_pago = (request.form.get("medio_pago") or "").strip()[:60]
+            op.referencia = (request.form.get("referencia") or "").strip()[:120]
+            op.solicitado_por = (request.form.get("solicitado_por") or "").strip()[:120]
+            op.institucion_nombre = (request.form.get("institucion_nombre") or "").strip()[:200]
+            op.evidencia = (request.form.get("evidencia") or "").strip()[:2000]
+            if float(op.valor_pagado or 0) >= float(op.valor_total or 0) > 0:
+                op.estado = "PAGADO"
+            elif float(op.valor_pagado or 0) > 0:
+                op.estado = "PARCIAL"
+            elif (op.estado or "").upper() != "ANULADO":
+                op.estado = "REGISTRADO"
+            db.session.commit()
+            try:
+                registrar_auditoria("Contabilidad editar", "op=%s" % op.codigo)
+            except Exception:
+                pass
+            return redirect("/gerencia/contabilidad/op/%s" % op.id)
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:200]
+    opts = "".join(
+        '<option value="%s"%s>%s</option>' % (a, " selected" if a == (op.tipo or "") else "", a)
+        for a, _ in TIPOS_OPERACION_CONT
+    )
+    body = f"""
+    {"<div style='color:#991b1b'>"+_esc(err)+"</div>" if err else ""}
+    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px;max-width:720px">
+      <p style="font-size:13px;color:#64748b">Corrige sin borrar. Código <b>{_esc(op.codigo)}</b> se conserva (auditoría).</p>
+      <label style="font-weight:700;font-size:12px">Tipo</label>
+      <select name="tipo" style="width:100%;padding:10px;margin-bottom:8px">{opts}</select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-weight:700;font-size:12px">Fecha</label><input name="fecha" value="{_esc(op.fecha)}" style="width:100%;padding:10px"></div>
+        <div><label style="font-weight:700;font-size:12px">Hora</label><input name="hora" value="{_esc(op.hora)}" style="width:100%;padding:10px"></div>
+      </div>
+      <label style="font-weight:700;font-size:12px">Quién / a quién</label>
+      <input name="parte_nombre" value="{_esc(op.parte_nombre)}" style="width:100%;padding:10px;margin-bottom:8px">
+      <label style="font-weight:700;font-size:12px">Producto</label>
+      <input name="producto" value="{_esc(op.producto)}" style="width:100%;padding:10px;margin-bottom:8px">
+      <label style="font-weight:700;font-size:12px">Descripción</label>
+      <textarea name="descripcion" rows="2" style="width:100%;padding:10px;margin-bottom:8px">{_esc(op.descripcion)}</textarea>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label style="font-weight:700;font-size:12px">Cantidad</label><input name="cantidad" type="number" step="0.01" value="{op.cantidad or 1}" style="width:100%;padding:10px"></div>
+        <div><label style="font-weight:700;font-size:12px">V. unitario</label><input name="valor_unitario" type="number" step="0.01" value="{op.valor_unitario or 0}" style="width:100%;padding:10px"></div>
+        <div><label style="font-weight:700;font-size:12px">Total</label><input name="valor_total" type="number" step="0.01" value="{op.valor_total or 0}" style="width:100%;padding:10px"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div><label style="font-weight:700;font-size:12px">Pagado / recibido</label><input name="valor_pagado" type="number" step="0.01" value="{op.valor_pagado or 0}" style="width:100%;padding:10px"></div>
+        <div><label style="font-weight:700;font-size:12px">Medio de pago</label><input name="medio_pago" value="{_esc(op.medio_pago)}" style="width:100%;padding:10px"></div>
+      </div>
+      <label style="font-weight:700;font-size:12px;margin-top:8px;display:block">Referencia</label>
+      <input name="referencia" value="{_esc(op.referencia)}" style="width:100%;padding:10px;margin-bottom:8px">
+      <label style="font-weight:700;font-size:12px">Solicitó</label>
+      <input name="solicitado_por" value="{_esc(op.solicitado_por)}" style="width:100%;padding:10px;margin-bottom:8px">
+      <label style="font-weight:700;font-size:12px">Institución</label>
+      <input name="institucion_nombre" value="{_esc(op.institucion_nombre)}" style="width:100%;padding:10px;margin-bottom:8px">
+      <label style="font-weight:700;font-size:12px">Evidencia</label>
+      <textarea name="evidencia" rows="3" style="width:100%;padding:10px;margin-bottom:12px">{_esc(op.evidencia)}</textarea>
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar corrección</button>
+      <a href="/gerencia/contabilidad/op/{op.id}" style="margin-left:10px">Cancelar</a>
+    </form>
+    """
+    return page("Editar " + (op.codigo or ""), _cont_shell("Corregir operación", body))
+
+
 @app.route("/gerencia/contabilidad/op/<int:oid>")
 def contabilidad_detalle(oid):
     g = _guard_contabilidad()
@@ -46333,6 +46431,7 @@ def contabilidad_detalle(oid):
       </table>
       <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
         <a href="/gerencia/contabilidad/op/{op.id}/pdf" style="background:#b91c1c;color:#fff;padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none">⬇ PDF documento interno</a>
+        <a href="/gerencia/contabilidad/op/{op.id}/editar" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none">✎ Corregir / editar</a>
       </div>
       <form method="POST" action="/gerencia/contabilidad" style="margin-top:12px" onsubmit="return confirm('¿Anular esta operación?')">
         <input type="hidden" name="accion" value="anular"><input type="hidden" name="id" value="{op.id}">
@@ -46410,44 +46509,129 @@ def contabilidad_partes():
 
 
 @app.route("/gerencia/contabilidad/trabajadores", methods=["GET", "POST"])
+
+def _ensure_cont_trabajadores_cols():
+    try:
+        from sqlalchemy import text as _sql, inspect
+        insp = inspect(db.engine)
+        if "cont_trabajadores" not in insp.get_table_names():
+            return
+        cols = {c["name"] for c in insp.get_columns("cont_trabajadores")}
+        alters = []
+        if "direccion" not in cols:
+            alters.append("ALTER TABLE cont_trabajadores ADD COLUMN direccion VARCHAR(255) DEFAULT ''")
+        if "objeto_funciones" not in cols:
+            alters.append("ALTER TABLE cont_trabajadores ADD COLUMN objeto_funciones TEXT DEFAULT ''")
+        if "fecha_inicio" not in cols:
+            alters.append("ALTER TABLE cont_trabajadores ADD COLUMN fecha_inicio VARCHAR(40) DEFAULT ''")
+        if "honorarios" not in cols:
+            alters.append("ALTER TABLE cont_trabajadores ADD COLUMN honorarios VARCHAR(80) DEFAULT ''")
+        if "activo" not in cols:
+            alters.append("ALTER TABLE cont_trabajadores ADD COLUMN activo BOOLEAN DEFAULT TRUE")
+        if alters:
+            with db.engine.begin() as conn:
+                for a in alters:
+                    try:
+                        conn.execute(_sql(a))
+                    except Exception as e:
+                        print("cont_trab col:", e)
+    except Exception as e:
+        print("ensure cont_trab:", e)
+
 def contabilidad_trabajadores():
     g = _guard_contabilidad()
     if g is not None:
         return g
     try:
         db.create_all()
+        _ensure_cont_trabajadores_cols()
     except Exception:
         pass
     msg = ""
     if request.method == "POST":
-        t = ContTrabajador(
-            nombre=(request.form.get("nombre") or "").strip()[:160],
-            documento=(request.form.get("documento") or "").strip()[:40],
-            cargo=(request.form.get("cargo") or "").strip()[:120],
-            tipo_contrato=(request.form.get("tipo_contrato") or "").strip()[:60],
-            email=(request.form.get("email") or "").strip()[:120],
-            telefono=(request.form.get("telefono") or "").strip()[:40],
-            direccion=(request.form.get("direccion") or "").strip()[:255],
-            objeto_funciones=(request.form.get("objeto_funciones") or "").strip()[:2000],
-            fecha_inicio=(request.form.get("fecha_inicio") or "").strip()[:40],
-            honorarios=(request.form.get("honorarios") or "").strip()[:80],
-            notas=(request.form.get("notas") or "").strip()[:1000],
-            creado_en=fecha_hoy() if "fecha_hoy" in dir() else "",
-        )
-        if t.nombre:
-            db.session.add(t)
-            db.session.commit()
-            msg = "Trabajador registrado. Ya puede generar la constancia laboral."
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "desactivar":
+            try:
+                tid = int(request.form.get("id") or 0)
+                tw = ContTrabajador.query.get(tid)
+                if tw:
+                    tw.activo = False
+                    db.session.commit()
+                    msg = "Vinculación finalizada: %s queda INACTIVO (conservado en historial)." % (tw.nombre or "")
+                    try:
+                        registrar_auditoria("Trabajador desactivado", "id=%s" % tid)
+                    except Exception:
+                        pass
+            except Exception as e:
+                msg = "No se pudo desactivar: %s" % str(e)[:80]
+        elif accion == "reactivar":
+            try:
+                tid = int(request.form.get("id") or 0)
+                tw = ContTrabajador.query.get(tid)
+                if tw:
+                    tw.activo = True
+                    db.session.commit()
+                    msg = "Trabajador reactivado: %s" % (tw.nombre or "")
+            except Exception as e:
+                msg = str(e)[:80]
+        else:
+            t = ContTrabajador(
+                nombre=(request.form.get("nombre") or "").strip()[:160],
+                documento=(request.form.get("documento") or "").strip()[:40],
+                cargo=(request.form.get("cargo") or "").strip()[:120],
+                tipo_contrato=(request.form.get("tipo_contrato") or "").strip()[:60],
+                email=(request.form.get("email") or "").strip()[:120],
+                telefono=(request.form.get("telefono") or "").strip()[:40],
+                direccion=(request.form.get("direccion") or "").strip()[:255],
+                objeto_funciones=(request.form.get("objeto_funciones") or "").strip()[:2000],
+                fecha_inicio=(request.form.get("fecha_inicio") or "").strip()[:40],
+                honorarios=(request.form.get("honorarios") or "").strip()[:80],
+                notas=(request.form.get("notas") or "").strip()[:1000],
+                activo=True,
+                creado_en=fecha_hoy() if "fecha_hoy" in dir() else "",
+            )
+            if t.nombre:
+                db.session.add(t)
+                db.session.commit()
+                msg = "Trabajador registrado. Ya puede generar la constancia laboral."
+    ver_inactivos = (request.args.get("inactivos") or "") == "1"
     filas = ""
-    for t in ContTrabajador.query.order_by(ContTrabajador.id.desc()).limit(200).all():
+    qtr = ContTrabajador.query
+    if not ver_inactivos:
+        try:
+            qtr = qtr.filter(ContTrabajador.activo.is_(True))
+        except Exception:
+            pass
+    for t in qtr.order_by(ContTrabajador.id.desc()).limit(200).all():
+        activo = bool(getattr(t, "activo", True))
+        estilo = "" if activo else "opacity:.55;background:#f8fafc"
+        if activo:
+            btn_estado = (
+                '<form method="POST" style="display:inline;margin:0" '
+                'onsubmit="return confirm(&quot;Finalizar vinculacion? El registro se conserva inactivo.&quot;);">'
+                '<input type="hidden" name="accion" value="desactivar">'
+                '<input type="hidden" name="id" value="%s">'
+                '<button type="submit" style="background:#b45309;color:#fff;border:0;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Inactivar</button></form>'
+            ) % t.id
+        else:
+            btn_estado = (
+                "<form method='POST' style='display:inline;margin:0'>"
+                "<input type='hidden' name='accion' value='reactivar'><input type='hidden' name='id' value='%s'>"
+                "<button type='submit' style='background:#15803d;color:#fff;border:0;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer'>Reactivar</button></form>"
+            ) % t.id
         filas += (
-            "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+            "<tr style='%s'><td><b>%s</b><br><span style='font-size:11px;color:%s'>%s</span></td>"
+            "<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
             "<td><a href='/gerencia/contabilidad/trabajador/%s/constancia' "
             "style='background:#0B2D57;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none'>"
-            "Constancia laboral</a></td></tr>"
+            "Constancia</a> %s</td></tr>"
         ) % (
-            _esc(t.nombre), _esc(t.documento), _esc(t.cargo), _esc(t.tipo_contrato),
-            _esc(t.telefono), _esc(t.email), t.id,
+            estilo,
+            _esc(t.nombre),
+            "#16a34a" if activo else "#94a3b8",
+            "ACTIVO" if activo else "INACTIVO",
+            _esc(t.documento), _esc(t.cargo), _esc(t.tipo_contrato),
+            _esc(t.telefono), _esc(t.email), t.id, btn_estado,
         )
     if not filas:
         filas = "<tr><td colspan='7' style='text-align:center;color:#94a3b8'>Sin trabajadores registrados.</td></tr>"
@@ -46455,6 +46639,8 @@ def contabilidad_trabajadores():
     {"<p style='color:#166534'>"+_esc(msg)+"</p>" if msg else ""}
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
       <a href="/gerencia/contabilidad/export/trabajadores.xlsx" style="background:#15803d;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ Excel trabajadores</a>
+      <a href="?inactivos=1" style="background:#e2e8f0;color:#0B2D57;padding:9px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">Ver inactivos</a>
+      <a href="?" style="background:#e2e8f0;color:#0B2D57;padding:9px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">Solo activos</a>
     </div>
     <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Nombre completo *</label>
