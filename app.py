@@ -46508,8 +46508,6 @@ def contabilidad_partes():
     return page("Clientes y proveedores", _cont_shell("Clientes · Proveedores · Servidores · Dominios", body))
 
 
-@app.route("/gerencia/contabilidad/trabajadores", methods=["GET", "POST"])
-
 def _ensure_cont_trabajadores_cols():
     try:
         from sqlalchemy import text as _sql, inspect
@@ -46538,6 +46536,8 @@ def _ensure_cont_trabajadores_cols():
     except Exception as e:
         print("ensure cont_trab:", e)
 
+
+@app.route("/gerencia/contabilidad/trabajadores", methods=["GET", "POST"])
 def contabilidad_trabajadores():
     g = _guard_contabilidad()
     if g is not None:
