@@ -46072,6 +46072,11 @@ def contabilidad_comercial():
       </div>
     </div>
     <p style="font-size:13px;color:#64748b;margin:0 0 10px">Registrar · Organizar · Controlar · Comprobar · Informar · Decidir. Cada operación queda con fecha, parte, valores e IP.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <a href="/gerencia/contabilidad/export/ops.xlsx{'?tipo='+filtro if filtro else ''}" style="background:#15803d;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ Excel operaciones</a>
+      <a href="/gerencia/contabilidad/export/ops.pdf{'?tipo='+filtro if filtro else ''}" style="background:#b91c1c;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ PDF documento interno</a>
+      <a href="/gerencia/contabilidad/nueva" style="background:#0B2D57;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">+ Nueva operación</a>
+    </div>
     <div style="margin-bottom:12px">{chips}</div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -46252,9 +46257,12 @@ def contabilidad_detalle(oid):
         <tr><td style="padding:6px 0;color:#64748b">Institución</td><td>{_esc(op.institucion_nombre)}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Evidencia</td><td>{_esc(op.evidencia)}</td></tr>
       </table>
-      <form method="POST" action="/gerencia/contabilidad" style="margin-top:16px" onsubmit="return confirm('¿Anular esta operación?')">
+      <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
+        <a href="/gerencia/contabilidad/op/{op.id}/pdf" style="background:#b91c1c;color:#fff;padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none">⬇ PDF documento interno</a>
+      </div>
+      <form method="POST" action="/gerencia/contabilidad" style="margin-top:12px" onsubmit="return confirm('¿Anular esta operación?')">
         <input type="hidden" name="accion" value="anular"><input type="hidden" name="id" value="{op.id}">
-        <button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:700">Anular operación</button>
+        <button type="submit" style="background:#64748b;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:700">Anular operación</button>
       </form>
     </div>
     """
@@ -46298,6 +46306,10 @@ def contabilidad_partes():
         filas = "<tr><td colspan='6' style='text-align:center;color:#94a3b8'>Sin clientes ni proveedores aún.</td></tr>"
     body = f"""
     {"<p style='color:#166534'>"+_esc(msg)+"</p>" if msg else ""}
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <a href="/gerencia/contabilidad/export/partes.xlsx" style="background:#15803d;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ Excel</a>
+      <a href="/gerencia/contabilidad/export/partes.pdf" style="background:#b91c1c;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ PDF documento interno</a>
+    </div>
     <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div><label style="font-size:12px;font-weight:700">Tipo</label>
       <select name="tipo" style="width:100%;padding:8px"><option>CLIENTE</option><option>PROVEEDOR</option><option>AMBOS</option></select></div>
@@ -46350,13 +46362,22 @@ def contabilidad_trabajadores():
             msg = "Trabajador registrado."
     filas = ""
     for t in ContTrabajador.query.order_by(ContTrabajador.id.desc()).limit(200).all():
-        filas += "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
-            _esc(t.nombre), _esc(t.documento), _esc(t.cargo), _esc(t.tipo_contrato), _esc(t.telefono), _esc(t.email)
+        filas += (
+            "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+            "<td><a href='/gerencia/contabilidad/trabajador/%s/constancia.pdf' "
+            "style='background:#0B2D57;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none'>"
+            "Constancia laboral PDF</a></td></tr>"
+        ) % (
+            _esc(t.nombre), _esc(t.documento), _esc(t.cargo), _esc(t.tipo_contrato),
+            _esc(t.telefono), _esc(t.email), t.id,
         )
     if not filas:
-        filas = "<tr><td colspan='6' style='text-align:center;color:#94a3b8'>Sin trabajadores registrados.</td></tr>"
+        filas = "<tr><td colspan='7' style='text-align:center;color:#94a3b8'>Sin trabajadores registrados.</td></tr>"
     body = f"""
     {"<p style='color:#166534'>"+_esc(msg)+"</p>" if msg else ""}
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <a href="/gerencia/contabilidad/export/trabajadores.xlsx" style="background:#15803d;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ Excel trabajadores</a>
+    </div>
     <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Nombre completo *</label>
       <input name="nombre" required style="width:100%;padding:8px"></div>
@@ -46371,12 +46392,527 @@ def contabilidad_trabajadores():
     </form>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px;text-align:left">Documento</th><th style="padding:8px;text-align:left">Cargo</th><th style="padding:8px;text-align:left">Contrato</th><th style="padding:8px;text-align:left">Tel</th><th style="padding:8px;text-align:left">Email</th></tr>
+        <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px;text-align:left">Documento</th><th style="padding:8px;text-align:left">Cargo</th><th style="padding:8px;text-align:left">Contrato</th><th style="padding:8px;text-align:left">Tel</th><th style="padding:8px;text-align:left">Email</th><th style="padding:8px;text-align:left">Constancia</th></tr>
         {filas}
       </table>
     </div>
     """
     return page("Trabajadores", _cont_shell("Módulo trabajadores", body))
+
+
+
+def _cont_empresa_meta():
+    try:
+        p = plataforma()
+        return {
+            "empresa": (getattr(p, "empresa", None) or "PROCSIS").strip(),
+            "producto": (getattr(p, "nombre_producto", None) or "EduTrack").strip(),
+            "nit": (getattr(p, "nit", None) or "").strip(),
+            "logo": logo_plataforma() if "logo_plataforma" in dir() else "",
+        }
+    except Exception:
+        return {"empresa": "PROCSIS", "producto": "EduTrack", "nit": "", "logo": ""}
+
+
+def _cont_cop(v):
+    try:
+        return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
+    except Exception:
+        return "$ 0"
+
+
+def _cont_logo_path_for_pdf():
+    """Ruta de archivo local del logo si existe; si es data URI, None (se omite dibujo de archivo)."""
+    import os as _os
+    candidates = [
+        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static", "img", "logo-procsis.png"),
+        _os.path.join("static", "img", "logo-procsis.png"),
+        _os.path.join("static", "img", "logo-edutrack.png"),
+        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static", "img", "logo-edutrack.png"),
+    ]
+    for c in candidates:
+        if _os.path.isfile(c):
+            return c
+    return None
+
+
+@app.route("/gerencia/contabilidad/export/ops.xlsx")
+@app.route("/cobranza/contabilidad/export/ops.xlsx")
+def contabilidad_export_ops_excel():
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    meta = _cont_empresa_meta()
+    filtro = (request.args.get("tipo") or "").strip().upper()
+    q = ContOperacion.query
+    if filtro:
+        q = q.filter_by(tipo=filtro)
+    ops = q.order_by(ContOperacion.id.desc()).limit(2000).all()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Operaciones"
+    # Estilos
+    navy = PatternFill("solid", fgColor="0B2D57")
+    gold = PatternFill("solid", fgColor="FBBF24")
+    light = PatternFill("solid", fgColor="F1F5F9")
+    green = PatternFill("solid", fgColor="DCFCE7")
+    white_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+    title_font = Font(name="Calibri", bold=True, color="0B2D57", size=16)
+    sub_font = Font(name="Calibri", bold=True, size=11, color="334155")
+    thin = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+    ws.merge_cells("A1:L1")
+    ws["A1"] = "%s · %s — DOCUMENTO INTERNO · Contabilidad comercial" % (meta["empresa"], meta["producto"])
+    ws["A1"].font = title_font
+    ws["A1"].alignment = Alignment(vertical="center")
+    ws.row_dimensions[1].height = 28
+    ws.merge_cells("A2:L2")
+    ws["A2"] = "Uso exclusivo de dirección y gerencia · Ley 1581 de 2012 · Generado: %s %s · NIT %s" % (
+        fecha_hoy() if "fecha_hoy" in dir() else "",
+        hora_actual() if "hora_actual" in dir() else "",
+        meta["nit"] or "—",
+    )
+    ws["A2"].font = Font(name="Calibri", size=9, color="64748B", italic=True)
+    headers = [
+        "Código", "Tipo", "Fecha", "Hora", "Quién / A quién", "Producto", "Descripción",
+        "Cantidad", "V. unitario", "Total", "Pagado", "Saldo", "Estado", "Medio pago",
+        "Referencia", "Solicitó", "Registró", "Institución", "IP",
+    ]
+    # use columns A-S
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.fill = navy
+        cell.font = white_font
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+        cell.border = thin
+    ws.row_dimensions[4].height = 32
+    for r, o in enumerate(ops, 5):
+        vals = [
+            o.codigo, o.tipo, o.fecha, o.hora, o.parte_nombre, o.producto, (o.descripcion or "")[:200],
+            o.cantidad, o.valor_unitario, o.valor_total, o.valor_pagado, o.saldo, o.estado,
+            o.medio_pago, o.referencia, o.solicitado_por, o.registrado_por, o.institucion_nombre, o.ip,
+        ]
+        for c, v in enumerate(vals, 1):
+            cell = ws.cell(row=r, column=c, value=v)
+            cell.border = thin
+            cell.font = Font(name="Calibri", size=10)
+            if r % 2 == 0:
+                cell.fill = light
+            if c in (9, 10, 11, 12) and isinstance(v, (int, float)):
+                cell.number_format = '"$"#,##0'
+        if (o.estado or "").upper() == "PAGADO":
+            ws.cell(row=r, column=13).fill = green
+    widths = [14, 12, 12, 10, 28, 24, 32, 10, 12, 12, 12, 12, 12, 14, 16, 16, 14, 22, 14]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    # hoja resumen
+    ws2 = wb.create_sheet("Resumen")
+    ws2["A1"] = "Resumen por tipo de operación"
+    ws2["A1"].font = title_font
+    ws2["A3"] = "Tipo"
+    ws2["B3"] = "Cantidad"
+    ws2["C3"] = "Total COP"
+    for cell in (ws2["A3"], ws2["B3"], ws2["C3"]):
+        cell.fill = navy
+        cell.font = white_font
+    from collections import defaultdict
+    acc = defaultdict(lambda: [0, 0.0])
+    for o in ops:
+        if (o.estado or "") == "ANULADO":
+            continue
+        acc[o.tipo or "—"][0] += 1
+        acc[o.tipo or "—"][1] += float(o.valor_total or 0)
+    rr = 4
+    for tipo, (n, tot) in sorted(acc.items()):
+        ws2.cell(row=rr, column=1, value=tipo)
+        ws2.cell(row=rr, column=2, value=n)
+        c = ws2.cell(row=rr, column=3, value=tot)
+        c.number_format = '"$"#,##0'
+        rr += 1
+    ws2.column_dimensions["A"].width = 18
+    ws2.column_dimensions["B"].width = 12
+    ws2.column_dimensions["C"].width = 16
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    try:
+        registrar_auditoria("Contabilidad export Excel ops", "filtro=%s n=%s" % (filtro, len(ops)))
+    except Exception:
+        pass
+    fname = "PROCSIS_Contabilidad_Operaciones_%s.xlsx" % (fecha_hoy() if "fecha_hoy" in dir() else "export")
+    return send_file(bio, as_attachment=True, download_name=fname,
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@app.route("/gerencia/contabilidad/export/ops.pdf")
+@app.route("/cobranza/contabilidad/export/ops.pdf")
+def contabilidad_export_ops_pdf():
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    meta = _cont_empresa_meta()
+    filtro = (request.args.get("tipo") or "").strip().upper()
+    q = ContOperacion.query
+    if filtro:
+        q = q.filter_by(tipo=filtro)
+    ops = q.order_by(ContOperacion.id.desc()).limit(500).all()
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=landscape(letter))
+    W, H = landscape(letter)
+    logo = _cont_logo_path_for_pdf()
+
+    def header(page_n):
+        c.setFillColor(colors.HexColor("#0B2D57"))
+        c.rect(0, H - 48, W, 48, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, H - 22, "%s · %s" % (meta["empresa"], meta["producto"]))
+        c.setFont("Helvetica", 8)
+        c.drawString(40, H - 36, "DOCUMENTO INTERNO — Contabilidad comercial · No distribuir fuera de gerencia")
+        c.drawRightString(W - 40, H - 22, "Pág. %s" % page_n)
+        c.drawRightString(W - 40, H - 36, (fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""))
+        if logo:
+            try:
+                c.drawImage(logo, W - 100, H - 44, width=40, height=32, mask="auto", preserveAspectRatio=True)
+            except Exception:
+                pass
+        c.setFillColor(colors.HexColor("#FBBF24"))
+        c.rect(0, H - 52, W, 4, fill=1, stroke=0)
+
+    y = H - 70
+    page = 1
+    header(page)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica-Bold", 9)
+    cols = [30, 70, 55, 70, 100, 120, 55, 55, 50]
+    labels = ["Código", "Tipo", "Fecha", "Parte", "Producto", "Total", "Pagado", "Estado", "Registró"]
+    x0 = 30
+    for i, lb in enumerate(labels):
+        c.drawString(x0 + sum(cols[:i]), y, lb)
+    y -= 14
+    c.setStrokeColor(colors.HexColor("#cbd5e1"))
+    c.line(30, y + 8, W - 30, y + 8)
+    c.setFont("Helvetica", 8)
+    for o in ops:
+        if y < 40:
+            c.showPage()
+            page += 1
+            header(page)
+            y = H - 70
+            c.setFont("Helvetica", 8)
+            c.setFillColor(colors.HexColor("#0f172a"))
+        row = [
+            (o.codigo or "")[:12],
+            (o.tipo or "")[:10],
+            (o.fecha or "")[:12],
+            (o.parte_nombre or "")[:18],
+            (o.producto or "")[:22],
+            _cont_cop(o.valor_total),
+            _cont_cop(o.valor_pagado),
+            (o.estado or "")[:10],
+            (o.registrado_por or "")[:12],
+        ]
+        for i, val in enumerate(row):
+            c.drawString(x0 + sum(cols[:i]), y, str(val))
+        y -= 12
+    c.setFont("Helvetica-Oblique", 7)
+    c.setFillColor(colors.HexColor("#64748b"))
+    c.drawString(30, 22, "Documento interno PROCSIS / EduTrack · Generado desde el módulo de Contabilidad comercial · Uso exclusivo gerencia")
+    c.save()
+    bio.seek(0)
+    try:
+        registrar_auditoria("Contabilidad export PDF ops", "n=%s" % len(ops))
+    except Exception:
+        pass
+    return send_file(bio, as_attachment=True,
+                     download_name="PROCSIS_Contabilidad_Operaciones_%s.pdf" % (fecha_hoy() if "fecha_hoy" in dir() else "export"),
+                     mimetype="application/pdf")
+
+
+@app.route("/gerencia/contabilidad/op/<int:oid>/pdf")
+def contabilidad_op_pdf(oid):
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    op = ContOperacion.query.get_or_404(oid)
+    meta = _cont_empresa_meta()
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 70, W, 70, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, H - 32, "%s · %s" % (meta["empresa"], meta["producto"]))
+    c.setFont("Helvetica", 9)
+    c.drawString(40, H - 48, "DOCUMENTO INTERNO — Comprobante de operación económica")
+    c.drawString(40, H - 60, "NIT %s · Código %s" % (meta["nit"] or "—", op.codigo or ""))
+    logo = _cont_logo_path_for_pdf()
+    if logo:
+        try:
+            c.drawImage(logo, W - 90, H - 58, width=48, height=40, mask="auto", preserveAspectRatio=True)
+        except Exception:
+            pass
+    c.setFillColor(colors.HexColor("#FBBF24"))
+    c.rect(0, H - 74, W, 4, fill=1, stroke=0)
+    y = H - 110
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Comprobante %s · %s" % (op.codigo or "", op.tipo or ""))
+    y -= 24
+    c.setFont("Helvetica", 10)
+    rows = [
+        ("Fecha / hora", "%s %s" % (op.fecha or "", op.hora or "")),
+        ("Quién / a quién", op.parte_nombre or "—"),
+        ("Producto / servicio", op.producto or "—"),
+        ("Descripción", (op.descripcion or "—")[:300]),
+        ("Cantidad", str(op.cantidad)),
+        ("Valor unitario", _cont_cop(op.valor_unitario)),
+        ("Valor total", _cont_cop(op.valor_total)),
+        ("Pagado / recibido", _cont_cop(op.valor_pagado)),
+        ("Saldo", _cont_cop(op.saldo)),
+        ("Estado", op.estado or ""),
+        ("Medio de pago", op.medio_pago or "—"),
+        ("Referencia", op.referencia or "—"),
+        ("Solicitó", op.solicitado_por or "—"),
+        ("Registró", "%s · IP %s" % (op.registrado_por or "", op.ip or "")),
+        ("Institución", op.institucion_nombre or "—"),
+        ("Evidencia", (op.evidencia or "—")[:250]),
+    ]
+    for lab, val in rows:
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawString(40, y, lab)
+        c.setFont("Helvetica", 10)
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.drawString(180, y, str(val)[:90])
+        y -= 16
+        if y < 80:
+            c.showPage()
+            y = H - 50
+    c.setFont("Helvetica-Oblique", 8)
+    c.setFillColor(colors.HexColor("#64748b"))
+    c.drawString(40, 40, "Documento interno. Respaldado en el sistema EduTrack / PROCSIS. No tiene validez tributaria DIAN por sí solo.")
+    c.drawString(40, 28, "Generado automáticamente · %s" % (op.creado_en or ""))
+    c.save()
+    bio.seek(0)
+    return send_file(bio, as_attachment=True,
+                     download_name="PROCSIS_OP_%s.pdf" % (op.codigo or oid),
+                     mimetype="application/pdf")
+
+
+@app.route("/gerencia/contabilidad/export/partes.xlsx")
+def contabilidad_export_partes_excel():
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    meta = _cont_empresa_meta()
+    partes = ContParte.query.order_by(ContParte.id.desc()).limit(2000).all()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Clientes_Proveedores"
+    navy = PatternFill("solid", fgColor="0B2D57")
+    white_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+    light = PatternFill("solid", fgColor="F8FAFC")
+    thin = Border(
+        left=Side(style="thin", color="CBD5E1"), right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"), bottom=Side(style="thin", color="CBD5E1"),
+    )
+    ws.merge_cells("A1:H1")
+    ws["A1"] = "%s — DOCUMENTO INTERNO · Clientes y proveedores" % meta["empresa"]
+    ws["A1"].font = Font(name="Calibri", bold=True, color="0B2D57", size=14)
+    headers = ["Tipo", "Nombre", "NIT/CC", "Email", "Teléfono", "Ciudad", "Categoría", "Dirección", "Notas"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col, value=h)
+        cell.fill = navy
+        cell.font = white_font
+        cell.border = thin
+    for r, p in enumerate(partes, 4):
+        vals = [p.tipo, p.nombre, p.nit_cc, p.email, p.telefono, p.ciudad, p.categoria, p.direccion, (p.notas or "")[:200]]
+        for c, v in enumerate(vals, 1):
+            cell = ws.cell(row=r, column=c, value=v)
+            cell.border = thin
+            cell.font = Font(name="Calibri", size=10)
+            if r % 2 == 0:
+                cell.fill = light
+    for i, w in enumerate([12, 28, 14, 24, 14, 14, 14, 28, 30], 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return send_file(bio, as_attachment=True,
+                     download_name="PROCSIS_Clientes_Proveedores_%s.xlsx" % (fecha_hoy() if "fecha_hoy" in dir() else "export"),
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@app.route("/gerencia/contabilidad/export/partes.pdf")
+def contabilidad_export_partes_pdf():
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    meta = _cont_empresa_meta()
+    partes = ContParte.query.order_by(ContParte.nombre).limit(400).all()
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 50, W, 50, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, H - 28, "%s · DOCUMENTO INTERNO — Clientes y proveedores" % meta["empresa"])
+    y = H - 70
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(40, y, "Tipo")
+    c.drawString(100, y, "Nombre")
+    c.drawString(280, y, "NIT/CC")
+    c.drawString(360, y, "Teléfono")
+    c.drawString(440, y, "Categoría")
+    y -= 12
+    c.setFont("Helvetica", 8)
+    for p in partes:
+        if y < 40:
+            c.showPage()
+            y = H - 40
+            c.setFont("Helvetica", 8)
+        c.drawString(40, y, (p.tipo or "")[:10])
+        c.drawString(100, y, (p.nombre or "")[:30])
+        c.drawString(280, y, (p.nit_cc or "")[:14])
+        c.drawString(360, y, (p.telefono or "")[:14])
+        c.drawString(440, y, (p.categoria or "")[:14])
+        y -= 11
+    c.setFont("Helvetica-Oblique", 7)
+    c.setFillColor(colors.HexColor("#64748b"))
+    c.drawString(40, 24, "Documento interno PROCSIS · Uso exclusivo de gerencia")
+    c.save()
+    bio.seek(0)
+    return send_file(bio, as_attachment=True,
+                     download_name="PROCSIS_Clientes_Proveedores.pdf", mimetype="application/pdf")
+
+
+@app.route("/gerencia/contabilidad/export/trabajadores.xlsx")
+def contabilidad_export_trab_excel():
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    meta = _cont_empresa_meta()
+    rows = ContTrabajador.query.order_by(ContTrabajador.id.desc()).limit(2000).all()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Trabajadores"
+    navy = PatternFill("solid", fgColor="0B2D57")
+    white_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+    thin = Border(
+        left=Side(style="thin", color="CBD5E1"), right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"), bottom=Side(style="thin", color="CBD5E1"),
+    )
+    ws.merge_cells("A1:G1")
+    ws["A1"] = "%s — DOCUMENTO INTERNO · Módulo trabajadores" % meta["empresa"]
+    ws["A1"].font = Font(name="Calibri", bold=True, color="0B2D57", size=14)
+    headers = ["Nombre", "Documento", "Cargo", "Tipo contrato", "Teléfono", "Email", "Notas"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col, value=h)
+        cell.fill = navy
+        cell.font = white_font
+        cell.border = thin
+    light = PatternFill("solid", fgColor="F8FAFC")
+    for r, t in enumerate(rows, 4):
+        vals = [t.nombre, t.documento, t.cargo, t.tipo_contrato, t.telefono, t.email, (t.notas or "")[:200]]
+        for c, v in enumerate(vals, 1):
+            cell = ws.cell(row=r, column=c, value=v)
+            cell.border = thin
+            if r % 2 == 0:
+                cell.fill = light
+    for i, w in enumerate([28, 14, 18, 22, 14, 24, 30], 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return send_file(bio, as_attachment=True,
+                     download_name="PROCSIS_Trabajadores.xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia.pdf")
+def contabilidad_constancia_laboral(tid):
+    """Constancia laboral / de vinculación del trabajador."""
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    t = ContTrabajador.query.get_or_404(tid)
+    meta = _cont_empresa_meta()
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 70, W, 70, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, H - 30, meta["empresa"])
+    c.setFont("Helvetica", 9)
+    c.drawString(40, H - 46, "%s · DOCUMENTO INTERNO" % meta["producto"])
+    c.drawString(40, H - 58, "Constancia laboral / de vinculación")
+    logo = _cont_logo_path_for_pdf()
+    if logo:
+        try:
+            c.drawImage(logo, W - 90, H - 58, width=48, height=40, mask="auto", preserveAspectRatio=True)
+        except Exception:
+            pass
+    c.setFillColor(colors.HexColor("#FBBF24"))
+    c.rect(0, H - 74, W, 4, fill=1, stroke=0)
+    y = H - 120
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica-Bold", 13)
+    c.drawCentredString(W / 2, y, "CONSTANCIA LABORAL")
+    y -= 36
+    c.setFont("Helvetica", 11)
+    texto = (
+        "La empresa %s, identificada con NIT %s, hace constar que el(la) señor(a) "
+        "%s, identificado(a) con documento No. %s, se encuentra vinculado(a) en calidad de "
+        "%s bajo la modalidad de contrato %s."
+    ) % (
+        meta["empresa"],
+        meta["nit"] or "—",
+        t.nombre or "—",
+        t.documento or "—",
+        t.cargo or "colaborador(a)",
+        t.tipo_contrato or "prestación de servicios",
+    )
+    # simple wrap
+    from reportlab.lib.utils import simpleSplit
+    lines = simpleSplit(texto, "Helvetica", 11, W - 100)
+    for ln in lines:
+        c.drawString(50, y, ln)
+        y -= 16
+    y -= 12
+    c.drawString(50, y, "Datos de contacto registrados: %s · %s" % (t.telefono or "—", t.email or "—"))
+    y -= 28
+    c.drawString(50, y, "La presente se expide a solicitud del interesado el día %s." % (fecha_hoy() if "fecha_hoy" in dir() else ""))
+    y -= 50
+    c.drawString(50, y, "_______________________________")
+    y -= 14
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(50, y, "Gerencia / Dirección de personal")
+    y -= 12
+    c.setFont("Helvetica", 9)
+    c.drawString(50, y, meta["empresa"])
+    c.setFont("Helvetica-Oblique", 7)
+    c.setFillColor(colors.HexColor("#64748b"))
+    c.drawString(40, 36, "Documento interno generado por EduTrack / PROCSIS. Verificar autenticidad con gerencia.")
+    c.save()
+    bio.seek(0)
+    try:
+        registrar_auditoria("Constancia laboral PDF", "trab=%s" % t.id)
+    except Exception:
+        pass
+    safe = "".join(ch if ch.isalnum() else "_" for ch in (t.nombre or "trabajador"))[:40]
+    return send_file(bio, as_attachment=True,
+                     download_name="PROCSIS_Constancia_Laboral_%s.pdf" % safe,
+                     mimetype="application/pdf")
 
 
 
