@@ -47554,6 +47554,9 @@ TIPOS_CERT_CORP = [
 def _cert_corp_meta():
     try:
         p = plataforma()
+        rep = (getattr(p, "desarrollador", None) or getattr(p, "representante_legal", None) or "").strip()
+        if not rep:
+            rep = "Sebastián López Arcila"
         return {
             "empresa": "PROCSIS",
             "nit": (getattr(p, "nit", None) or "").strip(),
@@ -47561,13 +47564,15 @@ def _cert_corp_meta():
             "direccion": (getattr(p, "direccion", None) or "").strip(),
             "tel": (getattr(p, "telefono_soporte", None) or "").strip(),
             "email": (getattr(p, "email_soporte", None) or "").strip(),
-            "rep": (getattr(p, "representante_legal", None) or "").strip() or "Founder & CEO, PROCSIS",
+            "rep": rep,
+            "cargo_rep": "Founder & CEO",
             "logo": logo_plataforma() if "logo_plataforma" in dir() else "",
         }
     except Exception:
         return {
             "empresa": "PROCSIS", "nit": "", "ciudad": "Caracolí, Antioquia",
-            "direccion": "", "tel": "", "email": "", "rep": "Founder & CEO, PROCSIS", "logo": "",
+            "direccion": "", "tel": "", "email": "",
+            "rep": "Sebastián López Arcila", "cargo_rep": "Founder & CEO", "logo": "",
         }
 
 
@@ -47633,6 +47638,12 @@ def gerencia_certificaciones():
     </select>
     <label style="font-size:12px;font-weight:700">Nombre de la institución *</label>
     <input id="inst_txt" name="institucion" required placeholder="Nombre del colegio" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label style="font-size:12px;font-weight:700">NIT de la institución</label>
+      <input name="nit_inst" placeholder="900.000.000-1" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+      <div><label style="font-size:12px;font-weight:700">Código DANE</label>
+      <input name="dane_inst" placeholder="105001000000" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+    </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div>
@@ -47670,6 +47681,8 @@ def _cert_corp_pdf(form, meta):
 
     tip = (form.get("tipo") or "implementacion").strip()
     inst = (form.get("institucion") or form.get("institucion_sel") or "").strip() or "la institución educativa"
+    nit_inst = (form.get("nit_inst") or "").strip()
+    dane_inst = (form.get("dane_inst") or "").strip()
     ciudad = (form.get("ciudad") or meta.get("ciudad") or "Caracolí, Antioquia").strip()
     rector = (form.get("rector") or "").strip() or "Rectora / Representante Legal"
     modulo = (form.get("modulo") or "Control de Asistencia Escolar mediante Código QR").strip()
@@ -47677,8 +47690,20 @@ def _cert_corp_pdf(form, meta):
     beneficiario = (form.get("beneficiario") or "").strip()
     objeto = (form.get("objeto") or "").strip()
     dia, mes, anio, fecha_larga = _cert_fecha_larga()
-    nit = meta.get("nit") or "—"
+    nit = (meta.get("nit") or "").strip() or "—"
     emp = "PROCSIS"
+    dir_emp = (meta.get("direccion") or "").strip()
+    ceo = (meta.get("rep") or "Sebastián López Arcila").strip()
+    cargo_ceo = (meta.get("cargo_rep") or "Founder & CEO").strip()
+    id_inst_txt = ""
+    if nit_inst or dane_inst:
+        partes = []
+        if nit_inst:
+            partes.append("NIT %s" % nit_inst)
+        if dane_inst:
+            partes.append("código DANE %s" % dane_inst)
+        id_inst_txt = ", identificada con %s" % " / ".join(partes)
+
     titulos = {
         "prestacion_servicios": "CONSTANCIA DE PRESTACIÓN DE SERVICIOS",
         "cliente_activo": "CERTIFICACIÓN DE CLIENTE ACTIVO",
@@ -47687,7 +47712,6 @@ def _cert_corp_pdf(form, meta):
     }
     titulo = titulos.get(tip, "CERTIFICACIÓN CORPORATIVA")
 
-    # Cuerpos por tipo
     if tip == "prestacion_servicios":
         cuerpo = (
             "La empresa %s, identificada con NIT %s, hace constar que %s ha prestado y/o presta "
@@ -47705,10 +47729,11 @@ def _cert_corp_pdf(form, meta):
             cuerpo += " %s" % detalle
     elif tip == "cliente_activo":
         cuerpo = (
-            "La empresa %s, constituida legalmente como proveedor de soluciones de base tecnológica, "
-            "hace constar que la institución educativa %s es cliente activo de nuestro ecosistema digital "
-            "y utiliza oficialmente la plataforma EduTrack para la modernización de sus procesos institucionales."
-            % (emp, inst)
+            "La empresa %s, identificada con NIT %s, constituida legalmente como proveedor de soluciones "
+            "de base tecnológica, hace constar que la institución educativa %s%s es cliente activo de nuestro "
+            "ecosistema digital y utiliza oficialmente la plataforma EduTrack para la modernización de sus "
+            "procesos institucionales."
+            % (emp, nit, inst, id_inst_txt)
         )
         if modulo:
             cuerpo += (
@@ -47719,8 +47744,9 @@ def _cert_corp_pdf(form, meta):
             cuerpo += " %s" % detalle
     elif tip == "caso_exito":
         cuerpo = (
-            "La empresa %s certifica el caso de éxito de la institución educativa %s en el uso de la plataforma EduTrack. "
-            % (emp, inst)
+            "La empresa %s, identificada con NIT %s, certifica el caso de éxito de la institución educativa %s%s "
+            "en el uso de la plataforma EduTrack. "
+            % (emp, nit, inst, id_inst_txt)
         )
         if modulo:
             cuerpo += "Se destaca la implementación de %s. " % modulo
@@ -47732,15 +47758,16 @@ def _cert_corp_pdf(form, meta):
             "Los resultados evidencian optimización de procesos, trazabilidad de la información y acompañamiento "
             "continuo por parte del equipo PROCSIS."
         )
-    else:  # implementacion
+    else:
         cuerpo = (
-            "La empresa %s, constituida legalmente como proveedor de soluciones de base tecnológica, "
-            "hace constar que la institución educativa %s es cliente activo de nuestro ecosistema digital "
-            "y utiliza oficialmente la plataforma EduTrack para la modernización de sus procesos institucionales. "
-            "A la fecha, la institución tiene implementado con total éxito el módulo de %s, garantizando la "
-            "optimización de los tiempos de registro en el aula, la trazabilidad segura de los datos de la "
-            "comunidad educativa y el soporte técnico preferente alojado en nuestra infraestructura de producción."
-            % (emp, inst, modulo)
+            "La empresa %s, identificada con NIT %s, constituida legalmente como proveedor de soluciones de base "
+            "tecnológica, hace constar que la institución educativa %s%s es cliente activo de nuestro ecosistema "
+            "digital y utiliza oficialmente la plataforma EduTrack para la modernización de sus procesos "
+            "institucionales. A la fecha, la institución tiene implementado con total éxito el módulo de %s, "
+            "garantizando la optimización de los tiempos de registro en el aula, la trazabilidad segura de los "
+            "datos de la comunidad educativa y el soporte técnico preferente alojado en nuestra infraestructura "
+            "de producción."
+            % (emp, nit, inst, id_inst_txt, modulo)
         )
         if detalle:
             cuerpo += " %s" % detalle
@@ -47755,9 +47782,9 @@ def _cert_corp_pdf(form, meta):
     c = canvas.Canvas(bio, pagesize=letter)
     W, H = letter
 
-    # Membrete
+    # Membrete con logo + dirección
     c.setFillColor(colors.HexColor("#0B2D57"))
-    c.rect(0, H - 78, W, 78, fill=1, stroke=0)
+    c.rect(0, H - 82, W, 82, fill=1, stroke=0)
     x_text = 48
     try:
         img = None
@@ -47765,66 +47792,79 @@ def _cert_corp_pdf(form, meta):
         if logo_src.startswith("data:image"):
             img = ImageReader(BytesIO(_b64.b64decode(logo_src.split(",", 1)[-1])))
         else:
-            path_l = _cont_logo_path_for_pdf() if "_cont_logo_path_for_pdf" in dir() else None
+            path_l = _cont_logo_path_for_pdf() if "_cont_logo_path_for_pdf" in globals() or "_cont_logo_path_for_pdf" in dir() else None
+            try:
+                path_l = _cont_logo_path_for_pdf()
+            except Exception:
+                path_l = None
             if path_l:
                 img = ImageReader(path_l)
         if img:
             c.setFillColor(colors.white)
-            c.roundRect(36, H - 68, 50, 46, 6, fill=1, stroke=0)
-            c.drawImage(img, 39, H - 65, width=44, height=40, mask="auto", preserveAspectRatio=True, anchor="c")
-            x_text = 98
+            c.roundRect(36, H - 72, 52, 48, 6, fill=1, stroke=0)
+            c.drawImage(img, 40, H - 68, width=44, height=40, mask="auto", preserveAspectRatio=True, anchor="c")
+            x_text = 100
     except Exception as e:
         print("cert logo:", e)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 18)
-    c.drawString(x_text, H - 32, emp)
+    c.drawString(x_text, H - 30, emp)
     c.setFont("Helvetica", 8)
-    c.drawString(x_text, H - 48, "DOCUMENTO INTERNO · Certificaciones corporativas")
-    if meta.get("nit"):
-        c.drawString(x_text, H - 60, "NIT %s" % meta["nit"])
+    c.drawString(x_text, H - 44, "DOCUMENTO INTERNO · Certificaciones corporativas")
+    linea_dir = " · ".join([x for x in [dir_emp, ciudad, ("NIT %s" % nit if nit != "—" else "")] if x])
+    if linea_dir:
+        c.drawString(x_text, H - 56, linea_dir[:100])
+    if meta.get("tel") or meta.get("email"):
+        c.drawString(x_text, H - 68, " · ".join([x for x in [meta.get("tel"), meta.get("email")] if x])[:100])
     c.setFillColor(colors.HexColor("#C4A035"))
-    c.rect(0, H - 82, W, 4, fill=1, stroke=0)
+    c.rect(0, H - 86, W, 4, fill=1, stroke=0)
 
     left, right = 70, W - 70
     width = right - left
-    y = H - 115
+    y = H - 130  # más aire bajo la franja dorada
+
     c.setFillColor(colors.HexColor("#0B2D57"))
     c.setFont("Helvetica-Bold", 13)
     for ln in simpleSplit(titulo, "Helvetica-Bold", 13, width):
         c.drawCentredString(W / 2, y, ln)
         y -= 16
-    y -= 10
+    y -= 14
+
     c.setFillColor(colors.HexColor("#0f172a"))
     c.setFont("Helvetica", 11)
     for ln in simpleSplit(cuerpo, "Helvetica", 11, width):
         c.drawString(left, y, ln)
         y -= 15
-        if y < 160:
+        if y < 180:
             c.showPage()
             y = H - 60
-    y -= 12
+    y -= 14
     for ln in simpleSplit(cierre, "Helvetica", 11, width):
         c.drawString(left, y, ln)
         y -= 15
 
-    # Doble firma
-    y = min(y - 50, 200)
-    mid = W / 2
+    # Firmas: 2 columnas, líneas ~200pt, espacio vertical amplio para firma manuscrita
+    y = min(y - 70, 220)
+    col_w = 200
+    x1 = left
+    x2 = right - col_w
     c.setStrokeColor(colors.HexColor("#0f172a"))
     c.setLineWidth(0.9)
-    c.line(left, y, left + 200, y)
-    c.line(mid + 20, y, mid + 220, y)
-    y -= 14
+    c.line(x1, y, x1 + col_w, y)
+    c.line(x2, y, x2 + col_w, y)
+    y -= 16
     c.setFont("Helvetica-Bold", 9)
-    c.drawString(left, y, meta.get("rep") or "Founder & CEO, PROCSIS")
-    c.drawString(mid + 20, y, rector[:42])
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.drawString(x1, y, ceo[:40])
+    c.drawString(x2, y, rector[:40])
     y -= 12
     c.setFont("Helvetica", 8)
     c.setFillColor(colors.HexColor("#475569"))
-    c.drawString(left, y, emp)
-    c.drawString(mid + 20, y, "Rectora / Representante Legal")
-    y -= 12
-    c.drawString(mid + 20, y, inst[:40])
+    c.drawString(x1, y, cargo_ceo)
+    c.drawString(x2, y, "Rectora / Representante Legal")
+    y -= 11
+    c.drawString(x1, y, emp)
+    c.drawString(x2, y, inst[:36])
 
     c.setFont("Helvetica", 7)
     c.setFillColor(colors.HexColor("#94a3b8"))
@@ -47844,15 +47884,6 @@ def _cert_corp_pdf(form, meta):
     )
 
 
-
-# ─── Requerimientos de autoridades (Habeas Data / órdenes oficiales) ─────────
-def _req_auth_codigo():
-    try:
-        n = (ReqAutoridad.query.count() or 0) + 1
-    except Exception:
-        n = 1
-    anio = (fecha_hoy() if "fecha_hoy" in dir() else "2026")[:4] or "2026"
-    return "RA-%s-%04d" % (anio, n)
 
 
 def _req_auth_audit(req_id, accion, detalle="", hash_archivo=""):
