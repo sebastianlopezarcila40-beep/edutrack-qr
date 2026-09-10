@@ -19441,6 +19441,10 @@ def gerencia_hq():
         <a class="g" href="/gerencia/cartera">Cuadro de mando · Cartera</a>
         <a class="g" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
         <a class="a" href="/gerencia/gastos">Gastos y cashflow</a>
+        <a class="g" href="/gerencia/contabilidad">📒 Contabilidad comercial</a>
+        <a class="g" href="/gerencia/contabilidad/nueva">➕ Nueva operación</a>
+        <a href="/gerencia/contabilidad/partes">Clientes y proveedores</a>
+        <a class="own" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
         <a class="t" href="/gerencia/planes">Planes · precios · paywalls</a>
         <a href="/gerencia/reportes">Reportes comerciales</a>
         <a href="/gerencia/turnos">Turnos y notas</a>
@@ -19470,6 +19474,9 @@ def gerencia_hq():
       <div class="grid-mod">
         <a class="own" href="/gerencia/turnos">👥 Turnos y notas de gestión</a>
         <a class="own" href="/gerencia/recursos-financieros">💾 Recursos Financieros y Consumo</a>
+        <a class="own" href="/gerencia/contabilidad">📒 Contabilidad · compras/ventas/pagos</a>
+        <a class="own" href="/gerencia/contabilidad/partes">Clientes · Proveedores · Dominios</a>
+        <a class="own" href="/gerencia/contabilidad/trabajadores">Módulo trabajadores</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
