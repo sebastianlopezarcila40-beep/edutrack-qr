@@ -48777,10 +48777,11 @@ def gerencia_hojas_vida():
         filas += (
             "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
             "<td><a href='/gerencia/hojas-vida/%s'>Ver</a> · "
-            "<a href='/gerencia/hojas-vida/%s/pdf'>PDF</a></td></tr>"
+            "<a href='/gerencia/hojas-vida/%s/pdf'>HV PDF</a> · "
+            "<a href='/gerencia/hojas-vida/%s/constancia.pdf'>Constancia</a></td></tr>"
         ) % (
             _esc(h.codigo), _esc(nom), _esc(h.documento), _esc(h.cargo_postula),
-            _esc(h.decision), h.id, h.id,
+            _esc(h.decision), h.id, h.id, h.id,
         )
     if not filas:
         filas = "<tr><td colspan='6' style='text-align:center;color:#94a3b8'>Sin hojas de vida registradas.</td></tr>"
@@ -48798,7 +48799,9 @@ def gerencia_hojas_vida():
     <a href="/gerencia/hojas-vida/formato.pdf" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;font-weight:800;text-decoration:none">📥 Descargar Formato Hoja de Vida (Imprimir)</a>
     <a href="/gerencia/hojas-vida/nueva" style="background:#15803d;color:#fff;padding:10px 14px;border-radius:8px;font-weight:800;text-decoration:none">+ Registrar hoja de vida recibida</a>
     <a href="?decision=CONTRATADO" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Contratados</a>
+    <a href="?decision=EN_PROCESO" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">En proceso</a>
     <a href="?decision=PRESELECCIONADO" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Preseleccionados</a>
+    <a href="?decision=NO_CONTINUA" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">No continúa</a>
     <a href="?" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Todos</a>
   </div>
   <div style="overflow:auto">
@@ -48926,7 +48929,7 @@ def gerencia_hv_nueva():
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <input name="fecha_entrevista" placeholder="Fecha entrevista" style="padding:9px">
     <input name="resultado_prueba" placeholder="Resultado prueba (ej. 85/100 Apto)" style="padding:9px">
-    <select name="decision" style="padding:9px"><option>PRESELECCIONADO</option><option>CONTRATADO</option><option>NO_CONTINUA</option></select>
+    <select name="decision" style="padding:9px"><option>PRESELECCIONADO</option><option>EN_PROCESO</option><option>CONTRATADO</option><option>NO_CONTINUA</option></select>
   </div>
   <textarea name="concepto_entrevistador" rows="2" placeholder="Concepto del entrevistador" style="width:100%;padding:9px;margin-top:8px"></textarea>
 
@@ -48991,7 +48994,8 @@ def gerencia_hv_detalle(hid):
   <p>{_esc(h.cargo_postula)} · {_esc(h.decision)}</p>
 </div>
 <div style="display:flex;gap:8px">
-  <a class="btn" href="/gerencia/hojas-vida/{h.id}/pdf">⬇ PDF</a>
+  <a class="btn" href="/gerencia/hojas-vida/{h.id}/pdf">⬇ Hoja de vida PDF</a>
+  <a class="btn" href="/gerencia/hojas-vida/{h.id}/constancia.pdf">⬇ Constancia decisión</a>
   <a class="btn" href="/gerencia/hojas-vida">Volver</a>
 </div></header>
 <section class="role-panel">
@@ -49012,6 +49016,7 @@ def gerencia_hv_detalle(hid):
     <div><label style="font-size:12px;font-weight:700">Decisión</label>
     <select name="decision" style="width:100%;padding:9px">
       <option value="PRESELECCIONADO" {"selected" if (h.decision or "")=="PRESELECCIONADO" else ""}>PRESELECCIONADO</option>
+      <option value="EN_PROCESO" {"selected" if (h.decision or "")=="EN_PROCESO" else ""}>EN_PROCESO</option>
       <option value="CONTRATADO" {"selected" if (h.decision or "")=="CONTRATADO" else ""}>CONTRATADO</option>
       <option value="NO_CONTINUA" {"selected" if (h.decision or "")=="NO_CONTINUA" else ""}>NO_CONTINUA</option>
     </select></div>
@@ -49382,6 +49387,166 @@ def gerencia_hv_pdf(hid):
     bio.seek(0)
     safe = "".join(ch if ch.isalnum() else "_" for ch in nom)[:30]
     return send_file(bio, as_attachment=True, download_name="PROCSIS_HV_%s.pdf" % safe, mimetype="application/pdf")
+
+
+
+@app.route("/gerencia/hojas-vida/<int:hid>/constancia.pdf")
+def gerencia_hv_constancia_pdf(hid):
+    """Constancia del estado del proceso de selección (cualquier decisión)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    h = HojaVida.query.get_or_404(hid)
+    meta = _hv_meta()
+    from reportlab.lib.utils import simpleSplit, ImageReader
+    import base64 as _b64
+
+    try:
+        dia, mes, anio, fecha_larga = _cert_fecha_larga()
+    except Exception:
+        fecha_larga = fecha_hoy() if "fecha_hoy" in dir() else ""
+        dia, mes, anio = "", "", ""
+
+    nom = " ".join([x for x in [h.nombres, h.primer_apellido, h.segundo_apellido] if x]).strip() or "—"
+    decision = (h.decision or "PRESELECCIONADO").upper()
+    titulos = {
+        "CONTRATADO": "CONSTANCIA DE CONTRATACIÓN",
+        "EN_PROCESO": "CONSTANCIA DE PROCESO DE SELECCIÓN EN CURSO",
+        "PRESELECCIONADO": "CONSTANCIA DE PRESELECCIÓN",
+        "NO_CONTINUA": "CONSTANCIA DE CIERRE DE PROCESO DE SELECCIÓN",
+    }
+    titulo = titulos.get(decision, "CONSTANCIA DE PROCESO DE SELECCIÓN")
+    textos = {
+        "CONTRATADO": (
+            "Que el(la) señor(a) %s, identificado(a) con %s No. %s, ha sido CONTRATADO(A) "
+            "para desempeñar el cargo de %s en PROCSIS, en el marco del proceso de selección "
+            "identificado con el código de vacante %s y el expediente de hoja de vida %s."
+        ) % (nom, h.tipo_doc or "C.C.", h.documento or "—", h.cargo_postula or "colaborador(a)",
+             h.codigo_vacante or "—", h.codigo or "—"),
+        "EN_PROCESO": (
+            "Que el(la) señor(a) %s, identificado(a) con %s No. %s, se encuentra EN PROCESO "
+            "de selección para el cargo de %s (vacante %s · HV %s). Las etapas de evaluación "
+            "continúan conforme a los protocolos internos de talento humano de PROCSIS."
+        ) % (nom, h.tipo_doc or "C.C.", h.documento or "—", h.cargo_postula or "—",
+             h.codigo_vacante or "—", h.codigo or "—"),
+        "PRESELECCIONADO": (
+            "Que el(la) señor(a) %s, identificado(a) con %s No. %s, ha sido PRESELECCIONADO(A) "
+            "para continuar en el proceso de selección del cargo %s (vacante %s · HV %s)."
+        ) % (nom, h.tipo_doc or "C.C.", h.documento or "—", h.cargo_postula or "—",
+             h.codigo_vacante or "—", h.codigo or "—"),
+        "NO_CONTINUA": (
+            "Que el(la) señor(a) %s, identificado(a) con %s No. %s, no continúa en el proceso "
+            "de selección para el cargo %s (vacante %s · HV %s), sin que ello implique juicio "
+            "sobre su idoneidad profesional fuera del alcance de esta convocatoria."
+        ) % (nom, h.tipo_doc or "C.C.", h.documento or "—", h.cargo_postula or "—",
+             h.codigo_vacante or "—", h.codigo or "—"),
+    }
+    cuerpo = textos.get(decision, textos["PRESELECCIONADO"])
+    nit = meta.get("nit") or "—"
+    ciudad = meta.get("ciudad") or "Caracolí, Antioquia"
+
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    # header
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 70, W, 70, fill=1, stroke=0)
+    x = 48
+    try:
+        img = None
+        logo = meta.get("logo") or ""
+        if logo.startswith("data:image"):
+            img = ImageReader(BytesIO(_b64.b64decode(logo.split(",", 1)[-1])))
+        else:
+            try:
+                pl = _cont_logo_path_for_pdf()
+                if pl:
+                    img = ImageReader(pl)
+            except Exception:
+                pass
+        if img:
+            c.setFillColor(colors.white)
+            c.roundRect(36, H - 60, 46, 42, 6, fill=1, stroke=0)
+            c.drawImage(img, 39, H - 56, width=40, height=34, mask="auto", preserveAspectRatio=True, anchor="c")
+            x = 96
+    except Exception:
+        pass
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x, H - 28, "PROCSIS")
+    c.setFont("Helvetica", 8)
+    c.drawString(x, H - 42, "NIT %s · DOCUMENTO INTERNO · Talento Humano" % nit)
+    c.drawString(x, H - 54, "REG-TH-002 · Constancia de decisión de selección")
+    c.setFillColor(colors.HexColor("#C4A035"))
+    c.rect(0, H - 74, W, 4, fill=1, stroke=0)
+
+    left, width = 60, W - 120
+    y = H - 110
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.setFont("Helvetica-Bold", 13)
+    for ln in simpleSplit(titulo, "Helvetica-Bold", 13, width):
+        c.drawCentredString(W / 2, y, ln)
+        y -= 16
+    y -= 8
+    c.setFont("Helvetica", 10)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    intro = (
+        "La empresa PROCSIS, identificada con NIT %s, por medio de la presente hace constar:"
+        % nit
+    )
+    for ln in simpleSplit(intro, "Helvetica", 10, width):
+        c.drawString(left, y, ln)
+        y -= 14
+    y -= 8
+    for ln in simpleSplit(cuerpo, "Helvetica", 10, width):
+        c.drawString(left, y, ln)
+        y -= 14
+    y -= 10
+    extra = []
+    if h.fecha_entrevista:
+        extra.append("Fecha de entrevista: %s." % h.fecha_entrevista)
+    if h.resultado_prueba:
+        extra.append("Resultado de prueba: %s." % h.resultado_prueba)
+    if h.concepto_entrevistador:
+        extra.append("Concepto: %s" % h.concepto_entrevistador)
+    for e in extra:
+        for ln in simpleSplit(e, "Helvetica", 9, width):
+            c.drawString(left, y, ln)
+            y -= 12
+    y -= 12
+    cierre = (
+        "Se expide la presente constancia en la ciudad de %s, a los %s días del mes de %s de %s, "
+        "para los fines que el interesado estime convenientes."
+        % (ciudad, dia or "—", mes or "—", anio or "—")
+    )
+    for ln in simpleSplit(cierre, "Helvetica", 10, width):
+        c.drawString(left, y, ln)
+        y -= 14
+
+    y = min(y - 50, 160)
+    c.setStrokeColor(colors.HexColor("#0f172a"))
+    c.line(left, y, left + 200, y)
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.drawString(left, y - 14, meta.get("rep") if meta.get("rep") else "Gerencia / Talento Humano")
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#475569"))
+    c.drawString(left, y - 26, "PROCSIS")
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(left, 28, "Estado: %s · Expediente %s · Documento interno PROCSIS" % (decision, h.codigo or ""))
+    c.save()
+    bio.seek(0)
+    try:
+        registrar_auditoria("Constancia HV PDF", "%s %s" % (h.codigo, decision))
+    except Exception:
+        pass
+    safe = "".join(ch if ch.isalnum() else "_" for ch in nom)[:25]
+    return send_file(
+        bio, as_attachment=True,
+        download_name="PROCSIS_Constancia_%s_%s.pdf" % (decision, safe),
+        mimetype="application/pdf",
+    )
 
 
 
