@@ -48928,7 +48928,7 @@ def gerencia_hv_detalle(hid):
 
 @app.route("/gerencia/hojas-vida/formato.pdf")
 def gerencia_hv_formato_pdf():
-    """PDF en blanco para llenado manual / impresión."""
+    """PDF en blanco estilo formulario oficial (cuadrículas) con marca PROCSIS."""
     g = _guard_gerencia()
     if g:
         return g
@@ -48938,87 +48938,195 @@ def gerencia_hv_formato_pdf():
     W, H = letter
     from reportlab.lib.utils import simpleSplit
 
-    def box(x, y, w, h):
-        c.setStrokeColor(colors.HexColor("#94a3b8"))
-        c.setLineWidth(0.6)
-        c.rect(x, y, w, h, stroke=1, fill=0)
+    GRAY = colors.HexColor("#94a3b8")
+    LINE = colors.HexColor("#cbd5e1")
+    NAVY = colors.HexColor("#0B2D57")
+    LABEL = colors.HexColor("#475569")  # gris carbón / azul oscuro suave
+    M = 40
+    usable = W - 2 * M
 
-    def label(x, y, t, size=7):
-        c.setFont("Helvetica", size)
-        c.setFillColor(colors.HexColor("#64748b"))
-        c.drawString(x, y, t)
-
-    def section(y, num, title):
-        c.setFillColor(colors.HexColor("#0B2D57"))
-        c.roundRect(50, y - 4, 200, 16, 8, fill=1, stroke=0)
+    def cell(x, y, w, h, lab="", lab_size=6.5):
+        c.setStrokeColor(LINE)
+        c.setLineWidth(0.7)
         c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 9)
-        c.drawString(58, y, "%s  %s" % (num, title))
-        return y - 22
+        c.rect(x, y, w, h, stroke=1, fill=1)
+        if lab:
+            c.setFont("Helvetica", lab_size)
+            c.setFillColor(LABEL)
+            c.drawString(x + 3, y + h - 9, lab)
+
+    def section_bar(y, text):
+        c.setFillColor(NAVY)
+        c.rect(M, y - 2, usable, 16, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(M + 6, y + 2, text)
+        return y - 18
 
     _hv_draw_header(c, W, H, meta, "REG-TH-001 · Formato para llenado manual")
-    y = H - 95
-    c.setFillColor(colors.HexColor("#0B2D57"))
+    y = H - 88
+
+    # Título centrado en recuadro
+    c.setStrokeColor(NAVY)
+    c.setLineWidth(1.2)
+    c.setFillColor(colors.white)
+    c.roundRect(M, y - 28, usable, 32, 4, stroke=1, fill=1)
+    c.setFillColor(NAVY)
     c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(W / 2, y, "HOJA DE VIDA · Persona Natural")
-    y -= 14
-    c.setFont("Helvetica", 8)
-    c.setFillColor(colors.HexColor("#64748b"))
-    c.drawCentredString(W / 2, y, "PROCSIS · Gestión de Talento Humano · Espacios en blanco para diligenciar")
-    y -= 22
+    c.drawCentredString(W / 2, y - 8, "HOJA DE VIDA")
+    c.setFont("Helvetica", 7)
+    c.setFillColor(LABEL)
+    c.drawCentredString(W / 2, y - 20, "PARA SOLICITUD DE EMPLEO · PROCSIS · Talento Humano")
+    y -= 40
 
-    y = section(y, "1", "DATOS PERSONALES")
-    box(50, y - 70, W - 100, 70)
-    label(55, y - 12, "PRIMER APELLIDO")
-    label(200, y - 12, "SEGUNDO APELLIDO")
-    label(350, y - 12, "NOMBRES")
-    c.setStrokeColor(colors.HexColor("#cbd5e1"))
-    c.line(50, y - 28, W - 50, y - 28)
-    label(55, y - 40, "TIPO DOC.  C.C. ( )  C.E. ( )  PAS ( )     No. _______________")
-    label(320, y - 40, "GÉNERO  F ( )  M ( )  NB ( )")
-    label(55, y - 55, "DIRECCIÓN _______________________________  CIUDAD __________  TEL __________  EMAIL ________________")
-    y -= 90
+    # ── I. INFORMACIÓN GENERAL ──
+    y = section_bar(y, "I. INFORMACIÓN GENERAL")
+    photo_w, photo_h = 78, 95
+    left_w = usable - photo_w - 4
+    row_h = 22
 
-    y = section(y, "2", "FORMACIÓN ACADÉMICA")
-    box(50, y - 100, W - 100, 100)
-    label(55, y - 12, "MODALIDAD")
-    label(140, y - 12, "INSTITUCIÓN")
-    label(300, y - 12, "TÍTULO OBTENIDO")
-    label(450, y - 12, "AÑO / GRADUADO")
-    for i in range(5):
-        yy = y - 28 - i * 14
-        c.setStrokeColor(colors.HexColor("#e2e8f0"))
-        c.line(55, yy, W - 55, yy)
-    y -= 120
+    # Fila cargo / vacante
+    cell(M, y - row_h, left_w * 0.62, row_h, "CARGO AL QUE ASPIRA")
+    cell(M + left_w * 0.62, y - row_h, left_w * 0.38, row_h, "CÓDIGO VACANTE / PROCESO")
+    # Foto a la derecha (ocupa varias filas)
+    c.setStrokeColor(LINE)
+    c.setLineWidth(0.9)
+    c.setFillColor(colors.HexColor("#f1f5f9"))
+    c.rect(M + left_w + 4, y - photo_h, photo_w, photo_h, stroke=1, fill=1)
+    c.setFillColor(LABEL)
+    c.setFont("Helvetica", 6.5)
+    c.drawCentredString(M + left_w + 4 + photo_w / 2, y - photo_h / 2 + 6, "Fotografía")
+    c.drawCentredString(M + left_w + 4 + photo_w / 2, y - photo_h / 2 - 4, "Reciente")
+    c.drawCentredString(M + left_w + 4 + photo_w / 2, y - photo_h / 2 - 14, "(Tamaño 3x4)")
+    y -= row_h
 
-    y = section(y, "3", "EXPERIENCIA LABORAL")
+    cell(M, y - row_h, left_w / 3, row_h, "PRIMER APELLIDO")
+    cell(M + left_w / 3, y - row_h, left_w / 3, row_h, "SEGUNDO APELLIDO")
+    cell(M + 2 * left_w / 3, y - row_h, left_w / 3, row_h, "NOMBRES")
+    y -= row_h
+    cell(M, y - row_h, left_w * 0.22, row_h, "TIPO DOC. C.C.( ) C.E.( ) PAS.( )")
+    cell(M + left_w * 0.22, y - row_h, left_w * 0.28, row_h, "No. DOCUMENTO")
+    cell(M + left_w * 0.50, y - row_h, left_w * 0.20, row_h, "GÉNERO F( ) M( ) NB( )")
+    cell(M + left_w * 0.70, y - row_h, left_w * 0.30, row_h, "NACIONALIDAD")
+    y -= row_h
+    # remaining height under photo area
+    cell(M, y - (photo_h - 3 * row_h), left_w, photo_h - 3 * row_h, "PERFIL BREVE / OBSERVACIONES")
+    y = y - (photo_h - 3 * row_h) - 8
+
+    # ── II. INFORMACIÓN PERSONAL ──
+    y = section_bar(y, "II. INFORMACIÓN PERSONAL Y DE CONTACTO")
+    rh = 20
+    cell(M, y - rh, usable * 0.55, rh, "DIRECCIÓN DE RESIDENCIA")
+    cell(M + usable * 0.55, y - rh, usable * 0.22, rh, "CIUDAD")
+    cell(M + usable * 0.77, y - rh, usable * 0.23, rh, "DEPARTAMENTO")
+    y -= rh
+    cell(M, y - rh, usable * 0.28, rh, "TELÉFONO / CELULAR")
+    cell(M + usable * 0.28, y - rh, usable * 0.40, rh, "CORREO ELECTRÓNICO")
+    cell(M + usable * 0.68, y - rh, usable * 0.32, rh, "FECHA Y LUGAR DE NACIMIENTO")
+    y -= rh
+    cell(M, y - rh, usable * 0.25, rh, "ESTADO CIVIL")
+    cell(M + usable * 0.25, y - rh, usable * 0.25, rh, "VIVIENDA (Propia/Arrendada/Familiar)")
+    cell(M + usable * 0.50, y - rh, usable * 0.25, rh, "LICENCIA CONDUCCIÓN")
+    cell(M + usable * 0.75, y - rh, usable * 0.25, rh, "VEHÍCULO (Carro/Moto/Ninguno)")
+    y -= rh + 8
+
+    # ── III. FORMACIÓN ──
+    y = section_bar(y, "III. FORMACIÓN ACADÉMICA")
+    headers = [
+        (0.18, "MODALIDAD"),
+        (0.30, "INSTITUCIÓN EDUCATIVA"),
+        (0.28, "TÍTULO OBTENIDO / PROGRAMA"),
+        (0.12, "GRADUADO"),
+        (0.12, "AÑO"),
+    ]
+    hh = 14
+    x0 = M
+    for frac, lab in headers:
+        w = usable * frac
+        cell(x0, y - hh, w, hh, lab, 5.5)
+        x0 += w
+    y -= hh
+    for _ in range(5):
+        x0 = M
+        for frac, _lab in headers:
+            w = usable * frac
+            cell(x0, y - 18, w, 18, "")
+            x0 += w
+        y -= 18
+    y -= 6
+    cell(M, y - 28, usable, 28, "HABILIDADES TÉCNICAS / APTITUDES / IDIOMAS")
+    y -= 36
+
+    # ── IV. EXPERIENCIA (página 1 - un bloque; resto página 2) ──
+    if y < 160:
+        c.showPage()
+        _hv_draw_header(c, W, H, meta, "REG-TH-001 · Continuación")
+        y = H - 90
+
+    y = section_bar(y, "IV. EXPERIENCIA LABORAL (últimos empleos)")
     for n in range(1, 3):
-        box(50, y - 85, W - 100, 85)
-        label(55, y - 12, "EMPRESA %s ________________________ TEL __________  CARGO ________________" % n)
-        label(55, y - 28, "JEFE INMEDIATO ________________  CARGO JEFE ______________  INGRESO ____ / RETIRO ____")
-        label(55, y - 44, "SUELDO INICIAL __________  SUELDO FINAL __________  MOTIVO RETIRO ____________________")
-        label(55, y - 60, "FUNCIONES: ___________________________________________________________________________")
-        label(55, y - 74, "_____________________________________________________________________________________")
-        y -= 95
+        if y < 130:
+            c.showPage()
+            _hv_draw_header(c, W, H, meta, "REG-TH-001 · Continuación")
+            y = H - 90
+        # grid 2x2 + full width rows
+        cell(M, y - 18, usable * 0.55, 18, "EMPRESA %s" % n)
+        cell(M + usable * 0.55, y - 18, usable * 0.45, 18, "TELÉFONO RR.HH. / EMPRESA")
+        y -= 18
+        cell(M, y - 18, usable * 0.50, 18, "CARGO DESEMPEÑADO")
+        cell(M + usable * 0.50, y - 18, usable * 0.50, 18, "JEFE INMEDIATO / CARGO DEL JEFE")
+        y -= 18
+        cell(M, y - 18, usable * 0.25, 18, "FECHA INGRESO")
+        cell(M + usable * 0.25, y - 18, usable * 0.25, 18, "FECHA RETIRO")
+        cell(M + usable * 0.50, y - 18, usable * 0.25, 18, "SUELDO INICIAL")
+        cell(M + usable * 0.75, y - 18, usable * 0.25, 18, "SUELDO FINAL")
+        y -= 18
+        cell(M, y - 18, usable, 18, "MOTIVO DEL RETIRO")
+        y -= 18
+        cell(M, y - 32, usable, 32, "FUNCIONES PRINCIPALES DESEMPEÑADAS")
+        y -= 40
 
-    y = section(y, "4", "REFERENCIAS Y AUTORIZACIÓN")
-    box(50, y - 55, W - 100, 55)
-    label(55, y - 14, "REF. 1: NOMBRE ______________ OCUPACIÓN ______________ TEL ______________")
-    label(55, y - 30, "REF. 2: NOMBRE ______________ OCUPACIÓN ______________ TEL ______________")
-    label(55, y - 46, "Autorizo a PROCSIS el tratamiento de mis datos personales (Ley 1581 de 2012) y la verificación de antecedentes.")
-    y -= 80
-    c.setStrokeColor(colors.black)
+    y = section_bar(y, "V. REFERENCIAS PERSONALES")
+    cell(M, y - 18, usable * 0.40, 18, "REFERENCIA 1 · NOMBRE")
+    cell(M + usable * 0.40, y - 18, usable * 0.30, 18, "OCUPACIÓN")
+    cell(M + usable * 0.70, y - 18, usable * 0.30, 18, "TELÉFONO")
+    y -= 18
+    cell(M, y - 18, usable * 0.40, 18, "REFERENCIA 2 · NOMBRE")
+    cell(M + usable * 0.40, y - 18, usable * 0.30, 18, "OCUPACIÓN")
+    cell(M + usable * 0.70, y - 18, usable * 0.30, 18, "TELÉFONO")
+    y -= 28
+
+    y = section_bar(y, "VI. AUTORIZACIÓN LEGAL (Ley 1581 de 2012)")
+    cell(M, y - 42, usable, 42, "")
+    c.setFont("Helvetica", 7)
+    c.setFillColor(LABEL)
+    auth = (
+        "El firmante autoriza expresamente a PROCSIS para realizar el tratamiento de los datos personales "
+        "aquí consignados, así como la verificación de sus antecedentes laborales y académicos, bajo estricto "
+        "cumplimiento de la Ley de Protección de Datos Personales de Colombia (Ley 1581 de 2012)."
+    )
+    yy = y - 12
+    for ln in simpleSplit(auth, "Helvetica", 7, usable - 10):
+        c.drawString(M + 5, yy, ln)
+        yy -= 9
+    y -= 55
+
+    # Firma con amplio espacio
+    y = min(y - 20, 100)
+    c.setStrokeColor(colors.HexColor("#0f172a"))
+    c.setLineWidth(0.9)
     c.line(W - 250, y, W - 50, y)
     c.setFont("Helvetica", 8)
-    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFillColor(LABEL)
     c.drawRightString(W - 50, y - 12, "Firma del aspirante")
-    c.drawRightString(W - 50, y - 24, "C.C. ________________")
-    c.setFont("Helvetica", 7)
-    c.setFillColor(colors.HexColor("#94a3b8"))
-    c.drawString(50, 28, "PROCSIS · REG-TH-001 · Documento interno · Formato de impresión")
+    c.drawRightString(W - 50, y - 24, "C.C. / Documento No. ________________")
+    c.setFont("Helvetica", 6.5)
+    c.setFillColor(GRAY)
+    c.drawString(M, 22, "PROCSIS · REG-TH-001 · Documento interno · Formato de impresión para llenado manual")
     c.save()
     bio.seek(0)
     return send_file(bio, as_attachment=True, download_name="PROCSIS_Formato_Hoja_de_Vida.pdf", mimetype="application/pdf")
+
 
 
 @app.route("/gerencia/hojas-vida/<int:hid>/pdf")
