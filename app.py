@@ -2208,6 +2208,72 @@ class TurnoLaboral(db.Model):
 
 
 
+
+class ContParte(db.Model):
+    """Clientes, proveedores (servidores, dominios, etc.) y terceros comerciales."""
+    __tablename__ = "cont_partes"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(30), default="CLIENTE", index=True)  # CLIENTE | PROVEEDOR | AMBOS
+    nombre = db.Column(db.String(200), default="")
+    nit_cc = db.Column(db.String(40), default="", index=True)
+    email = db.Column(db.String(120), default="")
+    telefono = db.Column(db.String(40), default="")
+    direccion = db.Column(db.String(255), default="")
+    ciudad = db.Column(db.String(80), default="")
+    categoria = db.Column(db.String(80), default="")  # servidor, dominio, software, papelería...
+    notas = db.Column(db.Text, default="")
+    activo = db.Column(db.Boolean, default=True)
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+
+
+class ContTrabajador(db.Model):
+    """Trabajadores / contratistas para control contable-laboral."""
+    __tablename__ = "cont_trabajadores"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(160), default="")
+    documento = db.Column(db.String(40), default="", index=True)
+    cargo = db.Column(db.String(100), default="")
+    tipo_contrato = db.Column(db.String(60), default="")  # Laboral | Prestación de servicios
+    email = db.Column(db.String(120), default="")
+    telefono = db.Column(db.String(40), default="")
+    activo = db.Column(db.Boolean, default=True)
+    notas = db.Column(db.Text, default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
+class ContOperacion(db.Model):
+    """Operación económica respaldada: compra, venta, pago, cobro, servicio, entrega, etc."""
+    __tablename__ = "cont_operaciones"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), default="", index=True)  # OP-2026-0001
+    tipo = db.Column(db.String(40), default="VENTA", index=True)
+    # COMPRA | VENTA | INGRESO | GASTO | PAGO | COBRO | OBLIGACION | SOLICITUD | ENTREGA | SERVICIO
+    fecha = db.Column(db.String(20), default="", index=True)
+    hora = db.Column(db.String(20), default="")
+    parte_id = db.Column(db.Integer, index=True, nullable=True)
+    parte_nombre = db.Column(db.String(200), default="")  # quien compró / a quién se compró
+    producto = db.Column(db.String(200), default="")
+    descripcion = db.Column(db.Text, default="")
+    cantidad = db.Column(db.Float, default=1.0)
+    valor_unitario = db.Column(db.Float, default=0.0)
+    valor_total = db.Column(db.Float, default=0.0)
+    valor_pagado = db.Column(db.Float, default=0.0)
+    saldo = db.Column(db.Float, default=0.0)
+    moneda = db.Column(db.String(10), default="COP")
+    estado = db.Column(db.String(30), default="REGISTRADO", index=True)
+    # REGISTRADO | PAGADO | PARCIAL | ANULADO | PENDIENTE
+    medio_pago = db.Column(db.String(60), default="")
+    referencia = db.Column(db.String(120), default="")
+    solicitado_por = db.Column(db.String(120), default="")
+    registrado_por = db.Column(db.String(80), default="")
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    institucion_nombre = db.Column(db.String(200), default="")
+    evidencia = db.Column(db.Text, default="")  # nota / data URI soporte
+    ip = db.Column(db.String(80), default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
 class Novedad(db.Model):
     __tablename__ = "novedades"
     id = db.Column(db.Integer, primary_key=True)
@@ -28372,6 +28438,9 @@ def _modulos_por_rol(rol):
         ("Marca global", "/soporte/marca", "#0B2D57"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
         ("Editar planes", "/gerencia/planes", "#0B2D57"),
+        ("📒 Contabilidad comercial", "/gerencia/contabilidad", "#0B2D57"),
+        ("Clientes y proveedores", "/gerencia/contabilidad/partes", "#1d4ed8"),
+        ("Trabajadores", "/gerencia/contabilidad/trabajadores", "#7c2d12"),
         ("Feature flags", "/feature_flags", "#7c2d12"),
         ("Equipo Procsis", "/soporte/equipo", "#7c2d12"),
         ("Kit RRHH / seguridad", "/soporte/rrhh", "#7c2d12"),
@@ -28396,6 +28465,7 @@ def _modulos_por_rol(rol):
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Instituciones", "/tenants", "#1d4ed8"),
         ("👥 Turnos", "/cobranza/turnos", "#0B2D57"),
+        ("📒 Contabilidad comercial", "/cobranza/contabilidad", "#0B2D57"),
         ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
     ]
@@ -45823,6 +45893,483 @@ button:disabled{{background:#cbd5e1;cursor:not-allowed}}
 </body></html>
 """
     return body
+
+
+
+# ─── Contabilidad comercial / documentos (Gerencia + Cobranza) ───────────────
+TIPOS_OPERACION_CONT = [
+    ("COMPRA", "Comprar productos / servidores / otros"),
+    ("VENTA", "Vender mercancías o software"),
+    ("INGRESO", "Recibir dinero"),
+    ("PAGO", "Realizar pagos"),
+    ("SOLICITUD", "Solicitud de grupos / productos"),
+    ("ENTREGA", "Entregar mercancía"),
+    ("SERVICIO", "Adquirir servicio"),
+    ("GASTO", "Gasto operativo"),
+    ("COBRO", "Cobro a cliente"),
+    ("OBLIGACION", "Obligación pendiente"),
+]
+
+
+def _guard_contabilidad():
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
+        return acceso_denegado("Solo Gerencia o Cobranza acceden a contabilidad comercial.")
+    return None
+
+
+def _cont_codigo_op():
+    try:
+        n = ContOperacion.query.count() + 1
+    except Exception:
+        n = 1
+    from datetime import datetime as _dt
+    return "OP-%s-%05d" % (_dt.now().strftime("%Y"), n)
+
+
+def _cont_shell(title, body, back="/gerencia/contabilidad"):
+    return (
+        '<div style="max-width:1100px;margin:0 auto;padding:16px 16px 48px;font-family:Segoe UI,system-ui,sans-serif">'
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px">'
+        '<h1 style="margin:0;font-size:20px;color:#0B2D57">' + title + "</h1>"
+        '<div style="display:flex;flex-wrap:wrap;gap:8px">'
+        '<a href="/gerencia/contabilidad" style="background:#0B2D57;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Operaciones</a>'
+        '<a href="/gerencia/contabilidad/nueva" style="background:#15803d;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">+ Nueva operación</a>'
+        '<a href="/gerencia/contabilidad/partes" style="background:#1d4ed8;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Clientes / Proveedores</a>'
+        '<a href="/gerencia/contabilidad/trabajadores" style="background:#7c2d12;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Trabajadores</a>'
+        '<a href="' + back + '" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Volver</a>'
+        "</div></div>" + body + "</div>"
+    )
+
+
+@app.route("/gerencia/contabilidad", methods=["GET", "POST"])
+@app.route("/cobranza/contabilidad", methods=["GET", "POST"])
+def contabilidad_comercial():
+    """Panel de operaciones económicas: ingresos, gastos, compras, ventas, pagos, cobros."""
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    filtro = (request.args.get("tipo") or "").strip().upper()
+    if request.method == "POST" and request.form.get("accion") == "anular":
+        try:
+            oid = int(request.form.get("id") or 0)
+            op = ContOperacion.query.get(oid)
+            if op:
+                op.estado = "ANULADO"
+                db.session.commit()
+                registrar_auditoria("Contabilidad anular", "op=%s" % op.codigo)
+                msg = "Operación %s anulada." % op.codigo
+        except Exception as e:
+            err = str(e)[:120]
+
+    q = ContOperacion.query
+    if filtro:
+        q = q.filter_by(tipo=filtro)
+    ops = q.order_by(ContOperacion.id.desc()).limit(200).all()
+
+    # Totales
+    def _sum(tipo=None, campo="valor_total"):
+        try:
+            qq = ContOperacion.query.filter(ContOperacion.estado != "ANULADO")
+            if tipo:
+                qq = qq.filter_by(tipo=tipo)
+            return sum(float(getattr(o, campo) or 0) for o in qq.limit(5000).all())
+        except Exception:
+            return 0.0
+
+    tot_ing = _sum("INGRESO") + _sum("COBRO") + _sum("VENTA")
+    tot_gas = _sum("GASTO") + _sum("PAGO") + _sum("COMPRA") + _sum("SERVICIO")
+    tot_obl = _sum("OBLIGACION", "saldo")
+
+    def _cop(v):
+        try:
+            return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
+        except Exception:
+            return "$ 0"
+
+    chips = "".join(
+        '<a href="?tipo=%s" style="display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;'
+        'text-decoration:none;margin:0 4px 6px 0;background:%s;color:%s">%s</a>'
+        % (
+            t[0],
+            "#0B2D57" if filtro == t[0] else "#e2e8f0",
+            "#fff" if filtro == t[0] else "#0B2D57",
+            t[0],
+        )
+        for t in TIPOS_OPERACION_CONT
+    )
+    chips = (
+        '<a href="?" style="display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;'
+        'text-decoration:none;margin:0 4px 6px 0;background:%s;color:%s">TODAS</a>'
+        % ("#0B2D57" if not filtro else "#e2e8f0", "#fff" if not filtro else "#0B2D57")
+        + chips
+    )
+
+    filas = ""
+    for o in ops:
+        color = {"ANULADO": "#94a3b8", "PAGADO": "#16a34a", "PARCIAL": "#ca8a04", "PENDIENTE": "#b45309"}.get(o.estado, "#0B2D57")
+        filas += (
+            "<tr>"
+            "<td><b>%s</b><br><span style='font-size:11px;color:#64748b'>%s %s</span></td>"
+            "<td><span style='background:#0B2D57;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px'>%s</span></td>"
+            "<td>%s</td><td>%s</td>"
+            "<td style='text-align:right'>%s</td><td style='text-align:right'>%s</td>"
+            "<td style='color:%s;font-weight:700'>%s</td>"
+            "<td style='font-size:12px'>%s</td>"
+            "<td><a href='/gerencia/contabilidad/op/%s'>Ver</a></td>"
+            "</tr>"
+            % (
+                _esc(o.codigo),
+                _esc(o.fecha),
+                _esc(o.hora or ""),
+                _esc(o.tipo),
+                _esc(o.parte_nombre or "—"),
+                _esc((o.producto or o.descripcion or "—")[:80]),
+                _cop(o.valor_total),
+                _cop(o.valor_pagado),
+                color,
+                _esc(o.estado),
+                _esc(o.registrado_por or ""),
+                o.id,
+            )
+        )
+    if not filas:
+        filas = "<tr><td colspan='9' style='text-align:center;color:#94a3b8;padding:16px'>Sin operaciones. Registre la primera.</td></tr>"
+
+    body = f"""
+    {"<div style='background:#ecfdf5;border:1px solid #86efac;padding:10px 12px;border-radius:10px;margin-bottom:12px'>"+_esc(msg)+"</div>" if msg else ""}
+    {"<div style='background:#fef2f2;border:1px solid #fca5a5;padding:10px 12px;border-radius:10px;margin-bottom:12px;color:#991b1b'>"+_esc(err)+"</div>" if err else ""}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #16a34a;border-radius:10px;padding:12px">
+        <div style="font-size:11px;color:#64748b;font-weight:700">INGRESOS + VENTAS + COBROS</div>
+        <div style="font-size:20px;font-weight:800;color:#166534">{_cop(tot_ing)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #dc2626;border-radius:10px;padding:12px">
+        <div style="font-size:11px;color:#64748b;font-weight:700">GASTOS + PAGOS + COMPRAS</div>
+        <div style="font-size:20px;font-weight:800;color:#991b1b">{_cop(tot_gas)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #b45309;border-radius:10px;padding:12px">
+        <div style="font-size:11px;color:#64748b;font-weight:700">OBLIGACIONES (saldo)</div>
+        <div style="font-size:20px;font-weight:800;color:#92400e">{_cop(tot_obl)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #0B2D57;border-radius:10px;padding:12px">
+        <div style="font-size:11px;color:#64748b;font-weight:700">BALANCE APROX.</div>
+        <div style="font-size:20px;font-weight:800;color:#0B2D57">{_cop(tot_ing - tot_gas)}</div>
+      </div>
+    </div>
+    <p style="font-size:13px;color:#64748b;margin:0 0 10px">Registrar · Organizar · Controlar · Comprobar · Informar · Decidir. Cada operación queda con fecha, parte, valores e IP.</p>
+    <div style="margin-bottom:12px">{chips}</div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr style="background:#0B2D57;color:#fff">
+          <th style="padding:8px;text-align:left">Código / Fecha</th>
+          <th style="padding:8px;text-align:left">Tipo</th>
+          <th style="padding:8px;text-align:left">Quién / A quién</th>
+          <th style="padding:8px;text-align:left">Producto / Descripción</th>
+          <th style="padding:8px;text-align:right">Total</th>
+          <th style="padding:8px;text-align:right">Pagado</th>
+          <th style="padding:8px;text-align:left">Estado</th>
+          <th style="padding:8px;text-align:left">Registró</th>
+          <th></th>
+        </tr>
+        {filas}
+      </table>
+    </div>
+    """
+    back = "/cobranza/panel" if (request.path or "").startswith("/cobranza") else "/gerencia/hq"
+    return page("Contabilidad comercial", _cont_shell("📒 Contabilidad comercial", body, back))
+
+
+@app.route("/gerencia/contabilidad/nueva", methods=["GET", "POST"])
+@app.route("/cobranza/contabilidad/nueva", methods=["GET", "POST"])
+def contabilidad_nueva():
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    err = ""
+    if request.method == "POST":
+        try:
+            tipo = (request.form.get("tipo") or "VENTA").strip().upper()
+            fecha = (request.form.get("fecha") or fecha_hoy()).strip()[:20]
+            hora = (request.form.get("hora") or (hora_actual() if "hora_actual" in dir() else "")).strip()[:20]
+            parte_nombre = (request.form.get("parte_nombre") or "").strip()[:200]
+            producto = (request.form.get("producto") or "").strip()[:200]
+            descripcion = (request.form.get("descripcion") or "").strip()[:2000]
+            cantidad = float(request.form.get("cantidad") or 1)
+            vu = float(request.form.get("valor_unitario") or 0)
+            vt = float(request.form.get("valor_total") or 0)
+            if vt <= 0 and cantidad and vu:
+                vt = cantidad * vu
+            vp = float(request.form.get("valor_pagado") or 0)
+            saldo = max(0.0, vt - vp)
+            estado = (request.form.get("estado") or "REGISTRADO").strip().upper()
+            if vp >= vt and vt > 0:
+                estado = "PAGADO"
+            elif vp > 0:
+                estado = "PARCIAL"
+            op = ContOperacion(
+                codigo=_cont_codigo_op(),
+                tipo=tipo,
+                fecha=fecha,
+                hora=hora,
+                parte_nombre=parte_nombre,
+                producto=producto,
+                descripcion=descripcion,
+                cantidad=cantidad,
+                valor_unitario=vu,
+                valor_total=vt,
+                valor_pagado=vp,
+                saldo=saldo,
+                estado=estado,
+                medio_pago=(request.form.get("medio_pago") or "").strip()[:60],
+                referencia=(request.form.get("referencia") or "").strip()[:120],
+                solicitado_por=(request.form.get("solicitado_por") or "").strip()[:120],
+                registrado_por=(session.get("usuario") or "").strip()[:80],
+                institucion_nombre=(request.form.get("institucion_nombre") or "").strip()[:200],
+                evidencia=(request.form.get("evidencia") or "").strip()[:2000],
+                ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80],
+                creado_en="%s %s" % (fecha, hora),
+            )
+            pid = request.form.get("parte_id", type=int)
+            if pid:
+                op.parte_id = pid
+                pt = ContParte.query.get(pid)
+                if pt and not parte_nombre:
+                    op.parte_nombre = pt.nombre
+            db.session.add(op)
+            db.session.commit()
+            try:
+                registrar_auditoria("Contabilidad nueva", "%s %s %s" % (op.codigo, op.tipo, op.valor_total))
+            except Exception:
+                pass
+            return redirect("/gerencia/contabilidad/op/%s" % op.id)
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:200]
+
+    opts_tipo = "".join('<option value="%s">%s — %s</option>' % (a, a, b) for a, b in TIPOS_OPERACION_CONT)
+    partes_opts = '<option value="">— Manual / escribir nombre —</option>'
+    try:
+        for p in ContParte.query.filter_by(activo=True).order_by(ContParte.nombre).limit(300).all():
+            partes_opts += '<option value="%s">%s (%s)</option>' % (p.id, _esc(p.nombre), _esc(p.tipo))
+    except Exception:
+        pass
+    hoy = fecha_hoy() if "fecha_hoy" in dir() else ""
+    body = f"""
+    {"<div style='background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:10px'>"+_esc(err)+"</div>" if err else ""}
+    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px;max-width:720px">
+      <label style="font-weight:700;font-size:12px">Tipo de operación *</label>
+      <select name="tipo" required style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">{opts_tipo}</select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-weight:700;font-size:12px">Fecha *</label>
+        <input name="fecha" value="{hoy}" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+        <div><label style="font-weight:700;font-size:12px">Hora</label>
+        <input name="hora" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+      </div>
+      <label style="font-weight:700;font-size:12px;margin-top:8px;display:block">Cliente / Proveedor (catálogo)</label>
+      <select name="parte_id" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1">{partes_opts}</select>
+      <label style="font-weight:700;font-size:12px">Nombre de la persona o empresa *</label>
+      <input name="parte_nombre" required placeholder="Quién compró / a quién se le compró" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <label style="font-weight:700;font-size:12px">Producto / servicio solicitado</label>
+      <input name="producto" placeholder="Ej: Servidor VPS, dominio .edu.co, plan EduTrack Pro" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <label style="font-weight:700;font-size:12px">Descripción de la operación</label>
+      <textarea name="descripcion" rows="2" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label style="font-weight:700;font-size:12px">Cantidad</label>
+        <input name="cantidad" type="number" step="0.01" value="1" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+        <div><label style="font-weight:700;font-size:12px">Valor unitario</label>
+        <input name="valor_unitario" type="number" step="0.01" value="0" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+        <div><label style="font-weight:700;font-size:12px">Valor total *</label>
+        <input name="valor_total" type="number" step="0.01" value="0" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div><label style="font-weight:700;font-size:12px">Cuánto pagó / recibió</label>
+        <input name="valor_pagado" type="number" step="0.01" value="0" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+        <div><label style="font-weight:700;font-size:12px">Medio de pago</label>
+        <input name="medio_pago" placeholder="Transferencia, Wompi, efectivo..." style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+      </div>
+      <label style="font-weight:700;font-size:12px;margin-top:10px;display:block">Referencia / soporte</label>
+      <input name="referencia" placeholder="N° transferencia, factura proveedor..." style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <label style="font-weight:700;font-size:12px">Quién realizó la solicitud</label>
+      <input name="solicitado_por" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <label style="font-weight:700;font-size:12px">Institución (si aplica)</label>
+      <input name="institucion_nombre" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <label style="font-weight:700;font-size:12px">Evidencia / nota de comprobación</label>
+      <textarea name="evidencia" rows="2" placeholder="Dejar evidencia de que la operación ocurrió" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
+      <button type="submit" style="background:#15803d;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Registrar operación</button>
+    </form>
+    """
+    return page("Nueva operación", _cont_shell("Nueva operación económica", body))
+
+
+@app.route("/gerencia/contabilidad/op/<int:oid>")
+def contabilidad_detalle(oid):
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    op = ContOperacion.query.get_or_404(oid)
+    def _cop(v):
+        try:
+            return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
+        except Exception:
+            return "$ 0"
+    body = f"""
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;max-width:720px">
+      <div style="font-size:12px;color:#64748b">Documento de operación · respaldo contable</div>
+      <h2 style="margin:4px 0 12px;color:#0B2D57">{_esc(op.codigo)} · {_esc(op.tipo)}</h2>
+      <table style="width:100%;font-size:14px;border-collapse:collapse">
+        <tr><td style="padding:6px 0;color:#64748b;width:40%">Fecha / hora</td><td><b>{_esc(op.fecha)} {_esc(op.hora or '')}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Quién / a quién</td><td><b>{_esc(op.parte_nombre)}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Producto</td><td>{_esc(op.producto)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Descripción</td><td>{_esc(op.descripcion)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Cantidad</td><td>{op.cantidad}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Valor unitario</td><td>{_cop(op.valor_unitario)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Valor total</td><td><b>{_cop(op.valor_total)}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Pagado / recibido</td><td>{_cop(op.valor_pagado)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Saldo</td><td>{_cop(op.saldo)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Estado</td><td><b>{_esc(op.estado)}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Medio / ref.</td><td>{_esc(op.medio_pago)} {_esc(op.referencia)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Solicitó</td><td>{_esc(op.solicitado_por)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Registró</td><td>{_esc(op.registrado_por)} · IP {_esc(op.ip)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Institución</td><td>{_esc(op.institucion_nombre)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Evidencia</td><td>{_esc(op.evidencia)}</td></tr>
+      </table>
+      <form method="POST" action="/gerencia/contabilidad" style="margin-top:16px" onsubmit="return confirm('¿Anular esta operación?')">
+        <input type="hidden" name="accion" value="anular"><input type="hidden" name="id" value="{op.id}">
+        <button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:700">Anular operación</button>
+      </form>
+    </div>
+    """
+    return page(op.codigo, _cont_shell("Detalle " + op.codigo, body))
+
+
+@app.route("/gerencia/contabilidad/partes", methods=["GET", "POST"])
+def contabilidad_partes():
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = ""
+    if request.method == "POST":
+        p = ContParte(
+            tipo=(request.form.get("tipo") or "CLIENTE").strip().upper()[:30],
+            nombre=(request.form.get("nombre") or "").strip()[:200],
+            nit_cc=(request.form.get("nit_cc") or "").strip()[:40],
+            email=(request.form.get("email") or "").strip()[:120],
+            telefono=(request.form.get("telefono") or "").strip()[:40],
+            direccion=(request.form.get("direccion") or "").strip()[:255],
+            ciudad=(request.form.get("ciudad") or "").strip()[:80],
+            categoria=(request.form.get("categoria") or "").strip()[:80],
+            notas=(request.form.get("notas") or "").strip()[:1000],
+            creado_en=fecha_hoy() if "fecha_hoy" in dir() else "",
+            creado_por=(session.get("usuario") or "")[:80],
+        )
+        if p.nombre:
+            db.session.add(p)
+            db.session.commit()
+            msg = "Registrado: " + p.nombre
+    filas = ""
+    for p in ContParte.query.order_by(ContParte.id.desc()).limit(200).all():
+        filas += "<tr><td>%s</td><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            _esc(p.tipo), _esc(p.nombre), _esc(p.nit_cc), _esc(p.telefono), _esc(p.categoria), _esc(p.ciudad)
+        )
+    if not filas:
+        filas = "<tr><td colspan='6' style='text-align:center;color:#94a3b8'>Sin clientes ni proveedores aún.</td></tr>"
+    body = f"""
+    {"<p style='color:#166534'>"+_esc(msg)+"</p>" if msg else ""}
+    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label style="font-size:12px;font-weight:700">Tipo</label>
+      <select name="tipo" style="width:100%;padding:8px"><option>CLIENTE</option><option>PROVEEDOR</option><option>AMBOS</option></select></div>
+      <div><label style="font-size:12px;font-weight:700">Categoría</label>
+      <input name="categoria" placeholder="servidor, dominio, software..." style="width:100%;padding:8px"></div>
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Nombre *</label>
+      <input name="nombre" required style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">NIT / CC</label><input name="nit_cc" style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Teléfono</label><input name="telefono" style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Email</label><input name="email" style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Ciudad</label><input name="ciudad" style="width:100%;padding:8px"></div>
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Dirección / notas</label>
+      <input name="direccion" style="width:100%;padding:8px;margin-bottom:6px"><input name="notas" style="width:100%;padding:8px"></div>
+      <div style="grid-column:1/-1"><button type="submit" style="background:#1d4ed8;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Guardar parte</button></div>
+    </form>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px;text-align:left">NIT/CC</th><th style="padding:8px;text-align:left">Tel</th><th style="padding:8px;text-align:left">Categoría</th><th style="padding:8px;text-align:left">Ciudad</th></tr>
+        {filas}
+      </table>
+    </div>
+    """
+    return page("Clientes y proveedores", _cont_shell("Clientes · Proveedores · Servidores · Dominios", body))
+
+
+@app.route("/gerencia/contabilidad/trabajadores", methods=["GET", "POST"])
+def contabilidad_trabajadores():
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = ""
+    if request.method == "POST":
+        t = ContTrabajador(
+            nombre=(request.form.get("nombre") or "").strip()[:160],
+            documento=(request.form.get("documento") or "").strip()[:40],
+            cargo=(request.form.get("cargo") or "").strip()[:100],
+            tipo_contrato=(request.form.get("tipo_contrato") or "").strip()[:60],
+            email=(request.form.get("email") or "").strip()[:120],
+            telefono=(request.form.get("telefono") or "").strip()[:40],
+            notas=(request.form.get("notas") or "").strip()[:1000],
+            creado_en=fecha_hoy() if "fecha_hoy" in dir() else "",
+        )
+        if t.nombre:
+            db.session.add(t)
+            db.session.commit()
+            msg = "Trabajador registrado."
+    filas = ""
+    for t in ContTrabajador.query.order_by(ContTrabajador.id.desc()).limit(200).all():
+        filas += "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            _esc(t.nombre), _esc(t.documento), _esc(t.cargo), _esc(t.tipo_contrato), _esc(t.telefono), _esc(t.email)
+        )
+    if not filas:
+        filas = "<tr><td colspan='6' style='text-align:center;color:#94a3b8'>Sin trabajadores registrados.</td></tr>"
+    body = f"""
+    {"<p style='color:#166534'>"+_esc(msg)+"</p>" if msg else ""}
+    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Nombre completo *</label>
+      <input name="nombre" required style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Documento</label><input name="documento" style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Cargo</label><input name="cargo" style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Tipo contrato</label>
+      <select name="tipo_contrato" style="width:100%;padding:8px"><option>Prestación de servicios</option><option>Laboral término fijo</option><option>Laboral indefinido</option><option>Obra o labor</option></select></div>
+      <div><label style="font-size:12px;font-weight:700">Teléfono</label><input name="telefono" style="width:100%;padding:8px"></div>
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Email / notas</label>
+      <input name="email" style="width:100%;padding:8px;margin-bottom:6px"><input name="notas" style="width:100%;padding:8px"></div>
+      <div style="grid-column:1/-1"><button type="submit" style="background:#7c2d12;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Registrar trabajador</button></div>
+    </form>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px;text-align:left">Documento</th><th style="padding:8px;text-align:left">Cargo</th><th style="padding:8px;text-align:left">Contrato</th><th style="padding:8px;text-align:left">Tel</th><th style="padding:8px;text-align:left">Email</th></tr>
+        {filas}
+      </table>
+    </div>
+    """
+    return page("Trabajadores", _cont_shell("Módulo trabajadores", body))
 
 
 
