@@ -547,7 +547,7 @@ UPLOAD_DIR = os.path.join("static", "uploads", "excusas")
 LOGO_DIR = os.path.join("static", "uploads", "logos")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(LOGO_DIR, exist_ok=True)
-DEFAULT_LOGO = "/static/img/logo-edutrack.jpeg"  # marca EduTrack (no logo de colegio)
+DEFAULT_LOGO = "/static/img/logo-procsis.png"  # marca PROCSIS (staff panels y documentos internos)
 LOGO_SVG_FALLBACK = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20120%20120%27%3E%3Crect%20width%3D%27120%27%20height%3D%27120%27%20rx%3D%2724%27%20fill%3D%27%230B2D57%27/%3E%3Ctext%20x%3D%2760%27%20y%3D%2752%27%20text-anchor%3D%27middle%27%20fill%3D%27%23fff%27%20font-family%3D%27Arial%27%20font-size%3D%2714%27%20font-weight%3D%27bold%27%3EEduTrack%3C/text%3E%3Ctext%20x%3D%2760%27%20y%3D%2778%27%20text-anchor%3D%27middle%27%20fill%3D%27%2393c5fd%27%20font-family%3D%27Arial%27%20font-size%3D%2711%27%3EProcsis%3C/text%3E%3C/svg%3E"
 
 
@@ -1041,7 +1041,7 @@ class Configuracion(db.Model):
     inst_resolucion = db.Column(db.String(160), default=DEFAULT_INST_RESOLUCION)
     inst_municipio = db.Column(db.String(120), default="")
     inst_departamento = db.Column(db.String(120), default="")
-    logo_path = db.Column(db.Text, default="/static/img/logo-edutrack.png")
+    logo_path = db.Column(db.Text, default="/static/img/logo-procsis.png")
     hora_inicio_asistencia = db.Column(db.String(10), default="06:00")
     hora_fin_asistencia_docente = db.Column(db.String(10), default="07:20")
     contacto_soporte = db.Column(db.String(120), default="")
@@ -4670,26 +4670,50 @@ def nombre_producto():
 
 
 def logo_plataforma():
-    """Logo de marca EduTrack/Procsis (nunca logo de un colegio)."""
+    """Logo corporativo PROCSIS (nunca logo de colegio ni LogixWARE)."""
     try:
         p = plataforma()
-        ruta = (p.logo_path or "").strip()
+        ruta = (getattr(p, "logo_path", None) or "").strip()
     except Exception:
         ruta = ""
-    # Rutas basura del demo / colegio
-    bad = ("logo-colegio",)
+    # data URI guardado en BD (persiste en Railway)
+    if ruta.startswith("data:image"):
+        return ruta
+    bad = (
+        "logo-colegio", "logixware", "logix", "/logos/logo_1_", "/logos/logo_2_",
+        "/logos/logo_inst", "colegio",
+    )
     low = (ruta or "").lower()
     if (not ruta) or any(b in low for b in bad):
-        ruta = DEFAULT_LOGO
-    # Solo respetar logo custom de plataforma si fue subido a uploads
-    if ruta.startswith("/static/uploads") or ruta.startswith("http://") or ruta.startswith("https://"):
+        ruta = ""
+    if ruta.startswith("http://") or ruta.startswith("https://"):
+        return ruta
+    if ruta.startswith("/static/") and "logo-edutrack" not in low:
         ok = _logo_ruta_valida(ruta)
-        if ok and not str(ok).startswith("data:"):
-            return ok + ("&v=10" if "?" in str(ok) else "?v=10") if not str(ok).startswith("data:") else ok
-    ok = _logo_ruta_valida(DEFAULT_LOGO)
-    if ok and not str(ok).startswith("data:"):
-        return ok + ("&v=10" if "?" in ok else "?v=10")
-    return ok
+        if ok:
+            if str(ok).startswith("data:"):
+                return ok
+            return ok + ("&v=12" if "?" in str(ok) else "?v=12")
+    # Preferir archivos PROCSIS en static/img
+    import os as _os
+    base = _os.path.dirname(_os.path.abspath(__file__))
+    for rel in (
+        "/static/img/logo-procsis.png",
+        "/static/img/logo-procsis.jpeg",
+        "/static/img/logo-procsis.jpg",
+        "/static/img/logo_empresa.jpeg",
+        "/static/img/logo empresa.jpeg",
+        DEFAULT_LOGO,
+        "/static/img/logo-edutrack.png",
+        "/static/img/logo-edutrack.jpeg",
+    ):
+        fs = _os.path.join(base, rel.lstrip("/"))
+        if _os.path.isfile(fs) or _os.path.isfile(rel.lstrip("/")):
+            return rel + "?v=12"
+        ok = _logo_ruta_valida(rel)
+        if ok:
+            return ok if str(ok).startswith("data:") else (str(ok) + ("&v=12" if "?" in str(ok) else "?v=12"))
+    return DEFAULT_LOGO + "?v=12"
 
 
 def shell_soporte(content):
@@ -46404,14 +46428,51 @@ def contabilidad_trabajadores():
 def _cont_empresa_meta():
     try:
         p = plataforma()
+        emp = (getattr(p, "empresa", None) or "PROCSIS").strip() or "PROCSIS"
+        # En documentos internos de contabilidad solo PROCSIS (no EduTrack como emisor)
+        if emp.lower() in ("edutrack", "edu track"):
+            emp = "PROCSIS"
+        nit = (getattr(p, "nit", None) or "").strip()
         return {
-            "empresa": (getattr(p, "empresa", None) or "PROCSIS").strip(),
-            "producto": (getattr(p, "nombre_producto", None) or "EduTrack").strip(),
-            "nit": (getattr(p, "nit", None) or "").strip(),
+            "empresa": emp if emp.upper() == "PROCSIS" or "procsis" in emp.lower() else ("PROCSIS" if not emp else emp),
+            "producto": "EduTrack",
+            "nit": nit,
             "logo": logo_plataforma() if "logo_plataforma" in dir() else "",
         }
     except Exception:
         return {"empresa": "PROCSIS", "producto": "EduTrack", "nit": "", "logo": ""}
+
+
+def _cont_draw_header_pdf(c, W, H, meta, subtitulo="DOCUMENTO INTERNO"):
+    """Cabecera PDF: texto PROCSIS a la izquierda, logo a la DERECHA."""
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 64, W, 64, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, H - 28, "PROCSIS")
+    c.setFont("Helvetica", 9)
+    c.drawString(40, H - 44, subtitulo)
+    nit_txt = ("NIT %s" % meta.get("nit")) if meta.get("nit") else "Complete NIT en Gerencia → Datos de la empresa"
+    c.drawString(40, H - 56, nit_txt)
+    # Logo a la DERECHA
+    logo_src = meta.get("logo") or ""
+    try:
+        import os as _os, base64 as _b64, tempfile
+        from reportlab.lib.utils import ImageReader
+        img = None
+        if logo_src.startswith("data:image"):
+            raw = logo_src.split(",", 1)[-1]
+            img = ImageReader(BytesIO(_b64.b64decode(raw)))
+        else:
+            path = _cont_logo_path_for_pdf()
+            if path:
+                img = ImageReader(path)
+        if img:
+            c.drawImage(img, W - 100, H - 56, width=56, height=44, mask="auto", preserveAspectRatio=True, anchor="c")
+    except Exception as _le:
+        print("pdf logo:", _le)
+    c.setFillColor(colors.HexColor("#FBBF24"))
+    c.rect(0, H - 68, W, 4, fill=1, stroke=0)
 
 
 def _cont_cop(v):
@@ -46422,17 +46483,34 @@ def _cont_cop(v):
 
 
 def _cont_logo_path_for_pdf():
-    """Ruta de archivo local del logo si existe; si es data URI, None (se omite dibujo de archivo)."""
+    """Archivo local del logo PROCSIS (nunca logos de colegios ni LogixWARE)."""
     import os as _os
+    base = _os.path.dirname(_os.path.abspath(__file__))
     candidates = [
-        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static", "img", "logo-procsis.png"),
+        _os.path.join(base, "static", "img", "logo-procsis.png"),
+        _os.path.join(base, "static", "img", "logo-procsis.jpeg"),
+        _os.path.join(base, "static", "img", "logo-procsis.jpg"),
+        _os.path.join(base, "static", "img", "logo_empresa.jpeg"),
         _os.path.join("static", "img", "logo-procsis.png"),
-        _os.path.join("static", "img", "logo-edutrack.png"),
-        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static", "img", "logo-edutrack.png"),
+        _os.path.join("static", "img", "logo-procsis.jpeg"),
+        _os.path.join("static", "img", "logo_empresa.jpeg"),
     ]
     for c in candidates:
         if _os.path.isfile(c):
             return c
+    # data URI en BD → escribir temp
+    try:
+        logo = logo_plataforma()
+        if logo and str(logo).startswith("data:image"):
+            import base64 as _b64, tempfile
+            raw = logo.split(",", 1)[-1]
+            data = _b64.b64decode(raw)
+            fd, path = tempfile.mkstemp(suffix=".png")
+            _os.write(fd, data)
+            _os.close(fd)
+            return path
+    except Exception:
+        pass
     return None
 
 
@@ -46566,22 +46644,10 @@ def contabilidad_export_ops_pdf():
     logo = _cont_logo_path_for_pdf()
 
     def header(page_n):
-        c.setFillColor(colors.HexColor("#0B2D57"))
-        c.rect(0, H - 48, W, 48, fill=1, stroke=0)
-        c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(40, H - 22, "%s · %s" % (meta["empresa"], meta["producto"]))
-        c.setFont("Helvetica", 8)
-        c.drawString(40, H - 36, "DOCUMENTO INTERNO — Contabilidad comercial · No distribuir fuera de gerencia")
-        c.drawRightString(W - 40, H - 22, "Pág. %s" % page_n)
-        c.drawRightString(W - 40, H - 36, (fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""))
-        if logo:
-            try:
-                c.drawImage(logo, W - 100, H - 44, width=40, height=32, mask="auto", preserveAspectRatio=True)
-            except Exception:
-                pass
-        c.setFillColor(colors.HexColor("#FBBF24"))
-        c.rect(0, H - 52, W, 4, fill=1, stroke=0)
+        _cont_draw_header_pdf(
+            c, W, H, meta,
+            "DOCUMENTO INTERNO — Contabilidad comercial · Pág. %s · No distribuir fuera de gerencia" % page_n,
+        )
 
     y = H - 70
     page = 1
@@ -46643,22 +46709,10 @@ def contabilidad_op_pdf(oid):
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=letter)
     W, H = letter
-    c.setFillColor(colors.HexColor("#0B2D57"))
-    c.rect(0, H - 70, W, 70, fill=1, stroke=0)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(40, H - 32, "%s · %s" % (meta["empresa"], meta["producto"]))
-    c.setFont("Helvetica", 9)
-    c.drawString(40, H - 48, "DOCUMENTO INTERNO — Comprobante de operación económica")
-    c.drawString(40, H - 60, "NIT %s · Código %s" % (meta["nit"] or "—", op.codigo or ""))
-    logo = _cont_logo_path_for_pdf()
-    if logo:
-        try:
-            c.drawImage(logo, W - 90, H - 58, width=48, height=40, mask="auto", preserveAspectRatio=True)
-        except Exception:
-            pass
-    c.setFillColor(colors.HexColor("#FBBF24"))
-    c.rect(0, H - 74, W, 4, fill=1, stroke=0)
+    _cont_draw_header_pdf(
+        c, W, H, meta,
+        "DOCUMENTO INTERNO — Comprobante de operación económica · %s" % (op.codigo or ""),
+    )
     y = H - 110
     c.setFillColor(colors.HexColor("#0f172a"))
     c.setFont("Helvetica-Bold", 12)
@@ -46839,70 +46893,83 @@ def contabilidad_export_trab_excel():
 
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia.pdf")
 def contabilidad_constancia_laboral(tid):
-    """Constancia laboral / de vinculación del trabajador."""
+    """Constancia laboral / de vinculación del trabajador — diseño carta formal."""
     g = _guard_contabilidad()
     if g is not None:
         return g
     t = ContTrabajador.query.get_or_404(tid)
     meta = _cont_empresa_meta()
+    # Fecha en español
+    try:
+        from datetime import datetime as _dt
+        _now = _dt.now()
+        _meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio",
+                  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+        fecha_larga = "%d de %s de %d" % (_now.day, _meses[_now.month - 1], _now.year)
+    except Exception:
+        fecha_larga = fecha_hoy() if "fecha_hoy" in dir() else ""
+    nit = (meta.get("nit") or "").strip()
+    if not nit:
+        nit = "900.000.000-0"  # placeholder: actualizar en Gerencia → Datos de la empresa
+        nit_aviso = True
+    else:
+        nit_aviso = False
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=letter)
     W, H = letter
-    c.setFillColor(colors.HexColor("#0B2D57"))
-    c.rect(0, H - 70, W, 70, fill=1, stroke=0)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(40, H - 30, meta["empresa"])
-    c.setFont("Helvetica", 9)
-    c.drawString(40, H - 46, "%s · DOCUMENTO INTERNO" % meta["producto"])
-    c.drawString(40, H - 58, "Constancia laboral / de vinculación")
-    logo = _cont_logo_path_for_pdf()
-    if logo:
-        try:
-            c.drawImage(logo, W - 90, H - 58, width=48, height=40, mask="auto", preserveAspectRatio=True)
-        except Exception:
-            pass
-    c.setFillColor(colors.HexColor("#FBBF24"))
-    c.rect(0, H - 74, W, 4, fill=1, stroke=0)
+    _cont_draw_header_pdf(c, W, H, meta, "DOCUMENTO INTERNO · Constancia laboral / de vinculación")
+    # Contenedor angosto tipo carta (~750px ≈ 550 pt de ancho útil centrado)
+    left = 70
+    right = W - 70
+    width = right - left
     y = H - 120
     c.setFillColor(colors.HexColor("#0f172a"))
-    c.setFont("Helvetica-Bold", 13)
+    c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(W / 2, y, "CONSTANCIA LABORAL")
     y -= 36
     c.setFont("Helvetica", 11)
     texto = (
-        "La empresa %s, identificada con NIT %s, hace constar que el(la) señor(a) "
+        "La empresa PROCSIS, identificada con NIT %s, hace constar que el(la) señor(a) "
         "%s, identificado(a) con documento No. %s, se encuentra vinculado(a) en calidad de "
         "%s bajo la modalidad de contrato %s."
     ) % (
-        meta["empresa"],
-        meta["nit"] or "—",
-        t.nombre or "—",
+        nit,
+        (t.nombre or "—").upper(),
         t.documento or "—",
-        t.cargo or "colaborador(a)",
+        (t.cargo or "colaborador(a)").upper(),
         t.tipo_contrato or "prestación de servicios",
     )
-    # simple wrap
     from reportlab.lib.utils import simpleSplit
-    lines = simpleSplit(texto, "Helvetica", 11, W - 100)
+    lines = simpleSplit(texto, "Helvetica", 11, width)
     for ln in lines:
-        c.drawString(50, y, ln)
+        c.drawString(left, y, ln)
         y -= 16
-    y -= 12
-    c.drawString(50, y, "Datos de contacto registrados: %s · %s" % (t.telefono or "—", t.email or "—"))
-    y -= 28
-    c.drawString(50, y, "La presente se expide a solicitud del interesado el día %s." % (fecha_hoy() if "fecha_hoy" in dir() else ""))
-    y -= 50
-    c.drawString(50, y, "_______________________________")
+    y -= 14
+    c.drawString(left, y, "Datos de contacto registrados: %s · %s" % (t.telefono or "—", t.email or "—"))
+    y -= 20
+    c.drawString(left, y, "La presente se expide a solicitud del interesado el día %s." % fecha_larga)
+    if nit_aviso:
+        y -= 18
+        c.setFont("Helvetica-Oblique", 8)
+        c.setFillColor(colors.HexColor("#b45309"))
+        c.drawString(left, y, "Nota: configure el NIT real en Gerencia → Datos de la empresa para documentos definitivos.")
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.setFont("Helvetica", 11)
+    # Espacio amplio para firma
+    y -= 90
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(1)
+    c.line(left, y, left + 220, y)
     y -= 14
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(50, y, "Gerencia / Dirección de personal")
+    c.drawString(left, y, "Gerencia / Dirección de personal")
     y -= 12
     c.setFont("Helvetica", 9)
-    c.drawString(50, y, meta["empresa"])
+    c.drawString(left, y, "PROCSIS")
     c.setFont("Helvetica-Oblique", 7)
     c.setFillColor(colors.HexColor("#64748b"))
-    c.drawString(40, 36, "Documento interno generado por EduTrack / PROCSIS. Verificar autenticidad con gerencia.")
+    c.drawString(left, 40, "Documento interno generado por el sistema. Verificar autenticidad con gerencia PROCSIS.")
+    c.drawString(left, 28, "Fecha de generación: %s" % fecha_larga)
     c.save()
     bio.seek(0)
     try:
