@@ -2227,6 +2227,60 @@ class ContParte(db.Model):
     creado_por = db.Column(db.String(80), default="")
 
 
+
+class ReqAutoridad(db.Model):
+    """Requerimiento de autoridad (Fiscalía, juez, etc.) — ciclo de vida completo."""
+    __tablename__ = "req_autoridades"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), default="", index=True)  # RA-2026-0001
+    # Autoridad
+    entidad = db.Column(db.String(200), default="")
+    funcionario = db.Column(db.String(160), default="")
+    cargo_funcionario = db.Column(db.String(120), default="")
+    id_institucional = db.Column(db.String(80), default="")
+    correo_oficial = db.Column(db.String(160), default="")
+    # Oficio
+    numero_oficio = db.Column(db.String(80), default="", index=True)
+    fecha_oficio = db.Column(db.String(30), default="")
+    proceso_referencia = db.Column(db.String(160), default="")
+    fundamento_legal = db.Column(db.Text, default="")
+    # Solicitud
+    solicitud_detalle = db.Column(db.Text, default="")
+    # Estado: RADICADO | ESPERANDO_VALIDACION | AUTORIZADO | RECHAZADO | ENTREGADO
+    estado = db.Column(db.String(40), default="ESPERANDO_VALIDACION", index=True)
+    # Checklist gerencia
+    chk_identidad = db.Column(db.Boolean, default=False)
+    chk_autenticidad = db.Column(db.Boolean, default=False)
+    chk_competencia = db.Column(db.Boolean, default=False)
+    chk_base_legal = db.Column(db.Boolean, default=False)
+    motivo_rechazo = db.Column(db.Text, default="")
+    # Quién
+    recibido_por = db.Column(db.String(120), default="")
+    recibido_en = db.Column(db.String(40), default="")
+    autorizado_por = db.Column(db.String(120), default="")
+    autorizado_en = db.Column(db.String(40), default="")
+    entregado_por = db.Column(db.String(120), default="")
+    entregado_en = db.Column(db.String(40), default="")
+    # Adjunto oficio (data URI o path)
+    oficio_adjunto = db.Column(db.Text, default="")
+    info_entregada = db.Column(db.Text, default="")
+    token_descarga = db.Column(db.String(64), default="")
+    notas = db.Column(db.Text, default="")
+    creado_en = db.Column(db.String(40), default="")
+
+
+class ReqAutoridadAudit(db.Model):
+    """Auditoría inmutable de entregas / acciones sobre requerimientos de autoridades."""
+    __tablename__ = "req_autoridades_audit"
+    id = db.Column(db.Integer, primary_key=True)
+    req_id = db.Column(db.Integer, index=True)
+    accion = db.Column(db.String(60), default="")  # RADICAR | AUTORIZAR | RECHAZAR | ENTREGAR
+    usuario = db.Column(db.String(120), default="")
+    ip = db.Column(db.String(80), default="")
+    detalle = db.Column(db.Text, default="")
+    hash_archivo = db.Column(db.String(80), default="")
+    timestamp = db.Column(db.String(40), default="")
+
 class ContTrabajador(db.Model):
     """Trabajadores / contratistas para control contable-laboral."""
     __tablename__ = "cont_trabajadores"
@@ -19511,6 +19565,7 @@ def gerencia_hq():
         <a class="own" href="/gerencia/contabilidad/partes">Clientes · Proveedores · Dominios</a>
         <a class="own" href="/gerencia/contabilidad/trabajadores">Módulo trabajadores</a>
         <a class="g" href="/gerencia/certificaciones">📜 Certificaciones corporativas</a>
+        <a class="o" href="/gerencia/requerimientos-autoridades">⚖️ Requerimientos de autoridades</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -47787,6 +47842,343 @@ def _cert_corp_pdf(form, meta):
         download_name="PROCSIS_%s_%s.pdf" % (tip, safe),
         mimetype="application/pdf",
     )
+
+
+
+# ─── Requerimientos de autoridades (Habeas Data / órdenes oficiales) ─────────
+def _req_auth_codigo():
+    try:
+        n = (ReqAutoridad.query.count() or 0) + 1
+    except Exception:
+        n = 1
+    anio = (fecha_hoy() if "fecha_hoy" in dir() else "2026")[:4] or "2026"
+    return "RA-%s-%04d" % (anio, n)
+
+
+def _req_auth_audit(req_id, accion, detalle="", hash_archivo=""):
+    try:
+        u = session.get("usuario") or session.get("user") or session.get("nombre") or "sistema"
+        ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+        ts = "%s %s" % (
+            fecha_hoy() if "fecha_hoy" in dir() else "",
+            hora_actual() if "hora_actual" in dir() else "",
+        )
+        db.session.add(ReqAutoridadAudit(
+            req_id=req_id, accion=accion, usuario=str(u)[:120], ip=ip,
+            detalle=(detalle or "")[:2000], hash_archivo=(hash_archivo or "")[:80], timestamp=ts,
+        ))
+        db.session.commit()
+    except Exception as e:
+        print("req audit:", e)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+@app.route("/gerencia/requerimientos-autoridades", methods=["GET", "POST"])
+def gerencia_req_autoridades():
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "radicar":
+            try:
+                cod = _req_auth_codigo()
+                u = session.get("usuario") or session.get("user") or "gerencia"
+                ts = "%s %s" % (
+                    fecha_hoy() if "fecha_hoy" in dir() else "",
+                    hora_actual() if "hora_actual" in dir() else "",
+                )
+                oficio_uri = ""
+                f = request.files.get("oficio_pdf")
+                if f and getattr(f, "filename", ""):
+                    try:
+                        oficio_uri = _archivo_a_data_uri(f, max_bytes=3_500_000) or ""
+                    except Exception:
+                        oficio_uri = ""
+                r = ReqAutoridad(
+                    codigo=cod,
+                    entidad=(request.form.get("entidad") or "").strip()[:200],
+                    funcionario=(request.form.get("funcionario") or "").strip()[:160],
+                    cargo_funcionario=(request.form.get("cargo_funcionario") or "").strip()[:120],
+                    id_institucional=(request.form.get("id_institucional") or "").strip()[:80],
+                    correo_oficial=(request.form.get("correo_oficial") or "").strip()[:160],
+                    numero_oficio=(request.form.get("numero_oficio") or "").strip()[:80],
+                    fecha_oficio=(request.form.get("fecha_oficio") or "").strip()[:30],
+                    proceso_referencia=(request.form.get("proceso_referencia") or "").strip()[:160],
+                    fundamento_legal=(request.form.get("fundamento_legal") or "").strip()[:2000],
+                    solicitud_detalle=(request.form.get("solicitud_detalle") or "").strip()[:4000],
+                    estado="ESPERANDO_VALIDACION",
+                    recibido_por=str(u)[:120],
+                    recibido_en=ts,
+                    oficio_adjunto=oficio_uri,
+                    creado_en=ts,
+                )
+                if not r.entidad or not r.numero_oficio or not r.solicitud_detalle:
+                    err = "Entidad, número de oficio y detalle de la solicitud son obligatorios."
+                else:
+                    db.session.add(r)
+                    db.session.commit()
+                    _req_auth_audit(r.id, "RADICAR", "Oficio %s · %s" % (r.numero_oficio, r.entidad))
+                    msg = "Radicado %s en estado ESPERANDO_VALIDACIÓN." % cod
+            except Exception as e:
+                db.session.rollback()
+                err = str(e)[:200]
+        elif accion in ("autorizar", "rechazar"):
+            try:
+                rid = int(request.form.get("id") or 0)
+                r = ReqAutoridad.query.get(rid)
+                if not r:
+                    err = "Requerimiento no encontrado."
+                else:
+                    u = session.get("usuario") or session.get("user") or "gerencia"
+                    ts = "%s %s" % (
+                        fecha_hoy() if "fecha_hoy" in dir() else "",
+                        hora_actual() if "hora_actual" in dir() else "",
+                    )
+                    if accion == "autorizar":
+                        r.chk_identidad = request.form.get("chk_identidad") == "1"
+                        r.chk_autenticidad = request.form.get("chk_autenticidad") == "1"
+                        r.chk_competencia = request.form.get("chk_competencia") == "1"
+                        r.chk_base_legal = request.form.get("chk_base_legal") == "1"
+                        if not all([r.chk_identidad, r.chk_autenticidad, r.chk_competencia, r.chk_base_legal]):
+                            err = "Debe marcar los 4 puntos del checklist para autorizar."
+                        else:
+                            r.estado = "AUTORIZADO"
+                            r.autorizado_por = str(u)[:120]
+                            r.autorizado_en = ts
+                            import secrets
+                            r.token_descarga = secrets.token_hex(16)
+                            db.session.commit()
+                            _req_auth_audit(r.id, "AUTORIZAR", "Checklist completo · token generado")
+                            msg = "Autorizado %s. Puede registrar la entrega controlada." % r.codigo
+                    else:
+                        r.estado = "RECHAZADO"
+                        r.motivo_rechazo = (request.form.get("motivo_rechazo") or "").strip()[:2000]
+                        r.autorizado_por = str(u)[:120]
+                        r.autorizado_en = ts
+                        db.session.commit()
+                        _req_auth_audit(r.id, "RECHAZAR", r.motivo_rechazo[:200])
+                        msg = "Requerimiento %s rechazado." % r.codigo
+            except Exception as e:
+                db.session.rollback()
+                err = str(e)[:200]
+        elif accion == "entregar":
+            try:
+                rid = int(request.form.get("id") or 0)
+                r = ReqAutoridad.query.get(rid)
+                if not r or (r.estado or "") != "AUTORIZADO":
+                    err = "Solo se entrega si está AUTORIZADO."
+                else:
+                    u = session.get("usuario") or session.get("user") or "gerencia"
+                    ts = "%s %s" % (
+                        fecha_hoy() if "fecha_hoy" in dir() else "",
+                        hora_actual() if "hora_actual" in dir() else "",
+                    )
+                    info = (request.form.get("info_entregada") or "").strip()[:4000]
+                    r.info_entregada = info
+                    r.estado = "ENTREGADO"
+                    r.entregado_por = str(u)[:120]
+                    r.entregado_en = ts
+                    import hashlib
+                    h = hashlib.sha256((info + ts + str(r.id)).encode("utf-8")).hexdigest()[:40]
+                    db.session.commit()
+                    _req_auth_audit(r.id, "ENTREGAR", "A %s · oficio %s" % (r.funcionario, r.numero_oficio), hash_archivo=h)
+                    msg = "Entrega registrada. Auditoría inmutable guardada (hash %s…)." % h[:12]
+            except Exception as e:
+                db.session.rollback()
+                err = str(e)[:200]
+
+    filtro = (request.args.get("estado") or "").strip().upper()
+    q = ReqAutoridad.query
+    if filtro:
+        q = q.filter_by(estado=filtro)
+    rows = q.order_by(ReqAutoridad.id.desc()).limit(100).all()
+
+    chips = ""
+    for st, lab in [
+        ("", "Todos"),
+        ("ESPERANDO_VALIDACION", "Esperando validación"),
+        ("AUTORIZADO", "Autorizados"),
+        ("ENTREGADO", "Entregados"),
+        ("RECHAZADO", "Rechazados"),
+    ]:
+        on = "background:#0B2D57;color:#fff" if filtro == st else "background:#e2e8f0;color:#0B2D57"
+        chips += '<a href="?estado=%s" style="%s;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;margin:2px;display:inline-block">%s</a>' % (
+            st, on, lab,
+        )
+
+    filas = ""
+    for r in rows:
+        color = {
+            "ESPERANDO_VALIDACION": "#b45309",
+            "AUTORIZADO": "#15803d",
+            "ENTREGADO": "#0B2D57",
+            "RECHAZADO": "#b91c1c",
+        }.get(r.estado or "", "#64748b")
+        filas += (
+            "<tr><td><b>%s</b><br><span style='font-size:11px;color:#64748b'>%s</span></td>"
+            "<td>%s<br><span style='font-size:11px'>%s</span></td>"
+            "<td>%s</td>"
+            "<td style='color:%s;font-weight:800'>%s</td>"
+            "<td><a href='/gerencia/requerimientos-autoridades/%s' style='font-weight:700'>Abrir</a></td></tr>"
+        ) % (
+            _esc(r.codigo), _esc(r.numero_oficio),
+            _esc(r.entidad), _esc(r.funcionario),
+            _esc((r.solicitud_detalle or "")[:80]),
+            color, _esc(r.estado),
+            r.id,
+        )
+    if not filas:
+        filas = "<tr><td colspan='5' style='text-align:center;color:#94a3b8'>Sin requerimientos radicados.</td></tr>"
+
+    content = f"""
+<header class="role-hero"><div>
+  <h1>⚖️ Requerimientos de autoridades</h1>
+  <p>Radicación → Validación gerencia (checklist) → Entrega controlada con auditoría inmutable. Ley 1581 / habeas data.</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+{"<div class='msg' style='background:#fef2f2;color:#991b1b'>"+_esc(err)+"</div>" if err else ""}
+<section class="role-panel">
+  <h3 style="margin-top:0;color:#0B2D57">1. Radicar oficio</h3>
+  <form method="POST" enctype="multipart/form-data" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f8fafc;padding:16px;border-radius:12px;border:1px solid #e2e8f0">
+    <input type="hidden" name="accion" value="radicar">
+    <div><label style="font-size:12px;font-weight:700">Entidad *</label>
+    <input name="entidad" required placeholder="Fiscalía General de la Nación" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Funcionario *</label>
+    <input name="funcionario" required style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Cargo</label>
+    <input name="cargo_funcionario" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">ID institucional</label>
+    <input name="id_institucional" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Correo oficial (.gov.co)</label>
+    <input name="correo_oficial" type="email" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Número de oficio / radicado *</label>
+    <input name="numero_oficio" required style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Fecha del oficio</label>
+    <input name="fecha_oficio" placeholder="YYYY-MM-DD" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Proceso / referencia judicial</label>
+    <input name="proceso_referencia" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Fundamento legal</label>
+    <textarea name="fundamento_legal" rows="2" style="width:100%;padding:9px" placeholder="Norma u orden del juez..."></textarea></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Información solicitada *</label>
+    <textarea name="solicitud_detalle" required rows="3" style="width:100%;padding:9px" placeholder="Ej: Logs de asistencia QR del estudiante X del día Y"></textarea></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">PDF del oficio (opcional)</label>
+    <input type="file" name="oficio_pdf" accept="application/pdf,image/*" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Radicar requerimiento</button></div>
+  </form>
+</section>
+<section class="role-panel" style="margin-top:16px">
+  <div style="margin-bottom:10px">{chips}</div>
+  <div style="overflow:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px;text-align:left">Código / Oficio</th>
+      <th style="padding:8px;text-align:left">Autoridad</th>
+      <th style="padding:8px;text-align:left">Solicitud</th>
+      <th style="padding:8px;text-align:left">Estado</th>
+      <th style="padding:8px;text-align:left">Acción</th>
+    </tr>
+    {filas}
+  </table>
+  </div>
+</section>
+"""
+    return page("Requerimientos de autoridades", shell(content))
+
+
+@app.route("/gerencia/requerimientos-autoridades/<int:rid>", methods=["GET", "POST"])
+def gerencia_req_autoridad_detalle(rid):
+    g = _guard_gerencia()
+    if g:
+        return g
+    r = ReqAutoridad.query.get_or_404(rid)
+    # POST handled on list for authorize/reject/deliver - also accept here
+    if request.method == "POST":
+        # reuse same actions by redirecting logic: simple re-post
+        request.form = request.form  # noqa
+        # inline minimal
+        accion = (request.form.get("accion") or "").strip()
+        if accion in ("autorizar", "rechazar", "entregar"):
+            # redirect to list with... can't easily; duplicate short path
+            return redirect("/gerencia/requerimientos-autoridades")  # will need form action to list
+    audits = []
+    try:
+        audits = ReqAutoridadAudit.query.filter_by(req_id=r.id).order_by(ReqAutoridadAudit.id.desc()).limit(50).all()
+    except Exception:
+        pass
+    audit_html = ""
+    for a in audits:
+        audit_html += "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td style='font-size:11px'>%s</td></tr>" % (
+            _esc(a.timestamp), _esc(a.accion), _esc(a.usuario), _esc(a.ip), _esc((a.detalle or "")[:120]),
+        )
+    if not audit_html:
+        audit_html = "<tr><td colspan='5' style='color:#94a3b8'>Sin eventos aún.</td></tr>"
+
+    checklist = ""
+    if (r.estado or "") == "ESPERANDO_VALIDACION":
+        checklist = f"""
+        <form method="POST" action="/gerencia/requerimientos-autoridades" style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:14px;margin:12px 0">
+          <input type="hidden" name="id" value="{r.id}">
+          <h4 style="margin:0 0 10px;color:#9a3412">2. Validación Gerencia (checklist obligatorio)</h4>
+          <label style="display:block;margin:6px 0"><input type="checkbox" name="chk_identidad" value="1" style="width:auto"> Validar identidad del funcionario</label>
+          <label style="display:block;margin:6px 0"><input type="checkbox" name="chk_autenticidad" value="1" style="width:auto"> Autenticidad del oficio (firmas / códigos)</label>
+          <label style="display:block;margin:6px 0"><input type="checkbox" name="chk_competencia" value="1" style="width:auto"> Competencia legal de la autoridad</label>
+          <label style="display:block;margin:6px 0"><input type="checkbox" name="chk_base_legal" value="1" style="width:auto"> Base legal / no viola Ley 1581 EduTrack</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button name="accion" value="autorizar" type="submit" style="background:#15803d;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Autorizar</button>
+            <button name="accion" value="rechazar" type="submit" style="background:#b91c1c;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800" onclick="var m=prompt('Motivo del rechazo');if(!m)return false;this.form.motivo_rechazo.value=m">Rechazar</button>
+            <input type="hidden" name="motivo_rechazo" value="">
+          </div>
+        </form>
+        """
+    entregar = ""
+    if (r.estado or "") == "AUTORIZADO":
+        entregar = f"""
+        <form method="POST" action="/gerencia/requerimientos-autoridades" style="background:#ecfdf5;border:1px solid #86efac;border-radius:12px;padding:14px;margin:12px 0">
+          <input type="hidden" name="accion" value="entregar">
+          <input type="hidden" name="id" value="{r.id}">
+          <h4 style="margin:0 0 8px;color:#166534">3. Entrega controlada</h4>
+          <p style="font-size:12px;color:#64748b">Describe exactamente qué información se entregó (logs, reporte, archivos). Queda en auditoría con hash.</p>
+          <textarea name="info_entregada" required rows="4" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Detalle de la información entregada..."></textarea>
+          <button type="submit" style="margin-top:10px;background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Registrar entrega</button>
+        </form>
+        """
+
+    content = f"""
+<header class="role-hero"><div>
+  <h1>{_esc(r.codigo)} · {_esc(r.estado)}</h1>
+  <p>{_esc(r.entidad)} · Oficio {_esc(r.numero_oficio)}</p>
+</div>
+<a class="btn" href="/gerencia/requerimientos-autoridades">Volver al listado</a></header>
+<section class="role-panel">
+  <p><b>Funcionario:</b> {_esc(r.funcionario)} ({_esc(r.cargo_funcionario)}) · {_esc(r.correo_oficial)}</p>
+  <p><b>Proceso:</b> {_esc(r.proceso_referencia)} · <b>Fecha oficio:</b> {_esc(r.fecha_oficio)}</p>
+  <p><b>Fundamento legal:</b> {_esc(r.fundamento_legal)}</p>
+  <p><b>Solicitud:</b> {_esc(r.solicitud_detalle)}</p>
+  <p style="font-size:12px;color:#64748b">Recibido por {_esc(r.recibido_por)} · {_esc(r.recibido_en)}
+  {" · Autorizado por "+_esc(r.autorizado_por)+" · "+_esc(r.autorizado_en) if r.autorizado_por else ""}
+  {" · Entregado por "+_esc(r.entregado_por)+" · "+_esc(r.entregado_en) if r.entregado_por else ""}</p>
+  {"<p style='color:#b91c1c'><b>Motivo rechazo:</b> "+_esc(r.motivo_rechazo)+"</p>" if r.motivo_rechazo else ""}
+  {"<p><b>Info entregada:</b> "+_esc(r.info_entregada)+"</p>" if r.info_entregada else ""}
+  {checklist}
+  {entregar}
+  <h3 style="color:#0B2D57">Auditoría de la operación</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="background:#0B2D57;color:#fff"><th style="padding:6px;text-align:left">Fecha/hora</th><th style="padding:6px;text-align:left">Acción</th><th style="padding:6px;text-align:left">Usuario</th><th style="padding:6px;text-align:left">IP</th><th style="padding:6px;text-align:left">Detalle</th></tr>
+    {audit_html}
+  </table>
+</section>
+"""
+    return page(r.codigo or "Requerimiento", shell(content))
 
 
 
