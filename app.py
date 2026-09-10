@@ -47241,6 +47241,7 @@ def contabilidad_constancia_laboral(tid):
 
 
 def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
+    """Carta formal de certificación de empleo actual — diseño corporativo PROCSIS."""
     try:
         from datetime import datetime as _dt
         _now = _dt.now()
@@ -47249,79 +47250,209 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
         fecha_larga = "%d de %s de %d" % (_now.day, _meses[_now.month - 1], _now.year)
     except Exception:
         fecha_larga = fecha_hoy() if "fecha_hoy" in dir() else ""
+
     nit = (meta.get("nit") or "").strip() or "—"
+    emp = "PROCSIS"
+    ciudad = ""
+    direccion_emp = ""
+    tel_emp = ""
+    email_emp = ""
+    rep = ""
+    try:
+        p = plataforma()
+        ciudad = (getattr(p, "ciudad", None) or "").strip() or "Colombia"
+        direccion_emp = (getattr(p, "direccion", None) or "").strip()
+        tel_emp = (getattr(p, "telefono_soporte", None) or "").strip()
+        email_emp = (getattr(p, "email_soporte", None) or "").strip()
+        rep = (getattr(p, "representante_legal", None) or "").strip() or "Gerencia / Dirección de personal"
+        if (getattr(p, "empresa", None) or "").strip():
+            emp_name = (p.empresa or "").strip()
+            if "procsis" in emp_name.lower() or emp_name.upper() == "PROCSIS":
+                emp = "PROCSIS"
+            else:
+                emp = emp_name
+    except Exception:
+        ciudad = "Colombia"
+
+    nombre = (t.nombre or "—").strip()
+    doc = (t.documento or "—").strip()
     cargo = (t.cargo or "colaborador(a)").strip()
-    objeto = (getattr(t, "objeto_funciones", None) or "").strip()
+    tipo_c = (t.tipo_contrato or "prestación de servicios").strip()
     desde = (getattr(t, "fecha_inicio", None) or "").strip() or "la fecha de su vinculación"
+    objeto = (getattr(t, "objeto_funciones", None) or "").strip()
+    honorarios = (getattr(t, "honorarios", None) or "").strip()
+    tel_t = (t.telefono or "").strip()
+    email_t = (t.email or "").strip()
+    dir_t = (getattr(t, "direccion", None) or "").strip()
+
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=letter)
     W, H = letter
-    _cont_draw_header_pdf(c, W, H, meta, "DOCUMENTO INTERNO · Constancia laboral")
-    left, right = 70, W - 70
+    from reportlab.lib.utils import simpleSplit, ImageReader
+    import base64 as _b64
+
+    # === Membrete corporativo (logo izq + PROCSIS) ===
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 78, W, 78, fill=1, stroke=0)
+    x_text = 48
+    try:
+        img = None
+        logo_src = meta.get("logo") or ""
+        if logo_src.startswith("data:image"):
+            img = ImageReader(BytesIO(_b64.b64decode(logo_src.split(",", 1)[-1])))
+        else:
+            path_l = _cont_logo_path_for_pdf()
+            if path_l:
+                img = ImageReader(path_l)
+        if img:
+            c.setFillColor(colors.white)
+            c.roundRect(36, H - 68, 50, 46, 6, fill=1, stroke=0)
+            c.drawImage(img, 39, H - 65, width=44, height=40, mask="auto", preserveAspectRatio=True, anchor="c")
+            x_text = 98
+    except Exception as _e:
+        print("logo constancia:", _e)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(x_text, H - 32, emp)
+    c.setFont("Helvetica", 8)
+    linea_dir = " · ".join([x for x in [direccion_emp, ciudad, ("NIT %s" % nit if nit != "—" else "")] if x])
+    if linea_dir:
+        c.drawString(x_text, H - 48, linea_dir[:95])
+    c.drawString(x_text, H - 60, "DOCUMENTO INTERNO · Certificación de empleo actual")
+    c.setFillColor(colors.HexColor("#C4A035"))
+    c.rect(0, H - 82, W, 4, fill=1, stroke=0)
+
+    # Márgenes carta formal (~750px de lectura)
+    left, right = 72, W - 72
     width = right - left
-    y = H - 120
+    y = H - 110
+
+    # Fecha (derecha, estilo carta)
     c.setFillColor(colors.HexColor("#0f172a"))
-    c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(W / 2, y, "CONSTANCIA LABORAL")
-    y -= 32
-    from reportlab.lib.utils import simpleSplit
     c.setFont("Helvetica", 11)
-    cuerpo = (
-        "La empresa PROCSIS, identificada con NIT %s, hace constar que el(la) señor(a) %s, "
-        "identificado(a) con documento de identidad No. %s, se encuentra vinculado(a) a esta organización "
-        "en calidad de %s, bajo la modalidad de contrato %s, desde el día %s"
-    ) % (
-        nit,
-        (t.nombre or "—").upper(),
-        t.documento or "—",
-        cargo,
-        (t.tipo_contrato or "prestación de servicios"),
-        desde,
-    )
+    c.drawRightString(right, y, "%s, %s" % (ciudad or "Colombia", fecha_larga))
+    y -= 28
+
+    # Destinatario genérico
+    c.setFont("Helvetica", 11)
+    c.drawString(left, y, "A quien interese / Entidad solicitante:")
+    y -= 24
+
+    # Asunto
+    c.setFont("Helvetica-Bold", 11)
+    asunto = "Asunto: Certificación de empleo actual de %s" % nombre
+    for ln in simpleSplit(asunto, "Helvetica-Bold", 11, width):
+        c.drawString(left, y, ln)
+        y -= 14
+    y -= 12
+
+    # Saludo
+    c.setFont("Helvetica", 11)
+    c.drawString(left, y, "Estimado(a) señor(a):")
+    y -= 18
+
+    # Cuerpo principal (unificado, justificado por líneas)
+    cuerpo1 = (
+        "El propósito de esta carta es confirmar que %s, identificado(a) con documento de identidad "
+        "No. %s, es colaborador(a) actual de %s desde %s y ocupa activamente el cargo de %s, "
+        "bajo la modalidad de contrato %s."
+    ) % (nombre, doc, emp, desde, cargo, tipo_c)
     if objeto:
-        cuerpo += ", ejecutando funciones orientadas a: %s" % objeto
-    cuerpo += ". La presente se expide a solicitud del interesado el día %s." % fecha_larga
-    if incluir_honorarios and (getattr(t, "honorarios", None) or "").strip():
-        cuerpo += " La asignación económica / honorarios acordados corresponden a %s." % t.honorarios.strip()
-    for ln in simpleSplit(cuerpo, "Helvetica", 11, width):
+        cuerpo1 += " En el ejercicio de sus funciones se desempeña en: %s." % objeto
+    cuerpo1 += (
+        " La empresa tiene autorización para divulgar la siguiente información a fin de satisfacer "
+        "los requisitos de la solicitud de constancia laboral:"
+    )
+    for ln in simpleSplit(cuerpo1, "Helvetica", 11, width):
         c.drawString(left, y, ln)
         y -= 15
-        if y < 160:
-            break
-    # Firma con espacio amplio
-    y = min(y - 70, 280)
-    c.setStrokeColor(colors.black)
-    c.setLineWidth(1)
-    c.line(left, y, left + 220, y)
+        if y < 120:
+            c.showPage()
+            y = H - 60
+    y -= 8
+
+    # Viñetas de información
+    bullets = []
+    if incluir_honorarios and honorarios:
+        bullets.append(
+            "Asignación económica / honorarios: %s, pagaderos según lo pactado en el contrato de vinculación." % honorarios
+        )
+    bullets.append("Tipo de vinculación: %s." % tipo_c)
+    bullets.append("Cargo actual: %s." % cargo)
+    bullets.append("Fecha de inicio de vinculación: %s." % desde)
+    if objeto:
+        bullets.append("Objeto de las funciones: %s." % objeto)
+    bullets.append(
+        "La presente constancia se expide el %s a solicitud del interesado(a), sin perjuicio de las obligaciones "
+        "legales vigentes en Colombia." % fecha_larga
+    )
+
+    c.setFont("Helvetica", 11)
+    for b in bullets:
+        # bullet
+        c.drawString(left + 8, y, "•")
+        for i, ln in enumerate(simpleSplit(b, "Helvetica", 11, width - 28)):
+            c.drawString(left + 22, y, ln)
+            y -= 15
+            if y < 120:
+                c.showPage()
+                y = H - 60
+        y -= 4
+
+    y -= 8
+    c.setFont("Helvetica", 11)
+    contacto_emp = "Si tiene alguna otra pregunta o inquietud, comuníquese con nosotros por el siguiente medio: %s%s." % (
+        ("tel. %s" % tel_emp) if tel_emp else "gerencia PROCSIS",
+        (" · %s" % email_emp) if email_emp else "",
+    )
+    for ln in simpleSplit(contacto_emp, "Helvetica", 11, width):
+        c.drawString(left, y, ln)
+        y -= 15
+
+    y -= 20
+    c.drawString(left, y, "Atentamente,")
+    y -= 50
+    c.setStrokeColor(colors.HexColor("#0f172a"))
+    c.setLineWidth(0.9)
+    c.line(left, y, left + 200, y)
     y -= 14
-    c.setFont("Helvetica-Bold", 10)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(left, y, rep)
+    y -= 13
+    c.setFont("Helvetica", 10)
     c.drawString(left, y, "Gerencia / Dirección de personal")
     y -= 12
-    c.setFont("Helvetica", 9)
-    c.drawString(left, y, "PROCSIS")
-    # Contactos al pie (sutiles)
-    y = 70
-    c.setStrokeColor(colors.HexColor("#e2e8f0"))
-    c.line(left, y + 16, right, y + 16)
-    c.setFont("Helvetica", 8)
-    c.setFillColor(colors.HexColor("#64748b"))
-    contact = "Correspondencia del trabajador: Tel. %s · %s · %s" % (
-        t.telefono or "—", t.email or "—", getattr(t, "direccion", None) or "—",
+    c.drawString(left, y, emp)
+    if nit and nit != "—":
+        y -= 12
+        c.setFont("Helvetica", 9)
+        c.setFillColor(colors.HexColor("#475569"))
+        c.drawString(left, y, "NIT %s" % nit)
+
+    # Pie sutil: datos del trabajador (no en medio del texto legal)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.setFont("Helvetica", 7.5)
+    pie = "Datos de contacto del colaborador (uso interno): %s · %s · %s" % (
+        tel_t or "—", email_t or "—", dir_t or "—",
     )
-    for ln in simpleSplit(contact, "Helvetica", 8, width):
-        c.drawString(left, y, ln)
-        y -= 11
-    c.drawString(left, 36, "Documento interno PROCSIS · Generado el %s · Verificar con gerencia" % fecha_larga)
+    for ln in simpleSplit(pie, "Helvetica", 7.5, width):
+        c.drawString(left, 36, ln)
+        break
+    c.drawString(left, 24, "Documento interno PROCSIS · No constituye certificado tributario DIAN por sí solo.")
+
     c.save()
     bio.seek(0)
     try:
         registrar_auditoria("Constancia laboral PDF", "trab=%s" % t.id)
     except Exception:
         pass
-    safe = "".join(ch if ch.isalnum() else "_" for ch in (t.nombre or "trabajador"))[:40]
-    return send_file(bio, as_attachment=True,
-                     download_name="PROCSIS_Constancia_Laboral_%s.pdf" % safe,
-                     mimetype="application/pdf")
+    safe = "".join(ch if ch.isalnum() else "_" for ch in (nombre or "trabajador"))[:40]
+    return send_file(
+        bio,
+        as_attachment=True,
+        download_name="PROCSIS_Certificacion_Empleo_%s.pdf" % safe,
+        mimetype="application/pdf",
+    )
 
 
 
