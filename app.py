@@ -3766,6 +3766,10 @@ def inicializar_bd():
                     "ALTER TABLE plataforma ALTER COLUMN anuncio_img1 TYPE TEXT",
                     "ALTER TABLE plataforma ALTER COLUMN anuncio_img2 TYPE TEXT",
                     "ALTER TABLE plataforma ALTER COLUMN corp_hero_fondo TYPE TEXT",
+                    "ALTER TABLE cont_trabajadores ADD COLUMN IF NOT EXISTS objeto_funciones TEXT DEFAULT ''",
+                    "ALTER TABLE cont_trabajadores ADD COLUMN IF NOT EXISTS fecha_inicio VARCHAR(40) DEFAULT ''",
+                    "ALTER TABLE cont_trabajadores ADD COLUMN IF NOT EXISTS honorarios VARCHAR(80) DEFAULT ''",
+                    "ALTER TABLE cont_trabajadores ADD COLUMN IF NOT EXISTS direccion VARCHAR(255) DEFAULT ''",
                     "ALTER TABLE plataforma ALTER COLUMN logo_path TYPE TEXT",
                     "ALTER TABLE productos_procsis ALTER COLUMN imagen TYPE TEXT",
                     "ALTER TABLE noticias_procsis ALTER COLUMN imagen TYPE TEXT",
@@ -46419,24 +46423,28 @@ def contabilidad_trabajadores():
         t = ContTrabajador(
             nombre=(request.form.get("nombre") or "").strip()[:160],
             documento=(request.form.get("documento") or "").strip()[:40],
-            cargo=(request.form.get("cargo") or "").strip()[:100],
+            cargo=(request.form.get("cargo") or "").strip()[:120],
             tipo_contrato=(request.form.get("tipo_contrato") or "").strip()[:60],
             email=(request.form.get("email") or "").strip()[:120],
             telefono=(request.form.get("telefono") or "").strip()[:40],
+            direccion=(request.form.get("direccion") or "").strip()[:255],
+            objeto_funciones=(request.form.get("objeto_funciones") or "").strip()[:2000],
+            fecha_inicio=(request.form.get("fecha_inicio") or "").strip()[:40],
+            honorarios=(request.form.get("honorarios") or "").strip()[:80],
             notas=(request.form.get("notas") or "").strip()[:1000],
             creado_en=fecha_hoy() if "fecha_hoy" in dir() else "",
         )
         if t.nombre:
             db.session.add(t)
             db.session.commit()
-            msg = "Trabajador registrado."
+            msg = "Trabajador registrado. Ya puede generar la constancia laboral."
     filas = ""
     for t in ContTrabajador.query.order_by(ContTrabajador.id.desc()).limit(200).all():
         filas += (
             "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
-            "<td><a href='/gerencia/contabilidad/trabajador/%s/constancia.pdf' "
+            "<td><a href='/gerencia/contabilidad/trabajador/%s/constancia' "
             "style='background:#0B2D57;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none'>"
-            "Constancia laboral PDF</a></td></tr>"
+            "Constancia laboral</a></td></tr>"
         ) % (
             _esc(t.nombre), _esc(t.documento), _esc(t.cargo), _esc(t.tipo_contrato),
             _esc(t.telefono), _esc(t.email), t.id,
@@ -46450,14 +46458,23 @@ def contabilidad_trabajadores():
     </div>
     <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Nombre completo *</label>
-      <input name="nombre" required style="width:100%;padding:8px"></div>
-      <div><label style="font-size:12px;font-weight:700">Documento</label><input name="documento" style="width:100%;padding:8px"></div>
-      <div><label style="font-size:12px;font-weight:700">Cargo</label><input name="cargo" style="width:100%;padding:8px"></div>
+      <input name="nombre" required style="width:100%;padding:8px" placeholder="Como aparecerá en la constancia"></div>
+      <div><label style="font-size:12px;font-weight:700">Documento (CC) *</label><input name="documento" required style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Cargo exacto *</label>
+      <input name="cargo" required placeholder="Ej: Desarrollador Full Stack, Asesor Comercial..." style="width:100%;padding:8px"></div>
       <div><label style="font-size:12px;font-weight:700">Tipo contrato</label>
       <select name="tipo_contrato" style="width:100%;padding:8px"><option>Prestación de servicios</option><option>Laboral término fijo</option><option>Laboral indefinido</option><option>Obra o labor</option></select></div>
+      <div><label style="font-size:12px;font-weight:700">Fecha inicio vinculación *</label>
+      <input name="fecha_inicio" required placeholder="Ej: 15 de enero de 2026" style="width:100%;padding:8px"></div>
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Objeto de sus funciones *</label>
+      <textarea name="objeto_funciones" required rows="2" placeholder="Ej: mantenimiento de servidores en Railway y desarrollo del núcleo de EduTrack" style="width:100%;padding:8px"></textarea></div>
+      <div><label style="font-size:12px;font-weight:700">Honorarios / salario (opcional)</label>
+      <input name="honorarios" placeholder="Ej: $ 2.500.000 mensuales" style="width:100%;padding:8px"></div>
       <div><label style="font-size:12px;font-weight:700">Teléfono</label><input name="telefono" style="width:100%;padding:8px"></div>
-      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Email / notas</label>
-      <input name="email" style="width:100%;padding:8px;margin-bottom:6px"><input name="notas" style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Email</label><input name="email" style="width:100%;padding:8px"></div>
+      <div><label style="font-size:12px;font-weight:700">Dirección / residencia</label><input name="direccion" style="width:100%;padding:8px"></div>
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Notas internas</label>
+      <input name="notas" style="width:100%;padding:8px"></div>
       <div style="grid-column:1/-1"><button type="submit" style="background:#7c2d12;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Registrar trabajador</button></div>
     </form>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
@@ -46490,35 +46507,49 @@ def _cont_empresa_meta():
 
 
 def _cont_draw_header_pdf(c, W, H, meta, subtitulo="DOCUMENTO INTERNO"):
-    """Cabecera PDF: texto PROCSIS a la izquierda, logo a la DERECHA."""
+    """Cabecera corporativa: logo + PROCSIS a la IZQUIERDA; datos a la derecha del bloque."""
     c.setFillColor(colors.HexColor("#0B2D57"))
-    c.rect(0, H - 64, W, 64, fill=1, stroke=0)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, H - 28, "PROCSIS")
-    c.setFont("Helvetica", 9)
-    c.drawString(40, H - 44, subtitulo)
-    nit_txt = ("NIT %s" % meta.get("nit")) if meta.get("nit") else "Complete NIT en Gerencia → Datos de la empresa"
-    c.drawString(40, H - 56, nit_txt)
-    # Logo a la DERECHA
+    c.rect(0, H - 72, W, 72, fill=1, stroke=0)
+    x_text = 40
     logo_src = meta.get("logo") or ""
     try:
-        import os as _os, base64 as _b64, tempfile
+        import base64 as _b64
         from reportlab.lib.utils import ImageReader
         img = None
         if logo_src.startswith("data:image"):
             raw = logo_src.split(",", 1)[-1]
             img = ImageReader(BytesIO(_b64.b64decode(raw)))
         else:
-            path = _cont_logo_path_for_pdf()
-            if path:
-                img = ImageReader(path)
+            path_l = _cont_logo_path_for_pdf()
+            if path_l:
+                img = ImageReader(path_l)
         if img:
-            c.drawImage(img, W - 100, H - 56, width=56, height=44, mask="auto", preserveAspectRatio=True, anchor="c")
+            # Logo a la IZQUIERDA, junto al nombre PROCSIS
+            c.setFillColor(colors.white)
+            c.roundRect(28, H - 64, 52, 48, 6, fill=1, stroke=0)
+            c.drawImage(img, 32, H - 60, width=44, height=40, mask="auto", preserveAspectRatio=True, anchor="c")
+            x_text = 92
     except Exception as _le:
         print("pdf logo:", _le)
-    c.setFillColor(colors.HexColor("#FBBF24"))
-    c.rect(0, H - 68, W, 4, fill=1, stroke=0)
+        x_text = 40
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(x_text, H - 30, "PROCSIS")
+    c.setFont("Helvetica", 8)
+    # Subtítulo en dos líneas si es largo
+    from reportlab.lib.utils import simpleSplit
+    max_w = W - x_text - 50
+    lines = simpleSplit(str(subtitulo or "DOCUMENTO INTERNO"), "Helvetica", 8, max_w)
+    yy = H - 44
+    for ln in lines[:2]:
+        c.drawString(x_text, yy, ln)
+        yy -= 11
+    nit = (meta.get("nit") or "").strip()
+    c.setFont("Helvetica", 8)
+    if nit:
+        c.drawString(x_text, min(yy, H - 64), "NIT %s" % nit)
+    c.setFillColor(colors.HexColor("#C4A035"))
+    c.rect(0, H - 76, W, 4, fill=1, stroke=0)
 
 
 def _cont_cop(v):
@@ -46760,16 +46791,22 @@ def contabilidad_op_pdf(oid):
         "DOCUMENTO INTERNO — Comprobante de operación económica · %s" % (op.codigo or ""),
     )
     y = H - 110
+    left, label_w, content_x = 48, 130, 178
+    content_w = W - content_x - 48
     c.setFillColor(colors.HexColor("#0f172a"))
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Comprobante %s · %s" % (op.codigo or "", op.tipo or ""))
-    y -= 24
-    c.setFont("Helvetica", 10)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(left, y, "Comprobante %s · %s" % (op.codigo or "", op.tipo or ""))
+    y -= 8
+    c.setStrokeColor(colors.HexColor("#e2e8f0"))
+    c.setLineWidth(0.8)
+    c.line(left, y, W - 48, y)
+    y -= 20
+    from reportlab.lib.utils import simpleSplit
     rows = [
         ("Fecha / hora", "%s %s" % (op.fecha or "", op.hora or "")),
         ("Quién / a quién", op.parte_nombre or "—"),
         ("Producto / servicio", op.producto or "—"),
-        ("Descripción", (op.descripcion or "—")[:300]),
+        ("Descripción", op.descripcion or "—"),
         ("Cantidad", str(op.cantidad)),
         ("Valor unitario", _cont_cop(op.valor_unitario)),
         ("Valor total", _cont_cop(op.valor_total)),
@@ -46781,19 +46818,32 @@ def contabilidad_op_pdf(oid):
         ("Solicitó", op.solicitado_por or "—"),
         ("Registró", "%s · IP %s" % (op.registrado_por or "", op.ip or "")),
         ("Institución", op.institucion_nombre or "—"),
-        ("Evidencia", (op.evidencia or "—")[:250]),
+        ("Evidencia", op.evidencia or "—"),
     ]
     for lab, val in rows:
-        c.setFont("Helvetica-Bold", 9)
-        c.setFillColor(colors.HexColor("#64748b"))
-        c.drawString(40, y, lab)
-        c.setFont("Helvetica", 10)
-        c.setFillColor(colors.HexColor("#0f172a"))
-        c.drawString(180, y, str(val)[:90])
-        y -= 16
-        if y < 80:
+        if y < 70:
             c.showPage()
-            y = H - 50
+            _cont_draw_header_pdf(c, W, H, meta, "DOCUMENTO INTERNO — Continuación · %s" % (op.codigo or ""))
+            y = H - 100
+        c.setFont("Helvetica-Bold", 8)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawString(left, y, lab)
+        c.setFont("Helvetica", 9)
+        c.setFillColor(colors.HexColor("#0f172a"))
+        lines = simpleSplit(str(val or "—"), "Helvetica", 9, content_w)
+        if not lines:
+            lines = ["—"]
+        for i, ln in enumerate(lines):
+            c.drawString(content_x, y, ln)
+            if i < len(lines) - 1:
+                y -= 12
+                if y < 70:
+                    c.showPage()
+                    _cont_draw_header_pdf(c, W, H, meta, "DOCUMENTO INTERNO — Continuación · %s" % (op.codigo or ""))
+                    y = H - 100
+                    c.setFont("Helvetica", 9)
+                    c.setFillColor(colors.HexColor("#0f172a"))
+        y -= 15
     c.setFont("Helvetica-Oblique", 8)
     c.setFillColor(colors.HexColor("#64748b"))
     c.drawString(40, 40, "Documento interno. Respaldado en el sistema EduTrack / PROCSIS. No tiene validez tributaria DIAN por sí solo.")
@@ -46937,15 +46987,74 @@ def contabilidad_export_trab_excel():
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
-@app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia.pdf")
+@app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia", methods=["GET", "POST"])
+@app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia.pdf", methods=["GET", "POST"])
 def contabilidad_constancia_laboral(tid):
-    """Constancia laboral / de vinculación del trabajador — diseño carta formal."""
+    """Formulario previo + PDF constancia laboral corporativa."""
     g = _guard_contabilidad()
     if g is not None:
         return g
     t = ContTrabajador.query.get_or_404(tid)
     meta = _cont_empresa_meta()
-    # Fecha en español
+    # Actualizar datos desde formulario antes de PDF
+    if request.method == "POST":
+        t.cargo = (request.form.get("cargo") or t.cargo or "").strip()[:120]
+        t.objeto_funciones = (request.form.get("objeto_funciones") or t.objeto_funciones or "").strip()[:2000]
+        t.fecha_inicio = (request.form.get("fecha_inicio") or t.fecha_inicio or "").strip()[:40]
+        t.honorarios = (request.form.get("honorarios") or t.honorarios or "").strip()[:80]
+        t.telefono = (request.form.get("telefono") or t.telefono or "").strip()[:40]
+        t.email = (request.form.get("email") or t.email or "").strip()[:120]
+        t.direccion = (request.form.get("direccion") or getattr(t, "direccion", "") or "").strip()[:255]
+        t.tipo_contrato = (request.form.get("tipo_contrato") or t.tipo_contrato or "").strip()[:60]
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        incluir_h = request.form.get("incluir_honorarios") == "1"
+        generar = request.form.get("accion") == "pdf" or (request.path or "").endswith(".pdf")
+        if generar:
+            return _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=incluir_h)
+    # GET: formulario obligatorio
+    if not (request.path or "").endswith(".pdf") or request.method == "GET":
+        if (request.path or "").endswith(".pdf") and request.method == "GET":
+            # forzar pasar por formulario
+            return redirect("/gerencia/contabilidad/trabajador/%s/constancia" % tid)
+        content = f"""
+        <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px">
+          <h2 style="margin:0 0 6px;color:#0B2D57">Constancia laboral · {_esc(t.nombre)}</h2>
+          <p style="font-size:13px;color:#64748b;margin:0 0 14px">Complete o confirme los datos antes de descargar el PDF. Documento interno PROCSIS.</p>
+          <form method="POST">
+            <label style="font-size:12px;font-weight:700">Cargo exacto *</label>
+            <input name="cargo" required value="{_esc(t.cargo)}" placeholder="Desarrollador Full Stack, Asesor Comercial..." style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Objeto de sus funciones *</label>
+            <textarea name="objeto_funciones" required rows="3" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Labores que desempeña...">{_esc(getattr(t,'objeto_funciones',None) or '')}</textarea>
+            <label style="font-size:12px;font-weight:700">Fecha de inicio de vinculación *</label>
+            <input name="fecha_inicio" required value="{_esc(getattr(t,'fecha_inicio',None) or '')}" placeholder="15 de enero de 2026" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Tipo de contrato</label>
+            <input name="tipo_contrato" value="{_esc(t.tipo_contrato)}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Honorarios / salario (opcional)</label>
+            <input name="honorarios" value="{_esc(getattr(t,'honorarios',None) or '')}" placeholder="$ 2.500.000 mensuales" style="width:100%;padding:10px;margin-bottom:6px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:12px">
+              <input type="checkbox" name="incluir_honorarios" value="1" style="width:auto"> ¿Incluir asignación económica en el PDF?
+            </label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div><label style="font-size:12px;font-weight:700">Teléfono</label>
+              <input name="telefono" value="{_esc(t.telefono)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+              <div><label style="font-size:12px;font-weight:700">Email</label>
+              <input name="email" value="{_esc(t.email)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+            </div>
+            <label style="font-size:12px;font-weight:700;margin-top:10px;display:block">Dirección / residencia</label>
+            <input name="direccion" value="{_esc(getattr(t,'direccion',None) or '')}" style="width:100%;padding:10px;margin-bottom:14px;border-radius:8px;border:1px solid #cbd5e1">
+            <input type="hidden" name="accion" value="pdf">
+            <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Descargar PDF constancia</button>
+            <a href="/gerencia/contabilidad/trabajadores" style="margin-left:10px;font-size:13px">Cancelar</a>
+          </form>
+        </div>
+        """
+        return page("Constancia laboral", _cont_shell("Constancia laboral", content))
+
+
+def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
     try:
         from datetime import datetime as _dt
         _now = _dt.now()
@@ -46954,55 +47063,47 @@ def contabilidad_constancia_laboral(tid):
         fecha_larga = "%d de %s de %d" % (_now.day, _meses[_now.month - 1], _now.year)
     except Exception:
         fecha_larga = fecha_hoy() if "fecha_hoy" in dir() else ""
-    nit = (meta.get("nit") or "").strip()
-    if not nit:
-        nit = "900.000.000-0"  # placeholder: actualizar en Gerencia → Datos de la empresa
-        nit_aviso = True
-    else:
-        nit_aviso = False
+    nit = (meta.get("nit") or "").strip() or "—"
+    cargo = (t.cargo or "colaborador(a)").strip()
+    objeto = (getattr(t, "objeto_funciones", None) or "").strip()
+    desde = (getattr(t, "fecha_inicio", None) or "").strip() or "la fecha de su vinculación"
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=letter)
     W, H = letter
-    _cont_draw_header_pdf(c, W, H, meta, "DOCUMENTO INTERNO · Constancia laboral / de vinculación")
-    # Contenedor angosto tipo carta (~750px ≈ 550 pt de ancho útil centrado)
-    left = 70
-    right = W - 70
+    _cont_draw_header_pdf(c, W, H, meta, "DOCUMENTO INTERNO · Constancia laboral")
+    left, right = 70, W - 70
     width = right - left
     y = H - 120
     c.setFillColor(colors.HexColor("#0f172a"))
     c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(W / 2, y, "CONSTANCIA LABORAL")
-    y -= 36
+    y -= 32
+    from reportlab.lib.utils import simpleSplit
     c.setFont("Helvetica", 11)
-    texto = (
-        "La empresa PROCSIS, identificada con NIT %s, hace constar que el(la) señor(a) "
-        "%s, identificado(a) con documento No. %s, se encuentra vinculado(a) en calidad de "
-        "%s bajo la modalidad de contrato %s."
+    cuerpo = (
+        "La empresa PROCSIS, identificada con NIT %s, hace constar que el(la) señor(a) %s, "
+        "identificado(a) con documento de identidad No. %s, se encuentra vinculado(a) a esta organización "
+        "en calidad de %s, bajo la modalidad de contrato %s, desde el día %s"
     ) % (
         nit,
         (t.nombre or "—").upper(),
         t.documento or "—",
-        (t.cargo or "colaborador(a)").upper(),
-        t.tipo_contrato or "prestación de servicios",
+        cargo,
+        (t.tipo_contrato or "prestación de servicios"),
+        desde,
     )
-    from reportlab.lib.utils import simpleSplit
-    lines = simpleSplit(texto, "Helvetica", 11, width)
-    for ln in lines:
+    if objeto:
+        cuerpo += ", ejecutando funciones orientadas a: %s" % objeto
+    cuerpo += ". La presente se expide a solicitud del interesado el día %s." % fecha_larga
+    if incluir_honorarios and (getattr(t, "honorarios", None) or "").strip():
+        cuerpo += " La asignación económica / honorarios acordados corresponden a %s." % t.honorarios.strip()
+    for ln in simpleSplit(cuerpo, "Helvetica", 11, width):
         c.drawString(left, y, ln)
-        y -= 16
-    y -= 14
-    c.drawString(left, y, "Datos de contacto registrados: %s · %s" % (t.telefono or "—", t.email or "—"))
-    y -= 20
-    c.drawString(left, y, "La presente se expide a solicitud del interesado el día %s." % fecha_larga)
-    if nit_aviso:
-        y -= 18
-        c.setFont("Helvetica-Oblique", 8)
-        c.setFillColor(colors.HexColor("#b45309"))
-        c.drawString(left, y, "Nota: configure el NIT real en Gerencia → Datos de la empresa para documentos definitivos.")
-        c.setFillColor(colors.HexColor("#0f172a"))
-        c.setFont("Helvetica", 11)
-    # Espacio amplio para firma
-    y -= 90
+        y -= 15
+        if y < 160:
+            break
+    # Firma con espacio amplio
+    y = min(y - 70, 280)
     c.setStrokeColor(colors.black)
     c.setLineWidth(1)
     c.line(left, y, left + 220, y)
@@ -47012,10 +47113,19 @@ def contabilidad_constancia_laboral(tid):
     y -= 12
     c.setFont("Helvetica", 9)
     c.drawString(left, y, "PROCSIS")
-    c.setFont("Helvetica-Oblique", 7)
+    # Contactos al pie (sutiles)
+    y = 70
+    c.setStrokeColor(colors.HexColor("#e2e8f0"))
+    c.line(left, y + 16, right, y + 16)
+    c.setFont("Helvetica", 8)
     c.setFillColor(colors.HexColor("#64748b"))
-    c.drawString(left, 40, "Documento interno generado por el sistema. Verificar autenticidad con gerencia PROCSIS.")
-    c.drawString(left, 28, "Fecha de generación: %s" % fecha_larga)
+    contact = "Correspondencia del trabajador: Tel. %s · %s · %s" % (
+        t.telefono or "—", t.email or "—", getattr(t, "direccion", None) or "—",
+    )
+    for ln in simpleSplit(contact, "Helvetica", 8, width):
+        c.drawString(left, y, ln)
+        y -= 11
+    c.drawString(left, 36, "Documento interno PROCSIS · Generado el %s · Verificar con gerencia" % fecha_larga)
     c.save()
     bio.seek(0)
     try:
