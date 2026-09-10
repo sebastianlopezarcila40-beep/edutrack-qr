@@ -2241,6 +2241,7 @@ class ContTrabajador(db.Model):
     objeto_funciones = db.Column(db.Text, default="")
     fecha_inicio = db.Column(db.String(40), default="")
     honorarios = db.Column(db.String(80), default="")
+    solicitante = db.Column(db.String(200), default="")  # entidad/persona que pide la constancia
     activo = db.Column(db.Boolean, default=True)
     notas = db.Column(db.Text, default="")
     creado_en = db.Column(db.String(30), default="")
@@ -46525,6 +46526,8 @@ def _ensure_cont_trabajadores_cols():
             alters.append("ALTER TABLE cont_trabajadores ADD COLUMN fecha_inicio VARCHAR(40) DEFAULT ''")
         if "honorarios" not in cols:
             alters.append("ALTER TABLE cont_trabajadores ADD COLUMN honorarios VARCHAR(80) DEFAULT ''")
+        if "solicitante" not in cols:
+            alters.append("ALTER TABLE cont_trabajadores ADD COLUMN solicitante VARCHAR(200) DEFAULT ''")
         if "activo" not in cols:
             alters.append("ALTER TABLE cont_trabajadores ADD COLUMN activo BOOLEAN DEFAULT TRUE")
         if alters:
@@ -46587,6 +46590,7 @@ def contabilidad_trabajadores():
                 objeto_funciones=(request.form.get("objeto_funciones") or "").strip()[:2000],
                 fecha_inicio=(request.form.get("fecha_inicio") or "").strip()[:40],
                 honorarios=(request.form.get("honorarios") or "").strip()[:80],
+                solicitante=(request.form.get("solicitante") or "").strip()[:200],
                 notas=(request.form.get("notas") or "").strip()[:1000],
                 activo=True,
                 creado_en=fecha_hoy() if "fecha_hoy" in dir() else "",
@@ -46657,6 +46661,8 @@ def contabilidad_trabajadores():
       <textarea name="objeto_funciones" required rows="2" placeholder="Ej: mantenimiento de servidores en Railway y desarrollo del núcleo de EduTrack" style="width:100%;padding:8px"></textarea></div>
       <div><label style="font-size:12px;font-weight:700">Honorarios / salario (opcional)</label>
       <input name="honorarios" placeholder="Ej: $ 2.500.000 mensuales" style="width:100%;padding:8px"></div>
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Entidad / persona que solicita la constancia</label>
+      <input name="solicitante" placeholder="Ej: Banco XYZ, Arrendadora, Nombre de la empresa o persona" style="width:100%;padding:8px"></div>
       <div><label style="font-size:12px;font-weight:700">Teléfono</label><input name="telefono" style="width:100%;padding:8px"></div>
       <div><label style="font-size:12px;font-weight:700">Email</label><input name="email" style="width:100%;padding:8px"></div>
       <div><label style="font-size:12px;font-weight:700">Dirección / residencia</label><input name="direccion" style="width:100%;padding:8px"></div>
@@ -47193,6 +47199,7 @@ def contabilidad_constancia_laboral(tid):
         t.email = (request.form.get("email") or t.email or "").strip()[:120]
         t.direccion = (request.form.get("direccion") or getattr(t, "direccion", "") or "").strip()[:255]
         t.tipo_contrato = (request.form.get("tipo_contrato") or t.tipo_contrato or "").strip()[:60]
+        t.solicitante = (request.form.get("solicitante") or getattr(t, "solicitante", "") or "").strip()[:200]
         try:
             db.session.commit()
         except Exception:
@@ -47217,8 +47224,16 @@ def contabilidad_constancia_laboral(tid):
             <textarea name="objeto_funciones" required rows="3" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Labores que desempeña...">{_esc(getattr(t,'objeto_funciones',None) or '')}</textarea>
             <label style="font-size:12px;font-weight:700">Fecha de inicio de vinculación *</label>
             <input name="fecha_inicio" required value="{_esc(getattr(t,'fecha_inicio',None) or '')}" placeholder="15 de enero de 2026" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
-            <label style="font-size:12px;font-weight:700">Tipo de contrato</label>
-            <input name="tipo_contrato" value="{_esc(t.tipo_contrato)}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Tipo de contrato (filtro)</label>
+            <select name="tipo_contrato" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+              <option value="Prestación de servicios" {"selected" if (t.tipo_contrato or "").lower().startswith("prest") else ""}>Prestación de servicios</option>
+              <option value="Laboral término fijo" {"selected" if "fijo" in (t.tipo_contrato or "").lower() else ""}>Laboral término fijo</option>
+              <option value="Laboral indefinido" {"selected" if "indefinido" in (t.tipo_contrato or "").lower() else ""}>Laboral indefinido</option>
+              <option value="Obra o labor" {"selected" if "obra" in (t.tipo_contrato or "").lower() else ""}>Obra o labor</option>
+              <option value="Contrato indefinido" {"selected" if (t.tipo_contrato or "") == "Contrato indefinido" else ""}>Contrato indefinido</option>
+            </select>
+            <label style="font-size:12px;font-weight:700">Entidad / persona solicitante de la constancia *</label>
+            <input name="solicitante" required value="{_esc(getattr(t,'solicitante',None) or '')}" placeholder="Empresa, banco, entidad o persona a quien va dirigida" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
             <label style="font-size:12px;font-weight:700">Honorarios / salario (opcional)</label>
             <input name="honorarios" value="{_esc(getattr(t,'honorarios',None) or '')}" placeholder="$ 2.500.000 mensuales" style="width:100%;padding:10px;margin-bottom:6px;border-radius:8px;border:1px solid #cbd5e1">
             <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:12px">
@@ -47285,6 +47300,9 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
     tel_t = (t.telefono or "").strip()
     email_t = (t.email or "").strip()
     dir_t = (getattr(t, "direccion", None) or "").strip()
+    solicitante = (getattr(t, "solicitante", None) or "").strip() or "A quien interese"
+    # Firmante = gerente / representante legal de la EMPRESA (Datos de la empresa), NO el trabajador
+    firmante = rep if rep else "Gerencia / Dirección de personal"
 
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=letter)
@@ -47334,10 +47352,19 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
     c.drawRightString(right, y, "%s, %s" % (ciudad or "Colombia", fecha_larga))
     y -= 28
 
-    # Destinatario genérico
+    # Destinatario: entidad/persona que solicita
     c.setFont("Helvetica", 11)
-    c.drawString(left, y, "A quien interese / Entidad solicitante:")
-    y -= 24
+    c.drawString(left, y, "A:")
+    y -= 14
+    for ln in simpleSplit(solicitante, "Helvetica-Bold", 11, width):
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(left, y, ln)
+        y -= 14
+    c.setFont("Helvetica", 10)
+    c.setFillColor(colors.HexColor("#64748b"))
+    c.drawString(left, y, "Entidad / persona solicitante de la certificación")
+    c.setFillColor(colors.HexColor("#0f172a"))
+    y -= 22
 
     # Asunto
     c.setFont("Helvetica-Bold", 11)
@@ -47347,10 +47374,13 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
         y -= 14
     y -= 12
 
-    # Saludo
+    # Saludo con nombre del solicitante
     c.setFont("Helvetica", 11)
-    c.drawString(left, y, "Estimado(a) señor(a):")
-    y -= 18
+    saludo = "Estimado(a) %s:" % solicitante
+    for ln in simpleSplit(saludo, "Helvetica", 11, width):
+        c.drawString(left, y, ln)
+        y -= 15
+    y -= 6
 
     # Cuerpo principal (unificado, justificado por líneas)
     cuerpo1 = (
@@ -47418,7 +47448,7 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
     c.line(left, y, left + 200, y)
     y -= 14
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(left, y, rep)
+    c.drawString(left, y, firmante)
     y -= 13
     c.setFont("Helvetica", 10)
     c.drawString(left, y, "Gerencia / Dirección de personal")
