@@ -50419,9 +50419,9 @@ def gerencia_nomina():
 
 
 
-@app.route("/gerencia/contratos-firmas")
+@app.route("/gerencia/contratos-firmas", methods=["GET", "POST"])
 def gerencia_contratos_firmas():
-    """Módulo central: listado de contratos con estado de firmas (gerente + empleado)."""
+    """Módulo central: listado de contratos + crear contrato desde trabajadores ya existentes."""
     g = _guard_gerencia()
     if g:
         return g
@@ -50429,7 +50429,123 @@ def gerencia_contratos_firmas():
         db.create_all()
     except Exception:
         pass
-    rows = ContratoPersonal.query.order_by(ContratoPersonal.id.desc()).limit(200).all()
+    msg = err = ""
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "crear_desde_trabajador":
+            try:
+                tid = int(request.form.get("trabajador_id") or 0)
+            except Exception:
+                tid = 0
+            tw = ContTrabajador.query.get(tid) if tid else None
+            if not tw:
+                err = "Seleccione un trabajador válido."
+            else:
+                # Evitar duplicado activo por documento
+                existente = None
+                if (tw.documento or "").strip():
+                    existente = ContratoPersonal.query.filter_by(
+                        documento=(tw.documento or "").strip(), estado="ACTIVO"
+                    ).order_by(ContratoPersonal.id.desc()).first()
+                if existente and not request.form.get("forzar"):
+                    msg = (
+                        "Ya existe un contrato activo para %s (C.C. %s). "
+                        "Ábralo en Editar + firmas, o marque «Crear de todas formas»."
+                        % (tw.nombre or "", tw.documento or "")
+                    )
+                    # still allow force via second submit
+                    if request.form.get("forzar") != "1":
+                        existente = existente  # keep message
+                    else:
+                        existente = None
+                if not err and (existente is None or request.form.get("forzar") == "1"):
+                    if existente and request.form.get("forzar") != "1":
+                        pass
+                    else:
+                        c = ContratoPersonal(
+                            tipo=(request.form.get("tipo") or "LABORAL_INDEFINIDO")[:40],
+                            nombres=(tw.nombre or "")[:160],
+                            documento=(tw.documento or "")[:40],
+                            cargo=(tw.cargo or "")[:120],
+                            fecha_inicio=(tw.fecha_inicio or (fecha_hoy() if "fecha_hoy" in dir() else ""))[:20],
+                            valor_mensual=(tw.honorarios or "")[:40],
+                            estado="ACTIVO",
+                            trabajador_id=tw.id,
+                            notas=("Creado desde módulo Contratos y firmas · trabajador id=%s" % tw.id)[:2000],
+                            creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
+                            creado_por=session.get("usuario") or "",
+                        )
+                        c.texto_contrato = _texto_contrato_default(
+                            c.nombres, c.documento, c.cargo, c.tipo,
+                            c.fecha_inicio, c.valor_mensual,
+                            tw.objeto_funciones or "",
+                        )
+                        db.session.add(c)
+                        try:
+                            db.session.flush()
+                            _generar_pdf_contrato_personal(c)
+                            db.session.commit()
+                            msg = "Contrato creado para %s. Ahora cargue las firmas." % (tw.nombre or "")
+                            try:
+                                registrar_auditoria("Contrato desde trabajador", "tid=%s cid=%s" % (tw.id, c.id))
+                            except Exception:
+                                pass
+                            return redirect("/gerencia/contratos-personal/%s/editar" % c.id)
+                        except Exception as e:
+                            db.session.rollback()
+                            err = "No se pudo crear el contrato: %s" % str(e)[:120]
+                            print("crear contrato trabajador:", e)
+
+    qtxt = (request.args.get("q") or "").strip()
+    filtro = (request.args.get("f") or "todos").strip().lower()  # todos | sin_firma | activos
+
+    rows_q = ContratoPersonal.query.order_by(ContratoPersonal.id.desc())
+    rows = rows_q.limit(300).all()
+    if qtxt:
+        ql = qtxt.lower()
+        rows = [
+            c for c in rows
+            if ql in (c.nombres or "").lower()
+            or ql in (c.documento or "").lower()
+            or ql in (c.cargo or "").lower()
+        ]
+    if filtro == "sin_firma":
+        rows = [
+            c for c in rows
+            if not (getattr(c, "firma_gerente", None) or "").strip()
+            or not (c.firma_empleado or "").strip()
+        ]
+    elif filtro == "activos":
+        rows = [c for c in rows if (c.estado or "").upper() == "ACTIVO"]
+
+    # Trabajadores sin contrato (o todos activos) para el selector
+    docs_con_contrato = set()
+    try:
+        for c in ContratoPersonal.query.filter_by(estado="ACTIVO").limit(500).all():
+            if c.documento:
+                docs_con_contrato.add((c.documento or "").strip())
+    except Exception:
+        pass
+    trabajadores = ContTrabajador.query.order_by(ContTrabajador.nombre).limit(500).all()
+    solo_sin = (request.args.get("solo_sin_contrato") or "1") == "1"
+    opts = []
+    for t in trabajadores:
+        if not t.activo and solo_sin:
+            continue
+        doc = (t.documento or "").strip()
+        ya = doc and doc in docs_con_contrato
+        if solo_sin and ya:
+            continue
+        label = "%s — %s — %s%s" % (
+            t.nombre or "—",
+            t.documento or "s/doc",
+            t.cargo or "s/cargo",
+            " (ya tiene contrato)" if ya else "",
+        )
+        opts.append('<option value="%s">%s</option>' % (t.id, _esc(label)))
+    opts_html = "".join(opts) or '<option value="">No hay trabajadores disponibles</option>'
+
     filas = []
     for c in rows:
         tiene_g = "Sí" if (getattr(c, "firma_gerente", None) or "").strip() else "No"
@@ -50463,12 +50579,23 @@ def gerencia_contratos_firmas():
         )
     tabla = "".join(filas) or (
         "<tr><td colspan='8' style='padding:16px;color:#64748b;text-align:center'>"
-        "Aún no hay contratos. Se generan al marcar una hoja de vida como <b>CONTRATADO</b>.</td></tr>"
+        "No hay contratos con este filtro. Cree uno abajo desde un trabajador existente "
+        "o marque una hoja de vida como <b>CONTRATADO</b>.</td></tr>"
     )
+
+    def chip(label, key):
+        active = filtro == key
+        bg = "#0B2D57;color:#fff" if active else "#e2e8f0;color:#0f172a"
+        href = "/gerencia/contratos-firmas?f=%s%s" % (key, ("&q=" + qtxt) if qtxt else "")
+        return (
+            '<a href="%s" style="background:%s;padding:7px 12px;border-radius:8px;text-decoration:none;'
+            'font-weight:700;font-size:12px;margin-right:6px">%s</a>'
+        ) % (href, bg, label)
+
     body = f"""
 <header class="role-hero"><div>
   <h1>Contratos y firmas digitales</h1>
-  <p>Gerencia · Firma del gerente + firma del empleado en cada contrato</p>
+  <p>Gerencia · Crear contratos para empleados ya vinculados · Firmas gerente + empleado</p>
 </div>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
   <a class="btn" href="/gerencia/hojas-vida">Hojas de vida</a>
@@ -50477,13 +50604,62 @@ def gerencia_contratos_firmas():
   <a class="btn" href="/gerencia/nomina">Nómina</a>
 </div></header>
 <section class="role-panel">
-  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:16px;font-size:13px;color:#1e3a8a">
-    <b>Cómo funciona</b><br>
-    1. En <b>Hojas de vida</b> marque <b>CONTRATADO</b> → se crea el contrato con nombre, C.C. y cargo.<br>
-    2. Entre a <b>Editar + firmas</b> y cargue la <b>firma del gerente</b> y la <b>firma del empleado</b> (fotos).<br>
-    3. Ajuste posición X/Y si hace falta y pulse <b>Guardar y regenerar PDF</b>.<br>
-    4. Descargue el PDF ya firmado por ambas partes.
+  {"<div class='msg ok' style='margin-bottom:12px'>" + _esc(msg) + "</div>" if msg else ""}
+  {"<div class='msg danger' style='margin-bottom:12px'>" + _esc(err) + "</div>" if err else ""}
+
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;margin-bottom:18px">
+    <h3 style="margin:0 0 8px;color:#166534;font-size:15px">Crear contrato desde trabajador existente</h3>
+    <p style="font-size:13px;color:#475569;margin:0 0 12px">
+      Use esto para empleados que ya estaban contratados antes de este módulo.
+      Elija el trabajador, genere el contrato y luego cargue las firmas del gerente y del empleado.
+    </p>
+    <form method="POST" style="display:grid;grid-template-columns:2fr 1fr auto;gap:10px;align-items:end;max-width:920px">
+      <input type="hidden" name="accion" value="crear_desde_trabajador">
+      <div>
+        <label style="font-size:12px;font-weight:700">Trabajador *</label>
+        <select name="trabajador_id" required style="width:100%;padding:10px">
+          <option value="">— Seleccione empleado —</option>
+          {opts_html}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700">Tipo de contrato</label>
+        <select name="tipo" style="width:100%;padding:10px">
+          <option value="LABORAL_INDEFINIDO">Laboral indefinido</option>
+          <option value="LABORAL_FIJO">Laboral fijo</option>
+          <option value="PRESTACION">Prestación de servicios</option>
+          <option value="OBRA_LABOR">Obra o labor</option>
+        </select>
+      </div>
+      <div>
+        <button type="submit" style="background:#15803d;color:#fff;border:0;padding:11px 16px;border-radius:8px;font-weight:800;white-space:nowrap">+ Crear contrato</button>
+      </div>
+      <div style="grid-column:1/-1;font-size:12px;color:#64748b">
+        <label><input type="checkbox" name="forzar" value="1"> Crear de todas formas aunque ya exista un contrato activo con ese documento</label>
+        · <a href="/gerencia/contratos-firmas?solo_sin_contrato=0">Ver también trabajadores que ya tienen contrato</a>
+        · <a href="/gerencia/contratos-firmas?solo_sin_contrato=1">Solo sin contrato</a>
+      </div>
+    </form>
   </div>
+
+  <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    {chip("Todos", "todos")}
+    {chip("Activos", "activos")}
+    {chip("Pendientes de firma", "sin_firma")}
+    <form method="GET" style="display:inline-flex;gap:6px;margin-left:8px">
+      <input type="hidden" name="f" value="{_esc(filtro)}">
+      <input name="q" value="{_esc(qtxt)}" placeholder="Buscar nombre, C.C. o cargo" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;min-width:200px">
+      <button type="submit" style="padding:7px 12px;border-radius:8px;border:0;background:#0B2D57;color:#fff;font-weight:700;font-size:12px">Buscar</button>
+    </form>
+  </div>
+
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;margin-bottom:14px;font-size:13px;color:#1e3a8a">
+    <b>Cómo funciona</b> —
+    1) Cree el contrato desde un trabajador (arriba) o desde HV → CONTRATADO.
+    2) <b>Editar + firmas</b> → cargue firma del gerente y del empleado.
+    3) Guarde y descargue el PDF.
+  </div>
+
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <tr style="background:#0B2D57;color:#fff">
@@ -50502,7 +50678,6 @@ def gerencia_contratos_firmas():
 </section>
 """
     return page("Contratos y firmas", shell(body))
-
 
 
 if __name__ == "__main__":
