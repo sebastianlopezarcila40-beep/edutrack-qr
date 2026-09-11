@@ -46295,8 +46295,50 @@ def contabilidad_comercial():
                 o.id,
             )
         )
+
     if not filas:
         filas = "<tr><td colspan='9' style='text-align:center;color:#94a3b8;padding:16px'>Sin operaciones. Registre la primera.</td></tr>"
+
+    # Pagos de nómina / empleados (módulo Gerencia → Nómina)
+    filas_nom = ""
+    tot_nom_pagado = 0.0
+    tot_nom_pend = 0.0
+    try:
+        pagos_nom = NominaPago.query.order_by(NominaPago.id.desc()).limit(30).all()
+        for p in pagos_nom:
+            neto = float(p.valor_neto or 0)
+            if (p.estado or "").upper() == "PAGADO":
+                tot_nom_pagado += neto
+            else:
+                tot_nom_pend += neto
+            st_color = "#16a34a" if (p.estado or "").upper() == "PAGADO" else "#b45309"
+            filas_nom += (
+                "<tr>"
+                "<td style='padding:8px'>%s</td>"
+                "<td style='padding:8px'>%s</td>"
+                "<td style='padding:8px'>%s</td>"
+                "<td style='padding:8px'>%s</td>"
+                "<td style='padding:8px;text-align:right'>%s</td>"
+                "<td style='padding:8px;color:%s;font-weight:700'>%s</td>"
+                "<td style='padding:8px'>%s</td>"
+                "</tr>"
+                % (
+                    _esc(p.periodo),
+                    _esc(p.trabajador_nombre),
+                    _esc(p.documento),
+                    _esc(p.concepto),
+                    _cop(neto),
+                    st_color,
+                    _esc(p.estado),
+                    _esc(p.fecha_pago or "—"),
+                )
+            )
+    except Exception as _ne:
+        print("nomina en contabilidad:", _ne)
+        pagos_nom = []
+    if not filas_nom:
+        filas_nom = "<tr><td colspan='7' style='padding:12px;color:#94a3b8;text-align:center'>Sin pagos de empleados. Regístrelos en <a href='/gerencia/nomina'>Nómina</a>.</td></tr>"
+
 
     body = f"""
     {"<div style='background:#ecfdf5;border:1px solid #86efac;padding:10px 12px;border-radius:10px;margin-bottom:12px'>"+_esc(msg)+"</div>" if msg else ""}
@@ -46308,15 +46350,23 @@ def contabilidad_comercial():
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #dc2626;border-radius:10px;padding:12px">
         <div style="font-size:11px;color:#64748b;font-weight:700">GASTOS + PAGOS + COMPRAS</div>
-        <div style="font-size:20px;font-weight:800;color:#991b1b">{_cop(tot_gas)}</div>
+        <div style="font-size:20px;font-weight:800;color:#b91c1c">{_cop(tot_gas)}</div>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #b45309;border-radius:10px;padding:12px">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #ca8a04;border-radius:10px;padding:12px">
         <div style="font-size:11px;color:#64748b;font-weight:700">OBLIGACIONES (saldo)</div>
-        <div style="font-size:20px;font-weight:800;color:#92400e">{_cop(tot_obl)}</div>
+        <div style="font-size:20px;font-weight:800;color:#b45309">{_cop(tot_obl)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #d97706;border-radius:10px;padding:12px">
+        <div style="font-size:11px;color:#64748b;font-weight:700">NÓMINA PAGADA</div>
+        <div style="font-size:20px;font-weight:800;color:#b45309">{_cop(tot_nom_pagado)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #7c2d12;border-radius:10px;padding:12px">
+        <div style="font-size:11px;color:#64748b;font-weight:700">NÓMINA PENDIENTE</div>
+        <div style="font-size:20px;font-weight:800;color:#7c2d12">{_cop(tot_nom_pend)}</div>
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #0B2D57;border-radius:10px;padding:12px">
         <div style="font-size:11px;color:#64748b;font-weight:700">BALANCE APROX.</div>
-        <div style="font-size:20px;font-weight:800;color:#0B2D57">{_cop(tot_ing - tot_gas)}</div>
+        <div style="font-size:20px;font-weight:800;color:#0B2D57">{_cop(tot_ing - tot_gas - tot_nom_pagado)}</div>
       </div>
     </div>
     <p style="font-size:13px;color:#64748b;margin:0 0 10px">Registrar · Organizar · Controlar · Comprobar · Informar · Decidir. Cada operación queda con fecha, parte, valores e IP.</p>
@@ -46324,9 +46374,10 @@ def contabilidad_comercial():
       <a href="/gerencia/contabilidad/export/ops.xlsx{'?tipo='+filtro if filtro else ''}" style="background:#15803d;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ Excel operaciones</a>
       <a href="/gerencia/contabilidad/export/ops.pdf{'?tipo='+filtro if filtro else ''}" style="background:#b91c1c;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ PDF documento interno</a>
       <a href="/gerencia/contabilidad/nueva" style="background:#0B2D57;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">+ Nueva operación</a>
+      <a href="/gerencia/nomina" style="background:#7c2d12;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">💵 Nómina / Pagos empleados</a>
     </div>
     <div style="margin-bottom:12px">{chips}</div>
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto;margin-bottom:18px">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <tr style="background:#0B2D57;color:#fff">
           <th style="padding:8px;text-align:left">Código / Fecha</th>
@@ -46340,6 +46391,22 @@ def contabilidad_comercial():
           <th></th>
         </tr>
         {filas}
+      </table>
+    </div>
+    <h3 style="margin:0 0 8px;color:#7c2d12;font-size:15px">Pagos a empleados (nómina)</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 8px">Últimos registros del módulo de nómina. Para crear o marcar pagos use <a href="/gerencia/nomina">Nómina / Pagos</a>.</p>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr style="background:#7c2d12;color:#fff">
+          <th style="padding:8px;text-align:left">Periodo</th>
+          <th style="padding:8px;text-align:left">Trabajador</th>
+          <th style="padding:8px;text-align:left">Documento</th>
+          <th style="padding:8px;text-align:left">Concepto</th>
+          <th style="padding:8px;text-align:right">Neto</th>
+          <th style="padding:8px;text-align:left">Estado</th>
+          <th style="padding:8px;text-align:left">Fecha pago</th>
+        </tr>
+        {filas_nom}
       </table>
     </div>
     """
@@ -46857,7 +46924,7 @@ def contabilidad_trabajadores():
       </table>
     </div>
     """
-    return page("Trabajadores", _cont_shell("Módulo trabajadores", body))
+    return page("Trabajadores", _cont_shell("Módulo trabajadores", body, back="/gerencia/hq"))
 
 
 def _cont_empresa_meta():
