@@ -2376,9 +2376,28 @@ class NominaPago(db.Model):
     documento = db.Column(db.String(40), default="", index=True)
     periodo = db.Column(db.String(7), default="", index=True)  # YYYY-MM
     concepto = db.Column(db.String(120), default="Salario / Honorarios")
-    valor_bruto = db.Column(db.Float, default=0.0)
-    deducciones = db.Column(db.Float, default=0.0)
+    valor_bruto = db.Column(db.Float, default=0.0)  # salario básico / IBC
+    deducciones = db.Column(db.Float, default=0.0)  # total descuentos empleado
     valor_neto = db.Column(db.Float, default=0.0)
+    # Seguridad social
+    eps_empleado = db.Column(db.Float, default=0.0)      # 4%
+    eps_empresa = db.Column(db.Float, default=0.0)       # 8.5% (exento SAS <10 SMMLV)
+    pension_empleado = db.Column(db.Float, default=0.0)  # 4%
+    pension_empresa = db.Column(db.Float, default=0.0)   # 12%
+    arl_empresa = db.Column(db.Float, default=0.0)       # riesgo (ej 0.522%)
+    riesgo_arl = db.Column(db.String(20), default="1")   # 1..5
+    # Parafiscales
+    caja_compensacion = db.Column(db.Float, default=0.0)  # 4%
+    icbf_sena = db.Column(db.Float, default=0.0)          # 5% (exento SAS <10 SMMLV)
+    # Prestaciones (provisiones mensuales)
+    prima_servicios = db.Column(db.Float, default=0.0)    # 8.33%
+    cesantias = db.Column(db.Float, default=0.0)          # 8.33%
+    intereses_cesantias = db.Column(db.Float, default=0.0)  # 1% sobre cesantías del mes
+    vacaciones = db.Column(db.Float, default=0.0)         # 4.17%
+    # Flags exenciones
+    exento_eps_empresa = db.Column(db.Boolean, default=False)
+    exento_icbf_sena = db.Column(db.Boolean, default=False)
+    costo_empresa_total = db.Column(db.Float, default=0.0)  # suma aportes empresa + prestaciones
     fecha_pago = db.Column(db.String(20), default="")
     medio_pago = db.Column(db.String(60), default="")
     referencia = db.Column(db.String(120), default="")
@@ -3931,6 +3950,20 @@ def inicializar_bd():
                     "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_gerente_h DOUBLE PRECISION DEFAULT 50",
                     "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS nombre_firmante_gerente VARCHAR(160) DEFAULT ''",
                     "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS cargo_firmante_gerente VARCHAR(120) DEFAULT 'Gerente'",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS eps_empleado DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS eps_empresa DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS pension_empleado DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS pension_empresa DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS arl_empresa DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS riesgo_arl VARCHAR(20) DEFAULT '1'",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS caja_compensacion DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS icbf_sena DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS prima_servicios DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS cesantias DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS intereses_cesantias DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS vacaciones DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS costo_empresa_total DOUBLE PRECISION DEFAULT 0",
+
 
 
                     "ALTER TABLE plataforma ALTER COLUMN logo_path TYPE TEXT",
@@ -50463,7 +50496,7 @@ def gerencia_contrato_editar(cid):
 # ─── Módulo de nómina (Gerencia) ────────────────────────────────────────────
 @app.route("/gerencia/nomina", methods=["GET", "POST"])
 def gerencia_nomina():
-    """Registro de pagos de nómina / honorarios de trabajadores activos."""
+    """Registro de pagos de nómina con seguridad social, parafiscales y prestaciones."""
     g = _guard_gerencia()
     if g:
         return g
@@ -50471,15 +50504,27 @@ def gerencia_nomina():
         db.create_all()
     except Exception:
         pass
-    # ensure columns for nomina if using sqlite/pg without migrate
-    try:
-        db.session.execute(text("SELECT 1 FROM nomina_pagos LIMIT 1"))
-    except Exception:
-        try:
-            db.create_all()
-        except Exception:
-            pass
     msg = err = ""
+
+    def _fnum(key, default=0.0):
+        raw = (request.form.get(key) or "").replace("$", "").replace(" ", "").replace(".", "").replace(",", ".")
+        # if user typed 2500000 or 2.500.000 Colombian style
+        raw2 = (request.form.get(key) or "").strip().replace("$", "").replace(" ", "")
+        try:
+            if raw2.count(".") > 1 or (raw2.count(".") == 1 and raw2.count(",") == 0 and len(raw2.split(".")[-1]) == 3):
+                # 2.500.000 -> 2500000
+                raw2 = raw2.replace(".", "")
+            elif "," in raw2 and "." in raw2:
+                raw2 = raw2.replace(".", "").replace(",", ".")
+            elif "," in raw2:
+                raw2 = raw2.replace(",", ".")
+            return float(raw2 or 0)
+        except Exception:
+            try:
+                return float(default)
+            except Exception:
+                return 0.0
+
     if request.method == "POST":
         accion = (request.form.get("accion") or "guardar").strip()
         if accion == "eliminar":
@@ -50512,15 +50557,59 @@ def gerencia_nomina():
             tw = ContTrabajador.query.get(tid) if tid else None
             nombre = (tw.nombre if tw else (request.form.get("trabajador_nombre") or "")).strip()[:160]
             doc = (tw.documento if tw else (request.form.get("documento") or "")).strip()[:40]
-            try:
-                bruto = float((request.form.get("valor_bruto") or "0").replace(",", "").replace("$", "").strip() or 0)
-            except Exception:
-                bruto = 0.0
-            try:
-                ded = float((request.form.get("deducciones") or "0").replace(",", "").replace("$", "").strip() or 0)
-            except Exception:
-                ded = 0.0
             periodo = (request.form.get("periodo") or "")[:7]
+            salario = _fnum("valor_bruto")
+            # Campos individuales (editables; si vienen vacíos se calculan)
+            eps_e = _fnum("eps_empleado")
+            eps_emp = _fnum("eps_empresa")
+            pen_e = _fnum("pension_empleado")
+            pen_emp = _fnum("pension_empresa")
+            arl = _fnum("arl_empresa")
+            caja = _fnum("caja_compensacion")
+            icbf = _fnum("icbf_sena")
+            prima = _fnum("prima_servicios")
+            ces = _fnum("cesantias")
+            int_ces = _fnum("intereses_cesantias")
+            vac = _fnum("vacaciones")
+            exento_eps = request.form.get("exento_eps_empresa") == "1"
+            exento_icbf = request.form.get("exento_icbf_sena") == "1"
+            riesgo = (request.form.get("riesgo_arl") or "1").strip()[:20]
+            # Auto-cálculo si salario > 0 y campos en 0
+            tasas_arl = {"1": 0.00522, "2": 0.01044, "3": 0.02436, "4": 0.04350, "5": 0.06960}
+            if salario > 0:
+                if eps_e <= 0:
+                    eps_e = round(salario * 0.04, 0)
+                if pen_e <= 0:
+                    pen_e = round(salario * 0.04, 0)
+                if eps_emp <= 0 and not exento_eps:
+                    eps_emp = round(salario * 0.085, 0)
+                elif exento_eps:
+                    eps_emp = 0.0
+                if pen_emp <= 0:
+                    pen_emp = round(salario * 0.12, 0)
+                if arl <= 0:
+                    arl = round(salario * tasas_arl.get(riesgo, 0.00522), 0)
+                if caja <= 0:
+                    caja = round(salario * 0.04, 0)
+                if icbf <= 0 and not exento_icbf:
+                    icbf = round(salario * 0.05, 0)
+                elif exento_icbf:
+                    icbf = 0.0
+                if prima <= 0:
+                    prima = round(salario * 0.0833, 0)
+                if ces <= 0:
+                    ces = round(salario * 0.0833, 0)
+                if int_ces <= 0:
+                    int_ces = round(ces * 0.01, 0)
+                if vac <= 0:
+                    vac = round(salario * 0.0417, 0)
+            ded = eps_e + pen_e
+            # permitir override deducciones
+            ded_form = _fnum("deducciones")
+            if ded_form > 0:
+                ded = ded_form
+            neto = max(0.0, salario - ded)
+            costo_emp = eps_emp + pen_emp + arl + caja + icbf + prima + ces + int_ces + vac
             if not nombre or not periodo:
                 err = "Trabajador y periodo (YYYY-MM) son obligatorios."
             else:
@@ -50530,9 +50619,24 @@ def gerencia_nomina():
                     documento=doc,
                     periodo=periodo,
                     concepto=(request.form.get("concepto") or "Salario / Honorarios")[:120],
-                    valor_bruto=bruto,
+                    valor_bruto=salario,
                     deducciones=ded,
-                    valor_neto=max(0.0, bruto - ded),
+                    valor_neto=neto,
+                    eps_empleado=eps_e,
+                    eps_empresa=eps_emp,
+                    pension_empleado=pen_e,
+                    pension_empresa=pen_emp,
+                    arl_empresa=arl,
+                    riesgo_arl=riesgo,
+                    caja_compensacion=caja,
+                    icbf_sena=icbf,
+                    prima_servicios=prima,
+                    cesantias=ces,
+                    intereses_cesantias=int_ces,
+                    vacaciones=vac,
+                    exento_eps_empresa=exento_eps,
+                    exento_icbf_sena=exento_icbf,
+                    costo_empresa_total=costo_emp,
                     fecha_pago=(request.form.get("fecha_pago") or "")[:20],
                     medio_pago=(request.form.get("medio_pago") or "")[:60],
                     referencia=(request.form.get("referencia") or "")[:120],
@@ -50544,14 +50648,17 @@ def gerencia_nomina():
                 db.session.add(row)
                 try:
                     db.session.commit()
-                    msg = "Pago de nómina registrado para %s · %s" % (nombre, periodo)
+                    msg = "Nómina registrada: %s · %s · Neto $ %s" % (
+                        nombre, periodo, "{:,.0f}".format(neto).replace(",", ".")
+                    )
                     try:
-                        registrar_auditoria("Nómina registro", "%s %s neto=%s" % (nombre, periodo, row.valor_neto))
+                        registrar_auditoria("Nómina registro", "%s %s neto=%s" % (nombre, periodo, neto))
                     except Exception:
                         pass
                 except Exception as e:
                     db.session.rollback()
-                    err = str(e)[:120]
+                    err = str(e)[:150]
+                    print("nomina save:", e)
 
     periodo_f = (request.args.get("periodo") or "").strip()[:7]
     q = NominaPago.query
@@ -50563,11 +50670,13 @@ def gerencia_nomina():
         '<option value="%s">%s — %s</option>' % (t.id, _esc(t.nombre), _esc(t.documento))
         for t in trabajadores
     )
+
     def _cop_n(v):
         try:
             return "$ " + "{:,.0f}".format(float(v or 0)).replace(",", ".")
         except Exception:
             return "$ 0"
+
     filas = []
     for p in pagos:
         btn_pag = ""
@@ -50584,62 +50693,212 @@ def gerencia_nomina():
             "<input type='hidden' name='id' value='" + str(p.id) + "'>"
             "<button type='submit' style='font-size:11px;padding:3px 6px'>Eliminar</button></form>"
         )
+        det = (
+            "<details style='font-size:11px'><summary>Ver liquidación</summary>"
+            "<div style='text-align:left;padding:6px;background:#f8fafc;border-radius:6px;margin-top:4px'>"
+            "EPS emp %s / Pensión emp %s<br>"
+            "EPS empresa %s / Pensión empresa %s / ARL %s<br>"
+            "Caja %s / ICBF-SENA %s<br>"
+            "Prima %s / Cesantías %s / Int.ces %s / Vac %s<br>"
+            "<b>Costo empresa:</b> %s"
+            "</div></details>"
+        ) % (
+            _cop_n(getattr(p, "eps_empleado", 0)),
+            _cop_n(getattr(p, "pension_empleado", 0)),
+            _cop_n(getattr(p, "eps_empresa", 0)),
+            _cop_n(getattr(p, "pension_empresa", 0)),
+            _cop_n(getattr(p, "arl_empresa", 0)),
+            _cop_n(getattr(p, "caja_compensacion", 0)),
+            _cop_n(getattr(p, "icbf_sena", 0)),
+            _cop_n(getattr(p, "prima_servicios", 0)),
+            _cop_n(getattr(p, "cesantias", 0)),
+            _cop_n(getattr(p, "intereses_cesantias", 0)),
+            _cop_n(getattr(p, "vacaciones", 0)),
+            _cop_n(getattr(p, "costo_empresa_total", 0)),
+        )
         filas.append(
             "<tr>"
             "<td style='padding:8px'>" + _esc(p.periodo) + "</td>"
-            "<td style='padding:8px'>" + _esc(p.trabajador_nombre) + "</td>"
+            "<td style='padding:8px'>" + _esc(p.trabajador_nombre) + det + "</td>"
             "<td style='padding:8px'>" + _esc(p.documento) + "</td>"
-            "<td style='padding:8px'>" + _esc(p.concepto) + "</td>"
             "<td style='padding:8px;text-align:right'>" + _cop_n(p.valor_bruto) + "</td>"
             "<td style='padding:8px;text-align:right'>" + _cop_n(p.deducciones) + "</td>"
             "<td style='padding:8px;text-align:right;font-weight:700'>" + _cop_n(p.valor_neto) + "</td>"
+            "<td style='padding:8px;text-align:right'>" + _cop_n(getattr(p, "costo_empresa_total", 0)) + "</td>"
             "<td style='padding:8px'>" + _esc(p.estado) + "</td>"
             "<td style='padding:8px'>" + _esc(p.fecha_pago or "—") + "</td>"
             "<td style='padding:8px'>" + btn_pag + btn_del + "</td>"
             "</tr>"
         )
-    filas_html = "".join(filas) or "<tr><td colspan='10' style='padding:14px;color:#64748b;text-align:center'>Sin pagos registrados</td></tr>"
-
+    filas_html = "".join(filas) or (
+        "<tr><td colspan='10' style='padding:14px;color:#64748b;text-align:center'>Sin pagos registrados</td></tr>"
+    )
 
     body = f"""
 <header class="role-hero"><div>
   <h1>Nómina / Pagos a trabajadores</h1>
-  <p>Registro de salarios y honorarios del equipo PROCSIS</p>
+  <p>Salario, seguridad social, parafiscales y prestaciones (Colombia)</p>
 </div>
 <div style="display:flex;gap:8px">
   <a class="btn" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
-  <a class="btn" href="/gerencia/hojas-vida">Hojas de vida</a>
+  <a class="btn" href="/gerencia/contabilidad">Contabilidad</a>
 </div></header>
 <section class="role-panel">
-  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-  <h3 style="color:#0B2D57;margin-top:0">Registrar pago</h3>
-  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;max-width:980px;margin-bottom:20px">
-    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Trabajador activo *</label>
-    <select name="trabajador_id" required style="width:100%;padding:9px">
-      <option value="">— Seleccione —</option>
-      {opts}
-    </select></div>
-    <div><label style="font-size:12px;font-weight:700">Periodo (YYYY-MM) *</label>
-    <input name="periodo" placeholder="2026-09" required style="width:100%;padding:9px"></div>
-    <div><label style="font-size:12px;font-weight:700">Concepto</label>
-    <input name="concepto" value="Salario / Honorarios" style="width:100%;padding:9px"></div>
-    <div><label style="font-size:12px;font-weight:700">Estado</label>
-    <select name="estado" style="width:100%;padding:9px"><option>PENDIENTE</option><option>PAGADO</option></select></div>
-    <div><label style="font-size:12px;font-weight:700">Valor bruto</label>
-    <input name="valor_bruto" placeholder="2500000" style="width:100%;padding:9px"></div>
-    <div><label style="font-size:12px;font-weight:700">Deducciones</label>
-    <input name="deducciones" placeholder="0" style="width:100%;padding:9px"></div>
-    <div><label style="font-size:12px;font-weight:700">Fecha de pago</label>
-    <input name="fecha_pago" placeholder="2026-09-30" style="width:100%;padding:9px"></div>
-    <div><label style="font-size:12px;font-weight:700">Medio de pago</label>
-    <input name="medio_pago" placeholder="Transferencia / Efectivo" style="width:100%;padding:9px"></div>
-    <div><label style="font-size:12px;font-weight:700">Referencia</label>
-    <input name="referencia" style="width:100%;padding:9px"></div>
-    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Notas</label>
-    <input name="notas" style="width:100%;padding:9px"></div>
-    <div style="grid-column:1/-1"><button type="submit" style="background:#1e40af;color:#fff;border:0;padding:11px 16px;border-radius:8px;font-weight:800">Registrar pago</button></div>
+  {"<div class='msg ok'>" + _esc(msg) + "</div>" if msg else ""}
+  {"<div class='msg danger'>" + _esc(err) + "</div>" if err else ""}
+
+  <h3 style="color:#0B2D57;margin-top:0">Registrar pago / liquidación</h3>
+  <form method="POST" id="form-nomina" style="max-width:980px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Trabajador activo *</label>
+      <select name="trabajador_id" required style="width:100%;padding:9px">
+        <option value="">— Seleccione —</option>
+        {opts}
+      </select></div>
+      <div><label style="font-size:12px;font-weight:700">Periodo (YYYY-MM) *</label>
+      <input name="periodo" placeholder="2026-09" required style="width:100%;padding:9px"></div>
+      <div><label style="font-size:12px;font-weight:700">Concepto</label>
+      <input name="concepto" value="Salario / Honorarios" style="width:100%;padding:9px"></div>
+      <div><label style="font-size:12px;font-weight:700">Estado</label>
+      <select name="estado" style="width:100%;padding:9px"><option>PENDIENTE</option><option>PAGADO</option></select></div>
+      <div><label style="font-size:12px;font-weight:700">Salario básico / IBC *</label>
+      <input name="valor_bruto" id="salario" placeholder="2500000" style="width:100%;padding:9px" oninput="calcularNomina()"></div>
+      <div><label style="font-size:12px;font-weight:700">Riesgo ARL</label>
+      <select name="riesgo_arl" id="riesgo_arl" style="width:100%;padding:9px" onchange="calcularNomina()">
+        <option value="1">1 — Oficina / software (0.522%)</option>
+        <option value="2">2 (1.044%)</option>
+        <option value="3">3 (2.436%)</option>
+        <option value="4">4 (4.350%)</option>
+        <option value="5">5 (6.960%)</option>
+      </select></div>
+      <div><label style="font-size:12px;font-weight:700">Fecha de pago</label>
+      <input name="fecha_pago" placeholder="2026-09-30" style="width:100%;padding:9px"></div>
+    </div>
+
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:12px">
+      <h4 style="margin:0 0 10px;color:#1e40af">1. Aportes a Seguridad Social (mensual)</h4>
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px">Se calculan sobre el salario básico / IBC. Puede editar cada casilla.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-size:11px;font-weight:700">EPS empleado (4%) → Deducciones</label>
+        <input name="eps_empleado" id="eps_empleado" placeholder="—" style="width:100%;padding:8px" oninput="recalcDed()"></div>
+        <div><label style="font-size:11px;font-weight:700">EPS empresa (8.5%)</label>
+        <input name="eps_empresa" id="eps_empresa" placeholder="—" style="width:100%;padding:8px"></div>
+        <div style="grid-column:1/-1;font-size:12px">
+          <label><input type="checkbox" name="exento_eps_empresa" id="exento_eps" value="1" onchange="calcularNomina()">
+          Empresa S.A.S. exenta de EPS 8.5% (empleado &lt; 10 SMMLV)</label>
+        </div>
+        <div><label style="font-size:11px;font-weight:700">Pensión empleado (4%) → Deducciones</label>
+        <input name="pension_empleado" id="pension_empleado" placeholder="—" style="width:100%;padding:8px" oninput="recalcDed()"></div>
+        <div><label style="font-size:11px;font-weight:700">Pensión empresa (12%)</label>
+        <input name="pension_empresa" id="pension_empresa" placeholder="—" style="width:100%;padding:8px"></div>
+        <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700">ARL empresa (100% empresa, según riesgo)</label>
+        <input name="arl_empresa" id="arl_empresa" placeholder="—" style="width:100%;padding:8px"></div>
+      </div>
+    </div>
+
+    <div style="background:#fefce8;border:1px solid #fde68a;border-radius:12px;padding:14px;margin-bottom:12px">
+      <h4 style="margin:0 0 10px;color:#a16207">2. Parafiscales (mensual — empresa)</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-size:11px;font-weight:700">Caja de Compensación Familiar (4%)</label>
+        <input name="caja_compensacion" id="caja_compensacion" placeholder="—" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:11px;font-weight:700">ICBF + SENA (5%)</label>
+        <input name="icbf_sena" id="icbf_sena" placeholder="—" style="width:100%;padding:8px"></div>
+        <div style="grid-column:1/-1;font-size:12px">
+          <label><input type="checkbox" name="exento_icbf_sena" id="exento_icbf" value="1" onchange="calcularNomina()">
+          Exento ICBF/SENA (S.A.S. y empleado &lt; 10 SMMLV)</label>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px;margin-bottom:12px">
+      <h4 style="margin:0 0 10px;color:#166534">3. Prestaciones sociales (provisiones mensuales)</h4>
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px">Provisión virtual cada mes para cuando toque pagar por ley.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-size:11px;font-weight:700">Prima de servicios (8.33%)</label>
+        <input name="prima_servicios" id="prima_servicios" placeholder="—" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:11px;font-weight:700">Cesantías (8.33%)</label>
+        <input name="cesantias" id="cesantias" placeholder="—" style="width:100%;padding:8px" oninput="calcularIntCes()"></div>
+        <div><label style="font-size:11px;font-weight:700">Intereses a las cesantías (1% s/ cesantías del mes)</label>
+        <input name="intereses_cesantias" id="intereses_cesantias" placeholder="—" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:11px;font-weight:700">Vacaciones (4.17%)</label>
+        <input name="vacaciones" id="vacaciones" placeholder="—" style="width:100%;padding:8px"></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label style="font-size:12px;font-weight:700">Total deducciones empleado</label>
+      <input name="deducciones" id="deducciones" readonly style="width:100%;padding:9px;background:#f1f5f9;font-weight:700"></div>
+      <div><label style="font-size:12px;font-weight:700">Neto a pagar al empleado</label>
+      <input id="neto_preview" readonly style="width:100%;padding:9px;background:#dcfce7;font-weight:800;color:#166534"></div>
+      <div><label style="font-size:12px;font-weight:700">Costo total empresa (aprox.)</label>
+      <input id="costo_empresa_preview" readonly style="width:100%;padding:9px;background:#fee2e2;font-weight:800;color:#991b1b"></div>
+      <div><label style="font-size:12px;font-weight:700">Medio de pago</label>
+      <input name="medio_pago" placeholder="Transferencia" style="width:100%;padding:9px"></div>
+      <div><label style="font-size:12px;font-weight:700">Referencia</label>
+      <input name="referencia" style="width:100%;padding:9px"></div>
+      <div><label style="font-size:12px;font-weight:700">Notas</label>
+      <input name="notas" style="width:100%;padding:9px"></div>
+    </div>
+    <button type="submit" style="background:#1e40af;color:#fff;border:0;padding:12px 18px;border-radius:8px;font-weight:800">Registrar liquidación de nómina</button>
   </form>
+
+  <script>
+  function num(v) {{
+    if (v === null || v === undefined || v === '') return 0;
+    var s = String(v).replace(/\\$/g,'').replace(/\\s/g,'');
+    if ((s.match(/\\./g)||[]).length > 1) s = s.replace(/\\./g,'');
+    s = s.replace(',', '.');
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }}
+  function round0(n) {{ return Math.round(n); }}
+  function calcularNomina() {{
+    var s = num(document.getElementById('salario').value);
+    if (s <= 0) return;
+    var riesgo = document.getElementById('riesgo_arl').value || '1';
+    var tasas = {{'1':0.00522,'2':0.01044,'3':0.02436,'4':0.04350,'5':0.06960}};
+    var exEps = document.getElementById('exento_eps').checked;
+    var exIcbf = document.getElementById('exento_icbf').checked;
+    document.getElementById('eps_empleado').value = round0(s * 0.04);
+    document.getElementById('pension_empleado').value = round0(s * 0.04);
+    document.getElementById('eps_empresa').value = exEps ? 0 : round0(s * 0.085);
+    document.getElementById('pension_empresa').value = round0(s * 0.12);
+    document.getElementById('arl_empresa').value = round0(s * (tasas[riesgo] || 0.00522));
+    document.getElementById('caja_compensacion').value = round0(s * 0.04);
+    document.getElementById('icbf_sena').value = exIcbf ? 0 : round0(s * 0.05);
+    document.getElementById('prima_servicios').value = round0(s * 0.0833);
+    var ces = round0(s * 0.0833);
+    document.getElementById('cesantias').value = ces;
+    document.getElementById('intereses_cesantias').value = round0(ces * 0.01);
+    document.getElementById('vacaciones').value = round0(s * 0.0417);
+    recalcDed();
+  }}
+  function calcularIntCes() {{
+    var ces = num(document.getElementById('cesantias').value);
+    document.getElementById('intereses_cesantias').value = round0(ces * 0.01);
+    recalcDed();
+  }}
+  function recalcDed() {{
+    var s = num(document.getElementById('salario').value);
+    var eps = num(document.getElementById('eps_empleado').value);
+    var pen = num(document.getElementById('pension_empleado').value);
+    var ded = eps + pen;
+    document.getElementById('deducciones').value = round0(ded);
+    document.getElementById('neto_preview').value = round0(Math.max(0, s - ded));
+    var costo = num(document.getElementById('eps_empresa').value)
+      + num(document.getElementById('pension_empresa').value)
+      + num(document.getElementById('arl_empresa').value)
+      + num(document.getElementById('caja_compensacion').value)
+      + num(document.getElementById('icbf_sena').value)
+      + num(document.getElementById('prima_servicios').value)
+      + num(document.getElementById('cesantias').value)
+      + num(document.getElementById('intereses_cesantias').value)
+      + num(document.getElementById('vacaciones').value);
+    document.getElementById('costo_empresa_preview').value = round0(costo);
+  }}
+  </script>
+
+  <hr style="border:0;border-top:1px solid #e2e8f0;margin:24px 0">
   <form method="GET" style="margin-bottom:10px">
     <label style="font-size:12px;font-weight:700">Filtrar periodo </label>
     <input name="periodo" value="{_esc(periodo_f)}" placeholder="YYYY-MM" style="padding:6px 8px">
@@ -50652,12 +50911,12 @@ def gerencia_nomina():
         <th style="padding:8px;text-align:left">Periodo</th>
         <th style="padding:8px;text-align:left">Trabajador</th>
         <th style="padding:8px;text-align:left">Documento</th>
-        <th style="padding:8px;text-align:left">Concepto</th>
-        <th style="padding:8px;text-align:right">Bruto</th>
+        <th style="padding:8px;text-align:right">Salario</th>
         <th style="padding:8px;text-align:right">Deducciones</th>
         <th style="padding:8px;text-align:right">Neto</th>
+        <th style="padding:8px;text-align:right">Costo empresa</th>
         <th style="padding:8px;text-align:left">Estado</th>
-        <th style="padding:8px;text-align:left">Fecha pago</th>
+        <th style="padding:8px;text-align:left">Fecha</th>
         <th style="padding:8px;text-align:left">Acciones</th>
       </tr>
       {filas_html}
@@ -50666,8 +50925,6 @@ def gerencia_nomina():
 </section>
 """
     return page("Nómina", shell(body))
-
-
 
 
 @app.route("/gerencia/contratos-firmas", methods=["GET", "POST"])
