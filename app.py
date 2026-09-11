@@ -2430,6 +2430,12 @@ class ProcsisRut(db.Model):
     responsabilidad = db.Column(db.String(120), default="05 - Régimen Ordinario")
     no_responsable_iva = db.Column(db.Boolean, default=True)
     razon_social_operacion = db.Column(db.String(160), default="PROCSIS")
+    # Extra DIAN
+    numero_formulario = db.Column(db.String(40), default="")  # Nro. formulario RUT
+    direccion_seccional = db.Column(db.String(200), default="")  # Dirección seccional DIAN
+    seccional_codigo = db.Column(db.String(20), default="")
+    fecha_expedicion = db.Column(db.String(20), default="")
+    fecha_inicio_actividades = db.Column(db.String(20), default="")
     # meta
     actualizado_en = db.Column(db.String(30), default="")
     actualizado_por = db.Column(db.String(80), default="")
@@ -51665,6 +51671,29 @@ def gerencia_datos_rut():
         db.create_all()
     except Exception:
         pass
+    for _sql in [
+        "ALTER TABLE procsis_rut ADD COLUMN IF NOT EXISTS numero_formulario VARCHAR(40) DEFAULT ''",
+        "ALTER TABLE procsis_rut ADD COLUMN IF NOT EXISTS direccion_seccional VARCHAR(200) DEFAULT ''",
+        "ALTER TABLE procsis_rut ADD COLUMN IF NOT EXISTS seccional_codigo VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE procsis_rut ADD COLUMN IF NOT EXISTS fecha_expedicion VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE procsis_rut ADD COLUMN IF NOT EXISTS fecha_inicio_actividades VARCHAR(20) DEFAULT ''",
+    ]:
+        try:
+            db.session.execute(text(_sql))
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.execute(text(_sql.replace(" IF NOT EXISTS", "")))
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
     msg = err = ""
     row = _procsis_rut()
     if request.method == "POST":
@@ -51688,6 +51717,11 @@ def gerencia_datos_rut():
             row.responsabilidad = (request.form.get("responsabilidad") or "").strip()[:120]
             row.no_responsable_iva = request.form.get("no_responsable_iva") == "1"
             row.razon_social_operacion = (request.form.get("razon_social_operacion") or "PROCSIS").strip()[:160]
+            row.numero_formulario = (request.form.get("numero_formulario") or "").strip()[:40]
+            row.direccion_seccional = (request.form.get("direccion_seccional") or "").strip()[:200]
+            row.seccional_codigo = (request.form.get("seccional_codigo") or "").strip()[:20]
+            row.fecha_expedicion = (request.form.get("fecha_expedicion") or "").strip()[:20]
+            row.fecha_inicio_actividades = (request.form.get("fecha_inicio_actividades") or "").strip()[:20]
             row.actualizado_en = (fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else "")
             row.actualizado_por = session.get("usuario") or ""
             db.session.commit()
@@ -51712,7 +51746,10 @@ def gerencia_datos_rut():
   <h1>Datos del RUT (DIAN)</h1>
   <p>Identificación, ubicación y responsabilidades del representante legal / operación provisional</p>
 </div>
-<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+  <a class="btn" href="/gerencia/datos-rut/pdf" target="_blank">⬇ Descargar PDF RUT</a>
+  <a class="btn" href="/gerencia/hq">← HQ</a>
+</div></header>
 <section class="role-panel">
   {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
   {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
@@ -51789,6 +51826,32 @@ def gerencia_datos_rut():
     </div>
 
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+      <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">2b. Formulario y Dirección Seccional DIAN</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:12px;font-weight:700">Número de formulario RUT</label>
+          <input name="numero_formulario" value="{_esc(getattr(r,'numero_formulario',None) or '')}" placeholder="Ej: 160000000000" style="width:100%;padding:9px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">Código seccional</label>
+          <input name="seccional_codigo" value="{_esc(getattr(r,'seccional_codigo',None) or '')}" placeholder="Ej: 05" style="width:100%;padding:9px">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:12px;font-weight:700">Dirección seccional DIAN</label>
+          <input name="direccion_seccional" value="{_esc(getattr(r,'direccion_seccional',None) or '')}" placeholder="Ej: Dirección Seccional de Impuestos de Medellín / Oriente Antioqueño" style="width:100%;padding:9px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">Fecha expedición / actualización RUT</label>
+          <input name="fecha_expedicion" value="{_esc(getattr(r,'fecha_expedicion',None) or '')}" placeholder="YYYY-MM-DD" style="width:100%;padding:9px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">Fecha inicio de actividades</label>
+          <input name="fecha_inicio_actividades" value="{_esc(getattr(r,'fecha_inicio_actividades',None) or '')}" placeholder="YYYY-MM-DD" style="width:100%;padding:9px">
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
       <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">3. Clasificación y responsabilidades (casillas 46–53)</h3>
       <div style="display:grid;grid-template-columns:120px 1fr;gap:10px">
         <div>
@@ -51815,6 +51878,115 @@ def gerencia_datos_rut():
 </section>
 """
     return page("Datos del RUT", shell(body))
+
+
+
+
+@app.route("/gerencia/datos-rut/pdf")
+def gerencia_datos_rut_pdf():
+    """PDF de datos del RUT para validaciones internas / soporte legal."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    r = _procsis_rut()
+    if not r:
+        return "Sin datos de RUT configurados", 404
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 72, W, 72, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, H - 28, "PROCSIS · Datos del RUT (DIAN)")
+    c.setFont("Helvetica", 9)
+    c.drawString(40, H - 44, "Resumen para validaciones internas · No reemplaza el RUT oficial de la DIAN")
+    c.drawString(40, H - 58, "Generado: %s" % (
+        (fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else "")
+    ))
+
+    y = H - 100
+    left = 45
+
+    def titulo(t):
+        nonlocal y
+        y -= 8
+        c.setFillColor(colors.HexColor("#0B2D57"))
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(left, y, t)
+        y -= 6
+        c.setStrokeColor(colors.HexColor("#cbd5e1"))
+        c.line(left, y, W - 45, y)
+        y -= 14
+
+    def fila(lab, val):
+        nonlocal y
+        if y < 60:
+            c.showPage()
+            y = H - 50
+        c.setFont("Helvetica", 9)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawString(left, y, lab)
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(left + 180, y, str(val or "—")[:70])
+        y -= 13
+
+    nit = (r.nit_cedula or "").strip()
+    dv = (r.digito_verificacion or "").strip()
+    nit_full = ("%s-%s" % (nit, dv)) if dv else nit
+
+    titulo("1. Identificacion")
+    fila("Numero de formulario", getattr(r, "numero_formulario", None) or "")
+    fila("Tipo de documento", r.tipo_documento)
+    fila("NIT / Cedula + DV", nit_full)
+    fila("Nombre completo", r.nombre_completo)
+    fila("Marca / operacion", r.razon_social_operacion)
+
+    titulo("2. Ubicacion")
+    fila("Departamento", "%s (%s)" % (r.departamento or "", r.departamento_codigo or ""))
+    fila("Municipio", "%s (%s)" % (r.municipio or "", r.municipio_codigo or ""))
+    fila("Direccion principal", r.direccion)
+    fila("Correo", r.correo)
+    fila("Telefono", r.telefono)
+
+    titulo("3. Direccion seccional DIAN")
+    fila("Codigo seccional", getattr(r, "seccional_codigo", None) or "")
+    fila("Direccion seccional", getattr(r, "direccion_seccional", None) or "")
+    fila("Fecha expedicion RUT", getattr(r, "fecha_expedicion", None) or "")
+    fila("Inicio de actividades", getattr(r, "fecha_inicio_actividades", None) or "")
+
+    titulo("4. Clasificacion y responsabilidades")
+    fila("CIIU principal", r.actividad_ciiu)
+    fila("Descripcion actividad", r.actividad_descripcion)
+    fila("Responsabilidades", r.responsabilidad)
+    fila("No responsable IVA", "Si" if getattr(r, "no_responsable_iva", False) else "No")
+
+    y -= 16
+    c.setFillColor(colors.HexColor("#1e3a8a"))
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(left, y, "Encabezado legal automatico:")
+    y -= 12
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    from reportlab.lib.utils import simpleSplit
+    for ln in simpleSplit(_encabezado_legal_procsis(), "Helvetica", 8, W - 90):
+        c.drawString(left, y, ln)
+        y -= 11
+
+    y -= 20
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(left, 36, "Documento interno PROCSIS · Validaciones y soporte · No es el formulario oficial DIAN")
+    c.drawString(left, 24, "Actualizado: %s por %s" % (r.actualizado_en or "—", r.actualizado_por or "—"))
+    c.save()
+    bio.seek(0)
+    safe = "".join(ch if ch.isalnum() else "_" for ch in (r.nombre_completo or "RUT"))[:30]
+    return send_file(
+        bio, as_attachment=True,
+        download_name="PROCSIS_Datos_RUT_%s.pdf" % safe,
+        mimetype="application/pdf",
+    )
 
 
 
