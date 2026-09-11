@@ -48904,10 +48904,13 @@ def _generar_pdf_contrato_personal(c_row):
         y = draw_header(True)
 
     def draw_signature_block(data_uri, box_x, box_bottom, box_w, img_h, nombre, lineas_cargo):
-        """Firma grande centrada + nombre en negrita + cargos debajo (como diseño de referencia)."""
+        """Firma pegada a la línea: imagen apoyada abajo + línea + nombre + cargo."""
         data_uri = (data_uri or "").strip()
         mid = box_x + box_w / 2
-        img_y = box_bottom + 55
+        # Línea de firma fija; la imagen se apoya justo encima (anchor sur)
+        line_y = box_bottom + 52
+        iw = min(box_w - 16, 190)
+        ih = min(max(float(img_h or 70), 48), 78)  # no demasiado alta
         if data_uri:
             try:
                 if data_uri.startswith("data:"):
@@ -48915,53 +48918,51 @@ def _generar_pdf_contrato_personal(c_row):
                 else:
                     raw = _b64.b64decode(data_uri)
                 img = ImageReader(BytesIO(raw))
-                # Ancho generoso para que se vea bien
-                iw = min(box_w - 10, 200)
-                ih = max(img_h, 70)
+                # anchor "s": el borde inferior de la imagen queda en line_y + 1 (casi tocando la línea)
                 c.drawImage(
-                    img, mid - iw / 2, img_y,
+                    img, mid - iw / 2, line_y + 1,
                     width=iw, height=ih,
-                    mask="auto", preserveAspectRatio=True, anchor="c",
+                    mask="auto", preserveAspectRatio=True, anchor="s",
                 )
             except Exception as fe:
                 print("firma bloque:", fe)
                 c.setStrokeColor(colors.HexColor("#cbd5e1"))
-                c.rect(mid - 80, img_y, 160, 50, stroke=1, fill=0)
+                c.line(mid - 90, line_y, mid + 90, line_y)
         else:
             c.setStrokeColor(colors.HexColor("#cbd5e1"))
             c.setDash(3, 2)
-            c.rect(mid - 90, img_y, 180, 55, stroke=1, fill=0)
+            c.line(mid - 90, line_y, mid + 90, line_y)
             c.setDash()
             c.setFont("Helvetica-Oblique", 8)
             c.setFillColor(colors.HexColor("#94a3b8"))
-            c.drawCentredString(mid, img_y + 24, "Espacio para firma digital")
+            c.drawCentredString(mid, line_y + 12, "Espacio para firma digital")
 
-        # Línea bajo la firma
+        # Línea de firma (justo bajo la imagen)
         c.setStrokeColor(colors.HexColor("#0f172a"))
-        c.setLineWidth(0.8)
+        c.setLineWidth(0.9)
         c.setDash()
-        c.line(mid - 95, img_y - 6, mid + 95, img_y - 6)
-        # Nombre
+        c.line(mid - 100, line_y, mid + 100, line_y)
+        # Nombre pegado a la línea
         c.setFillColor(colors.HexColor("#0f172a"))
         c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(mid, img_y - 20, (nombre or "—")[:60])
+        c.drawCentredString(mid, line_y - 13, (nombre or "—")[:60])
         # Cargos
-        cy = img_y - 33
+        cy = line_y - 25
         c.setFont("Helvetica", 8)
         c.setFillColor(colors.HexColor("#334155"))
         for ln in (lineas_cargo or [])[:4]:
             if ln:
                 c.drawCentredString(mid, cy, str(ln)[:70])
-                cy -= 11
+                cy -= 10
 
     # Dos columnas: Gerencia (izq) | Colaborador (der)
     col_w = (width - 20) / 2
     base_y = 40
     # Tamaños: por defecto más grandes que 50pt
     gw = float(getattr(c_row, "firma_gerente_w", None) or 180)
-    gh = float(getattr(c_row, "firma_gerente_h", None) or 85)
+    gh = float(getattr(c_row, "firma_gerente_h", None) or 70)
     ew = float(getattr(c_row, "firma_w", None) or 180)
-    eh = float(getattr(c_row, "firma_h", None) or 85)
+    eh = float(getattr(c_row, "firma_h", None) or 70)
     # Si el usuario puso X/Y manuales altos, respetamos posición; si no, usamos layout fijo
     use_custom = False
     try:
@@ -48985,6 +48986,8 @@ def _generar_pdf_contrato_personal(c_row):
     if use_custom:
         def _draw_custom(data_uri, fx, fy, fw, fh, nombre, lineas):
             data_uri = (data_uri or "").strip()
+            iw = max(float(fw or 140), 120)
+            ih = min(max(float(fh or 60), 45), 75)
             if data_uri:
                 try:
                     if data_uri.startswith("data:"):
@@ -48992,17 +48995,19 @@ def _generar_pdf_contrato_personal(c_row):
                     else:
                         raw = _b64.b64decode(data_uri)
                     img = ImageReader(BytesIO(raw))
-                    c.drawImage(img, fx, fy, width=max(fw, 140), height=max(fh, 70), mask="auto", preserveAspectRatio=True, anchor="sw")
+                    # imagen apoyada sobre fy (borde inferior = línea)
+                    c.drawImage(img, fx, fy + 1, width=iw, height=ih, mask="auto", preserveAspectRatio=True, anchor="s")
                 except Exception as fe:
                     print("firma custom:", fe)
             c.setStrokeColor(colors.HexColor("#0f172a"))
-            c.line(fx, fy - 4, fx + max(fw, 140), fy - 4)
+            c.setLineWidth(0.9)
+            c.line(fx, fy, fx + iw, fy)
             c.setFont("Helvetica-Bold", 9)
             c.setFillColor(colors.HexColor("#0f172a"))
-            c.drawString(fx, fy - 16, (nombre or "")[:50])
+            c.drawString(fx, fy - 13, (nombre or "")[:50])
             c.setFont("Helvetica", 8)
             c.setFillColor(colors.HexColor("#334155"))
-            yy = fy - 28
+            yy = fy - 25
             for ln in lineas[:3]:
                 c.drawString(fx, yy, str(ln)[:55])
                 yy -= 10
