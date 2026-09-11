@@ -48853,6 +48853,43 @@ def _generar_pdf_contrato_personal(c_row):
     texto = (c_row.texto_contrato or "").strip() or _texto_contrato_default(
         c_row.nombres, c_row.documento, c_row.cargo, c_row.tipo,
         c_row.fecha_inicio, c_row.valor_mensual, c_row.notas or "")
+    # Limpiar caracteres que Helvetica no dibuja (aparecen como cuadritos negros ■)
+    def _limpio_pdf(s):
+        if not s:
+            return ""
+        s = str(s)
+        # reemplazos comunes
+        repl = {
+            "\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'",
+            "\u2013": "-", "\u2014": "-", "\u2022": "-", "\u00a0": " ",
+            "\ufeff": "", "\u25a0": "", "\u25aa": "", "\u25a1": "",
+            "\u25cf": "-", "\u25cb": "-", "\ufffd": "",
+            "■": "", "□": "", "●": "-", "•": "-", "◦": "-",
+            "→": "->", "←": "<-", "✔": "", "✗": "", "★": "",
+        }
+        for a, b in repl.items():
+            s = s.replace(a, b)
+        # quitar otros no-latin1 que reportlab/Helvetica no puede
+        out = []
+        for ch in s:
+            o = ord(ch)
+            if o < 32 and ch not in ("\n", "\r", "\t"):
+                continue
+            if o == 0x25A0 or o == 0x25AA:  # black square
+                continue
+            try:
+                ch.encode("latin-1")
+                out.append(ch)
+            except UnicodeEncodeError:
+                # intentar normalizar acentos ya en latin-1; si no, omitir
+                try:
+                    import unicodedata as _ud
+                    n = _ud.normalize("NFKD", ch).encode("ascii", "ignore").decode("ascii")
+                    out.append(n if n else "")
+                except Exception:
+                    pass
+        return "".join(out)
+    texto = _limpio_pdf(texto)
 
     for para in texto.split("\n"):
         if y < MARGIN_BOTTOM_TEXT:
@@ -48904,13 +48941,24 @@ def _generar_pdf_contrato_personal(c_row):
         y = draw_header(True)
 
     def draw_signature_block(data_uri, box_x, box_bottom, box_w, img_h, nombre, lineas_cargo):
-        """Firma pegada a la línea: imagen apoyada abajo + línea + nombre + cargo."""
+        """Firma estilo documento limpio: imagen + nombre + cargos (SIN línea de firma)."""
         data_uri = (data_uri or "").strip()
         mid = box_x + box_w / 2
-        # Línea de firma fija; la imagen se apoya justo encima (anchor sur)
-        line_y = box_bottom + 52
-        iw = min(box_w - 16, 190)
-        ih = min(max(float(img_h or 70), 48), 78)  # no demasiado alta
+        base = box_bottom + 8
+        iw = min(box_w - 20, 170)
+        ih = min(max(float(img_h or 65), 45), 72)
+        # Texto debajo
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.setFont("Helvetica-Bold", 9)
+        c.drawCentredString(mid, base + 36, (nombre or "")[:55])
+        cy = base + 24
+        c.setFont("Helvetica", 7.5)
+        c.setFillColor(colors.HexColor("#334155"))
+        for ln in (lineas_cargo or [])[:4]:
+            if ln:
+                c.drawCentredString(mid, cy, str(ln)[:65])
+                cy -= 10
+        # Imagen de firma encima del bloque de texto (sin línea)
         if data_uri:
             try:
                 if data_uri.startswith("data:"):
@@ -48918,42 +48966,18 @@ def _generar_pdf_contrato_personal(c_row):
                 else:
                     raw = _b64.b64decode(data_uri)
                 img = ImageReader(BytesIO(raw))
-                # anchor "s": el borde inferior de la imagen queda en line_y + 1 (casi tocando la línea)
+                # borde inferior de la imagen justo encima del nombre
                 c.drawImage(
-                    img, mid - iw / 2, line_y + 1,
+                    img, mid - iw / 2, base + 42,
                     width=iw, height=ih,
                     mask="auto", preserveAspectRatio=True, anchor="s",
                 )
             except Exception as fe:
                 print("firma bloque:", fe)
-                c.setStrokeColor(colors.HexColor("#cbd5e1"))
-                c.line(mid - 90, line_y, mid + 90, line_y)
         else:
-            c.setStrokeColor(colors.HexColor("#cbd5e1"))
-            c.setDash(3, 2)
-            c.line(mid - 90, line_y, mid + 90, line_y)
-            c.setDash()
             c.setFont("Helvetica-Oblique", 8)
             c.setFillColor(colors.HexColor("#94a3b8"))
-            c.drawCentredString(mid, line_y + 12, "Espacio para firma digital")
-
-        # Línea de firma (justo bajo la imagen)
-        c.setStrokeColor(colors.HexColor("#0f172a"))
-        c.setLineWidth(0.9)
-        c.setDash()
-        c.line(mid - 100, line_y, mid + 100, line_y)
-        # Nombre pegado a la línea
-        c.setFillColor(colors.HexColor("#0f172a"))
-        c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(mid, line_y - 13, (nombre or "—")[:60])
-        # Cargos
-        cy = line_y - 25
-        c.setFont("Helvetica", 8)
-        c.setFillColor(colors.HexColor("#334155"))
-        for ln in (lineas_cargo or [])[:4]:
-            if ln:
-                c.drawCentredString(mid, cy, str(ln)[:70])
-                cy -= 10
+            c.drawCentredString(mid, base + 55, "(Firma digital)")
 
     # Dos columnas: Gerencia (izq) | Colaborador (der)
     col_w = (width - 20) / 2
@@ -48987,7 +49011,7 @@ def _generar_pdf_contrato_personal(c_row):
         def _draw_custom(data_uri, fx, fy, fw, fh, nombre, lineas):
             data_uri = (data_uri or "").strip()
             iw = max(float(fw or 140), 120)
-            ih = min(max(float(fh or 60), 45), 75)
+            ih = min(max(float(fh or 60), 45), 72)
             if data_uri:
                 try:
                     if data_uri.startswith("data:"):
@@ -48995,19 +49019,16 @@ def _generar_pdf_contrato_personal(c_row):
                     else:
                         raw = _b64.b64decode(data_uri)
                     img = ImageReader(BytesIO(raw))
-                    # imagen apoyada sobre fy (borde inferior = línea)
-                    c.drawImage(img, fx, fy + 1, width=iw, height=ih, mask="auto", preserveAspectRatio=True, anchor="s")
+                    c.drawImage(img, fx, fy + 14, width=iw, height=ih, mask="auto", preserveAspectRatio=True, anchor="s")
                 except Exception as fe:
                     print("firma custom:", fe)
-            c.setStrokeColor(colors.HexColor("#0f172a"))
-            c.setLineWidth(0.9)
-            c.line(fx, fy, fx + iw, fy)
+            # SIN línea: solo nombre + cargos debajo
             c.setFont("Helvetica-Bold", 9)
             c.setFillColor(colors.HexColor("#0f172a"))
-            c.drawString(fx, fy - 13, (nombre or "")[:50])
+            c.drawString(fx, fy, (nombre or "")[:50])
             c.setFont("Helvetica", 8)
             c.setFillColor(colors.HexColor("#334155"))
-            yy = fy - 25
+            yy = fy - 12
             for ln in lineas[:3]:
                 c.drawString(fx, yy, str(ln)[:55])
                 yy -= 10
@@ -50509,6 +50530,47 @@ def gerencia_nomina():
         db.create_all()
     except Exception:
         pass
+    # Asegurar columnas nuevas en PostgreSQL/SQLite (tabla puede existir sin ellas)
+    try:
+        alters = [
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS eps_empleado DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS eps_empresa DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS pension_empleado DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS pension_empresa DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS arl_empresa DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS riesgo_arl VARCHAR(20) DEFAULT '1'",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS caja_compensacion DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS icbf_sena DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS prima_servicios DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS cesantias DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS intereses_cesantias DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS vacaciones DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS costo_empresa_total DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS exento_eps_empresa BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS exento_icbf_sena BOOLEAN DEFAULT FALSE",
+        ]
+        # SQLite no soporta IF NOT EXISTS en ADD COLUMN en versiones viejas: intentar una a una
+        for sql in alters:
+            try:
+                db.session.execute(text(sql))
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                # SQLite fallback sin IF NOT EXISTS
+                try:
+                    sql2 = sql.replace(" IF NOT EXISTS", "")
+                    db.session.execute(text(sql2))
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+    except Exception as _ae:
+        print("nomina ensure cols:", _ae)
     msg = err = ""
 
     def _fnum(key, default=0.0):
