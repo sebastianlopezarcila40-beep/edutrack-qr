@@ -50574,21 +50574,26 @@ def gerencia_nomina():
     msg = err = ""
 
     def _fnum(key, default=0.0):
-        raw = (request.form.get(key) or "").replace("$", "").replace(" ", "").replace(".", "").replace(",", ".")
-        # if user typed 2500000 or 2.500.000 Colombian style
+        """Parsea pesos colombianos: 30.000 | 30.000,50 | 30000 | 30000.50"""
         raw2 = (request.form.get(key) or "").strip().replace("$", "").replace(" ", "")
+        if not raw2:
+            return float(default or 0)
         try:
-            if raw2.count(".") > 1 or (raw2.count(".") == 1 and raw2.count(",") == 0 and len(raw2.split(".")[-1]) == 3):
-                # 2.500.000 -> 2500000
-                raw2 = raw2.replace(".", "")
-            elif "," in raw2 and "." in raw2:
+            if "," in raw2:
+                # 1.200,50 -> 1200.50
                 raw2 = raw2.replace(".", "").replace(",", ".")
-            elif "," in raw2:
-                raw2 = raw2.replace(",", ".")
-            return float(raw2 or 0)
+            elif raw2.count(".") > 1:
+                raw2 = raw2.replace(".", "")
+            elif raw2.count(".") == 1:
+                left, right = raw2.split(".", 1)
+                if len(right) == 3 and right.isdigit():
+                    # miles: 30.000
+                    raw2 = left + right
+                # else decimal inglés 30.5
+            return round(float(raw2 or 0), 2)
         except Exception:
             try:
-                return float(default)
+                return float(default or 0)
             except Exception:
                 return 0.0
 
@@ -50645,38 +50650,41 @@ def gerencia_nomina():
             tasas_arl = {"1": 0.00522, "2": 0.01044, "3": 0.02436, "4": 0.04350, "5": 0.06960}
             if salario > 0:
                 if eps_e <= 0:
-                    eps_e = round(salario * 0.04, 0)
+                    eps_e = round(salario * 0.04, 2)
                 if pen_e <= 0:
-                    pen_e = round(salario * 0.04, 0)
+                    pen_e = round(salario * 0.04, 2)
                 if eps_emp <= 0 and not exento_eps:
-                    eps_emp = round(salario * 0.085, 0)
+                    eps_emp = round(salario * 0.085, 2)
                 elif exento_eps:
                     eps_emp = 0.0
                 if pen_emp <= 0:
-                    pen_emp = round(salario * 0.12, 0)
+                    pen_emp = round(salario * 0.12, 2)
                 if arl <= 0:
-                    arl = round(salario * tasas_arl.get(riesgo, 0.00522), 0)
+                    arl = round(salario * tasas_arl.get(riesgo, 0.00522), 2)
                 if caja <= 0:
-                    caja = round(salario * 0.04, 0)
+                    caja = round(salario * 0.04, 2)
                 if icbf <= 0 and not exento_icbf:
-                    icbf = round(salario * 0.05, 0)
+                    icbf = round(salario * 0.05, 2)
                 elif exento_icbf:
                     icbf = 0.0
                 if prima <= 0:
-                    prima = round(salario * 0.0833, 0)
+                    prima = round(salario * 0.0833, 2)
                 if ces <= 0:
-                    ces = round(salario * 0.0833, 0)
+                    ces = round(salario * 0.0833, 2)
                 if int_ces <= 0:
-                    int_ces = round(ces * 0.01, 0)
+                    int_ces = round(ces * 0.01, 2)
                 if vac <= 0:
-                    vac = round(salario * 0.0417, 0)
-            ded = eps_e + pen_e
+                    vac = round(salario * 0.0417, 2)
+            ded = round(eps_e + pen_e, 2)
             # permitir override deducciones
             ded_form = _fnum("deducciones")
             if ded_form > 0:
                 ded = ded_form
-            neto = max(0.0, salario - ded)
-            costo_emp = eps_emp + pen_emp + arl + caja + icbf + prima + ces + int_ces + vac
+            neto = round(max(0.0, salario - ded), 2)
+            # Costo empresa = salario + todos los aportes a cargo de la empresa
+            costo_emp = round(
+                salario + eps_emp + pen_emp + arl + caja + icbf + prima + ces + int_ces + vac, 2
+            )
             if not nombre or not periodo:
                 err = "Trabajador y periodo (YYYY-MM) son obligatorios."
             else:
@@ -50740,9 +50748,14 @@ def gerencia_nomina():
 
     def _cop_n(v):
         try:
-            return "$ " + "{:,.0f}".format(float(v or 0)).replace(",", ".")
+            n = float(v or 0)
+            # Formato COP con centavos: $ 1.200,50
+            s = "{:,.2f}".format(n)
+            # 1,200.50 -> 1.200,50
+            s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+            return "$ " + s
         except Exception:
-            return "$ 0"
+            return "$ 0,00"
 
     filas = []
     for p in pagos:
@@ -50759,6 +50772,11 @@ def gerencia_nomina():
             "<input type='hidden' name='accion' value='eliminar'>"
             "<input type='hidden' name='id' value='" + str(p.id) + "'>"
             "<button type='submit' style='font-size:11px;padding:3px 6px'>Eliminar</button></form>"
+        )
+        btn_pdf = (
+            "<a href='/gerencia/nomina/" + str(p.id) + "/pdf' target='_blank' "
+            "style='font-size:11px;padding:3px 8px;background:#0B2D57;color:#fff;border-radius:4px;"
+            "text-decoration:none;margin-right:4px'>PDF</a>"
         )
         det = (
             "<details style='font-size:11px'><summary>Ver liquidación</summary>"
@@ -50794,7 +50812,7 @@ def gerencia_nomina():
             "<td style='padding:8px;text-align:right'>" + _cop_n(getattr(p, "costo_empresa_total", 0)) + "</td>"
             "<td style='padding:8px'>" + _esc(p.estado) + "</td>"
             "<td style='padding:8px'>" + _esc(p.fecha_pago or "—") + "</td>"
-            "<td style='padding:8px'>" + btn_pag + btn_del + "</td>"
+            "<td style='padding:8px'>" + btn_pdf + btn_pag + btn_del + "</td>"
             "</tr>"
         )
     filas_html = "".join(filas) or (
@@ -50910,15 +50928,36 @@ def gerencia_nomina():
   </form>
 
   <script>
+  // Pesos colombianos: punto = miles, coma = decimales. Ej: 30.000,50 o 30000
   function num(v) {{
     if (v === null || v === undefined || v === '') return 0;
-    var s = String(v).replace(/\\$/g,'').replace(/\\s/g,'');
-    if ((s.match(/\\./g)||[]).length > 1) s = s.replace(/\\./g,'');
-    s = s.replace(',', '.');
+    var s = String(v).replace(/\\$/g,'').replace(/\\s/g,'').trim();
+    if (!s) return 0;
+    // 1.500.000,50 -> 1500000.50
+    if (s.indexOf(',') >= 0) {{
+      s = s.replace(/\\./g, '').replace(',', '.');
+    }} else if ((s.match(/\\./g) || []).length > 1) {{
+      s = s.replace(/\\./g, '');
+    }} else if ((s.match(/\\./g) || []).length === 1) {{
+      var parts = s.split('.');
+      // Si hay exactamente 3 dígitos después del punto => miles (30.000 -> 30000)
+      if (parts[1].length === 3 && /^\\d+$/.test(parts[1])) {{
+        s = parts[0] + parts[1];
+      }}
+      // si no, se deja como decimal (30.5)
+    }}
     var n = parseFloat(s);
     return isNaN(n) ? 0 : n;
   }}
-  function round0(n) {{ return Math.round(n); }}
+  function money(n) {{
+    // Formato COP: 1.200,50
+    n = Math.round((Number(n) || 0) * 100) / 100;
+    var neg = n < 0;
+    n = Math.abs(n);
+    var parts = n.toFixed(2).split('.');
+    var ent = parts[0].replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, '.');
+    return (neg ? '-' : '') + ent + ',' + parts[1];
+  }}
   function calcularNomina() {{
     var s = num(document.getElementById('salario').value);
     if (s <= 0) return;
@@ -50926,23 +50965,23 @@ def gerencia_nomina():
     var tasas = {{'1':0.00522,'2':0.01044,'3':0.02436,'4':0.04350,'5':0.06960}};
     var exEps = document.getElementById('exento_eps').checked;
     var exIcbf = document.getElementById('exento_icbf').checked;
-    document.getElementById('eps_empleado').value = round0(s * 0.04);
-    document.getElementById('pension_empleado').value = round0(s * 0.04);
-    document.getElementById('eps_empresa').value = exEps ? 0 : round0(s * 0.085);
-    document.getElementById('pension_empresa').value = round0(s * 0.12);
-    document.getElementById('arl_empresa').value = round0(s * (tasas[riesgo] || 0.00522));
-    document.getElementById('caja_compensacion').value = round0(s * 0.04);
-    document.getElementById('icbf_sena').value = exIcbf ? 0 : round0(s * 0.05);
-    document.getElementById('prima_servicios').value = round0(s * 0.0833);
-    var ces = round0(s * 0.0833);
-    document.getElementById('cesantias').value = ces;
-    document.getElementById('intereses_cesantias').value = round0(ces * 0.01);
-    document.getElementById('vacaciones').value = round0(s * 0.0417);
+    document.getElementById('eps_empleado').value = money(s * 0.04);
+    document.getElementById('pension_empleado').value = money(s * 0.04);
+    document.getElementById('eps_empresa').value = money(exEps ? 0 : s * 0.085);
+    document.getElementById('pension_empresa').value = money(s * 0.12);
+    document.getElementById('arl_empresa').value = money(s * (tasas[riesgo] || 0.00522));
+    document.getElementById('caja_compensacion').value = money(s * 0.04);
+    document.getElementById('icbf_sena').value = money(exIcbf ? 0 : s * 0.05);
+    document.getElementById('prima_servicios').value = money(s * 0.0833);
+    var ces = s * 0.0833;
+    document.getElementById('cesantias').value = money(ces);
+    document.getElementById('intereses_cesantias').value = money(ces * 0.01);
+    document.getElementById('vacaciones').value = money(s * 0.0417);
     recalcDed();
   }}
   function calcularIntCes() {{
     var ces = num(document.getElementById('cesantias').value);
-    document.getElementById('intereses_cesantias').value = round0(ces * 0.01);
+    document.getElementById('intereses_cesantias').value = money(ces * 0.01);
     recalcDed();
   }}
   function recalcDed() {{
@@ -50950,9 +50989,11 @@ def gerencia_nomina():
     var eps = num(document.getElementById('eps_empleado').value);
     var pen = num(document.getElementById('pension_empleado').value);
     var ded = eps + pen;
-    document.getElementById('deducciones').value = round0(ded);
-    document.getElementById('neto_preview').value = round0(Math.max(0, s - ded));
-    var costo = num(document.getElementById('eps_empresa').value)
+    document.getElementById('deducciones').value = money(ded);
+    document.getElementById('neto_preview').value = money(Math.max(0, s - ded));
+    // Costo empresa = salario + aportes empresa (NO incluye deducciones del empleado)
+    var costo = s
+      + num(document.getElementById('eps_empresa').value)
       + num(document.getElementById('pension_empresa').value)
       + num(document.getElementById('arl_empresa').value)
       + num(document.getElementById('caja_compensacion').value)
@@ -50961,16 +51002,17 @@ def gerencia_nomina():
       + num(document.getElementById('cesantias').value)
       + num(document.getElementById('intereses_cesantias').value)
       + num(document.getElementById('vacaciones').value);
-    document.getElementById('costo_empresa_preview').value = round0(costo);
+    document.getElementById('costo_empresa_preview').value = money(costo);
   }}
   </script>
 
   <hr style="border:0;border-top:1px solid #e2e8f0;margin:24px 0">
-  <form method="GET" style="margin-bottom:10px">
+  <form method="GET" style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
     <label style="font-size:12px;font-weight:700">Filtrar periodo </label>
     <input name="periodo" value="{_esc(periodo_f)}" placeholder="YYYY-MM" style="padding:6px 8px">
     <button type="submit" style="padding:6px 10px">Filtrar</button>
-    <a href="/gerencia/nomina" style="margin-left:8px">Limpiar</a>
+    <a href="/gerencia/nomina" style="margin-left:4px">Limpiar</a>
+    <a href="/gerencia/nomina/excel{'?periodo='+_esc(periodo_f) if periodo_f else ''}" style="background:#15803d;color:#fff;padding:7px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">⬇ Excel pagos</a>
   </form>
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -51253,6 +51295,233 @@ def gerencia_contratos_firmas():
 </section>
 """
     return page("Contratos y firmas", shell(body))
+
+
+
+@app.route("/gerencia/nomina/excel")
+def gerencia_nomina_excel():
+    """Exportar liquidaciones de nómina a Excel."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    periodo_f = (request.args.get("periodo") or "").strip()[:7]
+    q = NominaPago.query
+    if periodo_f:
+        q = q.filter_by(periodo=periodo_f)
+    pagos = q.order_by(NominaPago.id.desc()).limit(2000).all()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Nomina"
+    headers = [
+        "ID", "Periodo", "Trabajador", "Documento", "Concepto", "Salario basico",
+        "EPS empleado", "Pension empleado", "EPS empresa", "Pension empresa", "ARL",
+        "Caja compensacion", "ICBF SENA", "Prima", "Cesantias", "Int. cesantias", "Vacaciones",
+        "Deducciones", "Neto", "Costo empresa", "Estado", "Fecha pago", "Medio pago", "Referencia",
+    ]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="0B2D57")
+    for r, p in enumerate(pagos, 2):
+        vals = [
+            p.id, p.periodo, p.trabajador_nombre, p.documento, p.concepto, p.valor_bruto or 0,
+            getattr(p, "eps_empleado", 0) or 0, getattr(p, "pension_empleado", 0) or 0,
+            getattr(p, "eps_empresa", 0) or 0, getattr(p, "pension_empresa", 0) or 0,
+            getattr(p, "arl_empresa", 0) or 0, getattr(p, "caja_compensacion", 0) or 0,
+            getattr(p, "icbf_sena", 0) or 0, getattr(p, "prima_servicios", 0) or 0,
+            getattr(p, "cesantias", 0) or 0, getattr(p, "intereses_cesantias", 0) or 0,
+            getattr(p, "vacaciones", 0) or 0, p.deducciones or 0, p.valor_neto or 0,
+            getattr(p, "costo_empresa_total", 0) or 0, p.estado, p.fecha_pago, p.medio_pago, p.referencia,
+        ]
+        for c, v in enumerate(vals, 1):
+            ws.cell(row=r, column=c, value=v)
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    fname = "PROCSIS_Nomina_%s.xlsx" % (periodo_f or "todos")
+    try:
+        registrar_auditoria("Nomina Excel", "n=%s periodo=%s" % (len(pagos), periodo_f))
+    except Exception:
+        pass
+    return send_file(
+        bio, as_attachment=True, download_name=fname,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@app.route("/gerencia/nomina/<int:nid>/pdf")
+def gerencia_nomina_pdf(nid):
+    """PDF de pre-liquidación (PENDIENTE) o comprobante de pago (PAGADO)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    p = NominaPago.query.get_or_404(nid)
+    from reportlab.lib.utils import simpleSplit
+    import hashlib
+
+    def cop(v):
+        try:
+            n = float(v or 0)
+            s = "{:,.2f}".format(n).replace(",", "X").replace(".", ",").replace("X", ".")
+            return "$ " + s
+        except Exception:
+            return "$ 0,00"
+
+    pagado = (p.estado or "").upper() == "PAGADO"
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    # Header
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 70, W, 70, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, H - 28, "PROCSIS")
+    c.setFont("Helvetica", 9)
+    if pagado:
+        c.drawString(40, H - 44, "Comprobante de Pago de Nomina / Recibo de Liquidacion")
+        c.drawString(40, H - 58, "Documento valido como soporte de desembolso")
+    else:
+        c.drawString(40, H - 44, "Pre-liquidacion de Nomina / Volante Provisional")
+        c.drawString(40, H - 58, "Documento interno de revision")
+    # Sello estado
+    if pagado:
+        c.setFillColor(colors.HexColor("#166534"))
+        c.setFont("Helvetica-Bold", 16)
+        c.drawRightString(W - 40, H - 40, "PAGADO / PROCESADO")
+    else:
+        c.setFillColor(colors.HexColor("#b91c1c"))
+        c.setFont("Helvetica-Bold", 11)
+        c.drawRightString(W - 40, H - 32, "PENDIENTE DE PAGO")
+        c.setFont("Helvetica", 8)
+        c.drawRightString(W - 40, H - 46, "NO VALIDO COMO SOPORTE DE DESEMBOLSO")
+
+    y = H - 95
+    left = 45
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(left, y, "Trabajador: %s" % (p.trabajador_nombre or "—"))
+    y -= 14
+    c.setFont("Helvetica", 9)
+    c.drawString(left, y, "Documento: %s   |   Periodo: %s   |   Concepto: %s" % (
+        p.documento or "—", p.periodo or "—", p.concepto or "—"))
+    y -= 14
+    c.drawString(left, y, "Estado: %s   |   Fecha pago: %s   |   Medio: %s   |   Ref: %s" % (
+        p.estado or "—", p.fecha_pago or "—", p.medio_pago or "—", p.referencia or "—"))
+    y -= 20
+
+    def row(label, val, bold=False):
+        nonlocal y
+        if y < 80:
+            c.showPage()
+            y = H - 50
+        c.setFont("Helvetica-Bold" if bold else "Helvetica", 9)
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.drawString(left, y, label)
+        c.drawRightString(W - 50, y, cop(val))
+        y -= 13
+
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "1. SALARIO BASICO / IBC")
+    y -= 14
+    row("Salario basico", p.valor_bruto, True)
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "2. SEGURIDAD SOCIAL")
+    y -= 14
+    row("EPS empleado (4%) — deduccion", getattr(p, "eps_empleado", 0))
+    row("Pension empleado (4%) — deduccion", getattr(p, "pension_empleado", 0))
+    row("EPS empresa (8.5%)", getattr(p, "eps_empresa", 0))
+    row("Pension empresa (12%)", getattr(p, "pension_empresa", 0))
+    row("ARL empresa (riesgo %s)" % (getattr(p, "riesgo_arl", "1") or "1"), getattr(p, "arl_empresa", 0))
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "3. PARAFISCALES")
+    y -= 14
+    row("Caja de compensacion (4%)", getattr(p, "caja_compensacion", 0))
+    row("ICBF + SENA (5%)", getattr(p, "icbf_sena", 0))
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.drawString(left, y, "4. PRESTACIONES (PROVISIONES)")
+    y -= 14
+    row("Prima de servicios (8.33%)", getattr(p, "prima_servicios", 0))
+    row("Cesantias (8.33%)", getattr(p, "cesantias", 0))
+    row("Intereses a las cesantias (1%)", getattr(p, "intereses_cesantias", 0))
+    row("Vacaciones (4.17%)", getattr(p, "vacaciones", 0))
+    y -= 8
+    c.setStrokeColor(colors.HexColor("#cbd5e1"))
+    c.line(left, y + 6, W - 50, y + 6)
+    row("TOTAL DEDUCCIONES EMPLEADO", p.deducciones, True)
+    row("NETO A PAGAR AL EMPLEADO", p.valor_neto, True)
+    row("COSTO TOTAL EMPRESA", getattr(p, "costo_empresa_total", 0), True)
+
+    y -= 20
+    if not pagado:
+        c.setFillColor(colors.HexColor("#b91c1c"))
+        c.setFont("Helvetica-Bold", 9)
+        for ln in simpleSplit(
+            "DOCUMENTO PENDIENTE DE PAGO — NO VALIDO COMO SOPORTE DE DESEMBOLSO. "
+            "Solo para revision y aprobacion interna de gerencia.",
+            "Helvetica-Bold", 9, W - 100,
+        ):
+            c.drawString(left, y, ln)
+            y -= 12
+    else:
+        # Hash de integridad
+        payload = "|".join([
+            str(p.id), p.periodo or "", p.documento or "", str(p.valor_neto or 0),
+            p.fecha_pago or "", p.medio_pago or "", p.estado or "",
+        ])
+        hsh = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24].upper()
+        ip = ""
+        try:
+            ip = _client_ip()
+        except Exception:
+            ip = ""
+        c.setFillColor(colors.HexColor("#166534"))
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(left, y, "PAGADO / PROCESADO — Soporte legal de desembolso")
+        y -= 14
+        c.setFont("Helvetica", 8)
+        c.setFillColor(colors.HexColor("#334155"))
+        c.drawString(left, y, "Hash de seguridad: %s" % hsh)
+        y -= 11
+        c.drawString(left, y, "IP registro/consulta: %s  |  Generado: %s" % (
+            ip or "—", (fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else "")))
+        y -= 24
+        # Firmas
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.drawString(left, y, "Gerencia PROCSIS")
+        c.drawString(left + 260, y, "Trabajador / Beneficiario")
+        y -= 40
+        c.setStrokeColor(colors.HexColor("#94a3b8"))
+        c.line(left, y, left + 160, y)
+        c.line(left + 260, y, left + 420, y)
+        y -= 12
+        c.setFont("Helvetica", 8)
+        c.drawString(left, y, "Firma y sello")
+        c.drawString(left + 260, y, (p.trabajador_nombre or "Firma")[:40])
+        y -= 11
+        c.drawString(left + 260, y, "C.C. %s" % (p.documento or "—"))
+
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(left, 28, "PROCSIS · Nomina · Documento interno · ID %s" % p.id)
+    c.save()
+    bio.seek(0)
+    nombre = "Comprobante_Pago" if pagado else "Preliquidacion"
+    safe = "".join(ch if ch.isalnum() else "_" for ch in (p.trabajador_nombre or "trabajador"))[:25]
+    return send_file(
+        bio, as_attachment=True,
+        download_name="PROCSIS_%s_%s_%s.pdf" % (nombre, p.periodo or "", safe),
+        mimetype="application/pdf",
+    )
+
 
 
 if __name__ == "__main__":
