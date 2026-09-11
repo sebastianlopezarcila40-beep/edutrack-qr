@@ -2407,6 +2407,34 @@ class NominaPago(db.Model):
     creado_en = db.Column(db.String(30), default="")
 
 
+class ProcsisRut(db.Model):
+    """Datos del RUT / DIAN del representante legal u operación provisional PROCSIS (singleton id=1)."""
+    __tablename__ = "procsis_rut"
+    id = db.Column(db.Integer, primary_key=True)
+    # Identificación (casillas 5-36)
+    nit_cedula = db.Column(db.String(40), default="")
+    digito_verificacion = db.Column(db.String(2), default="")
+    tipo_documento = db.Column(db.String(60), default="Cédula de Ciudadanía")
+    nombre_completo = db.Column(db.String(200), default="")
+    # Ubicación (38-44)
+    departamento = db.Column(db.String(80), default="")
+    departamento_codigo = db.Column(db.String(10), default="")
+    municipio = db.Column(db.String(80), default="")
+    municipio_codigo = db.Column(db.String(10), default="")
+    direccion = db.Column(db.String(250), default="")
+    correo = db.Column(db.String(160), default="")
+    telefono = db.Column(db.String(40), default="")
+    # Clasificación (46-53)
+    actividad_ciiu = db.Column(db.String(20), default="6201")
+    actividad_descripcion = db.Column(db.String(200), default="Desarrollo de sistemas informáticos y software")
+    responsabilidad = db.Column(db.String(120), default="05 - Régimen Ordinario")
+    no_responsable_iva = db.Column(db.Boolean, default=True)
+    razon_social_operacion = db.Column(db.String(160), default="PROCSIS")
+    # meta
+    actualizado_en = db.Column(db.String(30), default="")
+    actualizado_por = db.Column(db.String(80), default="")
+
+
 class ContOperacion(db.Model):
     """Operación económica respaldada: compra, venta, pago, cobro, servicio, entrega, etc."""
     __tablename__ = "cont_operaciones"
@@ -19706,6 +19734,7 @@ def gerencia_hq():
         <a class="g" href="/gerencia/hojas-vida">📋 Hojas de vida / Talento</a>
         <a class="g" href="/gerencia/nomina">💵 Nómina / Pagos</a>
         <a class="g" href="/gerencia/contratos-firmas">📝 Contratos y firmas digitales</a>
+        <a class="g" href="/gerencia/datos-rut">📋 Datos del RUT (DIAN)</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -48756,6 +48785,70 @@ def _texto_contrato_default(nombre, documento, cargo, tipo="PRESTACION", fecha_i
     )
 
 
+
+
+def _procsis_rut():
+    """Obtiene (o crea) el registro único de Datos del RUT para documentos y contratos."""
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        row = ProcsisRut.query.get(1)
+    except Exception:
+        row = None
+    if not row:
+        try:
+            row = ProcsisRut(
+                id=1,
+                nit_cedula="1038062294",
+                digito_verificacion="3",
+                tipo_documento="Cédula de Ciudadanía",
+                nombre_completo="MARÍA DUBER LÓPEZ ARCILA",
+                departamento="Antioquia",
+                departamento_codigo="05",
+                municipio="Caracolí",
+                municipio_codigo="169",
+                correo="sebastianlopezarcila40@gmail.com",
+                telefono="3122837769",
+                actividad_ciiu="6201",
+                actividad_descripcion="Desarrollo de sistemas informáticos y software",
+                responsabilidad="05 - Régimen Ordinario",
+                no_responsable_iva=True,
+                razon_social_operacion="PROCSIS",
+            )
+            db.session.add(row)
+            db.session.commit()
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            print("seed ProcsisRut:", e)
+            try:
+                row = ProcsisRut.query.get(1)
+            except Exception:
+                row = None
+    return row
+
+
+def _encabezado_legal_procsis():
+    """Texto estándar para cuentas de cobro / facturas / PDFs legales."""
+    r = _procsis_rut()
+    if not r:
+        return "PROCSIS"
+    nit = (r.nit_cedula or "").strip()
+    dv = (r.digito_verificacion or "").strip()
+    nit_full = ("%s-%s" % (nit, dv)) if dv else nit
+    nombre = (r.nombre_completo or "").strip()
+    ciiu = (r.actividad_ciiu or "6201").strip()
+    marca = (r.razon_social_operacion or "PROCSIS").strip()
+    return (
+        "%s — Operado provisionalmente por %s — NIT %s, bajo actividad económica %s"
+        % (marca, nombre or "—", nit_full or "—", ciiu)
+    )
+
+
 def _generar_pdf_contrato_personal(c_row):
     """PDF de contrato: texto con negrita simple, firmas grandes estilo bloque (imagen + nombre + cargo)."""
     from reportlab.lib.utils import simpleSplit, ImageReader
@@ -48855,40 +48948,58 @@ def _generar_pdf_contrato_personal(c_row):
         c_row.fecha_inicio, c_row.valor_mensual, c_row.notas or "")
     # Limpiar caracteres que Helvetica no dibuja (aparecen como cuadritos negros ■)
     def _limpio_pdf(s):
+        """Quita cuadritos negros y caracteres que Helvetica no puede dibujar."""
         if not s:
             return ""
+        import re as _re
+        import unicodedata as _ud
         s = str(s)
-        # reemplazos comunes
+        # Quitar explicitamente todos los "cuadrados" y bullets geometricos
+        s = _re.sub(
+            r"[\u25A0-\u25FF\u2B00-\u2BFF\u2200-\u22FF■□▪▫◼◾⬛⬜◆◇●○•◦‣⁃▪]",
+            "",
+            s,
+        )
+        # Word / Office raros
+        s = s.replace("\uf0a7", "").replace("\uf0b7", "").replace("\uf0d8", "")
+        s = s.replace("\ufeff", "").replace("\u200b", "").replace("\u200c", "").replace("\u200d", "")
+        s = s.replace("\xa0", " ")
         repl = {
             "\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'",
-            "\u2013": "-", "\u2014": "-", "\u2022": "-", "\u00a0": " ",
-            "\ufeff": "", "\u25a0": "", "\u25aa": "", "\u25a1": "",
-            "\u25cf": "-", "\u25cb": "-", "\ufffd": "",
-            "■": "", "□": "", "●": "-", "•": "-", "◦": "-",
+            "\u2013": "-", "\u2014": "-", "\u2026": "...",
             "→": "->", "←": "<-", "✔": "", "✗": "", "★": "",
         }
         for a, b in repl.items():
             s = s.replace(a, b)
-        # quitar otros no-latin1 que reportlab/Helvetica no puede
         out = []
         for ch in s:
             o = ord(ch)
-            if o < 32 and ch not in ("\n", "\r", "\t"):
+            if ch in ("\n", "\r", "\t"):
+                out.append(ch)
                 continue
-            if o == 0x25A0 or o == 0x25AA:  # black square
+            if o < 32 or o == 0x7F:
+                continue
+            # rangos geometricos / private use
+            if 0x2500 <= o <= 0x257F:  # box drawing
+                continue
+            if 0x25A0 <= o <= 0x25FF:
+                continue
+            if 0xE000 <= o <= 0xF8FF:  # private use (Word bullets)
                 continue
             try:
                 ch.encode("latin-1")
                 out.append(ch)
             except UnicodeEncodeError:
-                # intentar normalizar acentos ya en latin-1; si no, omitir
                 try:
-                    import unicodedata as _ud
-                    n = _ud.normalize("NFKD", ch).encode("ascii", "ignore").decode("ascii")
-                    out.append(n if n else "")
+                    n = _ud.normalize("NFKD", ch).encode("latin-1", "ignore").decode("latin-1")
+                    if n:
+                        out.append(n)
                 except Exception:
                     pass
-        return "".join(out)
+        s2 = "".join(out)
+        # Quitar restos de simbolos al final de parrafo tipo "texto.■"
+        s2 = _re.sub(r"[\s]*[■□▪▫◼◾•]+[\s]*$", "", s2, flags=_re.M)
+        return s2
     texto = _limpio_pdf(texto)
 
     for para in texto.split("\n"):
@@ -48920,9 +49031,15 @@ def _generar_pdf_contrato_personal(c_row):
                 if y < MARGIN_BOTTOM_TEXT:
                     c.showPage()
                     y = draw_header(True)
+                ln = _limpio_pdf(ln).rstrip(" .;:") + (("" if not ln.strip() else "") )
+                # strip any trailing junk that became empty markers
+                ln = ln.replace("■", "").replace("□", "").replace("▪", "")
                 c.setFont("Helvetica", 10)
                 c.setFillColor(colors.HexColor("#0f172a"))
-                c.drawString(left, y, ln)
+                try:
+                    c.drawString(left, y, ln)
+                except Exception:
+                    c.drawString(left, y, ln.encode("latin-1", "ignore").decode("latin-1"))
                 y -= 14
         else:
             # Dibujar párrafo rich completo con wrap
@@ -48988,15 +49105,22 @@ def _generar_pdf_contrato_personal(c_row):
     ew = float(getattr(c_row, "firma_w", None) or 180)
     eh = float(getattr(c_row, "firma_h", None) or 70)
     # Si el usuario puso X/Y manuales altos, respetamos posición; si no, usamos layout fijo
+    # Siempre layout limpio sin linea de firma (estilo documento Tigo/referencia)
     use_custom = False
-    try:
-        if abs(float(getattr(c_row, "firma_gerente_x", None) or 80) - 80) > 5 or abs(float(getattr(c_row, "firma_x", None) or 350) - 350) > 5:
-            use_custom = True
-    except Exception:
-        pass
 
-    nom_g = (getattr(c_row, "nombre_firmante_gerente", None) or "Alejandro Llano Gutiérrez").strip()
-    cargo_g = (getattr(c_row, "cargo_firmante_gerente", None) or "Gerente Soporte y Experiencia").strip()
+    _rut = None
+    try:
+        _rut = _procsis_rut()
+    except Exception:
+        _rut = None
+    _rut_nombre = (_rut.nombre_completo if _rut else "") or "MARÍA DUBER LÓPEZ ARCILA"
+    _rut_doc = ""
+    if _rut:
+        _rut_doc = (_rut.nit_cedula or "").strip()
+        if (_rut.digito_verificacion or "").strip():
+            _rut_doc = "%s-%s" % (_rut_doc, _rut.digito_verificacion.strip())
+    nom_g = (getattr(c_row, "nombre_firmante_gerente", None) or _rut_nombre).strip()
+    cargo_g = (getattr(c_row, "cargo_firmante_gerente", None) or "Representante legal · NIT %s" % (_rut_doc or "—")).strip()
     lineas_g = [x.strip() for x in cargo_g.replace("|", "\n").split("\n") if x.strip()]
     if not lineas_g:
         lineas_g = ["Gerente Soporte y Experiencia", "PROCSIS"]
@@ -49054,9 +49178,15 @@ def _generar_pdf_contrato_personal(c_row):
             left + col_w + 20, base_y, col_w, eh, nom_e, lineas_e,
         )
 
-    c.setFont("Helvetica", 7)
+    c.setFont("Helvetica", 6.5)
+    c.setFillColor(colors.HexColor("#64748b"))
+    try:
+        pie = _encabezado_legal_procsis()
+    except Exception:
+        pie = "PROCSIS"
+    c.drawString(left, 22, (pie or "")[:110])
     c.setFillColor(colors.HexColor("#94a3b8"))
-    c.drawString(left, 18, "PROCSIS · Contrato editable · Documento interno · %s" % (c_row.documento or ""))
+    c.drawString(left, 12, "Contrato editable · Documento interno · %s" % (c_row.documento or ""))
     c.save()
     bio.seek(0)
     raw_pdf = bio.read()
@@ -51521,6 +51651,170 @@ def gerencia_nomina_pdf(nid):
         download_name="PROCSIS_%s_%s_%s.pdf" % (nombre, p.periodo or "", safe),
         mimetype="application/pdf",
     )
+
+
+
+
+@app.route("/gerencia/datos-rut", methods=["GET", "POST"])
+def gerencia_datos_rut():
+    """Formulario Datos del RUT (casillas clave DIAN) — representante legal / operación PROCSIS."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    row = _procsis_rut()
+    if request.method == "POST":
+        try:
+            if not row:
+                row = ProcsisRut(id=1)
+                db.session.add(row)
+            row.nit_cedula = (request.form.get("nit_cedula") or "").strip()[:40]
+            row.digito_verificacion = (request.form.get("digito_verificacion") or "").strip()[:2]
+            row.tipo_documento = (request.form.get("tipo_documento") or "Cédula de Ciudadanía").strip()[:60]
+            row.nombre_completo = (request.form.get("nombre_completo") or "").strip()[:200]
+            row.departamento = (request.form.get("departamento") or "").strip()[:80]
+            row.departamento_codigo = (request.form.get("departamento_codigo") or "").strip()[:10]
+            row.municipio = (request.form.get("municipio") or "").strip()[:80]
+            row.municipio_codigo = (request.form.get("municipio_codigo") or "").strip()[:10]
+            row.direccion = (request.form.get("direccion") or "").strip()[:250]
+            row.correo = (request.form.get("correo") or "").strip()[:160]
+            row.telefono = (request.form.get("telefono") or "").strip()[:40]
+            row.actividad_ciiu = (request.form.get("actividad_ciiu") or "6201").strip()[:20]
+            row.actividad_descripcion = (request.form.get("actividad_descripcion") or "").strip()[:200]
+            row.responsabilidad = (request.form.get("responsabilidad") or "").strip()[:120]
+            row.no_responsable_iva = request.form.get("no_responsable_iva") == "1"
+            row.razon_social_operacion = (request.form.get("razon_social_operacion") or "PROCSIS").strip()[:160]
+            row.actualizado_en = (fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else "")
+            row.actualizado_por = session.get("usuario") or ""
+            db.session.commit()
+            msg = "Datos del RUT guardados. Se usarán en contratos, cuentas de cobro y notificaciones."
+            try:
+                registrar_auditoria("RUT actualizado", "nit=%s-%s" % (row.nit_cedula, row.digito_verificacion))
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = str(e)[:150]
+            print("datos-rut save:", e)
+        row = _procsis_rut()
+
+    r = row or ProcsisRut()
+    preview = _encabezado_legal_procsis()
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Datos del RUT (DIAN)</h1>
+  <p>Identificación, ubicación y responsabilidades del representante legal / operación provisional</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;margin-bottom:16px;font-size:13px;color:#1e3a8a">
+    <b>Vista previa del encabezado legal</b> (cuentas de cobro, facturas, PDFs):<br>
+    <span style="font-family:Georgia,serif">{_esc(preview)}</span>
+  </div>
+
+  <form method="POST" style="max-width:920px;display:grid;gap:14px">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+      <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">1. Identificación (casillas 5–36 del RUT)</h3>
+      <div style="display:grid;grid-template-columns:2fr 80px 1fr;gap:10px">
+        <div>
+          <label style="font-size:12px;font-weight:700">NIT / Cédula</label>
+          <input name="nit_cedula" value="{_esc(r.nit_cedula)}" placeholder="1038062294" style="width:100%;padding:9px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">DV</label>
+          <input name="digito_verificacion" value="{_esc(r.digito_verificacion)}" maxlength="2" placeholder="3" style="width:100%;padding:9px;text-align:center;font-weight:800">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">Tipo de documento</label>
+          <select name="tipo_documento" style="width:100%;padding:9px">
+            <option {"selected" if (r.tipo_documento or "").startswith("Cédula") else ""}>Cédula de Ciudadanía</option>
+            <option {"selected" if "NIT" in (r.tipo_documento or "").upper() else ""}>NIT</option>
+            <option {"selected" if "Extranjería" in (r.tipo_documento or "") else ""}>Cédula de Extranjería</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:12px;font-weight:700">Nombre completo / Razón social</label>
+          <input name="nombre_completo" value="{_esc(r.nombre_completo)}" style="width:100%;padding:9px">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:12px;font-weight:700">Marca / nombre de operación</label>
+          <input name="razon_social_operacion" value="{_esc(r.razon_social_operacion or 'PROCSIS')}" style="width:100%;padding:9px">
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+      <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">2. Ubicación (casillas 38–44)</h3>
+      <div style="display:grid;grid-template-columns:1fr 100px 1fr 100px;gap:10px">
+        <div>
+          <label style="font-size:12px;font-weight:700">Departamento</label>
+          <input name="departamento" value="{_esc(r.departamento)}" placeholder="Antioquia" style="width:100%;padding:9px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">Cód.</label>
+          <input name="departamento_codigo" value="{_esc(r.departamento_codigo)}" placeholder="05" style="width:100%;padding:9px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">Municipio / Ciudad</label>
+          <input name="municipio" value="{_esc(r.municipio)}" placeholder="Caracolí" style="width:100%;padding:9px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">Cód.</label>
+          <input name="municipio_codigo" value="{_esc(r.municipio_codigo)}" placeholder="169" style="width:100%;padding:9px">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:12px;font-weight:700">Dirección principal</label>
+          <input name="direccion" value="{_esc(r.direccion)}" style="width:100%;padding:9px">
+        </div>
+        <div style="grid-column:1/3">
+          <label style="font-size:12px;font-weight:700">Correo electrónico</label>
+          <input name="correo" type="email" value="{_esc(r.correo)}" style="width:100%;padding:9px">
+          <p style="font-size:11px;color:#64748b;margin:4px 0 0">Se usará para notificaciones de nómina y cobros.</p>
+        </div>
+        <div style="grid-column:3/-1">
+          <label style="font-size:12px;font-weight:700">Teléfono</label>
+          <input name="telefono" value="{_esc(r.telefono)}" style="width:100%;padding:9px">
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+      <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">3. Clasificación y responsabilidades (casillas 46–53)</h3>
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:10px">
+        <div>
+          <label style="font-size:12px;font-weight:700">CIIU principal</label>
+          <input name="actividad_ciiu" value="{_esc(r.actividad_ciiu or '6201')}" style="width:100%;padding:9px;font-weight:800">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700">Descripción actividad</label>
+          <input name="actividad_descripcion" value="{_esc(r.actividad_descripcion)}" style="width:100%;padding:9px">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:12px;font-weight:700">Responsabilidades (casilla 53)</label>
+          <input name="responsabilidad" value="{_esc(r.responsabilidad)}" placeholder="05 - Régimen Ordinario" style="width:100%;padding:9px">
+        </div>
+        <div style="grid-column:1/-1;font-size:13px">
+          <label><input type="checkbox" name="no_responsable_iva" value="1" {"checked" if getattr(r,"no_responsable_iva",True) else ""}>
+          No responsable de IVA</label>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar datos del RUT</button>
+  </form>
+</section>
+"""
+    return page("Datos del RUT", shell(body))
 
 
 
