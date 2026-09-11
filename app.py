@@ -39806,6 +39806,27 @@ def soporte_consultas_descargas_reportes():
 
 def panel_fidelizacion_csat():
     """CSAT + notas de consulta. Nunca debe tumbar el portal: crea tablas y atrapa errores."""
+    try:
+        return _panel_fidelizacion_csat_inner()
+    except Exception as e_top:
+        print("fidelizacion TOP:", e_top)
+        import traceback
+        traceback.print_exc()
+        try:
+            return page(
+                "Fidelización CSAT",
+                shell(
+                    "<section class='role-panel'><h2>Fidelización CSAT</h2>"
+                    "<p class='msg danger'>No se pudo cargar el módulo por completo. "
+                    "Se registró el error para soporte. Detalle: %s</p>"
+                    "<p><a class='btn' href='/soporte_admin'>Volver a soporte</a></p></section>"
+                    % _esc(str(e_top)[:200])
+                ),
+            )
+        except Exception:
+            return "Error en Fidelización CSAT. Intente de nuevo.", 500
+
+def _panel_fidelizacion_csat_inner():
     if not requiere_login():
         # redirigir al login del portal según path
         p = request.path or ""
@@ -49034,7 +49055,7 @@ def _generar_pdf_contrato_personal(c_row):
     texto = (c_row.texto_contrato or "").strip() or _texto_contrato_default(
         c_row.nombres, c_row.documento, c_row.cargo, c_row.tipo,
         c_row.fecha_inicio, c_row.valor_mensual, c_row.notas or "")
-    # Limpiar caracteres que Helvetica no dibuja (aparecen como cuadritos negros ■)
+    # Limpiar caracteres que Helvetica no dibuja (aparecen como cuadritos negros )
     def _limpio_pdf(s):
         """Quita cuadritos negros y caracteres que Helvetica no puede dibujar."""
         if not s:
@@ -49044,7 +49065,7 @@ def _generar_pdf_contrato_personal(c_row):
         s = str(s)
         # Quitar explicitamente todos los "cuadrados" y bullets geometricos
         s = _re.sub(
-            r"[\u25A0-\u25FF\u2B00-\u2BFF\u2200-\u22FF■□▪▫◼◾⬛⬜◆◇●○•◦‣⁃▪]",
+            r"[\u25A0-\u25FF\u2B00-\u2BFF\u2200-\u22FF□▪▫◼◾⬛⬜◆◇●○•◦‣⁃▪]",
             "",
             s,
         )
@@ -49085,10 +49106,13 @@ def _generar_pdf_contrato_personal(c_row):
                 except Exception:
                     pass
         s2 = "".join(out)
-        # Quitar restos de simbolos al final de parrafo tipo "texto.■"
-        s2 = _re.sub(r"[\s]*[■□▪▫◼◾•]+[\s]*$", "", s2, flags=_re.M)
+        # Quitar restos de simbolos al final de parrafo tipo "texto."
+        s2 = _re.sub(r"[\s]*[□▪▫◼◾•]+[\s]*$", "", s2, flags=_re.M)
         return s2
     texto = _limpio_pdf(texto)
+    import re as _re2
+    texto = _re2.sub(r'[\u2500-\u257F\u25A0-\u25FF\uE000-\uF8FF]', '', texto)
+    texto = texto.replace(chr(0x7F), '').replace('\x7f', '')
 
     for para in texto.split("\n"):
         if y < MARGIN_BOTTOM_TEXT:
@@ -49121,7 +49145,7 @@ def _generar_pdf_contrato_personal(c_row):
                     y = draw_header(True)
                 ln = _limpio_pdf(ln).rstrip(" .;:") + (("" if not ln.strip() else "") )
                 # strip any trailing junk that became empty markers
-                ln = ln.replace("■", "").replace("□", "").replace("▪", "")
+                ln = ln.replace("", "").replace("□", "").replace("▪", "")
                 c.setFont("Helvetica", 10)
                 c.setFillColor(colors.HexColor("#0f172a"))
                 try:
@@ -49146,13 +49170,13 @@ def _generar_pdf_contrato_personal(c_row):
         y = draw_header(True)
 
     def draw_signature_block(data_uri, box_x, box_bottom, box_w, img_h, nombre, lineas_cargo):
-        """Firma estilo documento limpio: imagen + nombre + cargos (SIN línea de firma)."""
+        """Firma limpia: solo imagen + nombre + cargos. SIN línea horizontal."""
         data_uri = (data_uri or "").strip()
         mid = box_x + box_w / 2
         base = box_bottom + 8
         iw = min(box_w - 20, 170)
         ih = min(max(float(img_h or 65), 45), 72)
-        # Texto debajo
+        # Texto debajo (sin línea)
         c.setFillColor(colors.HexColor("#0f172a"))
         c.setFont("Helvetica-Bold", 9)
         c.drawCentredString(mid, base + 36, (nombre or "")[:55])
@@ -49163,15 +49187,26 @@ def _generar_pdf_contrato_personal(c_row):
             if ln:
                 c.drawCentredString(mid, cy, str(ln)[:65])
                 cy -= 10
-        # Imagen de firma encima del bloque de texto (sin línea)
         if data_uri:
             try:
                 if data_uri.startswith("data:"):
                     raw = _b64.b64decode(data_uri.split(",", 1)[-1])
                 else:
                     raw = _b64.b64decode(data_uri)
-                img = ImageReader(BytesIO(raw))
-                # borde inferior de la imagen justo encima del nombre
+                # Recortar borde inferior de la imagen (muchas firmas traen una línea dibujada)
+                try:
+                    from PIL import Image as _PILImage
+                    im = _PILImage.open(BytesIO(raw)).convert("RGBA")
+                    w0, h0 = im.size
+                    # quitar ~12% inferior (línea típica bajo la firma)
+                    crop_h = max(1, int(h0 * 0.88))
+                    im = im.crop((0, 0, w0, crop_h))
+                    buf2 = BytesIO()
+                    im.save(buf2, format="PNG")
+                    buf2.seek(0)
+                    img = ImageReader(buf2)
+                except Exception:
+                    img = ImageReader(BytesIO(raw))
                 c.drawImage(
                     img, mid - iw / 2, base + 42,
                     width=iw, height=ih,
@@ -50595,6 +50630,9 @@ def gerencia_contrato_editar(cid):
         c.fecha_inicio = (request.form.get("fecha_inicio") or "")[:20]
         c.valor_mensual = (request.form.get("valor_mensual") or "")[:40]
         c.texto_contrato = (request.form.get("texto_contrato") or "")[:50000]
+        # limpiar cuadritos/símbolos problemáticos al guardar
+        for _bad in ("■", "□", "▪", "▫", "●", "•", "\uf0a7", "\uf0b7"):
+            c.texto_contrato = c.texto_contrato.replace(_bad, "")
         c.nombre_firmante_gerente = (request.form.get("nombre_firmante_gerente") or c.nombre_firmante_gerente or "")[:160]
         c.cargo_firmante_gerente = (request.form.get("cargo_firmante_gerente") or c.cargo_firmante_gerente or "")[:500]
         try:
@@ -52563,6 +52601,7 @@ def certificados_apoyo_familiar():
                 creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
                 creado_por=session.get("usuario") or "",
             )
+            _fh = cert.creado_en or ""
             cert.texto = (
                 "CERTIFICADO DE %s\n\n"
                 "El/la suscrito(a) %s, identificado(a) con documento %s, certifica que durante el periodo %s "
@@ -52580,7 +52619,7 @@ def certificados_apoyo_familiar():
                 cert.beneficiario_nombre, cert.beneficiario_documento or "—",
                 "{:,.2f}".format(valor).replace(",", "X").replace(".", ",").replace("X", "."),
                 cert.concepto,
-                cert.creado_en or "",
+                _fh or cert.creado_en or "",
             )
             db.session.add(cert)
             db.session.commit()
@@ -52662,41 +52701,120 @@ def certificados_apoyo_familiar():
 @app.route("/gerencia/certificados-apoyo/<int:cid>/pdf")
 @app.route("/cobranza/certificados-apoyo/<int:cid>/pdf")
 def certificados_apoyo_pdf(cid):
+    """PDF: CERTIFICADO DE MANDATO AD HONOREM centrado + fecha/hora sistema + firma sin línea."""
     g = _guard_gerencia()
-    # permitir cobranza sin fallar
     if g and (session.get("rol") or "") not in ("Cobranza", "cobranza"):
-        return g
+        # intentar no bloquear cobranza si guard redirige
+        try:
+            if not session.get("usuario"):
+                return g
+        except Exception:
+            return g
     cert = CertificadoApoyoFamiliar.query.get_or_404(cid)
+    from reportlab.lib.utils import simpleSplit, ImageReader
+    import base64 as _b64
+    from datetime import datetime as _dt
+
+    # Fecha/hora de emisión (sistema)
+    try:
+        emitido = "%s %s" % (
+            fecha_hoy() if "fecha_hoy" in dir() else _dt.now().strftime("%Y-%m-%d"),
+            hora_actual() if "hora_actual" in dir() else _dt.now().strftime("%H:%M:%S"),
+        )
+    except Exception:
+        emitido = _dt.now().strftime("%Y-%m-%d %H:%M:%S")
+    if not (cert.creado_en or "").strip():
+        try:
+            cert.creado_en = emitido
+            db.session.commit()
+        except Exception:
+            pass
+    fecha_mostrar = (cert.creado_en or emitido).strip()
+
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=letter)
     W, H = letter
+
+    # Cabecera
     c.setFillColor(colors.HexColor("#0B2D57"))
-    c.rect(0, H - 64, W, 64, fill=1, stroke=0)
+    c.rect(0, H - 56, W, 56, fill=1, stroke=0)
     c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(40, H - 28, "PROCSIS · Certificado de apoyo / mandato")
-    c.setFont("Helvetica", 9)
-    c.drawString(40, H - 46, "Soporte contable · Fase de pre-lanzamiento · Documento interno")
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, H - 28, "PROCSIS")
+    c.setFont("Helvetica", 8)
+    c.drawString(40, H - 42, "Documento interno · Soporte contable · Fase de pre-lanzamiento")
+
     y = H - 100
-    from reportlab.lib.utils import simpleSplit
+    # Título centrado grande
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(W / 2, y, "CERTIFICADO DE MANDATO AD HONOREM")
+    y -= 28
+
     c.setFillColor(colors.HexColor("#0f172a"))
     c.setFont("Helvetica", 10)
-    for para in (cert.texto or "").split("\n"):
+    cuerpo = (cert.texto or "").strip()
+    # Forzar fecha de emisión en el cuerpo
+    if "Fecha de emisión" in cuerpo:
+        import re as _re
+        cuerpo = _re.sub(
+            r"Fecha de emisi[oó]n:\s*[^\n]*",
+            "Fecha de emisión: %s" % fecha_mostrar,
+            cuerpo,
+            flags=_re.I,
+        )
+    else:
+        cuerpo = cuerpo.rstrip() + "\n\nFecha de emisión: %s." % fecha_mostrar
+
+    for para in cuerpo.split("\n"):
         for ln in simpleSplit(para if para else " ", "Helvetica", 10, W - 90):
-            if y < 50:
+            if y < 160:
                 c.showPage()
                 y = H - 50
             c.drawString(45, y, ln)
             y -= 13
-        y -= 4
+        y -= 3
+
+    # Firma estilo limpio: imagen + nombre + cargos + solo Elaboró PROCSIS (SIN línea)
+    y = max(90, min(y - 20, 160))
+    mid = W / 2
+    # Intentar firma gerente del contrato personal más reciente o texto fijo Sebastián
+    firma_img = None
+    try:
+        # buscar última firma_gerente en contratos
+        ult = ContratoPersonal.query.filter(
+            ContratoPersonal.firma_gerente.isnot(None)
+        ).order_by(ContratoPersonal.id.desc()).first()
+        if ult and (ult.firma_gerente or "").strip():
+            firma_img = ult.firma_gerente
+    except Exception:
+        pass
+
+    if firma_img:
+        try:
+            raw = firma_img.split(",", 1)[-1] if firma_img.startswith("data:") else firma_img
+            img = ImageReader(BytesIO(_b64.b64decode(raw)))
+            c.drawImage(img, mid - 70, y + 8, width=140, height=55, mask="auto", preserveAspectRatio=True, anchor="s")
+        except Exception:
+            pass
+
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(mid, y - 6, "SEBASTIÁN LÓPEZ ARCILA")
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#334155"))
+    c.drawCentredString(mid, y - 18, "Gerente General PROCSIS")
+    c.drawCentredString(mid, y - 29, "Autorizado por su Madre (Art. 306)")
+    c.drawCentredString(mid, y - 40, "Elaboró: PROCSIS")
+
     c.setFont("Helvetica", 7)
     c.setFillColor(colors.HexColor("#94a3b8"))
-    c.drawString(45, 28, "PROCSIS · Certificado #%s · %s" % (cert.id, cert.creado_en or ""))
+    c.drawString(45, 24, "PROCSIS · Certificado #%s · Emitido %s" % (cert.id, fecha_mostrar))
     c.save()
     bio.seek(0)
     return send_file(
         bio, as_attachment=True,
-        download_name="PROCSIS_Certificado_Apoyo_%s.pdf" % cert.id,
+        download_name="PROCSIS_Certificado_Mandato_%s.pdf" % cert.id,
         mimetype="application/pdf",
     )
 
