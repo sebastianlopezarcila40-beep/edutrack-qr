@@ -2029,11 +2029,19 @@ class ContratoPersonal(db.Model):
     actualizado_en = db.Column(db.String(30), default="")
     # Extensiones: contrato editable + firma digital + vínculos
     texto_contrato = db.Column(db.Text, default="")  # cuerpo editable del contrato
-    firma_empleado = db.Column(db.Text, default="")  # data URI imagen firma
-    firma_x = db.Column(db.Float, default=350.0)  # posición X en PDF (pts)
-    firma_y = db.Column(db.Float, default=80.0)   # posición Y desde abajo
-    firma_w = db.Column(db.Float, default=120.0)  # ancho firma
-    firma_h = db.Column(db.Float, default=50.0)   # alto firma
+    firma_empleado = db.Column(db.Text, default="")  # data URI imagen firma empleado
+    firma_x = db.Column(db.Float, default=350.0)  # posición X firma empleado
+    firma_y = db.Column(db.Float, default=80.0)
+    firma_w = db.Column(db.Float, default=120.0)
+    firma_h = db.Column(db.Float, default=50.0)
+    # Firma digital del gerente / representante legal
+    firma_gerente = db.Column(db.Text, default="")
+    firma_gerente_x = db.Column(db.Float, default=80.0)
+    firma_gerente_y = db.Column(db.Float, default=80.0)
+    firma_gerente_w = db.Column(db.Float, default=120.0)
+    firma_gerente_h = db.Column(db.Float, default=50.0)
+    nombre_firmante_gerente = db.Column(db.String(160), default="")  # ej. Alejandro Llano Gutiérrez
+    cargo_firmante_gerente = db.Column(db.String(120), default="Gerente")
     hv_id = db.Column(db.Integer, nullable=True, index=True)
     trabajador_id = db.Column(db.Integer, nullable=True, index=True)
 
@@ -3916,6 +3924,14 @@ def inicializar_bd():
                     "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_h DOUBLE PRECISION DEFAULT 50",
                     "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS hv_id INTEGER",
                     "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS trabajador_id INTEGER",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_gerente TEXT DEFAULT ''",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_gerente_x DOUBLE PRECISION DEFAULT 80",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_gerente_y DOUBLE PRECISION DEFAULT 80",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_gerente_w DOUBLE PRECISION DEFAULT 120",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_gerente_h DOUBLE PRECISION DEFAULT 50",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS nombre_firmante_gerente VARCHAR(160) DEFAULT ''",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS cargo_firmante_gerente VARCHAR(120) DEFAULT 'Gerente'",
+
 
                     "ALTER TABLE plataforma ALTER COLUMN logo_path TYPE TEXT",
                     "ALTER TABLE productos_procsis ALTER COLUMN imagen TYPE TEXT",
@@ -19656,6 +19672,7 @@ def gerencia_hq():
         <a class="o" href="/gerencia/requerimientos-autoridades">⚖️ Requerimientos de autoridades</a>
         <a class="g" href="/gerencia/hojas-vida">📋 Hojas de vida / Talento</a>
         <a class="g" href="/gerencia/nomina">💵 Nómina / Pagos</a>
+        <a class="g" href="/gerencia/contratos-firmas">📝 Contratos y firmas digitales</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -48686,25 +48703,40 @@ def _generar_pdf_contrato_personal(c_row):
             c.drawString(left, y, ln)
             y -= 12
         y -= 4
-    # Firma digital del empleado (posicionable)
-    firma = (c_row.firma_empleado or "").strip()
-    if firma:
+    # Firmas digitales (gerente + empleado), posicionables
+    def _draw_firma(data_uri, fx, fy, fw, fh, etiqueta):
+        data_uri = (data_uri or "").strip()
+        if not data_uri:
+            return
         try:
-            if firma.startswith("data:"):
-                raw = _b64.b64decode(firma.split(",", 1)[-1])
+            if data_uri.startswith("data:"):
+                raw = _b64.b64decode(data_uri.split(",", 1)[-1])
             else:
-                raw = _b64.b64decode(firma)
+                raw = _b64.b64decode(data_uri)
             img = ImageReader(BytesIO(raw))
-            fx = float(getattr(c_row, "firma_x", None) or 350)
-            fy = float(getattr(c_row, "firma_y", None) or 80)
-            fw = float(getattr(c_row, "firma_w", None) or 120)
-            fh = float(getattr(c_row, "firma_h", None) or 50)
             c.drawImage(img, fx, fy, width=fw, height=fh, mask="auto", preserveAspectRatio=True, anchor="c")
             c.setFont("Helvetica", 7)
             c.setFillColor(colors.HexColor("#64748b"))
-            c.drawCentredString(fx + fw / 2, fy - 10, "Firma digital del colaborador")
+            c.drawCentredString(fx + fw / 2, fy - 10, etiqueta)
         except Exception as fe:
             print("firma contrato pdf:", fe)
+
+    _draw_firma(
+        getattr(c_row, "firma_gerente", None),
+        float(getattr(c_row, "firma_gerente_x", None) or 80),
+        float(getattr(c_row, "firma_gerente_y", None) or 80),
+        float(getattr(c_row, "firma_gerente_w", None) or 120),
+        float(getattr(c_row, "firma_gerente_h", None) or 50),
+        (getattr(c_row, "nombre_firmante_gerente", None) or "Firma Gerencia / PROCSIS"),
+    )
+    _draw_firma(
+        getattr(c_row, "firma_empleado", None),
+        float(getattr(c_row, "firma_x", None) or 350),
+        float(getattr(c_row, "firma_y", None) or 80),
+        float(getattr(c_row, "firma_w", None) or 120),
+        float(getattr(c_row, "firma_h", None) or 50),
+        "Firma digital del colaborador",
+    )
     c.setFont("Helvetica", 7)
     c.setFillColor(colors.HexColor("#94a3b8"))
     c.drawString(left, 28, "PROCSIS · Contrato editable · Documento interno · %s" % (c_row.documento or ""))
@@ -49825,25 +49857,47 @@ def gerencia_hv_contrato(hid):
             c.firma_y = float(request.form.get("firma_y") or c.firma_y or 80)
             c.firma_w = float(request.form.get("firma_w") or c.firma_w or 120)
             c.firma_h = float(request.form.get("firma_h") or c.firma_h or 50)
+            c.firma_gerente_x = float(request.form.get("firma_gerente_x") or c.firma_gerente_x or 80)
+            c.firma_gerente_y = float(request.form.get("firma_gerente_y") or c.firma_gerente_y or 80)
+            c.firma_gerente_w = float(request.form.get("firma_gerente_w") or c.firma_gerente_w or 120)
+            c.firma_gerente_h = float(request.form.get("firma_gerente_h") or c.firma_gerente_h or 50)
         except Exception:
             pass
-        # Carga de firma digital (imagen)
+        c.nombre_firmante_gerente = (request.form.get("nombre_firmante_gerente") or c.nombre_firmante_gerente or "")[:160]
+        c.cargo_firmante_gerente = (request.form.get("cargo_firmante_gerente") or c.cargo_firmante_gerente or "Gerente")[:120]
+        import base64 as _b64
+        # Firma empleado
         f = request.files.get("firma")
         if f and f.filename:
             try:
-                import base64 as _b64
                 raw = f.read()
                 if len(raw) > 2 * 1024 * 1024:
-                    err = "La imagen de firma no debe superar 2 MB."
+                    err = "La imagen de firma del empleado no debe superar 2 MB."
                 else:
                     mime = (f.mimetype or "image/png").split(";")[0]
                     if not mime.startswith("image/"):
                         mime = "image/png"
                     c.firma_empleado = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
             except Exception as fe:
-                err = "No se pudo cargar la firma: %s" % str(fe)[:80]
+                err = "No se pudo cargar la firma del empleado: %s" % str(fe)[:80]
         if request.form.get("quitar_firma") == "1":
             c.firma_empleado = ""
+        # Firma gerente
+        fg = request.files.get("firma_gerente")
+        if fg and fg.filename:
+            try:
+                raw = fg.read()
+                if len(raw) > 2 * 1024 * 1024:
+                    err = (err + " " if err else "") + "Firma del gerente > 2 MB."
+                else:
+                    mime = (fg.mimetype or "image/png").split(";")[0]
+                    if not mime.startswith("image/"):
+                        mime = "image/png"
+                    c.firma_gerente = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+            except Exception as fe:
+                err = (err + " " if err else "") + "Error firma gerente: %s" % str(fe)[:60]
+        if request.form.get("quitar_firma_gerente") == "1":
+            c.firma_gerente = ""
         c.hv_id = h.id
         c.actualizado_en = (fecha_hoy() if "fecha_hoy" in dir() else "")
         try:
@@ -49883,9 +49937,15 @@ def gerencia_hv_contrato(hid):
     firma_prev = ""
     if c.firma_empleado:
         firma_prev = (
-            '<div style="margin:8px 0"><img src="%s" alt="Firma" style="max-width:220px;max-height:90px;border:1px solid #cbd5e1;background:#fff;padding:4px">'
-            '<label style="display:block;margin-top:6px;font-size:12px"><input type="checkbox" name="quitar_firma" value="1"> Quitar firma</label></div>'
+            '<div style="margin:8px 0"><img src="%s" alt="Firma empleado" style="max-width:220px;max-height:90px;border:1px solid #cbd5e1;background:#fff;padding:4px">'
+            '<label style="display:block;margin-top:6px;font-size:12px"><input type="checkbox" name="quitar_firma" value="1"> Quitar firma del empleado</label></div>'
         ) % _esc(c.firma_empleado)
+    firma_ger_prev = ""
+    if getattr(c, "firma_gerente", None):
+        firma_ger_prev = (
+            '<div style="margin:8px 0"><img src="%s" alt="Firma gerente" style="max-width:220px;max-height:90px;border:1px solid #cbd5e1;background:#fff;padding:4px">'
+            '<label style="display:block;margin-top:6px;font-size:12px"><input type="checkbox" name="quitar_firma_gerente" value="1"> Quitar firma del gerente</label></div>'
+        ) % _esc(c.firma_gerente)
 
     body = f"""
 <header class="role-hero"><div>
@@ -49894,15 +49954,16 @@ def gerencia_hv_contrato(hid):
 </div>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
   <a class="btn" href="/gerencia/contratos-personal/{c.id}/pdf">⬇ Descargar PDF</a>
+  <a class="btn" href="/gerencia/contratos-firmas">Módulo contratos y firmas</a>
   <a class="btn" href="/gerencia/hojas-vida/{h.id}">Volver a HV</a>
   <a class="btn" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
 </div></header>
 <section class="role-panel">
   {"<div class='msg ok'>" + _esc(msg) + "</div>" if msg else ""}
   {"<div class='msg danger'>" + _esc(err) + "</div>" if err else ""}
-  <p style="font-size:13px;color:#475569">Puede modificar el texto del contrato, el valor, las fechas y cargar la <b>firma digital</b>
-  del empleado (foto de la firma). Ajuste posición X/Y y tamaño como en una foto posicionable.</p>
-  <form method="POST" enctype="multipart/form-data" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:960px">
+  <p style="font-size:13px;color:#475569">Edite el contrato y cargue las <b>dos firmas digitales</b>: la del <b>gerente</b> (PROCSIS) y la del <b>empleado</b>.
+  Cada firma se posiciona en el PDF (X/Y, ancho, alto).</p>
+  <form method="POST" enctype="multipart/form-data" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:980px">
     <div><label style="font-size:12px;font-weight:700">Nombres</label>
     <input name="nombres" value="{_esc(c.nombres)}" style="width:100%;padding:9px"></div>
     <div><label style="font-size:12px;font-weight:700">Documento (C.C.)</label>
@@ -49923,21 +49984,41 @@ def gerencia_hv_contrato(hid):
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Valor / honorarios</label>
     <input name="valor_mensual" value="{_esc(c.valor_mensual)}" placeholder="Ej: $ 2.500.000 mensuales" style="width:100%;padding:9px"></div>
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Texto del contrato (editable)</label>
-    <textarea name="texto_contrato" rows="16" style="width:100%;padding:10px;font-family:Georgia,serif;font-size:13px;line-height:1.45">{_esc(c.texto_contrato)}</textarea></div>
-    <div style="grid-column:1/-1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px">
-      <h3 style="margin:0 0 8px;color:#0B2D57;font-size:14px">Firma digital del empleado</h3>
-      <p style="font-size:12px;color:#64748b;margin:0 0 8px">Suba una foto o escaneo de la firma (PNG/JPG). Ajuste posición en el PDF (coordenadas desde la esquina inferior izquierda, en puntos).</p>
-      {firma_prev}
-      <input type="file" name="firma" accept="image/*" style="width:100%;padding:8px;margin-bottom:8px">
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-        <div><label style="font-size:11px;font-weight:700">Posición X</label><input name="firma_x" type="number" step="1" value="{_esc(c.firma_x or 350)}" style="width:100%;padding:8px"></div>
-        <div><label style="font-size:11px;font-weight:700">Posición Y</label><input name="firma_y" type="number" step="1" value="{_esc(c.firma_y or 80)}" style="width:100%;padding:8px"></div>
-        <div><label style="font-size:11px;font-weight:700">Ancho</label><input name="firma_w" type="number" step="1" value="{_esc(c.firma_w or 120)}" style="width:100%;padding:8px"></div>
-        <div><label style="font-size:11px;font-weight:700">Alto</label><input name="firma_h" type="number" step="1" value="{_esc(c.firma_h or 50)}" style="width:100%;padding:8px"></div>
+    <textarea name="texto_contrato" rows="14" style="width:100%;padding:10px;font-family:Georgia,serif;font-size:13px;line-height:1.45">{_esc(c.texto_contrato)}</textarea></div>
+
+    <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px">
+        <h3 style="margin:0 0 8px;color:#1e40af;font-size:14px">1. Firma digital del GERENTE</h3>
+        <p style="font-size:12px;color:#64748b;margin:0 0 8px">Foto o escaneo de la firma de Gerencia / representante legal PROCSIS.</p>
+        <div><label style="font-size:11px;font-weight:700">Nombre del firmante</label>
+        <input name="nombre_firmante_gerente" value="{_esc(getattr(c,'nombre_firmante_gerente',None) or 'Alejandro Llano Gutiérrez')}" style="width:100%;padding:8px;margin-bottom:6px"></div>
+        <div><label style="font-size:11px;font-weight:700">Cargo del firmante</label>
+        <input name="cargo_firmante_gerente" value="{_esc(getattr(c,'cargo_firmante_gerente',None) or 'Gerente Soporte y Experiencia')}" style="width:100%;padding:8px;margin-bottom:6px"></div>
+        {firma_ger_prev}
+        <input type="file" name="firma_gerente" accept="image/*" style="width:100%;padding:8px;margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <div><label style="font-size:10px;font-weight:700">X</label><input name="firma_gerente_x" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_x',None) or 80)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Y</label><input name="firma_gerente_y" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_y',None) or 80)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Ancho</label><input name="firma_gerente_w" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_w',None) or 120)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Alto</label><input name="firma_gerente_h" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_h',None) or 50)}" style="width:100%;padding:6px"></div>
+        </div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px">
+        <h3 style="margin:0 0 8px;color:#166534;font-size:14px">2. Firma digital del EMPLEADO</h3>
+        <p style="font-size:12px;color:#64748b;margin:0 0 8px">Foto o escaneo de la firma del colaborador contratado.</p>
+        {firma_prev}
+        <input type="file" name="firma" accept="image/*" style="width:100%;padding:8px;margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <div><label style="font-size:10px;font-weight:700">X</label><input name="firma_x" type="number" step="1" value="{_esc(c.firma_x or 350)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Y</label><input name="firma_y" type="number" step="1" value="{_esc(c.firma_y or 80)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Ancho</label><input name="firma_w" type="number" step="1" value="{_esc(c.firma_w or 120)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Alto</label><input name="firma_h" type="number" step="1" value="{_esc(c.firma_h or 50)}" style="width:100%;padding:6px"></div>
+        </div>
       </div>
     </div>
+
     <div style="grid-column:1/-1">
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar y regenerar PDF</button>
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar y regenerar PDF con firmas</button>
     </div>
   </form>
 </section>
@@ -50267,6 +50348,93 @@ def gerencia_nomina():
 </section>
 """
     return page("Nómina", shell(body))
+
+
+
+
+@app.route("/gerencia/contratos-firmas")
+def gerencia_contratos_firmas():
+    """Módulo central: listado de contratos con estado de firmas (gerente + empleado)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    rows = ContratoPersonal.query.order_by(ContratoPersonal.id.desc()).limit(200).all()
+    filas = []
+    for c in rows:
+        tiene_g = "Sí" if (getattr(c, "firma_gerente", None) or "").strip() else "No"
+        tiene_e = "Sí" if (c.firma_empleado or "").strip() else "No"
+        bg_g = "#dcfce7" if tiene_g == "Sí" else "#fee2e2"
+        bg_e = "#dcfce7" if tiene_e == "Sí" else "#fee2e2"
+        edit_url = "/gerencia/hojas-vida/%s/contrato" % c.hv_id if c.hv_id else "/gerencia/contratos-personal/%s/editar" % c.id
+        pdf = ("<a href='/gerencia/contratos-personal/%s/pdf' target='_blank'>PDF</a>" % c.id) if c.pdf_data else "—"
+        filas.append(
+            "<tr>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px;text-align:center'><span style='background:%s;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700'>%s</span></td>"
+            "<td style='padding:8px;text-align:center'><span style='background:%s;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700'>%s</span></td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'><a href='%s'>Editar + firmas</a> · %s</td>"
+            "</tr>"
+            % (
+                _esc(c.nombres),
+                _esc(c.documento),
+                _esc(c.cargo),
+                _esc(c.estado or "—"),
+                bg_g, tiene_g,
+                bg_e, tiene_e,
+                _esc(c.fecha_inicio or "—"),
+                edit_url,
+                pdf,
+            )
+        )
+    tabla = "".join(filas) or (
+        "<tr><td colspan='8' style='padding:16px;color:#64748b;text-align:center'>"
+        "Aún no hay contratos. Se generan al marcar una hoja de vida como <b>CONTRATADO</b>.</td></tr>"
+    )
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Contratos y firmas digitales</h1>
+  <p>Gerencia · Firma del gerente + firma del empleado en cada contrato</p>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+  <a class="btn" href="/gerencia/hojas-vida">Hojas de vida</a>
+  <a class="btn" href="/gerencia/contratos-personal">Gestión de contratos</a>
+  <a class="btn" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
+  <a class="btn" href="/gerencia/nomina">Nómina</a>
+</div></header>
+<section class="role-panel">
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:16px;font-size:13px;color:#1e3a8a">
+    <b>Cómo funciona</b><br>
+    1. En <b>Hojas de vida</b> marque <b>CONTRATADO</b> → se crea el contrato con nombre, C.C. y cargo.<br>
+    2. Entre a <b>Editar + firmas</b> y cargue la <b>firma del gerente</b> y la <b>firma del empleado</b> (fotos).<br>
+    3. Ajuste posición X/Y si hace falta y pulse <b>Guardar y regenerar PDF</b>.<br>
+    4. Descargue el PDF ya firmado por ambas partes.
+  </div>
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="background:#0B2D57;color:#fff">
+        <th style="padding:8px;text-align:left">Nombre</th>
+        <th style="padding:8px;text-align:left">Documento</th>
+        <th style="padding:8px;text-align:left">Cargo</th>
+        <th style="padding:8px;text-align:left">Estado</th>
+        <th style="padding:8px;text-align:center">Firma gerente</th>
+        <th style="padding:8px;text-align:center">Firma empleado</th>
+        <th style="padding:8px;text-align:left">Inicio</th>
+        <th style="padding:8px;text-align:left">Acciones</th>
+      </tr>
+      {tabla}
+    </table>
+  </div>
+</section>
+"""
+    return page("Contratos y firmas", shell(body))
 
 
 
