@@ -48722,9 +48722,10 @@ def _texto_contrato_default(nombre, documento, cargo, tipo="PRESTACION", fecha_i
 
 
 def _generar_pdf_contrato_personal(c_row):
-    """Genera PDF del contrato (texto + firma digital posicionable) y lo guarda en pdf_data."""
+    """PDF de contrato: texto con negrita simple, firmas grandes estilo bloque (imagen + nombre + cargo)."""
     from reportlab.lib.utils import simpleSplit, ImageReader
     import base64 as _b64
+    import re as _re
     meta = {}
     try:
         meta = _hv_meta()
@@ -48733,84 +48734,271 @@ def _generar_pdf_contrato_personal(c_row):
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=letter)
     W, H = letter
-    try:
-        _hv_draw_header(c, W, H, meta, subtitulo="REG-TH-003 · Contrato de vinculación")
-    except Exception:
+    left, right = 50, W - 50
+    width = right - left
+    MARGIN_BOTTOM_TEXT = 200  # espacio para firmas al final
+    HEADER_H = 78
+
+    def draw_header(cont=False):
+        # Cabecera limpia (sin franja amarilla agresiva)
         c.setFillColor(colors.HexColor("#0B2D57"))
-        c.rect(0, H - 50, W, 50, fill=1, stroke=0)
+        c.rect(0, H - HEADER_H, W, HEADER_H, fill=1, stroke=0)
+        x = 44
+        try:
+            logo = meta.get("logo") or ""
+            img = None
+            if logo.startswith("data:image"):
+                img = ImageReader(BytesIO(_b64.b64decode(logo.split(",", 1)[-1])))
+            else:
+                try:
+                    pl = _cont_logo_path_for_pdf()
+                    if pl:
+                        img = ImageReader(pl)
+                except Exception:
+                    pass
+            if img:
+                c.setFillColor(colors.white)
+                c.roundRect(28, H - 68, 46, 42, 6, fill=1, stroke=0)
+                c.drawImage(img, 31, H - 64, width=40, height=34, mask="auto", preserveAspectRatio=True, anchor="c")
+                x = 84
+        except Exception:
+            pass
         c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(40, H - 30, "PROCSIS — Contrato")
-    y = H - 100
-    left, width = 50, W - 100
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(x, H - 28, "PROCSIS")
+        c.setFont("Helvetica", 8)
+        sub = "REG-TH-003 · Contrato de vinculación" + (" (continuación)" if cont else "")
+        c.drawString(x, H - 42, "NIT %s · %s" % (meta.get("nit") or "—", sub))
+        c.drawString(x, H - 54, "Módulo: Gestión de Talento Humano y Reclutamiento")
+        # línea discreta (no amarilla)
+        c.setStrokeColor(colors.HexColor("#94a3b8"))
+        c.setLineWidth(1.2)
+        c.line(0, H - HEADER_H - 2, W, H - HEADER_H - 2)
+        return H - HEADER_H - 28  # y inicial del texto (más abajo en páginas siguientes)
+
+    def draw_rich_line(text, x, y, max_w, size=10):
+        """Soporta **negrita** o <b>...</b> en el texto."""
+        text = text or ""
+        text = text.replace("<b>", "**").replace("</b>", "**")
+        parts = _re.split(r"(\*\*[^*]+\*\*)", text)
+        cx = x
+        for part in parts:
+            if not part:
+                continue
+            bold = part.startswith("**") and part.endswith("**") and len(part) > 4
+            chunk = part[2:-2] if bold else part
+            font = "Helvetica-Bold" if bold else "Helvetica"
+            c.setFont(font, size)
+            # word wrap manual por si el tramo es largo
+            words = chunk.split(" ")
+            for wi, w in enumerate(words):
+                piece = w + (" " if wi < len(words) - 1 else "")
+                pw = c.stringWidth(piece, font, size)
+                if cx + pw > x + max_w and cx > x:
+                    y -= size + 3
+                    cx = x
+                    if y < MARGIN_BOTTOM_TEXT:
+                        return y, True  # need new page
+                c.setFillColor(colors.HexColor("#0f172a"))
+                c.drawString(cx, y, piece)
+                cx += pw
+        return y, False
+
+    y = draw_header(False)
     c.setFillColor(colors.HexColor("#0B2D57"))
-    c.setFont("Helvetica-Bold", 12)
+    c.setFont("Helvetica-Bold", 13)
     c.drawCentredString(W / 2, y, "CONTRATO DE VINCULACIÓN")
     y -= 16
     c.setFont("Helvetica", 9)
     c.setFillColor(colors.HexColor("#334155"))
     c.drawCentredString(W / 2, y, "%s · C.C. %s · Cargo: %s" % (
         c_row.nombres or "—", c_row.documento or "—", c_row.cargo or "—"))
-    y -= 20
+    y -= 22
+
     texto = (c_row.texto_contrato or "").strip() or _texto_contrato_default(
         c_row.nombres, c_row.documento, c_row.cargo, c_row.tipo,
         c_row.fecha_inicio, c_row.valor_mensual, c_row.notas or "")
-    c.setFont("Helvetica", 9)
-    c.setFillColor(colors.HexColor("#0f172a"))
-    for para in texto.split("\n"):
-        lines = simpleSplit(para if para else " ", "Helvetica", 9, width)
-        for ln in lines:
-            if y < 100:
-                c.showPage()
-                try:
-                    _hv_draw_header(c, W, H, meta, subtitulo="REG-TH-003 · Contrato (cont.)")
-                except Exception:
-                    pass
-                y = H - 90
-            c.drawString(left, y, ln)
-            y -= 12
-        y -= 4
-    # Firmas digitales (gerente + empleado), posicionables
-    def _draw_firma(data_uri, fx, fy, fw, fh, etiqueta):
-        data_uri = (data_uri or "").strip()
-        if not data_uri:
-            return
-        try:
-            if data_uri.startswith("data:"):
-                raw = _b64.b64decode(data_uri.split(",", 1)[-1])
-            else:
-                raw = _b64.b64decode(data_uri)
-            img = ImageReader(BytesIO(raw))
-            c.drawImage(img, fx, fy, width=fw, height=fh, mask="auto", preserveAspectRatio=True, anchor="c")
-            c.setFont("Helvetica", 7)
-            c.setFillColor(colors.HexColor("#64748b"))
-            c.drawCentredString(fx + fw / 2, fy - 10, etiqueta)
-        except Exception as fe:
-            print("firma contrato pdf:", fe)
 
-    _draw_firma(
-        getattr(c_row, "firma_gerente", None),
-        float(getattr(c_row, "firma_gerente_x", None) or 80),
-        float(getattr(c_row, "firma_gerente_y", None) or 80),
-        float(getattr(c_row, "firma_gerente_w", None) or 120),
-        float(getattr(c_row, "firma_gerente_h", None) or 50),
-        (getattr(c_row, "nombre_firmante_gerente", None) or "Firma Gerencia / PROCSIS"),
-    )
-    _draw_firma(
-        getattr(c_row, "firma_empleado", None),
-        float(getattr(c_row, "firma_x", None) or 350),
-        float(getattr(c_row, "firma_y", None) or 80),
-        float(getattr(c_row, "firma_w", None) or 120),
-        float(getattr(c_row, "firma_h", None) or 50),
-        "Firma digital del colaborador",
-    )
+    for para in texto.split("\n"):
+        if y < MARGIN_BOTTOM_TEXT:
+            c.showPage()
+            y = draw_header(True)
+        if not para.strip():
+            y -= 8
+            continue
+        # párrafos largos con negrita
+        remaining = para
+        # simpleSplit no entiende bold; usamos draw_rich por tramos con wrap
+        # Envolver por longitud aproximada
+        while remaining:
+            if y < MARGIN_BOTTOM_TEXT:
+                c.showPage()
+                y = draw_header(True)
+            # tomar un tramo que quepa ~ en una línea (con bold puede variar)
+            # Usamos simpleSplit sin markers luego dibujamos rich por línea completa
+            # Mejor: dibujar todo el párrafo línea a línea estimando
+            break
+        # Convertir párrafo a líneas respetando ** **
+        # Estrategia: quitar markers para medir, pero dibujar rich
+        plain = _re.sub(r"\*\*([^*]+)\*\*", r"\1", para.replace("<b>", "").replace("</b>", ""))
+        line_list = simpleSplit(plain if plain else " ", "Helvetica", 10, width)
+        # Si no hay bold, dibujar simple
+        if "**" not in para and "<b>" not in para:
+            for ln in line_list:
+                if y < MARGIN_BOTTOM_TEXT:
+                    c.showPage()
+                    y = draw_header(True)
+                c.setFont("Helvetica", 10)
+                c.setFillColor(colors.HexColor("#0f172a"))
+                c.drawString(left, y, ln)
+                y -= 14
+        else:
+            # Dibujar párrafo rich completo con wrap
+            y2, need = draw_rich_line(para, left, y, width, size=10)
+            y = y2 - 14
+            if need:
+                c.showPage()
+                y = draw_header(True)
+
+        y -= 4
+
+    # ——— Bloque de firmas estilo imagen 2 (grande, nombre + cargo) ———
+    # Si no hay espacio, nueva página dedicada a firmas
+    if y < 220:
+        c.showPage()
+        y = draw_header(True)
+
+    def draw_signature_block(data_uri, box_x, box_bottom, box_w, img_h, nombre, lineas_cargo):
+        """Firma grande centrada + nombre en negrita + cargos debajo (como diseño de referencia)."""
+        data_uri = (data_uri or "").strip()
+        mid = box_x + box_w / 2
+        img_y = box_bottom + 55
+        if data_uri:
+            try:
+                if data_uri.startswith("data:"):
+                    raw = _b64.b64decode(data_uri.split(",", 1)[-1])
+                else:
+                    raw = _b64.b64decode(data_uri)
+                img = ImageReader(BytesIO(raw))
+                # Ancho generoso para que se vea bien
+                iw = min(box_w - 10, 200)
+                ih = max(img_h, 70)
+                c.drawImage(
+                    img, mid - iw / 2, img_y,
+                    width=iw, height=ih,
+                    mask="auto", preserveAspectRatio=True, anchor="c",
+                )
+            except Exception as fe:
+                print("firma bloque:", fe)
+                c.setStrokeColor(colors.HexColor("#cbd5e1"))
+                c.rect(mid - 80, img_y, 160, 50, stroke=1, fill=0)
+        else:
+            c.setStrokeColor(colors.HexColor("#cbd5e1"))
+            c.setDash(3, 2)
+            c.rect(mid - 90, img_y, 180, 55, stroke=1, fill=0)
+            c.setDash()
+            c.setFont("Helvetica-Oblique", 8)
+            c.setFillColor(colors.HexColor("#94a3b8"))
+            c.drawCentredString(mid, img_y + 24, "Espacio para firma digital")
+
+        # Línea bajo la firma
+        c.setStrokeColor(colors.HexColor("#0f172a"))
+        c.setLineWidth(0.8)
+        c.setDash()
+        c.line(mid - 95, img_y - 6, mid + 95, img_y - 6)
+        # Nombre
+        c.setFillColor(colors.HexColor("#0f172a"))
+        c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(mid, img_y - 20, (nombre or "—")[:60])
+        # Cargos
+        cy = img_y - 33
+        c.setFont("Helvetica", 8)
+        c.setFillColor(colors.HexColor("#334155"))
+        for ln in (lineas_cargo or [])[:4]:
+            if ln:
+                c.drawCentredString(mid, cy, str(ln)[:70])
+                cy -= 11
+
+    # Dos columnas: Gerencia (izq) | Colaborador (der)
+    col_w = (width - 20) / 2
+    base_y = 40
+    # Tamaños: por defecto más grandes que 50pt
+    gw = float(getattr(c_row, "firma_gerente_w", None) or 180)
+    gh = float(getattr(c_row, "firma_gerente_h", None) or 85)
+    ew = float(getattr(c_row, "firma_w", None) or 180)
+    eh = float(getattr(c_row, "firma_h", None) or 85)
+    # Si el usuario puso X/Y manuales altos, respetamos posición; si no, usamos layout fijo
+    use_custom = False
+    try:
+        if abs(float(getattr(c_row, "firma_gerente_x", None) or 80) - 80) > 5 or abs(float(getattr(c_row, "firma_x", None) or 350) - 350) > 5:
+            use_custom = True
+    except Exception:
+        pass
+
+    nom_g = (getattr(c_row, "nombre_firmante_gerente", None) or "Alejandro Llano Gutiérrez").strip()
+    cargo_g = (getattr(c_row, "cargo_firmante_gerente", None) or "Gerente Soporte y Experiencia").strip()
+    lineas_g = [x.strip() for x in cargo_g.replace("|", "\n").split("\n") if x.strip()]
+    if not lineas_g:
+        lineas_g = ["Gerente Soporte y Experiencia", "PROCSIS"]
+
+    nom_e = (c_row.nombres or "Colaborador").strip()
+    lineas_e = [
+        (c_row.cargo or "Colaborador").strip(),
+        "C.C. %s" % (c_row.documento or "—"),
+    ]
+
+    if use_custom:
+        def _draw_custom(data_uri, fx, fy, fw, fh, nombre, lineas):
+            data_uri = (data_uri or "").strip()
+            if data_uri:
+                try:
+                    if data_uri.startswith("data:"):
+                        raw = _b64.b64decode(data_uri.split(",", 1)[-1])
+                    else:
+                        raw = _b64.b64decode(data_uri)
+                    img = ImageReader(BytesIO(raw))
+                    c.drawImage(img, fx, fy, width=max(fw, 140), height=max(fh, 70), mask="auto", preserveAspectRatio=True, anchor="sw")
+                except Exception as fe:
+                    print("firma custom:", fe)
+            c.setStrokeColor(colors.HexColor("#0f172a"))
+            c.line(fx, fy - 4, fx + max(fw, 140), fy - 4)
+            c.setFont("Helvetica-Bold", 9)
+            c.setFillColor(colors.HexColor("#0f172a"))
+            c.drawString(fx, fy - 16, (nombre or "")[:50])
+            c.setFont("Helvetica", 8)
+            c.setFillColor(colors.HexColor("#334155"))
+            yy = fy - 28
+            for ln in lineas[:3]:
+                c.drawString(fx, yy, str(ln)[:55])
+                yy -= 10
+        _draw_custom(
+            getattr(c_row, "firma_gerente", None),
+            float(getattr(c_row, "firma_gerente_x", None) or 60),
+            float(getattr(c_row, "firma_gerente_y", None) or 90),
+            gw, gh, nom_g, lineas_g,
+        )
+        _draw_custom(
+            getattr(c_row, "firma_empleado", None),
+            float(getattr(c_row, "firma_x", None) or 320),
+            float(getattr(c_row, "firma_y", None) or 90),
+            ew, eh, nom_e, lineas_e,
+        )
+    else:
+        draw_signature_block(
+            getattr(c_row, "firma_gerente", None),
+            left, base_y, col_w, gh, nom_g, lineas_g,
+        )
+        draw_signature_block(
+            getattr(c_row, "firma_empleado", None),
+            left + col_w + 20, base_y, col_w, eh, nom_e, lineas_e,
+        )
+
     c.setFont("Helvetica", 7)
     c.setFillColor(colors.HexColor("#94a3b8"))
-    c.drawString(left, 28, "PROCSIS · Contrato editable · Documento interno · %s" % (c_row.documento or ""))
+    c.drawString(left, 18, "PROCSIS · Contrato editable · Documento interno · %s" % (c_row.documento or ""))
     c.save()
     bio.seek(0)
     raw_pdf = bio.read()
-    import base64 as _b64
     c_row.pdf_data = "data:application/pdf;base64," + _b64.b64encode(raw_pdf).decode("ascii")
     c_row.pdf_nombre = "Contrato_%s_%s.pdf" % (
         "".join(ch if ch.isalnum() else "_" for ch in (c_row.nombres or "colaborador"))[:25],
@@ -50066,8 +50254,8 @@ def gerencia_hv_contrato(hid):
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
           <div><label style="font-size:10px;font-weight:700">X</label><input name="firma_gerente_x" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_x',None) or 80)}" style="width:100%;padding:6px"></div>
           <div><label style="font-size:10px;font-weight:700">Y</label><input name="firma_gerente_y" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_y',None) or 80)}" style="width:100%;padding:6px"></div>
-          <div><label style="font-size:10px;font-weight:700">Ancho</label><input name="firma_gerente_w" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_w',None) or 120)}" style="width:100%;padding:6px"></div>
-          <div><label style="font-size:10px;font-weight:700">Alto</label><input name="firma_gerente_h" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_h',None) or 50)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Ancho</label><input name="firma_gerente_w" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_w',None) or 180)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Alto</label><input name="firma_gerente_h" type="number" step="1" value="{_esc(getattr(c,'firma_gerente_h',None) or 85)}" style="width:100%;padding:6px"></div>
         </div>
       </div>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px">
@@ -50078,8 +50266,8 @@ def gerencia_hv_contrato(hid):
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
           <div><label style="font-size:10px;font-weight:700">X</label><input name="firma_x" type="number" step="1" value="{_esc(c.firma_x or 350)}" style="width:100%;padding:6px"></div>
           <div><label style="font-size:10px;font-weight:700">Y</label><input name="firma_y" type="number" step="1" value="{_esc(c.firma_y or 80)}" style="width:100%;padding:6px"></div>
-          <div><label style="font-size:10px;font-weight:700">Ancho</label><input name="firma_w" type="number" step="1" value="{_esc(c.firma_w or 120)}" style="width:100%;padding:6px"></div>
-          <div><label style="font-size:10px;font-weight:700">Alto</label><input name="firma_h" type="number" step="1" value="{_esc(c.firma_h or 50)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Ancho</label><input name="firma_w" type="number" step="1" value="{_esc(c.firma_w or 180)}" style="width:100%;padding:6px"></div>
+          <div><label style="font-size:10px;font-weight:700">Alto</label><input name="firma_h" type="number" step="1" value="{_esc(c.firma_h or 85)}" style="width:100%;padding:6px"></div>
         </div>
       </div>
     </div>
@@ -50112,22 +50300,40 @@ def gerencia_contrato_editar(cid):
         c.fecha_inicio = (request.form.get("fecha_inicio") or "")[:20]
         c.valor_mensual = (request.form.get("valor_mensual") or "")[:40]
         c.texto_contrato = (request.form.get("texto_contrato") or "")[:50000]
+        c.nombre_firmante_gerente = (request.form.get("nombre_firmante_gerente") or c.nombre_firmante_gerente or "")[:160]
+        c.cargo_firmante_gerente = (request.form.get("cargo_firmante_gerente") or c.cargo_firmante_gerente or "")[:500]
         try:
             c.firma_x = float(request.form.get("firma_x") or 350)
             c.firma_y = float(request.form.get("firma_y") or 80)
-            c.firma_w = float(request.form.get("firma_w") or 120)
-            c.firma_h = float(request.form.get("firma_h") or 50)
+            c.firma_w = float(request.form.get("firma_w") or 180)
+            c.firma_h = float(request.form.get("firma_h") or 85)
+            c.firma_gerente_x = float(request.form.get("firma_gerente_x") or 80)
+            c.firma_gerente_y = float(request.form.get("firma_gerente_y") or 80)
+            c.firma_gerente_w = float(request.form.get("firma_gerente_w") or 180)
+            c.firma_gerente_h = float(request.form.get("firma_gerente_h") or 85)
         except Exception:
             pass
+        import base64 as _b64
         f = request.files.get("firma")
         if f and f.filename:
             try:
-                import base64 as _b64
                 raw = f.read()
                 mime = (f.mimetype or "image/png").split(";")[0]
                 c.firma_empleado = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
             except Exception:
                 pass
+        if request.form.get("quitar_firma") == "1":
+            c.firma_empleado = ""
+        fg = request.files.get("firma_gerente")
+        if fg and fg.filename:
+            try:
+                raw = fg.read()
+                mime = (fg.mimetype or "image/png").split(";")[0]
+                c.firma_gerente = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+            except Exception:
+                pass
+        if request.form.get("quitar_firma_gerente") == "1":
+            c.firma_gerente = ""
         try:
             _generar_pdf_contrato_personal(c)
             db.session.commit()
@@ -50135,27 +50341,85 @@ def gerencia_contrato_editar(cid):
         except Exception as e:
             db.session.rollback()
             err = str(e)[:100]
+    firma_prev = ""
+    if c.firma_empleado:
+        firma_prev = (
+            '<div style="margin:8px 0"><img src="%s" style="max-width:260px;max-height:110px;border:1px solid #e2e8f0;background:#fff;padding:6px">'
+            '<label style="display:block;font-size:12px;margin-top:4px"><input type="checkbox" name="quitar_firma" value="1"> Quitar firma empleado</label></div>'
+        ) % _esc(c.firma_empleado)
+    firma_ger_prev = ""
+    if getattr(c, "firma_gerente", None):
+        firma_ger_prev = (
+            '<div style="margin:8px 0"><img src="%s" style="max-width:260px;max-height:110px;border:1px solid #e2e8f0;background:#fff;padding:6px">'
+            '<label style="display:block;font-size:12px;margin-top:4px"><input type="checkbox" name="quitar_firma_gerente" value="1"> Quitar firma gerente</label></div>'
+        ) % _esc(c.firma_gerente)
+
     body = f"""
 <header class="role-hero"><div><h1>Editar contrato #{c.id}</h1>
-<p>{_esc(c.nombres)} · {_esc(c.documento)}</p></div>
-<a class="btn" href="/gerencia/contratos-personal/{c.id}/pdf">PDF</a></header>
+<p>{_esc(c.nombres)} · {_esc(c.documento)} · {_esc(c.cargo)}</p></div>
+<div style="display:flex;gap:8px">
+  <a class="btn" href="/gerencia/contratos-personal/{c.id}/pdf">⬇ PDF</a>
+  <a class="btn" href="/gerencia/contratos-firmas">Volver a contratos</a>
+</div></header>
 <section class="role-panel">
   {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
   {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-  <form method="POST" enctype="multipart/form-data" style="max-width:900px;display:grid;gap:8px">
-    <input name="nombres" value="{_esc(c.nombres)}" placeholder="Nombres">
-    <input name="documento" value="{_esc(c.documento)}" placeholder="Documento">
-    <input name="cargo" value="{_esc(c.cargo)}" placeholder="Cargo">
-    <input name="valor_mensual" value="{_esc(c.valor_mensual)}" placeholder="Valor">
-    <textarea name="texto_contrato" rows="14">{_esc(c.texto_contrato)}</textarea>
-    <label>Firma digital <input type="file" name="firma" accept="image/*"></label>
-    <div style="display:flex;gap:8px">
-      <input name="firma_x" type="number" value="{_esc(c.firma_x or 350)}" placeholder="X">
-      <input name="firma_y" type="number" value="{_esc(c.firma_y or 80)}" placeholder="Y">
-      <input name="firma_w" type="number" value="{_esc(c.firma_w or 120)}" placeholder="Ancho">
-      <input name="firma_h" type="number" value="{_esc(c.firma_h or 50)}" placeholder="Alto">
+  <form method="POST" enctype="multipart/form-data" style="max-width:980px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div><label style="font-size:12px;font-weight:700">Nombres</label>
+    <input name="nombres" value="{_esc(c.nombres)}" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Documento</label>
+    <input name="documento" value="{_esc(c.documento)}" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Cargo</label>
+    <input name="cargo" value="{_esc(c.cargo)}" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Valor / honorarios</label>
+    <input name="valor_mensual" value="{_esc(c.valor_mensual)}" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1">
+      <label style="font-size:12px;font-weight:700">Texto del contrato</label>
+      <p style="font-size:12px;color:#64748b;margin:4px 0 6px">Use <b>**texto**</b> o &lt;b&gt;texto&lt;/b&gt; para <b>negrita</b> en el PDF.</p>
+      <textarea name="texto_contrato" rows="14" style="width:100%;padding:10px;font-family:Georgia,serif;font-size:13px;line-height:1.45">{_esc(c.texto_contrato)}</textarea>
     </div>
-    <button type="submit">Guardar</button>
+
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px">
+      <h3 style="margin:0 0 8px;color:#1e40af;font-size:14px">Firma GERENCIA</h3>
+      <p style="font-size:12px;color:#64748b;margin:0 0 8px">Diseño: foto de firma grande + nombre y cargo debajo (como en documentos PROCSIS).</p>
+      <label style="font-size:11px;font-weight:700">Nombre del firmante</label>
+      <input name="nombre_firmante_gerente" value="{_esc(getattr(c,'nombre_firmante_gerente',None) or 'Alejandro Llano Gutiérrez')}" style="width:100%;padding:8px;margin-bottom:6px">
+      <label style="font-size:11px;font-weight:700">Cargo (una línea por renglón)</label>
+      <textarea name="cargo_firmante_gerente" rows="3" style="width:100%;padding:8px;margin-bottom:6px">{_esc(getattr(c,'cargo_firmante_gerente',None) or 'Gerente Soporte y Experiencia\nPROCSIS')}</textarea>
+      {firma_ger_prev}
+      <label style="font-size:11px;font-weight:700">Subir foto de la firma</label>
+      <input type="file" name="firma_gerente" accept="image/*" style="width:100%;padding:8px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><label style="font-size:10px">Ancho firma</label><input name="firma_gerente_w" type="number" value="{_esc(getattr(c,'firma_gerente_w',None) or 180)}" style="width:100%;padding:6px"></div>
+        <div><label style="font-size:10px">Alto firma</label><input name="firma_gerente_h" type="number" value="{_esc(getattr(c,'firma_gerente_h',None) or 85)}" style="width:100%;padding:6px"></div>
+      </div>
+      <p style="font-size:11px;color:#64748b;margin:8px 0 0">Posición opcional (deje por defecto para layout automático en dos columnas):</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><label style="font-size:10px">X</label><input name="firma_gerente_x" type="number" value="{_esc(getattr(c,'firma_gerente_x',None) or 80)}" style="width:100%;padding:6px"></div>
+        <div><label style="font-size:10px">Y</label><input name="firma_gerente_y" type="number" value="{_esc(getattr(c,'firma_gerente_y',None) or 80)}" style="width:100%;padding:6px"></div>
+      </div>
+    </div>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px">
+      <h3 style="margin:0 0 8px;color:#166534;font-size:14px">Firma TRABAJADOR</h3>
+      <p style="font-size:12px;color:#64748b;margin:0 0 8px">Foto de la firma del empleado. Se muestra grande con nombre, cargo y C.C.</p>
+      {firma_prev}
+      <label style="font-size:11px;font-weight:700">Subir foto de la firma</label>
+      <input type="file" name="firma" accept="image/*" style="width:100%;padding:8px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><label style="font-size:10px">Ancho firma</label><input name="firma_w" type="number" value="{_esc(c.firma_w or 180)}" style="width:100%;padding:6px"></div>
+        <div><label style="font-size:10px">Alto firma</label><input name="firma_h" type="number" value="{_esc(c.firma_h or 85)}" style="width:100%;padding:6px"></div>
+      </div>
+      <p style="font-size:11px;color:#64748b;margin:8px 0 0">Posición opcional:</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><label style="font-size:10px">X</label><input name="firma_x" type="number" value="{_esc(c.firma_x or 350)}" style="width:100%;padding:6px"></div>
+        <div><label style="font-size:10px">Y</label><input name="firma_y" type="number" value="{_esc(c.firma_y or 80)}" style="width:100%;padding:6px"></div>
+      </div>
+    </div>
+
+    <div style="grid-column:1/-1">
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;width:100%">Guardar y regenerar PDF con firmas grandes</button>
+    </div>
   </form>
 </section>
 """
