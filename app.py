@@ -21402,14 +21402,34 @@ def gerencia_contratos_personal():
 
 @app.route("/gerencia/contratos-personal/<int:cid>/pdf")
 def gerencia_contrato_pdf(cid):
+    """Siempre regenera el PDF limpio (sin cuadritos negros ni líneas viejas)."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
     c = ContratoPersonal.query.get_or_404(cid)
-    if not c.pdf_data:
-        return "Sin PDF", 404
     import base64 as _b64
-    data = c.pdf_data
+    # Limpiar texto guardado de simbolos negros antes de generar
+    if c.texto_contrato:
+        t = c.texto_contrato
+        for bad in ("■", "□", "▪", "▫", "●", "•", "", "", "▪", "■", "□"):
+            t = t.replace(bad, "")
+        import re as _re
+        t = _re.sub(r"[─-╿■-◿-]", "", t)
+        c.texto_contrato = t
+    try:
+        _generar_pdf_contrato_personal(c)
+        db.session.commit()
+    except Exception as e:
+        print("regenerar pdf contrato:", e)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if not c.pdf_data:
+            return "No se pudo generar el PDF: %s" % str(e)[:120], 500
+    data = c.pdf_data or ""
+    if not data:
+        return "Sin PDF", 404
     if data.startswith("data:"):
         data = data.split(",", 1)[-1]
     raw = _b64.b64decode(data)
@@ -49057,57 +49077,44 @@ def _generar_pdf_contrato_personal(c_row):
         c_row.fecha_inicio, c_row.valor_mensual, c_row.notas or "")
     # Limpiar caracteres que Helvetica no dibuja (aparecen como cuadritos negros )
     def _limpio_pdf(s):
-        """Quita cuadritos negros y caracteres que Helvetica no puede dibujar."""
+        """Elimina TODO lo que Helvetica dibuja como cuadrito negro."""
         if not s:
             return ""
         import re as _re
         import unicodedata as _ud
         s = str(s)
-        # Quitar explicitamente todos los "cuadrados" y bullets geometricos
-        s = _re.sub(
-            r"[\u25A0-\u25FF\u2B00-\u2BFF\u2200-\u22FF□▪▫◼◾⬛⬜◆◇●○•◦‣⁃▪]",
-            "",
-            s,
-        )
-        # Word / Office raros
+        # 1) Quitar explicitamente cuadrados y bullets
+        s = s.replace("■", "").replace("□", "").replace("▪", "").replace("▫", "")
+        s = s.replace("●", "").replace("•", "").replace("◦", "").replace("‣", "")
         s = s.replace("\uf0a7", "").replace("\uf0b7", "").replace("\uf0d8", "")
-        s = s.replace("\ufeff", "").replace("\u200b", "").replace("\u200c", "").replace("\u200d", "")
-        s = s.replace("\xa0", " ")
-        repl = {
-            "\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'",
-            "\u2013": "-", "\u2014": "-", "\u2026": "...",
-            "→": "->", "←": "<-", "✔": "", "✗": "", "★": "",
-        }
-        for a, b in repl.items():
-            s = s.replace(a, b)
+        s = s.replace("\ufeff", "").replace("\u200b", "").replace("\xa0", " ")
+        # 2) Rangos unicode problematicos
+        s = _re.sub(r"[\u2500-\u257F\u25A0-\u25FF\u2B00-\u2BFF\uE000-\uF8FF\u2190-\u21FF]", "", s)
+        # 3) Solo latin-1 imprimible + saltos de linea (Helvetica/WinAnsi safe)
         out = []
         for ch in s:
             o = ord(ch)
-            if ch in ("\n", "\r", "\t"):
-                out.append(ch)
+            if ch in "\n\r\t":
+                out.append("\n" if ch != "\t" else " ")
                 continue
-            if o < 32 or o == 0x7F:
+            if o < 32 or o == 127:
                 continue
-            # rangos geometricos / private use
-            if 0x2500 <= o <= 0x257F:  # box drawing
-                continue
-            if 0x25A0 <= o <= 0x25FF:
-                continue
-            if 0xE000 <= o <= 0xF8FF:  # private use (Word bullets)
-                continue
-            try:
-                ch.encode("latin-1")
-                out.append(ch)
-            except UnicodeEncodeError:
+            if o > 255:
                 try:
-                    n = _ud.normalize("NFKD", ch).encode("latin-1", "ignore").decode("latin-1")
+                    n = _ud.normalize("NFKD", ch).encode("ascii", "ignore").decode("ascii")
                     if n:
                         out.append(n)
                 except Exception:
                     pass
+                continue
+            # WinAnsi-safe subset: evitar controles C1
+            if 128 <= o <= 159:
+                continue
+            out.append(ch)
         s2 = "".join(out)
-        # Quitar restos de simbolos al final de parrafo tipo "texto."
-        s2 = _re.sub(r"[\s]*[□▪▫◼◾•]+[\s]*$", "", s2, flags=_re.M)
+        # 4) Quitar basura al final de cada linea/parrafo
+        s2 = _re.sub(r"[ \t]+$", "", s2, flags=_re.M)
+        s2 = _re.sub(r"([.!?])[^\w\n\"')\]]+$", r"\1", s2, flags=_re.M)
         return s2
     texto = _limpio_pdf(texto)
     import re as _re2
@@ -49148,10 +49155,12 @@ def _generar_pdf_contrato_personal(c_row):
                 ln = ln.replace("", "").replace("□", "").replace("▪", "")
                 c.setFont("Helvetica", 10)
                 c.setFillColor(colors.HexColor("#0f172a"))
+                safe = "".join(ch for ch in (ln or "") if ord(ch) < 256 and ord(ch) not in (127,))
+                safe = safe.replace("■", "").replace("□", "")
                 try:
-                    c.drawString(left, y, ln)
+                    c.drawString(left, y, safe)
                 except Exception:
-                    c.drawString(left, y, ln.encode("latin-1", "ignore").decode("latin-1"))
+                    c.drawString(left, y, safe.encode("latin-1", "ignore").decode("latin-1"))
                 y -= 14
         else:
             # Dibujar párrafo rich completo con wrap
