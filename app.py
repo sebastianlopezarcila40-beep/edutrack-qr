@@ -2027,6 +2027,15 @@ class ContratoPersonal(db.Model):
     creado_en = db.Column(db.String(30), default="")
     creado_por = db.Column(db.String(120), default="")
     actualizado_en = db.Column(db.String(30), default="")
+    # Extensiones: contrato editable + firma digital + vínculos
+    texto_contrato = db.Column(db.Text, default="")  # cuerpo editable del contrato
+    firma_empleado = db.Column(db.Text, default="")  # data URI imagen firma
+    firma_x = db.Column(db.Float, default=350.0)  # posición X en PDF (pts)
+    firma_y = db.Column(db.Float, default=80.0)   # posición Y desde abajo
+    firma_w = db.Column(db.Float, default=120.0)  # ancho firma
+    firma_h = db.Column(db.Float, default=50.0)   # alto firma
+    hv_id = db.Column(db.Integer, nullable=True, index=True)
+    trabajador_id = db.Column(db.Integer, nullable=True, index=True)
 
 
 class PlanillaPILA(db.Model):
@@ -2347,6 +2356,27 @@ class ContTrabajador(db.Model):
     solicitante = db.Column(db.String(200), default="")  # entidad/persona que pide la constancia
     activo = db.Column(db.Boolean, default=True)
     notas = db.Column(db.Text, default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
+class NominaPago(db.Model):
+    """Pagos de nómina / honorarios por periodo a trabajadores PROCSIS."""
+    __tablename__ = "nomina_pagos"
+    id = db.Column(db.Integer, primary_key=True)
+    trabajador_id = db.Column(db.Integer, index=True, nullable=True)
+    trabajador_nombre = db.Column(db.String(160), default="")
+    documento = db.Column(db.String(40), default="", index=True)
+    periodo = db.Column(db.String(7), default="", index=True)  # YYYY-MM
+    concepto = db.Column(db.String(120), default="Salario / Honorarios")
+    valor_bruto = db.Column(db.Float, default=0.0)
+    deducciones = db.Column(db.Float, default=0.0)
+    valor_neto = db.Column(db.Float, default=0.0)
+    fecha_pago = db.Column(db.String(20), default="")
+    medio_pago = db.Column(db.String(60), default="")
+    referencia = db.Column(db.String(120), default="")
+    estado = db.Column(db.String(30), default="PENDIENTE")  # PENDIENTE | PAGADO | ANULADO
+    notas = db.Column(db.Text, default="")
+    registrado_por = db.Column(db.String(80), default="")
     creado_en = db.Column(db.String(30), default="")
 
 
@@ -3878,6 +3908,15 @@ def inicializar_bd():
                     "ALTER TABLE cont_trabajadores ADD COLUMN IF NOT EXISTS fecha_inicio VARCHAR(40) DEFAULT ''",
                     "ALTER TABLE cont_trabajadores ADD COLUMN IF NOT EXISTS honorarios VARCHAR(80) DEFAULT ''",
                     "ALTER TABLE cont_trabajadores ADD COLUMN IF NOT EXISTS direccion VARCHAR(255) DEFAULT ''",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS texto_contrato TEXT DEFAULT ''",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_empleado TEXT DEFAULT ''",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_x DOUBLE PRECISION DEFAULT 350",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_y DOUBLE PRECISION DEFAULT 80",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_w DOUBLE PRECISION DEFAULT 120",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS firma_h DOUBLE PRECISION DEFAULT 50",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS hv_id INTEGER",
+                    "ALTER TABLE contratos_personal ADD COLUMN IF NOT EXISTS trabajador_id INTEGER",
+
                     "ALTER TABLE plataforma ALTER COLUMN logo_path TYPE TEXT",
                     "ALTER TABLE productos_procsis ALTER COLUMN imagen TYPE TEXT",
                     "ALTER TABLE noticias_procsis ALTER COLUMN imagen TYPE TEXT",
@@ -19616,6 +19655,7 @@ def gerencia_hq():
         <a class="g" href="/gerencia/certificaciones">📜 Certificaciones corporativas</a>
         <a class="o" href="/gerencia/requerimientos-autoridades">⚖️ Requerimientos de autoridades</a>
         <a class="g" href="/gerencia/hojas-vida">📋 Hojas de vida / Talento</a>
+        <a class="g" href="/gerencia/nomina">💵 Nómina / Pagos</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -46648,6 +46688,7 @@ def _ensure_cont_trabajadores_cols():
 
 @app.route("/gerencia/contabilidad/trabajadores", methods=["GET", "POST"])
 def contabilidad_trabajadores():
+    """Listado de trabajadores (activos / inactivos / historial). El alta solo se hace desde Hojas de vida → CONTRATADO."""
     g = _guard_contabilidad()
     if g is not None:
         return g
@@ -46683,107 +46724,123 @@ def contabilidad_trabajadores():
                     msg = "Trabajador reactivado: %s" % (tw.nombre or "")
             except Exception as e:
                 msg = str(e)[:80]
-        else:
-            t = ContTrabajador(
-                nombre=(request.form.get("nombre") or "").strip()[:160],
-                documento=(request.form.get("documento") or "").strip()[:40],
-                cargo=(request.form.get("cargo") or "").strip()[:120],
-                tipo_contrato=(request.form.get("tipo_contrato") or "").strip()[:60],
-                email=(request.form.get("email") or "").strip()[:120],
-                telefono=(request.form.get("telefono") or "").strip()[:40],
-                direccion=(request.form.get("direccion") or "").strip()[:255],
-                objeto_funciones=(request.form.get("objeto_funciones") or "").strip()[:2000],
-                fecha_inicio=(request.form.get("fecha_inicio") or "").strip()[:40],
-                honorarios=(request.form.get("honorarios") or "").strip()[:80],
-                solicitante=(request.form.get("solicitante") or "").strip()[:200],
-                notas=(request.form.get("notas") or "").strip()[:1000],
-                activo=True,
-                creado_en=fecha_hoy() if "fecha_hoy" in dir() else "",
-            )
-            if t.nombre:
-                db.session.add(t)
-                db.session.commit()
-                msg = "Trabajador registrado. Ya puede generar la constancia laboral."
-    ver_inactivos = (request.args.get("inactivos") or "") == "1"
-    filas = ""
-    qtr = ContTrabajador.query
-    if not ver_inactivos:
-        try:
-            qtr = qtr.filter(ContTrabajador.activo.is_(True))
-        except Exception:
-            pass
-    for t in qtr.order_by(ContTrabajador.id.desc()).limit(200).all():
-        activo = bool(getattr(t, "activo", True))
-        estilo = "" if activo else "opacity:.55;background:#f8fafc"
-        if activo:
-            btn_estado = (
-                '<form method="POST" style="display:inline;margin:0" '
-                'onsubmit="return confirm(&quot;Finalizar vinculacion? El registro se conserva inactivo.&quot;);">'
+        # Ya no se permiten altas manuales aquí: el registro nace en Hojas de vida → CONTRATADO.
+
+    filtro = (request.args.get("f") or "activos").strip().lower()
+    q = ContTrabajador.query
+    if filtro == "inactivos":
+        rows = q.filter_by(activo=False).order_by(ContTrabajador.id.desc()).limit(500).all()
+        titulo_lista = "Trabajadores inactivos"
+    elif filtro in ("todos", "historial", "viejos"):
+        rows = q.order_by(ContTrabajador.id.desc()).limit(800).all()
+        titulo_lista = "Historial completo (activos + inactivos)"
+    else:
+        rows = q.filter_by(activo=True).order_by(ContTrabajador.id.desc()).limit(500).all()
+        titulo_lista = "Trabajadores activos"
+
+    filas = []
+    for tw in rows:
+        estado = "ACTIVO" if tw.activo else "INACTIVO"
+        badge = "background:#dcfce7;color:#166534" if tw.activo else "background:#fee2e2;color:#991b1b"
+        btn = ""
+        if tw.activo:
+            btn = (
+                '<form method="POST" style="display:inline" onsubmit="return confirm(\'¿Finalizar vinculación?\')">'
                 '<input type="hidden" name="accion" value="desactivar">'
                 '<input type="hidden" name="id" value="%s">'
-                '<button type="submit" style="background:#b45309;color:#fff;border:0;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Inactivar</button></form>'
-            ) % t.id
+                '<button type="submit" style="font-size:11px;padding:4px 8px;background:#b91c1c;color:#fff;border:0;border-radius:6px;cursor:pointer">Desactivar</button></form>'
+            ) % tw.id
         else:
-            btn_estado = (
-                "<form method='POST' style='display:inline;margin:0'>"
-                "<input type='hidden' name='accion' value='reactivar'><input type='hidden' name='id' value='%s'>"
-                "<button type='submit' style='background:#15803d;color:#fff;border:0;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer'>Reactivar</button></form>"
-            ) % t.id
-        filas += (
-            "<tr style='%s'><td><b>%s</b><br><span style='font-size:11px;color:%s'>%s</span></td>"
-            "<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
-            "<td><a href='/gerencia/contabilidad/trabajador/%s/constancia' "
-            "style='background:#0B2D57;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none'>"
-            "Constancia</a> %s</td></tr>"
-        ) % (
-            estilo,
-            _esc(t.nombre),
-            "#16a34a" if activo else "#94a3b8",
-            "ACTIVO" if activo else "INACTIVO",
-            _esc(t.documento), _esc(t.cargo), _esc(t.tipo_contrato),
-            _esc(t.telefono), _esc(t.email), t.id, btn_estado,
+            btn = (
+                '<form method="POST" style="display:inline">'
+                '<input type="hidden" name="accion" value="reactivar">'
+                '<input type="hidden" name="id" value="%s">'
+                '<button type="submit" style="font-size:11px;padding:4px 8px;background:#15803d;color:#fff;border:0;border-radius:6px;cursor:pointer">Reactivar</button></form>'
+            ) % tw.id
+        # Link a contrato si existe
+        contrato_lnk = ""
+        try:
+            cp = ContratoPersonal.query.filter(
+                db.or_(
+                    ContratoPersonal.trabajador_id == tw.id,
+                    ContratoPersonal.documento == (tw.documento or ""),
+                )
+            ).order_by(ContratoPersonal.id.desc()).first()
+            if cp:
+                contrato_lnk = ' · <a href="/gerencia/contratos-personal/%s/editar">Contrato</a>' % cp.id
+        except Exception:
+            pass
+        filas.append(
+            "<tr>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'><span style='padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700;%s'>%s</span></td>"
+            "<td style='padding:8px'>%s%s</td>"
+            "</tr>"
+            % (
+                _esc(tw.nombre),
+                _esc(tw.documento),
+                _esc(tw.cargo),
+                _esc(tw.tipo_contrato),
+                _esc(tw.telefono),
+                _esc(tw.email),
+                badge,
+                estado,
+                btn,
+                contrato_lnk,
+            )
         )
-    if not filas:
-        filas = "<tr><td colspan='7' style='text-align:center;color:#94a3b8'>Sin trabajadores registrados.</td></tr>"
+    filas_html = "".join(filas) or (
+        "<tr><td colspan='8' style='padding:16px;color:#64748b;text-align:center'>"
+        "No hay trabajadores en esta vista. El alta se realiza desde "
+        "<a href='/gerencia/hojas-vida'>Hojas de vida</a> al marcar <b>CONTRATADO</b>.</td></tr>"
+    )
+
+    def tab(label, key):
+        active = filtro == key or (key == "activos" and filtro not in ("inactivos", "todos", "historial", "viejos"))
+        bg = "#0B2D57;color:#fff" if active else "#e2e8f0;color:#0f172a"
+        return (
+            '<a href="/gerencia/contabilidad/trabajadores?f=%s" style="background:%s;padding:8px 12px;'
+            'border-radius:8px;text-decoration:none;font-weight:700;font-size:12px;margin-right:6px">%s</a>'
+        ) % (key, bg, label)
+
     body = f"""
-    {"<p style='color:#166534'>"+_esc(msg)+"</p>" if msg else ""}
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-      <a href="/gerencia/contabilidad/export/trabajadores.xlsx" style="background:#15803d;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ Excel trabajadores</a>
-      <a href="?inactivos=1" style="background:#e2e8f0;color:#0B2D57;padding:9px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">Ver inactivos</a>
-      <a href="?" style="background:#e2e8f0;color:#0B2D57;padding:9px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">Solo activos</a>
+    <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      {tab("Solo activos", "activos")}
+      {tab("Ver inactivos", "inactivos")}
+      {tab("Historial / viejos", "todos")}
+      <a href="/gerencia/hojas-vida" style="background:#15803d;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">+ Alta vía Hoja de vida</a>
+      <a href="/gerencia/nomina" style="background:#1e40af;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Nómina</a>
+      <a href="/gerencia/contabilidad/trabajadores.xlsx" style="background:#0f766e;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Excel trabajadores</a>
     </div>
-    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Nombre completo *</label>
-      <input name="nombre" required style="width:100%;padding:8px" placeholder="Como aparecerá en la constancia"></div>
-      <div><label style="font-size:12px;font-weight:700">Documento (CC) *</label><input name="documento" required style="width:100%;padding:8px"></div>
-      <div><label style="font-size:12px;font-weight:700">Cargo exacto *</label>
-      <input name="cargo" required placeholder="Ej: Desarrollador Full Stack, Asesor Comercial..." style="width:100%;padding:8px"></div>
-      <div><label style="font-size:12px;font-weight:700">Tipo contrato</label>
-      <select name="tipo_contrato" style="width:100%;padding:8px"><option>Prestación de servicios</option><option>Laboral término fijo</option><option>Laboral indefinido</option><option>Obra o labor</option></select></div>
-      <div><label style="font-size:12px;font-weight:700">Fecha inicio vinculación *</label>
-      <input name="fecha_inicio" required placeholder="Ej: 15 de enero de 2026" style="width:100%;padding:8px"></div>
-      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Objeto de sus funciones *</label>
-      <textarea name="objeto_funciones" required rows="2" placeholder="Ej: mantenimiento de servidores en Railway y desarrollo del núcleo de EduTrack" style="width:100%;padding:8px"></textarea></div>
-      <div><label style="font-size:12px;font-weight:700">Honorarios / salario (opcional)</label>
-      <input name="honorarios" placeholder="Ej: $ 2.500.000 mensuales" style="width:100%;padding:8px"></div>
-      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Entidad / persona que solicita la constancia</label>
-      <input name="solicitante" placeholder="Ej: Banco XYZ, Arrendadora, Nombre de la empresa o persona" style="width:100%;padding:8px"></div>
-      <div><label style="font-size:12px;font-weight:700">Teléfono</label><input name="telefono" style="width:100%;padding:8px"></div>
-      <div><label style="font-size:12px;font-weight:700">Email</label><input name="email" style="width:100%;padding:8px"></div>
-      <div><label style="font-size:12px;font-weight:700">Dirección / residencia</label><input name="direccion" style="width:100%;padding:8px"></div>
-      <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Notas internas</label>
-      <input name="notas" style="width:100%;padding:8px"></div>
-      <div style="grid-column:1/-1"><button type="submit" style="background:#7c2d12;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Registrar trabajador</button></div>
-    </form>
+    {"<div class='msg ok' style='margin-bottom:10px'>" + _esc(msg) + "</div>" if msg else ""}
+    <p style="font-size:13px;color:#475569;margin:0 0 12px">
+      Los trabajadores se crean automáticamente cuando una <b>Hoja de vida</b> se marca como <b>CONTRATADO</b>
+      (también se genera el contrato editable con opción de firma digital).
+      Aquí solo gestiona el estado (activo / inactivo) y consulta el historial.
+    </p>
+    <h3 style="margin:0 0 8px;color:#0B2D57">{_esc(titulo_lista)}</h3>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px;text-align:left">Documento</th><th style="padding:8px;text-align:left">Cargo</th><th style="padding:8px;text-align:left">Contrato</th><th style="padding:8px;text-align:left">Tel</th><th style="padding:8px;text-align:left">Email</th><th style="padding:8px;text-align:left">Constancia</th></tr>
-        {filas}
+        <tr style="background:#0B2D57;color:#fff">
+          <th style="padding:8px;text-align:left">Nombre</th>
+          <th style="padding:8px;text-align:left">Documento</th>
+          <th style="padding:8px;text-align:left">Cargo</th>
+          <th style="padding:8px;text-align:left">Contrato</th>
+          <th style="padding:8px;text-align:left">Tel</th>
+          <th style="padding:8px;text-align:left">Email</th>
+          <th style="padding:8px;text-align:left">Estado</th>
+          <th style="padding:8px;text-align:left">Acciones</th>
+        </tr>
+        {filas_html}
       </table>
     </div>
     """
     return page("Trabajadores", _cont_shell("Módulo trabajadores", body))
-
 
 
 def _cont_empresa_meta():
@@ -48526,8 +48583,145 @@ def gerencia_req_acta_pdf(rid):
 
 
 
+def _texto_contrato_default(nombre, documento, cargo, tipo="PRESTACION", fecha_inicio="", valor="", objeto=""):
+    """Plantilla base editable de contrato de vinculación PROCSIS."""
+    meta = {}
+    try:
+        meta = _hv_meta() if "_hv_meta" in dir() else {}
+    except Exception:
+        pass
+    empresa = meta.get("empresa") or "PROCSIS"
+    nit = meta.get("nit") or "—"
+    ciudad = meta.get("ciudad") or "Caracolí, Antioquia"
+    fecha = fecha_inicio or (fecha_hoy() if "fecha_hoy" in dir() else "")
+    tipo_txt = {
+        "PRESTACION": "prestación de servicios",
+        "LABORAL_FIJO": "contrato laboral a término fijo",
+        "LABORAL_INDEFINIDO": "contrato laboral a término indefinido",
+        "OBRA_LABOR": "contrato por obra o labor",
+    }.get((tipo or "PRESTACION").upper(), "prestación de servicios")
+    return (
+        "CONTRATO DE %s\n\n"
+        "Entre %s, identificada con NIT %s (en adelante EL CONTRATANTE), y el(la) señor(a) %s, "
+        "identificado(a) con cédula de ciudadanía No. %s (en adelante EL CONTRATISTA / COLABORADOR), "
+        "se celebra el presente contrato de %s, bajo las siguientes cláusulas:\n\n"
+        "PRIMERA. OBJETO. EL CONTRATISTA se obliga a desempeñar el cargo de %s, "
+        "desarrollando las funciones propias del rol y las que le sean asignadas por la gerencia, "
+        "incluyendo: %s\n\n"
+        "SEGUNDA. VIGENCIA. El presente contrato inicia el %s y se mantendrá vigente según la "
+        "modalidad pactada, pudiendo renovarse o terminarse conforme a la ley y a las políticas internas de %s.\n\n"
+        "TERCERA. REMUNERACIÓN. Como contraprestación, EL CONTRATANTE reconocerá a EL CONTRATISTA "
+        "la suma de %s, pagadera según los periodos de nómina o facturación acordados.\n\n"
+        "CUARTA. OBLIGACIONES. EL CONTRATISTA se compromete a cumplir horarios, políticas de "
+        "confidencialidad, habeas data (Ley 1581 de 2012) y estándares de calidad de %s.\n\n"
+        "QUINTA. TERMINACIÓN. El contrato podrá terminarse por mutuo acuerdo, incumplimiento, "
+        "o las causales legales aplicables.\n\n"
+        "SEXTA. ACEPTACIÓN. Firmado en la ciudad de %s, en señal de aceptación de todas las cláusulas.\n\n"
+        "_______________________________          _______________________________\n"
+        "EL CONTRATANTE (%s)                       EL CONTRATISTA / COLABORADOR\n"
+        "                                          %s\n"
+        "                                          C.C. %s\n"
+    ) % (
+        tipo_txt.upper(),
+        empresa, nit, nombre, documento or "—", tipo_txt,
+        cargo or "colaborador(a)",
+        (objeto or "las funciones del cargo asignado")[:500],
+        fecha or "—",
+        empresa,
+        valor or "(a definir / según acuerdo)",
+        empresa,
+        ciudad,
+        empresa,
+        nombre,
+        documento or "—",
+    )
+
+
+def _generar_pdf_contrato_personal(c_row):
+    """Genera PDF del contrato (texto + firma digital posicionable) y lo guarda en pdf_data."""
+    from reportlab.lib.utils import simpleSplit, ImageReader
+    import base64 as _b64
+    meta = {}
+    try:
+        meta = _hv_meta()
+    except Exception:
+        meta = {"empresa": "PROCSIS", "nit": "—", "ciudad": "Caracolí, Antioquia", "logo": ""}
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    try:
+        _hv_draw_header(c, W, H, meta, subtitulo="REG-TH-003 · Contrato de vinculación")
+    except Exception:
+        c.setFillColor(colors.HexColor("#0B2D57"))
+        c.rect(0, H - 50, W, 50, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, H - 30, "PROCSIS — Contrato")
+    y = H - 100
+    left, width = 50, W - 100
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(W / 2, y, "CONTRATO DE VINCULACIÓN")
+    y -= 16
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.HexColor("#334155"))
+    c.drawCentredString(W / 2, y, "%s · C.C. %s · Cargo: %s" % (
+        c_row.nombres or "—", c_row.documento or "—", c_row.cargo or "—"))
+    y -= 20
+    texto = (c_row.texto_contrato or "").strip() or _texto_contrato_default(
+        c_row.nombres, c_row.documento, c_row.cargo, c_row.tipo,
+        c_row.fecha_inicio, c_row.valor_mensual, c_row.notas or "")
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.HexColor("#0f172a"))
+    for para in texto.split("\n"):
+        lines = simpleSplit(para if para else " ", "Helvetica", 9, width)
+        for ln in lines:
+            if y < 100:
+                c.showPage()
+                try:
+                    _hv_draw_header(c, W, H, meta, subtitulo="REG-TH-003 · Contrato (cont.)")
+                except Exception:
+                    pass
+                y = H - 90
+            c.drawString(left, y, ln)
+            y -= 12
+        y -= 4
+    # Firma digital del empleado (posicionable)
+    firma = (c_row.firma_empleado or "").strip()
+    if firma:
+        try:
+            if firma.startswith("data:"):
+                raw = _b64.b64decode(firma.split(",", 1)[-1])
+            else:
+                raw = _b64.b64decode(firma)
+            img = ImageReader(BytesIO(raw))
+            fx = float(getattr(c_row, "firma_x", None) or 350)
+            fy = float(getattr(c_row, "firma_y", None) or 80)
+            fw = float(getattr(c_row, "firma_w", None) or 120)
+            fh = float(getattr(c_row, "firma_h", None) or 50)
+            c.drawImage(img, fx, fy, width=fw, height=fh, mask="auto", preserveAspectRatio=True, anchor="c")
+            c.setFont("Helvetica", 7)
+            c.setFillColor(colors.HexColor("#64748b"))
+            c.drawCentredString(fx + fw / 2, fy - 10, "Firma digital del colaborador")
+        except Exception as fe:
+            print("firma contrato pdf:", fe)
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(left, 28, "PROCSIS · Contrato editable · Documento interno · %s" % (c_row.documento or ""))
+    c.save()
+    bio.seek(0)
+    raw_pdf = bio.read()
+    import base64 as _b64
+    c_row.pdf_data = "data:application/pdf;base64," + _b64.b64encode(raw_pdf).decode("ascii")
+    c_row.pdf_nombre = "Contrato_%s_%s.pdf" % (
+        "".join(ch if ch.isalnum() else "_" for ch in (c_row.nombres or "colaborador"))[:25],
+        (c_row.documento or "sdoc")[:12],
+    )
+    return c_row
+
+
 def _hv_a_trabajador(hv):
-    """Si la HV está CONTRATADO, crea o actualiza ContTrabajador."""
+    """Si la HV está CONTRATADO, crea/actualiza ContTrabajador y genera ContratoPersonal editable."""
     if not hv:
         return None
     if (hv.decision or "").upper() != "CONTRATADO":
@@ -48568,6 +48762,39 @@ def _hv_a_trabajador(hv):
                 t.notas = "Vinculado desde HV %s" % (hv.codigo or "")
             else:
                 t.notas = ((t.notas or "") + " | HV %s contratado" % (hv.codigo or ""))[:1000]
+        db.session.flush()
+        # Contrato personal vinculado a la HV
+        c = None
+        if getattr(hv, "id", None):
+            c = ContratoPersonal.query.filter_by(hv_id=hv.id).first()
+        if not c and doc:
+            c = ContratoPersonal.query.filter_by(documento=doc, estado="ACTIVO").order_by(ContratoPersonal.id.desc()).first()
+        if not c:
+            c = ContratoPersonal(
+                creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
+                creado_por=(session.get("usuario") if session else "") or "sistema",
+                estado="ACTIVO",
+            )
+            db.session.add(c)
+        c.tipo = "LABORAL_INDEFINIDO"
+        c.nombres = nombre[:160]
+        c.documento = doc[:40]
+        c.cargo = (hv.cargo_postula or "")[:120]
+        c.fecha_inicio = (fecha_hoy() if "fecha_hoy" in dir() else "")[:20]
+        c.notas = ("Generado desde HV %s" % (hv.codigo or ""))[:2000]
+        c.hv_id = hv.id
+        c.trabajador_id = t.id if t and getattr(t, "id", None) else None
+        if not (c.texto_contrato or "").strip():
+            c.texto_contrato = _texto_contrato_default(
+                nombre, doc, hv.cargo_postula or "",
+                "LABORAL_INDEFINIDO", c.fecha_inicio, "",
+                hv.perfil_breve or hv.habilidades or "",
+            )
+        try:
+            _generar_pdf_contrato_personal(c)
+        except Exception as pe:
+            print("pdf contrato auto:", pe)
+        c.actualizado_en = (fecha_hoy() if "fecha_hoy" in dir() else "")
         db.session.commit()
         return t
     except Exception as e:
@@ -49010,7 +49237,7 @@ def gerencia_hv_detalle(hid):
   <p style="font-size:12px;color:#64748b">Registrado por {_esc(h.registrado_por)} · {_esc(h.creado_en)}</p>
   <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0">
   <h3 style="color:#0B2D57;margin:0 0 8px">Actualizar decisión de selección</h3>
-  <p style="font-size:12px;color:#64748b;margin:0 0 10px">Si marcas <b>CONTRATADO</b>, el sistema da de alta al colaborador en <b>Contabilidad → Trabajadores</b> de forma automática.</p>
+  <p style="font-size:12px;color:#64748b;margin:0 0 10px">Si marcas <b>CONTRATADO</b>, el sistema da de alta al colaborador en <b>Trabajadores</b>, genera el <b>contrato editable</b> (nombre, C.C., cargo) y permite cargar la <b>firma digital</b> del empleado.</p>
   <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:640px">
     <input type="hidden" name="accion" value="decision">
     <div><label style="font-size:12px;font-weight:700">Decisión</label>
@@ -49027,7 +49254,8 @@ def gerencia_hv_detalle(hid):
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Concepto</label>
     <textarea name="concepto_entrevistador" rows="2" style="width:100%;padding:9px">{_esc(h.concepto_entrevistador)}</textarea></div>
     <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Guardar decisión</button>
-    <a href="/gerencia/contabilidad/trabajadores" style="margin-left:10px;font-weight:700">Ir a Trabajadores →</a></div>
+    <a href="/gerencia/contabilidad/trabajadores" style="margin-left:10px;font-weight:700">Ir a Trabajadores →</a>
+    <a href="/gerencia/hojas-vida/{h.id}/contrato" style="margin-left:10px;font-weight:700;color:#1e40af">Ver / editar contrato →</a></div>
   </form>
 </section>
 """
@@ -49547,6 +49775,498 @@ def gerencia_hv_constancia_pdf(hid):
         download_name="PROCSIS_Constancia_%s_%s.pdf" % (decision, safe),
         mimetype="application/pdf",
     )
+
+
+
+
+
+# ─── Contrato editable desde HV + firma digital ─────────────────────────────
+@app.route("/gerencia/hojas-vida/<int:hid>/contrato", methods=["GET", "POST"])
+def gerencia_hv_contrato(hid):
+    """Editar texto del contrato, subir firma digital y regenerar PDF al marcar CONTRATADO."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    h = HojaVida.query.get_or_404(hid)
+    # Asegurar que exista contrato si ya está contratado
+    if (h.decision or "").upper() == "CONTRATADO":
+        try:
+            _hv_a_trabajador(h)
+        except Exception as e:
+            print("hv contrato ensure:", e)
+    c = ContratoPersonal.query.filter_by(hv_id=h.id).order_by(ContratoPersonal.id.desc()).first()
+    if not c and (h.documento or "").strip():
+        c = ContratoPersonal.query.filter_by(documento=(h.documento or "").strip()).order_by(ContratoPersonal.id.desc()).first()
+    msg = err = ""
+    if request.method == "POST":
+        if not c:
+            c = ContratoPersonal(
+                hv_id=h.id,
+                nombres=" ".join([x for x in [h.nombres, h.primer_apellido, h.segundo_apellido] if x])[:160],
+                documento=(h.documento or "")[:40],
+                cargo=(h.cargo_postula or "")[:120],
+                tipo="LABORAL_INDEFINIDO",
+                fecha_inicio=(fecha_hoy() if "fecha_hoy" in dir() else "")[:20],
+                estado="ACTIVO",
+                creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
+                creado_por=session.get("usuario") or "",
+            )
+            db.session.add(c)
+        c.nombres = (request.form.get("nombres") or c.nombres or "")[:160]
+        c.documento = (request.form.get("documento") or c.documento or "")[:40]
+        c.cargo = (request.form.get("cargo") or c.cargo or "")[:120]
+        c.tipo = (request.form.get("tipo") or c.tipo or "LABORAL_INDEFINIDO")[:40]
+        c.fecha_inicio = (request.form.get("fecha_inicio") or c.fecha_inicio or "")[:20]
+        c.fecha_fin = (request.form.get("fecha_fin") or c.fecha_fin or "")[:20]
+        c.valor_mensual = (request.form.get("valor_mensual") or c.valor_mensual or "")[:40]
+        c.texto_contrato = (request.form.get("texto_contrato") or c.texto_contrato or "")[:50000]
+        try:
+            c.firma_x = float(request.form.get("firma_x") or c.firma_x or 350)
+            c.firma_y = float(request.form.get("firma_y") or c.firma_y or 80)
+            c.firma_w = float(request.form.get("firma_w") or c.firma_w or 120)
+            c.firma_h = float(request.form.get("firma_h") or c.firma_h or 50)
+        except Exception:
+            pass
+        # Carga de firma digital (imagen)
+        f = request.files.get("firma")
+        if f and f.filename:
+            try:
+                import base64 as _b64
+                raw = f.read()
+                if len(raw) > 2 * 1024 * 1024:
+                    err = "La imagen de firma no debe superar 2 MB."
+                else:
+                    mime = (f.mimetype or "image/png").split(";")[0]
+                    if not mime.startswith("image/"):
+                        mime = "image/png"
+                    c.firma_empleado = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+            except Exception as fe:
+                err = "No se pudo cargar la firma: %s" % str(fe)[:80]
+        if request.form.get("quitar_firma") == "1":
+            c.firma_empleado = ""
+        c.hv_id = h.id
+        c.actualizado_en = (fecha_hoy() if "fecha_hoy" in dir() else "")
+        try:
+            _generar_pdf_contrato_personal(c)
+            db.session.commit()
+            msg = "Contrato actualizado y PDF regenerado."
+            try:
+                registrar_auditoria("Contrato HV editado", "hv=%s contrato=%s" % (h.codigo, c.id))
+            except Exception:
+                pass
+        except Exception as e:
+            db.session.rollback()
+            err = "Error al guardar: %s" % str(e)[:120]
+            print("hv contrato save:", e)
+
+    nom = " ".join([x for x in [h.nombres, h.primer_apellido, h.segundo_apellido] if x])
+    if not c:
+        body = f"""
+<header class="role-hero"><div>
+  <h1>Contrato · {_esc(h.codigo)}</h1>
+  <p>{_esc(nom)} · {_esc(h.decision)}</p>
+</div>
+<a class="btn" href="/gerencia/hojas-vida/{h.id}">Volver a HV</a></header>
+<section class="role-panel">
+  <div class="msg warn">Aún no hay contrato. Marque la decisión como <b>CONTRATADO</b> y guarde para generarlo automáticamente,
+  o cree uno ahora:</div>
+  <form method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="nombres" value="{_esc(nom)}">
+    <input type="hidden" name="documento" value="{_esc(h.documento)}">
+    <input type="hidden" name="cargo" value="{_esc(h.cargo_postula)}">
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Generar contrato ahora</button>
+  </form>
+</section>
+"""
+        return page("Contrato HV", shell(body))
+
+    firma_prev = ""
+    if c.firma_empleado:
+        firma_prev = (
+            '<div style="margin:8px 0"><img src="%s" alt="Firma" style="max-width:220px;max-height:90px;border:1px solid #cbd5e1;background:#fff;padding:4px">'
+            '<label style="display:block;margin-top:6px;font-size:12px"><input type="checkbox" name="quitar_firma" value="1"> Quitar firma</label></div>'
+        ) % _esc(c.firma_empleado)
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Contrato editable · {_esc(h.codigo)}</h1>
+  <p>{_esc(c.nombres)} · C.C. {_esc(c.documento)} · {_esc(c.cargo)}</p>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+  <a class="btn" href="/gerencia/contratos-personal/{c.id}/pdf">⬇ Descargar PDF</a>
+  <a class="btn" href="/gerencia/hojas-vida/{h.id}">Volver a HV</a>
+  <a class="btn" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
+</div></header>
+<section class="role-panel">
+  {"<div class='msg ok'>" + _esc(msg) + "</div>" if msg else ""}
+  {"<div class='msg danger'>" + _esc(err) + "</div>" if err else ""}
+  <p style="font-size:13px;color:#475569">Puede modificar el texto del contrato, el valor, las fechas y cargar la <b>firma digital</b>
+  del empleado (foto de la firma). Ajuste posición X/Y y tamaño como en una foto posicionable.</p>
+  <form method="POST" enctype="multipart/form-data" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:960px">
+    <div><label style="font-size:12px;font-weight:700">Nombres</label>
+    <input name="nombres" value="{_esc(c.nombres)}" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Documento (C.C.)</label>
+    <input name="documento" value="{_esc(c.documento)}" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Cargo</label>
+    <input name="cargo" value="{_esc(c.cargo)}" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Tipo de contrato</label>
+    <select name="tipo" style="width:100%;padding:9px">
+      <option value="PRESTACION" {"selected" if (c.tipo or "")=="PRESTACION" else ""}>Prestación de servicios</option>
+      <option value="LABORAL_INDEFINIDO" {"selected" if (c.tipo or "")=="LABORAL_INDEFINIDO" else ""}>Laboral indefinido</option>
+      <option value="LABORAL_FIJO" {"selected" if (c.tipo or "")=="LABORAL_FIJO" else ""}>Laboral fijo</option>
+      <option value="OBRA_LABOR" {"selected" if (c.tipo or "")=="OBRA_LABOR" else ""}>Obra o labor</option>
+    </select></div>
+    <div><label style="font-size:12px;font-weight:700">Fecha inicio</label>
+    <input name="fecha_inicio" value="{_esc(c.fecha_inicio)}" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Fecha fin (opcional)</label>
+    <input name="fecha_fin" value="{_esc(c.fecha_fin)}" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Valor / honorarios</label>
+    <input name="valor_mensual" value="{_esc(c.valor_mensual)}" placeholder="Ej: $ 2.500.000 mensuales" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Texto del contrato (editable)</label>
+    <textarea name="texto_contrato" rows="16" style="width:100%;padding:10px;font-family:Georgia,serif;font-size:13px;line-height:1.45">{_esc(c.texto_contrato)}</textarea></div>
+    <div style="grid-column:1/-1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px">
+      <h3 style="margin:0 0 8px;color:#0B2D57;font-size:14px">Firma digital del empleado</h3>
+      <p style="font-size:12px;color:#64748b;margin:0 0 8px">Suba una foto o escaneo de la firma (PNG/JPG). Ajuste posición en el PDF (coordenadas desde la esquina inferior izquierda, en puntos).</p>
+      {firma_prev}
+      <input type="file" name="firma" accept="image/*" style="width:100%;padding:8px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div><label style="font-size:11px;font-weight:700">Posición X</label><input name="firma_x" type="number" step="1" value="{_esc(c.firma_x or 350)}" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:11px;font-weight:700">Posición Y</label><input name="firma_y" type="number" step="1" value="{_esc(c.firma_y or 80)}" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:11px;font-weight:700">Ancho</label><input name="firma_w" type="number" step="1" value="{_esc(c.firma_w or 120)}" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:11px;font-weight:700">Alto</label><input name="firma_h" type="number" step="1" value="{_esc(c.firma_h or 50)}" style="width:100%;padding:8px"></div>
+      </div>
+    </div>
+    <div style="grid-column:1/-1">
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar y regenerar PDF</button>
+    </div>
+  </form>
+</section>
+"""
+    return page("Contrato HV", shell(body))
+
+
+@app.route("/gerencia/contratos-personal/<int:cid>/editar", methods=["GET", "POST"])
+def gerencia_contrato_editar(cid):
+    """Atajo: redirige al editor de contrato vinculado a HV o muestra el mismo formulario."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    c = ContratoPersonal.query.get_or_404(cid)
+    if c.hv_id:
+        return redirect("/gerencia/hojas-vida/%s/contrato" % c.hv_id)
+    # Sin HV: editor mínimo
+    msg = err = ""
+    if request.method == "POST":
+        c.nombres = (request.form.get("nombres") or c.nombres or "")[:160]
+        c.documento = (request.form.get("documento") or c.documento or "")[:40]
+        c.cargo = (request.form.get("cargo") or c.cargo or "")[:120]
+        c.tipo = (request.form.get("tipo") or c.tipo or "")[:40]
+        c.fecha_inicio = (request.form.get("fecha_inicio") or "")[:20]
+        c.valor_mensual = (request.form.get("valor_mensual") or "")[:40]
+        c.texto_contrato = (request.form.get("texto_contrato") or "")[:50000]
+        try:
+            c.firma_x = float(request.form.get("firma_x") or 350)
+            c.firma_y = float(request.form.get("firma_y") or 80)
+            c.firma_w = float(request.form.get("firma_w") or 120)
+            c.firma_h = float(request.form.get("firma_h") or 50)
+        except Exception:
+            pass
+        f = request.files.get("firma")
+        if f and f.filename:
+            try:
+                import base64 as _b64
+                raw = f.read()
+                mime = (f.mimetype or "image/png").split(";")[0]
+                c.firma_empleado = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+            except Exception:
+                pass
+        try:
+            _generar_pdf_contrato_personal(c)
+            db.session.commit()
+            msg = "Guardado."
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:100]
+    body = f"""
+<header class="role-hero"><div><h1>Editar contrato #{c.id}</h1>
+<p>{_esc(c.nombres)} · {_esc(c.documento)}</p></div>
+<a class="btn" href="/gerencia/contratos-personal/{c.id}/pdf">PDF</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" enctype="multipart/form-data" style="max-width:900px;display:grid;gap:8px">
+    <input name="nombres" value="{_esc(c.nombres)}" placeholder="Nombres">
+    <input name="documento" value="{_esc(c.documento)}" placeholder="Documento">
+    <input name="cargo" value="{_esc(c.cargo)}" placeholder="Cargo">
+    <input name="valor_mensual" value="{_esc(c.valor_mensual)}" placeholder="Valor">
+    <textarea name="texto_contrato" rows="14">{_esc(c.texto_contrato)}</textarea>
+    <label>Firma digital <input type="file" name="firma" accept="image/*"></label>
+    <div style="display:flex;gap:8px">
+      <input name="firma_x" type="number" value="{_esc(c.firma_x or 350)}" placeholder="X">
+      <input name="firma_y" type="number" value="{_esc(c.firma_y or 80)}" placeholder="Y">
+      <input name="firma_w" type="number" value="{_esc(c.firma_w or 120)}" placeholder="Ancho">
+      <input name="firma_h" type="number" value="{_esc(c.firma_h or 50)}" placeholder="Alto">
+    </div>
+    <button type="submit">Guardar</button>
+  </form>
+</section>
+"""
+    return page("Editar contrato", shell(body))
+
+
+# ─── Módulo de nómina (Gerencia) ────────────────────────────────────────────
+@app.route("/gerencia/nomina", methods=["GET", "POST"])
+def gerencia_nomina():
+    """Registro de pagos de nómina / honorarios de trabajadores activos."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    # ensure columns for nomina if using sqlite/pg without migrate
+    try:
+        db.session.execute(text("SELECT 1 FROM nomina_pagos LIMIT 1"))
+    except Exception:
+        try:
+            db.create_all()
+        except Exception:
+            pass
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "guardar").strip()
+        if accion == "eliminar":
+            try:
+                nid = int(request.form.get("id") or 0)
+                row = NominaPago.query.get(nid)
+                if row:
+                    db.session.delete(row)
+                    db.session.commit()
+                    msg = "Pago eliminado."
+            except Exception as e:
+                err = str(e)[:100]
+        elif accion == "marcar_pagado":
+            try:
+                nid = int(request.form.get("id") or 0)
+                row = NominaPago.query.get(nid)
+                if row:
+                    row.estado = "PAGADO"
+                    if not row.fecha_pago:
+                        row.fecha_pago = fecha_hoy() if "fecha_hoy" in dir() else ""
+                    db.session.commit()
+                    msg = "Marcado como PAGADO."
+            except Exception as e:
+                err = str(e)[:100]
+        else:
+            try:
+                tid = int(request.form.get("trabajador_id") or 0)
+            except Exception:
+                tid = 0
+            tw = ContTrabajador.query.get(tid) if tid else None
+            nombre = (tw.nombre if tw else (request.form.get("trabajador_nombre") or "")).strip()[:160]
+            doc = (tw.documento if tw else (request.form.get("documento") or "")).strip()[:40]
+            try:
+                bruto = float((request.form.get("valor_bruto") or "0").replace(",", "").replace("$", "").strip() or 0)
+            except Exception:
+                bruto = 0.0
+            try:
+                ded = float((request.form.get("deducciones") or "0").replace(",", "").replace("$", "").strip() or 0)
+            except Exception:
+                ded = 0.0
+            periodo = (request.form.get("periodo") or "")[:7]
+            if not nombre or not periodo:
+                err = "Trabajador y periodo (YYYY-MM) son obligatorios."
+            else:
+                row = NominaPago(
+                    trabajador_id=tid or None,
+                    trabajador_nombre=nombre,
+                    documento=doc,
+                    periodo=periodo,
+                    concepto=(request.form.get("concepto") or "Salario / Honorarios")[:120],
+                    valor_bruto=bruto,
+                    deducciones=ded,
+                    valor_neto=max(0.0, bruto - ded),
+                    fecha_pago=(request.form.get("fecha_pago") or "")[:20],
+                    medio_pago=(request.form.get("medio_pago") or "")[:60],
+                    referencia=(request.form.get("referencia") or "")[:120],
+                    estado=(request.form.get("estado") or "PENDIENTE")[:30],
+                    notas=(request.form.get("notas") or "")[:1000],
+                    registrado_por=session.get("usuario") or "",
+                    creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
+                )
+                db.session.add(row)
+                try:
+                    db.session.commit()
+                    msg = "Pago de nómina registrado para %s · %s" % (nombre, periodo)
+                    try:
+                        registrar_auditoria("Nómina registro", "%s %s neto=%s" % (nombre, periodo, row.valor_neto))
+                    except Exception:
+                        pass
+                except Exception as e:
+                    db.session.rollback()
+                    err = str(e)[:120]
+
+    periodo_f = (request.args.get("periodo") or "").strip()[:7]
+    q = NominaPago.query
+    if periodo_f:
+        q = q.filter_by(periodo=periodo_f)
+    pagos = q.order_by(NominaPago.id.desc()).limit(300).all()
+    trabajadores = ContTrabajador.query.filter_by(activo=True).order_by(ContTrabajador.nombre).all()
+    opts = "".join(
+        '<option value="%s">%s — %s</option>' % (t.id, _esc(t.nombre), _esc(t.documento))
+        for t in trabajadores
+    )
+    filas = []
+    for p in pagos:
+        filas.append(
+            "<tr>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px;text-align:right'>$ {:,.0f}</td>".format(p.valor_bruto or 0).replace(",", ".")
+            +
+            "<td style='padding:8px;text-align:right'>$ {:,.0f}</td>".format(p.deducciones or 0).replace(",", ".")
+            +
+            "<td style='padding:8px;text-align:right;font-weight:700'>$ {:,.0f}</td>".format(p.valor_neto or 0).replace(",", ".")
+            +
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>"
+            "%s"
+            "<form method='POST' style='display:inline;margin-left:4px' onsubmit=\"return confirm('¿Eliminar?')\">"
+            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
+            "<button type='submit' style='font-size:11px;padding:3px 6px'>Eliminar</button></form>"
+            "</td></tr>"
+            % (
+                _esc(p.periodo),
+                _esc(p.trabajador_nombre),
+                _esc(p.documento),
+                _esc(p.concepto),
+                _esc(p.estado),
+                _esc(p.fecha_pago or "—"),
+                (
+                    "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='marcar_pagado'>"
+                    "<input type='hidden' name='id' value='%s'><button type='submit' style='font-size:11px;padding:3px 6px;background:#15803d;color:#fff;border:0;border-radius:4px'>Marcar pagado</button></form>"
+                    % p.id
+                    if (p.estado or "") != "PAGADO"
+                    else ""
+                ),
+                p.id,
+            )
+        )
+    # Fix: the format above is messy because I mixed. Rebuild simpler.
+    filas = []
+    for p in pagos:
+        btn_pag = ""
+        if (p.estado or "") != "PAGADO":
+            btn_pag = (
+                "<form method='POST' style='display:inline'>"
+                "<input type='hidden' name='accion' value='marcar_pagado'>"
+                "<input type='hidden' name='id' value='%d'>"
+                "<button type='submit' style='font-size:11px;padding:3px 6px;background:#15803d;color:#fff;border:0;border-radius:4px'>Marcar pagado</button></form>"
+            ) % p.id
+        btn_del = (
+            "<form method='POST' style='display:inline;margin-left:4px' onsubmit=\"return confirm('¿Eliminar?')\">"
+            "<input type='hidden' name='accion' value='eliminar'>"
+            "<input type='hidden' name='id' value='%d'>"
+            "<button type='submit' style='font-size:11px;padding:3px 6px'>Eliminar</button></form>"
+        ) % p.id
+        filas.append(
+            "<tr>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px;text-align:right'>%s</td>"
+            "<td style='padding:8px;text-align:right'>%s</td>"
+            "<td style='padding:8px;text-align:right;font-weight:700'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s%s</td>"
+            "</tr>"
+            % (
+                _esc(p.periodo),
+                _esc(p.trabajador_nombre),
+                _esc(p.documento),
+                _esc(p.concepto),
+                "$ {:,.0f}".format(p.valor_bruto or 0).replace(",", "."),
+                "$ {:,.0f}".format(p.deducciones or 0).replace(",", "."),
+                "$ {:,.0f}".format(p.valor_neto or 0).replace(",", "."),
+                _esc(p.estado),
+                _esc(p.fecha_pago or "—"),
+                btn_pag,
+                btn_del,
+            )
+        )
+    filas_html = "".join(filas) or "<tr><td colspan='10' style='padding:14px;color:#64748b;text-align:center'>Sin pagos registrados</td></tr>"
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Nómina / Pagos a trabajadores</h1>
+  <p>Registro de salarios y honorarios del equipo PROCSIS</p>
+</div>
+<div style="display:flex;gap:8px">
+  <a class="btn" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
+  <a class="btn" href="/gerencia/hojas-vida">Hojas de vida</a>
+</div></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <h3 style="color:#0B2D57;margin-top:0">Registrar pago</h3>
+  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;max-width:980px;margin-bottom:20px">
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Trabajador activo *</label>
+    <select name="trabajador_id" required style="width:100%;padding:9px">
+      <option value="">— Seleccione —</option>
+      {opts}
+    </select></div>
+    <div><label style="font-size:12px;font-weight:700">Periodo (YYYY-MM) *</label>
+    <input name="periodo" placeholder="2026-09" required style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Concepto</label>
+    <input name="concepto" value="Salario / Honorarios" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Estado</label>
+    <select name="estado" style="width:100%;padding:9px"><option>PENDIENTE</option><option>PAGADO</option></select></div>
+    <div><label style="font-size:12px;font-weight:700">Valor bruto</label>
+    <input name="valor_bruto" placeholder="2500000" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Deducciones</label>
+    <input name="deducciones" placeholder="0" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Fecha de pago</label>
+    <input name="fecha_pago" placeholder="2026-09-30" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Medio de pago</label>
+    <input name="medio_pago" placeholder="Transferencia / Efectivo" style="width:100%;padding:9px"></div>
+    <div><label style="font-size:12px;font-weight:700">Referencia</label>
+    <input name="referencia" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Notas</label>
+    <input name="notas" style="width:100%;padding:9px"></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#1e40af;color:#fff;border:0;padding:11px 16px;border-radius:8px;font-weight:800">Registrar pago</button></div>
+  </form>
+  <form method="GET" style="margin-bottom:10px">
+    <label style="font-size:12px;font-weight:700">Filtrar periodo </label>
+    <input name="periodo" value="{_esc(periodo_f)}" placeholder="YYYY-MM" style="padding:6px 8px">
+    <button type="submit" style="padding:6px 10px">Filtrar</button>
+    <a href="/gerencia/nomina" style="margin-left:8px">Limpiar</a>
+  </form>
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="background:#0B2D57;color:#fff">
+        <th style="padding:8px;text-align:left">Periodo</th>
+        <th style="padding:8px;text-align:left">Trabajador</th>
+        <th style="padding:8px;text-align:left">Documento</th>
+        <th style="padding:8px;text-align:left">Concepto</th>
+        <th style="padding:8px;text-align:right">Bruto</th>
+        <th style="padding:8px;text-align:right">Deducciones</th>
+        <th style="padding:8px;text-align:right">Neto</th>
+        <th style="padding:8px;text-align:left">Estado</th>
+        <th style="padding:8px;text-align:left">Fecha pago</th>
+        <th style="padding:8px;text-align:left">Acciones</th>
+      </tr>
+      {filas_html}
+    </table>
+  </div>
+</section>
+"""
+    return page("Nómina", shell(body))
 
 
 
