@@ -21114,17 +21114,19 @@ def gerencia_contratos_personal():
     if request.method == "POST":
         accion = (request.form.get("accion") or "guardar").strip()
         if accion == "eliminar":
+            # Los contratos NO se eliminan: se archivan para conservar historial legal.
             try:
                 cid = int(request.form.get("id") or 0)
             except Exception:
                 cid = 0
             c = ContratoPersonal.query.get(cid) if cid else None
             if c:
-                db.session.delete(c)
+                c.estado = "ARCHIVADO"
+                c.actualizado_en = (fecha_hoy() if "fecha_hoy" in dir() else "")
                 db.session.commit()
-                msg = "Contrato eliminado."
+                msg = "Contrato archivado (no se elimina). Queda en historial."
                 try:
-                    registrar_auditoria("Contrato personal eliminado", "id=%s" % cid)
+                    registrar_auditoria("Contrato personal archivado", "id=%s" % cid)
                 except Exception:
                     pass
         else:
@@ -50239,7 +50241,23 @@ def gerencia_hv_contrato(hid):
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Valor / honorarios</label>
     <input name="valor_mensual" value="{_esc(c.valor_mensual)}" placeholder="Ej: $ 2.500.000 mensuales" style="width:100%;padding:9px"></div>
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Texto del contrato (editable)</label>
-    <textarea name="texto_contrato" rows="14" style="width:100%;padding:10px;font-family:Georgia,serif;font-size:13px;line-height:1.45">{_esc(c.texto_contrato)}</textarea></div>
+    
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">
+        <button type="button" onclick="window._negritaContrato &amp;&amp; window._negritaContrato()" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font-weight:800;cursor:pointer">B Negrita</button>
+        <span style="font-size:12px;color:#64748b;align-self:center">Seleccione texto y pulse Negrita, o escriba **texto**</span>
+      </div>
+      <script>
+      window._negritaContrato = function() {{
+        var t = document.getElementById('texto_contrato');
+        if (!t) return;
+        var a = t.selectionStart, b = t.selectionEnd, s = t.value;
+        t.value = s.slice(0,a) + '**' + s.slice(a,b) + '**' + s.slice(b);
+        t.focus();
+        t.selectionStart = a + 2;
+        t.selectionEnd = b + 2;
+      }};
+      </script>
+<textarea id="texto_contrato" name="texto_contrato" rows="14" style="width:100%;padding:10px;font-family:Georgia,serif;font-size:13px;line-height:1.45">{_esc(c.texto_contrato)}</textarea></div>
 
     <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px">
@@ -50376,7 +50394,23 @@ def gerencia_contrato_editar(cid):
     <div style="grid-column:1/-1">
       <label style="font-size:12px;font-weight:700">Texto del contrato</label>
       <p style="font-size:12px;color:#64748b;margin:4px 0 6px">Use <b>**texto**</b> o &lt;b&gt;texto&lt;/b&gt; para <b>negrita</b> en el PDF.</p>
-      <textarea name="texto_contrato" rows="14" style="width:100%;padding:10px;font-family:Georgia,serif;font-size:13px;line-height:1.45">{_esc(c.texto_contrato)}</textarea>
+      
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">
+        <button type="button" onclick="window._negritaContrato &amp;&amp; window._negritaContrato()" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font-weight:800;cursor:pointer">B Negrita</button>
+        <span style="font-size:12px;color:#64748b;align-self:center">Seleccione texto y pulse Negrita, o escriba **texto**</span>
+      </div>
+      <script>
+      window._negritaContrato = function() {{
+        var t = document.getElementById('texto_contrato');
+        if (!t) return;
+        var a = t.selectionStart, b = t.selectionEnd, s = t.value;
+        t.value = s.slice(0,a) + '**' + s.slice(a,b) + '**' + s.slice(b);
+        t.focus();
+        t.selectionStart = a + 2;
+        t.selectionEnd = b + 2;
+      }};
+      </script>
+<textarea id="texto_contrato" name="texto_contrato" rows="14" style="width:100%;padding:10px;font-family:Georgia,serif;font-size:13px;line-height:1.45">{_esc(c.texto_contrato)}</textarea>
     </div>
 
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px">
@@ -50529,46 +50563,11 @@ def gerencia_nomina():
         '<option value="%s">%s — %s</option>' % (t.id, _esc(t.nombre), _esc(t.documento))
         for t in trabajadores
     )
-    filas = []
-    for p in pagos:
-        filas.append(
-            "<tr>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px;text-align:right'>$ {:,.0f}</td>".format(p.valor_bruto or 0).replace(",", ".")
-            +
-            "<td style='padding:8px;text-align:right'>$ {:,.0f}</td>".format(p.deducciones or 0).replace(",", ".")
-            +
-            "<td style='padding:8px;text-align:right;font-weight:700'>$ {:,.0f}</td>".format(p.valor_neto or 0).replace(",", ".")
-            +
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>"
-            "%s"
-            "<form method='POST' style='display:inline;margin-left:4px' onsubmit=\"return confirm('¿Eliminar?')\">"
-            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
-            "<button type='submit' style='font-size:11px;padding:3px 6px'>Eliminar</button></form>"
-            "</td></tr>"
-            % (
-                _esc(p.periodo),
-                _esc(p.trabajador_nombre),
-                _esc(p.documento),
-                _esc(p.concepto),
-                _esc(p.estado),
-                _esc(p.fecha_pago or "—"),
-                (
-                    "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='marcar_pagado'>"
-                    "<input type='hidden' name='id' value='%s'><button type='submit' style='font-size:11px;padding:3px 6px;background:#15803d;color:#fff;border:0;border-radius:4px'>Marcar pagado</button></form>"
-                    % p.id
-                    if (p.estado or "") != "PAGADO"
-                    else ""
-                ),
-                p.id,
-            )
-        )
-    # Fix: the format above is messy because I mixed. Rebuild simpler.
+    def _cop_n(v):
+        try:
+            return "$ " + "{:,.0f}".format(float(v or 0)).replace(",", ".")
+        except Exception:
+            return "$ 0"
     filas = []
     for p in pagos:
         btn_pag = ""
@@ -50576,43 +50575,31 @@ def gerencia_nomina():
             btn_pag = (
                 "<form method='POST' style='display:inline'>"
                 "<input type='hidden' name='accion' value='marcar_pagado'>"
-                "<input type='hidden' name='id' value='%d'>"
+                "<input type='hidden' name='id' value='" + str(p.id) + "'>"
                 "<button type='submit' style='font-size:11px;padding:3px 6px;background:#15803d;color:#fff;border:0;border-radius:4px'>Marcar pagado</button></form>"
-            ) % p.id
+            )
         btn_del = (
-            "<form method='POST' style='display:inline;margin-left:4px' onsubmit=\"return confirm('¿Eliminar?')\">"
+            "<form method='POST' style='display:inline;margin-left:4px' onsubmit=\"return confirm('Eliminar pago?')\">"
             "<input type='hidden' name='accion' value='eliminar'>"
-            "<input type='hidden' name='id' value='%d'>"
+            "<input type='hidden' name='id' value='" + str(p.id) + "'>"
             "<button type='submit' style='font-size:11px;padding:3px 6px'>Eliminar</button></form>"
-        ) % p.id
+        )
         filas.append(
             "<tr>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px;text-align:right'>%s</td>"
-            "<td style='padding:8px;text-align:right'>%s</td>"
-            "<td style='padding:8px;text-align:right;font-weight:700'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s</td>"
-            "<td style='padding:8px'>%s%s</td>"
+            "<td style='padding:8px'>" + _esc(p.periodo) + "</td>"
+            "<td style='padding:8px'>" + _esc(p.trabajador_nombre) + "</td>"
+            "<td style='padding:8px'>" + _esc(p.documento) + "</td>"
+            "<td style='padding:8px'>" + _esc(p.concepto) + "</td>"
+            "<td style='padding:8px;text-align:right'>" + _cop_n(p.valor_bruto) + "</td>"
+            "<td style='padding:8px;text-align:right'>" + _cop_n(p.deducciones) + "</td>"
+            "<td style='padding:8px;text-align:right;font-weight:700'>" + _cop_n(p.valor_neto) + "</td>"
+            "<td style='padding:8px'>" + _esc(p.estado) + "</td>"
+            "<td style='padding:8px'>" + _esc(p.fecha_pago or "—") + "</td>"
+            "<td style='padding:8px'>" + btn_pag + btn_del + "</td>"
             "</tr>"
-            % (
-                _esc(p.periodo),
-                _esc(p.trabajador_nombre),
-                _esc(p.documento),
-                _esc(p.concepto),
-                "$ {:,.0f}".format(p.valor_bruto or 0).replace(",", "."),
-                "$ {:,.0f}".format(p.deducciones or 0).replace(",", "."),
-                "$ {:,.0f}".format(p.valor_neto or 0).replace(",", "."),
-                _esc(p.estado),
-                _esc(p.fecha_pago or "—"),
-                btn_pag,
-                btn_del,
-            )
         )
     filas_html = "".join(filas) or "<tr><td colspan='10' style='padding:14px;color:#64748b;text-align:center'>Sin pagos registrados</td></tr>"
+
 
     body = f"""
 <header class="role-hero"><div>
