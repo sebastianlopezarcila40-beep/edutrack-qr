@@ -2441,6 +2441,85 @@ class ProcsisRut(db.Model):
     actualizado_por = db.Column(db.String(80), default="")
 
 
+class FondoFormalizacion(db.Model):
+    """Alcancía virtual: ingresos congelados para matrícula mercantil / formalización S.A.S."""
+    __tablename__ = "fondo_formalizacion"
+    id = db.Column(db.Integer, primary_key=True)
+    meta_monto = db.Column(db.Float, default=0.0)  # meta Cámara de Comercio
+    acumulado = db.Column(db.Float, default=0.0)
+    estado = db.Column(db.String(30), default="ACTIVO")  # ACTIVO | META_CUMPLIDA | CERRADO
+    porcentaje_retencion = db.Column(db.Float, default=100.0)  # % de ingresos a congelar
+    descripcion = db.Column(db.Text, default="Fondo para derechos de matrícula mercantil y constitución S.A.S.")
+    fecha_meta_cumplida = db.Column(db.String(20), default="")
+    notas = db.Column(db.Text, default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
+class FondoFormalizacionMov(db.Model):
+    """Movimientos del fondo de formalización (ingresos congelados / liberaciones)."""
+    __tablename__ = "fondo_formalizacion_mov"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(30), default="INGRESO")  # INGRESO | AJUSTE | LIBERACION | GASTO_FORMALIZACION
+    concepto = db.Column(db.String(200), default="")
+    valor = db.Column(db.Float, default=0.0)
+    referencia = db.Column(db.String(120), default="")  # factura, colegio, etc.
+    congelado = db.Column(db.Boolean, default=True)
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+
+
+class ContratoSaaSColegio(db.Model):
+    """Contrato de licenciamiento SaaS EduTrack firmado digitalmente por el rector."""
+    __tablename__ = "contratos_saas_colegio"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True, nullable=True)
+    lead_id = db.Column(db.Integer, index=True, nullable=True)
+    colegio_nombre = db.Column(db.String(200), default="")
+    nit_colegio = db.Column(db.String(40), default="")
+    rector_nombre = db.Column(db.String(160), default="")
+    rector_documento = db.Column(db.String(40), default="")
+    rector_email = db.Column(db.String(120), default="")
+    plan = db.Column(db.String(80), default="")
+    valor_mensual = db.Column(db.Float, default=0.0)
+    fecha_inicio = db.Column(db.String(20), default="")
+    fecha_fin = db.Column(db.String(20), default="")
+    estado = db.Column(db.String(30), default="BORRADOR")  # BORRADOR | ENVIADO | FIRMADO | ANULADO
+    texto_contrato = db.Column(db.Text, default="")
+    # Proveedor provisional (desde RUT)
+    proveedor_nombre = db.Column(db.String(200), default="")
+    proveedor_nit = db.Column(db.String(40), default="")
+    proveedor_actividad = db.Column(db.String(120), default="")
+    # Firmas
+    firma_rector = db.Column(db.Text, default="")
+    firma_proveedor = db.Column(db.Text, default="")
+    firmado_en = db.Column(db.String(30), default="")
+    hash_firma = db.Column(db.String(80), default="")
+    pdf_data = db.Column(db.Text, default="")
+    notas = db.Column(db.Text, default="")
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+
+
+class CertificadoApoyoFamiliar(db.Model):
+    """Certificados civiles de mandato / apoyo familiar (justificación DIAN pre-lanzamiento)."""
+    __tablename__ = "certificados_apoyo_familiar"
+    id = db.Column(db.Integer, primary_key=True)
+    beneficiario_nombre = db.Column(db.String(200), default="")
+    beneficiario_documento = db.Column(db.String(40), default="")
+    otorgante_nombre = db.Column(db.String(200), default="")
+    otorgante_documento = db.Column(db.String(40), default="")
+    periodo = db.Column(db.String(20), default="")  # YYYY-MM o rango
+    valor = db.Column(db.Float, default=0.0)
+    concepto = db.Column(db.String(200), default="Apoyo familiar / mandato ad honorem")
+    tipo = db.Column(db.String(40), default="MANDATO_AD_HONOREM")  # MANDATO_AD_HONOREM | APOYO_FAMILIAR | DONACION
+    texto = db.Column(db.Text, default="")
+    pdf_data = db.Column(db.Text, default="")
+    estado = db.Column(db.String(30), default="EMITIDO")
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+    notas = db.Column(db.Text, default="")
+
+
 class ContOperacion(db.Model):
     """Operación económica respaldada: compra, venta, pago, cobro, servicio, entrega, etc."""
     __tablename__ = "cont_operaciones"
@@ -19741,6 +19820,9 @@ def gerencia_hq():
         <a class="g" href="/gerencia/nomina">💵 Nómina / Pagos</a>
         <a class="g" href="/gerencia/contratos-firmas">📝 Contratos y firmas digitales</a>
         <a class="g" href="/gerencia/datos-rut">📋 Datos del RUT (DIAN)</a>
+        <a class="g" href="/gerencia/fondo-formalizacion">🏦 Fondo de Formalización (Matrícula mercantil)</a>
+        <a class="g" href="/gerencia/contratos-saas">📄 Contratos SaaS Colegios</a>
+        <a class="g" href="/gerencia/certificados-apoyo">📑 Certificados apoyo familiar</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -51985,6 +52067,636 @@ def gerencia_datos_rut_pdf():
     return send_file(
         bio, as_attachment=True,
         download_name="PROCSIS_Datos_RUT_%s.pdf" % safe,
+        mimetype="application/pdf",
+    )
+
+
+
+
+def _fondo_formalizacion_get():
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    f = FondoFormalizacion.query.get(1)
+    if not f:
+        f = FondoFormalizacion(
+            id=1,
+            meta_monto=2500000.0,
+            acumulado=0.0,
+            estado="ACTIVO",
+            porcentaje_retencion=100.0,
+            descripcion="Fondo para derechos de matrícula mercantil y constitución S.A.S. El 100% de los primeros ingresos se congela hasta cumplir la meta.",
+        )
+        db.session.add(f)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            f = FondoFormalizacion.query.get(1)
+    return f
+
+
+@app.route("/gerencia/fondo-formalizacion", methods=["GET", "POST"])
+def gerencia_fondo_formalizacion():
+    """Alcancía virtual: ingresos congelados para matrícula mercantil."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    msg = err = ""
+    f = _fondo_formalizacion_get()
+
+    def _cop(v):
+        try:
+            n = float(v or 0)
+            s = "{:,.2f}".format(n).replace(",", "X").replace(".", ",").replace("X", ".")
+            return "$ " + s
+        except Exception:
+            return "$ 0,00"
+
+    def _parse_cop(raw):
+        s = (raw or "").strip().replace("$", "").replace(" ", "")
+        if not s:
+            return 0.0
+        try:
+            if "," in s:
+                s = s.replace(".", "").replace(",", ".")
+            elif s.count(".") > 1:
+                s = s.replace(".", "")
+            elif s.count(".") == 1 and len(s.split(".")[1]) == 3:
+                s = s.replace(".", "")
+            return round(float(s), 2)
+        except Exception:
+            return 0.0
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "config").strip()
+        try:
+            if accion == "config":
+                f.meta_monto = _parse_cop(request.form.get("meta_monto"))
+                f.porcentaje_retencion = float(request.form.get("porcentaje_retencion") or 100)
+                f.descripcion = (request.form.get("descripcion") or f.descripcion or "")[:2000]
+                f.notas = (request.form.get("notas") or "")[:2000]
+                f.actualizado_en = (fecha_hoy() if "fecha_hoy" in dir() else "")
+                db.session.commit()
+                msg = "Configuración del fondo actualizada."
+            elif accion == "ingreso":
+                val = _parse_cop(request.form.get("valor"))
+                if val <= 0:
+                    err = "Indique un valor mayor a 0."
+                elif (f.estado or "") != "ACTIVO":
+                    err = "El fondo no está activo (meta cumplida o cerrado)."
+                else:
+                    ret = max(0.0, min(100.0, float(f.porcentaje_retencion or 100))) / 100.0
+                    cong = round(val * ret, 2)
+                    mov = FondoFormalizacionMov(
+                        tipo="INGRESO",
+                        concepto=(request.form.get("concepto") or "Ingreso preventa / recaudo")[:200],
+                        valor=cong,
+                        referencia=(request.form.get("referencia") or "")[:120],
+                        congelado=True,
+                        creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
+                        creado_por=session.get("usuario") or "",
+                    )
+                    db.session.add(mov)
+                    f.acumulado = round(float(f.acumulado or 0) + cong, 2)
+                    if f.meta_monto and f.acumulado >= f.meta_monto:
+                        f.estado = "META_CUMPLIDA"
+                        f.fecha_meta_cumplida = fecha_hoy() if "fecha_hoy" in dir() else ""
+                        msg = "Ingreso congelado. ¡Meta de formalización cumplida!"
+                    else:
+                        msg = "Ingreso de %s congelado en el fondo." % _cop(cong)
+                    f.actualizado_en = fecha_hoy() if "fecha_hoy" in dir() else ""
+                    db.session.commit()
+            elif accion == "gasto_formalizacion":
+                val = _parse_cop(request.form.get("valor"))
+                if val <= 0:
+                    err = "Indique valor."
+                elif (f.estado or "") not in ("META_CUMPLIDA", "ACTIVO", "CERRADO"):
+                    err = "Estado no permite este movimiento."
+                else:
+                    mov = FondoFormalizacionMov(
+                        tipo="GASTO_FORMALIZACION",
+                        concepto=(request.form.get("concepto") or "Pago Cámara de Comercio / formalización")[:200],
+                        valor=val,
+                        referencia=(request.form.get("referencia") or "")[:120],
+                        congelado=False,
+                        creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
+                        creado_por=session.get("usuario") or "",
+                    )
+                    db.session.add(mov)
+                    f.acumulado = round(max(0.0, float(f.acumulado or 0) - val), 2)
+                    if request.form.get("cerrar") == "1":
+                        f.estado = "CERRADO"
+                    f.actualizado_en = fecha_hoy() if "fecha_hoy" in dir() else ""
+                    db.session.commit()
+                    msg = "Gasto de formalización registrado."
+            elif accion == "reactivar":
+                f.estado = "ACTIVO"
+                f.fecha_meta_cumplida = ""
+                db.session.commit()
+                msg = "Fondo reactivado."
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:120]
+            print("fondo:", e)
+        f = _fondo_formalizacion_get()
+
+    movs = FondoFormalizacionMov.query.order_by(FondoFormalizacionMov.id.desc()).limit(100).all()
+    filas = []
+    for m in movs:
+        filas.append(
+            "<tr><td style='padding:7px'>%s</td><td style='padding:7px'>%s</td>"
+            "<td style='padding:7px'>%s</td><td style='padding:7px;text-align:right'>%s</td>"
+            "<td style='padding:7px'>%s</td><td style='padding:7px'>%s</td></tr>" % (
+                _esc(m.creado_en), _esc(m.tipo), _esc(m.concepto),
+                _cop(m.valor), _esc(m.referencia), "Sí" if m.congelado else "No",
+            )
+        )
+    tabla = "".join(filas) or "<tr><td colspan='6' style='padding:12px;color:#64748b;text-align:center'>Sin movimientos</td></tr>"
+    pct = 0
+    if f.meta_monto and f.meta_monto > 0:
+        pct = min(100, round(100.0 * float(f.acumulado or 0) / float(f.meta_monto), 1))
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Fondo de Formalización</h1>
+  <p>Matrícula mercantil · Alcancía virtual · Ingresos congelados hasta constitución S.A.S.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px">
+    <div style="background:#eff6ff;border-radius:12px;padding:14px"><div style="font-size:12px;color:#64748b">Meta</div>
+      <div style="font-size:22px;font-weight:800;color:#0B2D57">{_cop(f.meta_monto)}</div></div>
+    <div style="background:#f0fdf4;border-radius:12px;padding:14px"><div style="font-size:12px;color:#64748b">Acumulado congelado</div>
+      <div style="font-size:22px;font-weight:800;color:#166534">{_cop(f.acumulado)}</div></div>
+    <div style="background:#fefce8;border-radius:12px;padding:14px"><div style="font-size:12px;color:#64748b">Avance</div>
+      <div style="font-size:22px;font-weight:800;color:#a16207">{pct}%</div></div>
+    <div style="background:#f8fafc;border-radius:12px;padding:14px"><div style="font-size:12px;color:#64748b">Estado</div>
+      <div style="font-size:18px;font-weight:800">{_esc(f.estado)}</div></div>
+  </div>
+  <div style="background:#e2e8f0;border-radius:999px;height:12px;margin-bottom:18px;overflow:hidden">
+    <div style="background:#0B2D57;height:12px;width:{pct}%"></div>
+  </div>
+  <p style="font-size:13px;color:#475569;margin:0 0 16px">{_esc(f.descripcion)}</p>
+  <p style="font-size:13px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px;color:#991b1b">
+    Mientras el estado sea <b>ACTIVO</b>, el {float(f.porcentaje_retencion or 100):.0f}% de los ingresos registrados aquí queda congelado.
+    No debe usarse para gasto operativo hasta cumplir la meta de formalización.
+  </p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:18px 0">
+    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+      <input type="hidden" name="accion" value="ingreso">
+      <h3 style="margin:0 0 10px;font-size:14px;color:#166534">Registrar ingreso a congelar</h3>
+      <label style="font-size:12px;font-weight:700">Valor recaudado</label>
+      <input name="valor" placeholder="500000" style="width:100%;padding:8px;margin-bottom:8px">
+      <label style="font-size:12px;font-weight:700">Concepto</label>
+      <input name="concepto" placeholder="Preventa colegio X" style="width:100%;padding:8px;margin-bottom:8px">
+      <label style="font-size:12px;font-weight:700">Referencia</label>
+      <input name="referencia" style="width:100%;padding:8px;margin-bottom:8px">
+      <button type="submit" style="background:#15803d;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Congelar ingreso</button>
+    </form>
+    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+      <input type="hidden" name="accion" value="gasto_formalizacion">
+      <h3 style="margin:0 0 10px;font-size:14px;color:#0B2D57">Pago formalización (Cámara de Comercio)</h3>
+      <label style="font-size:12px;font-weight:700">Valor del trámite</label>
+      <input name="valor" placeholder="2500000" style="width:100%;padding:8px;margin-bottom:8px">
+      <label style="font-size:12px;font-weight:700">Concepto</label>
+      <input name="concepto" value="Matrícula mercantil / constitución S.A.S." style="width:100%;padding:8px;margin-bottom:8px">
+      <label style="font-size:12px;font-weight:700">Referencia</label>
+      <input name="referencia" placeholder="Recibo Cámara de Comercio" style="width:100%;padding:8px;margin-bottom:8px">
+      <label style="font-size:12px"><input type="checkbox" name="cerrar" value="1"> Cerrar fondo al pagar</label>
+      <div style="margin-top:8px"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Registrar pago formalización</button></div>
+    </form>
+  </div>
+
+  <details style="margin-bottom:16px"><summary style="cursor:pointer;font-weight:700">Configurar meta y retención</summary>
+  <form method="POST" style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px">
+    <input type="hidden" name="accion" value="config">
+    <div><label style="font-size:12px;font-weight:700">Meta ($)</label>
+    <input name="meta_monto" value="{_esc(f.meta_monto)}" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">% retención ingresos</label>
+    <input name="porcentaje_retencion" value="{_esc(f.porcentaje_retencion)}" style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Descripción</label>
+    <textarea name="descripcion" rows="2" style="width:100%;padding:8px">{_esc(f.descripcion)}</textarea></div>
+    <div style="grid-column:1/-1"><button type="submit" style="padding:8px 12px;border-radius:8px;border:0;background:#334155;color:#fff;font-weight:700">Guardar config</button>
+    <button type="submit" name="accion" value="reactivar" style="padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;margin-left:8px">Reactivar fondo</button></div>
+  </form></details>
+
+  <h3 style="font-size:14px;color:#0B2D57">Movimientos</h3>
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="background:#0B2D57;color:#fff">
+        <th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Tipo</th>
+        <th style="padding:8px;text-align:left">Concepto</th><th style="padding:8px;text-align:right">Valor</th>
+        <th style="padding:8px;text-align:left">Ref.</th><th style="padding:8px;text-align:left">Congelado</th>
+      </tr>
+      {tabla}
+    </table>
+  </div>
+</section>
+"""
+    return page("Fondo Formalización", shell(body))
+
+
+def _texto_contrato_saas_default(colegio, rector, nit_col, plan, valor, prov_nombre, prov_nit, ciiu):
+    return (
+        "CONTRATO DE LICENCIAMIENTO SaaS — EduTrack / PROCSIS\n\n"
+        "PROVEEDOR PROVISIONAL: %s, identificado(a) con NIT/C.C. %s, actividad económica CIIU %s, "
+        "quien opera provisionalmente la plataforma PROCSIS / EduTrack.\n\n"
+        "CLIENTE: %s, NIT %s, representado legalmente por %s.\n\n"
+        "CLÁUSULA PRIMERA. OBJETO: El PROVEEDOR otorga al CLIENTE licencia de uso no exclusiva de la plataforma "
+        "EduTrack (gestión académica institucional) en modalidad SaaS, plan %s.\n\n"
+        "CLÁUSULA SEGUNDA. VALOR: El CLIENTE pagará %s de forma periódica según condiciones comerciales acordadas.\n\n"
+        "CLÁUSULA TERCERA. VIGENCIA: A partir de la fecha de firma digital por el rector / representante legal.\n\n"
+        "CLÁUSULA CUARTA. SOPORTE LEGAL DE COBRO: Las cuentas de cobro se emitirán a nombre del proveedor provisional "
+        "indicado, con soporte RUT, hasta la formalización de la S.A.S.\n\n"
+        "Las partes aceptan el presente documento mediante firma digital en la plataforma PROCSIS."
+    ) % (
+        prov_nombre or "—", prov_nit or "—", ciiu or "6201",
+        colegio or "—", nit_col or "—", rector or "—",
+        plan or "Estándar",
+        ("$ {:,.0f}".format(float(valor or 0)).replace(",", ".") if valor else "según cotización"),
+    )
+
+
+@app.route("/gerencia/contratos-saas", methods=["GET", "POST"])
+def gerencia_contratos_saas():
+    """Contratos de licenciamiento SaaS EduTrack para colegios (firma rector + datos RUT)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    rut = _procsis_rut()
+    prov_nombre = (rut.nombre_completo if rut else "") or "MARÍA DUBER LÓPEZ ARCILA"
+    prov_nit = ""
+    if rut:
+        prov_nit = (rut.nit_cedula or "").strip()
+        if (rut.digito_verificacion or "").strip():
+            prov_nit = "%s-%s" % (prov_nit, rut.digito_verificacion.strip())
+    ciiu = (rut.actividad_ciiu if rut else "6201") or "6201"
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "crear").strip()
+        if accion == "crear":
+            try:
+                col = (request.form.get("colegio_nombre") or "").strip()[:200]
+                if not col:
+                    err = "Nombre del colegio obligatorio."
+                else:
+                    c = ContratoSaaSColegio(
+                        colegio_nombre=col,
+                        nit_colegio=(request.form.get("nit_colegio") or "")[:40],
+                        rector_nombre=(request.form.get("rector_nombre") or "")[:160],
+                        rector_documento=(request.form.get("rector_documento") or "")[:40],
+                        rector_email=(request.form.get("rector_email") or "")[:120],
+                        plan=(request.form.get("plan") or "Estándar")[:80],
+                        valor_mensual=float((request.form.get("valor_mensual") or "0").replace(".", "").replace(",", ".") or 0),
+                        fecha_inicio=(request.form.get("fecha_inicio") or "")[:20],
+                        estado="BORRADOR",
+                        proveedor_nombre=prov_nombre[:200],
+                        proveedor_nit=prov_nit[:40],
+                        proveedor_actividad=ciiu[:120],
+                        creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
+                        creado_por=session.get("usuario") or "",
+                    )
+                    c.texto_contrato = _texto_contrato_saas_default(
+                        c.colegio_nombre, c.rector_nombre, c.nit_colegio, c.plan, c.valor_mensual,
+                        c.proveedor_nombre, c.proveedor_nit, c.proveedor_actividad,
+                    )
+                    try:
+                        lid = int(request.form.get("lead_id") or 0)
+                        c.lead_id = lid or None
+                    except Exception:
+                        pass
+                    try:
+                        iid = int(request.form.get("institucion_id") or 0)
+                        c.institucion_id = iid or None
+                    except Exception:
+                        pass
+                    db.session.add(c)
+                    db.session.commit()
+                    msg = "Contrato SaaS creado. Puede enviarlo a firma del rector."
+                    return redirect("/gerencia/contratos-saas/%s" % c.id)
+            except Exception as e:
+                db.session.rollback()
+                err = str(e)[:120]
+        elif accion == "firmar":
+            try:
+                cid = int(request.form.get("id") or 0)
+            except Exception:
+                cid = 0
+            c = ContratoSaaSColegio.query.get(cid) if cid else None
+            if c:
+                import hashlib
+                c.estado = "FIRMADO"
+                c.firmado_en = (fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else "")
+                c.hash_firma = hashlib.sha256(
+                    ("%s|%s|%s|%s" % (c.id, c.colegio_nombre, c.rector_documento, c.firmado_en)).encode()
+                ).hexdigest()[:32].upper()
+                f = request.files.get("firma_rector")
+                if f and f.filename:
+                    import base64 as _b64
+                    raw = f.read()
+                    mime = (f.mimetype or "image/png").split(";")[0]
+                    c.firma_rector = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+                db.session.commit()
+                msg = "Contrato marcado como FIRMADO."
+
+    rows = ContratoSaaSColegio.query.order_by(ContratoSaaSColegio.id.desc()).limit(100).all()
+    filas = []
+    for c in rows:
+        filas.append(
+            "<tr><td style='padding:8px'>%s</td><td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td><td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'><a href='/gerencia/contratos-saas/%s'>Abrir</a></td></tr>" % (
+                _esc(c.colegio_nombre), _esc(c.rector_nombre), _esc(c.plan),
+                _esc(c.estado), _esc(c.proveedor_nit), c.id,
+            )
+        )
+    tabla = "".join(filas) or "<tr><td colspan='6' style='padding:12px;color:#64748b;text-align:center'>Sin contratos SaaS</td></tr>"
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Contratos SaaS · Colegios</h1>
+  <p>Licenciamiento EduTrack · Proveedor provisional desde Datos del RUT · Firma del rector</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;margin-bottom:14px;font-size:13px;color:#1e3a8a">
+    Proveedor provisional actual: <b>{_esc(prov_nombre)}</b> · NIT <b>{_esc(prov_nit)}</b> · CIIU <b>{_esc(ciiu)}</b>
+    · <a href="/gerencia/datos-rut">Editar RUT</a>
+  </div>
+  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:900px;margin-bottom:18px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+    <input type="hidden" name="accion" value="crear">
+    <div style="grid-column:1/-1"><h3 style="margin:0;font-size:14px">Nuevo contrato de licenciamiento</h3></div>
+    <div><label style="font-size:12px;font-weight:700">Colegio *</label>
+    <input name="colegio_nombre" required style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">NIT colegio</label>
+    <input name="nit_colegio" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Rector / representante</label>
+    <input name="rector_nombre" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Documento rector</label>
+    <input name="rector_documento" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Email rector</label>
+    <input name="rector_email" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Plan</label>
+    <input name="plan" value="Estándar" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Valor mensual</label>
+    <input name="valor_mensual" placeholder="0" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Fecha inicio</label>
+    <input name="fecha_inicio" placeholder="YYYY-MM-DD" style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Crear contrato SaaS</button></div>
+  </form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px;text-align:left">Colegio</th><th style="padding:8px;text-align:left">Rector</th>
+      <th style="padding:8px;text-align:left">Plan</th><th style="padding:8px;text-align:left">Estado</th>
+      <th style="padding:8px;text-align:left">NIT proveedor</th><th style="padding:8px;text-align:left"></th>
+    </tr>
+    {tabla}
+  </table>
+</section>
+"""
+    return page("Contratos SaaS", shell(body))
+
+
+@app.route("/gerencia/contratos-saas/<int:cid>", methods=["GET", "POST"])
+def gerencia_contratos_saas_detalle(cid):
+    g = _guard_gerencia()
+    if g:
+        return g
+    c = ContratoSaaSColegio.query.get_or_404(cid)
+    msg = ""
+    if request.method == "POST":
+        c.texto_contrato = (request.form.get("texto_contrato") or c.texto_contrato or "")[:50000]
+        c.notas = (request.form.get("notas") or "")[:2000]
+        if request.form.get("accion") == "firmar":
+            import hashlib
+            c.estado = "FIRMADO"
+            c.firmado_en = (fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else "")
+            c.hash_firma = hashlib.sha256(
+                ("%s|%s|%s|%s" % (c.id, c.colegio_nombre, c.rector_documento, c.firmado_en)).encode()
+            ).hexdigest()[:32].upper()
+            f = request.files.get("firma_rector")
+            if f and f.filename:
+                import base64 as _b64
+                raw = f.read()
+                mime = (f.mimetype or "image/png").split(";")[0]
+                c.firma_rector = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+            msg = "Contrato firmado."
+        else:
+            msg = "Guardado."
+        db.session.commit()
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Contrato SaaS #{c.id}</h1>
+  <p>{_esc(c.colegio_nombre)} · {_esc(c.estado)}</p>
+</div>
+<a class="btn" href="/gerencia/contratos-saas">← Listado</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  <p style="font-size:13px"><b>Proveedor:</b> {_esc(c.proveedor_nombre)} · NIT {_esc(c.proveedor_nit)} · CIIU {_esc(c.proveedor_actividad)}<br>
+  <b>Rector:</b> {_esc(c.rector_nombre)} · {_esc(c.rector_documento)} · {_esc(c.rector_email)}<br>
+  {"<b>Firmado:</b> "+_esc(c.firmado_en)+" · Hash "+_esc(c.hash_firma) if c.estado=="FIRMADO" else ""}</p>
+  <form method="POST" enctype="multipart/form-data" style="display:grid;gap:10px;max-width:900px">
+    <textarea name="texto_contrato" rows="16" style="width:100%;padding:10px;font-family:Georgia,serif">{_esc(c.texto_contrato)}</textarea>
+    <label>Firma digital del rector <input type="file" name="firma_rector" accept="image/*"></label>
+    {"<img src='"+_esc(c.firma_rector)+"' style='max-height:80px'>" if c.firma_rector else ""}
+    <textarea name="notas" rows="2" placeholder="Notas">{_esc(c.notas)}</textarea>
+    <div style="display:flex;gap:8px">
+      <button type="submit" style="padding:10px 14px;border:0;border-radius:8px;background:#334155;color:#fff;font-weight:700">Guardar texto</button>
+      <button type="submit" name="accion" value="firmar" style="padding:10px 14px;border:0;border-radius:8px;background:#15803d;color:#fff;font-weight:700">Marcar firmado + estampar</button>
+    </div>
+  </form>
+</section>
+"""
+    return page("Contrato SaaS", shell(body))
+
+
+@app.route("/cobranza/certificados-apoyo", methods=["GET", "POST"])
+@app.route("/gerencia/certificados-apoyo", methods=["GET", "POST"])
+def certificados_apoyo_familiar():
+    """Historial de certificados de mandato ad honorem / apoyo familiar (justificación DIAN)."""
+    # Permitir gerencia o cobranza
+    rol = (session.get("rol") or "").strip()
+    if rol not in ("Gerente", "Administrador", "Superadmin", "Cobranza", "gerente", "cobranza"):
+        g = _guard_gerencia()
+        if g:
+            return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    rut = _procsis_rut()
+    def_ben = (rut.nombre_completo if rut else "") or "MARÍA DUBER LÓPEZ ARCILA"
+    def_doc = (rut.nit_cedula if rut else "") or "1038062294"
+
+    if request.method == "POST":
+        try:
+            valor = 0.0
+            raw = (request.form.get("valor") or "0").replace("$", "").replace(" ", "")
+            if "," in raw:
+                raw = raw.replace(".", "").replace(",", ".")
+            elif raw.count(".") == 1 and len(raw.split(".")[1]) == 3:
+                raw = raw.replace(".", "")
+            valor = round(float(raw or 0), 2)
+            cert = CertificadoApoyoFamiliar(
+                beneficiario_nombre=(request.form.get("beneficiario_nombre") or def_ben)[:200],
+                beneficiario_documento=(request.form.get("beneficiario_documento") or def_doc)[:40],
+                otorgante_nombre=(request.form.get("otorgante_nombre") or "SEBASTIÁN LÓPEZ ARCILA")[:200],
+                otorgante_documento=(request.form.get("otorgante_documento") or "")[:40],
+                periodo=(request.form.get("periodo") or "")[:20],
+                valor=valor,
+                concepto=(request.form.get("concepto") or "Apoyo familiar / mandato ad honorem")[:200],
+                tipo=(request.form.get("tipo") or "MANDATO_AD_HONOREM")[:40],
+                notas=(request.form.get("notas") or "")[:1000],
+                estado="EMITIDO",
+                creado_en=(fecha_hoy() if "fecha_hoy" in dir() else "") + " " + (hora_actual() if "hora_actual" in dir() else ""),
+                creado_por=session.get("usuario") or "",
+            )
+            cert.texto = (
+                "CERTIFICADO DE %s\n\n"
+                "El/la suscrito(a) %s, identificado(a) con documento %s, certifica que durante el periodo %s "
+                "se reconoció a %s (documento %s) la suma de $ %s por concepto de: %s.\n\n"
+                "Este reconocimiento se realiza en el marco de un mandato / colaboración familiar ad honorem "
+                "en fase de pre-constitución de la unidad de negocio PROCSIS, sin generar relación laboral "
+                "ni obligaciones de seguridad social distintas a las que las partes acuerden por escrito.\n\n"
+                "El presente certificado se emite para soporte contable y eventuales requerimientos de la DIAN "
+                "u otras autoridades, y no constituye título valor.\n\n"
+                "Fecha de emisión: %s."
+            ) % (
+                (cert.tipo or "APOYO").replace("_", " "),
+                cert.otorgante_nombre, cert.otorgante_documento or "—",
+                cert.periodo or "—",
+                cert.beneficiario_nombre, cert.beneficiario_documento or "—",
+                "{:,.2f}".format(valor).replace(",", "X").replace(".", ",").replace("X", "."),
+                cert.concepto,
+                cert.creado_en or "",
+            )
+            db.session.add(cert)
+            db.session.commit()
+            msg = "Certificado #%s emitido." % cert.id
+            return redirect("/gerencia/certificados-apoyo/%s/pdf" % cert.id)
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:120]
+            print("cert apoyo:", e)
+
+    rows = CertificadoApoyoFamiliar.query.order_by(CertificadoApoyoFamiliar.id.desc()).limit(100).all()
+    def _cop(v):
+        try:
+            s = "{:,.2f}".format(float(v or 0)).replace(",", "X").replace(".", ",").replace("X", ".")
+            return "$ " + s
+        except Exception:
+            return "$ 0,00"
+    filas = []
+    for x in rows:
+        filas.append(
+            "<tr><td style='padding:8px'>%s</td><td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'>%s</td><td style='padding:8px;text-align:right'>%s</td>"
+            "<td style='padding:8px'>%s</td>"
+            "<td style='padding:8px'><a href='/gerencia/certificados-apoyo/%s/pdf' target='_blank'>PDF</a></td></tr>" % (
+                _esc(x.periodo), _esc(x.beneficiario_nombre), _esc(x.concepto),
+                _cop(x.valor), _esc(x.tipo), x.id,
+            )
+        )
+    tabla = "".join(filas) or "<tr><td colspan='6' style='padding:12px;color:#64748b;text-align:center'>Sin certificados</td></tr>"
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Certificados de apoyo familiar / mandato</h1>
+  <p>Historial para justificación DIAN · Fase de pre-lanzamiento · Sin contrato laboral tradicional</p>
+</div>
+<div style="display:flex;gap:8px">
+  <a class="btn" href="/gerencia/hq">← HQ</a>
+  <a class="btn" href="/cobranza/panel">Cobranza</a>
+</div></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:900px;margin-bottom:18px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+    <div style="grid-column:1/-1"><h3 style="margin:0;font-size:14px">Emitir certificado</h3></div>
+    <div><label style="font-size:12px;font-weight:700">Beneficiario (quien recibe)</label>
+    <input name="beneficiario_nombre" value="{_esc(def_ben)}" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Documento beneficiario</label>
+    <input name="beneficiario_documento" value="{_esc(def_doc)}" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Otorgante</label>
+    <input name="otorgante_nombre" value="SEBASTIÁN LÓPEZ ARCILA" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Documento otorgante</label>
+    <input name="otorgante_documento" placeholder="TI / CC" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Periodo</label>
+    <input name="periodo" placeholder="2026-09" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Valor</label>
+    <input name="valor" placeholder="30000" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Tipo</label>
+    <select name="tipo" style="width:100%;padding:8px">
+      <option value="MANDATO_AD_HONOREM">Mandato ad honorem</option>
+      <option value="APOYO_FAMILIAR">Apoyo familiar</option>
+      <option value="DONACION">Donación</option>
+    </select></div>
+    <div><label style="font-size:12px;font-weight:700">Concepto</label>
+    <input name="concepto" value="Apoyo familiar / mandato ad honorem fase pre-lanzamiento" style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Emitir y descargar PDF</button></div>
+  </form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px;text-align:left">Periodo</th><th style="padding:8px;text-align:left">Beneficiario</th>
+      <th style="padding:8px;text-align:left">Concepto</th><th style="padding:8px;text-align:right">Valor</th>
+      <th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:left">PDF</th>
+    </tr>
+    {tabla}
+  </table>
+</section>
+"""
+    return page("Certificados apoyo", shell(body))
+
+
+@app.route("/gerencia/certificados-apoyo/<int:cid>/pdf")
+@app.route("/cobranza/certificados-apoyo/<int:cid>/pdf")
+def certificados_apoyo_pdf(cid):
+    g = _guard_gerencia()
+    # permitir cobranza sin fallar
+    if g and (session.get("rol") or "") not in ("Cobranza", "cobranza"):
+        return g
+    cert = CertificadoApoyoFamiliar.query.get_or_404(cid)
+    bio = BytesIO()
+    c = canvas.Canvas(bio, pagesize=letter)
+    W, H = letter
+    c.setFillColor(colors.HexColor("#0B2D57"))
+    c.rect(0, H - 64, W, 64, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(40, H - 28, "PROCSIS · Certificado de apoyo / mandato")
+    c.setFont("Helvetica", 9)
+    c.drawString(40, H - 46, "Soporte contable · Fase de pre-lanzamiento · Documento interno")
+    y = H - 100
+    from reportlab.lib.utils import simpleSplit
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica", 10)
+    for para in (cert.texto or "").split("\n"):
+        for ln in simpleSplit(para if para else " ", "Helvetica", 10, W - 90):
+            if y < 50:
+                c.showPage()
+                y = H - 50
+            c.drawString(45, y, ln)
+            y -= 13
+        y -= 4
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(45, 28, "PROCSIS · Certificado #%s · %s" % (cert.id, cert.creado_en or ""))
+    c.save()
+    bio.seek(0)
+    return send_file(
+        bio, as_attachment=True,
+        download_name="PROCSIS_Certificado_Apoyo_%s.pdf" % cert.id,
         mimetype="application/pdf",
     )
 
