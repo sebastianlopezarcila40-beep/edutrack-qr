@@ -19786,6 +19786,11 @@ def gerencia_hq():
 .hq-cat.verde-corp{{background:#bbf7d0;color:#14532d}}
 .hq-cat.azul-rey{{background:#bfdbfe;color:#1e3a8a}}
 .hq-cat.naranja-lad{{background:#fdba74;color:#7c2d12}}
+.hq-tabs{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;border-bottom:2px solid #e2e8f0;padding-bottom:10px}}
+.hq-tab{{border:0;cursor:pointer;padding:10px 18px;border-radius:8px 8px 0 0;font-weight:800;font-size:13px;background:#e2e8f0;color:#475569}}
+.hq-tab.active{{background:#0B2D57;color:#fff}}
+.hq-tab-panel{{display:none}}
+.hq-tab-panel.active{{display:block}}
 .bar{{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin-top:6px}}
 .bar>i{{display:block;height:100%;background:#0B2D57}}
 .srv{{display:inline-flex;align-items:center;gap:8px;font-weight:700}}
@@ -19820,129 +19825,157 @@ def gerencia_hq():
     {aviso_pendientes}
 
     <div class="sec">
-      <h2>Módulos operativos</h2>
 
-      <div class="hq-cat verde">🟢 Dinero y facturación</div>
-      <div class="grid-mod">
-        <a class="c-verde" href="/gerencia/cartera">Cuadro de mando · Cartera</a>
-        <a class="c-verde" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
-        <a class="c-verde" href="/gerencia/gastos">Gastos y cashflow</a>
-        <a class="c-verde" href="/gerencia/contabilidad">Contabilidad comercial</a>
-        <a class="c-verde" href="/gerencia/reportes-pago">Reportes de pago</a>
-        <a class="c-verde" href="/gerencia/verificaciones-pendientes">Validaciones de venta</a>
+    <div class="sec" style="padding-top:12px">
+      <div class="hq-tabs" role="tablist">
+        <button type="button" class="hq-tab active" data-tab="operativo" onclick="hqTab(this,'operativo')">Panel operativo</button>
+        <button type="button" class="hq-tab" data-tab="gerencia" onclick="hqTab(this,'gerencia')">Panel de gerencia</button>
+        <button type="button" class="hq-tab" data-tab="contingencia" onclick="hqTab(this,'contingencia')">Contingencia · DRP · Legal</button>
       </div>
 
-      <div class="hq-cat azul">🔵 Clientes, soporte e instituciones</div>
-      <div class="grid-mod">
-        <a class="c-azul" href="/gerencia/contabilidad/partes">Clientes y proveedores</a>
-        <a class="c-azul" href="/soporte_admin">Centro de soporte</a>
-        <a class="c-azul" href="/gerencia/pqr-limpieza">Limpieza PQR de prueba</a>
-        <a class="c-azul" href="/gerencia/fidelizacion">Fidelización CSAT</a>
-        <a class="c-azul" href="/gerencia/rectores">Rectores CRM</a>
-        <a class="c-azul" href="/tenants">Instituciones</a>
-        <a class="c-azul" href="/calendario">Calendario escolar</a>
+      <div id="hq-tab-operativo" class="hq-tab-panel active">
+        <p class="hq-note" style="margin-top:0">Operación del día a día · Facturación, clientes, soporte y herramientas</p>
+
+        <div class="hq-cat verde">🟢 Dinero y facturación</div>
+        <div class="grid-mod">
+          <a class="c-verde" href="/gerencia/cartera">Cuadro de mando · Cartera</a>
+          <a class="c-verde" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
+          <a class="c-verde" href="/gerencia/gastos">Gastos y cashflow</a>
+          <a class="c-verde" href="/gerencia/contabilidad">Contabilidad comercial</a>
+          <a class="c-verde" href="/gerencia/reportes-pago">Reportes de pago</a>
+          <a class="c-verde" href="/gerencia/verificaciones-pendientes">Validaciones de venta</a>
+        </div>
+
+        <div class="hq-cat azul">🔵 Clientes, soporte e instituciones</div>
+        <div class="grid-mod">
+          <a class="c-azul" href="/gerencia/contabilidad/partes">Clientes y proveedores</a>
+          <a class="c-azul" href="/soporte_admin">Centro de soporte</a>
+          <a class="c-azul" href="/gerencia/pqr-limpieza">Limpieza PQR de prueba</a>
+          <a class="c-azul" href="/gerencia/fidelizacion">Fidelización CSAT</a>
+          <a class="c-azul" href="/gerencia/rectores">Rectores CRM</a>
+          <a class="c-azul" href="/tenants">Instituciones</a>
+          <a class="c-azul" href="/calendario">Calendario escolar</a>
+        </div>
+
+        <div class="hq-cat naranja">🟠 Comunicación y herramientas</div>
+        <div class="grid-mod">
+          <a class="c-naranja" href="/gerencia/wati-conexion">Conectar WhatsApp · API WATI</a>
+          <a class="c-naranja" href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
+          <a class="c-naranja" href="/gerencia/correo-soporte">Conectar Gmail · Soporte</a>
+          <a class="c-naranja" href="/gerencia/correo-notificaciones">Conectar Gmail · Notificaciones</a>
+          <a class="c-naranja" href="/gerencia/procsis-web">Noticias y productos web</a>
+          <a class="c-naranja" href="/gerencia/anuncios">Anuncios (editar)</a>
+        </div>
+
+        <div class="hq-cat gris">⚫ Seguridad e internos</div>
+        <div class="grid-mod">
+          <a class="c-gris" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
+          <a class="c-gris" href="/gerencia/turnos">Turnos y notas</a>
+          <a class="c-gris" href="/gerencia/auditoria">Auditoría IP / ubicación</a>
+          <a class="c-gris" href="/auditoria">Auditoría</a>
+          <a class="c-gris" href="/gerencia/lideres">Líderes / equipo web</a>
+          <a class="c-gris" href="/gerencia/contabilidad/nueva">Nueva operación</a>
+          <a class="c-gris" href="/gerencia/planes">Planes · precios · paywalls</a>
+        </div>
       </div>
 
-      <div class="hq-cat naranja">🟠 Comunicación y herramientas</div>
-      <div class="grid-mod">
-        <a class="c-naranja" href="/gerencia/wati-conexion">Conectar WhatsApp · API WATI</a>
-        <a class="c-naranja" href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
-        <a class="c-naranja" href="/gerencia/correo-soporte">Conectar Gmail · Soporte</a>
-        <a class="c-naranja" href="/gerencia/correo-notificaciones">Conectar Gmail · Notificaciones</a>
-        <a class="c-naranja" href="/gerencia/procsis-web">Noticias y productos web</a>
-        <a class="c-naranja" href="/gerencia/anuncios">Anuncios (editar)</a>
+      <div id="hq-tab-gerencia" class="hq-tab-panel">
+        <p class="hq-note" style="margin-top:0">Exclusivo dirección · Talento, legal, finanzas corporativas y configuración</p>
+
+        <div class="hq-cat marron">🟤 Talento y trabajadores</div>
+        <div class="grid-mod">
+          <a class="c-marron" href="/gerencia/contabilidad/trabajadores">Módulo trabajadores</a>
+          <a class="c-marron" href="/gerencia/hojas-vida">Hojas de vida / Talento</a>
+          <a class="c-marron" href="/gerencia/nomina">Nómina / Pagos</a>
+          <a class="c-marron" href="/gerencia/contratos-firmas">Contratos y firmas digitales</a>
+          <a class="c-marron" href="/gerencia/certificados-apoyo">Certificados apoyo familiar</a>
+          <a class="c-marron" href="/gerencia/contratos-personal">Admisión / gestión de contratos</a>
+          <a class="c-marron" href="/gerencia/comisiones-ventas">Comisiones de ventas</a>
+        </div>
+
+        <div class="hq-cat verde-corp">🟢 Legal y formalización PROCSIS</div>
+        <div class="grid-mod">
+          <a class="c-verde-corp" href="/gerencia/datos-rut">Datos del RUT (DIAN)</a>
+          <a class="c-verde-corp" href="/gerencia/fondo-formalizacion">Fondo de Formalización</a>
+          <a class="c-verde-corp" href="/gerencia/contratos-saas">Contratos SaaS Colegios</a>
+          <a class="c-verde-corp" href="/gerencia/documentos/politica-datos">Textos legales (PQR / Habeas Data)</a>
+          <a class="c-verde-corp" href="/gerencia/certificaciones">Certificaciones corporativas</a>
+          <a class="c-verde-corp" href="/gerencia/requerimientos-autoridades">Requerimientos de autoridades</a>
+        </div>
+
+        <div class="hq-cat azul-rey">🔵 Finanzas y conexiones del servidor</div>
+        <div class="grid-mod">
+          <a class="c-azul-rey" href="/gerencia/recursos-financieros">Recursos Financieros y Consumo</a>
+          <a class="c-azul-rey" href="/gerencia/contabilidad">Contabilidad · compras/ventas/pagos</a>
+          <a class="c-azul-rey" href="/gerencia/tesoreria">Cuentas bancarias y pasarelas</a>
+          <a class="c-azul-rey" href="/gerencia/correo-soporte">Conectar Gmail · Soporte</a>
+          <a class="c-azul-rey" href="/gerencia/correo-notificaciones">Conectar Gmail · Notificaciones</a>
+          <a class="c-azul-rey" href="/gerencia/wati-conexion">Conectar WhatsApp · API WATI</a>
+        </div>
+
+        <div class="hq-cat naranja-lad">🟠 Configuración y web de la empresa</div>
+        <div class="grid-mod">
+          <a class="c-naranja-lad" href="/gerencia/empresa">Datos de la empresa</a>
+          <a class="c-naranja-lad" href="/gerencia/web-corporativa">Página web / Web corporativa</a>
+          <a class="c-naranja-lad" href="/feature_flags">Parámetros dinámicos / Feature flags</a>
+          <a class="c-naranja-lad" href="/gerencia/facturacion">Facturación auto</a>
+          <a class="c-naranja-lad" href="/gerencia/planes">Aprobar precios y planes</a>
+          <a class="c-naranja-lad" href="/gerencia/descuentos">Descuentos especiales</a>
+          <a class="c-naranja-lad" href="/gerencia/lideres">Equipo directivo (web)</a>
+          <a class="c-naranja-lad" href="/gerencia/contabilidad/partes">Clientes · Proveedores · Dominios</a>
+          <a class="c-naranja-lad" href="/gerencia/turnos">Turnos y notas de gestión</a>
+          <a class="c-naranja-lad" href="/soporte/equipo">Equipo Procsis · roles</a>
+          <a class="c-naranja-lad" href="/gerencia/cancelaciones">Cancelaciones de servicio</a>
+          <a class="c-naranja-lad" href="/retencion">Retención · validar casos</a>
+        </div>
+        <p class="hq-note">Las decisiones de precio, descuento, baja de plan y cancelación requieren autorización de gerencia. El acceso queda registrado en auditoría.</p>
       </div>
 
-      <div class="hq-cat gris">⚫ Seguridad e internos</div>
-      <div class="grid-mod">
-        <a class="c-gris" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
-        <a class="c-gris" href="/gerencia/turnos">Turnos y notas</a>
-        <a class="c-gris" href="/gerencia/auditoria">Auditoría IP / ubicación</a>
-        <a class="c-gris" href="/auditoria">Auditoría</a>
-        <a class="c-gris" href="/gerencia/lideres">Líderes / equipo web</a>
-        <a class="c-gris" href="/gerencia/contabilidad/nueva">Nueva operación</a>
-        <a class="c-gris" href="/gerencia/planes">Planes · precios · paywalls</a>
+      <div id="hq-tab-contingencia" class="hq-tab-panel">
+        <p class="hq-note" style="margin-top:0">Documentos legales, DRP y biblioteca corporativa</p>
+        <div class="grid-mod">
+          <a class="own" href="/gerencia/documentos">Biblioteca de documentos</a>
+          <a class="own" href="/gerencia/documentos/opinion-publica">Opinión pública</a>
+          <a class="own" href="/gerencia/documentos/comunicado-prensa">Comunicado de prensa</a>
+          <a class="own" href="/gerencia/documentos/contrato-licenciamiento">Contrato SaaS EduTrack</a>
+          <a class="own" href="/gerencia/documentos/contrato-implementacion">Contrato implementación</a>
+          <a class="own" href="/gerencia/documentos/acta-compromiso-colegio">Acta de compromiso</a>
+          <a class="own" href="/gerencia/documentos/plan-contingencia">Plan de Contingencia</a>
+          <a class="own" href="/gerencia/documentos/plan-drp">Plan DRP (desastres)</a>
+          <a class="t" href="/gerencia/documentos/terminos-condiciones">Términos y condiciones</a>
+          <a class="t" href="/gerencia/documentos/politica-datos">Política de datos</a>
+          <a class="t" href="/gerencia/documentos/sg-sst">SG-SST simplificado</a>
+          <a class="own" href="/gerencia/talento-legal">Guía contratación · PILA · SG-SST</a>
+          <a class="own" href="/gerencia/contratos-personal">Gestión de contratos</a>
+          <a class="own" href="/gerencia/planillas-pila">Historial planillas PILA</a>
+          <a class="own" href="/gerencia/matriz-epp">Matriz EPP / visitas colegios</a>
+        </div>
+        <p class="hq-note">Editor tipo documento corporativo con descarga PDF. Los marcados como públicos se publican en /docs/…</p>
       </div>
     </div>
 
-    <div class="sec">
-      <h2>Reservado a dirección / gerencia</h2>
-
-      <div class="hq-cat marron">🟤 Talento y trabajadores</div>
-      <div class="grid-mod">
-        <a class="c-marron" href="/gerencia/contabilidad/trabajadores">Módulo trabajadores</a>
-        <a class="c-marron" href="/gerencia/hojas-vida">Hojas de vida / Talento</a>
-        <a class="c-marron" href="/gerencia/nomina">Nómina / Pagos</a>
-        <a class="c-marron" href="/gerencia/contratos-firmas">Contratos y firmas digitales</a>
-        <a class="c-marron" href="/gerencia/certificados-apoyo">Certificados apoyo familiar</a>
-        <a class="c-marron" href="/gerencia/contratos-personal">Admisión / gestión de contratos</a>
-        <a class="c-marron" href="/gerencia/comisiones-ventas">Comisiones de ventas</a>
-      </div>
-
-      <div class="hq-cat verde-corp">🟢 Legal y formalización PROCSIS</div>
-      <div class="grid-mod">
-        <a class="c-verde-corp" href="/gerencia/datos-rut">Datos del RUT (DIAN)</a>
-        <a class="c-verde-corp" href="/gerencia/fondo-formalizacion">Fondo de Formalización</a>
-        <a class="c-verde-corp" href="/gerencia/contratos-saas">Contratos SaaS Colegios</a>
-        <a class="c-verde-corp" href="/gerencia/documentos/politica-datos">Textos legales (PQR / Habeas Data)</a>
-        <a class="c-verde-corp" href="/gerencia/certificaciones">Certificaciones corporativas</a>
-        <a class="c-verde-corp" href="/gerencia/requerimientos-autoridades">Requerimientos de autoridades</a>
-      </div>
-
-      <div class="hq-cat azul-rey">🔵 Finanzas y conexiones del servidor</div>
-      <div class="grid-mod">
-        <a class="c-azul-rey" href="/gerencia/recursos-financieros">Recursos Financieros y Consumo</a>
-        <a class="c-azul-rey" href="/gerencia/contabilidad">Contabilidad · compras/ventas/pagos</a>
-        <a class="c-azul-rey" href="/gerencia/tesoreria">Cuentas bancarias y pasarelas</a>
-        <a class="c-azul-rey" href="/gerencia/correo-soporte">Conectar Gmail · Soporte</a>
-        <a class="c-azul-rey" href="/gerencia/correo-notificaciones">Conectar Gmail · Notificaciones</a>
-        <a class="c-azul-rey" href="/gerencia/wati-conexion">Conectar WhatsApp · API WATI</a>
-      </div>
-
-      <div class="hq-cat naranja-lad">🟠 Configuración y web de la empresa</div>
-      <div class="grid-mod">
-        <a class="c-naranja-lad" href="/gerencia/empresa">Datos de la empresa</a>
-        <a class="c-naranja-lad" href="/gerencia/web-corporativa">Página web / Web corporativa</a>
-        <a class="c-naranja-lad" href="/feature_flags">Parámetros dinámicos / Feature flags</a>
-        <a class="c-naranja-lad" href="/gerencia/facturacion">Facturación auto</a>
-        <a class="c-naranja-lad" href="/gerencia/planes">Aprobar precios y planes</a>
-        <a class="c-naranja-lad" href="/gerencia/descuentos">Descuentos especiales</a>
-        <a class="c-naranja-lad" href="/gerencia/lideres">Equipo directivo (web)</a>
-        <a class="c-naranja-lad" href="/gerencia/contabilidad/partes">Clientes · Proveedores · Dominios</a>
-        <a class="c-naranja-lad" href="/gerencia/turnos">Turnos y notas de gestión</a>
-        <a class="c-naranja-lad" href="/soporte/equipo">Equipo Procsis · roles</a>
-        <a class="c-naranja-lad" href="/gerencia/cancelaciones">Cancelaciones de servicio</a>
-        <a class="c-naranja-lad" href="/retencion">Retención · validar casos</a>
-      </div>
-      <p class="hq-note">Las decisiones de precio, descuento, baja de plan y cancelación requieren autorización de gerencia. El acceso queda registrado en auditoría. Uso indebido de este panel puede generar responsabilidades laborales y legales.</p>
-    </div>
+    <script>
+    function hqTab(btn, id){{
+      document.querySelectorAll('.hq-tab').forEach(function(b){{ b.classList.remove('active'); }});
+      document.querySelectorAll('.hq-tab-panel').forEach(function(p){{ p.classList.remove('active'); }});
+      btn.classList.add('active');
+      var el = document.getElementById('hq-tab-'+id);
+      if(el) el.classList.add('active');
+      try{{ localStorage.setItem('hq_tab', id); }}catch(e){{}}
+    }}
+    (function(){{
+      try{{
+        var t = localStorage.getItem('hq_tab');
+        if(t){{
+          var b = document.querySelector('.hq-tab[data-tab="'+t+'"]');
+          if(b) hqTab(b, t);
+        }}
+      }}catch(e){{}}
+    }})();
+    </script>
 
     <div class="sec">
-      <h2>Contingencia · DRP · Documentos legales</h2>
-      <div class="grid-mod">
-        <a class="own" href="/gerencia/documentos">Biblioteca de documentos</a>
-        <a class="own" href="/gerencia/documentos/opinion-publica">Opinión pública</a>
-        <a class="own" href="/gerencia/documentos/comunicado-prensa">Comunicado de prensa</a>
-        <a class="own" href="/gerencia/documentos/contrato-licenciamiento">Contrato SaaS EduTrack</a>
-        <a class="own" href="/gerencia/documentos/contrato-implementacion">Contrato implementación</a>
-        <a class="own" href="/gerencia/documentos/acta-compromiso-colegio">Acta de compromiso</a>
-        <a class="own" href="/gerencia/documentos/plan-contingencia">Plan de Contingencia</a>
-        <a class="own" href="/gerencia/documentos/plan-drp">Plan DRP (desastres)</a>
-        <a class="t" href="/gerencia/documentos/terminos-condiciones">Términos y condiciones</a>
-        <a class="t" href="/gerencia/documentos/politica-datos">Política de datos</a>
-        <a class="t" href="/gerencia/documentos/sg-sst">SG-SST simplificado</a>
-        <a class="own" href="/gerencia/talento-legal">Guía contratación · PILA · SG-SST</a>
-        <a class="own" href="/gerencia/contratos-personal">Gestión de contratos</a>
-        <a class="own" href="/gerencia/planillas-pila">Historial planillas PILA</a>
-        <a class="own" href="/gerencia/matriz-epp">Matriz EPP / visitas colegios</a>
-        <a class="g" href="/docs/opinion-publica" target="_blank">Vista pública · Opinión</a>
-        <a class="g" href="/docs/comunicado-prensa" target="_blank">Vista pública · Prensa</a>
-        <a class="g" href="/docs/terminos-condiciones" target="_blank">Vista pública · Términos</a>
-      </div>
-      <p class="hq-note">Editor tipo documento corporativo con descarga PDF. Los marcados como públicos se publican en /docs/… para opinión pública y clientes.</p>
-    </div>
-
-    <div class="sec">
+<div class="sec">
       <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
         <h2 style="margin:0">Indicadores financieros</h2>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
