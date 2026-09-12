@@ -2520,6 +2520,63 @@ class CertificadoApoyoFamiliar(db.Model):
     notas = db.Column(db.Text, default="")
 
 
+
+class ActaSocietaria(db.Model):
+    """Libro de actas y decisiones (pre-constitución / S.A.S.)."""
+    __tablename__ = "actas_societarias"
+    id = db.Column(db.Integer, primary_key=True)
+    consecutivo = db.Column(db.String(40), unique=True, index=True, default="")  # ACTA-2026-001
+    titulo = db.Column(db.String(200), default="")
+    tipo = db.Column(db.String(60), default="DECISION")  # DECISION | MANDATO | ASAMBLEA | OTRO
+    resumen = db.Column(db.Text, default="")
+    pdf_data = db.Column(db.Text, default="")
+    pdf_nombre = db.Column(db.String(160), default="")
+    fecha_acta = db.Column(db.String(20), default="")
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+    inmutable = db.Column(db.Boolean, default=True)
+
+
+class BovedaDocumento(db.Model):
+    """Bóveda de documentación legal externa (RUT DIAN, banco, registro mercantil)."""
+    __tablename__ = "boveda_documentos"
+    id = db.Column(db.Integer, primary_key=True)
+    categoria = db.Column(db.String(60), default="RUT")  # RUT | BANCO | REGISTRO_MERCANTIL | OTRO
+    titulo = db.Column(db.String(200), default="")
+    descripcion = db.Column(db.Text, default="")
+    pdf_data = db.Column(db.Text, default="")
+    pdf_nombre = db.Column(db.String(160), default="")
+    fecha_documento = db.Column(db.String(20), default="")
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+
+
+class ChangelogVersion(db.Model):
+    """Historial de versiones del software (changelog institucional)."""
+    __tablename__ = "changelog_versiones"
+    id = db.Column(db.Integer, primary_key=True)
+    version = db.Column(db.String(40), default="")
+    fecha = db.Column(db.String(20), default="")
+    resumen = db.Column(db.Text, default="")
+    publico = db.Column(db.Boolean, default=True)
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+
+
+class ConciliacionBancaria(db.Model):
+    """Líneas de conciliación banco vs facturas."""
+    __tablename__ = "conciliacion_bancaria"
+    id = db.Column(db.Integer, primary_key=True)
+    fecha_mov = db.Column(db.String(20), default="")
+    referencia = db.Column(db.String(120), default="")
+    valor = db.Column(db.Float, default=0.0)
+    descripcion = db.Column(db.String(250), default="")
+    factura_id = db.Column(db.Integer, nullable=True)
+    estado = db.Column(db.String(30), default="PENDIENTE")  # PENDIENTE | CONCILIADO | DESCARTADO
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+
+
 class ContOperacion(db.Model):
     """Operación económica respaldada: compra, venta, pago, cobro, servicio, entrega, etc."""
     __tablename__ = "cont_operaciones"
@@ -11752,7 +11809,104 @@ def carnet(id):
     if not modulo_en_plan("carnes") and rol_actual() != "Soporte":
         return page("Carné", shell("<div class='msg danger'>Carnés no incluidos en su plan.</div>"))
     e = Estudiante.query.get_or_404(id)
-    return page("Carné", f"""<div class="print-wrap"><div class="carnet"><div class="carnet-head"><img class="logo" src="{logo_actual()}"><h3>{INST_NOMBRE}</h3><p>Sede {INST_SEDE}</p></div><h2>{e.nombre} {e.apellido}</h2><p><b>Grado:</b> {e.grado}</p><p><b>Director:</b> {e.director}</p><p><b>Código:</b> {e.codigo}</p><img class="qr" src="/qr/{e.id}"><p>{APP_NAME}</p></div><br><button class="no-print" onclick="window.print()">Imprimir carné</button> <a class="btn no-print" href="/carnet_descargar/{e.id}">Descargar carné PDF</a><br><br><a class="no-print" href="/estudiantes">Volver</a></div>""")
+    # Nombres sin punto final; truncar si son muy largos en UI
+    inst_nom = (INST_NOMBRE or "Institución educativa").strip().rstrip(".")
+    sede = (INST_SEDE or "").strip().rstrip(".")
+    nom = ((e.nombre or "") + " " + (e.apellido or "")).strip()
+    nom_show = nom if len(nom) <= 42 else (nom[:40] + "…")
+    grado = (e.grado or "").strip().rstrip(".")
+    director = (e.director or "").strip().rstrip(".")
+    codigo = (e.codigo or "").strip()
+    logo = logo_actual()
+    body = f"""
+<style>
+@page {{ size: A4 landscape; margin: 12mm; }}
+* {{ box-sizing: border-box; }}
+body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:#eef2f7; }}
+.toolbar {{ display:flex; gap:10px; justify-content:center; padding:16px; flex-wrap:wrap; }}
+.toolbar a, .toolbar button {{
+  appearance:none; border:1px solid #cbd5e1; cursor:pointer; text-decoration:none;
+  background:#0B2D57; color:#fff; font-weight:700; font-size:13px;
+  padding:10px 18px; border-radius:6px; box-shadow:none;
+}}
+.toolbar a.sec {{ background:#fff; color:#0B2D57; }}
+.stage {{ display:flex; flex-wrap:wrap; gap:28px; justify-content:center; align-items:flex-start; padding:12px 16px 40px; }}
+.side-label {{ text-align:center; font-size:11px; font-weight:700; letter-spacing:.12em; color:#64748b; margin-bottom:8px; text-transform:uppercase; }}
+.card {{
+  width: 86mm; height: 54mm; /* CR80 approx for plastic */
+  background:#fff; border-radius:6px; overflow:hidden;
+  border:1px solid #d0d7de; display:flex; flex-direction:column;
+  box-shadow:0 1px 3px rgba(15,23,42,.08);
+}}
+.card .top {{
+  background:#0B2D57; color:#fff; padding:8px 10px; display:flex; align-items:center; gap:8px;
+  min-height:28px;
+}}
+.card .top img {{ height:22px; width:auto; background:#fff; border-radius:4px; padding:2px; }}
+.card .top .brand {{ font-size:10px; font-weight:800; letter-spacing:.06em; }}
+.card .mid {{ flex:1; padding:8px 10px; display:flex; gap:8px; align-items:center; }}
+.card .info {{ flex:1; min-width:0; }}
+.card .info h2 {{
+  margin:0 0 4px; font-size:13px; color:#0B2D57; font-weight:800; line-height:1.2;
+  word-break:break-word; max-height:2.4em; overflow:hidden;
+}}
+.card .info p {{ margin:0 0 2px; font-size:10px; color:#334155; }}
+.card .info .cod {{ font-weight:800; color:#0B2D57; font-size:11px; margin-top:4px; }}
+.card .qr-wrap {{ flex-shrink:0; width:72px; text-align:center; }}
+.card .qr-wrap img {{ width:70px; height:70px; }}
+.card .bot {{
+  background:#0B2D57; color:#fff; font-size:9px; text-align:center;
+  padding:4px 8px; letter-spacing:.04em;
+}}
+.card.back .mid {{ justify-content:center; flex-direction:column; text-align:center; }}
+.card.back .mid img {{ width:90px; height:90px; }}
+.card.back .hint {{ font-size:9px; color:#64748b; margin-top:6px; }}
+@media print {{
+  body {{ background:#fff; }}
+  .toolbar {{ display:none !important; }}
+  .stage {{ gap:16mm; padding:0; }}
+  .card {{ box-shadow:none; page-break-inside:avoid; }}
+}}
+</style>
+<div class="toolbar no-print">
+  <button type="button" onclick="window.print()">Imprimir carné</button>
+  <a href="/carnet_descargar/{e.id}">Descargar carné PDF</a>
+  <a class="sec" href="/estudiantes">Volver</a>
+</div>
+<div class="stage">
+  <div>
+    <div class="side-label">Anverso</div>
+    <div class="card">
+      <div class="top">
+        <img src="{logo}" alt="">
+        <span class="brand">EDUTRACK</span>
+      </div>
+      <div class="mid">
+        <div class="info">
+          <h2 title="{nom}">{nom_show}</h2>
+          <p>Grado {grado}</p>
+          <p>Director: {director or "—"}</p>
+          <p class="cod">Código: {codigo}</p>
+        </div>
+        <div class="qr-wrap"><img src="/qr/{e.id}" alt="QR"></div>
+      </div>
+      <div class="bot">{inst_nom} · Sede {sede}</div>
+    </div>
+  </div>
+  <div>
+    <div class="side-label">Reverso</div>
+    <div class="card back">
+      <div class="top"><span class="brand">CONTROL DE ACCESO</span></div>
+      <div class="mid">
+        <img src="/qr/{e.id}" alt="QR">
+        <div class="hint">Si el QR no escanea, digite el código<br><b>{codigo}</b></div>
+      </div>
+      <div class="bot">EduTrack · Portería</div>
+    </div>
+  </div>
+</div>
+"""
+    return page("Carné", body)
 
 
 def nombre_archivo_carnet(e):
@@ -19949,6 +20103,9 @@ def gerencia_hq():
         <div class="hq-cat verde-corp">🟢 Legal y formalización PROCSIS</div>
         <div class="grid-mod">
           <a class="c-verde-corp" href="/gerencia/datos-rut">Datos del RUT (DIAN)</a>
+          <a class="c-verde-corp" href="/gerencia/libro-actas">Libro de actas societarias</a>
+          <a class="c-verde-corp" href="/gerencia/boveda-legal">Bóveda documentación legal</a>
+          <a class="c-verde-corp" href="/gerencia/changelog">Changelog institucional</a>
           <a class="c-verde-corp" href="/gerencia/fondo-formalizacion">Fondo de Formalización</a>
           <a class="c-verde-corp" href="/gerencia/contratos-saas">Contratos SaaS Colegios</a>
           <a class="c-verde-corp" href="/gerencia/documentos/politica-datos">Textos legales (PQR / Habeas Data)</a>
@@ -42251,7 +42408,7 @@ def abrir_turno_laboral():
         'style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" placeholder="Como figura en cédula"></div>'
         '<div><label style="font-size:12px;font-weight:700">Cédula o código interno *</label>'
         '<input name="documento" required value="' + _esc(doc_pref) + '" '
-        'style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" placeholder="CC 1038063108 o código PROCSIS"></div>'
+        'style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" placeholder="CC o código interno PROCSIS"></div>'
         '<div><label style="font-size:12px;font-weight:700">Nota de apertura (opcional)</label>'
         '<textarea name="nota_apertura" rows="2" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" '
         'placeholder="Ej. Turno mañana mesa de ventas"></textarea></div>'
@@ -52130,7 +52287,7 @@ def gerencia_datos_rut():
             db.session.commit()
             msg = "Datos del RUT guardados. Se usarán en contratos, cuentas de cobro y notificaciones."
             try:
-                registrar_auditoria("RUT actualizado", "nit=%s-%s" % (row.nit_cedula, row.digito_verificacion))
+                registrar_auditoria("RUT actualizado", "nit=%s-%s · IP %s" % (row.nit_cedula, row.digito_verificacion, (_client_ip() if "_client_ip" in dir() else "")))
             except Exception:
                 pass
         except Exception as e:
@@ -53216,6 +53373,321 @@ def gerencia_comisiones_ventas():
 </section>
 """
     return page("Comisiones ventas", shell(body))
+
+
+
+
+@app.route("/gerencia/libro-actas", methods=["GET", "POST"])
+def gerencia_libro_actas():
+    """Libro de actas y decisiones societarias con consecutivo ACTA-YYYY-NNN."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            anio = (fecha_hoy() or "")[:4] or "2026"
+            prev = ActaSocietaria.query.filter(ActaSocietaria.consecutivo.like("ACTA-%s-%%" % anio)).count()
+            cons = "ACTA-%s-%03d" % (anio, prev + 1)
+            a = ActaSocietaria(
+                consecutivo=cons,
+                titulo=(request.form.get("titulo") or "")[:200],
+                tipo=(request.form.get("tipo") or "DECISION")[:60],
+                resumen=(request.form.get("resumen") or "")[:5000],
+                fecha_acta=(request.form.get("fecha_acta") or fecha_hoy() or "")[:20],
+                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                creado_por=session.get("usuario") or "",
+                inmutable=True,
+            )
+            f = request.files.get("pdf")
+            if f and f.filename:
+                import base64 as _b64
+                raw = f.read()
+                a.pdf_data = "data:application/pdf;base64," + _b64.b64encode(raw).decode("ascii")
+                a.pdf_nombre = (f.filename or "acta.pdf")[:160]
+            db.session.add(a)
+            db.session.commit()
+            try:
+                registrar_auditoria("Acta societaria", "%s · %s" % (cons, a.titulo[:80]))
+            except Exception:
+                pass
+            msg = "Acta %s registrada (inmutable)." % cons
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:150]
+    rows = ActaSocietaria.query.order_by(ActaSocietaria.id.desc()).limit(100).all()
+    filas = "".join(
+        "<tr><td style='padding:8px'><b>%s</b></td><td style='padding:8px'>%s</td>"
+        "<td style='padding:8px'>%s</td><td style='padding:8px'>%s</td>"
+        "<td style='padding:8px'>%s</td></tr>" % (
+            _esc(r.consecutivo), _esc(r.titulo), _esc(r.tipo), _esc(r.fecha_acta),
+            "PDF" if r.pdf_data else "—",
+        )
+        for r in rows
+    ) or "<tr><td colspan='5' style='padding:12px;color:#64748b;text-align:center'>Sin actas</td></tr>"
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Libro de actas y decisiones</h1>
+  <p>Consecutivo automático ACTA-AAAA-NNN · Historial para Cámara de Comercio / S.A.S.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" enctype="multipart/form-data" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:800px;margin-bottom:16px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Título</label>
+    <input name="titulo" required style="width:100%;padding:8px;border-radius:4px;border:1px solid #cbd5e1"></div>
+    <div><label style="font-size:12px;font-weight:700">Tipo</label>
+    <select name="tipo" style="width:100%;padding:8px"><option>DECISION</option><option>MANDATO</option><option>ASAMBLEA</option><option>OTRO</option></select></div>
+    <div><label style="font-size:12px;font-weight:700">Fecha del acta</label>
+    <input name="fecha_acta" value="{(fecha_hoy() or '')}" style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Resumen</label>
+    <textarea name="resumen" rows="3" style="width:100%;padding:8px"></textarea></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">PDF firmado (opcional)</label>
+    <input type="file" name="pdf" accept="application/pdf"></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:700">Registrar acta</button></div>
+  </form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
+    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Consecutivo</th><th style="padding:8px;text-align:left">Título</th><th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">PDF</th></tr>
+    {filas}
+  </table>
+</section>
+"""
+    return page("Libro de actas", shell(body))
+
+
+@app.route("/gerencia/boveda-legal", methods=["GET", "POST"])
+def gerencia_boveda_legal():
+    """Bóveda de documentación legal externa (RUT, banco, registro mercantil)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            d = BovedaDocumento(
+                categoria=(request.form.get("categoria") or "RUT")[:60],
+                titulo=(request.form.get("titulo") or "")[:200],
+                descripcion=(request.form.get("descripcion") or "")[:2000],
+                fecha_documento=(request.form.get("fecha_documento") or "")[:20],
+                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                creado_por=session.get("usuario") or "",
+            )
+            f = request.files.get("pdf")
+            if f and f.filename:
+                import base64 as _b64
+                raw = f.read()
+                d.pdf_data = "data:application/pdf;base64," + _b64.b64encode(raw).decode("ascii")
+                d.pdf_nombre = (f.filename or "doc.pdf")[:160]
+            db.session.add(d)
+            db.session.commit()
+            try:
+                registrar_auditoria("Bóveda legal", "%s · %s" % (d.categoria, d.titulo[:80]))
+            except Exception:
+                pass
+            msg = "Documento indexado en la bóveda."
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:150]
+    rows = BovedaDocumento.query.order_by(BovedaDocumento.id.desc()).limit(100).all()
+    filas = "".join(
+        "<tr><td style='padding:8px'>%s</td><td style='padding:8px'>%s</td>"
+        "<td style='padding:8px'>%s</td><td style='padding:8px'>%s</td></tr>" % (
+            _esc(r.categoria), _esc(r.titulo), _esc(r.fecha_documento), _esc(r.creado_en),
+        )
+        for r in rows
+    ) or "<tr><td colspan='4' style='padding:12px;color:#64748b;text-align:center'>Sin documentos</td></tr>"
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Bóveda de documentación legal</h1>
+  <p>RUT DIAN, certificados bancarios, registro mercantil · Indexación interna</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" enctype="multipart/form-data" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:800px;margin-bottom:16px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+    <div><label style="font-size:12px;font-weight:700">Categoría</label>
+    <select name="categoria" style="width:100%;padding:8px">
+      <option>RUT</option><option>BANCO</option><option>REGISTRO_MERCANTIL</option><option>OTRO</option>
+    </select></div>
+    <div><label style="font-size:12px;font-weight:700">Fecha del documento</label>
+    <input name="fecha_documento" style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Título</label>
+    <input name="titulo" required style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Descripción</label>
+    <textarea name="descripcion" rows="2" style="width:100%;padding:8px"></textarea></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Archivo PDF</label>
+    <input type="file" name="pdf" accept="application/pdf"></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:700">Indexar en bóveda</button></div>
+  </form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
+    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Categoría</th><th style="padding:8px;text-align:left">Título</th><th style="padding:8px;text-align:left">Fecha doc.</th><th style="padding:8px;text-align:left">Indexado</th></tr>
+    {filas}
+  </table>
+</section>
+"""
+    return page("Bóveda legal", shell(body))
+
+
+@app.route("/changelog")
+@app.route("/soporte/changelog")
+@app.route("/gerencia/changelog", methods=["GET", "POST"])
+def changelog_institucional():
+    """Historial de versiones del software · visible a soporte y gerencia."""
+    rol = rol_actual()
+    if not requiere_login():
+        return redirect("/login")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = ""
+    if request.method == "POST" and rol in ("Gerente", "Superadmin", "Administrador", "Soporte"):
+        try:
+            v = ChangelogVersion(
+                version=(request.form.get("version") or "")[:40],
+                fecha=(request.form.get("fecha") or fecha_hoy() or "")[:20],
+                resumen=(request.form.get("resumen") or "")[:5000],
+                publico=request.form.get("publico") == "1",
+                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                creado_por=session.get("usuario") or "",
+            )
+            db.session.add(v)
+            db.session.commit()
+            msg = "Versión publicada."
+        except Exception as e:
+            db.session.rollback()
+            msg = str(e)[:100]
+    rows = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).limit(50).all()
+    if not rows:
+        # seed
+        try:
+            db.session.add(ChangelogVersion(
+                version="1.5.0", fecha=fecha_hoy() or "",
+                resumen="HQ Gerencia con pestañas corporativas, reloj hora Colombia, módulos RUT/nómina/contratos, restricciones Cobranza, carné estudiantil anverso/reverso.",
+                publico=True, creado_en=fecha_hoy() or "", creado_por="sistema",
+            ))
+            db.session.commit()
+            rows = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).limit(50).all()
+        except Exception:
+            pass
+    items = "".join(
+        "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-bottom:10px'>"
+        "<div style='font-weight:800;color:#0B2D57'>Versión %s · %s</div>"
+        "<p style='margin:6px 0 0;font-size:13px;color:#334155'>%s</p></div>" % (
+            _esc(r.version), _esc(r.fecha), _esc(r.resumen),
+        )
+        for r in rows
+    )
+    form = ""
+    if rol in ("Gerente", "Superadmin", "Administrador", "Soporte"):
+        form = f"""
+  <form method="POST" action="/gerencia/changelog" style="max-width:640px;margin-bottom:16px;display:grid;gap:8px;background:#f8fafc;padding:12px;border-radius:6px">
+    {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+    <input name="version" placeholder="1.5.1" style="padding:8px" required>
+    <input name="fecha" value="{(fecha_hoy() or '')}" style="padding:8px">
+    <textarea name="resumen" rows="3" placeholder="Qué se actualizó..." style="padding:8px" required></textarea>
+    <label style="font-size:12px"><input type="checkbox" name="publico" value="1" checked> Visible públicamente</label>
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px;border-radius:4px;font-weight:700">Publicar versión</button>
+  </form>
+"""
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Changelog institucional</h1>
+  <p>Historial de versiones EduTrack / PROCSIS · Transparencia técnica</p>
+</div>
+<a class="btn" href="/gerencia/hq">← Volver</a></header>
+<section class="role-panel">
+  {form}
+  {items or "<p style='color:#64748b'>Sin versiones registradas</p>"}
+</section>
+"""
+    return page("Changelog", shell(body))
+
+
+@app.route("/cobranza/conciliacion", methods=["GET", "POST"])
+def cobranza_conciliacion():
+    """Conciliación bancaria: cruzar movimientos con facturas pagadas."""
+    if not requiere_login() or rol_actual() not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/cobranza-login")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            c = ConciliacionBancaria(
+                fecha_mov=(request.form.get("fecha_mov") or "")[:20],
+                referencia=(request.form.get("referencia") or "")[:120],
+                valor=float((request.form.get("valor") or "0").replace(".", "").replace(",", ".") or 0),
+                descripcion=(request.form.get("descripcion") or "")[:250],
+                estado=(request.form.get("estado") or "PENDIENTE")[:30],
+                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                creado_por=session.get("usuario") or "",
+            )
+            try:
+                c.factura_id = int(request.form.get("factura_id") or 0) or None
+            except Exception:
+                c.factura_id = None
+            db.session.add(c)
+            db.session.commit()
+            msg = "Movimiento registrado."
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:120]
+    rows = ConciliacionBancaria.query.order_by(ConciliacionBancaria.id.desc()).limit(100).all()
+    def _cop(v):
+        try:
+            return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
+        except Exception:
+            return "$ 0"
+    filas = "".join(
+        "<tr><td style='padding:8px'>%s</td><td style='padding:8px'>%s</td>"
+        "<td style='padding:8px;text-align:right'>%s</td><td style='padding:8px'>%s</td>"
+        "<td style='padding:8px'>%s</td></tr>" % (
+            _esc(r.fecha_mov), _esc(r.referencia), _cop(r.valor), _esc(r.estado), _esc(r.descripcion),
+        )
+        for r in rows
+    ) or "<tr><td colspan='5' style='padding:12px;color:#64748b;text-align:center'>Sin movimientos</td></tr>"
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Conciliación bancaria</h1>
+  <p>Cruce de ingresos vs recibos PAGADO · Control financiero PROCSIS</p>
+</div>
+<a class="btn" href="/cobranza/panel">← Cobranza</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:720px;margin-bottom:16px;background:#fff;border:1px solid #e2e8f0;padding:12px;border-radius:6px">
+    <div><label style="font-size:12px;font-weight:700">Fecha movimiento</label>
+    <input name="fecha_mov" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Referencia / voucher</label>
+    <input name="referencia" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Valor</label>
+    <input name="valor" placeholder="0" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Estado</label>
+    <select name="estado" style="width:100%;padding:8px"><option>PENDIENTE</option><option>CONCILIADO</option><option>DESCARTADO</option></select></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Descripción</label>
+    <input name="descripcion" style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px;border-radius:4px;font-weight:700">Registrar movimiento</button></div>
+  </form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
+    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Ref.</th><th style="padding:8px;text-align:right">Valor</th><th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Descripción</th></tr>
+    {filas}
+  </table>
+</section>
+"""
+    return page("Conciliación", shell(body))
 
 
 
