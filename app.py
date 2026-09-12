@@ -16196,8 +16196,12 @@ def _guard_gerencia():
         return redirect("/gerencia-login")
     rol = rol_actual()
     if rol not in ("Gerente", "Superadmin", "Administrador"):
-        # Igual que en Soporte: mandar al LOGIN del portal que se intenta abrir, no de
-        # vuelta al portal actual — así se puede cambiar de rol abriendo otra pestaña.
+        # Soporte y otros roles: 403, no deben ver RUT, nómina, contratos, etc.
+        if rol in ("Soporte", "Comercial", "Cobranza", "Ventas"):
+            return acceso_denegado(
+                "Acceso denegado (403). El módulo de Gerencia (RUT, nómina, contratos, firmas, "
+                "fondo de formalización) es exclusivo del rol Gerente."
+            )
         return redirect("/gerencia-login")
     return None
 
@@ -16785,6 +16789,7 @@ def portal_whatsapp_soporte():
 
 
 @app.route("/ventas/panel", methods=["GET", "POST"])
+@app.route("/ventas/crm", methods=["GET", "POST"])
 def ventas_panel():
     """Panel comercial: embudo, metas, links demo, kit mensajes, validación MEN."""
     _g = _guard_ventas()
@@ -16877,23 +16882,48 @@ def ventas_panel():
     # Link demo reciente
     inv_msg = ""
     if request.method == "POST" and request.form.get("accion") == "crear_link_demo":
-        import secrets
-        tok = secrets.token_urlsafe(16)
-        inv = InvitacionDemo(
-            token=tok,
-            creada_por=asesor,
-            creada_en=f"{fecha_hoy()} {hora_actual()}",
-            dias=int(request.form.get("dias") or 15),
-            activa=True,
-        )
-        db.session.add(inv)
-        db.session.commit()
         try:
-            base = request.host_url.rstrip("/")
-        except Exception:
-            base = ""
-        link = f"{base}/demo/invitar/{tok}"
-        inv_msg = link
+            import secrets
+            try:
+                db.create_all()
+            except Exception:
+                pass
+            tok = secrets.token_urlsafe(16)
+            try:
+                dias = int(request.form.get("dias") or 15)
+            except Exception:
+                dias = 15
+            inv = InvitacionDemo(
+                token=tok,
+                creada_por=asesor,
+                creada_en=f"{fecha_hoy()} {hora_actual()}",
+                dias=dias,
+                activa=True,
+            )
+            db.session.add(inv)
+            db.session.commit()
+            try:
+                base = request.host_url.rstrip("/")
+            except Exception:
+                base = ""
+            link = f"{base}/demo/invitar/{tok}"
+            inv_msg = link
+            try:
+                registrar_auditoria("Link demo creado", link[:120])
+            except Exception:
+                pass
+        except Exception as e_demo:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            inv_msg = ""
+            print("crear_link_demo:", e_demo)
+            # mostrar error en panel
+            try:
+                inv_msg = "ERROR: " + str(e_demo)[:150]
+            except Exception:
+                pass
 
     try:
         mods = _html_modulos_rol("Comercial" if rol in ("Comercial", "Ventas") else rol)
@@ -19823,6 +19853,7 @@ def gerencia_hq():
         <a class="g" href="/gerencia/fondo-formalizacion">🏦 Fondo de Formalización (Matrícula mercantil)</a>
         <a class="g" href="/gerencia/contratos-saas">📄 Contratos SaaS Colegios</a>
         <a class="g" href="/gerencia/certificados-apoyo">📑 Certificados apoyo familiar</a>
+        <a class="g" href="/gerencia/comisiones-ventas">💰 Comisiones de ventas</a>
         <a class="own" href="/gerencia/usuarios">Equipo Procsis · roles</a>
         <a class="own" href="/gerencia/admision-personal">📄 Admisión de personal</a>
         <a class="own" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
@@ -22908,7 +22939,14 @@ def ventas_propuesta_pdf():
         for p in planes:
             feats = []
             try:
-                feats = json.loads(p.features_json or "[]")
+                raw_f = json.loads(p.features_json or "[]")
+                if isinstance(raw_f, list):
+                    feats = [str(x) for x in raw_f]
+                elif isinstance(raw_f, dict):
+                    feats = [str(x) for x in (raw_f.get("incluidos") or raw_f.get("features") or list(raw_f.values())[:6])]
+                    feats = [x for x in feats if x and x not in ("[]", "{}")]
+                else:
+                    feats = [str(raw_f)]
             except Exception:
                 feats = []
             feats_txt = " · ".join(feats[:6]) if feats else ""
@@ -30135,8 +30173,18 @@ body {{
 
 @app.route("/tenants")
 def tenants():
-    if not requiere_soporte_global():
+    if not requiere_login():
+        # Redirigir al login del portal desde el que vino
+        ref = (request.referrer or "")
+        if "/soporte" in ref or (session.get("rol") == "Soporte"):
+            return redirect("/soporte-login")
+        if "/ventas" in ref:
+            return redirect("/ventas-login")
+        if "/gerencia" in ref:
+            return redirect("/gerencia-login")
         return redirect("/login")
+    if rol_actual() not in ("Soporte", "Administrador", "Superadmin", "Gerente", "Comercial", "Cobranza"):
+        return acceso_denegado("Solo personal interno PROCSIS puede ver instituciones.")
     aviso_nuevo = ""
     info = session.pop("nuevo_tenant_info", None)
     if info:
@@ -39188,12 +39236,6 @@ document.querySelectorAll('.stars').forEach(function(box){{
     return body
 
 
-@app.route("/gerencia/fidelizacion", methods=["GET", "POST"])
-@app.route("/soporte/fidelizacion", methods=["GET", "POST"])
-@app.route("/ventas/fidelizacion", methods=["GET", "POST"])
-@app.route("/cobranza/fidelizacion", methods=["GET", "POST"])
-
-
 def _ensure_descargas_reportes_table():
     try:
         db.create_all()
@@ -39824,6 +39866,10 @@ def soporte_consultas_descargas_reportes():
 
 
 
+@app.route("/gerencia/fidelizacion", methods=["GET", "POST"])
+@app.route("/soporte/fidelizacion", methods=["GET", "POST"])
+@app.route("/ventas/fidelizacion", methods=["GET", "POST"])
+@app.route("/cobranza/fidelizacion", methods=["GET", "POST"])
 def panel_fidelizacion_csat():
     """CSAT + notas de consulta. Nunca debe tumbar el portal: crea tablas y atrapa errores."""
     try:
@@ -52793,49 +52839,3 @@ def certificados_apoyo_pdf(cid):
         # buscar última firma_gerente en contratos
         ult = ContratoPersonal.query.filter(
             ContratoPersonal.firma_gerente.isnot(None)
-        ).order_by(ContratoPersonal.id.desc()).first()
-        if ult and (ult.firma_gerente or "").strip():
-            firma_img = ult.firma_gerente
-    except Exception:
-        pass
-
-    if firma_img:
-        try:
-            raw = firma_img.split(",", 1)[-1] if firma_img.startswith("data:") else firma_img
-            img = ImageReader(BytesIO(_b64.b64decode(raw)))
-            c.drawImage(img, mid - 70, y + 8, width=140, height=55, mask="auto", preserveAspectRatio=True, anchor="s")
-        except Exception:
-            pass
-
-    c.setFillColor(colors.HexColor("#0f172a"))
-    c.setFont("Helvetica-Bold", 10)
-    c.drawCentredString(mid, y - 6, "SEBASTIÁN LÓPEZ ARCILA")
-    c.setFont("Helvetica", 8)
-    c.setFillColor(colors.HexColor("#334155"))
-    c.drawCentredString(mid, y - 18, "Gerente General PROCSIS")
-    c.drawCentredString(mid, y - 29, "Autorizado por su Madre (Art. 306)")
-    c.drawCentredString(mid, y - 40, "Elaboró: PROCSIS")
-
-    c.setFont("Helvetica", 7)
-    c.setFillColor(colors.HexColor("#94a3b8"))
-    c.drawString(45, 24, "PROCSIS · Certificado #%s · Emitido %s" % (cert.id, fecha_mostrar))
-    c.save()
-    bio.seek(0)
-    return send_file(
-        bio, as_attachment=True,
-        download_name="PROCSIS_Certificado_Mandato_%s.pdf" % cert.id,
-        mimetype="application/pdf",
-    )
-
-
-
-if __name__ == "__main__":
-    with app.app_context():
-        inicializar_bd()
-        try:
-            sincronizar_licencias()
-            aplicar_cambios_plan_pendientes()
-            _ciclo_facturacion_automatica()
-        except Exception as _e:
-            print("ciclo facturacion:", _e)
-    app.run(debug=True, host="0.0.0.0")
