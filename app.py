@@ -25587,7 +25587,9 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo_rol = (request.form.get("nuevo_rol") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
+            if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+                error = "Solo Gerencia puede cambiar roles de usuarios."
+            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
                 error = "Usuario no válido."
             elif nuevo_rol not in ("Comercial", "Soporte", "Gerente"):
                 error = "Rol no permitido."
@@ -30174,7 +30176,6 @@ body {{
 @app.route("/tenants")
 def tenants():
     if not requiere_login():
-        # Redirigir al login del portal desde el que vino
         ref = (request.referrer or "")
         if "/soporte" in ref or (session.get("rol") == "Soporte"):
             return redirect("/soporte-login")
@@ -30182,46 +30183,137 @@ def tenants():
             return redirect("/ventas-login")
         if "/gerencia" in ref:
             return redirect("/gerencia-login")
+        if "/cobranza" in ref or (session.get("rol") == "Cobranza"):
+            return redirect("/cobranza-login")
         return redirect("/login")
-    if rol_actual() not in ("Soporte", "Administrador", "Superadmin", "Gerente", "Comercial", "Cobranza"):
+    rol = rol_actual()
+    if rol not in ("Soporte", "Administrador", "Superadmin", "Gerente", "Comercial", "Cobranza"):
         return acceso_denegado("Solo personal interno PROCSIS puede ver instituciones.")
+
+    es_cobranza = rol == "Cobranza"
     aviso_nuevo = ""
-    info = session.pop("nuevo_tenant_info", None)
-    if info:
-        aviso_nuevo = f"""
-        <div class='msg ok'>
-          <b>Institución creada:</b> {info.get('codigo')} — {info.get('nombre')}<br>
-          <b>Usuario admin:</b> {info.get('usuario')}<br>
-          <b>Contraseña:</b> {info.get('password')}<br>
-          En el login elige este colegio e ingresa con esas credenciales (no uses el admin de otro colegio).
-          <br><a href='/login?inst={info.get("id")}' target='_blank'>Abrir login de este colegio</a>
-        </div>"""
+    if not es_cobranza:
+        info = session.pop("nuevo_tenant_info", None)
+        if info:
+            aviso_nuevo = f"""
+            <div class='msg ok'>
+              <b>Institución creada:</b> {info.get('codigo')} — {info.get('nombre')}<br>
+              <b>Usuario admin:</b> {info.get('usuario')}<br>
+              <b>Contraseña:</b> {info.get('password')}<br>
+              En el login elige este colegio e ingresa con esas credenciales (no uses el admin de otro colegio).
+              <br><a href='/login?inst={info.get("id")}' target='_blank'>Abrir login de este colegio</a>
+            </div>"""
+
     lista = Institucion.query.order_by(Institucion.id.desc()).all()
     filas = ""
     for i in lista:
         n_users = Usuario.query.filter_by(institucion_id=i.id).count()
         n_est = Estudiante.query.filter_by(institucion_id=i.id).count()
         logo = logo_actual(i.id)
-        _eliminar_link = (
-            f"· <a class='danger-link' href='/eliminar_institucion/{i.id}' onclick=\"return confirm('¿Eliminar institución {i.codigo}? Se borrarán su configuración y se desvincularán usuarios/estudiantes de este tenant.')\">Eliminar</a>"
-            if rol_actual() in ("Gerente", "Superadmin", "Administrador") else ""
-        )
-        filas += f"""<tr>
-          <td>{i.id}</td>
-          <td><img src='{logo}' alt='' style='width:36px;height:36px;object-fit:contain;background:#fff;border-radius:8px'></td>
-          <td><b>{i.codigo}</b></td>
-          <td>{i.nombre}<br><span class='mini-text'>{i.municipio or ''} / {i.departamento or ''}</span></td>
-          <td>{i.sede or ''}</td>
-          <td>{i.estado}</td>
-          <td>{i.plan or 'Basico'}</td>
-          <td>{n_users} / {n_est}</td>
-          <td>{i.fecha_creacion or ''}</td>
-          <td>
-            <a href='/entrar_institucion/{i.id}'>Entrar</a> ·
-            <a href='/editar_institucion/{i.id}'>Editar</a> {_eliminar_link}
-          </td>
-        </tr>"""
-    content = f"""
+        # Saldo / pagos (solo lectura para cobranza)
+        saldo_txt = "—"
+        pagos_txt = "—"
+        try:
+            # Facturas o cobros asociados
+            total_pend = 0.0
+            total_pagado = 0.0
+            try:
+                from sqlalchemy import func as _func
+                # FacturaCobro o similar
+                if "FacturaCobro" in globals() or True:
+                    for fc in db.session.execute(
+                        db.text(
+                            "SELECT COALESCE(SUM(CASE WHEN COALESCE(estado,'') IN ('PENDIENTE','VENCIDA') THEN COALESCE(saldo, valor, 0) ELSE 0 END),0) AS pend, "
+                            "COALESCE(SUM(CASE WHEN COALESCE(estado,'') IN ('PAGADA','PAGADO') THEN COALESCE(valor,0) ELSE 0 END),0) AS pag "
+                            "FROM facturas_cobro WHERE institucion_id = :iid"
+                        ),
+                        {"iid": i.id},
+                    ).fetchall() if False else []:
+                        pass
+            except Exception:
+                pass
+            # Fallback con modelo si existe
+            try:
+                Fact = globals().get("FacturaCobro") or globals().get("Factura")
+                if Fact is not None:
+                    rows = Fact.query.filter_by(institucion_id=i.id).all()
+                    for r in rows:
+                        est = (getattr(r, "estado", None) or "").upper()
+                        val = float(getattr(r, "saldo", None) or getattr(r, "valor", None) or 0)
+                        if est in ("PENDIENTE", "VENCIDA", "PARCIAL"):
+                            total_pend += val
+                        elif est in ("PAGADA", "PAGADO"):
+                            total_pagado += float(getattr(r, "valor", None) or val or 0)
+            except Exception:
+                pass
+            def _cop(v):
+                try:
+                    return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
+                except Exception:
+                    return "$ 0"
+            saldo_txt = _cop(total_pend)
+            pagos_txt = _cop(total_pagado)
+        except Exception:
+            saldo_txt, pagos_txt = "—", "—"
+
+        if es_cobranza:
+            # Solo ver plan y saldos — SIN Entrar / Editar / Eliminar
+            filas += f"""<tr>
+              <td>{i.id}</td>
+              <td><img src='{logo}' alt='' style='width:36px;height:36px;object-fit:contain;background:#fff;border-radius:8px'></td>
+              <td><b>{i.codigo}</b></td>
+              <td>{i.nombre}<br><span class='mini-text'>{i.municipio or ''} / {i.departamento or ''}</span></td>
+              <td>{i.estado}</td>
+              <td><b>{i.plan or 'Basico'}</b></td>
+              <td style="text-align:right;color:#b91c1c;font-weight:700">{saldo_txt}</td>
+              <td style="text-align:right;color:#166534;font-weight:700">{pagos_txt}</td>
+              <td><span class="mini-text" style="color:#64748b">Solo lectura</span></td>
+            </tr>"""
+        else:
+            _eliminar_link = (
+                f"· <a class='danger-link' href='/eliminar_institucion/{i.id}' onclick=\"return confirm('¿Eliminar institución {i.codigo}?')\">Eliminar</a>"
+                if rol in ("Gerente", "Superadmin", "Administrador") else ""
+            )
+            filas += f"""<tr>
+              <td>{i.id}</td>
+              <td><img src='{logo}' alt='' style='width:36px;height:36px;object-fit:contain;background:#fff;border-radius:8px'></td>
+              <td><b>{i.codigo}</b></td>
+              <td>{i.nombre}<br><span class='mini-text'>{i.municipio or ''} / {i.departamento or ''}</span></td>
+              <td>{i.sede or ''}</td>
+              <td>{i.estado}</td>
+              <td>{i.plan or 'Basico'}</td>
+              <td>{n_users} / {n_est}</td>
+              <td>{i.fecha_creacion or ''}</td>
+              <td>
+                <a href='/entrar_institucion/{i.id}'>Entrar</a> ·
+                <a href='/editar_institucion/{i.id}'>Editar</a> {_eliminar_link}
+              </td>
+            </tr>"""
+
+    if es_cobranza:
+        body = f"""
+<header class='role-hero'>
+  <div>
+    <h1>Colegios · Vista Cobranza</h1>
+    <p>Solo consulta de <b>plan</b> y <b>saldos</b>. No puede entrar, editar, crear ni eliminar instituciones.</p>
+  </div>
+  <a class='btn' href='/cobranza/panel'>← Panel Cobranza</a>
+</header>
+<div class='msg' style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:10px 14px;border-radius:10px;margin-bottom:12px">
+  El saldo pendiente solo baja al registrar un <b>recibo de pago real</b>. No es editable manualmente.
+</div>
+<div class='table-card'>
+  <table>
+    <tr>
+      <th>ID</th><th>Logo</th><th>Código</th><th>Nombre</th><th>Estado</th>
+      <th>Plan</th><th>Saldo pendiente</th><th>Pagado (hist.)</th><th></th>
+    </tr>
+    {filas if filas else '<tr><td colspan="9">No hay instituciones.</td></tr>'}
+  </table>
+</div>
+"""
+    else:
+        body = f"""
 <header class='role-hero'>
   <div><h1>Instituciones (tenants)</h1><p>Cada colegio es independiente: logo, login, usuarios y datos propios. Un colegio <b>no ve</b> la información del otro.</p></div>
   <a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>
@@ -30237,11 +30329,13 @@ def tenants():
   </table>
 </div>
 """
-    return page("Instituciones", shell(content))
+    return page("Instituciones", shell(body))
 
 
 @app.route("/nueva_institucion", methods=["GET", "POST"])
 def nueva_institucion():
+    if rol_actual() == "Cobranza":
+        return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
     if not requiere_soporte_global():
         return redirect("/login")
     mensaje = ""
@@ -30401,6 +30495,8 @@ def nueva_institucion():
 
 @app.route("/editar_institucion/<int:id>", methods=["GET", "POST"])
 def editar_institucion(id):
+    if rol_actual() == "Cobranza":
+        return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
     if not requiere_soporte_global():
         return redirect("/login")
     inst = Institucion.query.get_or_404(id)
@@ -30601,6 +30697,8 @@ def editar_institucion(id):
 
 @app.route("/eliminar_institucion/<int:id>", methods=["GET", "POST"])
 def eliminar_institucion(id):
+    if rol_actual() == "Cobranza":
+        return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
     """Borrado definitivo de institución. Limpia tablas hijas con savepoints
     (un fallo en una tabla no deshace el resto). Solo Gerencia/Admin."""
     if not requiere_login():
@@ -30809,6 +30907,8 @@ def eliminar_institucion(id):
 
 @app.route("/entrar_institucion/<int:id>")
 def entrar_institucion(id):
+    if rol_actual() == "Cobranza":
+        return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
     """Soporte entra al contexto de un tenant para administrarlo."""
     if not requiere_soporte_global():
         return redirect("/login")
@@ -42643,6 +42743,9 @@ def soporte_reinicio_acceso():
     msg = error = ""
     if request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
+        if rol_actual() == "Cobranza" and accion in ("limpiar_todo", "limpiar_ip"):
+            error = "Cobranza no puede limpiar bloqueos globales. Solo Gerencia/Soporte."
+            accion = ""
         if accion == "limpiar_ip":
             ip = (request.form.get("ip") or _client_ip() or "").strip()
             n = _rate_limit_clear_all(ip)
