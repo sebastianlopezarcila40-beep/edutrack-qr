@@ -5828,7 +5828,7 @@ def _dentro_horario_laboral(u):
         return True  # usuarios de colegio: no aplica bloqueo por horario corporativo
     # Soporte y Superadmin: acceso 24/7 (operación crítica)
     rol = (u.rol or "").strip()
-    if rol in ("Soporte", "Superadmin", "Gerente", "Comercial"):
+    if rol in ("Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza"):
         return True
     try:
         from datetime import datetime
@@ -24748,10 +24748,14 @@ def gerencia_facturacion():
         _migrate_facturas_cobro_columns()
     except Exception:
         pass
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Comercial"):
-        return redirect("/gerencia-login")
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Comercial", "Cobranza"):
+        return redirect("/cobranza-login" if rol_actual() == "Cobranza" else "/gerencia-login")
+    es_cobranza = rol_actual() == "Cobranza"
     msg = error = ""
     if request.method == "POST":
+        if es_cobranza:
+            # Cobranza solo consulta/descarga recibos; no crea, edita valores ni cambia estados a mano.
+            return redirect("/gerencia/facturacion")
         accion = (request.form.get("accion") or "").strip()
         if accion == "estado":
             try:
@@ -24892,6 +24896,21 @@ def gerencia_facturacion():
         lab = f"{meses_es[m-1]} {y}"
         sel = " selected" if off == 0 else ""
         mes_opts += f'<option value="{val}"{sel}>{lab}</option>'
+    def _bloque_acciones_recibo(f, cons, est):
+        return f"""<form method="POST" action="/gerencia/facturacion/{f.id}/eliminar" style="display:inline;margin-left:4px" onsubmit="return confirm('¿Eliminar recibo {cons}?');">
+              <button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:5px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Eliminar</button>
+            </form>
+            <form method="POST" style="display:inline;margin-left:4px">
+              <input type="hidden" name="accion" value="estado">
+              <input type="hidden" name="factura_id" value="{f.id}">
+              <select name="nuevo_estado" style="font-size:11px;padding:4px">
+                <option value="PENDIENTE" {"selected" if est=="PENDIENTE" else ""}>Pendiente</option>
+                <option value="PAGADO" {"selected" if est=="PAGADO" else ""}>Pagado</option>
+                <option value="VENCIDO" {"selected" if est=="VENCIDO" else ""}>Vencido</option>
+                <option value="ANULADO" {"selected" if est=="ANULADO" else ""}>Anulado</option>
+              </select>
+              <button class="btn-ok" type="submit">OK</button>
+            </form>"""
     facturas = FacturaCobro.query.order_by(FacturaCobro.id.desc()).limit(80).all()
     filas = ""
     for f in facturas:
@@ -24921,20 +24940,7 @@ def gerencia_facturacion():
           <td style="white-space:nowrap">
             <a class="btn-pdf" href="/gerencia/facturacion/{f.id}/pdf" target="_blank" title="PDF">PDF</a>
             <a class="btn-mail" href="mailto:?subject=Recibo%20{cons}%20EduTrack&body=Adjunto%20recibo%20{cons}%20por%20{val_txt}.%20Descargue%20en%20el%20sistema%20o%20solicite%20reenvío." title="Correo">✉</a>
-            <form method="POST" action="/gerencia/facturacion/{f.id}/eliminar" style="display:inline;margin-left:4px" onsubmit="return confirm('¿Eliminar recibo {cons}?');">
-              <button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:5px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Eliminar</button>
-            </form>
-            <form method="POST" style="display:inline;margin-left:4px">
-              <input type="hidden" name="accion" value="estado">
-              <input type="hidden" name="factura_id" value="{f.id}">
-              <select name="nuevo_estado" style="font-size:11px;padding:4px">
-                <option value="PENDIENTE" {"selected" if est=="PENDIENTE" else ""}>Pendiente</option>
-                <option value="PAGADO" {"selected" if est=="PAGADO" else ""}>Pagado</option>
-                <option value="VENCIDO" {"selected" if est=="VENCIDO" else ""}>Vencido</option>
-                <option value="ANULADO" {"selected" if est=="ANULADO" else ""}>Anulado</option>
-              </select>
-              <button class="btn-ok" type="submit">OK</button>
-            </form>
+            {_bloque_acciones_recibo(f, cons, est) if not es_cobranza else ""}
           </td>
         </tr>"""
     body = f"""
@@ -24985,7 +24991,7 @@ def gerencia_facturacion():
       </table>
     </div>
   </div>
-  <div class="fx-card">
+  {"" if es_cobranza else f'''<div class="fx-card">
     <h2 style="margin:0 0 8px;font-size:16px;color:#0B2D57">Generar recibo</h2>
     <form method="POST" id="formRecibo">
       <label>Colegio</label>
@@ -25022,7 +25028,10 @@ def gerencia_facturacion():
       <p class="hint">El valor se calcula solo (plan + add-ons). Puede editarlo para descuentos.</p>
       <button class="gen" type="submit">Generar recibo interno</button>
     </form>
-  </div>
+  </div>'''}
+  {'''<div class="fx-card" style="border-left:4px solid #0B2D57">
+    <p class="hint" style="font-size:13px;color:#334155;margin:0">📄 Consulta y descarga de recibos. Los valores vienen fijos del plan del colegio: aquí no se editan montos ni se eliminan recibos históricos.</p>
+  </div>''' if es_cobranza else ""}
   <div class="fx-card" id="historial">
     <h2 style="margin:0 0 12px;font-size:16px;color:#0B2D57">Historial de recibos generados</h2>
     <div style="overflow-x:auto">
@@ -25091,12 +25100,15 @@ def gerencia_facturacion():
       }})
       .catch(function(){{ hint.textContent = 'No se pudo cargar la tarifa del colegio.'; }});
   }}
-  sel.addEventListener('change', loadInst);
-  tipo.addEventListener('change', recalc);
-  ia.addEventListener('change', recalc);
-  sede.addEventListener('change', recalc);
-  ciclo.addEventListener('change', recalc);
-  moneda.addEventListener('change', recalc);
+  if (sel) {{
+    sel.addEventListener('change', loadInst);
+    tipo.addEventListener('change', recalc);
+    ia.addEventListener('change', recalc);
+    mig.addEventListener('change', recalc);
+    s247.addEventListener('change', recalc);
+    ciclo.addEventListener('change', recalc);
+    moneda.addEventListener('change', recalc);
+  }}
 }})();
 </script>
 """
@@ -25349,10 +25361,12 @@ def gerencia_factura_pdf(fid):
     except Exception:
         pass
 
+    es_pagado = (est == "PAGADO")
+    titulo_doc = "Recibo de Caja · Paz y Salvo" if es_pagado else "Cuenta de Cobro / Factura Temporal"
     head_left = [
         Paragraph(f"Hola, {colegio}", styles["Hi"]),
         Paragraph(
-            f"Cuenta de Cobro Interna · <b>{cons}</b><br/>"
+            f"{titulo_doc} · <b>{cons}</b><br/>"
             f"Fecha de expedición: {exped_txt}<br/>"
             f"Periodo facturado: {periodo_txt}",
             styles["HiSub"],
@@ -25371,6 +25385,42 @@ def gerencia_factura_pdf(fid):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
     ]))
     story.append(head_tbl)
+    story.append(Spacer(1, 6))
+
+    # —— Sello de estado: PAGADO (verde) o advertencia de deuda pendiente (rojo) ——
+    styles.add(ParagraphStyle(name="StampOk", fontName="Helvetica-Bold", fontSize=13, textColor=white, alignment=TA_CENTER, leading=16))
+    styles.add(ParagraphStyle(name="StampOkSub", fontName="Helvetica", fontSize=8, textColor=white, alignment=TA_CENTER, leading=10))
+    styles.add(ParagraphStyle(name="StampWarn", fontName="Helvetica-Bold", fontSize=13, textColor=white, alignment=TA_CENTER, leading=16))
+    styles.add(ParagraphStyle(name="StampWarnSub", fontName="Helvetica", fontSize=8, textColor=white, alignment=TA_CENTER, leading=10))
+    GREEN_SEAL = HexColor("#15803d")
+    RED_SEAL = HexColor("#b91c1c")
+    if es_pagado:
+        sello = Table([[
+            Paragraph("✔ PAGADO — PAZ Y SALVO", styles["StampOk"]),
+        ], [
+            Paragraph(f"El colegio {colegio} no tiene saldo pendiente con {empresa} a la fecha de expedición de este recibo.", styles["StampOkSub"]),
+        ]], colWidths=[17.8*cm])
+        sello.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), GREEN_SEAL),
+            ("TOPPADDING", (0, 0), (-1, 0), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
+            ("TOPPADDING", (0, 1), (-1, 1), 0),
+            ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
+        ]))
+    else:
+        sello = Table([[
+            Paragraph("⚠ SALDO PENDIENTE DE PAGO", styles["StampWarn"]),
+        ], [
+            Paragraph("Este documento es una cuenta de cobro temporal, no un recibo de pago. Se recomienda cancelar antes de la fecha límite indicada abajo.", styles["StampWarnSub"]),
+        ]], colWidths=[17.8*cm])
+        sello.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), RED_SEAL),
+            ("TOPPADDING", (0, 0), (-1, 0), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
+            ("TOPPADDING", (0, 1), (-1, 1), 0),
+            ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
+        ]))
+    story.append(sello)
     story.append(Spacer(1, 10))
 
     # Datos cliente + total
@@ -25451,52 +25501,72 @@ def gerencia_factura_pdf(fid):
     story.append(Paragraph(feat_txt, styles["Body"]))
     story.append(Spacer(1, 8))
 
-    # Fecha límite
-    limit_box = Table([[
-        Paragraph(f"<b>Fecha límite de pago</b><br/><font size='12'>{venc_txt}</font>", styles["Limit"]),
-        Paragraph(
-            "En caso de no registrar el pago antes de esta fecha, el soporte técnico de la plataforma "
-            "será suspendido temporalmente. Los datos académicos se conservan íntegros.",
-            styles["Warn"],
-        ),
-    ]], colWidths=[6*cm, 11.8*cm])
-    limit_box.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.8, AMBER),
-        ("BACKGROUND", (0, 0), (0, 0), HexColor("#fffbeb")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(limit_box)
-    story.append(Spacer(1, 8))
+    if es_pagado:
+        # —— Recibo de Caja: firmas autorizadas en vez de aviso de vencimiento / cobro ——
+        story.append(Paragraph("Constancia de pago y firmas autorizadas", styles["Sec"]))
+        firma_html = (
+            "<br/><br/>_______________________________<br/><b>{nombre}</b><br/>{cargo}"
+        )
+        firmas_tbl = Table([[
+            Paragraph(firma_html.format(nombre="Firma autorizada 1", cargo="Representante · Procsis"), styles["Body"]),
+            Paragraph(firma_html.format(nombre="Firma autorizada 2", cargo="Representante · Procsis"), styles["Body"]),
+        ]], colWidths=[8.9*cm, 8.9*cm])
+        firmas_tbl.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.6, BORDER),
+            ("INNERGRID", (0, 0), (-1, -1), 0.6, BORDER),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        story.append(firmas_tbl)
+        story.append(Spacer(1, 10))
+    else:
+        # Fecha límite
+        limit_box = Table([[
+            Paragraph(f"<b>Fecha límite de pago</b><br/><font size='12'>{venc_txt}</font>", styles["Limit"]),
+            Paragraph(
+                "En caso de no registrar el pago antes de esta fecha, el soporte técnico de la plataforma "
+                "será suspendido temporalmente. Los datos académicos se conservan íntegros.",
+                styles["Warn"],
+            ),
+        ]], colWidths=[6*cm, 11.8*cm])
+        limit_box.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.8, AMBER),
+            ("BACKGROUND", (0, 0), (0, 0), HexColor("#fffbeb")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        story.append(limit_box)
+        story.append(Spacer(1, 8))
 
-    # Pago + QR
-    pay_txt = (
-        f"<b>Paga tu cuenta de cobro fácil y seguro con Wompi</b><br/>"
-        f"Tarjeta crédito/débito · PSE · Nequi · Bancolombia<br/>"
-        f"También puede consignar a la cuenta de Ahorros N° <b>{cta_banco}</b> — NEQUI · Titular: <b>PROCSIS</b><br/>"
-        f"Referencia de pago: <b>{cons}</b> · Cartera: {tel_emp or '—'} · {email_emp}"
-    )
-    qr_cell = Paragraph("QR no disponible", styles["Small"])
-    if qr_ok:
-        try:
-            qr_cell = Image(qr_buf, width=3.2*cm, height=3.2*cm)
-        except Exception:
-            pass
-    pay = Table([[Paragraph(pay_txt, styles["Body"]), qr_cell]], colWidths=[13.5*cm, 4.3*cm])
-    pay.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.8, NAVY),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 10),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("ALIGN", (1, 0), (1, 0), "CENTER"),
-    ]))
-    story.append(pay)
-    story.append(Spacer(1, 10))
+        # Pago + QR
+        pay_txt = (
+            f"<b>Paga tu cuenta de cobro fácil y seguro con Wompi</b><br/>"
+            f"Tarjeta crédito/débito · PSE · Nequi · Bancolombia<br/>"
+            f"También puede consignar a la cuenta de Ahorros N° <b>{cta_banco}</b> — NEQUI · Titular: <b>PROCSIS</b><br/>"
+            f"Referencia de pago: <b>{cons}</b> · Cartera: {tel_emp or '—'} · {email_emp}"
+        )
+        qr_cell = Paragraph("QR no disponible", styles["Small"])
+        if qr_ok:
+            try:
+                qr_cell = Image(qr_buf, width=3.2*cm, height=3.2*cm)
+            except Exception:
+                pass
+        pay = Table([[Paragraph(pay_txt, styles["Body"]), qr_cell]], colWidths=[13.5*cm, 4.3*cm])
+        pay.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.8, NAVY),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("ALIGN", (1, 0), (1, 0), "CENTER"),
+        ]))
+        story.append(pay)
+        story.append(Spacer(1, 10))
 
     # —— CUFE / DIAN (espacio reservado para factura electrónica) ——
     story.append(Paragraph("Facturación electrónica DIAN · Código CUFE", styles["Sec"]))
