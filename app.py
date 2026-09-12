@@ -19813,6 +19813,34 @@ def gerencia_hq():
           <p class="hello">Bienvenido, Sr. Gerente: <span>{gerente_label}</span></p>
           <div class="meta">Acceso restringido · Gerencia / Dirección · {hoy_txt}</div>
           <div class="meta">Periodo de referencia: {m['mes'] or '—'}</div>
+          <div class="meta" id="hq-reloj-co" style="font-variant-numeric:tabular-nums;font-weight:700;color:#fbbf24;margin-top:6px;font-size:13px;letter-spacing:.02em">
+            🇨🇴 <span id="hq-reloj-txt">—:—:—.---</span> · Hora Colombia
+          </div>
+
+<script>
+(function(){{
+  function pad(n, w){{ n = String(n); while(n.length < (w||2)) n = '0'+n; return n; }}
+  function tickCo(){{
+    try{{
+      var now = new Date();
+      var fmt = new Intl.DateTimeFormat('es-CO', {{
+        timeZone: 'America/Bogota',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false, year: 'numeric', month: '2-digit', day: '2-digit'
+      }});
+      var parts = fmt.formatToParts(now);
+      var get = function(t){{ for(var i=0;i<parts.length;i++) if(parts[i].type===t) return parts[i].value; return ''; }};
+      var ms = pad(now.getMilliseconds(), 3);
+      var txt = get('day') + '/' + get('month') + '/' + get('year') + '  ' + get('hour') + ':' + get('minute') + ':' + get('second') + '.' + ms;
+      var el = document.getElementById('hq-reloj-txt');
+      if(el) el.textContent = txt;
+    }}catch(e){{}}
+  }}
+  tickCo();
+  setInterval(tickCo, 50);
+}})();
+</script>
+
         </div>
       </div>
     </div>
