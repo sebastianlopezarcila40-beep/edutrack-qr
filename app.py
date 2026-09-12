@@ -2583,6 +2583,21 @@ class ChangelogVersion(db.Model):
     creado_por = db.Column(db.String(80), default="")
 
 
+class FirmaAutorizada(db.Model):
+    """Firmas digitales de PROCSIS para documentos descargables (recibos, paz y salvo, etc.).
+    Configurables desde Gerencia. No aplica a contratos (esos usan su propio flujo)."""
+    __tablename__ = "firmas_autorizadas"
+    id = db.Column(db.Integer, primary_key=True)
+    slot = db.Column(db.Integer, default=1)  # 1 o 2 (dos firmantes)
+    nombre = db.Column(db.String(120), default="")
+    cargo = db.Column(db.String(160), default="")
+    subtitulo = db.Column(db.String(200), default="")  # ej. "Autorizado por su Madre (Art. 306)"
+    elaboro = db.Column(db.String(120), default="PROCSIS")
+    imagen_path = db.Column(db.String(255), default="")  # /static/uploads/firmas/firma_1.png
+    actualizado_en = db.Column(db.String(30), default="")
+    actualizado_por = db.Column(db.String(80), default="")
+
+
 class ConciliacionBancaria(db.Model):
     """Líneas de conciliación banco vs facturas."""
     __tablename__ = "conciliacion_bancaria"
@@ -5229,6 +5244,51 @@ def guardar_foto_estudiante(file_storage, estudiante_id, institucion_id=None):
             return f"/static/uploads/fotos_estudiantes/{fname}"
         except Exception:
             return None
+
+
+def guardar_firma_autorizada(file_storage, slot):
+    """Guarda la imagen de una firma digital (fondo transparente si el PNG lo trae).
+    Ruta: /static/uploads/firmas/firma_{slot}.png"""
+    if not file_storage or not getattr(file_storage, "filename", ""):
+        return None
+    folder = os.path.join(app.root_path, "static", "uploads", "firmas")
+    os.makedirs(folder, exist_ok=True)
+    fname = f"firma_{int(slot)}.png"
+    dest = os.path.join(folder, fname)
+    try:
+        from PIL import Image
+        from io import BytesIO
+        raw = file_storage.read()
+        if not raw:
+            return None
+        im = Image.open(BytesIO(raw))
+        # Conservar transparencia si la trae (fondo blanco si no)
+        if im.mode not in ("RGBA", "LA"):
+            im = im.convert("RGBA")
+        max_w = 500
+        if im.width > max_w:
+            ratio = max_w / im.width
+            im = im.resize((max_w, int(im.height * ratio)), Image.Resampling.LANCZOS)
+        im.save(dest, "PNG", optimize=True)
+        return f"/static/uploads/firmas/{fname}"
+    except Exception as ex:
+        print("guardar_firma_autorizada error:", ex)
+        try:
+            file_storage.seek(0)
+            file_storage.save(dest)
+            return f"/static/uploads/firmas/{fname}"
+        except Exception:
+            return None
+
+
+def _firmas_autorizadas():
+    """Devuelve hasta 2 registros FirmaAutorizada (slot 1 y 2), en orden, o [] si no hay ninguna configurada."""
+    try:
+        db.create_all()
+        rows = FirmaAutorizada.query.order_by(FirmaAutorizada.slot.asc()).limit(2).all()
+        return rows
+    except Exception:
+        return []
 
 
 def _comprimir_imagen_bytes(raw, max_side=200, max_kb=50):
@@ -11877,6 +11937,8 @@ body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:
 }}
 .card .info p {{ margin:0 0 2px; font-size:10px; color:#334155; }}
 .card .info .cod {{ font-weight:800; color:#0B2D57; font-size:11px; margin-top:4px; }}
+.card .foto {{ width:44px; height:54px; object-fit:cover; border-radius:4px; border:1px solid #d0d7de; flex:0 0 auto; background:#eef2f7; }}
+.card .foto-ph {{ width:44px; height:54px; border-radius:4px; border:1px dashed #94a3b8; background:#eef2f7; flex:0 0 auto; display:flex; align-items:center; justify-content:center; text-align:center; font-size:7px; color:#64748b; line-height:1.2; }}
 .card .qr-wrap {{ flex-shrink:0; width:72px; text-align:center; }}
 .card .qr-wrap img {{ width:70px; height:70px; }}
 .card .bot {{
@@ -11907,6 +11969,7 @@ body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:
         <span class="brand">EDUTRACK</span>
       </div>
       <div class="mid">
+        {'<img class="foto" src="'+_esc(e.foto_path)+'" alt="Foto">' if getattr(e, 'foto_path', None) else '<div class="foto-ph">FOTO<br>ESTU&shy;DIANTE</div>'}
         <div class="info">
           <h2 title="{nom}">{nom_show}</h2>
           <p>Grado {grado}</p>
@@ -11970,18 +12033,41 @@ def carnet_descargar(id):
     pdf.drawCentredString(x+card_w/2, y+card_h-92, (INST_NOMBRE or "INSTITUCIÓN EDUCATIVA")[:40])
     pdf.setFont("Helvetica", 8)
     pdf.drawCentredString(x+card_w/2, y+card_h-112, f"Sede {INST_SEDE}")
+    # Foto del estudiante (si fue cargada) justo debajo del encabezado azul
+    foto_h = 78
+    foto_top = y+card_h-135
+    foto_path = (getattr(e, "foto_path", None) or "").strip()
+    foto_dibujada = False
+    if foto_path:
+        try:
+            foto_fs = os.path.join(app.root_path, foto_path.lstrip("/"))
+            if os.path.isfile(foto_fs):
+                pdf.drawImage(foto_fs, x+card_w/2-foto_h/2, foto_top-foto_h, width=foto_h, height=foto_h,
+                               preserveAspectRatio=True, anchor='c', mask='auto')
+                foto_dibujada = True
+        except Exception:
+            pass
+    if not foto_dibujada:
+        pdf.setStrokeColor(colors.HexColor('#94a3b8'))
+        pdf.setDash(2, 2)
+        pdf.roundRect(x+card_w/2-foto_h/2, foto_top-foto_h, foto_h, foto_h, 6, fill=0, stroke=1)
+        pdf.setDash()
+        pdf.setFillColor(colors.HexColor('#94a3b8'))
+        pdf.setFont("Helvetica", 6.5)
+        pdf.drawCentredString(x+card_w/2, foto_top-foto_h/2+3, "FOTO")
+        pdf.drawCentredString(x+card_w/2, foto_top-foto_h/2-6, "ESTUDIANTE")
     pdf.setFillColor(colors.HexColor('#111827'))
     pdf.setFont("Helvetica-Bold", 13)
     nombre = estudiante_nombre(e)
     if len(nombre) > 28:
         partes = nombre.split()
         mitad = max(1, len(partes)//2)
-        pdf.drawCentredString(x+card_w/2, y+card_h-158, " ".join(partes[:mitad])[:28])
-        pdf.drawCentredString(x+card_w/2, y+card_h-176, " ".join(partes[mitad:])[:28])
-        text_y = y+card_h-206
+        pdf.drawCentredString(x+card_w/2, foto_top-foto_h-26, " ".join(partes[:mitad])[:28])
+        pdf.drawCentredString(x+card_w/2, foto_top-foto_h-44, " ".join(partes[mitad:])[:28])
+        text_y = foto_top-foto_h-74
     else:
-        pdf.drawCentredString(x+card_w/2, y+card_h-165, nombre)
-        text_y = y+card_h-198
+        pdf.drawCentredString(x+card_w/2, foto_top-foto_h-33, nombre)
+        text_y = foto_top-foto_h-66
     pdf.setFont("Helvetica", 9)
     pdf.drawCentredString(x+card_w/2, text_y, f"Grado: {e.grado}")
     pdf.drawCentredString(x+card_w/2, text_y-24, f"Director: {e.director or 'No registrado'}"[:42])
@@ -11990,13 +12076,13 @@ def carnet_descargar(id):
     qr_b = BytesIO(); qr_img.save(qr_b, format="PNG"); qr_b.seek(0)
     try:
         from reportlab.lib.utils import ImageReader
-        pdf.drawImage(ImageReader(qr_b), x+card_w/2-58, y+86, width=116, height=116, preserveAspectRatio=True, mask='auto')
+        pdf.drawImage(ImageReader(qr_b), x+card_w/2-46, max(y+30, text_y-140), width=92, height=92, preserveAspectRatio=True, mask='auto')
     except Exception:
         pass
     pdf.setFont("Helvetica", 8)
-    pdf.drawCentredString(x+card_w/2, y+36, APP_NAME)
+    pdf.drawCentredString(x+card_w/2, y+22, APP_NAME)
     pdf.setFont("Helvetica", 7)
-    pdf.drawCentredString(width/2, 28, f"Generado por {APP_NAME} · {fecha_hoy()} {hora_actual()}")
+    pdf.drawCentredString(width/2, 12, f"Generado por {APP_NAME} · {fecha_hoy()} {hora_actual()}")
     pdf.save(); b.seek(0)
     registrar_auditoria("Descargar carné", f"{e.codigo} - {estudiante_nombre(e)}")
     return send_file(b, as_attachment=True, download_name=nombre_archivo_carnet(e), mimetype="application/pdf")
@@ -24970,7 +25056,7 @@ def gerencia_facturacion():
 .fx .hint{{font-size:12px;color:#64748b;margin-top:4px}}
 </style>
 <div class="fx"><div class="fx-in">
-  <a class="back" href="/gerencia/hq">← Módulos HQ</a> &nbsp;·&nbsp; <a class="back" href="/gerencia/limpieza">Limpieza de datos</a> &nbsp;·&nbsp; <a class="back" href="/gerencia/lideres">Nuestros líderes</a>
+  <a class="back" href="/gerencia/hq">← Módulos HQ</a> &nbsp;·&nbsp; <a class="back" href="/gerencia/limpieza">Limpieza de datos</a> &nbsp;·&nbsp; <a class="back" href="/gerencia/lideres">Nuestros líderes</a>{'' if es_cobranza else ' &nbsp;·&nbsp; <a class="back" href="/gerencia/firmas">Firmas digitales</a>'}
   <h1>Recibos / Facturación interna</h1>
   <p class="sub">Pre-sistema (cuenta de cobro). No es factura electrónica DIAN. Autocompleta colegio, plan y valor.</p>
   <div class="next">Próximo consecutivo a generar: {next_cons}</div>
@@ -25113,6 +25199,168 @@ def gerencia_facturacion():
 </script>
 """
     return page("Facturación interna", body)
+
+
+def _bloque_firmas_procsis(ancho_total_cm=17.8, titulo="Firmas autorizadas"):
+    """Bloque reutilizable de firmas digitales configuradas en Gerencia (/gerencia/firmas).
+    Úsalo en cualquier PDF descargable de PROCSIS (recibos, paz y salvo, comprobantes) EXCEPTO contratos.
+    Devuelve una lista de flowables para agregar al story de un documento reportlab."""
+    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image as RLImage
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.units import cm
+    from reportlab.lib.colors import HexColor
+    import os as _os
+
+    st_titulo = ParagraphStyle("FBTitulo", fontName="Helvetica-Bold", fontSize=9, textColor=HexColor("#0B2D57"))
+    st_nombre = ParagraphStyle("FBNombre", fontName="Helvetica-Bold", fontSize=9.5, textColor=HexColor("#0f172a"), alignment=TA_CENTER)
+    st_cargo = ParagraphStyle("FBCargo", fontName="Helvetica", fontSize=8, textColor=HexColor("#334155"), alignment=TA_CENTER)
+    st_linea = ParagraphStyle("FBLinea", fontName="Helvetica", fontSize=9, textColor=HexColor("#94a3b8"), alignment=TA_CENTER)
+    st_sub = ParagraphStyle("FBSub", fontName="Helvetica-Oblique", fontSize=7.5, textColor=HexColor("#64748b"), alignment=TA_CENTER)
+    st_elaboro = ParagraphStyle("FBElaboro", fontName="Helvetica", fontSize=7, textColor=HexColor("#94a3b8"), alignment=TA_CENTER)
+
+    firmas = _firmas_autorizadas()
+    slots = [next((x for x in firmas if x.slot == i), None) for i in (1, 2)]
+
+    celdas = []
+    elaboro_txt = ""
+    for f in slots:
+        partes = []
+        img_ok = False
+        if f and (f.imagen_path or "").strip():
+            try:
+                ruta_fs = _os.path.join(app.root_path, f.imagen_path.lstrip("/"))
+                if _os.path.isfile(ruta_fs):
+                    partes.append(RLImage(ruta_fs, width=3.6*cm, height=1.7*cm, kind='proportional'))
+                    img_ok = True
+            except Exception:
+                pass
+        if not img_ok:
+            partes.append(Spacer(1, 14))
+            partes.append(Paragraph("_______________________________", st_linea))
+        nombre_txt = (f.nombre if f and (f.nombre or "").strip() else "Firma autorizada").strip().upper()
+        cargo_txt = (f.cargo if f and (f.cargo or "").strip() else "Representante · Procsis")
+        partes.append(Spacer(1, 4))
+        partes.append(Paragraph(nombre_txt, st_nombre))
+        partes.append(Paragraph(cargo_txt, st_cargo))
+        if f and (f.subtitulo or "").strip():
+            partes.append(Paragraph(f.subtitulo, st_sub))
+        if f and (f.elaboro or "").strip():
+            elaboro_txt = f.elaboro
+        celdas.append(partes)
+
+    tbl = Table([celdas], colWidths=[(ancho_total_cm / 2) * cm] * 2)
+    tbl.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.6, HexColor("#cbd5e1")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.6, HexColor("#cbd5e1")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+    ]))
+
+    out = []
+    if titulo:
+        out.append(Paragraph(titulo, st_titulo))
+        out.append(Spacer(1, 4))
+    out.append(tbl)
+    if elaboro_txt:
+        out.append(Spacer(1, 4))
+        out.append(Paragraph(f"Elaboró: {elaboro_txt}", st_elaboro))
+    return out
+
+
+@app.route("/gerencia/firmas", methods=["GET", "POST"])
+def gerencia_firmas():
+    """Configura las 2 firmas digitales (imagen + nombre + cargo) que aparecen en los
+    documentos descargables de PROCSIS (recibos, paz y salvo, comprobantes). No aplica a contratos."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        return redirect("/gerencia-login")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = error = ""
+    if request.method == "POST":
+        try:
+            slot = int(request.form.get("slot") or 0)
+        except Exception:
+            slot = 0
+        if slot not in (1, 2):
+            error = "Firma inválida."
+        else:
+            f = FirmaAutorizada.query.filter_by(slot=slot).first()
+            if not f:
+                f = FirmaAutorizada(slot=slot)
+                db.session.add(f)
+            f.nombre = (request.form.get("nombre") or "").strip()[:120]
+            f.cargo = (request.form.get("cargo") or "").strip()[:160]
+            f.subtitulo = (request.form.get("subtitulo") or "").strip()[:200]
+            f.elaboro = (request.form.get("elaboro") or "PROCSIS").strip()[:120]
+            imagen_f = request.files.get("imagen")
+            if imagen_f and getattr(imagen_f, "filename", ""):
+                ruta = guardar_firma_autorizada(imagen_f, slot)
+                if ruta:
+                    f.imagen_path = ruta
+                else:
+                    error = "No se pudo guardar la imagen de la firma (formato no soportado)."
+            f.actualizado_en = f"{fecha_hoy()} {hora_actual()}"
+            f.actualizado_por = session.get("usuario") or ""
+            if not error:
+                db.session.commit()
+                registrar_auditoria("Firma digital actualizada", f"slot {slot} · {f.nombre}")
+                msg = f"Firma {slot} guardada."
+    firmas = {f.slot: f for f in FirmaAutorizada.query.all()}
+
+    def _panel(slot):
+        f = firmas.get(slot)
+        prev = ""
+        if f and (f.imagen_path or "").strip():
+            prev = f"<img src='{_esc(f.imagen_path)}' style='max-width:220px;max-height:90px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;background:#fff;padding:6px'>"
+        else:
+            prev = "<div style='width:220px;height:90px;border:1px dashed #94a3b8;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px'>Sin firma cargada</div>"
+        nombre_v = _esc(f.nombre) if f else ""
+        cargo_v = _esc(f.cargo) if f else ""
+        sub_v = _esc(f.subtitulo) if f else ""
+        elaboro_v = _esc(f.elaboro) if f and f.elaboro else "PROCSIS"
+        return f"""
+  <div class="w32-box" style="max-width:480px">
+    <div class="w32-title">FIRMA {slot}</div>
+    <div style="background:#fff;padding:12px;border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080">
+      <div style="text-align:center;margin-bottom:10px">{prev}</div>
+      <form method="POST" enctype="multipart/form-data" style="display:grid;gap:8px">
+        <input type="hidden" name="slot" value="{slot}">
+        <div><label style="font-size:12px;font-weight:700">Imagen de la firma (PNG, fondo transparente recomendado)</label>
+        <input type="file" name="imagen" accept="image/*" style="width:100%;padding:6px"></div>
+        <div><label style="font-size:12px;font-weight:700">Nombre completo</label>
+        <input name="nombre" value="{nombre_v}" placeholder="Ej. Sebastian Lopez Arcila" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:12px;font-weight:700">Cargo</label>
+        <input name="cargo" value="{cargo_v}" placeholder="Ej. Gerente General PROCSIS" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:12px;font-weight:700">Subtítulo (opcional)</label>
+        <input name="subtitulo" value="{sub_v}" placeholder="Ej. Autorizado por su Madre (Art. 306)" style="width:100%;padding:8px"></div>
+        <div><label style="font-size:12px;font-weight:700">Elaboró</label>
+        <input name="elaboro" value="{elaboro_v}" style="width:100%;padding:8px"></div>
+        <div><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px;border-radius:4px;font-weight:700">Guardar firma {slot}</button></div>
+      </form>
+    </div>
+  </div>"""
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Firmas digitales</h1>
+  <p>Firmas que aparecen en recibos, paz y salvo y comprobantes de PROCSIS (no aplica a contratos)</p>
+</div>
+<a class="btn" href="/gerencia/facturacion">← Facturación</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(error)+"</div>" if error else ""}
+  <div style="display:flex;flex-wrap:wrap;gap:16px">
+    {_panel(1)}
+    {_panel(2)}
+  </div>
+</section>
+"""
+    return page("Firmas digitales", shell(body))
 
 
 @app.route("/gerencia/facturacion/<int:fid>/pdf")
@@ -25503,22 +25751,7 @@ def gerencia_factura_pdf(fid):
 
     if es_pagado:
         # —— Recibo de Caja: firmas autorizadas en vez de aviso de vencimiento / cobro ——
-        story.append(Paragraph("Constancia de pago y firmas autorizadas", styles["Sec"]))
-        firma_html = (
-            "<br/><br/>_______________________________<br/><b>{nombre}</b><br/>{cargo}"
-        )
-        firmas_tbl = Table([[
-            Paragraph(firma_html.format(nombre="Firma autorizada 1", cargo="Representante · Procsis"), styles["Body"]),
-            Paragraph(firma_html.format(nombre="Firma autorizada 2", cargo="Representante · Procsis"), styles["Body"]),
-        ]], colWidths=[8.9*cm, 8.9*cm])
-        firmas_tbl.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), 0.6, BORDER),
-            ("INNERGRID", (0, 0), (-1, -1), 0.6, BORDER),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("TOPPADDING", (0, 0), (-1, -1), 10),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ]))
-        story.append(firmas_tbl)
+        story.extend(_bloque_firmas_procsis(titulo="Constancia de pago y firmas autorizadas"))
         story.append(Spacer(1, 10))
     else:
         # Fecha límite
@@ -54209,18 +54442,22 @@ def ventas_preview_carnet_qr():
     <div>
       <div style="text-align:center;font-size:11px;font-weight:700;letter-spacing:.1em;color:#64748b;margin-bottom:8px">ANVERSO</div>
       <div style="width:86mm;height:54mm;background:{fondo};border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;display:flex;flex-direction:column">
-        <div style="background:{prim};color:#fff;padding:8px 10px;display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:10px;font-weight:800;letter-spacing:.06em">EDUTRACK · QR</span>
+        <div style="background:{prim};color:#fff;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:6px">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0">
+            <div style="width:18px;height:18px;border-radius:3px;background:rgba(255,255,255,.18);border:1px dashed rgba(255,255,255,.6);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:6px;color:#fff" title="Logo del colegio">LOGO</div>
+            <span style="font-size:10px;font-weight:800;letter-spacing:.06em;white-space:nowrap">EDUTRACK · QR</span>
+          </div>
           <span style="font-size:9px;background:{acento};color:#0f172a;padding:2px 6px;border-radius:3px;font-weight:800">ACCESO</span>
         </div>
         <div style="flex:1;padding:8px 10px;display:flex;gap:8px;align-items:center">
+          <div style="width:44px;height:54px;background:#eef2f7;border:1px dashed #94a3b8;border-radius:4px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;text-align:center;font-size:7px;color:#64748b;line-height:1.2" title="Foto del estudiante">FOTO<br>ESTU&shy;DIANTE</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:800;color:{texto};line-height:1.2;margin-bottom:4px">{_esc(alumno[:42])}</div>
             <div style="font-size:10px;color:#475569">Grado {_esc(grado)}</div>
             <div style="font-size:11px;font-weight:800;color:{prim};margin-top:4px">Código: {_esc(codigo)}</div>
           </div>
-          <div style="width:70px;height:70px;background:#fff;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={_esc(codigo)}" alt="QR" width="64" height="64" style="display:block">
+          <div style="width:60px;height:60px;background:#fff;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;flex:0 0 auto">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={_esc(codigo)}" alt="QR" width="54" height="54" style="display:block">
           </div>
         </div>
         <div style="background:{prim};color:#fff;font-size:9px;text-align:center;padding:4px 8px">{_esc((colegio or "Nombre del colegio")[:48])} · {_esc(sede)}</div>
