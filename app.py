@@ -52836,6 +52836,168 @@ def certificados_apoyo_pdf(cid):
     # Intentar firma gerente del contrato personal más reciente o texto fijo Sebastián
     firma_img = None
     try:
-        # buscar última firma_gerente en contratos
-        ult = ContratoPersonal.query.filter(
-            ContratoPersonal.firma_gerente.isnot(None)
+        for ult in ContratoPersonal.query.order_by(ContratoPersonal.id.desc()).limit(20).all():
+            if (getattr(ult, "firma_gerente", None) or "").strip():
+                firma_img = ult.firma_gerente
+                break
+    except Exception:
+        firma_img = None
+
+    if firma_img:
+        try:
+            raw = firma_img.split(",", 1)[-1] if firma_img.startswith("data:") else firma_img
+            img = ImageReader(BytesIO(_b64.b64decode(raw)))
+            c.drawImage(img, mid - 70, y + 8, width=140, height=55, mask="auto", preserveAspectRatio=True, anchor="s")
+        except Exception:
+            pass
+
+    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(mid, y - 6, "SEBASTIÁN LÓPEZ ARCILA")
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#334155"))
+    c.drawCentredString(mid, y - 18, "Gerente General PROCSIS")
+    c.drawCentredString(mid, y - 29, "Autorizado por su Madre (Art. 306)")
+    c.drawCentredString(mid, y - 40, "Elaboró: PROCSIS")
+
+    c.setFont("Helvetica", 7)
+    c.setFillColor(colors.HexColor("#94a3b8"))
+    c.drawString(45, 24, "PROCSIS · Certificado #%s · Emitido %s" % (cert.id, fecha_mostrar))
+    c.save()
+    bio.seek(0)
+    return send_file(
+        bio, as_attachment=True,
+        download_name="PROCSIS_Certificado_Mandato_%s.pdf" % cert.id,
+        mimetype="application/pdf",
+    )
+
+
+
+
+@app.route("/gerencia/comisiones-ventas", methods=["GET", "POST"])
+def gerencia_comisiones_ventas():
+    """Configurar comisión por cierre de colegio y ver historial por asesor."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    # valor global default en plataforma o primer meta
+    default_comision = 175000.0
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "global").strip()
+        try:
+            if accion == "global":
+                raw = (request.form.get("comision_por_cierre") or "175000").replace(".", "").replace(",", "")
+                val = float(raw or 175000)
+                # actualizar metas del mes actual sin cerrados
+                mes = ahora().strftime("%Y-%m") if hasattr(ahora(), "strftime") else ""
+                for m in MetaVendedor.query.filter_by(mes=mes).all():
+                    m.comision_por_cierre = val
+                    m.comision_cop = float(m.cerrados or 0) * val
+                # guardar en session/plat note via auditoria
+                session["comision_por_cierre_global"] = val
+                db.session.commit()
+                msg = "Comisión por cierre actualizada a $ %s para el mes %s." % (
+                    "{:,.0f}".format(val).replace(",", "."), mes or "—"
+                )
+            elif accion == "meta_asesor":
+                usuario = (request.form.get("usuario") or "").strip()
+                mes = (request.form.get("mes") or "").strip()[:7]
+                try:
+                    meta_col = int(request.form.get("meta_colegios") or 5)
+                except Exception:
+                    meta_col = 5
+                try:
+                    com = float((request.form.get("comision_por_cierre") or "175000").replace(".", "").replace(",", "") or 175000)
+                except Exception:
+                    com = 175000.0
+                if not usuario or not mes:
+                    err = "Usuario y mes obligatorios."
+                else:
+                    m = MetaVendedor.query.filter_by(usuario=usuario, mes=mes).first()
+                    if not m:
+                        m = MetaVendedor(usuario=usuario, mes=mes, cerrados=0)
+                        db.session.add(m)
+                    m.meta_colegios = meta_col
+                    m.comision_por_cierre = com
+                    m.comision_cop = float(m.cerrados or 0) * com
+                    db.session.commit()
+                    msg = "Meta de %s actualizada." % usuario
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:120]
+
+    mes_act = ahora().strftime("%Y-%m") if hasattr(ahora(), "strftime") else ""
+    metas = MetaVendedor.query.order_by(MetaVendedor.mes.desc(), MetaVendedor.usuario).limit(100).all()
+    filas = []
+    for m in metas:
+        filas.append(
+            "<tr><td style='padding:8px'>%s</td><td style='padding:8px'>%s</td>"
+            "<td style='padding:8px;text-align:center'>%s / %s</td>"
+            "<td style='padding:8px;text-align:right'>$ %s</td>"
+            "<td style='padding:8px;text-align:right'>$ %s</td></tr>" % (
+                _esc(m.mes), _esc(m.usuario),
+                int(m.cerrados or 0), int(m.meta_colegios or 0),
+                "{:,.0f}".format(float(m.comision_por_cierre or 0)).replace(",", "."),
+                "{:,.0f}".format(float(m.comision_cop or 0)).replace(",", "."),
+            )
+        )
+    tabla = "".join(filas) or "<tr><td colspan='5' style='padding:12px;color:#64748b;text-align:center'>Sin metas registradas</td></tr>"
+    global_val = session.get("comision_por_cierre_global") or default_comision
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Comisiones de ventas</h1>
+  <p>Definir valor por colegio cerrado · Metas por asesor · Solo Gerencia</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;max-width:480px;margin-bottom:16px">
+    <input type="hidden" name="accion" value="global">
+    <h3 style="margin:0 0 10px;font-size:14px">Comisión por cierre (mes { _esc(mes_act) })</h3>
+    <label style="font-size:12px;font-weight:700">Valor COP por colegio GANADO</label>
+    <input name="comision_por_cierre" value="{int(global_val)}" style="width:100%;padding:9px;margin:6px 0 10px">
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Aplicar a asesores del mes</button>
+  </form>
+  <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;max-width:640px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <input type="hidden" name="accion" value="meta_asesor">
+    <div style="grid-column:1/-1"><h3 style="margin:0;font-size:14px">Meta individual</h3></div>
+    <div><label style="font-size:12px;font-weight:700">Usuario asesor</label>
+    <input name="usuario" placeholder="nombre.usuario" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Mes (YYYY-MM)</label>
+    <input name="mes" value="{_esc(mes_act)}" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Meta colegios</label>
+    <input name="meta_colegios" value="5" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Comisión por cierre</label>
+    <input name="comision_por_cierre" value="{int(global_val)}" style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1"><button type="submit" style="padding:9px 12px;border:0;border-radius:8px;background:#15803d;color:#fff;font-weight:800">Guardar meta asesor</button></div>
+  </form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px;text-align:left">Mes</th><th style="padding:8px;text-align:left">Asesor</th>
+      <th style="padding:8px;text-align:center">Cerrados / Meta</th>
+      <th style="padding:8px;text-align:right">$/cierre</th><th style="padding:8px;text-align:right">Comisión</th>
+    </tr>
+    {tabla}
+  </table>
+</section>
+"""
+    return page("Comisiones ventas", shell(body))
+
+
+
+if __name__ == "__main__":
+    with app.app_context():
+        inicializar_bd()
+        try:
+            sincronizar_licencias()
+            aplicar_cambios_plan_pendientes()
+            _ciclo_facturacion_automatica()
+        except Exception as _e:
+            print("ciclo facturacion:", _e)
+    app.run(debug=True, host="0.0.0.0")
