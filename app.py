@@ -19755,7 +19755,7 @@ def gerencia_hq():
 .hq-welcome .meta{{font-size:12px;opacity:.85;margin-top:4px}}
 .hq-legal{{max-width:1120px;margin:0 auto;padding:8px 20px;font-size:11px;color:#94a3b8;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;background:#0a1929}}
 .hq-wrap{{max-width:1120px;margin:0 auto;padding:16px}}
-.sec{{background:#fff;border:1px solid #dbe3ee;border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 12px rgba(15,23,42,.05)}}
+.sec{{background:#fff;border:1px solid #dbe3ee;border-radius:6px;padding:16px 18px;margin-bottom:14px;box-shadow:0 1px 4px rgba(15,23,42,.04)}}
 .sec h2{{margin:0 0 12px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#0B2D57;font-weight:800;border-bottom:2px solid #e8eef5;padding-bottom:8px}}
 .kpis{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}}
 .kpi{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px}}
@@ -19763,7 +19763,7 @@ def gerencia_hq():
 .kpi .v{{font-size:18px;font-weight:800;color:#0f172a;margin-top:3px}}
 .kpi .s{{font-size:12px;color:#94a3b8;margin-top:2px}}
 .grid-mod{{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}}
-.grid-mod a{{display:block;text-align:center;padding:12px 10px;border-radius:8px;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:.01em;transition:opacity .15s}}
+.grid-mod a{{display:block;text-align:center;padding:11px 10px;border-radius:4px;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:.01em;transition:opacity .15s}}
 .grid-mod a:hover{{opacity:.92}}
 .grid-mod a.own{{background:#5c2d0e}}
 .grid-mod a.g{{background:#0f6b3c}}
@@ -19778,19 +19778,45 @@ def gerencia_hq():
 .grid-mod a.c-azul-rey{{background:#1e40af}}
 .grid-mod a.c-naranja-lad{{background:#9a3412}}
 .hq-cat{{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:14px 0 8px;padding:6px 10px;border-radius:6px;display:inline-block}}
-.hq-cat.verde{{background:#d1fae5;color:#065f46}}
-.hq-cat.azul{{background:#dbeafe;color:#1e3a5f}}
-.hq-cat.naranja{{background:#ffedd5;color:#9a3412}}
-.hq-cat.gris{{background:#e5e7eb;color:#111827}}
-.hq-cat.marron{{background:#fed7aa;color:#7c2d12}}
-.hq-cat.verde-corp{{background:#bbf7d0;color:#14532d}}
-.hq-cat.azul-rey{{background:#bfdbfe;color:#1e3a8a}}
-.hq-cat.naranja-lad{{background:#fdba74;color:#7c2d12}}
-.hq-tabs{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;border-bottom:2px solid #e2e8f0;padding-bottom:10px}}
-.hq-tab{{border:0;cursor:pointer;padding:10px 18px;border-radius:8px 8px 0 0;font-weight:800;font-size:13px;background:#e2e8f0;color:#475569}}
-.hq-tab.active{{background:#0B2D57;color:#fff}}
-.hq-tab-panel{{display:none}}
+.hq-cat.verde{{background:#ecfdf5;color:#065f46}}
+.hq-cat.azul{{background:#f1f5f9;color:#1e3a5f}}
+.hq-cat.naranja{{background:#fff7ed;color:#9a3412}}
+.hq-cat.gris{{background:#f3f4f6;color:#111827}}
+.hq-cat.marron{{background:#faf5f0;color:#7c2d12}}
+.hq-cat.verde-corp{{background:#f0fdf4;color:#14532d}}
+.hq-cat.azul-rey{{background:#eff6ff;color:#1e3a8a}}
+.hq-cat.naranja-lad{{background:#fff7ed;color:#7c2d12}}
+.hq-tabs{{
+  display:flex;flex-wrap:wrap;gap:0;margin:0 0 20px;padding:0;
+  border-bottom:1px solid #cbd5e1;background:transparent;
+}}
+.hq-tab{{
+  border:0;border-bottom:3px solid transparent;cursor:pointer;
+  padding:14px 22px 12px;margin:0 0 -1px 0;
+  border-radius:0;background:transparent !important;
+  color:#64748b;font-weight:600;font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;
+  transition:color .12s,border-color .12s;
+  font-family:inherit;
+}}
+.hq-tab:hover{{color:#0B2D57;background:#f8fafc !important}}
+.hq-tab.active{{
+  background:transparent !important;color:#0B2D57 !important;
+  border-bottom:3px solid #0B2D57;font-weight:700;
+}}
+.hq-tab-panel{{display:none;padding-top:6px}}
 .hq-tab-panel.active{{display:block}}
+.grid-mod a{{
+  border-radius:4px !important;
+  box-shadow:none !important;
+  background-image:none !important;
+}}
+.sec{{border-radius:4px !important;box-shadow:0 1px 2px rgba(15,23,42,.04) !important}}
+.hq-cat{{
+  border-radius:2px !important;font-size:10px;letter-spacing:.12em;
+  font-weight:700;border-left:3px solid currentColor;padding-left:10px;
+}}
+.kpi{{border-radius:4px !important}}
 .bar{{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin-top:6px}}
 .bar>i{{display:block;height:100%;background:#0B2D57}}
 .srv{{display:inline-flex;align-items:center;gap:8px;font-weight:700}}
@@ -19814,7 +19840,7 @@ def gerencia_hq():
           <div class="meta">Acceso restringido · Gerencia / Dirección · {hoy_txt}</div>
           <div class="meta">Periodo de referencia: {m['mes'] or '—'}</div>
           <div class="meta" id="hq-reloj-co" style="font-variant-numeric:tabular-nums;font-weight:700;color:#fbbf24;margin-top:6px;font-size:13px;letter-spacing:.02em">
-            🇨🇴 <span id="hq-reloj-txt">—:—:—.---</span> · Hora Colombia
+            🇨🇴 <span id="hq-reloj-txt">—:—:—</span> · Hora Colombia
           </div>
 
 <script>
@@ -19830,14 +19856,13 @@ def gerencia_hq():
       }});
       var parts = fmt.formatToParts(now);
       var get = function(t){{ for(var i=0;i<parts.length;i++) if(parts[i].type===t) return parts[i].value; return ''; }};
-      var ms = pad(now.getMilliseconds(), 3);
-      var txt = get('day') + '/' + get('month') + '/' + get('year') + '  ' + get('hour') + ':' + get('minute') + ':' + get('second') + '.' + ms;
+      var txt = get('day') + '/' + get('month') + '/' + get('year') + '  ' + get('hour') + ':' + get('minute') + ':' + get('second');
       var el = document.getElementById('hq-reloj-txt');
       if(el) el.textContent = txt;
     }}catch(e){{}}
   }}
   tickCo();
-  setInterval(tickCo, 50);
+  setInterval(tickCo, 1000);
 }})();
 </script>
 
@@ -19856,9 +19881,9 @@ def gerencia_hq():
 
     <div class="sec" style="padding-top:12px">
       <div class="hq-tabs" role="tablist">
-        <button type="button" class="hq-tab active" data-tab="operativo" onclick="hqTab(this,'operativo')">Panel operativo</button>
-        <button type="button" class="hq-tab" data-tab="gerencia" onclick="hqTab(this,'gerencia')">Panel de gerencia</button>
-        <button type="button" class="hq-tab" data-tab="contingencia" onclick="hqTab(this,'contingencia')">Contingencia · DRP · Legal</button>
+        <button type="button" class="hq-tab active" data-tab="operativo" onclick="hqTab(this,'operativo')">PANEL OPERATIVO</button>
+        <button type="button" class="hq-tab" data-tab="gerencia" onclick="hqTab(this,'gerencia')">PANEL DE GERENCIA</button>
+        <button type="button" class="hq-tab" data-tab="contingencia" onclick="hqTab(this,'contingencia')">CONTINGENCIA / DRP / LEGAL</button>
       </div>
 
       <div id="hq-tab-operativo" class="hq-tab-panel active">
