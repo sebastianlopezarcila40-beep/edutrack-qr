@@ -5375,11 +5375,41 @@ def estado_licencia(inst):
     if not inst:
         return {"estado": "ok", "dias_restantes": None, "mensaje": "", "bloqueado": False, "popup_mora": False}
     est = (inst.estado or "ACTIVA").upper()
-    if est in ("SUSPENDIDA", "ARCHIVADA"):
+    if est == "SUSPENDIDA":
+        # Si no hay deuda real, no bloquear el acceso (queda inconsistente en BD → auto-corregir)
+        try:
+            pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
+            saldo = sum(float(x.valor or 0) for x in pend)
+        except Exception:
+            saldo = 0.0
+        if saldo <= 0:
+            try:
+                inst.estado = "ACTIVA"
+                inst.motivo_bloqueo = ""
+                from datetime import timedelta
+                hoy = ahora().date() if hasattr(ahora(), "date") else __import__("datetime").date.today()
+                venc = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
+                if not venc or venc < hoy:
+                    inst.fecha_vencimiento = (hoy + timedelta(days=30)).isoformat()
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+            return {"estado": "ok", "dias_restantes": None, "mensaje": "", "bloqueado": False, "popup_mora": False}
         return {
-            "estado": "suspendida" if est == "SUSPENDIDA" else "archivada",
+            "estado": "suspendida",
             "dias_restantes": 0,
-            "mensaje": inst.motivo_bloqueo or "Servicio suspendido por mora o cancelación.",
+            "mensaje": inst.motivo_bloqueo or "Servicio suspendido por mora de cartera.",
+            "bloqueado": True,
+            "popup_mora": False,
+        }
+    if est == "ARCHIVADA":
+        return {
+            "estado": "archivada",
+            "dias_restantes": 0,
+            "mensaje": inst.motivo_bloqueo or "Institución archivada.",
             "bloqueado": True,
             "popup_mora": False,
         }
@@ -5455,15 +5485,35 @@ def estado_licencia(inst):
 
 
 def sincronizar_licencias():
-    """Auto-suspende colegios con licencia vencida (fecha_vencimiento < hoy)."""
+    """Auto-suspende SOLO si hay deuda real (facturas PENDIENTE con valor > 0).
+
+    Ya no suspende solo por fecha_vencimiento vencida sin cartera: eso dejaba colegios
+    en $0 como SUSPENDIDA y al reactivar desde Gerencia se volvían a caer solos.
+    """
     try:
         hoy = ahora().date()
         for inst in Institucion.query.filter(Institucion.estado == "ACTIVA").all():
+            try:
+                pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
+                saldo = sum(float(x.valor or 0) for x in pend)
+            except Exception:
+                saldo = 0.0
+            # Sin deuda registrada → no suspender por fecha
+            if saldo <= 0:
+                continue
             venc = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None))
-            if venc and venc < hoy:
+            # Con deuda: suspender si vencimiento pasó, o si hay mora clara
+            if (venc and venc < hoy) or saldo > 0:
+                # Solo auto-suspender por mora de cartera cuando hay saldo pendiente
                 inst.estado = "SUSPENDIDA"
-                inst.fecha_suspension = fecha_hoy()
-                inst.motivo_bloqueo = inst.motivo_bloqueo or f"Licencia vencida el {inst.fecha_vencimiento}. Pago no registrado."
+                try:
+                    inst.fecha_suspension = fecha_hoy()
+                except Exception:
+                    pass
+                inst.motivo_bloqueo = (
+                    inst.motivo_bloqueo
+                    or ("Mora de cartera: saldo pendiente $ %.0f. Regularice el pago." % saldo)
+                )
         db.session.commit()
     except Exception as e:
         print("sincronizar_licencias:", e)
@@ -22610,9 +22660,18 @@ def gerencia_suspender():
         elif accion == "reactivar":
             inst.estado = "ACTIVA"
             inst.motivo_bloqueo = ""
+            # Evitar que se vuelva a suspender solo: alargar vencimiento si está vacío o vencido
+            try:
+                from datetime import timedelta
+                hoy = ahora().date() if hasattr(ahora(), "date") else __import__("datetime").date.today()
+                venc = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
+                if not venc or venc < hoy:
+                    inst.fecha_vencimiento = (hoy + timedelta(days=30)).isoformat()
+            except Exception:
+                pass
             db.session.commit()
-            registrar_auditoria("Reactivar colegio", f"{inst.nombre}")
-            msg = f"Colegio «{inst.nombre}» reactivado."
+            registrar_auditoria("Reactivar colegio", f"{inst.nombre} venc={getattr(inst,'fecha_vencimiento',None)}")
+            msg = f"Colegio «{inst.nombre}» reactivado · licencia hasta {inst.fecha_vencimiento or '—'}."
     filas = ""
     for i in Institucion.query.order_by(Institucion.nombre.asc()).limit(200).all():
         est = i.estado or "—"
