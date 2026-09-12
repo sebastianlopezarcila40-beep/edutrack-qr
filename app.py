@@ -2583,21 +2583,6 @@ class ChangelogVersion(db.Model):
     creado_por = db.Column(db.String(80), default="")
 
 
-class FirmaAutorizada(db.Model):
-    """Firmas digitales de PROCSIS para documentos descargables (recibos, paz y salvo, etc.).
-    Configurables desde Gerencia. No aplica a contratos (esos usan su propio flujo)."""
-    __tablename__ = "firmas_autorizadas"
-    id = db.Column(db.Integer, primary_key=True)
-    slot = db.Column(db.Integer, default=1)  # 1 o 2 (dos firmantes)
-    nombre = db.Column(db.String(120), default="")
-    cargo = db.Column(db.String(160), default="")
-    subtitulo = db.Column(db.String(200), default="")  # ej. "Autorizado por su Madre (Art. 306)"
-    elaboro = db.Column(db.String(120), default="PROCSIS")
-    imagen_path = db.Column(db.String(255), default="")  # /static/uploads/firmas/firma_1.png
-    actualizado_en = db.Column(db.String(30), default="")
-    actualizado_por = db.Column(db.String(80), default="")
-
-
 class ConciliacionBancaria(db.Model):
     """Líneas de conciliación banco vs facturas."""
     __tablename__ = "conciliacion_bancaria"
@@ -5246,51 +5231,6 @@ def guardar_foto_estudiante(file_storage, estudiante_id, institucion_id=None):
             return None
 
 
-def guardar_firma_autorizada(file_storage, slot):
-    """Guarda la imagen de una firma digital (fondo transparente si el PNG lo trae).
-    Ruta: /static/uploads/firmas/firma_{slot}.png"""
-    if not file_storage or not getattr(file_storage, "filename", ""):
-        return None
-    folder = os.path.join(app.root_path, "static", "uploads", "firmas")
-    os.makedirs(folder, exist_ok=True)
-    fname = f"firma_{int(slot)}.png"
-    dest = os.path.join(folder, fname)
-    try:
-        from PIL import Image
-        from io import BytesIO
-        raw = file_storage.read()
-        if not raw:
-            return None
-        im = Image.open(BytesIO(raw))
-        # Conservar transparencia si la trae (fondo blanco si no)
-        if im.mode not in ("RGBA", "LA"):
-            im = im.convert("RGBA")
-        max_w = 500
-        if im.width > max_w:
-            ratio = max_w / im.width
-            im = im.resize((max_w, int(im.height * ratio)), Image.Resampling.LANCZOS)
-        im.save(dest, "PNG", optimize=True)
-        return f"/static/uploads/firmas/{fname}"
-    except Exception as ex:
-        print("guardar_firma_autorizada error:", ex)
-        try:
-            file_storage.seek(0)
-            file_storage.save(dest)
-            return f"/static/uploads/firmas/{fname}"
-        except Exception:
-            return None
-
-
-def _firmas_autorizadas():
-    """Devuelve hasta 2 registros FirmaAutorizada (slot 1 y 2), en orden, o [] si no hay ninguna configurada."""
-    try:
-        db.create_all()
-        rows = FirmaAutorizada.query.order_by(FirmaAutorizada.slot.asc()).limit(2).all()
-        return rows
-    except Exception:
-        return []
-
-
 def _comprimir_imagen_bytes(raw, max_side=200, max_kb=50):
     """Comprime bytes de imagen (biometría, evidencias)."""
     try:
@@ -5888,7 +5828,7 @@ def _dentro_horario_laboral(u):
         return True  # usuarios de colegio: no aplica bloqueo por horario corporativo
     # Soporte y Superadmin: acceso 24/7 (operación crítica)
     rol = (u.rol or "").strip()
-    if rol in ("Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza"):
+    if rol in ("Soporte", "Superadmin", "Gerente", "Comercial"):
         return True
     try:
         from datetime import datetime
@@ -11887,6 +11827,7 @@ def qr_descargar(id):
     e = Estudiante.query.get_or_404(id); img = qrcode.make(qr_texto(e)); b = BytesIO(); img.save(b, format="PNG"); b.seek(0); return send_file(b, mimetype="image/png", as_attachment=True, download_name=f"{e.codigo}.png")
 
 
+
 @app.route("/carnet/<int:id>")
 def carnet(id):
     if not requiere_login():
@@ -11894,65 +11835,83 @@ def carnet(id):
     if not modulo_en_plan("carnes") and rol_actual() != "Soporte":
         return page("Carné", shell("<div class='msg danger'>Carnés no incluidos en su plan.</div>"))
     e = Estudiante.query.get_or_404(id)
-    # Nombres sin punto final; truncar si son muy largos en UI
     inst_nom = (INST_NOMBRE or "Institución educativa").strip().rstrip(".")
     sede = (INST_SEDE or "").strip().rstrip(".")
     nom = ((e.nombre or "") + " " + (e.apellido or "")).strip()
-    nom_show = nom if len(nom) <= 42 else (nom[:40] + "…")
+    nom_show = nom if len(nom) <= 48 else (nom[:46] + "…")
     grado = (e.grado or "").strip().rstrip(".")
     director = (e.director or "").strip().rstrip(".")
     codigo = (e.codigo or "").strip()
+    documento = (getattr(e, "documento", None) or "").strip() or "—"
+    rh = (getattr(e, "rh", None) or "").strip() or "—"
+    acudiente = (getattr(e, "acudiente", None) or "").strip() or "—"
+    tel_acu = (getattr(e, "telefono_acudiente", None) or "").strip() or "—"
+    eps = (getattr(e, "eps", None) or "").strip() or "—"
+    foto = (getattr(e, "foto_path", None) or "").strip()
+    if foto and not foto.startswith("/") and not foto.startswith("http"):
+        foto = "/" + foto.lstrip("/")
+    foto_html = (
+        f'<img src="{_esc(foto)}" alt="Foto" style="width:100%;height:100%;object-fit:cover;display:block">'
+        if foto else
+        '<span style="font-size:10px;color:#94a3b8;text-align:center;line-height:1.2">FOTO<br>3,5 × 4,5</span>'
+    )
     logo = logo_actual()
+    anio = (fecha_hoy() or "2026")[:4] or "2026"
     body = f"""
 <style>
-@page {{ size: A4 landscape; margin: 12mm; }}
+@page {{ size: A4 landscape; margin: 10mm; }}
 * {{ box-sizing: border-box; }}
-body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:#eef2f7; }}
-.toolbar {{ display:flex; gap:10px; justify-content:center; padding:16px; flex-wrap:wrap; }}
+body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:#e8eef5; }}
+.toolbar {{ display:flex; gap:10px; justify-content:center; padding:14px; flex-wrap:wrap; }}
 .toolbar a, .toolbar button {{
   appearance:none; border:1px solid #cbd5e1; cursor:pointer; text-decoration:none;
   background:#0B2D57; color:#fff; font-weight:700; font-size:13px;
-  padding:10px 18px; border-radius:6px; box-shadow:none;
+  padding:10px 18px; border-radius:4px; box-shadow:none;
 }}
 .toolbar a.sec {{ background:#fff; color:#0B2D57; }}
-.stage {{ display:flex; flex-wrap:wrap; gap:28px; justify-content:center; align-items:flex-start; padding:12px 16px 40px; }}
-.side-label {{ text-align:center; font-size:11px; font-weight:700; letter-spacing:.12em; color:#64748b; margin-bottom:8px; text-transform:uppercase; }}
+.stage {{ display:flex; flex-wrap:wrap; gap:32px; justify-content:center; align-items:flex-start; padding:8px 16px 36px; }}
+.side-label {{ text-align:center; font-size:11px; font-weight:700; letter-spacing:.14em; color:#64748b; margin-bottom:8px; text-transform:uppercase; }}
+/* Tamaño grande para vista e impresión (~ tarjeta ampliada) */
 .card {{
-  width: 86mm; height: 54mm; /* CR80 approx for plastic */
-  background:#fff; border-radius:6px; overflow:hidden;
-  border:1px solid #d0d7de; display:flex; flex-direction:column;
-  box-shadow:0 1px 3px rgba(15,23,42,.08);
+  width: 105mm; height: 66mm;
+  background:#fff; border-radius:8px; overflow:hidden;
+  border:1px solid #c5d0dc; display:flex; flex-direction:column;
+  box-shadow:0 2px 8px rgba(15,23,42,.08);
 }}
 .card .top {{
-  background:#0B2D57; color:#fff; padding:8px 10px; display:flex; align-items:center; gap:8px;
-  min-height:28px;
+  background:#0B2D57; color:#fff; padding:7px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px;
 }}
-.card .top img {{ height:22px; width:auto; background:#fff; border-radius:4px; padding:2px; }}
-.card .top .brand {{ font-size:10px; font-weight:800; letter-spacing:.06em; }}
-.card .mid {{ flex:1; padding:8px 10px; display:flex; gap:8px; align-items:center; }}
-.card .info {{ flex:1; min-width:0; }}
+.card .top img {{ height:26px; width:auto; background:#fff; border-radius:4px; padding:2px; }}
+.card .top .brand {{ font-size:12px; font-weight:800; letter-spacing:.08em; }}
+.card .vig {{ font-size:9px; font-weight:800; background:#facc15; color:#0f172a; padding:3px 8px; border-radius:3px; letter-spacing:.04em; white-space:nowrap; }}
+.card .mid {{ flex:1; padding:10px 12px; display:flex; gap:12px; align-items:stretch; }}
+.card .foto {{
+  width: 35mm; height: 45mm; /* 3,5 × 4,5 cm */
+  flex:0 0 auto; border:1px solid #cbd5e1; border-radius:4px; overflow:hidden;
+  background:#f1f5f9; display:flex; align-items:center; justify-content:center;
+}}
+.card .info {{ flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }}
 .card .info h2 {{
-  margin:0 0 4px; font-size:13px; color:#0B2D57; font-weight:800; line-height:1.2;
-  word-break:break-word; max-height:2.4em; overflow:hidden;
+  margin:0 0 6px; font-size:15px; color:#0B2D57; font-weight:800; line-height:1.2;
+  word-break:break-word;
 }}
-.card .info p {{ margin:0 0 2px; font-size:10px; color:#334155; }}
-.card .info .cod {{ font-weight:800; color:#0B2D57; font-size:11px; margin-top:4px; }}
-.card .foto {{ width:44px; height:54px; object-fit:cover; border-radius:4px; border:1px solid #d0d7de; flex:0 0 auto; background:#eef2f7; }}
-.card .foto-ph {{ width:44px; height:54px; border-radius:4px; border:1px dashed #94a3b8; background:#eef2f7; flex:0 0 auto; display:flex; align-items:center; justify-content:center; text-align:center; font-size:7px; color:#64748b; line-height:1.2; }}
-.card .qr-wrap {{ flex-shrink:0; width:72px; text-align:center; }}
-.card .qr-wrap img {{ width:70px; height:70px; }}
+.card .info p {{ margin:0 0 3px; font-size:11px; color:#334155; }}
+.card .info .cod {{ font-weight:800; color:#0B2D57; font-size:12px; margin-top:4px; }}
 .card .bot {{
-  background:#0B2D57; color:#fff; font-size:9px; text-align:center;
-  padding:4px 8px; letter-spacing:.04em;
+  background:#0B2D57; color:#fff; font-size:10px; text-align:center;
+  padding:5px 10px; letter-spacing:.03em;
 }}
-.card.back .mid {{ justify-content:center; flex-direction:column; text-align:center; }}
-.card.back .mid img {{ width:90px; height:90px; }}
-.card.back .hint {{ font-size:9px; color:#64748b; margin-top:6px; }}
+.card.back .mid {{ flex-direction:column; padding:8px 12px; gap:6px; }}
+.card.back .legal {{ font-size:7.5px; line-height:1.35; color:#1e293b; text-align:left; }}
+.card.back .legal b {{ color:#0B2D57; }}
+.card.back .qr-row {{ display:flex; gap:10px; align-items:center; }}
+.card.back .qr-row img {{ width:72px; height:72px; flex:0 0 auto; }}
+.card.back .emer {{ font-size:8px; color:#334155; line-height:1.35; }}
 @media print {{
   body {{ background:#fff; }}
   .toolbar {{ display:none !important; }}
-  .stage {{ gap:16mm; padding:0; }}
-  .card {{ box-shadow:none; page-break-inside:avoid; }}
+  .stage {{ gap:12mm; padding:0; }}
+  .card {{ box-shadow:none; page-break-inside:avoid; width:105mm; height:66mm; }}
 }}
 </style>
 <div class="toolbar no-print">
@@ -11965,31 +11924,51 @@ body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:
     <div class="side-label">Anverso</div>
     <div class="card">
       <div class="top">
-        <img src="{logo}" alt="">
-        <span class="brand">EDUTRACK</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <img src="{logo}" alt="">
+          <span class="brand">EDUTRACK</span>
+        </div>
+        <span class="vig">VIGENCIA: AÑO LECTIVO {anio}</span>
       </div>
       <div class="mid">
-        {'<img class="foto" src="'+_esc(e.foto_path)+'" alt="Foto">' if getattr(e, 'foto_path', None) else '<div class="foto-ph">FOTO<br>ESTU&shy;DIANTE</div>'}
+        <div class="foto">{foto_html}</div>
         <div class="info">
-          <h2 title="{nom}">{nom_show}</h2>
-          <p>Grado {grado}</p>
-          <p>Director: {director or "—"}</p>
-          <p class="cod">Código: {codigo}</p>
+          <h2 title="{_esc(nom)}">{_esc(nom_show)}</h2>
+          <p>Grado {_esc(grado)}</p>
+          <p>Director: {_esc(director or "—")}</p>
+          <p>Documento: T.I. / C.C. {_esc(documento)}</p>
+          <p>Tipo de sangre · RH: {_esc(rh)}</p>
+          <p class="cod">Código: {_esc(codigo)}</p>
         </div>
-        <div class="qr-wrap"><img src="/qr/{e.id}" alt="QR"></div>
       </div>
-      <div class="bot">{inst_nom} · Sede {sede}</div>
+      <div class="bot">{_esc(inst_nom)} · Sede {_esc(sede)}</div>
     </div>
   </div>
   <div>
     <div class="side-label">Reverso</div>
     <div class="card back">
-      <div class="top"><span class="brand">CONTROL DE ACCESO</span></div>
+      <div class="top"><span class="brand">CONTROL DE ACCESO · PROPIEDAD INSTITUCIONAL</span></div>
       <div class="mid">
-        <img src="/qr/{e.id}" alt="QR">
-        <div class="hint">Si el QR no escanea, digite el código<br><b>{codigo}</b></div>
+        <div class="qr-row">
+          <img src="/qr/{e.id}" alt="QR">
+          <div class="legal">
+            <b>PROPIEDAD INSTITUCIONAL</b><br>
+            Este carné es un documento público-institucional, de carácter privado, personal e intransferible.
+            Identifica al titular como estudiante activo de <b>{_esc(inst_nom)}</b>.
+            <br><br>
+            <b>CONDICIONES DE USO:</b><br>
+            1. Obligatorio presentarlo y escanearlo en portería (ingreso/salida) vía EduTrack.<br>
+            2. Uso indebido, préstamo, alteración o falsificación se sanciona según el Manual de Convivencia.<br>
+            3. Pérdida o hurto: reportar de inmediato a secretaría para bloquear el QR y tramitar duplicado.
+          </div>
+        </div>
+        <div class="emer">
+          <b>EN CASO DE EMERGENCIA COMUNICARSE A:</b><br>
+          Acudiente: {_esc(acudiente)} · Tel: {_esc(tel_acu)} · EPS: {_esc(eps)}<br>
+          Si el QR no escanea, digite el código <b>{_esc(codigo)}</b>
+        </div>
       </div>
-      <div class="bot">EduTrack · Portería</div>
+      <div class="bot">Tecnología de control de acceso operada por PROCSIS © {anio}</div>
     </div>
   </div>
 </div>
@@ -12004,89 +11983,168 @@ def nombre_archivo_carnet(e):
 
 @app.route("/carnet_descargar/<int:id>")
 def carnet_descargar(id):
-    if not requiere_login(): return redirect("/login")
-    if rol_actual() not in ["Secretaría", "Coordinación", "Administrador", "Soporte", "Rectoría"]: return acceso_denegado()
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ["Secretaría", "Coordinación", "Administrador", "Soporte", "Rectoría"]:
+        return acceso_denegado()
     e = Estudiante.query.get_or_404(id)
+    from reportlab.lib.utils import ImageReader
+    from reportlab.lib.pagesizes import A4, landscape as _landscape
+
+    inst_nom = (INST_NOMBRE or "Institución educativa").strip().rstrip(".")
+    sede = (INST_SEDE or "").strip().rstrip(".")
+    nom = ((e.nombre or "") + " " + (e.apellido or "")).strip()
+    grado = (e.grado or "").strip()
+    director = (e.director or "").strip() or "—"
+    codigo = (e.codigo or "").strip()
+    documento = (getattr(e, "documento", None) or "").strip() or "—"
+    rh = (getattr(e, "rh", None) or "").strip() or "—"
+    acudiente = (getattr(e, "acudiente", None) or "").strip() or "—"
+    tel_acu = (getattr(e, "telefono_acudiente", None) or "").strip() or "—"
+    eps = (getattr(e, "eps", None) or "").strip() or "—"
+    anio = (fecha_hoy() or "2026")[:4] or "2026"
+
     b = BytesIO()
-    pdf = canvas.Canvas(b, pagesize=letter)
+    pdf = canvas.Canvas(b, pagesize=_landscape(A4))
     pdf.setTitle(f"Carné {estudiante_nombre(e)}")
-    width, height = letter
-    card_w, card_h = 230, 430
-    x = (width - card_w) / 2
-    y = height - card_h - 55
-    pdf.setFillColor(colors.white)
-    pdf.roundRect(x, y, card_w, card_h, 18, fill=1, stroke=0)
-    pdf.setStrokeColor(colors.HexColor('#dbeafe'))
-    pdf.setLineWidth(1)
-    pdf.roundRect(x, y, card_w, card_h, 18, fill=0, stroke=1)
-    pdf.setFillColor(colors.HexColor('#0b4fae'))
-    pdf.roundRect(x+15, y+card_h-125, card_w-30, 110, 14, fill=1, stroke=0)
-    pdf.setFillColor(colors.HexColor('#facc15'))
-    pdf.roundRect(x+15, y+card_h-128, card_w-30, 8, 4, fill=1, stroke=0)
-    try:
-        pdf.drawImage(logo_fs(), x+card_w/2-28, y+card_h-58, width=56, height=56, preserveAspectRatio=True, mask='auto')
-    except Exception:
-        pass
-    pdf.setFillColor(colors.white)
-    pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawCentredString(x+card_w/2, y+card_h-78, "INSTITUCIÓN EDUCATIVA")
-    pdf.drawCentredString(x+card_w/2, y+card_h-92, (INST_NOMBRE or "INSTITUCIÓN EDUCATIVA")[:40])
-    pdf.setFont("Helvetica", 8)
-    pdf.drawCentredString(x+card_w/2, y+card_h-112, f"Sede {INST_SEDE}")
-    # Foto del estudiante (si fue cargada) justo debajo del encabezado azul
-    foto_h = 78
-    foto_top = y+card_h-135
+    width, height = _landscape(A4)
+
+    # Tarjetas grandes centradas (aprox 105×66 mm en puntos: 1mm≈2.834)
+    card_w, card_h = 298, 187  # ~105mm x 66mm
+    gap = 28
+    total_w = card_w * 2 + gap
+    x0 = (width - total_w) / 2
+    y0 = (height - card_h) / 2
+
+    def draw_rounded_card(x, y, w, h):
+        pdf.setFillColor(colors.white)
+        pdf.setStrokeColor(colors.HexColor("#c5d0dc"))
+        pdf.setLineWidth(1)
+        pdf.roundRect(x, y, w, h, 8, fill=1, stroke=1)
+
+    def header_bar(x, y, w, h, title_left, title_right=None):
+        pdf.setFillColor(colors.HexColor("#0B2D57"))
+        pdf.rect(x, y + h - 28, w, 28, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(x + 10, y + h - 18, title_left[:42])
+        if title_right:
+            pdf.setFillColor(colors.HexColor("#facc15"))
+            tw = pdf.stringWidth(title_right, "Helvetica-Bold", 7) + 10
+            pdf.roundRect(x + w - tw - 8, y + h - 22, tw, 14, 2, fill=1, stroke=0)
+            pdf.setFillColor(colors.HexColor("#0f172a"))
+            pdf.setFont("Helvetica-Bold", 7)
+            pdf.drawString(x + w - tw - 3, y + h - 17, title_right)
+
+    def footer_bar(x, y, w, text):
+        pdf.setFillColor(colors.HexColor("#0B2D57"))
+        pdf.rect(x, y, w, 18, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica", 7)
+        pdf.drawCentredString(x + w / 2, y + 6, text[:70])
+
+    # ——— ANVERSO (sin QR) ———
+    x, y = x0, y0
+    draw_rounded_card(x, y, card_w, card_h)
+    header_bar(x, y, card_w, card_h, "EDUTRACK", f"VIGENCIA: AÑO LECTIVO {anio}")
+    # Foto 3,5×4,5 cm ≈ 99×128 pt
+    foto_w, foto_h = 99, 128
+    fx, fy = x + 12, y + 28
+    pdf.setStrokeColor(colors.HexColor("#cbd5e1"))
+    pdf.setFillColor(colors.HexColor("#f1f5f9"))
+    pdf.rect(fx, fy, foto_w, foto_h, fill=1, stroke=1)
     foto_path = (getattr(e, "foto_path", None) or "").strip()
-    foto_dibujada = False
     if foto_path:
         try:
-            foto_fs = os.path.join(app.root_path, foto_path.lstrip("/"))
-            if os.path.isfile(foto_fs):
-                pdf.drawImage(foto_fs, x+card_w/2-foto_h/2, foto_top-foto_h, width=foto_h, height=foto_h,
-                               preserveAspectRatio=True, anchor='c', mask='auto')
-                foto_dibujada = True
+            import os as _os
+            candidates = [foto_path, _os.path.join("static", foto_path.lstrip("/")), foto_path.lstrip("/")]
+            drawn = False
+            for pth in candidates:
+                if pth and _os.path.isfile(pth):
+                    pdf.drawImage(pth, fx, fy, width=foto_w, height=foto_h, preserveAspectRatio=True, mask="auto")
+                    drawn = True
+                    break
+            if not drawn:
+                pdf.setFillColor(colors.HexColor("#94a3b8"))
+                pdf.setFont("Helvetica", 8)
+                pdf.drawCentredString(fx + foto_w / 2, fy + foto_h / 2, "FOTO 3,5×4,5")
         except Exception:
-            pass
-    if not foto_dibujada:
-        pdf.setStrokeColor(colors.HexColor('#94a3b8'))
-        pdf.setDash(2, 2)
-        pdf.roundRect(x+card_w/2-foto_h/2, foto_top-foto_h, foto_h, foto_h, 6, fill=0, stroke=1)
-        pdf.setDash()
-        pdf.setFillColor(colors.HexColor('#94a3b8'))
-        pdf.setFont("Helvetica", 6.5)
-        pdf.drawCentredString(x+card_w/2, foto_top-foto_h/2+3, "FOTO")
-        pdf.drawCentredString(x+card_w/2, foto_top-foto_h/2-6, "ESTUDIANTE")
-    pdf.setFillColor(colors.HexColor('#111827'))
-    pdf.setFont("Helvetica-Bold", 13)
-    nombre = estudiante_nombre(e)
-    if len(nombre) > 28:
-        partes = nombre.split()
-        mitad = max(1, len(partes)//2)
-        pdf.drawCentredString(x+card_w/2, foto_top-foto_h-26, " ".join(partes[:mitad])[:28])
-        pdf.drawCentredString(x+card_w/2, foto_top-foto_h-44, " ".join(partes[mitad:])[:28])
-        text_y = foto_top-foto_h-74
+            pdf.setFillColor(colors.HexColor("#94a3b8"))
+            pdf.setFont("Helvetica", 8)
+            pdf.drawCentredString(fx + foto_w / 2, fy + foto_h / 2, "FOTO 3,5×4,5")
     else:
-        pdf.drawCentredString(x+card_w/2, foto_top-foto_h-33, nombre)
-        text_y = foto_top-foto_h-66
+        pdf.setFillColor(colors.HexColor("#94a3b8"))
+        pdf.setFont("Helvetica", 8)
+        pdf.drawCentredString(fx + foto_w / 2, fy + foto_h / 2 - 4, "FOTO")
+        pdf.drawCentredString(fx + foto_w / 2, fy + foto_h / 2 - 14, "3,5 × 4,5 cm")
+
+    tx = fx + foto_w + 12
+    pdf.setFillColor(colors.HexColor("#0B2D57"))
+    pdf.setFont("Helvetica-Bold", 11)
+    # nombre en 2 líneas si es largo
+    if len(nom) > 28:
+        pdf.drawString(tx, y + card_h - 48, nom[:28])
+        pdf.drawString(tx, y + card_h - 62, nom[28:56])
+        base_y = y + card_h - 78
+    else:
+        pdf.drawString(tx, y + card_h - 50, nom[:32])
+        base_y = y + card_h - 66
+    pdf.setFillColor(colors.HexColor("#334155"))
     pdf.setFont("Helvetica", 9)
-    pdf.drawCentredString(x+card_w/2, text_y, f"Grado: {e.grado}")
-    pdf.drawCentredString(x+card_w/2, text_y-24, f"Director: {e.director or 'No registrado'}"[:42])
-    pdf.drawCentredString(x+card_w/2, text_y-48, f"Código: {e.codigo}")
-    qr_img = qrcode.make(qr_texto(e))
-    qr_b = BytesIO(); qr_img.save(qr_b, format="PNG"); qr_b.seek(0)
+    pdf.drawString(tx, base_y, f"Grado {grado}"[:40])
+    pdf.drawString(tx, base_y - 14, f"Director: {director}"[:42])
+    pdf.drawString(tx, base_y - 28, f"Documento: T.I. / C.C. {documento}"[:48])
+    pdf.drawString(tx, base_y - 42, f"Tipo de sangre · RH: {rh}"[:40])
+    pdf.setFillColor(colors.HexColor("#0B2D57"))
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(tx, base_y - 58, f"Código: {codigo}"[:36])
+    footer_bar(x, y, card_w, f"{inst_nom} · Sede {sede}")
+
+    # ——— REVERSO (QR + cláusulas) ———
+    x2 = x0 + card_w + gap
+    draw_rounded_card(x2, y0, card_w, card_h)
+    header_bar(x2, y0, card_w, card_h, "CONTROL DE ACCESO · PROPIEDAD INSTITUCIONAL")
+    # QR
     try:
-        from reportlab.lib.utils import ImageReader
-        pdf.drawImage(ImageReader(qr_b), x+card_w/2-46, max(y+30, text_y-140), width=92, height=92, preserveAspectRatio=True, mask='auto')
+        qr_img = qrcode.make(qr_texto(e) if "qr_texto" in dir() else (codigo or str(e.id)))
+        qr_b = BytesIO()
+        qr_img.save(qr_b, format="PNG")
+        qr_b.seek(0)
+        pdf.drawImage(ImageReader(qr_b), x2 + 10, y0 + 55, width=78, height=78, preserveAspectRatio=True, mask="auto")
     except Exception:
         pass
-    pdf.setFont("Helvetica", 8)
-    pdf.drawCentredString(x+card_w/2, y+22, APP_NAME)
+    pdf.setFillColor(colors.HexColor("#0B2D57"))
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.drawString(x2 + 95, y0 + card_h - 42, "PROPIEDAD INSTITUCIONAL")
+    pdf.setFillColor(colors.HexColor("#1e293b"))
+    pdf.setFont("Helvetica", 6.5)
+    texto_legal = [
+        f"Documento privado, personal e intransferible. Identifica al titular",
+        f"como estudiante activo de {inst_nom[:40]}.",
+        "",
+        "CONDICIONES DE USO:",
+        "1. Obligatorio presentarlo y escanearlo en portería (EduTrack).",
+        "2. Uso indebido o falsificación: sanción según Manual de Convivencia.",
+        "3. Pérdida/hurto: reportar a secretaría para bloquear el QR.",
+        "",
+        "EN CASO DE EMERGENCIA:",
+        f"Acudiente: {acudiente[:36]}",
+        f"Tel: {tel_acu[:28]}  ·  EPS: {eps[:28]}",
+        f"Si el QR no escanea, digite: {codigo}",
+    ]
+    ly = y0 + card_h - 52
+    for line in texto_legal:
+        pdf.drawString(x2 + 95, ly, line[:55])
+        ly -= 9
+    footer_bar(x2, y0, card_w, f"Tecnología de control de acceso operada por PROCSIS © {anio}")
+
     pdf.setFont("Helvetica", 7)
-    pdf.drawCentredString(width/2, 12, f"Generado por {APP_NAME} · {fecha_hoy()} {hora_actual()}")
-    pdf.save(); b.seek(0)
+    pdf.setFillColor(colors.HexColor("#64748b"))
+    pdf.drawCentredString(width / 2, 18, f"Generado por {APP_NAME} · {fecha_hoy()} {hora_actual()} · Anverso + Reverso")
+    pdf.save()
+    b.seek(0)
     registrar_auditoria("Descargar carné", f"{e.codigo} - {estudiante_nombre(e)}")
     return send_file(b, as_attachment=True, download_name=nombre_archivo_carnet(e), mimetype="application/pdf")
-
 
 
 
@@ -24834,14 +24892,10 @@ def gerencia_facturacion():
         _migrate_facturas_cobro_columns()
     except Exception:
         pass
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Comercial", "Cobranza"):
-        return redirect("/cobranza-login" if rol_actual() == "Cobranza" else "/gerencia-login")
-    es_cobranza = rol_actual() == "Cobranza"
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Comercial"):
+        return redirect("/gerencia-login")
     msg = error = ""
     if request.method == "POST":
-        if es_cobranza:
-            # Cobranza solo consulta/descarga recibos; no crea, edita valores ni cambia estados a mano.
-            return redirect("/gerencia/facturacion")
         accion = (request.form.get("accion") or "").strip()
         if accion == "estado":
             try:
@@ -24982,21 +25036,6 @@ def gerencia_facturacion():
         lab = f"{meses_es[m-1]} {y}"
         sel = " selected" if off == 0 else ""
         mes_opts += f'<option value="{val}"{sel}>{lab}</option>'
-    def _bloque_acciones_recibo(f, cons, est):
-        return f"""<form method="POST" action="/gerencia/facturacion/{f.id}/eliminar" style="display:inline;margin-left:4px" onsubmit="return confirm('¿Eliminar recibo {cons}?');">
-              <button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:5px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Eliminar</button>
-            </form>
-            <form method="POST" style="display:inline;margin-left:4px">
-              <input type="hidden" name="accion" value="estado">
-              <input type="hidden" name="factura_id" value="{f.id}">
-              <select name="nuevo_estado" style="font-size:11px;padding:4px">
-                <option value="PENDIENTE" {"selected" if est=="PENDIENTE" else ""}>Pendiente</option>
-                <option value="PAGADO" {"selected" if est=="PAGADO" else ""}>Pagado</option>
-                <option value="VENCIDO" {"selected" if est=="VENCIDO" else ""}>Vencido</option>
-                <option value="ANULADO" {"selected" if est=="ANULADO" else ""}>Anulado</option>
-              </select>
-              <button class="btn-ok" type="submit">OK</button>
-            </form>"""
     facturas = FacturaCobro.query.order_by(FacturaCobro.id.desc()).limit(80).all()
     filas = ""
     for f in facturas:
@@ -25026,7 +25065,20 @@ def gerencia_facturacion():
           <td style="white-space:nowrap">
             <a class="btn-pdf" href="/gerencia/facturacion/{f.id}/pdf" target="_blank" title="PDF">PDF</a>
             <a class="btn-mail" href="mailto:?subject=Recibo%20{cons}%20EduTrack&body=Adjunto%20recibo%20{cons}%20por%20{val_txt}.%20Descargue%20en%20el%20sistema%20o%20solicite%20reenvío." title="Correo">✉</a>
-            {_bloque_acciones_recibo(f, cons, est) if not es_cobranza else ""}
+            <form method="POST" action="/gerencia/facturacion/{f.id}/eliminar" style="display:inline;margin-left:4px" onsubmit="return confirm('¿Eliminar recibo {cons}?');">
+              <button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:5px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Eliminar</button>
+            </form>
+            <form method="POST" style="display:inline;margin-left:4px">
+              <input type="hidden" name="accion" value="estado">
+              <input type="hidden" name="factura_id" value="{f.id}">
+              <select name="nuevo_estado" style="font-size:11px;padding:4px">
+                <option value="PENDIENTE" {"selected" if est=="PENDIENTE" else ""}>Pendiente</option>
+                <option value="PAGADO" {"selected" if est=="PAGADO" else ""}>Pagado</option>
+                <option value="VENCIDO" {"selected" if est=="VENCIDO" else ""}>Vencido</option>
+                <option value="ANULADO" {"selected" if est=="ANULADO" else ""}>Anulado</option>
+              </select>
+              <button class="btn-ok" type="submit">OK</button>
+            </form>
           </td>
         </tr>"""
     body = f"""
@@ -25056,7 +25108,7 @@ def gerencia_facturacion():
 .fx .hint{{font-size:12px;color:#64748b;margin-top:4px}}
 </style>
 <div class="fx"><div class="fx-in">
-  <a class="back" href="/gerencia/hq">← Módulos HQ</a> &nbsp;·&nbsp; <a class="back" href="/gerencia/limpieza">Limpieza de datos</a> &nbsp;·&nbsp; <a class="back" href="/gerencia/lideres">Nuestros líderes</a>{'' if es_cobranza else ' &nbsp;·&nbsp; <a class="back" href="/gerencia/firmas">Firmas digitales</a>'}
+  <a class="back" href="/gerencia/hq">← Módulos HQ</a> &nbsp;·&nbsp; <a class="back" href="/gerencia/limpieza">Limpieza de datos</a> &nbsp;·&nbsp; <a class="back" href="/gerencia/lideres">Nuestros líderes</a>
   <h1>Recibos / Facturación interna</h1>
   <p class="sub">Pre-sistema (cuenta de cobro). No es factura electrónica DIAN. Autocompleta colegio, plan y valor.</p>
   <div class="next">Próximo consecutivo a generar: {next_cons}</div>
@@ -25077,7 +25129,7 @@ def gerencia_facturacion():
       </table>
     </div>
   </div>
-  {"" if es_cobranza else f'''<div class="fx-card">
+  <div class="fx-card">
     <h2 style="margin:0 0 8px;font-size:16px;color:#0B2D57">Generar recibo</h2>
     <form method="POST" id="formRecibo">
       <label>Colegio</label>
@@ -25114,10 +25166,7 @@ def gerencia_facturacion():
       <p class="hint">El valor se calcula solo (plan + add-ons). Puede editarlo para descuentos.</p>
       <button class="gen" type="submit">Generar recibo interno</button>
     </form>
-  </div>'''}
-  {'''<div class="fx-card" style="border-left:4px solid #0B2D57">
-    <p class="hint" style="font-size:13px;color:#334155;margin:0">📄 Consulta y descarga de recibos. Los valores vienen fijos del plan del colegio: aquí no se editan montos ni se eliminan recibos históricos.</p>
-  </div>''' if es_cobranza else ""}
+  </div>
   <div class="fx-card" id="historial">
     <h2 style="margin:0 0 12px;font-size:16px;color:#0B2D57">Historial de recibos generados</h2>
     <div style="overflow-x:auto">
@@ -25186,181 +25235,16 @@ def gerencia_facturacion():
       }})
       .catch(function(){{ hint.textContent = 'No se pudo cargar la tarifa del colegio.'; }});
   }}
-  if (sel) {{
-    sel.addEventListener('change', loadInst);
-    tipo.addEventListener('change', recalc);
-    ia.addEventListener('change', recalc);
-    mig.addEventListener('change', recalc);
-    s247.addEventListener('change', recalc);
-    ciclo.addEventListener('change', recalc);
-    moneda.addEventListener('change', recalc);
-  }}
+  sel.addEventListener('change', loadInst);
+  tipo.addEventListener('change', recalc);
+  ia.addEventListener('change', recalc);
+  sede.addEventListener('change', recalc);
+  ciclo.addEventListener('change', recalc);
+  moneda.addEventListener('change', recalc);
 }})();
 </script>
 """
     return page("Facturación interna", body)
-
-
-def _bloque_firmas_procsis(ancho_total_cm=17.8, titulo="Firmas autorizadas"):
-    """Bloque reutilizable de firmas digitales configuradas en Gerencia (/gerencia/firmas).
-    Úsalo en cualquier PDF descargable de PROCSIS (recibos, paz y salvo, comprobantes) EXCEPTO contratos.
-    Devuelve una lista de flowables para agregar al story de un documento reportlab."""
-    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image as RLImage
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER
-    from reportlab.lib.units import cm
-    from reportlab.lib.colors import HexColor
-    import os as _os
-
-    st_titulo = ParagraphStyle("FBTitulo", fontName="Helvetica-Bold", fontSize=9, textColor=HexColor("#0B2D57"))
-    st_nombre = ParagraphStyle("FBNombre", fontName="Helvetica-Bold", fontSize=9.5, textColor=HexColor("#0f172a"), alignment=TA_CENTER)
-    st_cargo = ParagraphStyle("FBCargo", fontName="Helvetica", fontSize=8, textColor=HexColor("#334155"), alignment=TA_CENTER)
-    st_linea = ParagraphStyle("FBLinea", fontName="Helvetica", fontSize=9, textColor=HexColor("#94a3b8"), alignment=TA_CENTER)
-    st_sub = ParagraphStyle("FBSub", fontName="Helvetica-Oblique", fontSize=7.5, textColor=HexColor("#64748b"), alignment=TA_CENTER)
-    st_elaboro = ParagraphStyle("FBElaboro", fontName="Helvetica", fontSize=7, textColor=HexColor("#94a3b8"), alignment=TA_CENTER)
-
-    firmas = _firmas_autorizadas()
-    slots = [next((x for x in firmas if x.slot == i), None) for i in (1, 2)]
-
-    celdas = []
-    elaboro_txt = ""
-    for f in slots:
-        partes = []
-        img_ok = False
-        if f and (f.imagen_path or "").strip():
-            try:
-                ruta_fs = _os.path.join(app.root_path, f.imagen_path.lstrip("/"))
-                if _os.path.isfile(ruta_fs):
-                    partes.append(RLImage(ruta_fs, width=3.6*cm, height=1.7*cm, kind='proportional'))
-                    img_ok = True
-            except Exception:
-                pass
-        if not img_ok:
-            partes.append(Spacer(1, 14))
-            partes.append(Paragraph("_______________________________", st_linea))
-        nombre_txt = (f.nombre if f and (f.nombre or "").strip() else "Firma autorizada").strip().upper()
-        cargo_txt = (f.cargo if f and (f.cargo or "").strip() else "Representante · Procsis")
-        partes.append(Spacer(1, 4))
-        partes.append(Paragraph(nombre_txt, st_nombre))
-        partes.append(Paragraph(cargo_txt, st_cargo))
-        if f and (f.subtitulo or "").strip():
-            partes.append(Paragraph(f.subtitulo, st_sub))
-        if f and (f.elaboro or "").strip():
-            elaboro_txt = f.elaboro
-        celdas.append(partes)
-
-    tbl = Table([celdas], colWidths=[(ancho_total_cm / 2) * cm] * 2)
-    tbl.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.6, HexColor("#cbd5e1")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.6, HexColor("#cbd5e1")),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-    ]))
-
-    out = []
-    if titulo:
-        out.append(Paragraph(titulo, st_titulo))
-        out.append(Spacer(1, 4))
-    out.append(tbl)
-    if elaboro_txt:
-        out.append(Spacer(1, 4))
-        out.append(Paragraph(f"Elaboró: {elaboro_txt}", st_elaboro))
-    return out
-
-
-@app.route("/gerencia/firmas", methods=["GET", "POST"])
-def gerencia_firmas():
-    """Configura las 2 firmas digitales (imagen + nombre + cargo) que aparecen en los
-    documentos descargables de PROCSIS (recibos, paz y salvo, comprobantes). No aplica a contratos."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
-        return redirect("/gerencia-login")
-    try:
-        db.create_all()
-    except Exception:
-        pass
-    msg = error = ""
-    if request.method == "POST":
-        try:
-            slot = int(request.form.get("slot") or 0)
-        except Exception:
-            slot = 0
-        if slot not in (1, 2):
-            error = "Firma inválida."
-        else:
-            f = FirmaAutorizada.query.filter_by(slot=slot).first()
-            if not f:
-                f = FirmaAutorizada(slot=slot)
-                db.session.add(f)
-            f.nombre = (request.form.get("nombre") or "").strip()[:120]
-            f.cargo = (request.form.get("cargo") or "").strip()[:160]
-            f.subtitulo = (request.form.get("subtitulo") or "").strip()[:200]
-            f.elaboro = (request.form.get("elaboro") or "PROCSIS").strip()[:120]
-            imagen_f = request.files.get("imagen")
-            if imagen_f and getattr(imagen_f, "filename", ""):
-                ruta = guardar_firma_autorizada(imagen_f, slot)
-                if ruta:
-                    f.imagen_path = ruta
-                else:
-                    error = "No se pudo guardar la imagen de la firma (formato no soportado)."
-            f.actualizado_en = f"{fecha_hoy()} {hora_actual()}"
-            f.actualizado_por = session.get("usuario") or ""
-            if not error:
-                db.session.commit()
-                registrar_auditoria("Firma digital actualizada", f"slot {slot} · {f.nombre}")
-                msg = f"Firma {slot} guardada."
-    firmas = {f.slot: f for f in FirmaAutorizada.query.all()}
-
-    def _panel(slot):
-        f = firmas.get(slot)
-        prev = ""
-        if f and (f.imagen_path or "").strip():
-            prev = f"<img src='{_esc(f.imagen_path)}' style='max-width:220px;max-height:90px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;background:#fff;padding:6px'>"
-        else:
-            prev = "<div style='width:220px;height:90px;border:1px dashed #94a3b8;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px'>Sin firma cargada</div>"
-        nombre_v = _esc(f.nombre) if f else ""
-        cargo_v = _esc(f.cargo) if f else ""
-        sub_v = _esc(f.subtitulo) if f else ""
-        elaboro_v = _esc(f.elaboro) if f and f.elaboro else "PROCSIS"
-        return f"""
-  <div class="w32-box" style="max-width:480px">
-    <div class="w32-title">FIRMA {slot}</div>
-    <div style="background:#fff;padding:12px;border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080">
-      <div style="text-align:center;margin-bottom:10px">{prev}</div>
-      <form method="POST" enctype="multipart/form-data" style="display:grid;gap:8px">
-        <input type="hidden" name="slot" value="{slot}">
-        <div><label style="font-size:12px;font-weight:700">Imagen de la firma (PNG, fondo transparente recomendado)</label>
-        <input type="file" name="imagen" accept="image/*" style="width:100%;padding:6px"></div>
-        <div><label style="font-size:12px;font-weight:700">Nombre completo</label>
-        <input name="nombre" value="{nombre_v}" placeholder="Ej. Sebastian Lopez Arcila" style="width:100%;padding:8px"></div>
-        <div><label style="font-size:12px;font-weight:700">Cargo</label>
-        <input name="cargo" value="{cargo_v}" placeholder="Ej. Gerente General PROCSIS" style="width:100%;padding:8px"></div>
-        <div><label style="font-size:12px;font-weight:700">Subtítulo (opcional)</label>
-        <input name="subtitulo" value="{sub_v}" placeholder="Ej. Autorizado por su Madre (Art. 306)" style="width:100%;padding:8px"></div>
-        <div><label style="font-size:12px;font-weight:700">Elaboró</label>
-        <input name="elaboro" value="{elaboro_v}" style="width:100%;padding:8px"></div>
-        <div><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px;border-radius:4px;font-weight:700">Guardar firma {slot}</button></div>
-      </form>
-    </div>
-  </div>"""
-
-    body = f"""
-<header class="role-hero"><div>
-  <h1>Firmas digitales</h1>
-  <p>Firmas que aparecen en recibos, paz y salvo y comprobantes de PROCSIS (no aplica a contratos)</p>
-</div>
-<a class="btn" href="/gerencia/facturacion">← Facturación</a></header>
-<section class="role-panel">
-  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-  {"<div class='msg danger'>"+_esc(error)+"</div>" if error else ""}
-  <div style="display:flex;flex-wrap:wrap;gap:16px">
-    {_panel(1)}
-    {_panel(2)}
-  </div>
-</section>
-"""
-    return page("Firmas digitales", shell(body))
 
 
 @app.route("/gerencia/facturacion/<int:fid>/pdf")
@@ -25609,12 +25493,10 @@ def gerencia_factura_pdf(fid):
     except Exception:
         pass
 
-    es_pagado = (est == "PAGADO")
-    titulo_doc = "Recibo de Caja · Paz y Salvo" if es_pagado else "Cuenta de Cobro / Factura Temporal"
     head_left = [
         Paragraph(f"Hola, {colegio}", styles["Hi"]),
         Paragraph(
-            f"{titulo_doc} · <b>{cons}</b><br/>"
+            f"Cuenta de Cobro Interna · <b>{cons}</b><br/>"
             f"Fecha de expedición: {exped_txt}<br/>"
             f"Periodo facturado: {periodo_txt}",
             styles["HiSub"],
@@ -25633,42 +25515,6 @@ def gerencia_factura_pdf(fid):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
     ]))
     story.append(head_tbl)
-    story.append(Spacer(1, 6))
-
-    # —— Sello de estado: PAGADO (verde) o advertencia de deuda pendiente (rojo) ——
-    styles.add(ParagraphStyle(name="StampOk", fontName="Helvetica-Bold", fontSize=13, textColor=white, alignment=TA_CENTER, leading=16))
-    styles.add(ParagraphStyle(name="StampOkSub", fontName="Helvetica", fontSize=8, textColor=white, alignment=TA_CENTER, leading=10))
-    styles.add(ParagraphStyle(name="StampWarn", fontName="Helvetica-Bold", fontSize=13, textColor=white, alignment=TA_CENTER, leading=16))
-    styles.add(ParagraphStyle(name="StampWarnSub", fontName="Helvetica", fontSize=8, textColor=white, alignment=TA_CENTER, leading=10))
-    GREEN_SEAL = HexColor("#15803d")
-    RED_SEAL = HexColor("#b91c1c")
-    if es_pagado:
-        sello = Table([[
-            Paragraph("✔ PAGADO — PAZ Y SALVO", styles["StampOk"]),
-        ], [
-            Paragraph(f"El colegio {colegio} no tiene saldo pendiente con {empresa} a la fecha de expedición de este recibo.", styles["StampOkSub"]),
-        ]], colWidths=[17.8*cm])
-        sello.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), GREEN_SEAL),
-            ("TOPPADDING", (0, 0), (-1, 0), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
-            ("TOPPADDING", (0, 1), (-1, 1), 0),
-            ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
-        ]))
-    else:
-        sello = Table([[
-            Paragraph("⚠ SALDO PENDIENTE DE PAGO", styles["StampWarn"]),
-        ], [
-            Paragraph("Este documento es una cuenta de cobro temporal, no un recibo de pago. Se recomienda cancelar antes de la fecha límite indicada abajo.", styles["StampWarnSub"]),
-        ]], colWidths=[17.8*cm])
-        sello.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), RED_SEAL),
-            ("TOPPADDING", (0, 0), (-1, 0), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
-            ("TOPPADDING", (0, 1), (-1, 1), 0),
-            ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
-        ]))
-    story.append(sello)
     story.append(Spacer(1, 10))
 
     # Datos cliente + total
@@ -25749,57 +25595,52 @@ def gerencia_factura_pdf(fid):
     story.append(Paragraph(feat_txt, styles["Body"]))
     story.append(Spacer(1, 8))
 
-    if es_pagado:
-        # —— Recibo de Caja: firmas autorizadas en vez de aviso de vencimiento / cobro ——
-        story.extend(_bloque_firmas_procsis(titulo="Constancia de pago y firmas autorizadas"))
-        story.append(Spacer(1, 10))
-    else:
-        # Fecha límite
-        limit_box = Table([[
-            Paragraph(f"<b>Fecha límite de pago</b><br/><font size='12'>{venc_txt}</font>", styles["Limit"]),
-            Paragraph(
-                "En caso de no registrar el pago antes de esta fecha, el soporte técnico de la plataforma "
-                "será suspendido temporalmente. Los datos académicos se conservan íntegros.",
-                styles["Warn"],
-            ),
-        ]], colWidths=[6*cm, 11.8*cm])
-        limit_box.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), 0.8, AMBER),
-            ("BACKGROUND", (0, 0), (0, 0), HexColor("#fffbeb")),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ]))
-        story.append(limit_box)
-        story.append(Spacer(1, 8))
+    # Fecha límite
+    limit_box = Table([[
+        Paragraph(f"<b>Fecha límite de pago</b><br/><font size='12'>{venc_txt}</font>", styles["Limit"]),
+        Paragraph(
+            "En caso de no registrar el pago antes de esta fecha, el soporte técnico de la plataforma "
+            "será suspendido temporalmente. Los datos académicos se conservan íntegros.",
+            styles["Warn"],
+        ),
+    ]], colWidths=[6*cm, 11.8*cm])
+    limit_box.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.8, AMBER),
+        ("BACKGROUND", (0, 0), (0, 0), HexColor("#fffbeb")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(limit_box)
+    story.append(Spacer(1, 8))
 
-        # Pago + QR
-        pay_txt = (
-            f"<b>Paga tu cuenta de cobro fácil y seguro con Wompi</b><br/>"
-            f"Tarjeta crédito/débito · PSE · Nequi · Bancolombia<br/>"
-            f"También puede consignar a la cuenta de Ahorros N° <b>{cta_banco}</b> — NEQUI · Titular: <b>PROCSIS</b><br/>"
-            f"Referencia de pago: <b>{cons}</b> · Cartera: {tel_emp or '—'} · {email_emp}"
-        )
-        qr_cell = Paragraph("QR no disponible", styles["Small"])
-        if qr_ok:
-            try:
-                qr_cell = Image(qr_buf, width=3.2*cm, height=3.2*cm)
-            except Exception:
-                pass
-        pay = Table([[Paragraph(pay_txt, styles["Body"]), qr_cell]], colWidths=[13.5*cm, 4.3*cm])
-        pay.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), 0.8, NAVY),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("ALIGN", (1, 0), (1, 0), "CENTER"),
-        ]))
-        story.append(pay)
-        story.append(Spacer(1, 10))
+    # Pago + QR
+    pay_txt = (
+        f"<b>Paga tu cuenta de cobro fácil y seguro con Wompi</b><br/>"
+        f"Tarjeta crédito/débito · PSE · Nequi · Bancolombia<br/>"
+        f"También puede consignar a la cuenta de Ahorros N° <b>{cta_banco}</b> — NEQUI · Titular: <b>PROCSIS</b><br/>"
+        f"Referencia de pago: <b>{cons}</b> · Cartera: {tel_emp or '—'} · {email_emp}"
+    )
+    qr_cell = Paragraph("QR no disponible", styles["Small"])
+    if qr_ok:
+        try:
+            qr_cell = Image(qr_buf, width=3.2*cm, height=3.2*cm)
+        except Exception:
+            pass
+    pay = Table([[Paragraph(pay_txt, styles["Body"]), qr_cell]], colWidths=[13.5*cm, 4.3*cm])
+    pay.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.8, NAVY),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("ALIGN", (1, 0), (1, 0), "CENTER"),
+    ]))
+    story.append(pay)
+    story.append(Spacer(1, 10))
 
     # —— CUFE / DIAN (espacio reservado para factura electrónica) ——
     story.append(Paragraph("Facturación electrónica DIAN · Código CUFE", styles["Sec"]))
@@ -54442,22 +54283,18 @@ def ventas_preview_carnet_qr():
     <div>
       <div style="text-align:center;font-size:11px;font-weight:700;letter-spacing:.1em;color:#64748b;margin-bottom:8px">ANVERSO</div>
       <div style="width:86mm;height:54mm;background:{fondo};border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;display:flex;flex-direction:column">
-        <div style="background:{prim};color:#fff;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:6px">
-          <div style="display:flex;align-items:center;gap:6px;min-width:0">
-            <div style="width:18px;height:18px;border-radius:3px;background:rgba(255,255,255,.18);border:1px dashed rgba(255,255,255,.6);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:6px;color:#fff" title="Logo del colegio">LOGO</div>
-            <span style="font-size:10px;font-weight:800;letter-spacing:.06em;white-space:nowrap">EDUTRACK · QR</span>
-          </div>
+        <div style="background:{prim};color:#fff;padding:8px 10px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:10px;font-weight:800;letter-spacing:.06em">EDUTRACK · QR</span>
           <span style="font-size:9px;background:{acento};color:#0f172a;padding:2px 6px;border-radius:3px;font-weight:800">ACCESO</span>
         </div>
         <div style="flex:1;padding:8px 10px;display:flex;gap:8px;align-items:center">
-          <div style="width:44px;height:54px;background:#eef2f7;border:1px dashed #94a3b8;border-radius:4px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;text-align:center;font-size:7px;color:#64748b;line-height:1.2" title="Foto del estudiante">FOTO<br>ESTU&shy;DIANTE</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:800;color:{texto};line-height:1.2;margin-bottom:4px">{_esc(alumno[:42])}</div>
             <div style="font-size:10px;color:#475569">Grado {_esc(grado)}</div>
             <div style="font-size:11px;font-weight:800;color:{prim};margin-top:4px">Código: {_esc(codigo)}</div>
           </div>
-          <div style="width:60px;height:60px;background:#fff;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;flex:0 0 auto">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={_esc(codigo)}" alt="QR" width="54" height="54" style="display:block">
+          <div style="width:70px;height:70px;background:#fff;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={_esc(codigo)}" alt="QR" width="64" height="64" style="display:block">
           </div>
         </div>
         <div style="background:{prim};color:#fff;font-size:9px;text-align:center;padding:4px 8px">{_esc((colegio or "Nombre del colegio")[:48])} · {_esc(sede)}</div>
