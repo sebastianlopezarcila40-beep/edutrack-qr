@@ -7662,7 +7662,7 @@ def session_idle_timeout():
     from flask import request as _req
     # rutas públicas
     path = (_req.path or "")
-    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/api/health") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/pagar") or path.startswith("/static") or path in ("/login", "/soporte-login", "/pqr", "/ayuda", "/centro-ayuda", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
+    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/api/health") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/pagar") or path.startswith("/static") or path in ("/login", "/soporte-login", "/cobranza-login", "/pqr", "/ayuda", "/centro-ayuda", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
         return
     if path.startswith("/colegio/") or path.startswith("/pqr") or path.startswith("/matricula") or path.startswith("/politicas") or path.startswith("/trabaja") or path.startswith("/casos") or path.startswith("/historias"):
         return
@@ -7689,12 +7689,17 @@ def seguridad_empleados_gate():
     if path.startswith("/static") or path in (
         "/login", "/soporte-login", "/docente-login", "/logout",
         "/recuperar", "/cookies", "/legal", "/ayuda", "/centro-ayuda", "/backoffice", "/edutrack-backoffice", "/ventas-login", "/gerencia-login",
+        "/cobranza-login", "/cobranza", "/cobranza/panel",
         "/ventas", "/ventas-login", "/ventas/panel", "/gerencia-login", "/gerencia/planes", "/whatsapp", "/whatsapp-soporte", "/contacto", "/pqr",
         "/familia-login", "/familia", "/familia/boletin", "/familia/certificado",
         "/mfa", "/mfa/verificar", "/biometria/app",
         "/procsis", "/empresa", "/portafolio", "/tecnologia", "/soluciones", "/quienes-somos",
+        "/abrir-turno", "/cerrar-turno",
     ):
         return
+    if path.startswith("/cobranza"):
+        # No aplicar redirecciones a soporte-login sobre el portal de cobranza
+        pass
     if path.startswith("/colegio/") or path.startswith("/matricula") or path.startswith("/familia") or path.startswith("/api/public") or path.startswith("/api/webhooks"):
         return
     if "usuario" not in session:
@@ -7715,18 +7720,18 @@ def seguridad_empleados_gate():
         return
     if not _usuario_activo_ok(u):
         session.clear()
-        return redirect("/soporte-login" if rol in ROLES_INTERNOS else "/login")
+        return redirect(_login_portal(rol) if rol in ROLES_INTERNOS else "/login")
     # sesión revocada
     tok = session.get("session_token") or ""
     if getattr(u, "session_token", None) and tok and u.session_token != tok:
         session.clear()
         registrar_auditoria("Sesión revocada", f"Intento con token inválido {u.usuario}")
-        return redirect("/soporte-login")
+        return redirect(_login_portal(rol))
     # horario
     if not _dentro_horario_laboral(u):
         session.clear()
         registrar_auditoria("Acceso fuera de horario", f"Bloqueado {u.usuario}")
-        return redirect("/soporte-login?error=horario")
+        return redirect(_login_portal(rol) + "?error=horario")
     # MFA pendiente
     if session.get("mfa_pendiente"):
         if path not in ("/mfa", "/mfa/verificar", "/biometria/app", "/logout"):
@@ -16331,8 +16336,12 @@ def _guard_soporte():
     # soporte (no de vuelta a su propio portal) para que pueda entrar con esas
     # credenciales si de verdad quiere cambiar de portal — así no se siente "atrapado"
     # en su rol actual al abrir otra pestaña.
-    if rol in ("Cobranza", "Comercial", "Gerente", "Administrador"):
-        return redirect("/soporte-login")
+    if rol == "Cobranza":
+        return redirect("/cobranza/panel")
+    if rol == "Comercial":
+        return redirect("/ventas/panel")
+    if rol in ("Gerente", "Administrador"):
+        return redirect("/gerencia/hq")
     if rol not in ("Soporte", "Superadmin"):
         return redirect("/soporte-login")
     # Soporte (rol exacto) tiene acceso a módulos operativos de soporte (tickets, usuarios,
@@ -42368,7 +42377,7 @@ def abrir_turno_laboral():
         return redirect("/dashboard")
     area = "Ventas" if rol == "Comercial" else ("Cobranza" if rol == "Cobranza" else "Soporte")
     dest = session.get("turno_pending_redirect") or (
-        "/ventas/panel" if area == "Ventas" else ("/cobranza" if area == "Cobranza" else "/soporte_admin")
+        "/ventas/panel" if area == "Ventas" else ("/cobranza/panel" if area == "Cobranza" else "/soporte_admin")
     )
     uid = session.get("uid")
     login = session.get("usuario") or ""
@@ -43247,25 +43256,38 @@ def cobranza_login():
             return _rate_limit_response(wait_m)
         user = login_usuario(request.form.get("usuario"), request.form.get("password"))
         rol = (user.rol or "").strip() if user else ""
+        # Normalizar alias de rol
+        if rol.lower() in ("cobranza", "facturacion", "facturación"):
+            rol = "Cobranza"
+            try:
+                if user and (user.rol or "").strip() != "Cobranza":
+                    user.rol = "Cobranza"
+                    db.session.commit()
+            except Exception:
+                pass
         if user and rol in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
             if not _usuario_activo_ok(user):
                 error = "Usuario desactivado."
             else:
                 session.clear()
                 session["usuario"] = user.usuario
-                session["rol"] = rol
+                session["rol"] = "Cobranza" if rol == "Cobranza" else rol
                 session["uid"] = user.id
-                session["password_temporal"] = bool(user.password_temporal)
+                session["password_temporal"] = bool(getattr(user, "password_temporal", False))
                 session["panel"] = "cobranza"
+                session["ultimo_movimiento"] = ahora().timestamp() if hasattr(ahora(), "timestamp") else __import__("time").time()
                 try:
                     registrar_sesion_empleado(user)
+                    if getattr(user, "session_token", None):
+                        session["session_token"] = user.session_token
                 except Exception:
                     pass
                 registrar_auditoria("Login cobranza", f"{rol} {user.usuario}")
                 if rol == "Cobranza":
+                    # Ir SIEMPRE al panel de cobranza (turno opcional, no bloquea)
+                    session["turno_pending_redirect"] = "/cobranza/panel"
                     try:
                         if not turno_abierto_actual(usuario_id=user.id, area="Cobranza"):
-                            session["turno_pending_redirect"] = "/cobranza/panel"
                             return redirect("/abrir-turno")
                     except Exception:
                         pass
