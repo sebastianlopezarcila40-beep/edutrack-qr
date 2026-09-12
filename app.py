@@ -16632,6 +16632,7 @@ def _aislar_paneles_internos():
         ok_cob = (
             path.startswith("/cobranza")
             or path.startswith("/gerencia/facturacion")
+            or path.startswith("/gerencia/plazos-cuotas")
             or path.startswith("/interno/buscar")
             or path.startswith("/interno/turnos")
             or path.startswith("/cobranza/turnos")
@@ -20072,7 +20073,7 @@ def gerencia_hq():
         <div class="hq-cat verde">🟢 Dinero y facturación</div>
         <div class="grid-mod">
           <a class="c-verde" href="/gerencia/cartera">Cuadro de mando · Cartera</a>
-          <a class="c-verde" href="/gerencia/plazos-cuotas">Plazos, cuotas y abonos</a>
+          <a class="c-verde" href="/gerencia/plazos-cuotas">Reporte plazos / cuotas</a>
           <a class="c-verde" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
           <a class="c-verde" href="/gerencia/gastos">Gastos y cashflow</a>
           <a class="c-verde" href="/gerencia/contabilidad">Contabilidad comercial</a>
@@ -43400,6 +43401,8 @@ def cobranza_panel():
   <p class="mini-text">Sin acceso a soporte técnico, impersonar, prórrogas académicas ni almacenamiento GB.</p>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
     <a class="cb-btn warn" href="/gerencia/facturacion-cobranza">💳 Facturación y cartera</a>
+    <a class="cb-btn" href="/cobranza/plazos-cuotas" style="background:#0B2D57">⏱ Plazos, cuotas y abonos</a>
+    <a class="cb-btn" href="/cobranza/conciliacion">🏦 Conciliación bancaria</a>
     <a class="cb-btn" href="/gerencia/facturacion">Generar / ver recibos</a>
     <a class="cb-btn" href="/cobranza/turnos">👥 Turnos y notas</a>
     <a class="cb-btn" href="/interno/buscar-colegio">🔍 Buscar colegio</a>
@@ -53761,120 +53764,128 @@ def _parse_cop_simple(raw):
         return 0.0
 
 
+
+@app.route("/cobranza/plazos-cuotas", methods=["GET", "POST"])
 @app.route("/gerencia/plazos-cuotas", methods=["GET", "POST"])
 def gerencia_plazos_cuotas():
-    """Alargar licencia, registrar abonos/cuotas por colegio y reactivar con nueva fecha."""
-    g = _guard_gerencia()
-    if g:
-        return g
+    """Cobranza registra plazos/cuotas/abonos. Gerencia solo ve el historial (reporte)."""
+    if not requiere_login():
+        return redirect("/cobranza-login")
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/cobranza-login")
+    # Solo Cobranza (y Superadmin de emergencia) operan; Gerencia = solo lectura
+    puede_operar = rol in ("Cobranza", "Superadmin")
+    solo_reporte = not puede_operar
     try:
         db.create_all()
     except Exception:
         pass
     msg = err = ""
     if request.method == "POST":
-        try:
-            iid = int(request.form.get("institucion_id") or 0)
-        except Exception:
-            iid = 0
-        inst = Institucion.query.get(iid) if iid else None
-        if not inst:
-            err = "Seleccione un colegio válido."
+        if not puede_operar:
+            err = "Gerencia solo consulta reportes. Los plazos, cuotas y abonos los registra Cobranza."
         else:
-            accion = (request.form.get("accion") or "cuota").strip()
             try:
-                from datetime import timedelta
-                hoy = ahora().date() if hasattr(ahora(), "date") else __import__("datetime").date.today()
+                iid = int(request.form.get("institucion_id") or 0)
             except Exception:
-                from datetime import date as _d, timedelta
-                hoy = _d.today()
-            estado_antes = (inst.estado or "ACTIVA")
-            valor = _parse_cop_simple(request.form.get("valor"))
-            concepto = (request.form.get("concepto") or "")[:200]
-            referencia = (request.form.get("referencia") or "")[:120]
-            notas = (request.form.get("notas") or "")[:1000]
-            nueva_fv = ""
-            dias = 0
-
-            if accion == "alargue":
+                iid = 0
+            inst = Institucion.query.get(iid) if iid else None
+            if not inst:
+                err = "Seleccione un colegio válido."
+            else:
+                accion = (request.form.get("accion") or "cuota").strip()
                 try:
-                    dias = int(request.form.get("dias_alargue") or 0)
+                    from datetime import timedelta
+                    hoy = ahora().date() if hasattr(ahora(), "date") else __import__("datetime").date.today()
                 except Exception:
-                    dias = 0
-                fv_manual = (request.form.get("nueva_fecha_vencimiento") or "").strip()[:20]
-                if fv_manual:
-                    nueva_fv = fv_manual
-                elif dias > 0:
-                    base = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
-                    if not base or base < hoy:
-                        base = hoy
-                    nueva_fv = (base + timedelta(days=dias)).isoformat()
-                else:
-                    err = "Indique días de alargue o una fecha de vencimiento nueva."
-                if not err and nueva_fv:
-                    inst.fecha_vencimiento = nueva_fv
-                    if request.form.get("reactivar") == "1":
-                        inst.estado = "ACTIVA"
-                        inst.motivo_bloqueo = ""
-                    tipo = "ALARGUE"
-                    if not concepto:
-                        concepto = "Alargue de licencia %s días / hasta %s" % (dias or "—", nueva_fv)
-            elif accion in ("cuota", "abono", "pago_total"):
-                if valor <= 0:
-                    err = "Indique un valor mayor a 0."
-                else:
-                    tipo = {"cuota": "CUOTA", "abono": "ABONO", "pago_total": "PAGO_TOTAL"}.get(accion, "CUOTA")
-                    fv_manual = (request.form.get("nueva_fecha_vencimiento") or "").strip()[:20]
+                    from datetime import date as _d, timedelta
+                    hoy = _d.today()
+                estado_antes = (inst.estado or "ACTIVA")
+                valor = _parse_cop_simple(request.form.get("valor"))
+                concepto = (request.form.get("concepto") or "")[:200]
+                referencia = (request.form.get("referencia") or "")[:120]
+                notas = (request.form.get("notas") or "")[:1000]
+                nueva_fv = ""
+                dias = 0
+                tipo = "CUOTA"
+                if accion == "alargue":
                     try:
                         dias = int(request.form.get("dias_alargue") or 0)
                     except Exception:
                         dias = 0
+                    fv_manual = (request.form.get("nueva_fecha_vencimiento") or "").strip()[:20]
                     if fv_manual:
                         nueva_fv = fv_manual
-                        inst.fecha_vencimiento = nueva_fv
                     elif dias > 0:
                         base = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
                         if not base or base < hoy:
                             base = hoy
                         nueva_fv = (base + timedelta(days=dias)).isoformat()
+                    else:
+                        err = "Indique días de alargue o una fecha de vencimiento nueva."
+                    if not err and nueva_fv:
                         inst.fecha_vencimiento = nueva_fv
-                    if request.form.get("reactivar") == "1" or accion == "pago_total":
-                        inst.estado = "ACTIVA"
-                        inst.motivo_bloqueo = ""
-                    if not concepto:
-                        concepto = "%s por $ %s" % (tipo, valor)
-            else:
-                err = "Acción no válida."
-                tipo = "CUOTA"
-
-            if not err:
-                mov = PagoCuotaColegio(
-                    institucion_id=inst.id,
-                    tipo=tipo,
-                    valor=valor,
-                    concepto=concepto,
-                    referencia=referencia,
-                    fecha_pago=(request.form.get("fecha_pago") or fecha_hoy() or "")[:20],
-                    nueva_fecha_vencimiento=nueva_fv or (inst.fecha_vencimiento or ""),
-                    dias_alargue=dias,
-                    estado_antes=estado_antes,
-                    estado_despues=(inst.estado or ""),
-                    creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
-                    creado_por=session.get("usuario") or "",
-                    notas=notas,
-                )
-                db.session.add(mov)
-                db.session.commit()
-                try:
-                    registrar_auditoria(
-                        "Plazo/cuota colegio",
-                        "%s · %s · $%s · venc %s" % (inst.codigo, tipo, valor, nueva_fv or inst.fecha_vencimiento),
+                        if request.form.get("reactivar") == "1":
+                            inst.estado = "ACTIVA"
+                            inst.motivo_bloqueo = ""
+                        tipo = "ALARGUE"
+                        if not concepto:
+                            concepto = "Alargue de licencia %s días / hasta %s" % (dias or "—", nueva_fv)
+                elif accion in ("cuota", "abono", "pago_total"):
+                    if valor <= 0:
+                        err = "Indique un valor mayor a 0."
+                    else:
+                        tipo = {"cuota": "CUOTA", "abono": "ABONO", "pago_total": "PAGO_TOTAL"}.get(accion, "CUOTA")
+                        fv_manual = (request.form.get("nueva_fecha_vencimiento") or "").strip()[:20]
+                        try:
+                            dias = int(request.form.get("dias_alargue") or 0)
+                        except Exception:
+                            dias = 0
+                        if fv_manual:
+                            nueva_fv = fv_manual
+                            inst.fecha_vencimiento = nueva_fv
+                        elif dias > 0:
+                            base = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
+                            if not base or base < hoy:
+                                base = hoy
+                            nueva_fv = (base + timedelta(days=dias)).isoformat()
+                            inst.fecha_vencimiento = nueva_fv
+                        if request.form.get("reactivar") == "1" or accion == "pago_total":
+                            inst.estado = "ACTIVA"
+                            inst.motivo_bloqueo = ""
+                        if not concepto:
+                            concepto = "%s por $ %s" % (tipo, valor)
+                else:
+                    err = "Acción no válida."
+                if not err:
+                    mov = PagoCuotaColegio(
+                        institucion_id=inst.id,
+                        tipo=tipo,
+                        valor=valor,
+                        concepto=concepto,
+                        referencia=referencia,
+                        fecha_pago=(request.form.get("fecha_pago") or fecha_hoy() or "")[:20],
+                        nueva_fecha_vencimiento=nueva_fv or (inst.fecha_vencimiento or ""),
+                        dias_alargue=dias,
+                        estado_antes=estado_antes,
+                        estado_despues=(inst.estado or ""),
+                        creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                        creado_por=session.get("usuario") or "",
+                        notas=notas,
                     )
-                except Exception:
-                    pass
-                msg = "Registrado. Colegio %s · estado %s · vence %s" % (
-                    inst.codigo, inst.estado, inst.fecha_vencimiento or "—",
-                )
+                    db.session.add(mov)
+                    db.session.commit()
+                    try:
+                        registrar_auditoria(
+                            "Plazo/cuota colegio",
+                            "%s · %s · $%s · venc %s" % (inst.codigo, tipo, valor, nueva_fv or inst.fecha_vencimiento),
+                        )
+                    except Exception:
+                        pass
+                    msg = "Registrado. Colegio %s · estado %s · vence %s" % (
+                        inst.codigo, inst.estado, inst.fecha_vencimiento or "—",
+                    )
 
     colegios = Institucion.query.order_by(Institucion.nombre.asc()).limit(300).all()
     opts = "".join(
@@ -53885,11 +53896,13 @@ def gerencia_plazos_cuotas():
         for i in colegios
     )
     movs = PagoCuotaColegio.query.order_by(PagoCuotaColegio.id.desc()).limit(80).all()
+
     def _cop(v):
         try:
             return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
         except Exception:
             return "$ 0"
+
     filas = []
     for m in movs:
         inst = Institucion.query.get(m.institucion_id)
@@ -53903,19 +53916,9 @@ def gerencia_plazos_cuotas():
             )
         )
     tabla = "".join(filas) or "<tr><td colspan='6' style='padding:12px;color:#64748b;text-align:center'>Sin movimientos</td></tr>"
-    body = f"""
-<header class="role-hero"><div>
-  <h1>Plazos, cuotas y abonos</h1>
-  <p>Alargar licencia · pagos parciales · reactivar colegio con nueva fecha de vencimiento</p>
-</div>
-<a class="btn" href="/gerencia/hq">← HQ</a></header>
-<section class="role-panel">
-  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px;margin-bottom:14px;font-size:13px;color:#1e3a8a">
-    Si solo reactivas sin cambiar <b>fecha de vencimiento</b>, el sistema puede volver a suspender el colegio automáticamente.
-    Aquí registras la cuota/abono y defines hasta cuándo queda activa la licencia.
-  </div>
+
+    if puede_operar:
+        form_block = f"""
   <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:900px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-bottom:18px">
     <div style="grid-column:1/-1">
       <label style="font-size:12px;font-weight:700">Colegio</label>
@@ -53926,7 +53929,7 @@ def gerencia_plazos_cuotas():
       <select name="accion" style="width:100%;padding:9px">
         <option value="cuota">Cuota / pago parcial</option>
         <option value="abono">Abono a deuda</option>
-        <option value="alargue">Solo alargar plazo (sin valor o con valor)</option>
+        <option value="alargue">Solo alargar plazo</option>
         <option value="pago_total">Pago total + reactivar</option>
       </select>
     </div>
@@ -53939,7 +53942,7 @@ def gerencia_plazos_cuotas():
       <input name="dias_alargue" type="number" min="0" placeholder="30" style="width:100%;padding:9px">
     </div>
     <div>
-      <label style="font-size:12px;font-weight:700">Nueva fecha vencimiento (opcional)</label>
+      <label style="font-size:12px;font-weight:700">Nueva fecha vencimiento</label>
       <input name="nueva_fecha_vencimiento" type="date" style="width:100%;padding:9px">
     </div>
     <div>
@@ -53961,6 +53964,37 @@ def gerencia_plazos_cuotas():
       <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:11px 16px;border-radius:4px;font-weight:800">Registrar plazo / cuota</button>
     </div>
   </form>
+"""
+        info = "Registre la cuota o abono y defina la nueva fecha de vencimiento para que el colegio no se vuelva a suspender solo."
+        back = "/cobranza/panel"
+        titulo = "Plazos, cuotas y abonos"
+        sub = "Operación Cobranza · alargue de licencia y pagos parciales"
+    else:
+        form_block = """
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-bottom:16px;font-size:13px;color:#475569">
+    <b>Solo lectura (Gerencia).</b> Aquí solo consulta el historial.
+    Quien registra cuotas, abonos y alargues de plazo es el rol <b>Cobranza</b>
+    en <code>/cobranza/plazos-cuotas</code>.
+  </div>
+"""
+        info = "Reporte institucional de plazos y cuotas. Sin permiso de edición."
+        back = "/gerencia/hq"
+        titulo = "Reporte plazos / cuotas"
+        sub = "Solo consulta · sin registrar movimientos"
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>{titulo}</h1>
+  <p>{sub}</p>
+</div>
+<a class="btn" href="{back}">← Volver</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px;margin-bottom:14px;font-size:13px;color:#1e3a8a">
+    {info}
+  </div>
+  {form_block}
   <h3 style="font-size:14px;color:#0B2D57">Historial</h3>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
     <tr style="background:#0B2D57;color:#fff">
@@ -53972,7 +54006,7 @@ def gerencia_plazos_cuotas():
   </table>
 </section>
 """
-    return page("Plazos y cuotas", shell(body))
+    return page(titulo, shell(body))
 
 
 # Paletas sugeridas por colores de uniforme / institución
