@@ -16636,19 +16636,22 @@ def _aislar_paneles_internos():
             or path.startswith("/interno/turnos")
             or path.startswith("/cobranza/turnos")
             or path.startswith("/tenants")
-            or path.startswith("/usuarios")
             or path.startswith("/mi-perfil")
-            or path.startswith("/soporte/reinicio-acceso")  # solo reinicio, no el resto de soporte
+            or path.startswith("/cambiar_password")
+            or path.startswith("/abrir-turno")
+            or path.startswith("/cerrar-turno")
+            or path.startswith("/soporte/reinicio-acceso")
+            or path.startswith("/cobranza/conciliacion")
         )
-        # Bloquear resto de soporte técnico y HQ gerencia
+        # Cobranza NUNCA debe caer en portal de soporte por error de ruta
         if path.startswith("/soporte") and not path.startswith("/soporte/reinicio-acceso"):
-            return redirect(_login_del_portal(path))
+            return redirect("/cobranza/panel")
         if path.startswith("/soporte_admin") or path.startswith("/ventas"):
-            return redirect(_login_del_portal(path))
+            return redirect("/cobranza/panel")
         if path.startswith("/gerencia/") and not path.startswith("/gerencia/facturacion"):
-            return redirect(_login_del_portal(path))
-        if not ok_cob and path.startswith("/gerencia"):
-            return redirect(_login_del_portal(path))
+            return redirect("/cobranza/panel")
+        if not ok_cob and (path.startswith("/gerencia") or path.startswith("/usuarios")):
+            return redirect("/cobranza/panel")
 
     elif rol in ("Gerente", "Superadmin", "Administrador"):
         # Gerencia NO opera el panel de ventas ni soporte_admin como home ajeno
@@ -20158,7 +20161,8 @@ def gerencia_hq():
           <a class="c-naranja-lad" href="/gerencia/lideres">Equipo directivo (web)</a>
           <a class="c-naranja-lad" href="/gerencia/contabilidad/partes">Clientes · Proveedores · Dominios</a>
           <a class="c-naranja-lad" href="/gerencia/turnos">Turnos y notas de gestión</a>
-          <a class="c-naranja-lad" href="/soporte/equipo">Equipo Procsis · roles</a>
+          <a class="c-naranja-lad" href="/gerencia/usuarios">Usuarios internos · claves y roles</a>
+          <a class="c-naranja-lad" href="/soporte/equipo">Equipo Procsis · carnés</a>
           <a class="c-naranja-lad" href="/gerencia/cancelaciones">Cancelaciones de servicio</a>
           <a class="c-naranja-lad" href="/retencion">Retención · validar casos</a>
         </div>
@@ -26022,7 +26026,7 @@ def gerencia_usuarios():
   {"<p style='color:#b91c1c;background:#fef2f2;padding:10px;border-radius:8px'>"+error+"</p>" if error else ""}
   <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:20px;box-shadow:0 4px 12px rgba(15,23,42,.04)">
     <input type="hidden" name="accion" value="crear">
-    <h3 style="margin:0 0 12px;color:#0B2D57">Crear usuario interno</h3>
+    <h3 style="margin:0 0 12px;color:#0B2D57">Crear usuario de la empresa</h3><p style="margin:0 0 12px;font-size:13px;color:#64748b">Soporte, Ventas (Comercial), Cobranza o Gerente. Cada uno entra por su portal: /soporte-login · /ventas-login · /cobranza-login · /gerencia-login</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div><label style="font-size:13px;font-weight:600">Usuario (login)</label>
       <input name="usuario" required style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
@@ -28007,7 +28011,26 @@ def soporte_login():
                     print("turno soporte:", _te)
                 return redirect("/soporte_admin")
         elif user:
-            error = f"Esta cuenta tiene rol «{user.rol}». El portal de soporte solo admite roles internos (Soporte, Admin, etc.)."
+            rol_u = (user.rol or "").strip()
+            # Credenciales válidas pero portal equivocado → enviar al login correcto
+            if rol_u == "Cobranza":
+                session.clear()
+                session["usuario"] = user.usuario
+                session["rol"] = "Cobranza"
+                session["uid"] = user.id
+                session["panel"] = "cobranza"
+                session["password_temporal"] = bool(getattr(user, "password_temporal", False))
+                try:
+                    registrar_sesion_empleado(user)
+                except Exception:
+                    pass
+                registrar_auditoria("Login cobranza (vía soporte-login)", user.usuario)
+                return redirect("/cobranza/panel")
+            if rol_u == "Comercial":
+                return redirect("/ventas-login")
+            if rol_u in ("Gerente", "Superadmin", "Administrador"):
+                return redirect("/gerencia-login")
+            error = f"Esta cuenta tiene rol «{user.rol}». Use el portal correspondiente."
         else:
             _rate_limit_fail()
             error = "Usuario o contraseña incorrectos. Verifique los datos e intente de nuevo."
@@ -43239,6 +43262,12 @@ def cobranza_login():
                     pass
                 registrar_auditoria("Login cobranza", f"{rol} {user.usuario}")
                 if rol == "Cobranza":
+                    try:
+                        if not turno_abierto_actual(usuario_id=user.id, area="Cobranza"):
+                            session["turno_pending_redirect"] = "/cobranza/panel"
+                            return redirect("/abrir-turno")
+                    except Exception:
+                        pass
                     return redirect("/cobranza/panel")
                 return redirect("/gerencia/facturacion-cobranza")
         elif user:
