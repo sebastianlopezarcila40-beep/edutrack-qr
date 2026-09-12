@@ -20346,6 +20346,7 @@ def gerencia_hq():
 
         <div class="hq-cat azul-rey">🔵 Finanzas y conexiones del servidor</div>
         <div class="grid-mod">
+          <a class="c-azul-rey" href="/gerencia/indicadores">Ver indicadores</a>
           <a class="c-azul-rey" href="/gerencia/recursos-financieros">Recursos Financieros y Consumo</a>
           <a class="c-azul-rey" href="/gerencia/contabilidad">Contabilidad · compras/ventas/pagos</a>
           <a class="c-azul-rey" href="/gerencia/tesoreria">Cuentas bancarias y pasarelas</a>
@@ -20417,60 +20418,26 @@ def gerencia_hq():
     </script>
 
     <div class="sec">
-<div class="sec">
-      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
-        <h2 style="margin:0">Indicadores financieros</h2>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          <a href="/gerencia/reportes?periodo=mensual" style="background:#0B2D57;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">📊 Reportes + gráficas</a>
-          <a href="/gerencia/reportes/excel?periodo=mensual" style="background:#15803d;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">⬇ Excel mensual</a>
-          <a href="/gerencia/reportes/excel?periodo=quincenal" style="background:#0f766e;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">⬇ Excel quincenal</a>
-          <a href="/gerencia/reportes/pdf?periodo=mensual" style="background:#b91c1c;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">⬇ PDF mensual</a>
-          <a href="/gerencia/reportes/pdf?periodo=quincenal" style="background:#9f1239;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">⬇ PDF quincenal</a>
+    <div class="sec">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+        <h2 style="margin:0;font-size:13px">Indicadores (resumen)</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <a href="/gerencia/indicadores" style="background:#0B2D57;color:#fff;padding:7px 12px;border-radius:4px;font-weight:700;font-size:11px;text-decoration:none;letter-spacing:.04em">VER INDICADORES</a>
+          <a href="/gerencia/reportes?periodo=mensual" style="background:#334155;color:#fff;padding:7px 12px;border-radius:4px;font-weight:700;font-size:11px;text-decoration:none">Reportes</a>
         </div>
       </div>
-      <div class="kpis">
-        <div class="kpi"><div class="l">MRR</div><div class="v">{_cop(m['mrr'])}</div><div class="s">Ingreso recurrente mes</div></div>
-        <div class="kpi"><div class="l">ARR</div><div class="v">{_cop(m['arr'])}</div><div class="s">Proyección 12 meses</div></div>
-        <div class="kpi"><div class="l">Churn</div><div class="v">{m['churn']}%</div><div class="s">Cancelación / suspensión</div></div>
-        <div class="kpi"><div class="l">Cashflow</div><div class="v">{_cop(m['cashflow'])}</div><div class="s">Cobrado − gastos acum.</div></div>
-        <div class="kpi"><div class="l">Margen</div><div class="v">{m['margen']}%</div><div class="s">MRR − gastos del mes</div></div>
-        <div class="kpi"><div class="l">Cartera</div><div class="v">{_cop(m['cartera'])}</div><div class="s">{m['facturas_pend']} facturas abiertas</div></div>
-        <div class="kpi"><div class="l">Gastos mes</div><div class="v">{_cop(m['gastos'])}</div><div class="s">Nómina, servidores, APIs</div></div>
-        <div class="kpi"><div class="l">Colegios activos</div><div class="v">{m['activas']}</div><div class="s">Suspendidos: {m['suspendidas']}</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px">
+        <div class="kpi" style="padding:8px"><div class="l" style="font-size:9px">MRR</div><div class="v" style="font-size:14px">{_cop(m['mrr'])}</div></div>
+        <div class="kpi" style="padding:8px"><div class="l" style="font-size:9px">ARR</div><div class="v" style="font-size:14px">{_cop(m['arr'])}</div></div>
+        <div class="kpi" style="padding:8px"><div class="l" style="font-size:9px">Cartera</div><div class="v" style="font-size:14px">{_cop(m['cartera'])}</div></div>
+        <div class="kpi" style="padding:8px"><div class="l" style="font-size:9px">Activos</div><div class="v" style="font-size:14px">{m['activas']}</div></div>
+        <div class="kpi" style="padding:8px"><div class="l" style="font-size:9px">Churn</div><div class="v" style="font-size:14px">{m['churn']}%</div></div>
+        <div class="kpi" style="padding:8px"><div class="l" style="font-size:9px">Cashflow</div><div class="v" style="font-size:14px">{_cop(m['cashflow'])}</div></div>
       </div>
+      <p style="margin:8px 0 0;font-size:11px;color:#64748b">Vista reducida. Detalle completo en <a href="/gerencia/indicadores" style="color:#0B2D57;font-weight:700">Ver indicadores</a>.</p>
     </div>
 
-    <div class="sec">
-      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
-        <h2 style="margin:0">Crecimiento y ventas</h2>
-        <a href="/gerencia/reportes?periodo=mensual#crecimiento" style="background:#0B2D57;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">Ver detalle y gráficas</a>
-      </div>
-      <div class="kpis">
-        <div class="kpi"><div class="l">CAC</div><div class="v">{_cop(m['cac'])}</div><div class="s">Costo por colegio nuevo (mes)</div></div>
-        <div class="kpi"><div class="l">LTV</div><div class="v">{_cop(m['ltv'])}</div><div class="s">Valor vida estimado / colegio</div></div>
-        <div class="kpi"><div class="l">ARPU</div><div class="v">{_cop(m['arpu'])}</div><div class="s">Ingreso medio por colegio</div></div>
-        <div class="kpi"><div class="l">Altas mes</div><div class="v">{m['altas_mes']}</div><div class="s">Implementaciones generadas</div></div>
-        <div class="kpi"><div class="l">Embudo cotización/demo</div><div class="v">{e['cotizacion']}</div><div class="s">Notas comerciales</div></div>
-        <div class="kpi"><div class="l">Seguimiento</div><div class="v">{e['seguimiento']}</div><div class="s">Negociación activa</div></div>
-        <div class="kpi"><div class="l">Cierres (impl. pagada)</div><div class="v">{e['cierres']}</div><div class="s">One-time pagados</div></div>
-      </div>
-    </div>
-
-    <div class="sec">
-      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
-        <h2 style="margin:0">Producto y soporte</h2>
-        <a href="/gerencia/reportes?periodo=mensual#producto" style="background:#0B2D57;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">Ver detalle y gráficas</a>
-      </div>
-      <div class="kpis">
-        <div class="kpi"><div class="l">DAU (proxy)</div><div class="v">{m['dau']}</div><div class="s">Actividad de acceso hoy</div></div>
-        <div class="kpi"><div class="l">MAU (roles colegio)</div><div class="v">{m['mau']}</div><div class="s">Usuarios institucionales</div></div>
-        <div class="kpi"><div class="l">PQR abiertas</div><div class="v">{m['pqr_abiertas']}</div><div class="s">Cerradas: {m['pqr_cerradas']}</div></div>
-        <div class="kpi"><div class="l">SLA meta</div><div class="v">{m['sla_horas']} h</div><div class="s">Tiempo objetivo de respuesta</div></div>
-        <div class="kpi"><div class="l">Servidores</div><div class="v"><span class="srv"><span class="srv-dot" style="background:{srv_color}"></span>{m['srv_label']}</span></div><div class="s">Carga según colegios activos</div></div>
-      </div>
-    </div>
-
-    <div class="sec">
+<div class="sec">
       <h2>Almacenamiento global (PDFs, fotos, media)</h2>
       <p style="margin:0 0 6px;font-size:13px;color:#475569">
         Uso en vivo: <b>{m.get('storage_used_mb', 0)} MB</b> · Capacidad plan ref. 5 GB ·
@@ -54375,6 +54342,68 @@ def ventas_preview_carnet_qr():
 </section>
 """
     return page("Preview carné QR", shell(body))
+
+
+
+
+@app.route("/gerencia/indicadores")
+def gerencia_indicadores():
+    """Módulo dedicado: todos los indicadores financieros / crecimiento / producto."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    # Reutiliza el cálculo del HQ / reportes
+    try:
+        m = _gerencia_metricas()
+    except Exception:
+        m = {}
+    if not m:
+        return redirect("/gerencia/reportes?periodo=mensual")
+    def _cop(v):
+        try:
+            return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
+        except Exception:
+            return "$ 0"
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Indicadores</h1>
+  <p>Financieros · crecimiento · producto y soporte</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+    <a class="btn" href="/gerencia/reportes?periodo=mensual">Reportes + gráficas</a>
+    <a class="btn" href="/gerencia/reportes/excel?periodo=mensual" style="background:#15803d">Excel mensual</a>
+    <a class="btn" href="/gerencia/reportes/pdf?periodo=mensual" style="background:#b91c1c">PDF mensual</a>
+  </div>
+  <h2 style="font-size:13px;color:#0B2D57;text-transform:uppercase;letter-spacing:.06em">Financieros</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:16px">
+    <div class="kpi"><div class="l">MRR</div><div class="v">{_cop(m.get('mrr'))}</div><div class="s">Ingreso recurrente mes</div></div>
+    <div class="kpi"><div class="l">ARR</div><div class="v">{_cop(m.get('arr'))}</div><div class="s">Proyección 12 meses</div></div>
+    <div class="kpi"><div class="l">Churn</div><div class="v">{m.get('churn')}%</div><div class="s">Cancelación / suspensión</div></div>
+    <div class="kpi"><div class="l">Cashflow</div><div class="v">{_cop(m.get('cashflow'))}</div><div class="s">Cobrado − gastos</div></div>
+    <div class="kpi"><div class="l">Margen</div><div class="v">{m.get('margen')}%</div><div class="s">MRR − gastos mes</div></div>
+    <div class="kpi"><div class="l">Cartera</div><div class="v">{_cop(m.get('cartera'))}</div><div class="s">{m.get('facturas_pend',0)} facturas abiertas</div></div>
+    <div class="kpi"><div class="l">Gastos mes</div><div class="v">{_cop(m.get('gastos'))}</div></div>
+    <div class="kpi"><div class="l">Colegios activos</div><div class="v">{m.get('activas')}</div><div class="s">Suspendidos: {m.get('suspendidas',0)}</div></div>
+  </div>
+  <h2 style="font-size:13px;color:#0B2D57;text-transform:uppercase;letter-spacing:.06em">Crecimiento y ventas</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:16px">
+    <div class="kpi"><div class="l">CAC</div><div class="v">{_cop(m.get('cac'))}</div></div>
+    <div class="kpi"><div class="l">LTV</div><div class="v">{_cop(m.get('ltv'))}</div></div>
+    <div class="kpi"><div class="l">ARPU</div><div class="v">{_cop(m.get('arpu'))}</div></div>
+    <div class="kpi"><div class="l">Altas mes</div><div class="v">{m.get('altas_mes', m.get('impl_mes', 0))}</div></div>
+  </div>
+  <h2 style="font-size:13px;color:#0B2D57;text-transform:uppercase;letter-spacing:.06em">Producto y soporte</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">
+    <div class="kpi"><div class="l">DAU</div><div class="v">{m.get('dau', 0)}</div></div>
+    <div class="kpi"><div class="l">MAU</div><div class="v">{m.get('mau', 0)}</div></div>
+    <div class="kpi"><div class="l">PQR abiertas</div><div class="v">{m.get('pqr_abiertas', 0)}</div></div>
+    <div class="kpi"><div class="l">SLA meta</div><div class="v">{m.get('sla_meta', '24 h')}</div></div>
+  </div>
+</section>
+"""
+    return page("Indicadores", shell(body))
 
 
 
