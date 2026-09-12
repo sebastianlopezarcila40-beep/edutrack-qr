@@ -2522,6 +2522,25 @@ class CertificadoApoyoFamiliar(db.Model):
 
 
 
+
+class MetaEmpresa(db.Model):
+    """Metas institucionales PROCSIS (Finanzas / Ventas / Producto / Soporte)."""
+    __tablename__ = "metas_empresa"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200), default="")
+    categoria = db.Column(db.String(40), default="FINANZAS")  # FINANZAS | VENTAS | PRODUCTO | SOPORTE
+    valor_inicial = db.Column(db.Float, default=0.0)
+    valor_meta = db.Column(db.Float, default=0.0)
+    fuente = db.Column(db.String(60), default="MANUAL")  # MANUAL | FONDO_FORMALIZACION | MRR | CARTERA | COLEGIOS | CRM | MUNICIPIOS | CARNETS | SLA | CSAT
+    fecha_limite = db.Column(db.String(20), default="")
+    unidad = db.Column(db.String(40), default="")  # COP | colegios | % | horas | etc
+    activo = db.Column(db.Boolean, default=True)
+    celebrada = db.Column(db.Boolean, default=False)
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+    notas = db.Column(db.Text, default="")
+
+
 class PagoCuotaColegio(db.Model):
     """Pagos parciales / cuotas por institución (alarga plazo o abona deuda)."""
     __tablename__ = "pagos_cuotas_colegio"
@@ -17569,6 +17588,27 @@ def portal_ventas():
         tel_wa = "57" + tel_wa
     msg_wa = quote("Hola, quiero información sobre planes EduTrack para mi colegio.")
     wa = f"https://wa.me/{tel_wa}?text={msg_wa}"
+    # Textos editables desde Gerencia → Landing /ventas
+    try:
+        p_cfg = plataforma()
+    except Exception:
+        p_cfg = None
+    lv_titulo = (getattr(p_cfg, "ventas_landing_titulo", None) or "").strip() or "Software escolar\ncompleto para tu institución"
+    lv_sub = (getattr(p_cfg, "ventas_landing_subtitulo", None) or "").strip() or "Notas SIEE, boletines, asistencia, horarios, PQR y multi-inquilino. Implementación y capacitación incluidas según el plan."
+    try:
+        lv_precio = float(getattr(p_cfg, "ventas_landing_precio_desde", None) or 149000)
+    except Exception:
+        lv_precio = 149000
+    lv_cta = (getattr(p_cfg, "ventas_landing_cta_demo", None) or "").strip() or "¡Agenda una demo!"
+    lv_cta_sub = (getattr(p_cfg, "ventas_landing_cta_sub", None) or "").strip() or "Te contactamos para mostrar EduTrack a rectores y secretaría."
+    lv_nota = (getattr(p_cfg, "ventas_landing_nota_planes", None) or "").strip() or "Solo consulta de tarifas · la activación la hace el equipo PROCSIS / Ventas"
+    lv_h2 = (getattr(p_cfg, "ventas_landing_h2_planes", None) or "").strip() or "Planes EduTrack completo"
+    # título con posible salto de línea → em en segunda línea
+    if "\n" in lv_titulo:
+        parts = lv_titulo.split("\n", 1)
+        lv_titulo_html = _esc(parts[0]) + "<br><em>" + _esc(parts[1]) + "</em>"
+    else:
+        lv_titulo_html = _esc(lv_titulo)
     try:
         _seed_planes_comerciales()
         planes = PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden).all()
@@ -17747,13 +17787,13 @@ def portal_ventas():
   <section class="lv-hero">
     <div class="lv-hero-in">
       <div>
-        <h1>Software escolar<br><em>completo</em> para tu institución</h1>
-        <p>Notas SIEE, boletines, asistencia, horarios, PQR y multi-inquilino. Implementación y capacitación incluidas según el plan.</p>
-        <div class="price">Desde {_cop(149000)} / mes</div>
+        <h1>{lv_titulo_html}</h1>
+        <p>{_esc(lv_sub)}</p>
+        <div class="price">Desde {_cop(lv_precio)} / mes</div>
       </div>
       <div class="lv-box">
-        <h3>¡Agenda una demo!</h3>
-        <p style="font-size:13px;color:#64748b;margin:0 0 8px">Te contactamos para mostrar EduTrack a rectores y secretaría.</p>
+        <h3>{_esc(lv_cta)}</h3>
+        <p style="font-size:13px;color:#64748b;margin:0 0 8px">{_esc(lv_cta_sub)}</p>
         <a class="btn" href="{wa}" target="_blank" rel="noopener">Hablar por WhatsApp</a>
         <a class="btn" href="/ventas/comprar" style="background:#15803d;margin-top:8px">Registrar colegio / comprar plan</a>
       </div>
@@ -17761,8 +17801,8 @@ def portal_ventas():
   </section>
 
   <section class="lv-section" id="planes">
-    <h2>Planes EduTrack completo</h2>
-    <p class="lead">Solo consulta de tarifas · la activación la hace el equipo PROCSIS / Ventas</p>
+    <h2>{_esc(lv_h2)}</h2>
+    <p class="lead">{_esc(lv_nota)}</p>
     <div class="lv-plans">{cards_full}</div>
   </section>
   <section class="lv-section" id="planes-qr" style="background:#f0f9ff;padding-top:32px;padding-bottom:40px">
@@ -20347,6 +20387,7 @@ def gerencia_hq():
         <div class="hq-cat azul-rey">🔵 Finanzas y conexiones del servidor</div>
         <div class="grid-mod">
           <a class="c-azul-rey" href="/gerencia/indicadores">Ver indicadores</a>
+          <a class="c-azul-rey" href="/gerencia/metas">Metas PROCSIS</a>
           <a class="c-azul-rey" href="/gerencia/recursos-financieros">Recursos Financieros y Consumo</a>
           <a class="c-azul-rey" href="/gerencia/contabilidad">Contabilidad · compras/ventas/pagos</a>
           <a class="c-azul-rey" href="/gerencia/tesoreria">Cuentas bancarias y pasarelas</a>
@@ -20361,6 +20402,7 @@ def gerencia_hq():
           <a class="c-naranja-lad" href="/gerencia/web-corporativa">Página web / Web corporativa</a>
           <a class="c-naranja-lad" href="/feature_flags">Parámetros dinámicos / Feature flags</a>
           <a class="c-naranja-lad" href="/gerencia/facturacion">Facturación auto</a>
+          <a class="c-naranja-lad" href="/gerencia/landing-ventas">Landing /ventas (textos)</a>
           <a class="c-naranja-lad" href="/gerencia/planes">Aprobar precios y planes</a>
           <a class="c-naranja-lad" href="/gerencia/descuentos">Descuentos especiales</a>
           <a class="c-naranja-lad" href="/gerencia/lideres">Equipo directivo (web)</a>
@@ -54643,6 +54685,517 @@ def gerencia_indicadores():
 </script>
 """
     return page("Indicadores", shell(body))
+
+
+
+
+def _meta_valor_actual(meta):
+    """Calcula progreso en vivo según fuente (otros módulos)."""
+    fuente = (getattr(meta, "fuente", None) or "MANUAL").upper()
+    try:
+        if fuente == "FONDO_FORMALIZACION":
+            try:
+                # suma ingresos marcados o saldo del fondo si existe
+                total = 0.0
+                for f in FacturaCobro.query.filter(FacturaCobro.estado == "PAGADO").limit(3000).all():
+                    total += float(f.valor or 0)
+                # si hay módulo fondo, preferir
+                try:
+                    from sqlalchemy import text as _t
+                    row = db.session.execute(_t("SELECT COALESCE(SUM(monto),0) FROM fondo_formalizacion_movs")).scalar()
+                    if row:
+                        return float(row)
+                except Exception:
+                    pass
+                return float(total) * 0.05  # proxy: 5% preventas hacia formalización
+            except Exception:
+                return float(meta.valor_inicial or 0)
+        if fuente == "MRR":
+            try:
+                m = _gerencia_metricas()
+                return float(m.get("mrr") or 0)
+            except Exception:
+                return 0.0
+        if fuente == "CARTERA":
+            # para metas de "reducir cartera": valor actual = cartera pendiente
+            try:
+                m = _gerencia_metricas()
+                return float(m.get("cartera") or 0)
+            except Exception:
+                return 0.0
+        if fuente == "COLEGIOS":
+            return float(Institucion.query.filter(Institucion.estado == "ACTIVA").count())
+        if fuente == "CRM":
+            try:
+                return float(db.session.execute(text("SELECT COUNT(*) FROM verificacion_rector WHERE gerencia_decision IS NULL OR gerencia_decision = ''")).scalar() or 0)
+            except Exception:
+                try:
+                    return float(VerificacionRector.query.count())
+                except Exception:
+                    return 0.0
+        if fuente == "MUNICIPIOS":
+            munis = set()
+            for inst in Institucion.query.limit(500).all():
+                mu = (getattr(inst, "municipio", None) or "").strip()
+                dep = (getattr(inst, "departamento", None) or "").strip()
+                if mu or dep:
+                    munis.add((mu or "?") + "|" + (dep or "?"))
+            return float(len(munis))
+        if fuente == "CARNETS":
+            try:
+                return float(Estudiante.query.filter(Estudiante.codigo.isnot(None)).count())
+            except Exception:
+                return 0.0
+        if fuente == "SLA":
+            return float(24)  # horas meta proxy; se compara contra valor_meta
+        if fuente == "CSAT":
+            try:
+                return float(db.session.execute(text("SELECT AVG(score) FROM fidelizacion_csat")).scalar() or 0)
+            except Exception:
+                return 0.0
+    except Exception:
+        pass
+    return float(getattr(meta, "valor_inicial", 0) or 0)
+
+
+def _meta_pct(actual, inicial, objetivo, fuente=""):
+    """Porcentaje de avance. Para CARTERA (reducir), invertido."""
+    try:
+        objetivo = float(objetivo or 0)
+        actual = float(actual or 0)
+        inicial = float(inicial or 0)
+        if (fuente or "").upper() == "CARTERA":
+            # bajar de inicial a objetivo (objetivo suele ser menor)
+            if inicial <= objetivo:
+                return 100.0 if actual <= objetivo else 0.0
+            avanzado = inicial - actual
+            total = inicial - objetivo
+            if total <= 0:
+                return 0.0
+            return max(0.0, min(100.0, 100.0 * avanzado / total))
+        base = objetivo - inicial if objetivo != inicial else objetivo
+        if base == 0:
+            return 100.0 if actual >= objetivo else 0.0
+        return max(0.0, min(100.0, 100.0 * (actual - inicial) / (objetivo - inicial if objetivo != inicial else objetivo)))
+    except Exception:
+        return 0.0
+
+
+@app.route("/gerencia/metas", methods=["GET", "POST"])
+def gerencia_metas():
+    """Tablero de metas PROCSIS · 4 pilares · progreso en vivo."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "crear").strip()
+        if accion == "crear":
+            try:
+                meta = MetaEmpresa(
+                    nombre=(request.form.get("nombre") or "")[:200],
+                    categoria=(request.form.get("categoria") or "FINANZAS")[:40].upper(),
+                    valor_inicial=float((request.form.get("valor_inicial") or "0").replace(".", "").replace(",", ".") or 0),
+                    valor_meta=float((request.form.get("valor_meta") or "0").replace(".", "").replace(",", ".") or 0),
+                    fuente=(request.form.get("fuente") or "MANUAL")[:60].upper(),
+                    fecha_limite=(request.form.get("fecha_limite") or "")[:20],
+                    unidad=(request.form.get("unidad") or "")[:40],
+                    activo=True,
+                    creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                    creado_por=session.get("usuario") or "",
+                    notas=(request.form.get("notas") or "")[:1000],
+                )
+                if not meta.nombre or meta.valor_meta <= 0:
+                    err = "Nombre y valor meta son obligatorios."
+                else:
+                    db.session.add(meta)
+                    db.session.commit()
+                    try:
+                        registrar_auditoria("Meta creada", "%s · %s" % (meta.categoria, meta.nombre[:60]))
+                    except Exception:
+                        pass
+                    msg = "Meta registrada."
+            except Exception as e:
+                db.session.rollback()
+                err = str(e)[:150]
+        elif accion == "celebrar":
+            try:
+                mid = int(request.form.get("meta_id") or 0)
+                meta = MetaEmpresa.query.get(mid)
+                if meta:
+                    meta.celebrada = True
+                    db.session.commit()
+                    msg = "¡Meta celebrada!"
+            except Exception as e:
+                err = str(e)[:100]
+        elif accion == "desactivar":
+            try:
+                mid = int(request.form.get("meta_id") or 0)
+                meta = MetaEmpresa.query.get(mid)
+                if meta:
+                    meta.activo = False
+                    db.session.commit()
+                    msg = "Meta archivada."
+            except Exception as e:
+                err = str(e)[:100]
+        elif accion == "seed":
+            # metas iniciales de ejemplo si no hay
+            if MetaEmpresa.query.count() == 0:
+                seeds = [
+                    ("Registro PROCSIS en Cámara de Comercio", "FINANZAS", 0, 400000, "FONDO_FORMALIZACION", "COP", "2026-09-30"),
+                    ("Crecer MRR a $1.500.000", "FINANZAS", 0, 1500000, "MRR", "COP", "2026-12-31"),
+                    ("Reducir cartera morosa a $0", "FINANZAS", 0, 0, "CARTERA", "COP", "2026-12-31"),
+                    ("5 colegios activos EduTrack", "VENTAS", 0, 5, "COLEGIOS", "colegios", "2026-12-31"),
+                    ("Rectores en negociación CRM", "VENTAS", 0, 10, "CRM", "rectores", "2026-10-31"),
+                    ("Municipios de Antioquia", "VENTAS", 1, 5, "MUNICIPIOS", "municipios", "2026-12-31"),
+                    ("Estudiantes carnetizados QR", "PRODUCTO", 0, 500, "CARNETS", "estudiantes", "2026-12-31"),
+                    ("CSAT rectores ≥ 4.5", "SOPORTE", 0, 4.5, "CSAT", "score", "2026-12-31"),
+                ]
+                for nom, cat, ini, obj, fue, uni, lim in seeds:
+                    db.session.add(MetaEmpresa(
+                        nombre=nom, categoria=cat, valor_inicial=ini, valor_meta=obj,
+                        fuente=fue, unidad=uni, fecha_limite=lim, activo=True,
+                        creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                        creado_por="sistema",
+                    ))
+                db.session.commit()
+                msg = "Metas iniciales cargadas."
+
+    metas = MetaEmpresa.query.filter_by(activo=True).order_by(MetaEmpresa.categoria.asc(), MetaEmpresa.id.asc()).all()
+    if not metas and request.method == "GET":
+        pass  # user can seed
+
+    def _fmt(v, unidad):
+        try:
+            v = float(v or 0)
+        except Exception:
+            return str(v)
+        u = (unidad or "").upper()
+        if u == "COP" or "PESO" in u:
+            return "$ {:,.0f}".format(v).replace(",", ".")
+        if abs(v - int(v)) < 0.01:
+            return str(int(v))
+        return "{:.1f}".format(v)
+
+    cats = {"FINANZAS": "💰 Financieras", "VENTAS": "📈 Expansión / Ventas", "PRODUCTO": "🛠️ Producto", "SOPORTE": "🎧 Soporte / Calidad"}
+    filas_html = []
+    celebrar_ids = []
+    for meta in metas:
+        actual = _meta_valor_actual(meta)
+        pct = _meta_pct(actual, meta.valor_inicial, meta.valor_meta, meta.fuente)
+        if pct >= 80:
+            color = "#16a34a"
+        elif pct >= 41:
+            color = "#ca8a04"
+        else:
+            color = "#dc2626"
+        lim = (meta.fecha_limite or "—")
+        rel = "%s / %s" % (_fmt(actual, meta.unidad), _fmt(meta.valor_meta, meta.unidad))
+        btn_cel = ""
+        if pct >= 100 and not meta.celebrada:
+            celebrar_ids.append(meta.id)
+            btn_cel = (
+                '<form method="POST" style="display:inline;margin-left:6px">'
+                '<input type="hidden" name="accion" value="celebrar">'
+                '<input type="hidden" name="meta_id" value="%s">'
+                '<button type="submit" style="background:#16a34a;color:#fff;border:0;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">🎉 Celebrar</button></form>'
+            ) % meta.id
+        elif meta.celebrada:
+            btn_cel = ' <span style="color:#16a34a;font-size:11px;font-weight:700">✓ Cumplida</span>'
+        filas_html.append(
+            """
+<div class="meta-row" data-cat="%s">
+  <div class="meta-left">
+    <div class="meta-name">%s</div>
+    <div class="meta-due">Vence: %s · %s</div>
+  </div>
+  <div class="meta-bar-wrap">
+    <div class="meta-bar"><i style="width:%s%%;background:%s"></i></div>
+  </div>
+  <div class="meta-right">
+    <b style="color:%s">%s%%</b>
+    <span class="meta-rel">%s</span>
+    %s
+    <form method="POST" style="display:inline" onsubmit="return confirm('¿Archivar meta?')">
+      <input type="hidden" name="accion" value="desactivar">
+      <input type="hidden" name="meta_id" value="%s">
+      <button type="submit" style="border:0;background:transparent;color:#94a3b8;cursor:pointer;font-size:11px">Archivar</button>
+    </form>
+  </div>
+</div>
+""" % (
+                _esc(meta.categoria),
+                _esc(meta.nombre),
+                _esc(lim),
+                _esc(cats.get(meta.categoria, meta.categoria)),
+                "%.1f" % pct,
+                color,
+                color,
+                "%.0f" % pct,
+                _esc(rel),
+                btn_cel,
+                meta.id,
+            )
+        )
+
+    body_rows = "".join(filas_html) or "<p style='color:#64748b;font-size:13px'>No hay metas activas. Crea una o carga las iniciales.</p>"
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Metas PROCSIS</h1>
+  <p>4 pilares · progreso en vivo amarrado a facturación, CRM, colegios y soporte</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+
+<section class="role-panel" style="max-width:920px;margin:0 auto">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+
+  <details style="margin-bottom:14px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px">
+    <summary style="cursor:pointer;font-weight:800;color:#0B2D57;font-size:13px">+ Crear nueva meta</summary>
+    <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <input type="hidden" name="accion" value="crear">
+      <div style="grid-column:1/-1">
+        <label style="font-size:11px;font-weight:700">Nombre de la meta</label>
+        <input name="nombre" required placeholder="Recaudar fondo Matrícula Mercantil" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700">Categoría</label>
+        <select name="categoria" style="width:100%;padding:8px">
+          <option value="FINANZAS">Financieras</option>
+          <option value="VENTAS">Expansión / Ventas</option>
+          <option value="PRODUCTO">Producto</option>
+          <option value="SOPORTE">Soporte / Calidad</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700">Fuente (cálculo automático)</label>
+        <select name="fuente" style="width:100%;padding:8px">
+          <option value="FONDO_FORMALIZACION">Fondo formalización / preventas</option>
+          <option value="MRR">MRR (suscripción)</option>
+          <option value="CARTERA">Cartera pendiente (reducir)</option>
+          <option value="COLEGIOS">Colegios activos</option>
+          <option value="CRM">Rectores CRM</option>
+          <option value="MUNICIPIOS">Municipios</option>
+          <option value="CARNETS">Estudiantes carnetizados</option>
+          <option value="CSAT">CSAT rectores</option>
+          <option value="MANUAL">Manual (solo base)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700">Valor inicial / base</label>
+        <input name="valor_inicial" value="0" style="width:100%;padding:8px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700">Valor meta / objetivo</label>
+        <input name="valor_meta" required placeholder="400000" style="width:100%;padding:8px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700">Unidad</label>
+        <input name="unidad" placeholder="COP / colegios / score" style="width:100%;padding:8px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700">Fecha límite</label>
+        <input type="date" name="fecha_limite" style="width:100%;padding:8px">
+      </div>
+      <div style="grid-column:1/-1">
+        <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:800">Guardar meta</button>
+      </div>
+    </form>
+  </details>
+
+  <form method="POST" style="margin-bottom:12px">
+    <input type="hidden" name="accion" value="seed">
+    <button type="submit" style="background:#f1f5f9;border:1px solid #cbd5e1;padding:6px 10px;border-radius:4px;font-size:12px;cursor:pointer">Cargar metas iniciales de ejemplo</button>
+  </form>
+
+  <div class="meta-board">
+    {body_rows}
+  </div>
+</section>
+
+<style>
+.meta-row{{
+  display:grid;grid-template-columns:minmax(160px,1.2fr) 1.4fr minmax(140px,0.9fr);
+  gap:10px;align-items:center;background:#fff;border:1px solid #e2e8f0;
+  border-radius:6px;padding:10px 12px;margin-bottom:8px;
+}}
+.meta-name{{font-size:13px;font-weight:800;color:#0f172a;line-height:1.25}}
+.meta-due{{font-size:11px;color:#94a3b8;margin-top:2px}}
+.meta-bar-wrap{{min-width:0}}
+.meta-bar{{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden}}
+.meta-bar>i{{display:block;height:100%;border-radius:6px;transition:width .4s}}
+.meta-right{{text-align:right;font-size:12px;color:#334155}}
+.meta-rel{{display:block;font-size:11px;color:#64748b;margin-top:2px}}
+@media (max-width:720px){{
+  .meta-row{{grid-template-columns:1fr;}}
+  .meta-right{{text-align:left}}
+}}
+</style>
+<script>
+(function(){{
+  // Confeti simple al celebrar (si msg contiene Celebrada)
+  var ok = document.querySelector('.msg.ok');
+  if(ok && /celebrada/i.test(ok.textContent||'')){{
+    var c = document.createElement('div');
+    c.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden';
+    document.body.appendChild(c);
+    for(var i=0;i<80;i++){{
+      var p = document.createElement('i');
+      p.style.cssText = 'position:absolute;width:8px;height:8px;border-radius:2px;top:-10px;left:'+(Math.random()*100)+'%;background:hsl('+Math.random()*360+',80%,55%);animation:fall '+(1.5+Math.random()*2)+'s linear forwards';
+      c.appendChild(p);
+    }}
+    var st = document.createElement('style');
+    st.textContent = '@keyframes fall{{to{{transform:translateY(110vh) rotate(720deg);opacity:0}}}}';
+    document.head.appendChild(st);
+    setTimeout(function(){{ c.remove(); }}, 4000);
+  }}
+}})();
+</script>
+"""
+    return page("Metas", shell(body))
+
+
+
+
+def _ensure_ventas_landing_cols():
+    try:
+        cols = [
+            ("ventas_landing_titulo", "VARCHAR(255) DEFAULT ''"),
+            ("ventas_landing_subtitulo", "TEXT DEFAULT ''"),
+            ("ventas_landing_precio_desde", "FLOAT DEFAULT 149000"),
+            ("ventas_landing_cta_demo", "VARCHAR(160) DEFAULT ''"),
+            ("ventas_landing_cta_sub", "VARCHAR(255) DEFAULT ''"),
+            ("ventas_landing_nota_planes", "VARCHAR(255) DEFAULT ''"),
+            ("ventas_landing_h2_planes", "VARCHAR(160) DEFAULT ''"),
+        ]
+        for name, typ in cols:
+            try:
+                db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (name, typ)))
+            except Exception:
+                try:
+                    db.session.execute(text("ALTER TABLE plataforma ADD COLUMN %s %s" % (name, typ)))
+                except Exception:
+                    pass
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+@app.route("/gerencia/landing-ventas", methods=["GET", "POST"])
+def gerencia_landing_ventas():
+    """Editor del panel público /ventas (hero, precio desde, textos de planes). No es el login."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    _ensure_ventas_landing_cols()
+    msg = err = ""
+    p = plataforma()
+    if request.method == "POST":
+        try:
+            p.ventas_landing_titulo = (request.form.get("titulo") or "")[:255]
+            p.ventas_landing_subtitulo = (request.form.get("subtitulo") or "")[:2000]
+            try:
+                p.ventas_landing_precio_desde = float((request.form.get("precio_desde") or "149000").replace(".", "").replace(",", ".") or 149000)
+            except Exception:
+                p.ventas_landing_precio_desde = 149000
+            p.ventas_landing_cta_demo = (request.form.get("cta_demo") or "")[:160]
+            p.ventas_landing_cta_sub = (request.form.get("cta_sub") or "")[:255]
+            p.ventas_landing_nota_planes = (request.form.get("nota_planes") or "")[:255]
+            p.ventas_landing_h2_planes = (request.form.get("h2_planes") or "")[:160]
+            # contacto visible en landing
+            if hasattr(p, "contacto_publico_tel"):
+                tel = (request.form.get("tel") or "").strip()[:40]
+                if tel:
+                    p.contacto_publico_tel = tel
+            if hasattr(p, "contacto_publico_email"):
+                em = (request.form.get("email") or "").strip()[:120]
+                if em:
+                    p.contacto_publico_email = em
+            db.session.commit()
+            try:
+                registrar_auditoria("Landing ventas actualizada", "precio=%s" % p.ventas_landing_precio_desde)
+            except Exception:
+                pass
+            msg = "Landing /ventas actualizada. Los cambios ya aplican en la página pública."
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:150]
+
+    def _g(attr, default=""):
+        v = getattr(p, attr, None)
+        return v if v not in (None, "") else default
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Landing pública /ventas</h1>
+  <p>Edita el panel principal de planes (hero, precio, textos). No es el login de asesores.</p>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+  <a class="btn" href="/ventas" target="_blank">Ver página pública</a>
+  <a class="btn" href="/gerencia/planes" style="background:#15803d">Editar planes y precios</a>
+  <a class="btn" href="/gerencia/hq">← HQ</a>
+</div></header>
+<section class="role-panel" style="max-width:720px">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" style="display:grid;gap:12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px">
+    <div>
+      <label style="font-size:12px;font-weight:700">Título principal (usa Enter o \\n para segunda línea en cursiva)</label>
+      <input name="titulo" value="{_esc(_g('ventas_landing_titulo', 'Software escolar\\ncompleto para tu institución'))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Subtítulo / descripción</label>
+      <textarea name="subtitulo" rows="3" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">{_esc(_g('ventas_landing_subtitulo', 'Notas SIEE, boletines, asistencia, horarios, PQR y multi-inquilino. Implementación y capacitación incluidas según el plan.'))}</textarea>
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Precio «Desde … / mes» (COP)</label>
+      <input name="precio_desde" value="{_esc(str(int(float(_g('ventas_landing_precio_desde', 149000) or 149000))))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Caja demo — título</label>
+      <input name="cta_demo" value="{_esc(_g('ventas_landing_cta_demo', '¡Agenda una demo!'))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Caja demo — texto</label>
+      <input name="cta_sub" value="{_esc(_g('ventas_landing_cta_sub', 'Te contactamos para mostrar EduTrack a rectores y secretaría.'))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Título sección planes</label>
+      <input name="h2_planes" value="{_esc(_g('ventas_landing_h2_planes', 'Planes EduTrack completo'))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Nota bajo el título de planes</label>
+      <input name="nota_planes" value="{_esc(_g('ventas_landing_nota_planes', 'Solo consulta de tarifas · la activación la hace el equipo PROCSIS / Ventas'))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label style="font-size:12px;font-weight:700">Teléfono ventas (barra superior)</label>
+        <input name="tel" value="{_esc(_g('contacto_publico_tel', ''))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700">Email visible</label>
+        <input name="email" value="{_esc(_g('contacto_publico_email', ''))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+    </div>
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800">Guardar cambios en /ventas</button>
+  </form>
+  <p style="font-size:13px;color:#64748b;margin-top:14px">
+    Los <b>precios de cada plan</b> (Básico, Estándar, Pro, Solo QR…) se editan en
+    <a href="/gerencia/planes" style="color:#0B2D57;font-weight:700">Planes · precios · paywalls</a>.
+    Esta pantalla controla el <b>texto y el precio «Desde»</b> del panel público.
+  </p>
+</section>
+"""
+    return page("Landing ventas", shell(body))
 
 
 
