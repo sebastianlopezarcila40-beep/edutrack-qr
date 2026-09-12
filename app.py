@@ -2521,6 +2521,26 @@ class CertificadoApoyoFamiliar(db.Model):
 
 
 
+
+class PagoCuotaColegio(db.Model):
+    """Pagos parciales / cuotas por institución (alarga plazo o abona deuda)."""
+    __tablename__ = "pagos_cuotas_colegio"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True, nullable=False)
+    tipo = db.Column(db.String(40), default="CUOTA")  # CUOTA | ABONO | ALARGUE | PAGO_TOTAL
+    valor = db.Column(db.Float, default=0.0)
+    concepto = db.Column(db.String(200), default="")
+    referencia = db.Column(db.String(120), default="")
+    fecha_pago = db.Column(db.String(20), default="")
+    nueva_fecha_vencimiento = db.Column(db.String(20), default="")
+    dias_alargue = db.Column(db.Integer, default=0)
+    estado_antes = db.Column(db.String(30), default="")
+    estado_despues = db.Column(db.String(30), default="")
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+    notas = db.Column(db.Text, default="")
+
+
 class ActaSocietaria(db.Model):
     """Libro de actas y decisiones (pre-constitución / S.A.S.)."""
     __tablename__ = "actas_societarias"
@@ -17108,7 +17128,10 @@ def ventas_panel():
                 '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">'
                 '<a href="/ventas/comprar?plan=' + _esc(cod) + '" style="background:#15803d;color:#fff;padding:9px 14px;'
                 'border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">Activar este plan</a>'
-                '<a href="/ventas" style="background:#e2e8f0;color:#0B2D57;padding:9px 12px;border-radius:8px;'
+                + ((' <a href="/ventas/preview-carnet-qr" style="background:#0B2D57;color:#fff;padding:9px 12px;'
+                'border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">Vista carné QR</a>')
+                if ("qr" in (cod or "").lower()) else "")
+                + '<a href="/ventas" style="background:#e2e8f0;color:#0B2D57;padding:9px 12px;border-radius:8px;'
                 'font-weight:700;font-size:12px;text-decoration:none">Ver precios</a></div></div>'
             )
     except Exception as _ep:
@@ -17119,7 +17142,7 @@ def ventas_panel():
         '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin:12px 0 16px">'
         '<h2 style="margin:0 0 4px;font-size:14px;color:#0B2D57;font-weight:800;text-transform:uppercase">Planes · Activar colegio</h2>'
         '<p style="margin:0 0 12px;font-size:12px;color:#64748b">Active el plan y registre la institución aquí. '
-        'Portal ventas / planes es solo catálogo de precios.</p>'
+        'Portal ventas / planes es solo catálogo de precios. <a href="/ventas/preview-carnet-qr" style="font-weight:800;color:#0B2D57">Vista previa carné plan QR →</a></p>'
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">'
         + "".join(cards_activar)
         + '</div></div>'
@@ -20046,6 +20069,7 @@ def gerencia_hq():
         <div class="hq-cat verde">🟢 Dinero y facturación</div>
         <div class="grid-mod">
           <a class="c-verde" href="/gerencia/cartera">Cuadro de mando · Cartera</a>
+          <a class="c-verde" href="/gerencia/plazos-cuotas">Plazos, cuotas y abonos</a>
           <a class="c-verde" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
           <a class="c-verde" href="/gerencia/gastos">Gastos y cashflow</a>
           <a class="c-verde" href="/gerencia/contabilidad">Contabilidad comercial</a>
@@ -53688,6 +53712,381 @@ def cobranza_conciliacion():
 </section>
 """
     return page("Conciliación", shell(body))
+
+
+
+
+def _parse_cop_simple(raw):
+    s = (raw or "").strip().replace("$", "").replace(" ", "")
+    if not s:
+        return 0.0
+    try:
+        if "," in s:
+            s = s.replace(".", "").replace(",", ".")
+        elif s.count(".") == 1 and len(s.split(".")[1]) == 3:
+            s = s.replace(".", "")
+        elif s.count(".") > 1:
+            s = s.replace(".", "")
+        return round(float(s), 2)
+    except Exception:
+        return 0.0
+
+
+@app.route("/gerencia/plazos-cuotas", methods=["GET", "POST"])
+def gerencia_plazos_cuotas():
+    """Alargar licencia, registrar abonos/cuotas por colegio y reactivar con nueva fecha."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            iid = int(request.form.get("institucion_id") or 0)
+        except Exception:
+            iid = 0
+        inst = Institucion.query.get(iid) if iid else None
+        if not inst:
+            err = "Seleccione un colegio válido."
+        else:
+            accion = (request.form.get("accion") or "cuota").strip()
+            try:
+                from datetime import timedelta
+                hoy = ahora().date() if hasattr(ahora(), "date") else __import__("datetime").date.today()
+            except Exception:
+                from datetime import date as _d, timedelta
+                hoy = _d.today()
+            estado_antes = (inst.estado or "ACTIVA")
+            valor = _parse_cop_simple(request.form.get("valor"))
+            concepto = (request.form.get("concepto") or "")[:200]
+            referencia = (request.form.get("referencia") or "")[:120]
+            notas = (request.form.get("notas") or "")[:1000]
+            nueva_fv = ""
+            dias = 0
+
+            if accion == "alargue":
+                try:
+                    dias = int(request.form.get("dias_alargue") or 0)
+                except Exception:
+                    dias = 0
+                fv_manual = (request.form.get("nueva_fecha_vencimiento") or "").strip()[:20]
+                if fv_manual:
+                    nueva_fv = fv_manual
+                elif dias > 0:
+                    base = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
+                    if not base or base < hoy:
+                        base = hoy
+                    nueva_fv = (base + timedelta(days=dias)).isoformat()
+                else:
+                    err = "Indique días de alargue o una fecha de vencimiento nueva."
+                if not err and nueva_fv:
+                    inst.fecha_vencimiento = nueva_fv
+                    if request.form.get("reactivar") == "1":
+                        inst.estado = "ACTIVA"
+                        inst.motivo_bloqueo = ""
+                    tipo = "ALARGUE"
+                    if not concepto:
+                        concepto = "Alargue de licencia %s días / hasta %s" % (dias or "—", nueva_fv)
+            elif accion in ("cuota", "abono", "pago_total"):
+                if valor <= 0:
+                    err = "Indique un valor mayor a 0."
+                else:
+                    tipo = {"cuota": "CUOTA", "abono": "ABONO", "pago_total": "PAGO_TOTAL"}.get(accion, "CUOTA")
+                    fv_manual = (request.form.get("nueva_fecha_vencimiento") or "").strip()[:20]
+                    try:
+                        dias = int(request.form.get("dias_alargue") or 0)
+                    except Exception:
+                        dias = 0
+                    if fv_manual:
+                        nueva_fv = fv_manual
+                        inst.fecha_vencimiento = nueva_fv
+                    elif dias > 0:
+                        base = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
+                        if not base or base < hoy:
+                            base = hoy
+                        nueva_fv = (base + timedelta(days=dias)).isoformat()
+                        inst.fecha_vencimiento = nueva_fv
+                    if request.form.get("reactivar") == "1" or accion == "pago_total":
+                        inst.estado = "ACTIVA"
+                        inst.motivo_bloqueo = ""
+                    if not concepto:
+                        concepto = "%s por $ %s" % (tipo, valor)
+            else:
+                err = "Acción no válida."
+                tipo = "CUOTA"
+
+            if not err:
+                mov = PagoCuotaColegio(
+                    institucion_id=inst.id,
+                    tipo=tipo,
+                    valor=valor,
+                    concepto=concepto,
+                    referencia=referencia,
+                    fecha_pago=(request.form.get("fecha_pago") or fecha_hoy() or "")[:20],
+                    nueva_fecha_vencimiento=nueva_fv or (inst.fecha_vencimiento or ""),
+                    dias_alargue=dias,
+                    estado_antes=estado_antes,
+                    estado_despues=(inst.estado or ""),
+                    creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                    creado_por=session.get("usuario") or "",
+                    notas=notas,
+                )
+                db.session.add(mov)
+                db.session.commit()
+                try:
+                    registrar_auditoria(
+                        "Plazo/cuota colegio",
+                        "%s · %s · $%s · venc %s" % (inst.codigo, tipo, valor, nueva_fv or inst.fecha_vencimiento),
+                    )
+                except Exception:
+                    pass
+                msg = "Registrado. Colegio %s · estado %s · vence %s" % (
+                    inst.codigo, inst.estado, inst.fecha_vencimiento or "—",
+                )
+
+    colegios = Institucion.query.order_by(Institucion.nombre.asc()).limit(300).all()
+    opts = "".join(
+        '<option value="%s">%s — %s [%s] venc:%s</option>' % (
+            i.id, _esc(i.codigo or ""), _esc((i.nombre or "")[:50]),
+            _esc(i.estado or ""), _esc(i.fecha_vencimiento or "—"),
+        )
+        for i in colegios
+    )
+    movs = PagoCuotaColegio.query.order_by(PagoCuotaColegio.id.desc()).limit(80).all()
+    def _cop(v):
+        try:
+            return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
+        except Exception:
+            return "$ 0"
+    filas = []
+    for m in movs:
+        inst = Institucion.query.get(m.institucion_id)
+        nom = (inst.codigo if inst else "?") + " · " + ((inst.nombre or "")[:30] if inst else "")
+        filas.append(
+            "<tr><td style='padding:7px'>%s</td><td style='padding:7px'>%s</td>"
+            "<td style='padding:7px'>%s</td><td style='padding:7px;text-align:right'>%s</td>"
+            "<td style='padding:7px'>%s</td><td style='padding:7px'>%s → %s</td></tr>" % (
+                _esc(m.creado_en), _esc(nom), _esc(m.tipo), _cop(m.valor),
+                _esc(m.nueva_fecha_vencimiento), _esc(m.estado_antes), _esc(m.estado_despues),
+            )
+        )
+    tabla = "".join(filas) or "<tr><td colspan='6' style='padding:12px;color:#64748b;text-align:center'>Sin movimientos</td></tr>"
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Plazos, cuotas y abonos</h1>
+  <p>Alargar licencia · pagos parciales · reactivar colegio con nueva fecha de vencimiento</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px;margin-bottom:14px;font-size:13px;color:#1e3a8a">
+    Si solo reactivas sin cambiar <b>fecha de vencimiento</b>, el sistema puede volver a suspender el colegio automáticamente.
+    Aquí registras la cuota/abono y defines hasta cuándo queda activa la licencia.
+  </div>
+  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:900px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-bottom:18px">
+    <div style="grid-column:1/-1">
+      <label style="font-size:12px;font-weight:700">Colegio</label>
+      <select name="institucion_id" required style="width:100%;padding:9px">{opts}</select>
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Tipo de movimiento</label>
+      <select name="accion" style="width:100%;padding:9px">
+        <option value="cuota">Cuota / pago parcial</option>
+        <option value="abono">Abono a deuda</option>
+        <option value="alargue">Solo alargar plazo (sin valor o con valor)</option>
+        <option value="pago_total">Pago total + reactivar</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Valor (COP)</label>
+      <input name="valor" placeholder="150000" style="width:100%;padding:9px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Días de alargue</label>
+      <input name="dias_alargue" type="number" min="0" placeholder="30" style="width:100%;padding:9px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Nueva fecha vencimiento (opcional)</label>
+      <input name="nueva_fecha_vencimiento" type="date" style="width:100%;padding:9px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Fecha del pago</label>
+      <input name="fecha_pago" type="date" value="{(fecha_hoy() or '')[:10]}" style="width:100%;padding:9px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Referencia / voucher</label>
+      <input name="referencia" style="width:100%;padding:9px">
+    </div>
+    <div style="grid-column:1/-1">
+      <label style="font-size:12px;font-weight:700">Concepto</label>
+      <input name="concepto" placeholder="Cuota 1 de 3 · plan QR" style="width:100%;padding:9px">
+    </div>
+    <div style="grid-column:1/-1">
+      <label style="font-size:12px"><input type="checkbox" name="reactivar" value="1" checked> Reactivar colegio (estado ACTIVA)</label>
+    </div>
+    <div style="grid-column:1/-1">
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:11px 16px;border-radius:4px;font-weight:800">Registrar plazo / cuota</button>
+    </div>
+  </form>
+  <h3 style="font-size:14px;color:#0B2D57">Historial</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
+    <tr style="background:#0B2D57;color:#fff">
+      <th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Colegio</th>
+      <th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:right">Valor</th>
+      <th style="padding:8px;text-align:left">Nuevo venc.</th><th style="padding:8px;text-align:left">Estado</th>
+    </tr>
+    {tabla}
+  </table>
+</section>
+"""
+    return page("Plazos y cuotas", shell(body))
+
+
+# Paletas sugeridas por colores de uniforme / institución
+_PALETAS_CARNET_QR = [
+    {"id": "marino_oro", "nombre": "Marino institucional", "primario": "#0B2D57", "acento": "#f59e0b", "fondo": "#ffffff", "texto": "#0f172a"},
+    {"id": "verde_colegio", "nombre": "Verde académico", "primario": "#166534", "acento": "#facc15", "fondo": "#ffffff", "texto": "#14532d"},
+    {"id": "rojo_uniforme", "nombre": "Rojo uniforme", "primario": "#9f1239", "acento": "#fde68a", "fondo": "#ffffff", "texto": "#1f2937"},
+    {"id": "azul_cielo", "nombre": "Azul cielo", "primario": "#0369a1", "acento": "#38bdf8", "fondo": "#f0f9ff", "texto": "#0c4a6e"},
+    {"id": "morado", "nombre": "Morado rectora", "primario": "#5b21b6", "acento": "#c4b5fd", "fondo": "#ffffff", "texto": "#1e1b4b"},
+    {"id": "gris_corporativo", "nombre": "Gris corporativo", "primario": "#334155", "acento": "#94a3b8", "fondo": "#f8fafc", "texto": "#0f172a"},
+]
+
+
+@app.route("/ventas/preview-carnet-qr", methods=["GET", "POST"])
+def ventas_preview_carnet_qr():
+    """Al activar plan QR: paleta de colores según colegio/uniforme + vista previa del carné."""
+    _g = _guard_ventas() if "_guard_ventas" in dir() else None
+    if _g is not None:
+        return _g
+    if not requiere_login() or rol_actual() not in ("Comercial", "Ventas", "Gerente", "Superadmin", "Administrador", "Soporte"):
+        return redirect("/ventas-login")
+
+    colegio = (request.values.get("colegio") or "").strip()[:120]
+    sede = (request.values.get("sede") or "Principal").strip()[:80]
+    alumno = (request.values.get("alumno") or "Estudiante de ejemplo").strip()[:80]
+    grado = (request.values.get("grado") or "6°").strip()[:40]
+    codigo = (request.values.get("codigo") or "2026000001").strip()[:40]
+    color_uni = (request.values.get("color_uniforme") or "").strip().lower()
+    paleta_id = (request.values.get("paleta") or "").strip()
+
+    # Elegir paleta según color de uniforme o selección
+    elegida = _PALETAS_CARNET_QR[0]
+    if paleta_id:
+        for p in _PALETAS_CARNET_QR:
+            if p["id"] == paleta_id:
+                elegida = p
+                break
+    elif color_uni:
+        mapa = {
+            "azul": "marino_oro", "navy": "marino_oro", "marino": "marino_oro",
+            "verde": "verde_colegio", "rojo": "rojo_uniforme", "vino": "rojo_uniforme",
+            "celeste": "azul_cielo", "morado": "morado", "lila": "morado",
+            "gris": "gris_corporativo", "negro": "gris_corporativo",
+        }
+        pid = mapa.get(color_uni, "marino_oro")
+        for p in _PALETAS_CARNET_QR:
+            if p["id"] == pid:
+                elegida = p
+                break
+
+    prim = elegida["primario"]
+    acento = elegida["acento"]
+    fondo = elegida["fondo"]
+    texto = elegida["texto"]
+
+    chips = "".join(
+        '<label style="display:inline-flex;align-items:center;gap:6px;border:1px solid #e2e8f0;border-radius:4px;padding:6px 10px;cursor:pointer;margin:0 6px 6px 0;%s">'
+        '<input type="radio" name="paleta" value="%s" %s style="margin:0">'
+        '<span style="width:14px;height:14px;border-radius:2px;background:%s;display:inline-block"></span>'
+        '<span style="width:14px;height:14px;border-radius:2px;background:%s;display:inline-block"></span>'
+        '<span style="font-size:12px;font-weight:700">%s</span></label>' % (
+            "outline:2px solid #0B2D57" if p["id"] == elegida["id"] else "",
+            p["id"],
+            "checked" if p["id"] == elegida["id"] else "",
+            p["primario"], p["acento"], _esc(p["nombre"]),
+        )
+        for p in _PALETAS_CARNET_QR
+    )
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Vista previa carné plan QR</h1>
+  <p>Paleta según colores del colegio / uniforme · Diseño para plastificar</p>
+</div>
+<a class="btn" href="/ventas/panel">← Ventas</a></header>
+<section class="role-panel">
+  <form method="GET" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;max-width:960px;margin-bottom:18px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+    <div><label style="font-size:12px;font-weight:700">Nombre del colegio</label>
+    <input name="colegio" value="{_esc(colegio)}" placeholder="IE Ejemplo" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Sede</label>
+    <input name="sede" value="{_esc(sede)}" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Color de uniforme</label>
+    <select name="color_uniforme" style="width:100%;padding:8px">
+      <option value="">— elegir —</option>
+      <option value="azul" {"selected" if color_uni=="azul" else ""}>Azul / marino</option>
+      <option value="verde" {"selected" if color_uni=="verde" else ""}>Verde</option>
+      <option value="rojo" {"selected" if color_uni=="rojo" else ""}>Rojo / vino</option>
+      <option value="celeste" {"selected" if color_uni=="celeste" else ""}>Celeste</option>
+      <option value="morado" {"selected" if color_uni=="morado" else ""}>Morado</option>
+      <option value="gris" {"selected" if color_uni=="gris" else ""}>Gris / negro</option>
+    </select></div>
+    <div><label style="font-size:12px;font-weight:700">Alumno (ejemplo)</label>
+    <input name="alumno" value="{_esc(alumno)}" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Grado</label>
+    <input name="grado" value="{_esc(grado)}" style="width:100%;padding:8px"></div>
+    <div><label style="font-size:12px;font-weight:700">Código</label>
+    <input name="codigo" value="{_esc(codigo)}" style="width:100%;padding:8px"></div>
+    <div style="grid-column:1/-1">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px">Paleta sugerida</div>
+      {chips}
+    </div>
+    <div style="grid-column:1/-1">
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:4px;font-weight:800">Actualizar vista previa</button>
+    </div>
+  </form>
+
+  <div style="display:flex;flex-wrap:wrap;gap:28px;justify-content:center;padding:12px 0 24px">
+    <div>
+      <div style="text-align:center;font-size:11px;font-weight:700;letter-spacing:.1em;color:#64748b;margin-bottom:8px">ANVERSO</div>
+      <div style="width:86mm;height:54mm;background:{fondo};border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;display:flex;flex-direction:column">
+        <div style="background:{prim};color:#fff;padding:8px 10px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:10px;font-weight:800;letter-spacing:.06em">EDUTRACK · QR</span>
+          <span style="font-size:9px;background:{acento};color:#0f172a;padding:2px 6px;border-radius:3px;font-weight:800">ACCESO</span>
+        </div>
+        <div style="flex:1;padding:8px 10px;display:flex;gap:8px;align-items:center">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:800;color:{texto};line-height:1.2;margin-bottom:4px">{_esc(alumno[:42])}</div>
+            <div style="font-size:10px;color:#475569">Grado {_esc(grado)}</div>
+            <div style="font-size:11px;font-weight:800;color:{prim};margin-top:4px">Código: {_esc(codigo)}</div>
+          </div>
+          <div style="width:70px;height:70px;background:#fff;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={_esc(codigo)}" alt="QR" width="64" height="64" style="display:block">
+          </div>
+        </div>
+        <div style="background:{prim};color:#fff;font-size:9px;text-align:center;padding:4px 8px">{_esc((colegio or "Nombre del colegio")[:48])} · {_esc(sede)}</div>
+      </div>
+    </div>
+    <div>
+      <div style="text-align:center;font-size:11px;font-weight:700;letter-spacing:.1em;color:#64748b;margin-bottom:8px">REVERSO</div>
+      <div style="width:86mm;height:54mm;background:{fondo};border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;display:flex;flex-direction:column">
+        <div style="background:{prim};color:#fff;padding:8px 10px;font-size:10px;font-weight:800;letter-spacing:.06em;text-align:center">CONTROL DE ACCESO</div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data={_esc(codigo)}" alt="QR" width="88" height="88">
+          <div style="font-size:9px;color:#64748b;text-align:center">Si el QR no escanea, digite<br><b style="color:{prim}">{_esc(codigo)}</b></div>
+        </div>
+        <div style="background:{prim};color:#fff;font-size:9px;text-align:center;padding:4px 8px">EduTrack · Portería</div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#64748b;text-align:center">Paleta: <b>{_esc(elegida["nombre"])}</b> · Primario {_esc(prim)} · Acento {_esc(acento)} · Ideal para plan Solo QR / QR+</p>
+</section>
+"""
+    return page("Preview carné QR", shell(body))
 
 
 
