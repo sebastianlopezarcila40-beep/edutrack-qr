@@ -3849,7 +3849,7 @@ def migrar_columnas():
         ("plataforma", "corp_barra_extra", "ALTER TABLE plataforma ADD COLUMN corp_barra_extra VARCHAR(255) DEFAULT ''"),
         ("plataforma", "corp_brand_nombre", "ALTER TABLE plataforma ADD COLUMN corp_brand_nombre VARCHAR(80) DEFAULT 'EduTrack'"),
         ("plataforma", "corp_brand_sub", "ALTER TABLE plataforma ADD COLUMN corp_brand_sub VARCHAR(80) DEFAULT 'Soluciones digitales'"),
-        ("plataforma", "corp_hero_fondo", "ALTER TABLE plataforma ADD COLUMN corp_hero_fondo VARCHAR(255) DEFAULT ''"),
+        ("plataforma", "corp_hero_fondo", "ALTER TABLE plataforma ADD COLUMN corp_hero_fondo TEXT DEFAULT ''"),
         ("plataforma", "corp_caracteristicas", "ALTER TABLE plataforma ADD COLUMN corp_caracteristicas TEXT"),
         ("plataforma", "corp_empresa_puntos", "ALTER TABLE plataforma ADD COLUMN corp_empresa_puntos TEXT"),
         ("plataforma", "corp_btn1_texto", "ALTER TABLE plataforma ADD COLUMN corp_btn1_texto VARCHAR(80) DEFAULT 'Conocer PROCSIS'"),
@@ -5251,7 +5251,40 @@ def nombre_producto():
 
 
 
-@app.route("/media/logo-corporativo")
+@app.route("/media/logo-corporativo", "/media/hero-corporativo")
+
+
+@app.route("/media/hero-corporativo")
+def media_hero_corporativo():
+    """Sirve el fondo hero de /procsis desde BD (evita CSS con data URI enorme)."""
+    from flask import Response
+    try:
+        row = db.session.execute(text(
+            "SELECT corp_hero_fondo FROM plataforma ORDER BY id ASC LIMIT 1"
+        )).first()
+        ruta = (row[0] if row else "") or ""
+    except Exception:
+        ruta = ""
+    if str(ruta).startswith("data:image"):
+        try:
+            header, b64 = ruta.split(",", 1)
+            mime = "image/jpeg"
+            if "png" in header:
+                mime = "image/png"
+            elif "webp" in header:
+                mime = "image/webp"
+            import base64 as _b64
+            return Response(_b64.b64decode(b64), mimetype=mime, headers={"Cache-Control": "public, max-age=600"})
+        except Exception:
+            pass
+    if str(ruta).startswith("http"):
+        return redirect(ruta)
+    return Response(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4'></svg>",
+        mimetype="image/svg+xml",
+    )
+
+
 def media_logo_corporativo():
     """Sirve el logo PROCSIS guardado en BD (data URI o archivo). Nunca EduTrack de producto."""
     from flask import Response
@@ -5311,9 +5344,20 @@ def logo_plataforma():
     import os as _os
     try:
         # Lectura directa SQL para evitar ORM stale / "not mapped"
-        row = db.session.execute(text(
-            "SELECT logo_path, COALESCE(logo_es_custom, FALSE) FROM plataforma ORDER BY id ASC LIMIT 1"
-        )).first()
+        try:
+            row = db.session.execute(text(
+                "SELECT logo_path, COALESCE(logo_es_custom, FALSE) FROM plataforma ORDER BY id ASC LIMIT 1"
+            )).first()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            row = db.session.execute(text(
+                "SELECT logo_path FROM plataforma ORDER BY id ASC LIMIT 1"
+            )).first()
+            if row:
+                row = (row[0], False)
         if row:
             ruta = (row[0] or "").strip()
             es_custom = bool(row[1])
@@ -17546,21 +17590,25 @@ def ventas_panel():
     _g = _guard_ventas()
     if _g is not None:
         return _g
+    # No db.create_all() en cada request (provoca timeouts 504 en Railway)
     try:
-        db.create_all()
-        _seed_planes_comerciales()
+        if not session.get("_planes_seeded"):
+            _seed_planes_comerciales()
+            session["_planes_seeded"] = True
     except Exception:
         pass
     rol = (session.get("rol") or "").strip()
     asesor = (session.get("usuario") or "asesor").strip()
-    # Nombre legible: "lopez" → "López" no siempre; capitalizar usuario
     asesor_label = asesor.replace("_", " ").replace(".", " ").title()
     try:
         p = plataforma()
-        logo_et = logo_plataforma() if "logo_plataforma" in dir() else (getattr(p, "logo_path", None) or "/static/img/logo-edutrack.png")
         empresa = (getattr(p, "empresa", None) or "Procsis").strip()
     except Exception:
-        logo_et, empresa = "/static/img/logo-edutrack.png", "Procsis"
+        p, empresa = None, "Procsis"
+    try:
+        logo_et = logo_plataforma()
+    except Exception:
+        logo_et = "/media/logo-corporativo"
 
     # Embudo counts
     try:
@@ -17925,6 +17973,7 @@ async function consultarMEN(){{
 @app.route("/ventas")
 @app.route("/gerencia/ventas")
 def portal_ventas():
+    # Catálogo público/comercial de planes (sin create_all pesado)
     """Landing comercial tipo operadora: hero + planes scroll + beneficios + CTA."""
     from urllib.parse import quote
     try:
@@ -24775,18 +24824,50 @@ def gerencia_web_corporativa():
         _set_si("corp_btn3_texto", request.form.get("corp_btn3_texto") or "Entrar al sistema", 80)
         _set_si("corp_btn3_url", request.form.get("corp_btn3_url") or "/login", 160)
         try:
+            # corp_hero_fondo debe ser TEXT (data URI no cabe en VARCHAR 255)
+            try:
+                db.session.execute(text("ALTER TABLE plataforma ALTER COLUMN corp_hero_fondo TYPE TEXT"))
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
             fimg = request.files.get("corp_hero_fondo_file")
             if fimg and getattr(fimg, "filename", ""):
-                data_uri = _archivo_a_data_uri(fimg, max_bytes=3_000_000)
+                try:
+                    fimg.stream.seek(0)
+                except Exception:
+                    pass
+                data_uri = _archivo_a_data_uri(fimg, max_bytes=2_500_000)
                 if data_uri:
                     p.corp_hero_fondo = data_uri
+                    try:
+                        db.session.execute(text(
+                            "UPDATE plataforma SET corp_hero_fondo=:h WHERE id=:id"
+                        ), {"h": data_uri, "id": p.id})
+                    except Exception as _ue:
+                        print("hero sql:", _ue)
+                else:
+                    mensaje = (mensaje + " " if mensaje else "") + "No se pudo leer la imagen del hero (use JPG/PNG < 2.5 MB)."
             else:
                 url_f = (request.form.get("corp_hero_fondo_url") or "").strip()
-                # Solo URL http(s); no pisar data URI con texto vacío o truncado del form
                 if url_f.startswith("http://") or url_f.startswith("https://"):
-                    p.corp_hero_fondo = url_f[:500]
+                    p.corp_hero_fondo = url_f[:2000]
+                    try:
+                        db.session.execute(text(
+                            "UPDATE plataforma SET corp_hero_fondo=:h WHERE id=:id"
+                        ), {"h": url_f[:2000], "id": p.id})
+                    except Exception:
+                        pass
             if request.form.get("quitar_fondo") == "1":
                 p.corp_hero_fondo = ""
+                try:
+                    db.session.execute(text(
+                        "UPDATE plataforma SET corp_hero_fondo='' WHERE id=:id"
+                    ), {"id": p.id})
+                except Exception:
+                    pass
         except Exception as _hf:
             print("hero fondo:", _hf)
         try:
@@ -24797,8 +24878,31 @@ def gerencia_web_corporativa():
                     p.logo_path = data_uri
         except Exception as _lg:
             print("corp logo:", _lg)
-        db.session.commit()
-        mensaje = "Página corporativa guardada. Este contenido NO se borra solo: solo cambia cuando Gerencia guarda aquí."
+        try:
+            db.session.add(p)
+            db.session.commit()
+        except Exception as _cm:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            # Reintento solo campos de texto sin logo
+            try:
+                db.session.execute(text(
+                    "UPDATE plataforma SET corp_hero_titulo=:t, corp_hero_texto=:x WHERE id=:id"
+                ), {
+                    "t": (getattr(p, "corp_hero_titulo", None) or "")[:255],
+                    "x": getattr(p, "corp_hero_texto", None) or "",
+                    "id": p.id,
+                })
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+            print("corp commit:", _cm)
+        mensaje = "Página corporativa guardada. Revise /procsis (Ctrl+F5). Hero y textos se leen desde la base de datos."
         try:
             registrar_auditoria("Gerencia web corporativa", "Actualizó textos /procsis")
         except Exception:
@@ -45766,7 +45870,13 @@ def pagina_corporativa_procsis():
         corp_tag = (getattr(_pp, "corp_tag", None) or "SOLUCIONES DIGITALES · COLOMBIA").strip()
         hero_tit = (getattr(_pp, "corp_hero_titulo", None) or "Software y solución digital para instituciones educativas").strip()
         hero_txt = (getattr(_pp, "corp_hero_texto", None) or "Diseñamos y operamos plataformas serias para colegios: gestión académica, reportes de coordinación, boletines y acompañamiento a directivos y docentes.").strip()
-        hero_fondo = (getattr(_pp, "corp_hero_fondo", None) or "").strip()
+        try:
+            _row_h = db.session.execute(text(
+                "SELECT corp_hero_fondo FROM plataforma ORDER BY id ASC LIMIT 1"
+            )).first()
+            hero_fondo = ((_row_h[0] if _row_h else None) or getattr(_pp, "corp_hero_fondo", None) or "").strip()
+        except Exception:
+            hero_fondo = (getattr(_pp, "corp_hero_fondo", None) or "").strip()
         caract_raw = (getattr(_pp, "corp_caracteristicas", None) or "").strip()
         empresa_pts = (getattr(_pp, "corp_empresa_puntos", None) or "").strip()
         btn1_t = (getattr(_pp, "corp_btn1_texto", None) or "Conocer PROCSIS").strip()
@@ -45831,9 +45941,11 @@ def pagina_corporativa_procsis():
     lis_emp = "".join(f"<li>{_esc(x.strip())}</li>" for x in (empresa_pts or "").replace("\\n", "\n").splitlines() if x.strip())
     btn1_t, btn2_t, btn3_t = _esc(btn1_t), _esc(btn2_t), _esc(btn3_t)
     if hero_fondo:
+        # data URI muy largo rompe el CSS del navegador → servir por /media/hero-corporativo
+        _hero_url = "/media/hero-corporativo" if str(hero_fondo).startswith("data:image") else str(hero_fondo).replace("'", "")
         hero_bg_style = (
             "background-image:linear-gradient(105deg,rgba(255,255,255,.92) 0%,rgba(248,250,252,.78) 42%,rgba(15,23,42,.35) 100%),url('"
-            + str(hero_fondo).replace("'", "")
+            + _hero_url
             + "');background-size:cover;background-position:center right;color:#0f172a;"
         )
     else:
