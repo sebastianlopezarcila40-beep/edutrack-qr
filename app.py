@@ -1183,6 +1183,7 @@ class Plataforma(db.Model):
     email_empresa = db.Column(db.String(160), default="")
     telefono_empresa = db.Column(db.String(40), default="")
     logo_es_custom = db.Column(db.Boolean, default=False)  # True solo si subieron logo PROCSIS en Datos empresa
+    css_inyectado = db.Column(db.Text, default="")  # CSS custom desde Consola Desarrollo
     # Personalización de logins (colores / diseño)
     login_color_primario = db.Column(db.String(20), default="#0B2D57")
     login_color_acento = db.Column(db.String(20), default="#f59e0b")
@@ -2935,7 +2936,13 @@ def css_tema_global():
     # Secundario: bordes/alertas/carnés (amarillo)
     sec = _hex(getattr(p, "tema_color_secundario", None) or getattr(p, "tema_color_acento", None), "#F2C12E")
     fondo = _hex(getattr(p, "tema_color_fondo", None), "#F8FAFC")
-    return (
+    try:
+        extra = (getattr(p, "css_inyectado", None) or "").strip()
+    except Exception:
+        extra = ""
+    if extra:
+        extra = extra.replace("</style>", "").replace("</STYLE>", "")[:20000]
+    base_css = (
         '<style id="tema-global">'
         ':root{'
         '--primary-color:' + prim + ';'
@@ -2957,15 +2964,48 @@ def css_tema_global():
         'font-family:' + fuente + ',Segoe UI,Arial,sans-serif!important}'
         '</style>'
     )
+    if extra:
+        return base_css + '<style id="css-inyectado-custom">' + extra + '</style>'
+    return base_css
 
 
-def feature_enabled(clave, default=False):
-    """Feature Flags globales (institucion_id NULL). Usar: if feature_enabled('whatsapp_api'): ..."""
+def feature_enabled(clave, default=False, inst=None):
+    """Feature Flags globales. Si Sandbox está ON, flags de módulos solo aplican al colegio de pruebas."""
     try:
         row = FeatureFlag.query.filter_by(clave=clave, institucion_id=None).first()
         if row is None:
-            return bool(default)
-        return bool(row.activo)
+            activo = bool(default)
+        else:
+            activo = bool(row.activo)
+        if not activo:
+            return False
+        # Sandbox: funciones experimentales solo en colegio de pruebas
+        if clave in ("whatsapp_api", "carnetizacion_masiva_pdf", "liquidacion_prestaciones"):
+            try:
+                sb = FeatureFlag.query.filter_by(clave="sandbox_mode", institucion_id=None).first()
+                if sb and sb.activo:
+                    # Solo true si la institución actual es de prueba
+                    try:
+                        if inst is None:
+                            iid = session.get("institucion_id")
+                            if iid:
+                                inst = Institucion.query.get(iid)
+                        if inst is not None:
+                            nombre = (getattr(inst, "nombre", None) or "").lower()
+                            codigo = (getattr(inst, "codigo", None) or "").lower()
+                            es_prueba = (
+                                "prueba" in nombre or "test" in nombre or "sandbox" in nombre
+                                or codigo in ("prueba", "test", "sandbox", "demo-interno")
+                                or bool(getattr(inst, "es_prueba", False))
+                            )
+                            return bool(es_prueba)
+                        # Sin contexto de colegio (staff interno): permitir
+                        return True
+                    except Exception:
+                        return True
+            except Exception:
+                pass
+        return True
     except Exception:
         return bool(default)
 
@@ -56122,6 +56162,63 @@ def _login_theme_css():
 # ── Buffer de errores en memoria (Bug Tracking) ─────────────────────────────
 _DEV_ERROR_LOG = []  # list of dict {ts, level, msg}
 _DEV_ERROR_LOG_MAX = 200
+_DEV_SESSIONS = {}  # sid -> {usuario, rol, ip, ua, last_action, last_ts}
+_DEV_SESSIONS_TTL = 900  # 15 min
+
+def _dev_track_session(action="vista"):
+    try:
+        import time
+        sid = session.get("session_token") or session.get("usuario") or "anon"
+        now = time.time()
+        # limpia viejas
+        dead = [k for k, v in _DEV_SESSIONS.items() if now - float(v.get("last_ts") or 0) > _DEV_SESSIONS_TTL]
+        for k in dead:
+            _DEV_SESSIONS.pop(k, None)
+        ua = (request.headers.get("User-Agent") or "")[:160]
+        ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+        _DEV_SESSIONS[str(sid)] = {
+            "usuario": session.get("usuario") or "—",
+            "rol": session.get("rol") or "—",
+            "ip": ip,
+            "ua": ua,
+            "last_action": (action or "vista")[:120],
+            "last_ts": now,
+        }
+    except Exception:
+        pass
+
+def _dev_sessions_html():
+    try:
+        import time
+        from datetime import datetime as _dt
+        now = time.time()
+        rows = []
+        for v in sorted(_DEV_SESSIONS.values(), key=lambda x: -float(x.get("last_ts") or 0)):
+            age = int(now - float(v.get("last_ts") or 0))
+            ts = _dt.fromtimestamp(float(v.get("last_ts") or 0)).strftime("%H:%M:%S")
+            rows.append(
+                "<tr style='border-bottom:1px solid #e2e8f0'>"
+                "<td style='padding:6px 8px;font-size:12px'><b>%s</b><br><span style='color:#64748b'>%s</span></td>"
+                "<td style='padding:6px 8px;font-size:12px;font-family:monospace'>%s</td>"
+                "<td style='padding:6px 8px;font-size:11px;color:#475569;max-width:220px;overflow:hidden;text-overflow:ellipsis'>%s</td>"
+                "<td style='padding:6px 8px;font-size:12px'>%s</td>"
+                "<td style='padding:6px 8px;font-size:12px'>%s <span style='color:#94a3b8'>(hace %ss)</span></td></tr>"
+                % (_esc(v.get("usuario")), _esc(v.get("rol")), _esc(v.get("ip")),
+                   _esc(v.get("ua")), _esc(v.get("last_action")), ts, age)
+            )
+        if not rows:
+            return "<p style='font-size:12px;color:#64748b'>Ninguna sesión técnica activa en los últimos 15 min.</p>"
+        return ("<table style='width:100%;border-collapse:collapse'>"
+                "<thead><tr style='background:#f8fafc;text-align:left'>"
+                "<th style='padding:6px 8px;font-size:11px'>Usuario / Rol</th>"
+                "<th style='padding:6px 8px;font-size:11px'>IP</th>"
+                "<th style='padding:6px 8px;font-size:11px'>Navegador</th>"
+                "<th style='padding:6px 8px;font-size:11px'>Última acción</th>"
+                "<th style='padding:6px 8px;font-size:11px'>Hora</th></tr></thead>"
+                "<tbody>%s</tbody></table>" % "".join(rows))
+    except Exception as e:
+        return "<p style='color:#b91c1c;font-size:12px'>Error sesiones: %s</p>" % _esc(str(e)[:80])
+
 
 
 def _dev_log_error(msg, level="ERROR"):
@@ -56150,6 +56247,7 @@ def _ensure_dev_version_cols():
             ("tema_color_primario", "VARCHAR(20) DEFAULT '#0B4A8F'"),
             ("tema_color_secundario", "VARCHAR(20) DEFAULT '#F2C12E'"),
             ("tema_color_fondo", "VARCHAR(20) DEFAULT '#F8FAFC'"),
+            ("css_inyectado", "TEXT DEFAULT ''"),
         ]:
             try:
                 db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
@@ -56194,6 +56292,10 @@ def dev_console():
     g = _guard_dev_console()
     if g:
         return g
+    try:
+        _dev_track_session("abre_consola")
+    except Exception:
+        pass
     _ensure_dev_version_cols()
     msg = err = ""
     tab = (request.args.get("tab") or request.form.get("tab") or "sistema").strip().lower()
@@ -56209,6 +56311,10 @@ def dev_console():
         ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
         try:
             registrar_auditoria("Dev console", "%s · IP %s · %s" % (accion, ip, session.get("usuario")))
+        except Exception:
+            pass
+        try:
+            _dev_track_session(accion or "post")
         except Exception:
             pass
         tab = (request.form.get("tab") or tab).strip().lower()
@@ -56275,6 +56381,7 @@ def dev_console():
             prim = (request.form.get("tema_color_primario") or "#0B4A8F").strip()[:20]
             sec = (request.form.get("tema_color_secundario") or "#F2C12E").strip()[:20]
             fondo = (request.form.get("tema_color_fondo") or "#F8FAFC").strip()[:20]
+            css_extra = (request.form.get("css_inyectado") or "").strip()[:20000]
             try:
                 if p is not None:
                     p.tema_color_primario = prim
@@ -56287,6 +56394,10 @@ def dev_console():
                     except Exception:
                         pass
                     p.tema_color_fondo = fondo
+                    try:
+                        p.css_inyectado = css_extra
+                    except Exception:
+                        pass
                 db.session.execute(text(
                     "UPDATE plataforma SET tema_color_primario=:a, tema_color_fondo=:c"
                 ), {"a": prim, "c": fondo})
@@ -56294,8 +56405,16 @@ def dev_console():
                     db.session.execute(text("UPDATE plataforma SET tema_color_secundario=:b, tema_color_acento=:b"), {"b": sec})
                 except Exception:
                     pass
+                try:
+                    db.session.execute(text("UPDATE plataforma SET css_inyectado=:x"), {"x": css_extra})
+                except Exception:
+                    try:
+                        db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS css_inyectado TEXT DEFAULT ''"))
+                        db.session.execute(text("UPDATE plataforma SET css_inyectado=:x"), {"x": css_extra})
+                    except Exception:
+                        pass
                 db.session.commit()
-                msg = "Paleta corporativa guardada. Se aplica en toda la suite al recargar."
+                msg = "Paleta y CSS inyectado guardados. Se aplican al recargar cualquier panel."
             except Exception as e:
                 err = str(e)[:120]
             tab = "temas"
@@ -56306,6 +56425,7 @@ def dev_console():
                 "whatsapp_api": "Módulo de Conexión WhatsApp API",
                 "carnetizacion_masiva_pdf": "Módulo de Carnetización Masiva PDF",
                 "liquidacion_prestaciones": "Módulo de Liquidación con Prestaciones",
+                "sandbox_mode": "Entorno Sandbox / Pruebas (solo colegio de prueba)",
             }
             if clave in desc_map:
                 if _set_feature_flag(clave, estado, desc_map[clave]):
@@ -56381,11 +56501,17 @@ def dev_console():
     try:
         n_inst = Institucion.query.count()
     except Exception:
-        n_inst = "—"
+        try:
+            n_inst = db.session.execute(text("SELECT COUNT(*) FROM instituciones")).scalar() or 0
+        except Exception:
+            n_inst = 0
     try:
         n_est = Estudiante.query.count()
     except Exception:
-        n_est = "—"
+        try:
+            n_est = db.session.execute(text("SELECT COUNT(*) FROM estudiantes")).scalar() or 0
+        except Exception:
+            n_est = 0
     try:
         disk_txt = _disk_usage_txt()
     except Exception:
@@ -56416,8 +56542,8 @@ def dev_console():
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
       <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Infraestructura</h3>
       <p style="font-size:12px;margin:4px 0">Memoria proceso: <b>{_esc(mem_info)}</b></p>
-      <p style="font-size:12px;margin:4px 0">Colegios en BD: <b>{n_inst}</b> <span style="color:#94a3b8">(COUNT instituciones)</span></p>
-      <p style="font-size:12px;margin:4px 0">Estudiantes: <b>{n_est}</b> <span style="color:#94a3b8">(COUNT estudiantes)</span></p>
+      <p style="font-size:12px;margin:4px 0">Colegios en BD: <b>{n_inst}</b></p>
+      <p style="font-size:12px;margin:4px 0">Estudiantes: <b>{n_est}</b></p>
       <p style="font-size:12px;margin:4px 0">Espacio en disco (Railway/Volume): <b>{_esc(disk_txt)}</b></p>
       <p style="font-size:12px;margin:4px 0">Mantenimiento: <b style="color:{'#b91c1c' if mant else '#15803d'}">{'ON' if mant else 'OFF'}</b></p>
       <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
@@ -56441,6 +56567,11 @@ def dev_console():
       </form>
     </div>
     <div style="max-height:300px;overflow:auto;margin-top:8px">{log_html}</div>
+  </div>
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-top:14px">
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Sesiones activas (Consola técnica)</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 10px">Usuarios con la consola abierta en los últimos 15 minutos · IP · navegador · última acción.</p>
+    {_dev_sessions_html()}
   </div>
 """
     elif tab == "versiones":
@@ -56488,8 +56619,9 @@ def dev_console():
             prim_v = (getattr(p, "tema_color_primario", None) or "#0B4A8F")
             sec_v = (getattr(p, "tema_color_secundario", None) or getattr(p, "tema_color_acento", None) or "#F2C12E")
             fondo_v = (getattr(p, "tema_color_fondo", None) or "#F8FAFC")
+            css_extra_v = getattr(p, "css_inyectado", None) or ""
         except Exception:
-            prim_v, sec_v, fondo_v = "#0B4A8F", "#F2C12E", "#F8FAFC"
+            prim_v, sec_v, fondo_v, css_extra_v = "#0B4A8F", "#F2C12E", "#F8FAFC", ""
         panel = f"""
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:560px">
     <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Sistema de Personalización Corporativa (Temas CSS)</h3>
@@ -56513,13 +56645,19 @@ def dev_console():
         <span style="background:{_esc(prim_v)};color:#fff;padding:8px 14px;border-radius:4px;font-size:12px;font-weight:700">Primario</span>
         <span style="background:{_esc(sec_v)};color:#0f172a;padding:8px 14px;border-radius:4px;font-size:12px;font-weight:700">Secundario</span>
       </div>
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar paleta corporativa</button>
+      <div>
+        <label style="font-size:12px;font-weight:700">CSS Inyectado Personalizado</label>
+        <p style="font-size:11px;color:#64748b;margin:4px 0 6px">Código CSS adicional (sin alterar el fuente en Railway). Ej: botones cuadrados, tipografía de un colegio exigente.</p>
+        <textarea name="css_inyectado" rows="8" placeholder=".btn {{ border-radius: 0 !important; }}&#10;body {{ font-family: Georgia, serif !important; }}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px;font-family:ui-monospace,Consolas,monospace;font-size:12px">{_esc(css_extra_v)}</textarea>
+      </div>
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar paleta y CSS</button>
     </form>
   </div>
 """
     else:
         # flags
         flags_def = [
+            ("sandbox_mode", "Entorno Sandbox / Pruebas (maestro)"),
             ("whatsapp_api", "Módulo de Conexión WhatsApp API"),
             ("carnetizacion_masiva_pdf", "Módulo de Carnetización Masiva PDF"),
             ("liquidacion_prestaciones", "Módulo de Liquidación con Prestaciones"),
@@ -56550,7 +56688,7 @@ def dev_console():
         panel = f"""
   <div style="max-width:640px">
     <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Gestor de Nuevas Funciones (Feature Flags)</h3>
-    <p style="font-size:12px;color:#64748b;margin:0 0 14px">Interruptores globales ON/OFF. En el código: <code>if feature_enabled('whatsapp_api'):</code> … Si está OFF el módulo se oculta para los colegios.</p>
+    <p style="font-size:12px;color:#64748b;margin:0 0 14px">Interruptores globales ON/OFF. Con <b>Sandbox ON</b>, WhatsApp / Carnés / Prestaciones solo aplican a colegios de prueba (nombre/código con «prueba», «test» o «sandbox»). Uso: <code>if feature_enabled('whatsapp_api'):</code></p>
     {''.join(filas_f)}
   </div>
 """
