@@ -3210,7 +3210,7 @@ def menu_items_por_rol():
             ("/usuarios", "Usuarios (reset / altas)"),
             ("/soporte/equipo", "Equipo Procsis"),
             ("/tenants", "Instituciones"),
-            ("/soporte/actualizaciones", "Actualizaciones"),
+            ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
             ("/soporte/marca", "Marca y contacto"),
             ("/sedes", "Sedes (colegios)"),
             ("/soporte/pqr", "Centro PQR"),
@@ -5106,6 +5106,14 @@ def plataforma():
         x.hero_titulo = "Tecnología educativa con control y transparencia"
         x.hero_texto = ""
         x.smtp_correo = x.smtp_password = x.smtp_notif_correo = x.smtp_notif_password = ""
+        # Anuncios institucionales (evita AttributeError en /gerencia/anuncios si la BD falla)
+        x.anuncio_activo = False
+        x.anuncio_titulo = ""
+        x.anuncio_cuerpo = ""
+        x.anuncio_cuenta = ""
+        x.anuncio_version = "1"
+        x.anuncio_img1 = ""
+        x.anuncio_img2 = ""
         return x
 
 
@@ -5517,7 +5525,7 @@ def shell_soporte(content):
         ("/soporte/prorroga", "Prórroga 24h"),
         ("/tenants", "Instituciones"),
         ("/nueva_institucion", "Nueva institución"),
-        ("/soporte/actualizaciones", "Actualizaciones"),
+        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
         ("/servidores", "Servidores"),
         ("/auditoria", "Auditoría"),
         ("/modo_prueba", "Modo prueba"),
@@ -8978,19 +8986,29 @@ def login():
                 slides.append((img, cap_t))
     except Exception:
         slides = []
+    slides_tienen_fotos = bool(slides)
     if not slides:
-        logo0 = datos.get("logo") or "/static/img/logo-edutrack.png"
+        # Sin fotos de carrusel cargadas todavía (Gerencia → /gerencia/diseno-login):
+        # se muestran 3 paneles corporativos con degradados distintos, para que el
+        # carrusel se vea "vivo" en vez de repetir la misma imagen sin cambios.
         slides = [
-            (logo0, "EduTrack · Tecnología educativa"),
-            (logo0, "Gestión multi-institucional"),
-            (logo0, "Asistencia, notas y reportes"),
+            ("linear-gradient(135deg,#0B2D57 0%,#1e3a8a 60%,#0ea5e9 100%)", "EduTrack · Tecnología educativa"),
+            ("linear-gradient(135deg,#0f172a 0%,#0B2D57 55%,#1e40af 100%)", "Gestión multi-institucional"),
+            ("linear-gradient(135deg,#1e3a8a 0%,#0369a1 55%,#0d9488 100%)", "Asistencia, notas y reportes"),
         ]
     slides_html = ""
     dots_html = ""
     for i, (img, cap) in enumerate(slides):
+        if slides_tienen_fotos:
+            visual_html = f'<img src="{img}" alt="Slide {i+1}" loading="eager">'
+        else:
+            visual_html = (
+                f'<div class="sinai-slide-ph" style="background:{img}">'
+                f'<img src="{datos.get("logo") or "/static/img/logo-edutrack.png"}" alt="EduTrack" class="sinai-slide-ph-logo"></div>'
+            )
         slides_html += (
             f'<div class="sinai-slide" data-i="{i}">'
-            f'<img src="{img}" alt="Slide {i+1}" loading="eager">'
+            f'{visual_html}'
             f'<div class="sinai-slide-cap"><b>{cap}</b><span>EduTrack · PROCSIS</span></div>'
             f"</div>"
         )
@@ -9035,8 +9053,15 @@ def login():
 .sinai-carousel{{position:relative;border-radius:20px;overflow:hidden;height:420px;background:linear-gradient(145deg,#0B2D57 0%,#1e3a8a 50%,#0ea5e9 100%);box-shadow:0 16px 40px rgba(15,23,42,.18);border:1px solid #e2e8f0}}
 .sinai-viewport{{width:100%;height:100%;overflow:hidden}}
 .sinai-track{{display:flex;height:100%;width:100%;transition:transform .55s ease}}
-.sinai-slide{{position:relative;min-width:100%;width:100%;height:100%;flex-shrink:0}}
-.sinai-slide img{{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.92)}}
+.sinai-slide{{position:relative;min-width:100%;width:100%;height:100%;flex-shrink:0;overflow:hidden}}
+.sinai-slide img{{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.92);animation:sinai-kenburns 9s ease-in-out infinite alternate}}
+.sinai-slide-ph{{width:100%;height:100%;display:flex;align-items:center;justify-content:center;animation:sinai-kenburns 9s ease-in-out infinite alternate}}
+.sinai-slide-ph-logo{{width:96px;height:96px;object-fit:contain;background:rgba(255,255,255,.92);border-radius:20px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}}
+@keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.08)}}}}
+.sinai-slide-cap{{animation:sinai-fade-up .6s ease}}
+@keyframes sinai-fade-up{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
+.sinai-card{{animation:sinai-fade-in .5s ease}}
+@keyframes sinai-fade-in{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
 .sinai-slide-cap{{position:absolute;left:0;right:0;bottom:0;padding:22px 24px 40px;background:linear-gradient(transparent,rgba(11,45,87,.92));color:#fff}}
 .sinai-slide-cap b{{display:block;font-size:20px;line-height:1.3;margin-bottom:4px}}
 .sinai-slide-cap span{{font-size:12px;opacity:.9}}
@@ -14408,7 +14433,18 @@ datos tratados, a través de los <a href="/atencion-directivos/canales-contacto"
 
 @app.route("/atencion-directivos/preguntas-frecuentes")
 def centro_ayuda_faq():
-    cuerpo = """
+    """Preguntas frecuentes: prioriza lo que Soporte publica en /soporte/actualizaciones (campo FAQ).
+    Si Soporte aún no ha escrito nada, se muestra un contenido por defecto."""
+    faq_soporte = ""
+    try:
+        p = plataforma()
+        faq_soporte = (getattr(p, "faq", None) or "").strip()
+    except Exception:
+        faq_soporte = ""
+    if faq_soporte:
+        cuerpo = _txt_a_html_lista(faq_soporte)
+    else:
+        cuerpo = """
 <h2>¿Cómo cambio de plan?</h2>
 <p>Comuníquese con su asesor comercial o a través del formulario de <a href="/contacto">contacto</a>.</p>
 <h2>¿Qué pasa si tengo una factura pendiente?</h2>
@@ -14417,6 +14453,8 @@ listada en <a href="/atencion-directivos/canales-contacto">canales de atención<
 <h2>¿Cómo reporto un problema técnico?</h2>
 <p>Use el canal de soporte técnico — no es necesario radicar una PQR formal para incidencias técnicas del
 día a día, aunque puede hacerlo si lo prefiere.</p>
+<p class="mini-text" style="margin-top:18px;color:#94a3b8">Aún no hay preguntas frecuentes personalizadas — Soporte puede publicarlas desde
+"Actualizaciones / FAQ / Ayuda" en su panel.</p>
 """
     return _ayuda_shell("preguntas-frecuentes", "Preguntas frecuentes", cuerpo)
 
@@ -18488,7 +18526,7 @@ def ventas_comprar():
             _nom = (_p.nombre or _cod).strip()
             _sel = " selected" if _cod.lower() == plan.lower() else ""
             _pr = int(float(_p.precio_mensual or 0))
-            _pr_txt = ("$ {:,.0f}/mes".format(_pr)).replace(",", ".") if _pr > 0 else "A definir"
+            _pr_txt = ("{}/mes".format(_cop(_pr))) if _pr > 0 else "A definir · consultar con Gerencia"
             opciones_plan += '<option value="' + _esc(_cod) + '"' + _sel + '>' + _esc(_nom) + " — " + _pr_txt + "</option>"
             _activo = (_cod.lower() == plan.lower())
             _bg = "#ecfdf5;border:2px solid #16a34a" if _activo else "#fff;border:1px solid #e2e8f0"
@@ -20905,6 +20943,7 @@ def gerencia_hq():
           <a class="c-naranja" href="/gerencia/correo-notificaciones">Conectar Gmail · Notificaciones</a>
           <a class="c-naranja" href="/gerencia/procsis-web">Noticias y productos web</a>
           <a class="c-naranja" href="/gerencia/anuncios">Anuncios (editar)</a>
+          <a class="c-naranja" href="/gerencia/actualizaciones">Actualizaciones / FAQ / Ayuda (ver)</a>
         </div>
 
         <div class="hq-cat gris">⚫ Seguridad e internos</div>
@@ -28610,8 +28649,15 @@ def gerencia_planes():
                 <label>Nombre</label>
                 <input name="nombre" value="{p.nombre}" required>
                 <div class="row2">
-                  <div><label>Precio mensual COP</label><input name="precio" type="number" value="{int(p.precio_mensual)}"></div>
-                  <div><label>Fee implementación</label><input name="fee" type="number" value="{int(p.fee_implementacion)}"></div>
+                  <div>
+                    <label>Precio mensual (pesos colombianos completos, sin puntos)</label>
+                    <input name="precio" type="number" min="0" step="1" placeholder="Ej: 70000" value="{int(p.precio_mensual)}">
+                    <p style="font-size:11px;color:#64748b;margin:4px 0 0">
+                      Escriba el valor completo en pesos. Ej: para $70.000 COP escriba <b>70000</b> (no <b>70</b>).
+                      Ahora se ve como: <b>{_cop(p.precio_mensual)}</b> · Si el plan aún no tiene tarifa definida, deje en 0 (se mostrará "Consultar precio").
+                    </p>
+                  </div>
+                  <div><label>Fee implementación</label><input name="fee" type="number" min="0" step="1" placeholder="Ej: 550000" value="{int(p.fee_implementacion)}"></div>
                 </div>
                 <div class="row2">
                   <div><label>Máx. estudiantes</label><input name="max_e" type="number" value="{p.max_estudiantes}"></div>
@@ -30399,7 +30445,7 @@ def _modulos_por_rol(rol):
         ("Consulta PQR validada", "/soporte/pqr/consulta", "#1d4ed8"),
         ("💙 Fidelización CSAT", "/soporte/fidelizacion", "#0d9488"),
         ("Aperturas de notas", "/soporte/aperturas-notas", "#b45309"),
-        ("Actualizaciones / login", "/soporte/actualizaciones", "#1d4ed8"),
+        ("Actualizaciones / FAQ / Ayuda", "/soporte/actualizaciones", "#1d4ed8"),
         ("Servidores", "/servidores", "#1d4ed8"),
         ("Modo prueba", "/modo_prueba", "#64748b"),
         ("Planilla accesos Excel", "/soporte/planilla-accesos", "#0f766e"),
@@ -30898,6 +30944,7 @@ def soporte_admin():
     <a class="btn" href="/soporte/prorroga" style="background:#7c2d12;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📅 Prórroga 24h</a>
     <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📆 Periodos 3/4</a>
     <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🚨 Logs errores</a>
+    <a class="btn" href="/soporte/actualizaciones" style="background:#0d9488;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">❓ Preguntas frecuentes / Ayuda</a>
     <a class="btn" href="/mi-perfil" style="background:#334155;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">👤 Mi perfil</a>
   </div>
 </section>
@@ -39501,21 +39548,34 @@ body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#fff;color:#111}
 
 @app.route("/soporte/actualizaciones", methods=["GET", "POST"])
 def soporte_actualizaciones():
-    """Panel Soporte: versión, novedades, FAQ, mantenimiento (se ven en el login)."""
-    if not requiere_login() or rol_actual() != "Soporte":
+    """Panel de contenidos del login: FAQ/Ayuda (Soporte), últimas actualizaciones y mejoras
+    (Desarrollador), y aviso de mantenimiento (Soporte). Gerencia solo supervisa (ver
+    /gerencia/actualizaciones), no edita este contenido."""
+    if not requiere_login():
         return redirect("/soporte-login")
+    _rol_act = rol_actual()
+    if _rol_act not in ("Soporte", "Desarrollador"):
+        if _rol_act in ("Gerente", "Superadmin", "Administrador"):
+            return redirect("/gerencia/actualizaciones")
+        return redirect("/soporte-login")
+    es_soporte = _rol_act == "Soporte"
+    es_desarrollo = _rol_act == "Desarrollador"
     p = plataforma()
     mensaje = ""
     if request.method == "POST":
         accion = request.form.get("accion") or "guardar"
         try:
             if accion == "guardar":
-                p.version_sistema = (request.form.get("version_sistema") or "2.5.0").strip()[:40]
-                p.novedades = (request.form.get("novedades") or "").strip()
-                p.faq = (request.form.get("faq") or "").strip()
-                p.mantenimiento_programado = (request.form.get("mantenimiento_programado") or "").strip()
-                p.habeas_data = (request.form.get("habeas_data") or "").strip()
-                p.reinicio_aviso = (request.form.get("reinicio_aviso") or "").strip()[:255]
+                # Cada rol solo puede editar lo suyo: Soporte → FAQ/Ayuda/mantenimiento;
+                # Desarrollador → últimas actualizaciones y mejoras (novedades).
+                if es_desarrollo:
+                    p.novedades = (request.form.get("novedades") or "").strip()
+                if es_soporte:
+                    p.version_sistema = (request.form.get("version_sistema") or "2.5.0").strip()[:40]
+                    p.faq = (request.form.get("faq") or "").strip()
+                    p.mantenimiento_programado = (request.form.get("mantenimiento_programado") or "").strip()
+                    p.habeas_data = (request.form.get("habeas_data") or "").strip()
+                    p.reinicio_aviso = (request.form.get("reinicio_aviso") or "").strip()[:255]
                 p.hero_chip = (request.form.get("hero_chip") or "").strip()[:120]
                 p.hero_titulo = (request.form.get("hero_titulo") or "").strip()[:220]
                 p.hero_texto = (request.form.get("hero_texto") or "").strip()
@@ -39557,20 +39617,30 @@ def soporte_actualizaciones():
         except Exception as ex:
             db.session.rollback()
             mensaje = f"Error: {ex}"
+    _ro_faq = "" if es_soporte else " readonly disabled"
+    _ro_nov = "" if es_desarrollo else " readonly disabled"
+    _nota_rol = (
+        "Estás editando como <b>Soporte</b>: puedes cambiar FAQ, Ayuda, mantenimiento y Habeas Data. "
+        "El campo de novedades lo administra Desarrollador (aquí solo se muestra)."
+        if es_soporte else
+        "Estás editando como <b>Desarrollador</b>: puedes publicar las últimas actualizaciones y mejoras. "
+        "FAQ, Ayuda y mantenimiento los administra Soporte (aquí solo se muestran)."
+    )
     content = f"""
 <header class="role-hero">
   <div>
-    <h1>Centro de actualizaciones</h1>
+    <h1>Centro de actualizaciones · Preguntas frecuentes · Ayuda</h1>
     <p>Lo que publiques aquí aparece abajo del login de EduTrack (novedades, versión, FAQ, mantenimiento).</p>
   </div>
   <a class="btn" href="/login" target="_blank">Ver login</a>
 </header>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+<div class="msg" style="background:#eff6ff;color:#1e3a8a;border-radius:10px;padding:10px 14px;margin-bottom:12px">{_nota_rol}</div>
 <div class="role-panel">
   <form method="POST" enctype="multipart/form-data">
     <input type="hidden" name="accion" value="guardar">
     <label><b>Versión del sistema</b></label>
-    <input name="version_sistema" value="{(getattr(p,'version_sistema',None) or '2.5.0')}" placeholder="2.5.0">
+    <input name="version_sistema" value="{(getattr(p,'version_sistema',None) or '2.5.0')}" placeholder="2.5.0"{_ro_faq}>
     <h3 style="margin-top:16px;color:#0B2D57">Panel derecho del login (mensaje ejecutivo)</h3>
     <label>Chip / etiqueta</label>
     <input name="hero_chip" value="{(getattr(p,'hero_chip',None) or '')}" placeholder="Plataforma institucional · Acceso seguro">
@@ -39579,16 +39649,16 @@ def soporte_actualizaciones():
     <label>Texto (párrafos separados por línea en blanco)</label>
     <textarea name="hero_texto" rows="5">{(getattr(p,'hero_texto',None) or '')}</textarea>
     <p class="mini-text">Todo lo que guardes aquí se muestra en el <b>login</b> (bloque con scroll). Usa párrafos separados y viñetas con <code>•</code> o <code>-</code>.</p>
-    <label><b>Últimas actualizaciones / novedades</b></label>
-    <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa...">{(getattr(p,'novedades',None) or '')}</textarea>
-    <label><b>Preguntas frecuentes</b> (separa cada pregunta con una línea en blanco)</label>
-    <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...&#10;&#10;¿Cómo ingreso como docente?&#10;Respuesta...">{(getattr(p,'faq',None) or '')}</textarea>
+    <label><b>Últimas actualizaciones / novedades</b> {"" if es_desarrollo else "(solo lectura · lo edita Desarrollador)"}</label>
+    <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa..."{_ro_nov}>{(getattr(p,'novedades',None) or '')}</textarea>
+    <label><b>Preguntas frecuentes</b> {"" if es_soporte else "(solo lectura · lo edita Soporte)"} (separa cada pregunta con una línea en blanco)</label>
+    <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...&#10;&#10;¿Cómo ingreso como docente?&#10;Respuesta..."{_ro_faq}>{(getattr(p,'faq',None) or '')}</textarea>
     <label><b>Mantenimiento programado</b> (fecha, hora, mensaje)</label>
-    <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores">{(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
+    <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores"{_ro_faq}>{(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
     <label><b>Texto Habeas Data (Colombia)</b></label>
-    <textarea name="habeas_data" rows="4">{(getattr(p,'habeas_data',None) or '')}</textarea>
+    <textarea name="habeas_data" rows="4"{_ro_faq}>{(getattr(p,'habeas_data',None) or '')}</textarea>
     <label><b>Aviso corto de reinicio / plataforma</b></label>
-    <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min">
+    <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min"{_ro_faq}>
     <h3 style="margin-top:18px;color:#0B2D57">Imágenes de novedades (máx. 3)</h3>
     <p class="mini-text">Se muestran en una columna estrecha al lado del texto en el login. PNG/JPG/WebP o URL.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
@@ -39651,7 +39721,43 @@ def soporte_actualizaciones():
   <p class="mini-text" style="margin-top:10px">Nota: el “reinicio real” del servidor se hace en Railway. Desde aquí solo se informa a los usuarios en el login.</p>
 </div>
 """
-    return page("Actualizaciones", shell(content))
+    return page("Actualizaciones / FAQ / Ayuda", shell(content))
+
+
+@app.route("/gerencia/actualizaciones")
+def gerencia_actualizaciones():
+    """Vista de SOLO SUPERVISIÓN para Gerencia: novedades, FAQ y ayuda que publican
+    Desarrollador y Soporte. Gerencia no edita este contenido desde aquí (para eso
+    existe el carrusel de fotos del login, que sí administra en /gerencia/diseno-login)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    p = plataforma()
+    novedades_html = _txt_a_html_lista(getattr(p, "novedades", None) or "") or "<p class='mini-text'>Desarrollador aún no ha publicado novedades.</p>"
+    faq_html = _txt_a_html_lista(getattr(p, "faq", None) or "") or "<p class='mini-text'>Soporte aún no ha publicado preguntas frecuentes.</p>"
+    mant = _esc(getattr(p, "mantenimiento_programado", None) or "Sin mantenimiento programado.")
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Actualizaciones · FAQ · Ayuda (solo supervisión)</h1>
+  <p>Gerencia visualiza este contenido, pero no lo edita. La edición corresponde a Soporte (FAQ / Ayuda)
+  y a Desarrollador (últimas actualizaciones y mejoras). Para las fotos del carrusel del login, use
+  <a href="/gerencia/diseno-login">Diseño de login</a>.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  <h2 style="color:#0B2D57">Últimas actualizaciones y mejoras (Desarrollador)</h2>
+  {novedades_html}
+</section>
+<section class="role-panel" style="margin-top:14px">
+  <h2 style="color:#0B2D57">Preguntas frecuentes / Ayuda (Soporte)</h2>
+  {faq_html}
+</section>
+<section class="role-panel" style="margin-top:14px">
+  <h2 style="color:#0B2D57">Mantenimiento programado (Soporte)</h2>
+  <p>{mant}</p>
+</section>
+"""
+    return page("Actualizaciones (Gerencia · solo ver)", shell(content))
 
 
 
@@ -39720,7 +39826,7 @@ def soporte_anuncios():
                 print("anuncio upload:", ex)
             # Siempre nueva versión → todos los usuarios vuelven a ver el anuncio
             try:
-                p.anuncio_version = str(int(str(p.anuncio_version or "1").strip() or "1") + 1)
+                p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
             except Exception:
                 p.anuncio_version = str(__import__("time").time())
             # Limpiar dismiss de esta sesión de gerencia para previsualizar
@@ -39734,12 +39840,12 @@ def soporte_anuncios():
             except Exception:
                 pass
             try:
-                registrar_auditoria("Anuncio global", f"{rol}: activo={p.anuncio_activo} titulo={p.anuncio_titulo[:60]}")
+                registrar_auditoria("Anuncio global", f"{rol}: activo={getattr(p,'anuncio_activo',False)} titulo={(getattr(p,'anuncio_titulo',None) or '')[:60]}")
             except Exception:
                 pass
             mensaje = (
                 "Anuncio guardado (v%s). " % (getattr(p, "anuncio_version", "") or "")
-                + ("Ya está activo: se verá al abrir /login y portales de acceso." if p.anuncio_activo else "(Inactivo — marque «Anuncio activo» para publicarlo)")
+                + ("Ya está activo: se verá al abrir /login y portales de acceso." if getattr(p,"anuncio_activo",False) else "(Inactivo — marque «Anuncio activo» para publicarlo)")
             )
     volver_href = "/soporte_admin" if (rol == "Soporte" or session.get("soporte")) else "/gerencia/hq"
     content = f"""
@@ -39756,22 +39862,22 @@ def soporte_anuncios():
       Anuncio activo (visible en login)
     </label>
     <label><b>Título</b></label>
-    <input name="titulo" value="{(p.anuncio_titulo or "").replace('"','&quot;')}" placeholder="Ej. Solidaridad ante emergencia nacional">
+    <input name="titulo" value="{(getattr(p,"anuncio_titulo",None) or "").replace('"','&quot;')}" placeholder="Ej. Solidaridad ante emergencia nacional">
     <label><b>Mensaje</b></label>
-    <textarea name="cuerpo" rows="6" placeholder="Texto del anuncio...">{(p.anuncio_cuerpo or "")}</textarea>
+    <textarea name="cuerpo" rows="6" placeholder="Texto del anuncio...">{(getattr(p,"anuncio_cuerpo",None) or "")}</textarea>
     <label><b>Fotos del anuncio</b> (opcional, máx. 2 · JPG/PNG)</label>
     <div class="form-row">
       <div>
         <input type="file" name="foto1" accept="image/*">
-        {('<div style="margin-top:8px"><img src="'+p.anuncio_img1+'" style="max-width:100%;max-height:120px;border-radius:10px;border:1px solid #e2e8f0"><label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px"><input type="checkbox" name="quitar_foto1" value="1" style="width:auto"> Quitar foto 1</label></div>') if getattr(p,"anuncio_img1",None) else '<p class="mini-text">Foto principal</p>'}
+        {('<div style="margin-top:8px"><img src="'+(getattr(p,"anuncio_img1",None) or "")+'" style="max-width:100%;max-height:120px;border-radius:10px;border:1px solid #e2e8f0"><label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px"><input type="checkbox" name="quitar_foto1" value="1" style="width:auto"> Quitar foto 1</label></div>') if getattr(p,"anuncio_img1",None) else '<p class="mini-text">Foto principal</p>'}
       </div>
       <div>
         <input type="file" name="foto2" accept="image/*">
-        {('<div style="margin-top:8px"><img src="'+p.anuncio_img2+'" style="max-width:100%;max-height:120px;border-radius:10px;border:1px solid #e2e8f0"><label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px"><input type="checkbox" name="quitar_foto2" value="1" style="width:auto"> Quitar foto 2</label></div>') if getattr(p,"anuncio_img2",None) else '<p class="mini-text">Foto secundaria</p>'}
+        {('<div style="margin-top:8px"><img src="'+(getattr(p,"anuncio_img2",None) or "")+'" style="max-width:100%;max-height:120px;border-radius:10px;border:1px solid #e2e8f0"><label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px"><input type="checkbox" name="quitar_foto2" value="1" style="width:auto"> Quitar foto 2</label></div>') if getattr(p,"anuncio_img2",None) else '<p class="mini-text">Foto secundaria</p>'}
       </div>
     </div>
     <label><b>Número de cuenta / datos de donación</b> (opcional)</label>
-    <input name="cuenta" value="{(p.anuncio_cuenta or "").replace('"','&quot;')}" placeholder="Ej. Bancolombia Ahorros 123-456789-00 · NIT 900...">
+    <input name="cuenta" value="{(getattr(p,"anuncio_cuenta",None) or "").replace('"','&quot;')}" placeholder="Ej. Bancolombia Ahorros 123-456789-00 · NIT 900...">
     <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
       <input type="checkbox" name="forzar_nueva" value="1" style="width:auto">
       Volver a mostrar aunque el usuario ya hubiera cerrado el aviso anterior
@@ -56656,6 +56762,24 @@ def gerencia_diseno_login():
                     p.login_logo_path = "/" + path_rel.replace("\\\\", "/")
                 except Exception:
                     pass
+            # Carrusel de fotos del login de acceso institucional (hasta 5) — administrado por Gerencia
+            import os as _osc
+            _car_dir = _osc.path.join(app.root_path, "static", "img", "novedades")
+            _osc.makedirs(_car_dir, exist_ok=True)
+            for _i in (1, 2, 3, 4, 5):
+                _cimg = request.files.get(f"carrusel_img{_i}")
+                if _cimg and (_cimg.filename or "").strip():
+                    _ext = (_cimg.filename.rsplit(".", 1)[-1] or "png").lower()
+                    if _ext not in ("png", "jpg", "jpeg", "webp", "gif"):
+                        _ext = "png"
+                    _fname = f"nov{_i}_{fecha_hoy().replace('-','')}.{_ext}"
+                    _cimg.save(_osc.path.join(_car_dir, _fname))
+                    setattr(p, f"novedad_img{_i}", f"/static/img/novedades/{_fname}")
+                _cap = (request.form.get(f"carrusel_img{_i}_cap") or "").strip()[:120]
+                if _cap:
+                    setattr(p, f"novedad_img{_i}_cap", _cap)
+                if request.form.get(f"carrusel_img{_i}_clear"):
+                    setattr(p, f"novedad_img{_i}", "")
             db.session.commit()
             try:
                 db.session.execute(text(
@@ -56720,6 +56844,20 @@ def gerencia_diseno_login():
       <label style="font-size:12px;font-weight:700">Logo del login</label>
       <input type="file" name="logo" accept="image/*" style="width:100%;padding:8px">
       {('<img src="'+_esc(logo)+'" alt="" style="max-height:64px;margin-top:8px">') if logo else ''}
+    </div>
+    <h3 style="margin:10px 0 0;color:#0B2D57;font-size:15px">Carrusel de fotos · Acceso institucional (login)</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 6px">Hasta 5 fotos que rotan automáticamente en el login (colegio). Recomendado: fotos horizontales, mismo tamaño, imagen institucional/corporativa.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      {"".join(
+        f'''<div>
+          <label style="font-size:12px;font-weight:700">Foto {i}</label>
+          {('<img src="'+_esc(getattr(p,f"novedad_img{i}",None) or "")+'" style="width:100%;max-height:70px;object-fit:cover;border-radius:8px;margin-bottom:6px">') if getattr(p,f"novedad_img{i}",None) else ""}
+          <input type="file" name="carrusel_img{i}" accept="image/*" style="width:100%">
+          <input name="carrusel_img{i}_cap" value="{_esc(getattr(p,f"novedad_img{i}_cap",None) or "")}" placeholder="Título corto" style="width:100%;margin-top:4px;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px">
+          <label style="display:flex;gap:6px;align-items:center;margin-top:4px;font-size:11px;font-weight:400"><input type="checkbox" name="carrusel_img{i}_clear" value="1" style="width:auto"> Quitar foto</label>
+        </div>'''
+        for i in (1, 2, 3, 4, 5)
+      )}
     </div>
     <button type="submit" style="background:{_esc(prim)};color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800">Guardar diseño</button>
   </form>
