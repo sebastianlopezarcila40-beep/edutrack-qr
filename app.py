@@ -5251,9 +5251,6 @@ def nombre_producto():
 
 
 
-@app.route("/media/logo-corporativo", "/media/hero-corporativo")
-
-
 @app.route("/media/hero-corporativo")
 def media_hero_corporativo():
     """Sirve el fondo hero de /procsis desde BD (evita CSS con data URI enorme)."""
@@ -5285,6 +5282,7 @@ def media_hero_corporativo():
     )
 
 
+@app.route("/media/logo-corporativo")
 def media_logo_corporativo():
     """Sirve el logo PROCSIS guardado en BD (data URI o archivo). Nunca EduTrack de producto."""
     from flask import Response
