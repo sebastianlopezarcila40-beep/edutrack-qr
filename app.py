@@ -4500,7 +4500,7 @@ def ruta_publica():
         or p.startswith("/qr/")
         or p.startswith("/matricula")
         or p.startswith("/colegio")
-        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/legal", "/cookies", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado"]
+        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/legal", "/cookies", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva"]
         or p.startswith("/verificar-certificado")
         or p.startswith("/demo/invitar")
         or p.startswith("/pqr/")
@@ -4800,6 +4800,7 @@ def contenido_login_novedades():
     if not faq:
         faq = (
             "¿Olvidé mi contraseña?\nUse «¿Olvidaste tu contraseña?» en el login o contacte a su administrador.\n\n"
+
             "¿Cómo ingreso como docente?\nUse el enlace Docentes o el usuario asignado por el colegio.\n\n"
             "¿Qué es multi-inquilino?\nCada colegio tiene sus datos aislados: no ve información de otra institución.\n\n"
             "¿Cómo radico una PQR?\nIngrese a /pqr, complete el formulario y conserve el radicado.\n\n"
@@ -7901,18 +7902,46 @@ def registrar_ingreso(codigo, estado, registrado_por=None):
     codigo = limpiar_codigo(codigo)
     e = q_estudiantes().filter_by(codigo=codigo).first()
     if not e:
-        # fallback: si portal público sin sesión, buscar global pero preferir con institucion
         e = Estudiante.query.filter_by(codigo=codigo).first()
-    if not e: return "Estudiante no registrado", "No registrado"
+    if not e:
+        return "Estudiante no registrado", "No registrado"
     if not registrado_por:
         registrado_por = f"{session.get('usuario', 'Portería')} ({session.get('rol', 'Portal móvil')})" if requiere_login() else "Portería / Portal móvil"
+    # Anti-suplantación: mismo QR en menos de 15 min
+    try:
+        ok_qr, wait_s = _qr_anti_suplantacion_ok(codigo, segundos=900)
+        if not ok_qr:
+            return (
+                "ALERTA: CARNÉ YA REGISTRADO EN EL PLANTEL - POSIBLE SUPLANTACIÓN. "
+                "Espere %s s y verifique la foto del estudiante." % wait_s,
+                "Suplantacion",
+            )
+    except Exception:
+        pass
     ultimo = IngresoPorteria.query.filter_by(estudiante_id=e.id, fecha=fecha_hoy()).order_by(IngresoPorteria.id.desc()).first()
     if ultimo:
         return f"Entrada bloqueada: {e.nombre} {e.apellido} ya fue registrado hoy a las {ultimo.hora} por {ultimo.registrado_por}.", "Duplicado"
-    db.session.add(IngresoPorteria(estudiante_id=e.id,fecha=fecha_hoy(),hora=hora_actual(),dia=ahora().strftime("%A"),estado=estado,periodo=periodo_actual(),registrado_por=registrado_por))
+    # Estado automático por hora de corte (07:00)
+    hora = hora_actual()
+    try:
+        st_auto, mins = _estado_ingreso_por_hora(hora, _hora_corte_tarde())
+        if st_auto == "RETARDO":
+            estado = "Tarde"
+        elif (estado or "").strip() in ("", "Temprano", "A tiempo", "A_TIEMPO"):
+            estado = "Temprano"
+    except Exception:
+        mins = 0
+    db.session.add(IngresoPorteria(
+        estudiante_id=e.id, fecha=fecha_hoy(), hora=hora,
+        dia=ahora().strftime("%A"), estado=estado, periodo=periodo_actual(),
+        registrado_por=registrado_por,
+    ))
     db.session.commit()
     registrar_auditoria("Registro de ingreso", f"{e.codigo} - {e.nombre} {e.apellido} - {estado} - {registrado_por}")
-    return f"Registro guardado: {e.nombre} {e.apellido} - {estado}", estado
+    extra = ""
+    if (estado or "").lower() in ("tarde", "retardo"):
+        extra = " (%s min tarde)" % mins if mins else " (retardo)"
+    return f"Registro guardado: {e.nombre} {e.apellido} - {estado}{extra}", estado
 
 def enviar_pin(correo_destino, pin):
     if not SOPORTE_EMAIL or not SOPORTE_PASSWORD: return False
@@ -8997,6 +9026,7 @@ def login():
             <a href="/recuperar">¿Problemas para ingresar? Contacta a Soporte</a>
           </div>
           <div class="sinai-portals">
+            <a href="/acudiente-asistencia" style="background:#0B2D57;color:#fff">Consulta asistencia en vivo · Acudientes</a>
             <a href="/familia-login" style="background:#ecfdf5;color:#065f46">Portal familiar · Padres</a>
             <a href="/ayuda">Centro de ayuda</a>
             <a href="/atencion-directivos">Atención al directivo · PQR</a>
@@ -20386,6 +20416,23 @@ def gerencia_hq():
         nit_emp = (getattr(p_plat, "nit", None) or "").strip()
     except Exception:
         logo_et, empresa, producto, nit_emp = "/static/img/logo-procsis.svg?v=21", "PROCSIS", "EduTrack", ""
+    _rol_hq = (session.get("rol") or rol_actual() or "").strip()
+    _ver_tecnica = _rol_hq in ("Superadmin", "Desarrollador", "Developer", "Gerente", "Administrador")
+    tab_tecnica_btn = (
+        '<button type="button" class="hq-tab" data-tab="tecnica" onclick="hqTab(this,\'tecnica\')">CONSOLA TÉCNICA</button>'
+        if _ver_tecnica else ""
+    )
+    tab_tecnica_panel = f"""
+      <div id="hq-tab-tecnica" class="hq-tab-panel">
+        <p class="hq-note" style="margin-top:0">Infraestructura, feature flags, temas CSS y monitoreo (rol técnico).</p>
+        <div class="grid-mod">
+          <a class="own" href="/dev-console">Abrir consola de desarrollo</a>
+          <a class="own" href="/dev-console?tab=flags">Feature flags</a>
+          <a class="own" href="/dev-console?tab=temas">Temas CSS / CSS inyectado</a>
+          <a class="own" href="/dev-console?tab=sistema">Logs y sesiones técnicas</a>
+        </div>
+      </div>
+""" if _ver_tecnica else ""
     try:
         from datetime import datetime as _dt
         hoy_txt = _dt.now().strftime("%d de %B de %Y")
@@ -20485,19 +20532,19 @@ def gerencia_hq():
 .hq-cat.azul-rey{{background:#eff6ff;color:#1e3a8a}}
 .hq-cat.naranja-lad{{background:#fff7ed;color:#7c2d12}}
 .hq-tabs{{
-  display:flex;flex-wrap:wrap;gap:0;margin:0 0 20px;padding:0;
-  border-bottom:1px solid #cbd5e1;background:transparent;
+  display:flex;flex-wrap:wrap;gap:0;margin:0 0 18px;padding:0;
+  border-bottom:1px solid #e2e8f0;background:transparent;box-shadow:none;
 }}
 .hq-tab{{
   border:0;border-bottom:3px solid transparent;cursor:pointer;
-  padding:14px 22px 12px;margin:0 0 -1px 0;
+  padding:12px 16px 10px;margin:0 0 -1px 0;
   border-radius:0;background:transparent !important;
-  color:#64748b;font-weight:600;font-size:11px;
-  letter-spacing:.1em;text-transform:uppercase;
-  transition:color .12s,border-color .12s;
-  font-family:inherit;
+  color:#94a3b8;font-weight:600;font-size:11px;
+  letter-spacing:.08em;text-transform:uppercase;
+  transition:color .18s ease,border-color .18s ease;
+  font-family:inherit;box-shadow:none !important;
 }}
-.hq-tab:hover{{color:#0B2D57;background:#f8fafc !important}}
+.hq-tab:hover{{color:#0B2D57;background:transparent !important}}
 .hq-tab.active{{
   background:transparent !important;color:#0B2D57 !important;
   border-bottom:3px solid #0B2D57;font-weight:700;
@@ -20581,11 +20628,13 @@ def gerencia_hq():
       <div class="hq-tabs" role="tablist">
         <button type="button" class="hq-tab active" data-tab="operativo" onclick="hqTab(this,'operativo')">PANEL OPERATIVO</button>
         <button type="button" class="hq-tab" data-tab="gerencia" onclick="hqTab(this,'gerencia')">PANEL DE GERENCIA</button>
-        <button type="button" class="hq-tab" data-tab="contingencia" onclick="hqTab(this,'contingencia')">CONTINGENCIA / DRP / LEGAL</button>
+        <button type="button" class="hq-tab" data-tab="contingencia" onclick="hqTab(this,'contingencia')">CONTINGENCIA Y LEGAL</button>
+        {tab_tecnica_btn}
+        <button type="button" class="hq-tab" data-tab="auditoria" onclick="hqTab(this,'auditoria')">AUDITORÍA DE RED</button>
       </div>
 
       <div id="hq-tab-operativo" class="hq-tab-panel active">
-        <p class="hq-note" style="margin-top:0">Operación del día a día · Facturación, clientes, soporte y herramientas</p>
+        <p class="hq-note" style="margin-top:0">Operación diaria del sistema: facturación, clientes, soporte y herramientas de control.</p>
 
         <div class="hq-cat verde">🟢 Dinero y facturación</div>
         <div class="grid-mod">
@@ -20597,6 +20646,7 @@ def gerencia_hq():
           <a class="c-verde" href="/gerencia/contabilidad">Contabilidad comercial</a>
           <a class="c-verde" href="/gerencia/reportes-pago">Reportes de pago</a>
           <a class="c-verde" href="/gerencia/verificaciones-pendientes">Validaciones de venta</a>
+          <a class="c-verde" href="/paz-y-salvo">Generador de paz y salvo</a>
         </div>
 
         <div class="hq-cat azul">🔵 Clientes, soporte e instituciones</div>
@@ -20608,6 +20658,7 @@ def gerencia_hq():
           <a class="c-azul" href="/gerencia/rectores">Rectores CRM</a>
           <a class="c-azul" href="/tenants">Instituciones</a>
           <a class="c-azul" href="/calendario">Calendario escolar</a>
+          <a class="c-azul" href="/retardos-acumulados">Control de retardos y convivencia</a>
         </div>
 
         <div class="hq-cat naranja">🟠 Comunicación y herramientas</div>
@@ -20712,6 +20763,17 @@ def gerencia_hq():
           <a class="own" href="/gerencia/matriz-epp">Matriz EPP / visitas colegios</a>
         </div>
         <p class="hq-note">Editor tipo documento corporativo con descarga PDF. Los marcados como públicos se publican en /docs/…</p>
+      </div>
+
+      {tab_tecnica_panel}
+
+      <div id="hq-tab-auditoria" class="hq-tab-panel">
+        <p class="hq-note" style="margin-top:0">Registro de accesos, IP y acciones críticas del sistema.</p>
+        <div class="grid-mod">
+          <a class="own" href="/auditoria">Auditoría global</a>
+          <a class="own" href="/gerencia/auditoria">Auditoría IP / ubicación</a>
+          <a class="own" href="/dev-console?tab=sistema">Sesiones técnicas activas</a>
+        </div>
       </div>
     </div>
 
@@ -56414,6 +56476,7 @@ def dev_console():
                 "carnetizacion_masiva_pdf": "Módulo de Carnetización Masiva PDF",
                 "liquidacion_prestaciones": "Módulo de Liquidación con Prestaciones",
                 "sandbox_mode": "Entorno Sandbox / Pruebas (solo colegio de prueba)",
+                "anti_suplantacion_qr": "Bloqueo anti-suplantación QR (15 min)",
             }
             if clave in desc_map:
                 if _set_feature_flag(clave, estado, desc_map[clave]):
@@ -56649,6 +56712,7 @@ def dev_console():
             ("whatsapp_api", "Módulo de Conexión WhatsApp API"),
             ("carnetizacion_masiva_pdf", "Módulo de Carnetización Masiva PDF"),
             ("liquidacion_prestaciones", "Módulo de Liquidación con Prestaciones"),
+            ("anti_suplantacion_qr", "Bloqueo anti-suplantación QR (15 min)"),
         ]
         filas_f = []
         for clave, label in flags_def:
@@ -56781,6 +56845,341 @@ def dev_console_login():
 </div></div>
 """
     return page("Consola Desarrollo · Login", body)
+
+
+
+
+# ── Asistencia acudientes, retardos, anti-QR, paz y salvo ─────────────────
+
+def _hora_corte_tarde(inst=None):
+    """Hora de corte para marcar RETARDO (default 07:00:00)."""
+    try:
+        if inst and getattr(inst, "hora_ingreso_corte", None):
+            return str(inst.hora_ingreso_corte).strip()[:8] or "07:00:00"
+    except Exception:
+        pass
+    return "07:00:00"
+
+
+def _estado_ingreso_por_hora(hora_str, corte="07:00:00"):
+    """Compara HH:MM:SS con corte. Retorna ('A_TIEMPO'|'RETARDO', minutos_tarde)."""
+    try:
+        h = (hora_str or "")[:8]
+        if len(h) == 5:
+            h = h + ":00"
+        c = (corte or "07:00:00")[:8]
+        if len(c) == 5:
+            c = c + ":00"
+        def to_s(x):
+            p = x.split(":")
+            return int(p[0]) * 3600 + int(p[1]) * 60 + int(p[2] if len(p) > 2 else 0)
+        hs, cs = to_s(h), to_s(c)
+        if hs <= cs:
+            return "A_TIEMPO", 0
+        return "RETARDO", max(0, (hs - cs) // 60)
+    except Exception:
+        return "A_TIEMPO", 0
+
+
+_QR_LAST_SCAN = {}  # codigo -> timestamp
+
+
+def _qr_anti_suplantacion_ok(codigo, segundos=900):
+    """False si el mismo código se escaneó hace menos de `segundos` (default 15 min)."""
+    try:
+        if not feature_enabled("anti_suplantacion_qr", True):
+            return True, 0
+    except Exception:
+        pass
+    import time
+    now = time.time()
+    key = str(codigo or "").strip()
+    if not key:
+        return True, 0
+    last = _QR_LAST_SCAN.get(key)
+    if last and (now - last) < segundos:
+        return False, int(segundos - (now - last))
+    _QR_LAST_SCAN[key] = now
+    # limpia viejos
+    dead = [k for k, t in list(_QR_LAST_SCAN.items()) if now - t > segundos * 2]
+    for k in dead:
+        _QR_LAST_SCAN.pop(k, None)
+    return True, 0
+
+
+@app.route("/acudiente-asistencia", methods=["GET", "POST"])
+@app.route("/familia/asistencia-viva", methods=["GET", "POST"])
+def acudiente_asistencia_viva():
+    """Portal acudiente: consulta por documento + código de carné (sin contraseña pesada)."""
+    err = msg = ""
+    tarjeta = ""
+    if request.method == "POST":
+        doc = (request.form.get("documento") or "").strip()
+        codigo = (request.form.get("codigo_carne") or request.form.get("codigo") or "").strip()
+        if not doc or not codigo:
+            err = "Ingrese documento del estudiante y código del carné."
+        else:
+            e = Estudiante.query.filter(
+                db.or_(
+                    Estudiante.documento == doc,
+                    Estudiante.codigo == doc,
+                )
+            ).filter(
+                db.or_(
+                    Estudiante.codigo == codigo,
+                    Estudiante.documento == codigo,
+                )
+            ).first()
+            if not e:
+                # match documento + codigo
+                e = Estudiante.query.filter_by(documento=doc, codigo=codigo).first()
+            if not e:
+                e = Estudiante.query.filter_by(codigo=codigo).first()
+                if e and (e.documento or "") != doc and (e.codigo or "") != doc:
+                    e = None
+            if not e:
+                err = "No se encontró coincidencia. Verifique documento y código del carné."
+            else:
+                hoy = fecha_hoy()
+                corte = _hora_corte_tarde()
+                try:
+                    from datetime import datetime as _dt, timedelta as _td
+                    hace7 = (_dt.now() - _td(days=7)).strftime("%Y-%m-%d")
+                except Exception:
+                    hace7 = hoy
+                # ingresos de hoy
+                estado_hoy = "SIN_REGISTRO"
+                detalle_hoy = "Sin registro de ingreso hoy"
+                color = "#ca8a04"
+                try:
+                    q = IngresoPorteria.query.filter_by(estudiante_id=e.id).filter(
+                        IngresoPorteria.fecha == hoy
+                    ).order_by(IngresoPorteria.id.desc()).first()
+                    if q:
+                        hora = getattr(q, "hora", None) or getattr(q, "hora_ingreso", None) or ""
+                        st, mins = _estado_ingreso_por_hora(str(hora), corte)
+                        if (getattr(q, "estado", None) or "").lower() in ("tarde", "retardo"):
+                            st, mins = "RETARDO", mins or 1
+                        if st == "RETARDO":
+                            estado_hoy = "RETARDO"
+                            detalle_hoy = "Ingresó a las %s — %s minutos tarde" % (hora, mins)
+                            color = "#b91c1c"
+                        else:
+                            estado_hoy = "A_TIEMPO"
+                            detalle_hoy = "Ingresó a las %s — a tiempo" % hora
+                            color = "#15803d"
+                except Exception as ex:
+                    detalle_hoy = "No se pudo leer asistencia: %s" % str(ex)[:60]
+                # historial semana
+                filas = []
+                try:
+                    regs = IngresoPorteria.query.filter_by(estudiante_id=e.id).filter(
+                        IngresoPorteria.fecha >= hace7
+                    ).order_by(IngresoPorteria.fecha.desc(), IngresoPorteria.id.desc()).limit(20).all()
+                    for r in regs:
+                        hora = getattr(r, "hora", None) or getattr(r, "hora_ingreso", None) or ""
+                        st, mins = _estado_ingreso_por_hora(str(hora), corte)
+                        est_txt = getattr(r, "estado", None) or st
+                        if str(est_txt).lower() in ("tarde", "retardo") or st == "RETARDO":
+                            badge = "<span style='color:#b91c1c;font-weight:700'>Tarde</span>"
+                        elif "hueco" in str(est_txt).lower():
+                            badge = "<span style='color:#1d4ed8;font-weight:700'>Hora hueco</span>"
+                        else:
+                            badge = "<span style='color:#15803d;font-weight:700'>A tiempo</span>"
+                        filas.append("<tr><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td></tr>" % (
+                            _esc(getattr(r, "fecha", "")), _esc(hora), badge))
+                except Exception:
+                    pass
+                hist = "".join(filas) or "<tr><td colspan='3' style='padding:8px;color:#64748b'>Sin registros esta semana</td></tr>"
+                # retardos mes
+                alerta_citacion = ""
+                try:
+                    mes = hoy[:7]
+                    n_tarde = 0
+                    for r in IngresoPorteria.query.filter_by(estudiante_id=e.id).all():
+                        f = str(getattr(r, "fecha", "") or "")
+                        if not f.startswith(mes):
+                            continue
+                        hora = getattr(r, "hora", None) or ""
+                        st, _ = _estado_ingreso_por_hora(str(hora), corte)
+                        if st == "RETARDO" or str(getattr(r, "estado", "")).lower() in ("tarde", "retardo"):
+                            n_tarde += 1
+                    if n_tarde >= 3:
+                        alerta_citacion = (
+                            "<div style='background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;"
+                            "padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px;font-weight:700'>"
+                            "Señor acudiente, su hijo ha registrado %s retardos en el periodo actual. "
+                            "Por favor, acérquese a la coordinación de convivencia.</div>" % n_tarde
+                        )
+                except Exception:
+                    pass
+                tel_sec = ""
+                try:
+                    inst = Institucion.query.get(e.institucion_id) if getattr(e, "institucion_id", None) else None
+                    tel_sec = (getattr(inst, "telefono", None) or getattr(inst, "contacto", None) or "") if inst else ""
+                except Exception:
+                    pass
+                etiqueta = {
+                    "A_TIEMPO": "EN EL PLANTEL — INGRESO A TIEMPO",
+                    "RETARDO": "EN EL PLANTEL — LLEGADA TARDE",
+                    "SIN_REGISTRO": "SIN REGISTRO DE INGRESO HOY",
+                }.get(estado_hoy, estado_hoy)
+                tarjeta = f"""
+{alerta_citacion}
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px;max-width:420px;margin:0 auto">
+  <div style="font-size:12px;color:#64748b;margin-bottom:4px">{_esc((e.nombre or '') + ' ' + (e.apellido or ''))} · {_esc(e.grado or '')}</div>
+  <div style="font-size:15px;font-weight:800;color:{color};margin-bottom:6px">[ {_esc(etiqueta)} ]</div>
+  <div style="font-size:13px;color:#334155;margin-bottom:14px">{_esc(detalle_hoy)}</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f8fafc;text-align:left"><th style="padding:6px">Fecha</th><th style="padding:6px">Hora</th><th style="padding:6px">Estado</th></tr></thead>
+    <tbody>{hist}</tbody>
+  </table>
+  <div style="margin-top:14px;text-align:center">
+    <a href="tel:{_esc(tel_sec)}" style="display:inline-block;background:#0B2D57;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px">
+      Llamar a secretaría del colegio
+    </a>
+  </div>
+</div>
+"""
+    body = f"""
+<div style="min-height:100vh;background:#f1f5f9;font-family:Segoe UI,system-ui,sans-serif;padding:24px 16px">
+  <div style="max-width:440px;margin:0 auto">
+    <h1 style="font-size:1.25rem;color:#0B2D57;margin:0 0 4px">Consulta de asistencia</h1>
+    <p style="font-size:13px;color:#64748b;margin:0 0 16px">Acudientes · validación por documento y código del carné</p>
+    {"<div style='background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px'>"+_esc(err)+"</div>" if err else ""}
+    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px">
+      <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Documento de identidad del estudiante</label>
+      <input name="documento" required placeholder="T.I. / C.C." style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:10px;box-sizing:border-box">
+      <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Código secreto del carné</label>
+      <input name="codigo_carne" required placeholder="Ej: 20261102115" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;box-sizing:border-box">
+      <button type="submit" style="width:100%;padding:12px;border:0;border-radius:6px;background:#15803d;color:#fff;font-weight:800;cursor:pointer">Consultar asistencia en vivo</button>
+    </form>
+    {tarjeta}
+    <p style="text-align:center;margin-top:16px"><a href="/login" style="color:#64748b;font-size:13px">← Volver al ingreso institucional</a></p>
+  </div>
+</div>
+"""
+    return page("Asistencia acudiente", body)
+
+
+@app.route("/retardos-acumulados")
+def retardos_acumulados():
+    """Tablero de retardos del mes para coordinación."""
+    if not requiere_login():
+        return redirect("/login")
+    corte = _hora_corte_tarde()
+    hoy = fecha_hoy()
+    mes = hoy[:7]
+    filas = []
+    try:
+        ests = Estudiante.query.order_by(Estudiante.grado, Estudiante.apellido).limit(2000).all()
+    except Exception:
+        ests = []
+    for e in ests:
+        n = 0
+        try:
+            for r in IngresoPorteria.query.filter_by(estudiante_id=e.id).all():
+                f = str(getattr(r, "fecha", "") or "")
+                if not f.startswith(mes):
+                    continue
+                hora = getattr(r, "hora", None) or getattr(r, "hora_ingreso", None) or ""
+                st, _ = _estado_ingreso_por_hora(str(hora), corte)
+                if st == "RETARDO" or str(getattr(r, "estado", "")).lower() in ("tarde", "retardo"):
+                    n += 1
+        except Exception:
+            continue
+        if n <= 0:
+            continue
+        estado = "Seguimiento" if n < 3 else "CITACIÓN A ACUDIENTE PENDIENTE"
+        color = "#ca8a04" if n < 3 else "#c2410c"
+        filas.append(
+            "<tr><td>%s</td><td>%s %s</td><td>%s</td><td><b>%s</b></td>"
+            "<td style='color:%s;font-weight:700'>%s</td></tr>" % (
+                _esc(e.codigo), _esc(e.nombre), _esc(e.apellido), _esc(e.grado), n, color, estado)
+        )
+    tabla = "".join(filas) or "<tr><td colspan='5' style='padding:12px;color:#64748b'>Sin retardos registrados este mes</td></tr>"
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Tablero de retardos acumulados</h1>
+  <p>Periodo {mes} · corte de llegada {corte} · 3 o más = citación pendiente</p>
+</div><a class="btn" href="/dashboard">Volver</a></header>
+<section class="role-panel">
+  <table class="table" style="width:100%;border-collapse:collapse">
+    <thead><tr><th>Código</th><th>Estudiante</th><th>Grado</th><th>Retardos mes</th><th>Estado</th></tr></thead>
+    <tbody>{tabla}</tbody>
+  </table>
+</section>
+"""
+    return page("Retardos acumulados", shell(body))
+
+
+@app.route("/paz-y-salvo")
+@app.route("/paz-y-salvo/<int:est_id>")
+def paz_y_salvo(est_id=None):
+    """Generador de paz y salvo financiero (bloqueo si hay deuda)."""
+    if not requiere_login():
+        return redirect("/login")
+    if est_id:
+        e = Estudiante.query.get(est_id)
+        if not e:
+            return page("Paz y salvo", shell("<p>Estudiante no encontrado.</p><a href='/paz-y-salvo'>Volver</a>"))
+        deuda = 0.0
+        try:
+            # Buscar saldos pendientes ligados al colegio/estudiante si existen
+            for attr in ("saldo_pendiente", "deuda", "valor_pendiente"):
+                if hasattr(e, attr) and getattr(e, attr):
+                    deuda = float(getattr(e, attr) or 0)
+                    break
+        except Exception:
+            deuda = 0.0
+        if deuda > 0:
+            body = f"""
+<header class="role-hero"><div><h1>Paz y salvo bloqueado</h1>
+<p>{_esc(e.nombre)} {_esc(e.apellido)} tiene saldo pendiente.</p></div>
+<a class="btn" href="/paz-y-salvo">Volver</a></header>
+<section class="role-panel"><p style="color:#b91c1c;font-weight:700">No se puede emitir paz y salvo. Deuda: ${deuda:,.0f}</p></section>
+"""
+            return page("Paz y salvo", shell(body))
+        # PDF simple
+        try:
+            from io import BytesIO
+            from reportlab.pdfgen import canvas as _c
+            from reportlab.lib.pagesizes import letter
+            buf = BytesIO()
+            c = _c.Canvas(buf, pagesize=letter)
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(72, 720, "PAZ Y SALVO FINANCIERO")
+            c.setFont("Helvetica", 11)
+            c.drawString(72, 690, "Estudiante: %s %s" % (e.nombre or "", e.apellido or ""))
+            c.drawString(72, 670, "Código: %s · Grado: %s" % (e.codigo or "", e.grado or ""))
+            c.drawString(72, 640, "ESTADO: PAZ Y SALVO FINANCIERO LEGALIZADO")
+            c.drawString(72, 610, "Fecha de emisión: %s %s" % (fecha_hoy(), hora_actual()))
+            c.drawString(72, 580, "Operado por PROCSIS / EduTrack")
+            c.showPage()
+            c.save()
+            buf.seek(0)
+            return send_file(buf, mimetype="application/pdf", as_attachment=True,
+                             download_name="paz_y_salvo_%s.pdf" % (e.codigo or e.id))
+        except Exception as ex:
+            return page("Paz y salvo", shell("<p>Error PDF: %s</p>" % _esc(str(ex)[:100])))
+    # listado
+    try:
+        ests = Estudiante.query.order_by(Estudiante.grado, Estudiante.apellido).limit(500).all()
+    except Exception:
+        ests = []
+    rows = "".join(
+        "<tr><td>%s</td><td>%s %s</td><td>%s</td><td><a class='btn' href='/paz-y-salvo/%s'>Generar PDF</a></td></tr>"
+        % (_esc(e.codigo), _esc(e.nombre), _esc(e.apellido), _esc(e.grado), e.id)
+        for e in ests
+    ) or "<tr><td colspan='4'>Sin estudiantes</td></tr>"
+    body = f"""
+<header class="role-hero"><div><h1>Generador de paz y salvo</h1>
+<p>Emite PDF si el estudiante no tiene saldo pendiente.</p></div>
+<a class="btn" href="/dashboard">Volver</a></header>
+<section class="role-panel"><table class="table" style="width:100%"><thead>
+<tr><th>Código</th><th>Nombre</th><th>Grado</th><th></th></tr></thead><tbody>{rows}</tbody></table></section>
+"""
+    return page("Paz y salvo", shell(body))
 
 
 
