@@ -8973,6 +8973,8 @@ def login():
         pplat = plataforma()
         for n in range(1, 6):
             img = (getattr(pplat, f"novedad_img{n}", None) or "").strip()
+            if img.startswith("[OFF]"):
+                continue
             if img:
                 cap_t = (getattr(pplat, f"novedad_img{n}_cap", None) or f"Novedad {n} · EduTrack").strip()
                 slides.append((img, cap_t))
@@ -9037,9 +9039,9 @@ def login():
 .sinai-track{{display:flex;height:100%;width:100%;transition:transform .55s ease}}
 .sinai-slide{{position:relative;min-width:100%;width:100%;height:100%;flex-shrink:0}}
 .sinai-slide img{{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.92)}}
-.sinai-slide-cap{{position:absolute;left:0;right:0;bottom:0;padding:22px 24px 40px;background:linear-gradient(transparent,rgba(11,45,87,.92));color:#fff}}
-.sinai-slide-cap b{{display:block;font-size:20px;line-height:1.3;margin-bottom:4px}}
-.sinai-slide-cap span{{font-size:12px;opacity:.9}}
+.sinai-slide-cap{{position:absolute;left:0;right:0;bottom:0;padding:18px 22px 28px;background:linear-gradient(180deg,transparent 0%,rgba(11,45,87,.55) 35%,rgba(11,45,87,.92) 100%);color:#fff;z-index:2}}
+.sinai-slide-cap b{{display:block;font-size:18px;line-height:1.35;margin-bottom:6px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.35)}}
+.sinai-slide-cap span{{display:block;font-size:12px;opacity:.95;letter-spacing:.02em;margin-top:2px}}
 .sinai-visual-badge{{position:absolute;top:14px;left:14px;z-index:4;background:rgba(255,255,255,.95);color:#0B2D57;font-size:11px;font-weight:800;padding:8px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.12);letter-spacing:.02em}}
 .sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:42px;height:42px;border:0;border-radius:50%;background:rgba(255,255,255,.96);color:#0B2D57;font-size:26px;line-height:42px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.14)}}
 .sinai-prev{{left:12px}}.sinai-next{{right:12px}}
@@ -9068,26 +9070,18 @@ def login():
 .sr-only{{position:absolute;left:-9999px}}
 .promo-row{{max-width:1100px;margin:0 auto 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 20px}}
 @media(max-width:800px){{.promo-row{{grid-template-columns:1fr}}}}
-.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12);transition:transform .25s ease-in-out,box-shadow .25s ease-in-out;animation:corp-fade-up .5s ease-out both;cursor:default}}
-.promo-row .promo-card:nth-child(1){{animation-delay:.05s}}
-.promo-row .promo-card:nth-child(2){{animation-delay:.12s}}
-.promo-card:hover{{transform:translateY(-4px);box-shadow:0 16px 36px rgba(15,23,42,.18)}}
+.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12)}}
 .promo-card h3{{margin:8px 0 6px;font-size:20px;line-height:1.25}}
 .promo-card p{{margin:0 0 14px;font-size:13px;opacity:.95;line-height:1.4}}
 .promo-card .badge{{display:inline-block;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.2)}}
-.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none;border:1px solid transparent;transition:transform .2s ease,border-color .2s ease,background .2s ease,color .2s ease}}
+.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none}}
 .promo-a{{background:linear-gradient(135deg,#0B2D57,#1e40af)}}
 .promo-a a.btn-promo{{background:#fff;color:#0B2D57}}
-.promo-a a.btn-promo:hover{{border-color:#0B2D57;transform:translateX(3px);font-weight:900}}
-.promo-b a.btn-promo:hover{{transform:translateX(3px);filter:brightness(1.06)}}
 .promo-b{{background:linear-gradient(135deg,#0369a1,#0d9488)}}
 .promo-b a.btn-promo{{background:#fbbf24;color:#0f172a}}
 
 .corp-support{{max-width:1100px;margin:8px auto 24px;padding:0 20px}}
-.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05);animation:corp-fade-up .55s ease-out both;transition:box-shadow .25s ease-in-out,transform .25s ease-in-out}}
-.corp-support-inner:hover{{box-shadow:0 12px 32px rgba(15,23,42,.1);transform:translateY(-2px)}}
-@keyframes corp-fade-up{{from{{opacity:0;transform:translateY(16px)}}to{{opacity:1;transform:translateY(0)}}}}
-@media (prefers-reduced-motion:reduce){{.promo-card,.corp-support-inner{{animation:none!important;transition:none!important}}}}
+.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05)}}
 @media(max-width:800px){{.corp-support-inner{{grid-template-columns:1fr}}}}
 .corp-ico{{width:56px;height:56px;border-radius:14px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}}
 .corp-support-left h2{{margin:0 0 10px;color:#0B2D57;font-size:24px}}
@@ -9100,11 +9094,13 @@ def login():
 .corp-hour b{{color:#0B2D57;display:block;margin-bottom:4px}}
 .corp-note{{margin-top:12px;padding:12px;background:#eff6ff;border-left:4px solid #1e3a8a;border-radius:8px;font-size:12px;color:#1e3a8a}}
 .corp-cta{{max-width:1100px;margin:0 auto 28px;padding:0 20px}}
-.corp-cta-card{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:18px;padding:28px;max-width:420px}}
+.corp-cta-card{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:18px;padding:28px;max-width:420px;box-shadow:0 12px 32px rgba(11,45,87,.25);transition:transform .25s ease-in-out,box-shadow .25s ease-in-out;animation:corp-fade-up .55s ease-out both}}
+.corp-cta-card:hover{{transform:translateY(-4px);box-shadow:0 18px 40px rgba(11,45,87,.32)}}
 .corp-cta-ico{{width:44px;height:44px;background:rgba(255,255,255,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}}
 .corp-cta-card h2{{margin:0 0 8px;font-size:22px;line-height:1.3}}
 .corp-cta-card p{{margin:0 0 16px;opacity:.95;font-size:14px;line-height:1.45}}
-.corp-wa{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 18px;border-radius:999px;text-decoration:none}}
+.corp-wa{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 18px;border-radius:999px;text-decoration:none;transition:transform .2s ease,box-shadow .2s ease}}
+.corp-wa:hover{{transform:translateY(-2px) translateX(2px);box-shadow:0 8px 20px rgba(0,0,0,.15)}}
 .corp-cta-foot{{margin-top:14px;font-size:11px;opacity:.75;letter-spacing:.02em}}
 .corp-footer{{background:#0B2D57;color:#e2e8f0;padding:36px 20px 18px;margin-top:20px}}
 .corp-footer-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:24px}}
@@ -9307,7 +9303,7 @@ def login():
           <div class="corp-hour"><b>Martes a viernes</b><br>{hor_sem}</div>
         </div>
         <div class="corp-note">Fuera de horario puede dejar su mensaje por WhatsApp o correo. Lo atenderemos al volver.</div>
-        <p style="margin-top:12px"><a class="btn btn-wa-corp" href="/whatsapp" style="background:#0B2D57;display:inline-flex;align-items:center;gap:8px;transition:background .2s ease,transform .2s ease,box-shadow .2s ease">💬 Escribir a soporte por WhatsApp <span style="display:inline-block;transition:transform .2s ease">›</span></a><style>.btn-wa-corp:hover{{background:#062447!important;transform:translateY(-2px);box-shadow:0 8px 20px rgba(11,45,87,.25)}}.btn-wa-corp:hover span{{transform:translateX(3px)}}</style></p>
+        <p style="margin-top:12px"><a class="btn" href="/whatsapp" style="background:#16a34a">💬 Escribir a soporte por WhatsApp</a></p>
       </div>
     </div>
   </section>
@@ -9338,36 +9334,37 @@ def login():
       {nov_html}
     </section>
 
+    <style>.lp-tech-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px;transition:transform .25s ease-in-out,box-shadow .25s ease-in-out,border-color .25s ease;animation:corp-fade-up .5s ease-out both}}.lp-tech-card:nth-child(1){{animation-delay:.04s}}.lp-tech-card:nth-child(2){{animation-delay:.08s}}.lp-tech-card:nth-child(3){{animation-delay:.12s}}.lp-tech-card:nth-child(4){{animation-delay:.06s}}.lp-tech-card:nth-child(5){{animation-delay:.1s}}.lp-tech-card:nth-child(6){{animation-delay:.14s}}.lp-tech-card:hover{{transform:translateY(-5px);box-shadow:0 14px 32px rgba(11,45,87,.12);border-color:#86efac;background:#fff}}</style>
     <section class="lp-section" id="tecnologia" style="background:#fff;border-radius:16px;padding:28px 22px;margin:18px 0;border:1px solid #e2e8f0">
       <p style="margin:0;color:#0B2D57;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase">Tecnología que</p>
       <h2 style="margin:8px 0 18px;font-size:28px;line-height:1.2;color:#0f172a">Tecnología que <span style="color:#16a34a">impulsa instituciones</span></h2>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">🖥️</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Plataforma EduTrack</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Asistencia, notas, boletines, horarios, matrícula y PQR según el plan contratado.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">⬡</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Tres módulos de acceso</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Directivos, docentes, estudiantes y familias, cada uno con su portal.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">▦</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Sistemas de evaluación</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Planillas SIEE (cognitivo, procedimental y actitudinal) con promedios automáticos.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">📊</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Informes y reportes</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Boletines PDF, reprobación por niveles, cuadro de honor y rendimiento por salón.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">🛡️</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Alojamiento y respaldo</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Nube con copias de seguridad y protección de datos educativos (Ley 1581).</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">🎧</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Soporte y acompañamiento</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Canales de atención para directivos y docentes en la implementación.</span>
@@ -58112,6 +58109,199 @@ def _html_carrusel_clientes():
         ".cli-logo:hover img{filter:grayscale(0%);opacity:1}"
         "@keyframes cli-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>"
     )
+
+
+
+
+@app.route("/gerencia/banners-login", methods=["GET", "POST"])
+def gerencia_banners_login():
+    """Gerencia: carrusel de imágenes del login (anuncios/banners)."""
+    if not requiere_login():
+        return redirect("/gerencia-login")
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte"):
+        return redirect("/dashboard")
+    p = plataforma()
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            for i in range(1, 6):
+                clear = request.form.get(f"novedad_img{i}_clear") == "1"
+                cap = (request.form.get(f"novedad_img{i}_cap") or "").strip()[:120]
+                activo = request.form.get(f"novedad_img{i}_activo", "1") == "1"
+                url = (request.form.get(f"novedad_img{i}_url") or "").strip()
+                f = request.files.get(f"novedad_img{i}")
+                if clear:
+                    setattr(p, f"novedad_img{i}", "")
+                elif f and f.filename:
+                    try:
+                        data = _archivo_a_data_uri(f, max_bytes=1_200_000)
+                        if data:
+                            setattr(p, f"novedad_img{i}", data)
+                    except Exception:
+                        pass
+                elif url:
+                    setattr(p, f"novedad_img{i}", url[:500])
+                setattr(p, f"novedad_img{i}_cap", cap)
+                # activo: vaciar path si desactivado se maneja con prefijo [OFF]
+                path_now = (getattr(p, f"novedad_img{i}", None) or "").strip()
+                if path_now.startswith("[OFF]"):
+                    path_now = path_now[5:]
+                if not activo and path_now:
+                    setattr(p, f"novedad_img{i}", "[OFF]" + path_now)
+                elif activo and path_now:
+                    setattr(p, f"novedad_img{i}", path_now)
+            db.session.commit()
+            msg = "Banners del login actualizados."
+        except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = str(ex)[:160]
+    filas = []
+    for i in range(1, 6):
+        path = (getattr(p, f"novedad_img{i}", None) or "").strip()
+        activo = not path.startswith("[OFF]")
+        show = path[5:] if path.startswith("[OFF]") else path
+        cap = getattr(p, f"novedad_img{i}_cap", None) or ""
+        prev = f'<img src="{_esc(show)}" style="max-height:64px;border-radius:8px;object-fit:cover">' if show and (show.startswith("data:") or show.startswith("http") or show.startswith("/")) else "<span style='color:#94a3b8'>Sin imagen</span>"
+        filas.append(f"""
+        <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px;background:#fff">
+          <b style="color:#0B2D57">Banner {i}</b> · orden {i}
+          <div style="margin:8px 0">{prev}</div>
+          <label style="font-size:12px">Archivo</label>
+          <input type="file" name="novedad_img{i}" accept="image/*">
+          <label style="font-size:12px">O URL</label>
+          <input name="novedad_img{i}_url" placeholder="https://..." style="width:100%;padding:8px;margin:4px 0">
+          <label style="font-size:12px">Título / texto alternativo</label>
+          <input name="novedad_img{i}_cap" value="{_esc(cap)}" style="width:100%;padding:8px;margin:4px 0">
+          <label style="font-size:12px;display:flex;gap:8px;align-items:center;margin-top:6px">
+            <input type="checkbox" name="novedad_img{i}_activo" value="1" {"checked" if activo else ""}> ACTIVADO
+          </label>
+          <label style="font-size:12px;display:flex;gap:8px;align-items:center">
+            <input type="checkbox" name="novedad_img{i}_clear" value="1"> Quitar imagen
+          </label>
+        </div>""")
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Anuncios y banners del login</h1>
+  <p>Carrusel de la portada · proporciones horizontales recomendadas</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a>
+<a class="btn" href="/gerencia/supervision-contenido">Supervisión contenido</a>
+</header>
+<section class="role-panel" style="max-width:640px">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" enctype="multipart/form-data">{"".join(filas)}
+    <button class="btn" type="submit">Guardar banners</button>
+  </form>
+</section>
+"""
+    return page("Banners login", shell(body))
+
+
+@app.route("/gerencia/supervision-contenido", methods=["GET", "POST"])
+def gerencia_supervision_contenido():
+    """Gerencia: supervisar FAQ, ayuda, novedades comerciales y habeas."""
+    if not requiere_login():
+        return redirect("/gerencia-login")
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Gerente", "Superadmin", "Administrador"):
+        return redirect("/dashboard")
+    p = plataforma()
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            p.novedades = (request.form.get("novedades") or "").strip()
+            p.faq = (request.form.get("faq") or "").strip()
+            p.habeas_data = (request.form.get("habeas_data") or "").strip()
+            if hasattr(p, "contacto_publico_tel"):
+                p.contacto_publico_tel = (request.form.get("contacto_publico_tel") or "").strip()[:40]
+            if hasattr(p, "contacto_publico_email"):
+                p.contacto_publico_email = (request.form.get("contacto_publico_email") or "").strip()[:160]
+            if hasattr(p, "horario_lunes"):
+                p.horario_lunes = (request.form.get("horario_lunes") or "").strip()[:80]
+            if hasattr(p, "horario_semana"):
+                p.horario_semana = (request.form.get("horario_semana") or "").strip()[:80]
+            db.session.commit()
+            msg = "Contenido supervisado y guardado."
+        except Exception as ex:
+            err = str(ex)[:160]
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Supervisión de contenido público</h1>
+  <p>FAQ, novedades comerciales, Habeas Data, contactos y horarios</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a>
+<a class="btn" href="/gerencia/banners-login">Banners login</a>
+<a class="btn" href="/soporte/actualizaciones">Panel Soporte</a>
+</header>
+<section class="role-panel" style="max-width:720px">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" style="display:grid;gap:12px">
+    <label><b>Últimas actualizaciones · mensaje comercial</b></label>
+    <textarea name="novedades" rows="5" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'novedades',None) or '')}</textarea>
+    <label><b>Preguntas frecuentes (supervisión)</b> — Soporte redacta; usted aprueba tono</label>
+    <textarea name="faq" rows="12" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'faq',None) or '')}</textarea>
+    <label><b>Habeas Data</b></label>
+    <textarea name="habeas_data" rows="8" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'habeas_data',None) or '')}</textarea>
+    <label><b>Teléfono soporte</b></label>
+    <input name="contacto_publico_tel" value="{_esc(getattr(p,'contacto_publico_tel',None) or '')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label><b>Correo soporte</b></label>
+    <input name="contacto_publico_email" value="{_esc(getattr(p,'contacto_publico_email',None) or getattr(p,'email_soporte',None) or '')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label><b>Horario lunes</b></label>
+    <input name="horario_lunes" value="{_esc(getattr(p,'horario_lunes',None) or '')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label><b>Horario martes–viernes</b></label>
+    <input name="horario_semana" value="{_esc(getattr(p,'horario_semana',None) or '')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <button class="btn" type="submit">Guardar supervisión</button>
+  </form>
+  <p style="margin-top:16px;font-size:13px;color:#64748b">Centro de ayuda público: <a href="/ayuda">/ayuda</a> · Las preguntas del buscador usan el FAQ de arriba.</p>
+</section>
+"""
+    return page("Supervisión contenido", shell(body))
+
+
+@app.route("/dev-console/changelog", methods=["GET", "POST"])
+def dev_console_changelog():
+    """Desarrollo: changelog técnico del login (viñetas de mejoras)."""
+    if not requiere_login():
+        return redirect("/dev-console-login")
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Desarrollador", "Developer", "Superadmin"):
+        return redirect("/dashboard")
+    p = plataforma()
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            if hasattr(p, "novedades_tecnicas"):
+                p.novedades_tecnicas = (request.form.get("novedades_tecnicas") or "").strip()
+            p.version_sistema = (request.form.get("version_sistema") or getattr(p, "version_sistema", None) or "2.5.0").strip()[:40]
+            db.session.commit()
+            msg = "Changelog técnico y versión actualizados en el login."
+        except Exception as ex:
+            err = str(ex)[:160]
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Changelog técnico · Login</h1>
+  <p>Viñetas de mejoras (planilla, SIMAT, etc.) y versión del sistema</p>
+</div>
+<a class="btn" href="/dev-console">← Consola</a></header>
+<section class="role-panel" style="max-width:640px">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" style="display:grid;gap:12px">
+    <label><b>Versión</b></label>
+    <input name="version_sistema" value="{_esc(getattr(p,'version_sistema',None) or '2.5.0')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label><b>Mejoras técnicas (una viñeta por línea, use • )</b></label>
+    <textarea name="novedades_tecnicas" rows="10" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-family:ui-monospace,Consolas,monospace">{_esc(getattr(p,'novedades_tecnicas',None) or '')}</textarea>
+    <button class="btn" type="submit">Publicar en login</button>
+  </form>
+</section>
+"""
+    return page("Changelog dev", shell(body))
 
 
 @app.route("/aceptar-terminos-pago", methods=["POST"])
