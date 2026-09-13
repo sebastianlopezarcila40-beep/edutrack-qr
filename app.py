@@ -1122,7 +1122,7 @@ class Plataforma(db.Model):
     empresa = db.Column(db.String(160), default="Procsis")
     nombre_producto = db.Column(db.String(160), default="EduTrack")  # nombre global del producto
     slogan = db.Column(db.String(255), default="Tecnología para una educación moderna y responsable")
-    logo_path = db.Column(db.Text, default="/static/img/logo-edutrack.png")
+    logo_path = db.Column(db.Text, default="/static/img/logo-procsis.png")
     desarrollador = db.Column(db.String(120), default="Sebastián López")
     telefono_soporte = db.Column(db.String(40), default="3105615621")
     email_soporte = db.Column(db.String(160), default="soporte@procsis.com")
@@ -4820,7 +4820,7 @@ def plataforma():
         x = _P()
         x.empresa = DESARROLLADOR
         x.slogan = SLOGAN
-        x.logo_path = "/static/img/logo-edutrack.png"
+        x.logo_path = "/static/img/logo-procsis.png"
         x.desarrollador = "Sebastián López"
         x.telefono_soporte = SOPORTE_TELEFONO
         x.email_soporte = SOPORTE_EMAIL or "soporte@procsis.com"
@@ -5114,7 +5114,10 @@ def logo_plataforma():
         ruta = ""
     if ruta.startswith("http://") or ruta.startswith("https://"):
         return ruta
-    if ruta.startswith("/static/") and "logo-edutrack" not in low:
+    # Si alguien guardó el logo de producto EduTrack como corporativo, no usarlo aquí
+    if "logo-edutrack" in low:
+        ruta = ""
+    if ruta.startswith("/static/"):
         ok = _logo_ruta_valida(ruta)
         if ok:
             if str(ok).startswith("data:"):
@@ -5130,8 +5133,6 @@ def logo_plataforma():
         "/static/img/logo_empresa.jpeg",
         "/static/img/logo empresa.jpeg",
         DEFAULT_LOGO,
-        "/static/img/logo-edutrack.png",
-        "/static/img/logo-edutrack.jpeg",
     ):
         fs = _os.path.join(base, rel.lstrip("/"))
         if _os.path.isfile(fs) or _os.path.isfile(rel.lstrip("/")):
@@ -5914,7 +5915,7 @@ def qr_texto(e):
 
 
 # ===== Seguridad de empleados =====
-ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza")
+ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Desarrollador")
 # Cuota de almacenamiento por colegio (GB)
 ALMACENAMIENTO_GB_POR_COLEGIO = 10
 ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza")
@@ -18472,7 +18473,7 @@ reinicien sin que usted lo pida.</p>
 puntualmente.</p>
 </div>""")
     try:
-        ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
+        ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Desarrollador", "Cobranza"]
         ids_viejos = [u.id for u in Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).all()]
         if ids_viejos:
             # Borrar primero lo que depende de esos usuarios (llaves foráneas), si no Postgres
@@ -26301,6 +26302,8 @@ def gerencia_usuarios():
                 <option value="Soporte" {"selected" if u.rol=="Soporte" else ""}>Soporte</option>
                 <option value="Cobranza" {"selected" if u.rol=="Cobranza" else ""}>Cobranza</option>
                 <option value="Gerente" {"selected" if u.rol=="Gerente" else ""}>Gerente</option>
+                <option value="Superadmin" {"selected" if u.rol=="Superadmin" else ""}>Superadmin</option>
+                <option value="Desarrollador" {"selected" if u.rol=="Desarrollador" else ""}>Desarrollador</option>
               </select>
               <button type="submit" style="padding:6px 10px;background:#0369a1;color:#fff;border:0;border-radius:6px;font-size:12px">Rol</button>
             </form>
@@ -26342,6 +26345,8 @@ def gerencia_usuarios():
       <option value="Soporte">Soporte técnico</option>
       <option value="Cobranza">Cobranza / Facturación</option>
       <option value="Gerente">Gerente</option>
+      <option value="Superadmin">Superadmin</option>
+      <option value="Desarrollador">Desarrollador</option>
     </select>
     <button type="submit" style="margin-top:10px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;cursor:pointer">Crear usuario</button>
   </form>
@@ -26395,6 +26400,36 @@ def gerencia_datos_empresa():
                 p.empresa = (request.form.get("empresa") or "").strip()[:160]
         except Exception as _e:
             err = "Error al asignar campos: " + str(_e)[:120]
+
+        # SQL persist datos empresa (no se pierden al salir/entrar)
+        try:
+            db.session.execute(text(
+                "UPDATE plataforma SET nit=:nit, direccion=:dir, ciudad=:ciu, empresa=COALESCE(NULLIF(:emp,''), empresa)"
+            ), {
+                "nit": (request.form.get("nit") or "")[:40],
+                "dir": (request.form.get("direccion") or "")[:255],
+                "ciu": (request.form.get("ciudad") or "")[:120],
+                "emp": (request.form.get("empresa") or "")[:160],
+            })
+            try:
+                db.session.execute(text(
+                    "UPDATE plataforma SET codigo_dane=:d, representante_legal=:r"
+                ), {
+                    "d": (request.form.get("codigo_dane") or "")[:40],
+                    "r": (request.form.get("representante_legal") or "")[:160],
+                })
+            except Exception:
+                pass
+            db.session.commit()
+            if not mensaje and not err:
+                mensaje = "Datos de la empresa guardados de forma permanente."
+        except Exception as _se:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            if not err:
+                err = "No se pudieron guardar algunos campos: " + str(_se)[:100]
         # Logo PROCSIS → BD (data URI) para que no se borre en Railway
         flogo = request.files.get("logo_empresa")
         if flogo and getattr(flogo, "filename", ""):
@@ -26424,7 +26459,7 @@ def gerencia_datos_empresa():
         logo_nota = "Logo actual guardado en base de datos (no se pierde al reiniciar Railway)."
     else:
         preview = logo_plataforma()
-        logo_nota = "Suba el logo oficial de PROCSIS (PNG o JPG). Se usará en Gerencia, Soporte, Ventas, Cobranza y PDFs."
+        logo_nota = "Logo corporativo PROCSIS (PNG/JPG). Queda guardado en base de datos y se usa en todos los accesos internos y PDFs. EduTrack es solo la marca del producto escolar."
     content = f"""
 <header class="role-hero"><div>
   <h1>🏢 Datos de la empresa (PROCSIS)</h1>
@@ -26453,9 +26488,8 @@ def gerencia_datos_empresa():
         <div style="flex:1;min-width:220px">
           <input type="file" name="logo_empresa" accept="image/png,image/jpeg,image/webp,image/gif"
             style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff">
-          <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px;color:#64748b">
-            <input type="checkbox" name="quitar_logo" value="1" style="width:auto"> Quitar logo personalizado (volver al predeterminado)
-          </label>
+          <p style="font-size:11px;color:#64748b;margin:8px 0 0">Predeterminado corporativo: <b>logo PROCSIS</b> (EduTrack es solo marca de producto).
+          El logo se guarda en base de datos y no se pierde al cerrar sesión.</p>
         </div>
       </div>
     </div>
@@ -26473,7 +26507,7 @@ def gerencia_admision_personal():
     g = _guard_gerencia()
     if g:
         return g
-    ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin"]
+    ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Desarrollador", "Cobranza"]
     staff = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).order_by(Usuario.usuario.asc()).all()
     filas = "".join(
         f"""<tr><td><b>{_esc(u.usuario)}</b>{' · '+_esc(u.nombre_completo) if u.nombre_completo else ''}</td><td>{_esc(u.rol)}</td>
