@@ -5172,48 +5172,93 @@ def nombre_producto():
     return APP_NAME or "EduTrack"
 
 
-def logo_plataforma():
-    """Logo corporativo PROCSIS para paneles internos (nunca EduTrack de producto)."""
-    import os as _os
-    base = _os.path.dirname(_os.path.abspath(__file__))
+
+
+@app.route("/media/logo-corporativo")
+def media_logo_corporativo():
+    """Sirve el logo PROCSIS guardado en BD (data URI o archivo). Nunca EduTrack de producto."""
+    from flask import Response
     try:
         p = plataforma()
         ruta = (getattr(p, "logo_path", None) or "").strip()
-        es_custom = bool(getattr(p, "logo_es_custom", False))
     except Exception:
-        p, ruta, es_custom = None, "", False
-    # Data URI subido desde Datos de la empresa → usar siempre (es el logo real)
+        ruta = ""
+    if ruta.startswith("data:image"):
+        # data:image/png;base64,XXXX
+        try:
+            header, b64 = ruta.split(",", 1)
+            mime = "image/png"
+            if "jpeg" in header or "jpg" in header:
+                mime = "image/jpeg"
+            elif "webp" in header:
+                mime = "image/webp"
+            elif "gif" in header:
+                mime = "image/gif"
+            elif "svg" in header:
+                mime = "image/svg+xml"
+            import base64 as _b64
+            raw = _b64.b64decode(b64)
+            resp = Response(raw, mimetype=mime)
+            resp.headers["Cache-Control"] = "public, max-age=3600"
+            return resp
+        except Exception as e:
+            print("media logo decode:", e)
+    if ruta.startswith("/static/"):
+        import os as _os
+        base = _os.path.dirname(_os.path.abspath(__file__))
+        fs = _os.path.join(base, ruta.lstrip("/"))
+        if _os.path.isfile(fs):
+            from flask import send_file
+            return send_file(fs)
+    # SVG PROCSIS por defecto (texto solo si no hay logo subido)
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80'>"
+        "<rect width='240' height='80' rx='8' fill='#0B2D57'/>"
+        "<text x='120' y='48' text-anchor='middle' fill='white' "
+        "font-family='Arial,sans-serif' font-size='22' font-weight='bold'>PROCSIS</text>"
+        "</svg>"
+    )
+    return Response(svg, mimetype="image/svg+xml")
+
+
+def logo_plataforma():
+    """Logo corporativo PROCSIS (imagen real subida en Datos de la empresa)."""
+    import os as _os
+    try:
+        p = plataforma()
+        # refrescar desde BD por si quedó cacheado el placeholder
+        try:
+            db.session.refresh(p)
+        except Exception:
+            pass
+        ruta = (getattr(p, "logo_path", None) or "").strip()
+    except Exception:
+        ruta = ""
     if ruta.startswith("data:image"):
         return ruta
-    # Archivo subido a /static/uploads/corp/ o marcado custom
-    if ruta and "logo-edutrack" not in ruta.lower():
-        if ruta.startswith("http://") or ruta.startswith("https://"):
-            return ruta
-        if "/uploads/corp/" in ruta or es_custom or ruta.startswith("/static/uploads/"):
-            ok = _logo_ruta_valida(ruta)
-            if ok:
-                return ok if str(ok).startswith("data:") else (str(ok) + ("&v=22" if "?" in str(ok) else "?v=22"))
-            # si el archivo existe en disco relativo
-            fs = _os.path.join(base, ruta.lstrip("/"))
-            if _os.path.isfile(fs):
-                return ruta + ("&v=22" if "?" in ruta else "?v=22")
-    # 2) Archivos PROCSIS en disco (prioridad absoluta)
-    for rel in (
+    # Endpoint que sirve el blob guardado en BD
+    if ruta and "logo-edutrack" not in ruta.lower() and ruta not in (
         "/static/img/logo-procsis.svg",
         "/static/img/logo-procsis.png",
-        "/static/img/logo-procsis.jpeg",
-        "/static/img/logo-procsis.jpg",
-        "/static/img/logo_empresa.jpeg",
-        "/static/img/logoempresa.jpeg",
         DEFAULT_LOGO,
     ):
-        fs = _os.path.join(base, rel.lstrip("/"))
-        if _os.path.isfile(fs) or _os.path.isfile(rel.lstrip("/")):
-            return rel + "?v=20"
-        ok = _logo_ruta_valida(rel)
-        if ok and "logo-edutrack" not in str(ok).lower():
-            return ok if str(ok).startswith("data:") else (str(ok) + ("&v=20" if "?" in str(ok) else "?v=20"))
-    return (DEFAULT_LOGO or "/static/img/logo-procsis.svg") + "?v=21"
+        if ruta.startswith("http://") or ruta.startswith("https://"):
+            return ruta
+        if ruta.startswith("/static/") or ruta.startswith("/media/"):
+            base = _os.path.dirname(_os.path.abspath(__file__))
+            fs = _os.path.join(base, ruta.lstrip("/"))
+            if _os.path.isfile(fs) or _os.path.isfile(ruta.lstrip("/")):
+                return ruta + ("&v=30" if "?" in ruta else "?v=30")
+            # ruta en BD pero archivo efímero → intentar media endpoint
+            return "/media/logo-corporativo?v=30"
+    # Si hay flag custom, servir siempre desde media (lee BD)
+    try:
+        if bool(getattr(p, "logo_es_custom", False)):
+            return "/media/logo-corporativo?v=30"
+    except Exception:
+        pass
+    # Fallback: SVG generado PROCSIS (solo si nunca subieron logo)
+    return "/media/logo-corporativo?v=30"
 
 
 
@@ -18678,7 +18723,7 @@ font-size:12px;font-weight:700;white-space:nowrap}}
 .bo-foot .dev:hover{{color:#94a3b8}}
 </style>
 <div class="bo"><div class="bo-box">
-  <div class="bo-logo"><img src="{logo}" alt="PROCSIS" style="height:72px;width:auto;max-width:220px;object-fit:contain;border-radius:6px;background:#fff;padding:8px 14px" onerror="this.onerror=null;this.src='/static/img/logo-procsis.svg?v=21'"></div>
+  <div class="bo-logo"><img src="{logo}" alt="PROCSIS" style="height:72px;width:auto;max-width:220px;object-fit:contain;border-radius:6px;background:#fff;padding:8px 14px" ></div>
   <h1>PROCSIS Backoffice</h1>
   <p class="sub">{_esc(empresa)} · Accesos internos de operación</p>
   <div class="bo-badge">[ Seguridad: acceso privado — restringido para operación interna ]</div>
@@ -20431,7 +20476,7 @@ def gerencia_hq():
     <div class="hq-corp-inner">
       <div class="hq-brand">
         <div class="hq-logos">
-          <img src="{logo_et}" alt="PROCSIS" style="height:52px;width:auto;max-width:160px;object-fit:contain;background:#fff;border-radius:6px;padding:6px 10px" onerror="this.onerror=null;this.src='/static/img/logo-procsis.svg?v=21'">
+          <img src="{logo_et}" alt="PROCSIS" style="height:52px;width:auto;max-width:160px;object-fit:contain;background:#fff;border-radius:6px;padding:6px 10px">
           <div class="sep"></div>
           <div class="names">
             <div class="co">{empresa} · Colombia</div>
@@ -26622,64 +26667,119 @@ def gerencia_datos_empresa():
                 pass
             db.session.commit()
             mensaje = "Logo restablecido a PROCSIS (archivo corporativo)."
-        # Logo PROCSIS → archivo en disco + ruta en BD (persiste en Railway volume / static)
+        # Logo PROCSIS → data URI en BD (sobrevive redeploy Railway) + archivo local
         flogo = request.files.get("logo_empresa")
         if flogo and getattr(flogo, "filename", ""):
             try:
-                import os as _os
-                from werkzeug.utils import secure_filename
-                raw_name = secure_filename(flogo.filename or "logo.png")
-                ext = (_os.path.splitext(raw_name)[1] or ".png").lower()
-                if ext not in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"):
-                    ext = ".png"
-                folder = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static", "uploads", "corp")
+                # Asegurar columna TEXT (data URI no cabe en VARCHAR 255)
                 try:
-                    _os.makedirs(folder, exist_ok=True)
+                    db.session.execute(text("ALTER TABLE plataforma ALTER COLUMN logo_path TYPE TEXT"))
+                    db.session.commit()
                 except Exception:
-                    folder = _os.path.join("static", "uploads", "corp")
-                    _os.makedirs(folder, exist_ok=True)
-                fname = "logo_procsis" + ext
-                fspath = _os.path.join(folder, fname)
-                flogo.save(fspath)
-                rel = "/static/uploads/corp/" + fname
-                p.logo_path = rel
-                try:
-                    p.logo_es_custom = True
-                except Exception:
-                    pass
-                # También data URI de respaldo si el volumen es efímero
-                try:
-                    data_uri = _archivo_a_data_uri(open(fspath, "rb"), max_bytes=1_800_000) if False else None
-                except Exception:
-                    data_uri = None
-                # Re-leer archivo para data URI opcional
-                try:
-                    with open(fspath, "rb") as _bf:
-                        import base64 as _b64
-                        mime = "image/png"
-                        if ext in (".jpg", ".jpeg"):
-                            mime = "image/jpeg"
-                        elif ext == ".webp":
-                            mime = "image/webp"
-                        elif ext == ".gif":
-                            mime = "image/gif"
-                        elif ext == ".svg":
-                            mime = "image/svg+xml"
-                        b64 = _b64.b64encode(_bf.read()).decode("ascii")
-                        if len(b64) < 1_500_000:
-                            p.logo_path = "data:%s;base64,%s" % (mime, b64)
-                except Exception:
-                    p.logo_path = rel
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                 try:
                     db.session.execute(text(
-                        "UPDATE plataforma SET logo_path=:lp, logo_es_custom=TRUE"
-                    ), {"lp": p.logo_path})
+                        "ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS logo_es_custom BOOLEAN DEFAULT FALSE"
+                    ))
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                # Leer bytes UNA vez desde el upload
+                try:
+                    flogo.stream.seek(0)
                 except Exception:
                     pass
-                db.session.commit()
-                mensaje = "Datos y logo PROCSIS guardados (permanentes en base de datos)."
+                raw = flogo.read()
+                if not raw:
+                    err = "El archivo del logo está vacío."
+                elif len(raw) > 2_000_000:
+                    err = "Logo demasiado pesado (máx. ~2 MB). Comprima la imagen."
+                else:
+                    import base64 as _b64
+                    import os as _os
+                    from werkzeug.utils import secure_filename
+                    fn = (secure_filename(flogo.filename or "logo.png")).lower()
+                    if fn.endswith(".png"):
+                        mime = "image/png"
+                        ext = ".png"
+                    elif fn.endswith(".webp"):
+                        mime = "image/webp"
+                        ext = ".webp"
+                    elif fn.endswith(".gif"):
+                        mime = "image/gif"
+                        ext = ".gif"
+                    elif fn.endswith(".svg"):
+                        mime = "image/svg+xml"
+                        ext = ".svg"
+                    else:
+                        mime = "image/jpeg"
+                        ext = ".jpg"
+                        # comprimir jpeg si es grande
+                        try:
+                            from PIL import Image
+                            from io import BytesIO
+                            im = Image.open(BytesIO(raw))
+                            if im.mode in ("RGBA", "P"):
+                                im = im.convert("RGB")
+                            im.thumbnail((800, 400), Image.Resampling.LANCZOS)
+                            buf = BytesIO()
+                            im.save(buf, format="JPEG", quality=85)
+                            raw = buf.getvalue()
+                            mime = "image/jpeg"
+                            ext = ".jpg"
+                        except Exception:
+                            pass
+                    data_uri = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+                    p.logo_path = data_uri
+                    try:
+                        p.logo_es_custom = True
+                    except Exception:
+                        pass
+                    # Guardar también en disco (best-effort)
+                    try:
+                        folder = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static", "uploads", "corp")
+                        _os.makedirs(folder, exist_ok=True)
+                        with open(_os.path.join(folder, "logo_procsis" + ext), "wb") as _out:
+                            _out.write(raw)
+                    except Exception:
+                        pass
+                    db.session.add(p)
+                    db.session.commit()
+                    # Forzar SQL por si el ORM no mapeó logo_es_custom
+                    try:
+                        db.session.execute(text(
+                            "UPDATE plataforma SET logo_path=:lp, logo_es_custom=TRUE WHERE id=:id"
+                        ), {"lp": data_uri, "id": p.id})
+                        db.session.commit()
+                    except Exception as _sq:
+                        try:
+                            db.session.execute(text(
+                                "UPDATE plataforma SET logo_path=:lp WHERE id=:id"
+                            ), {"lp": data_uri, "id": p.id})
+                            db.session.commit()
+                        except Exception as _sq2:
+                            print("logo sql:", _sq, _sq2)
+                    # Verificar lectura
+                    try:
+                        db.session.refresh(p)
+                    except Exception:
+                        pass
+                    if (getattr(p, "logo_path", None) or "").startswith("data:image"):
+                        mensaje = "Logo PROCSIS guardado correctamente. Ya debe verse en HQ y Backoffice."
+                    else:
+                        mensaje = "Se intentó guardar el logo; recargue con Ctrl+F5. Si no aparece, el archivo puede ser muy grande."
             except Exception as e_logo:
-                err = "Error al guardar logo: %s" % str(e_logo)[:120]
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = "Error al guardar logo: %s" % str(e_logo)[:150]
         if request.form.get("quitar_logo") == "1":
             p.logo_path = "/static/img/logo-procsis.png"
             mensaje = (mensaje + " " if mensaje else "") + "Logo restablecido al predeterminado."
@@ -26692,12 +26792,15 @@ def gerencia_datos_empresa():
         if not mensaje and not err:
             mensaje = "Datos guardados."
     logo_actual = (getattr(p, "logo_path", None) or "").strip()
-    if logo_actual.startswith("data:image") or "/uploads/corp/" in logo_actual:
+    if logo_actual.startswith("data:image"):
+        preview = "/media/logo-corporativo?v=30"
+        logo_nota = "Logo personalizado activo en base de datos. Se muestra en Backoffice, Gerencia, Soporte, Ventas y Cobranza."
+    elif logo_actual and "logo-edutrack" not in logo_actual.lower() and logo_actual not in ("/static/img/logo-procsis.svg", DEFAULT_LOGO):
         preview = logo_actual
-        logo_nota = "Logo personalizado activo (guardado). Se muestra en Backoffice, Gerencia, Soporte, Ventas y Cobranza."
+        logo_nota = "Logo personalizado activo."
     else:
-        preview = logo_plataforma()
-        logo_nota = "Aún no hay logo personalizado. Suba el PNG/JPG de PROCSIS y pulse Guardar datos y logo."
+        preview = "/media/logo-corporativo?v=30"
+        logo_nota = "Suba el PNG/JPG de PROCSIS y pulse Guardar datos y logo. Hasta entonces se muestra el marcador PROCSIS."
     content = f"""
 <header class="role-hero"><div>
   <h1>🏢 Datos de la empresa (PROCSIS)</h1>
@@ -26732,7 +26835,7 @@ def gerencia_datos_empresa():
       <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-width:140px;text-align:center">
           <img id="logo-preview" src="{preview}" alt="PROCSIS" style="max-height:80px;max-width:160px;object-fit:contain"
-            onerror="this.onerror=null;this.src='/static/img/logo-procsis.svg?v=21'">
+            >
         </div>
         <div style="flex:1;min-width:220px">
           <label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px">Cargar logo PROCSIS</label>
