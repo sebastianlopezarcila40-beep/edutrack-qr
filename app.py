@@ -1258,8 +1258,8 @@ class Plataforma(db.Model):
     smtp_notif_password = db.Column(db.String(255), default="")
     smtp_notif_conectado_por = db.Column(db.String(120), default="")
     smtp_notif_conectado_en = db.Column(db.String(20), default="")
-    horario_lunes = db.Column(db.String(80), default="8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
-    horario_semana = db.Column(db.String(80), default="7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
+    horario_lunes = db.Column(db.String(80), default="8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
+    horario_semana = db.Column(db.String(80), default="7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
     soporte_mensaje = db.Column(db.Text, default="")
     # Página corporativa /procsis (editable desde Gerencia)
     corp_tag = db.Column(db.String(120), default="SOLUCIONES DIGITALES · COLOMBIA")
@@ -9008,14 +9008,14 @@ def login():
             "demostración y prueba piloto con Procsis. ¡Gracias!"
         )
         wa_link = (f"https://wa.me/{wa_num}?text={_uq(_wa_txt)}" if wa_num else "/ventas")
-        hor_lun = (getattr(_pp, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
-        hor_sem = (getattr(_pp, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
+        hor_lun = (getattr(_pp, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
+        hor_sem = (getattr(_pp, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
         soporte_msg = (getattr(_pp, "soporte_mensaje", None) or "¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo de expertos está listo para asistirle. Consulte a continuación nuestros canales y horarios de atención.")
         anio = ahora().year
     except Exception:
         corp_tel, corp_email, wa_link = "—", "soporte@procsis.com", "/contacto"
-        hor_lun = "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
-        hor_sem = "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
+        hor_lun = "8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
+        hor_sem = "7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
         soporte_msg = "¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo está listo para asistirle."
         anio = 2026
     return page("Login", f"""
@@ -9068,24 +9068,18 @@ def login():
 .sr-only{{position:absolute;left:-9999px}}
 .promo-row{{max-width:1100px;margin:0 auto 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 20px}}
 @media(max-width:800px){{.promo-row{{grid-template-columns:1fr}}}}
-.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12);transition:transform .2s ease-in-out,box-shadow .2s ease-in-out;animation:corp-fade-up .45s ease-out both}}
-.promo-row .promo-card:nth-child(1){{animation-delay:.04s}}
-.promo-row .promo-card:nth-child(2){{animation-delay:.1s}}
-.promo-card:hover{{transform:translateY(-4px);box-shadow:0 14px 32px rgba(15,23,42,.16)}}
+.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12)}}
 .promo-card h3{{margin:8px 0 6px;font-size:20px;line-height:1.25}}
 .promo-card p{{margin:0 0 14px;font-size:13px;opacity:.95;line-height:1.4}}
 .promo-card .badge{{display:inline-block;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.2)}}
-.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none;transition:border-color .2s ease,color .2s ease,font-weight .2s ease,background .2s ease,transform .2s ease}}
+.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none}}
 .promo-a{{background:linear-gradient(135deg,#0B2D57,#1e40af)}}
-.promo-a a.btn-promo{{background:#fff;color:#0B2D57;border:1px solid transparent}}
-.promo-a a.btn-promo:hover{{border-color:#0B2D57;font-weight:900;transform:translateX(2px)}}
+.promo-a a.btn-promo{{background:#fff;color:#0B2D57}}
 .promo-b{{background:linear-gradient(135deg,#0369a1,#0d9488)}}
 .promo-b a.btn-promo{{background:#fbbf24;color:#0f172a}}
-.promo-b a.btn-promo:hover{{filter:brightness(1.05);transform:translateX(2px)}}
 
 .corp-support{{max-width:1100px;margin:8px auto 24px;padding:0 20px}}
-.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05);animation:corp-fade-up .5s ease-out both;transition:box-shadow .2s ease-in-out}}
-.corp-support-inner:hover{{box-shadow:0 10px 28px rgba(15,23,42,.08)}}
+.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05)}}
 @media(max-width:800px){{.corp-support-inner{{grid-template-columns:1fr}}}}
 .corp-ico{{width:56px;height:56px;border-radius:14px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}}
 .corp-support-left h2{{margin:0 0 10px;color:#0B2D57;font-size:24px}}
@@ -9305,7 +9299,7 @@ def login():
           <div class="corp-hour"><b>Martes a viernes</b><br>{hor_sem}</div>
         </div>
         <div class="corp-note">Fuera de horario puede dejar su mensaje por WhatsApp o correo. Lo atenderemos al volver.</div>
-        <p style="margin-top:12px"><a class="btn btn-wa-corp" href="/whatsapp" style="background:#0B2D57;display:inline-block;transition:background .2s ease,transform .2s ease">💬 Escribir a soporte por WhatsApp <span class="wa-arrow" style="display:inline-block;transition:transform .2s ease">›</span></a></p><style>.btn-wa-corp:hover{{background:#062447!important}}.btn-wa-corp:hover .wa-arrow{{transform:translateX(3px)}}@keyframes corp-fade-up{{from{{opacity:0;transform:translateY(15px)}}to{{opacity:1;transform:translateY(0)}} }}@media (prefers-reduced-motion:reduce){{.promo-card,.corp-support-inner{{animation:none!important;transition:none!important}}}}</style>
+        <p style="margin-top:12px"><a class="btn" href="/whatsapp" style="background:#16a34a">💬 Escribir a soporte por WhatsApp</a></p>
       </div>
     </div>
   </section>
@@ -17515,11 +17509,11 @@ body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#eef5fb;colo
 .chips a:hover{{border-color:#0ea5e9;background:#e0f2fe}}
 .wrap{{max-width:1080px;margin:0 auto;padding:8px 16px 48px}}
 .cats{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin:28px 0 8px}}
-.cat{{background:#fff;border-radius:14px;padding:18px 12px;text-align:center;text-decoration:none;color:#0B2D57;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(15,23,42,.05);border:1px solid #e8eef5;transition:transform .2s ease-in-out,box-shadow .2s ease-in-out;animation:corp-fade-up .4s ease-out both}}.cat:hover{{transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.1)}}.cat:nth-child(1){{animation-delay:.03s}}.cat:nth-child(2){{animation-delay:.06s}}.cat:nth-child(3){{animation-delay:.09s}}.cat:nth-child(4){{animation-delay:.12s}}.cat:nth-child(5){{animation-delay:.05s}}.cat:nth-child(6){{animation-delay:.08s}}.cat:nth-child(7){{animation-delay:.11s}}.cat:nth-child(8){{animation-delay:.14s}}
+.cat{{background:#fff;border-radius:14px;padding:18px 12px;text-align:center;text-decoration:none;color:#0B2D57;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(15,23,42,.05);border:1px solid #e8eef5}}
 .cat span{{display:block;font-size:28px;margin-bottom:8px}}
 .section-title{{color:#0B2D57;font-size:20px;font-weight:900;margin:28px 0 14px}}
 .pop{{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}}
-.pop a{{background:#fff;border-radius:14px;padding:16px 18px;text-decoration:none;color:#0f172a;border:1px solid #e8eef5;box-shadow:0 4px 12px rgba(15,23,42,.04);transition:transform .2s ease-in-out,box-shadow .2s ease-in-out;animation:corp-fade-up .45s ease-out both;display:flex;justify-content:space-between;align-items:center;gap:10px}.pop a:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.1)}@keyframes corp-fade-up{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}}
+.pop a{{background:#fff;border-radius:14px;padding:16px 18px;text-decoration:none;color:#0f172a;border:1px solid #e8eef5;box-shadow:0 4px 12px rgba(15,23,42,.04);display:flex;justify-content:space-between;align-items:center;gap:10px;transition:transform .2s ease-in-out,box-shadow .2s ease-in-out;animation:corp-fade-up .45s ease-out both}}.pop a:hover{{transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.1)}}@keyframes corp-fade-up{{from{{opacity:0;transform:translateY(15px)}}to{{opacity:1;transform:translateY(0)}}}}
 .pop a b{{display:block;color:#0B2D57;font-size:14px;margin-bottom:4px}}
 .pop a span{{font-size:12px;color:#64748b}}
 .pop a .ic{{width:36px;height:36px;border-radius:50%;background:#e0f2fe;display:flex;align-items:center;justify-content:center;flex-shrink:0}}
@@ -17640,8 +17634,8 @@ def portal_whatsapp_soporte():
             or ""
         ) if c.isdigit())
         logo = (getattr(p, "logo_path", None) or "/static/img/logo-edutrack.png")
-        hor_lun = getattr(p, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
-        hor_sem = getattr(p, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
+        hor_lun = getattr(p, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
+        hor_sem = getattr(p, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
     except Exception:
         tel, email, wa_num, logo = "—", "—", "", "/static/img/logo-edutrack.png"
         hor_lun = hor_sem = "Horario laboral"
@@ -40166,7 +40160,7 @@ def soporte_contacto_publico():
   <label><b>Horario lunes</b></label>
   <input name="horario_lunes" value="{getattr(p,'horario_lunes',None) or '8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.'}">
   <label><b>Horario martes a viernes</b></label>
-  <input name="horario_semana" value="{getattr(p,'horario_semana',None) or '7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.'}">
+  <input name="horario_semana" value="{getattr(p,'horario_semana',None) or '7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.'}">
   <label><b>Mensaje de soporte</b></label>
   <textarea name="mensaje" rows="3">{getattr(p,'soporte_mensaje',None) or '¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo está listo para asistirle.'}</textarea>
   <button type="submit">Guardar</button>
@@ -58110,84 +58104,6 @@ def _html_carrusel_clientes():
         ".cli-logo:hover img{filter:grayscale(0%);opacity:1}"
         "@keyframes cli-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>"
     )
-
-
-
-
-@app.route("/gerencia/contenido-login", methods=["GET", "POST"])
-def gerencia_contenido_login():
-    """Gerencia: contactos, horarios, mensaje comercial y Habeas del login público."""
-    if not requiere_login():
-        return redirect("/gerencia-login")
-    rol = (rol_actual() or "").strip()
-    if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte"):
-        return redirect("/dashboard")
-    p = plataforma()
-    msg = err = ""
-    if request.method == "POST":
-        try:
-            p.novedades = (request.form.get("novedades") or "").strip()
-            p.habeas_data = (request.form.get("habeas_data") or "").strip()
-            if request.form.get("faq") is not None:
-                p.faq = (request.form.get("faq") or "").strip()
-            tel = (request.form.get("contacto_publico_tel") or "").strip()[:40]
-            email = (request.form.get("contacto_publico_email") or "").strip()[:160]
-            if hasattr(p, "contacto_publico_tel"):
-                p.contacto_publico_tel = tel
-            if hasattr(p, "telefono_soporte"):
-                p.telefono_soporte = tel
-            if hasattr(p, "contacto_publico_email"):
-                p.contacto_publico_email = email
-            if hasattr(p, "email_soporte") and email:
-                p.email_soporte = email
-            if hasattr(p, "horario_lunes"):
-                p.horario_lunes = (request.form.get("horario_lunes") or "").strip()[:80]
-            hv = (request.form.get("horario_semana") or "").strip()[:80]
-            for _hk in ("horario_semana", "horario_martes_viernes"):
-                if hasattr(p, _hk):
-                    setattr(p, _hk, hv)
-            db.session.commit()
-            msg = "Contenido público guardado (contactos, horarios, novedades, habeas, FAQ)."
-        except Exception as ex:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            err = str(ex)[:160]
-    tel_v = getattr(p, "contacto_publico_tel", None) or getattr(p, "telefono_soporte", None) or ""
-    email_v = getattr(p, "contacto_publico_email", None) or getattr(p, "email_soporte", None) or ""
-    hl = getattr(p, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
-    hs = getattr(p, "horario_semana", None) or getattr(p, "horario_martes_viernes", None) or "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
-    body = f"""
-<header class="role-hero"><div>
-  <h1>Contenido del login y soporte público</h1>
-  <p>Gerencia: teléfono, correo, horarios, mensaje comercial y Habeas Data. FAQ supervisado (Soporte redacta).</p>
-</div>
-<a class="btn" href="/gerencia/hq">← HQ</a> · <a class="btn" href="/soporte/actualizaciones">Panel Soporte</a></header>
-<section class="role-panel" style="max-width:720px">
-  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-  <form method="POST" style="display:grid;gap:12px">
-    <label><b>Teléfono público de soporte</b></label>
-    <input name="contacto_publico_tel" value="{_esc(tel_v)}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <label><b>Correo público de soporte</b></label>
-    <input name="contacto_publico_email" value="{_esc(email_v)}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <label><b>Horario lunes</b></label>
-    <input name="horario_lunes" value="{_esc(hl)}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <label><b>Horario martes a viernes</b></label>
-    <input name="horario_semana" value="{_esc(hs)}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <label><b>Mensaje comercial · Novedades</b></label>
-    <textarea name="novedades" rows="5" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'novedades',None) or "")}</textarea>
-    <label><b>Habeas Data / Protección de datos</b></label>
-    <textarea name="habeas_data" rows="10" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-family:ui-monospace,Consolas,monospace;font-size:12px">{_esc(getattr(p,'habeas_data',None) or "")}</textarea>
-    <label><b>FAQ (supervisión)</b> — Soporte redacta; Gerencia revisa tono</label>
-    <textarea name="faq" rows="10" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'faq',None) or "")}</textarea>
-    <button class="btn" type="submit">Guardar</button>
-  </form>
-</section>
-"""
-    return page("Contenido login · Gerencia", shell(body))
-
 
 
 @app.route("/aceptar-terminos-pago", methods=["POST"])
