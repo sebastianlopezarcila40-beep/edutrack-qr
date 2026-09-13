@@ -4959,6 +4959,118 @@ def _archivo_a_data_uri(file_storage, max_bytes=2_500_000):
 
 
 
+
+def _ensure_plataforma_corp_columns():
+    """Crea/amplía columnas corp_* en plataforma (idempotente)."""
+    cols = [
+        ("corp_hero_fondo", "TEXT"),
+        ("corp_hero_titulo", "VARCHAR(255)"),
+        ("corp_hero_texto", "TEXT"),
+        ("corp_tag", "VARCHAR(120)"),
+        ("corp_brand_nombre", "VARCHAR(80)"),
+        ("corp_brand_sub", "VARCHAR(80)"),
+        ("corp_nosotros_titulo", "VARCHAR(120)"),
+        ("corp_nosotros_texto", "TEXT"),
+        ("corp_cta_titulo", "VARCHAR(160)"),
+        ("corp_cta_texto", "TEXT"),
+        ("corp_footer_texto", "TEXT"),
+        ("corp_portafolio_titulo", "VARCHAR(160)"),
+        ("corp_portafolio_texto", "TEXT"),
+        ("corp_caracteristicas", "TEXT"),
+        ("corp_empresa_puntos", "TEXT"),
+        ("corp_btn1_texto", "VARCHAR(80)"),
+        ("corp_btn1_url", "VARCHAR(160)"),
+        ("corp_btn2_texto", "VARCHAR(80)"),
+        ("corp_btn2_url", "VARCHAR(160)"),
+        ("corp_btn3_texto", "VARCHAR(80)"),
+        ("corp_btn3_url", "VARCHAR(160)"),
+        ("corp_top_derecha", "VARCHAR(160)"),
+        ("corp_barra_extra", "VARCHAR(255)"),
+        ("contacto_publico_tel", "VARCHAR(40)"),
+        ("contacto_publico_email", "VARCHAR(120)"),
+        ("contacto_whatsapp_ventas", "VARCHAR(40)"),
+        ("logo_path", "TEXT"),
+        ("logo_es_custom", "BOOLEAN DEFAULT FALSE"),
+    ]
+    for name, typ in cols:
+        try:
+            db.session.execute(text(
+                "ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (name, typ)
+            ))
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.execute(text(
+                    "ALTER TABLE plataforma ADD COLUMN %s %s" % (name, typ)
+                ))
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+    for name in ("corp_hero_fondo", "corp_hero_texto", "logo_path", "corp_caracteristicas", "corp_empresa_puntos"):
+        try:
+            db.session.execute(text("ALTER TABLE plataforma ALTER COLUMN %s TYPE TEXT" % name))
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+
+def _corp_cfg_from_db():
+    """Lee configuración pública PROCSIS campo a campo (no falla si falta una columna)."""
+    _ensure_plataforma_corp_columns()
+    keys = [
+        "corp_hero_titulo", "corp_hero_texto", "corp_hero_fondo", "corp_tag",
+        "corp_brand_nombre", "corp_brand_sub", "corp_nosotros_titulo", "corp_nosotros_texto",
+        "corp_cta_titulo", "corp_cta_texto", "corp_footer_texto",
+        "corp_portafolio_titulo", "corp_portafolio_texto", "corp_caracteristicas", "corp_empresa_puntos",
+        "corp_btn1_texto", "corp_btn1_url", "corp_btn2_texto", "corp_btn2_url", "corp_btn3_texto", "corp_btn3_url",
+        "corp_top_derecha", "corp_barra_extra",
+        "contacto_publico_tel", "contacto_publico_email", "contacto_whatsapp_ventas", "logo_path",
+    ]
+    out = {k: "" for k in keys}
+    try:
+        row = db.session.execute(text(
+            "SELECT " + ", ".join(keys) + " FROM plataforma ORDER BY id ASC LIMIT 1"
+        )).first()
+        if row:
+            for i, k in enumerate(keys):
+                try:
+                    v = row[i]
+                    out[k] = "" if v is None else str(v)
+                except Exception:
+                    pass
+            return out
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    # fallback campo a campo
+    for k in keys:
+        try:
+            r = db.session.execute(text(
+                "SELECT %s FROM plataforma ORDER BY id ASC LIMIT 1" % k
+            )).first()
+            if r and r[0] is not None:
+                out[k] = str(r[0])
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+    return out
+
+
+
 def plataforma():
 
     """Configuración de la empresa de soporte (Procsis), no del colegio."""
@@ -24780,6 +24892,10 @@ def gerencia_web_corporativa():
         return _g
     p = plataforma()
     mensaje = ""
+    try:
+        _ensure_plataforma_corp_columns()
+    except Exception:
+        pass
     if request.method == "POST":
         # Contactos barra superior
         p.contacto_publico_tel = (request.form.get("contacto_publico_tel") or "").strip()[:40]
@@ -45930,6 +46046,27 @@ def pagina_corporativa_procsis():
     hero_fondo = ""
     top_der = "Software para instituciones educativas · Colombia"
     barra_extra = "Facturación / Cartera / Ventas"
+    # Fuente única: BD (SQL). Si Gerencia guarda, aquí se refleja.
+    hero_tit = "Software y solución digital para instituciones educativas"
+    hero_txt = "Diseñamos y operamos plataformas serias para colegios."
+    corp_tag = "SOLUCIONES DIGITALES · COLOMBIA"
+    brand_nom, brand_sub = "PROCSIS", "Innovación que gestiona"
+    nos_tit, nos_txt = "Quiénes somos", "Equipo enfocado en software educativo confiable."
+    cta_tit, cta_txt = "¿Listo para ver EduTrack en su colegio?", "Solicite una demostración."
+    foot_txt = "Soluciones digitales para el sector educativo."
+    logo = "/media/logo-corporativo"
+    corp_tel, corp_email, wa_link = "—", "contacto@procsis.com", "/contacto"
+    caract_raw = empresa_pts = ""
+    btn1_t, btn1_u = "Conocer PROCSIS", "#nosotros"
+    btn2_t, btn2_u = "Hablar con un asesor", "/contacto"
+    btn3_t, btn3_u = "Entrar al sistema", "/login"
+    try:
+        _cfg = _corp_cfg_from_db()
+    except Exception:
+        _cfg = {}
+    def _cg(key, default=""):
+        v = (_cfg.get(key) if isinstance(_cfg, dict) else None) or default
+        return str(v).strip() if v is not None else default
     caract_raw = ""
     empresa_pts = ""
     btn1_t, btn1_u = "Conocer PROCSIS", "#nosotros"
@@ -45949,11 +46086,11 @@ def pagina_corporativa_procsis():
             if wa_num else "/contacto"
         )
         # Marca corporativa PROCSIS (no EduTrack) en /procsis y /empresa
-        _lp = (getattr(_pp, "logo_path", None) or "").strip()
-        if (not _lp) or ("edutrack" in _lp.lower()) or ("logo-colegio" in _lp.lower()):
-            logo = "/static/img/logo-procsis.jpeg"
+        _lp = (_cg("logo_path") or getattr(_pp, "logo_path", None) or "").strip()
+        if _lp.startswith("data:image") or (_lp and "edutrack" not in _lp.lower() and "logo-colegio" not in _lp.lower()):
+            logo = "/media/logo-corporativo" if _lp.startswith("data:") else _lp
         else:
-            logo = _lp
+            logo = "/media/logo-corporativo"
         _bn = (getattr(_pp, "corp_brand_nombre", None) or "").strip()
         if (not _bn) or _bn.lower() in ("edutrack", "edutrack | edutrack"):
             brand_nom = "PROCSIS"
@@ -46105,6 +46242,64 @@ def pagina_corporativa_procsis():
         empresa_pts = empresa_pts.replace("\\n", chr(10))
     lis_emp = "".join(f"<li>{_esc(x.strip())}</li>" for x in (empresa_pts or "").replace("\\n", "\n").splitlines() if x.strip())
     btn1_t, btn2_t, btn3_t = _esc(btn1_t), _esc(btn2_t), _esc(btn3_t)
+
+    # Forzar valores publicados desde Gerencia (siempre, aunque falle el try ORM)
+    try:
+        if _cg("corp_hero_titulo"):
+            hero_tit = _cg("corp_hero_titulo")
+        if _cg("corp_hero_texto"):
+            hero_txt = _cg("corp_hero_texto")
+        if _cg("corp_tag"):
+            corp_tag = _cg("corp_tag")
+        if _cg("corp_brand_nombre") and _cg("corp_brand_nombre").lower() != "edutrack":
+            brand_nom = _cg("corp_brand_nombre")
+        if _cg("corp_brand_sub"):
+            brand_sub = _cg("corp_brand_sub")
+        if _cg("corp_nosotros_titulo"):
+            nos_tit = _cg("corp_nosotros_titulo")
+        if _cg("corp_nosotros_texto"):
+            nos_txt = _cg("corp_nosotros_texto")
+        if _cg("corp_cta_titulo"):
+            cta_tit = _cg("corp_cta_titulo")
+        if _cg("corp_cta_texto"):
+            cta_txt = _cg("corp_cta_texto")
+        if _cg("corp_footer_texto"):
+            foot_txt = _cg("corp_footer_texto")
+        if _cg("corp_caracteristicas"):
+            caract_raw = _cg("corp_caracteristicas")
+        if _cg("corp_empresa_puntos"):
+            empresa_pts = _cg("corp_empresa_puntos")
+        if _cg("corp_btn1_texto"):
+            btn1_t = _cg("corp_btn1_texto")
+        if _cg("corp_btn1_url"):
+            btn1_u = _cg("corp_btn1_url")
+        if _cg("corp_btn2_texto"):
+            btn2_t = _cg("corp_btn2_texto")
+        if _cg("corp_btn2_url"):
+            btn2_u = _cg("corp_btn2_url")
+        if _cg("corp_btn3_texto"):
+            btn3_t = _cg("corp_btn3_texto")
+        if _cg("corp_btn3_url"):
+            btn3_u = _cg("corp_btn3_url")
+        if _cg("corp_top_derecha"):
+            top_der = _cg("corp_top_derecha")
+        if _cg("corp_barra_extra"):
+            barra_extra = _cg("corp_barra_extra")
+        if _cg("contacto_publico_tel"):
+            corp_tel = _cg("contacto_publico_tel")
+        if _cg("contacto_publico_email"):
+            corp_email = _cg("contacto_publico_email")
+        _hf = _cg("corp_hero_fondo")
+        if _hf:
+            hero_fondo = _hf
+        _lp3 = _cg("logo_path")
+        if _lp3:
+            logo = "/media/logo-corporativo" if _lp3.startswith("data:") else (
+                _lp3 if "edutrack" not in _lp3.lower() else "/media/logo-corporativo"
+            )
+    except Exception as _ov:
+        print("corp override:", _ov)
+
     if hero_fondo:
         # data URI muy largo rompe el CSS del navegador → servir por /media/hero-corporativo
         _hero_url = "/media/hero-corporativo" if str(hero_fondo).startswith("data:image") else str(hero_fondo).replace("'", "")
@@ -46354,9 +46549,13 @@ def pagina_corporativa_procsis():
 </div>
 """
     try:
-        body = (body or "") + _html_carrusel_clientes()
-    except Exception:
-        pass
+        _car = _html_carrusel_clientes()
+        if "pc-foot" in (body or ""):
+            body = (body or "").replace('<footer class="pc-foot">', _car + '<footer class="pc-foot">', 1)
+        else:
+            body = (body or "") + _car
+    except Exception as _ce:
+        print("carrusel:", _ce)
     return page(f"{brand_nom} · {brand_sub}", body)
 
 
@@ -57838,12 +58037,48 @@ def gerencia_alianzas_clientes():
 
 
 def _html_carrusel_clientes():
+    items = []
     try:
-        items = ClienteAlianza.query.filter_by(activo=True).order_by(ClienteAlianza.orden, ClienteAlianza.id).all()
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS clientes_alianzas ("
+            "id SERIAL PRIMARY KEY, nombre VARCHAR(160) DEFAULT '', url VARCHAR(255) DEFAULT '', "
+            "logo_path TEXT DEFAULT '', activo BOOLEAN DEFAULT TRUE, orden INT DEFAULT 0)"
+        ))
+        db.session.commit()
     except Exception:
-        items = []
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        rows = db.session.execute(text(
+            "SELECT nombre, url, logo_path FROM clientes_alianzas WHERE activo IS NOT FALSE ORDER BY orden, id"
+        )).fetchall()
+        for r in rows:
+            class _It:
+                pass
+            it = _It()
+            it.nombre, it.url, it.logo_path = r[0] or "", r[1] or "", r[2] or ""
+            items.append(it)
+    except Exception:
+        try:
+            items = ClienteAlianza.query.filter_by(activo=True).order_by(ClienteAlianza.orden, ClienteAlianza.id).all()
+        except Exception:
+            items = []
     if not items:
-        return ""
+        # Sección visible aunque esté vacía (para que se note en /procsis)
+        return (
+            '<section class="cli-strip" id="clientes-alianzas">'
+            '<p class="cli-kicker">PARA NOSOTROS NUESTROS CLIENTES SON PRIMERO</p>'
+            '<h2 class="cli-title">Algunos de nuestros clientes</h2>'
+            '<p style="color:#64748b;font-size:14px;max-width:520px;margin:0 auto">'
+            "Pronto publicaremos aquí los escudos de las instituciones aliadas. "
+            "Gerencia puede cargarlos en <b>Gestionar alianzas y clientes</b>."
+            "</p></section>"
+            "<style>.cli-strip{padding:48px 16px;background:#f8fafc;text-align:center}"
+            ".cli-kicker{margin:0 0 8px;font-size:14px;letter-spacing:2px;font-weight:700;color:#3b82f6;text-transform:uppercase}"
+            ".cli-title{margin:0 0 16px;font-size:1.75rem;font-weight:800;color:#0B2D57}</style>"
+        )
     logos = []
     for it in items:
         if not it.logo_path:
