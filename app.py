@@ -5504,35 +5504,64 @@ def estado_licencia(inst):
 
 
 def sincronizar_licencias():
-    """Auto-suspende SOLO si hay deuda real (facturas PENDIENTE con valor > 0).
+    """Auto-suspende SOLO con deuda real Y licencia vencida.
 
-    Ya no suspende solo por fecha_vencimiento vencida sin cartera: eso dejaba colegios
-    en $0 como SUSPENDIDA y al reactivar desde Gerencia se volvían a caer solos.
+    Reglas:
+    - Si saldo pendiente (facturas PENDIENTE valor>0) es 0 → NUNCA suspende ni por fecha.
+    - Si el colegio tiene auto_suspender=False → no lo toca el job automático.
+    - Si hay saldo > 0 y fecha_vencimiento ya pasó → suspende por mora.
+    - Si hay saldo > 0 pero la fecha de vencimiento es futura → NO suspende (aún en plazo).
     """
     try:
         hoy = ahora().date()
-        for inst in Institucion.query.filter(Institucion.estado == "ACTIVA").all():
+        # 1) Reparar suspendidos sin deuda
+        for inst in Institucion.query.filter(Institucion.estado == "SUSPENDIDA").all():
+            try:
+                if getattr(inst, "auto_suspender", None) is False:
+                    continue
+            except Exception:
+                pass
             try:
                 pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
-                saldo = sum(float(x.valor or 0) for x in pend)
+                saldo = sum(float(x.valor or 0) for x in pend if float(x.valor or 0) > 0)
             except Exception:
                 saldo = 0.0
-            # Sin deuda registrada → no suspender por fecha
+            if saldo <= 0:
+                inst.estado = "ACTIVA"
+                inst.motivo_bloqueo = ""
+                try:
+                    venc = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
+                    if not venc or venc < hoy:
+                        from datetime import timedelta
+                        inst.fecha_vencimiento = (hoy + timedelta(days=30)).isoformat()
+                except Exception:
+                    pass
+        # 2) Suspender activos solo con deuda + vencimiento pasado
+        for inst in Institucion.query.filter(Institucion.estado == "ACTIVA").all():
+            try:
+                if getattr(inst, "auto_suspender", None) is False:
+                    continue
+            except Exception:
+                pass
+            try:
+                pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
+                saldo = sum(float(x.valor or 0) for x in pend if float(x.valor or 0) > 0)
+            except Exception:
+                saldo = 0.0
             if saldo <= 0:
                 continue
             venc = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None))
-            # Con deuda: suspender si vencimiento pasó, o si hay mora clara
-            if (venc and venc < hoy) or saldo > 0:
-                # Solo auto-suspender por mora de cartera cuando hay saldo pendiente
-                inst.estado = "SUSPENDIDA"
-                try:
-                    inst.fecha_suspension = fecha_hoy()
-                except Exception:
-                    pass
-                inst.motivo_bloqueo = (
-                    inst.motivo_bloqueo
-                    or ("Mora de cartera: saldo pendiente $ %.0f. Regularice el pago." % saldo)
-                )
+            if venc and venc >= hoy:
+                continue  # aún dentro del plazo pagado / acordado
+            # deuda y (sin fecha o fecha vencida)
+            inst.estado = "SUSPENDIDA"
+            try:
+                inst.fecha_suspension = fecha_hoy()
+            except Exception:
+                pass
+            inst.motivo_bloqueo = (
+                "Mora de cartera: saldo pendiente $ %.0f. Regularice el pago." % saldo
+            )
         db.session.commit()
     except Exception as e:
         print("sincronizar_licencias:", e)
@@ -20317,6 +20346,7 @@ def gerencia_hq():
         <div class="grid-mod">
           <a class="c-verde" href="/gerencia/cartera">Cuadro de mando · Cartera</a>
           <a class="c-verde" href="/gerencia/plazos-cuotas">Reporte plazos / cuotas</a>
+          <a class="c-verde" href="/gerencia/colegios-config">Config colegios · fechas</a>
           <a class="c-verde" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
           <a class="c-verde" href="/gerencia/gastos">Gastos y cashflow</a>
           <a class="c-verde" href="/gerencia/contabilidad">Contabilidad comercial</a>
@@ -22669,18 +22699,22 @@ def gerencia_suspender():
         elif accion == "reactivar":
             inst.estado = "ACTIVA"
             inst.motivo_bloqueo = ""
-            # Evitar que se vuelva a suspender solo: alargar vencimiento si está vacío o vencido
             try:
                 from datetime import timedelta
                 hoy = ahora().date() if hasattr(ahora(), "date") else __import__("datetime").date.today()
                 venc = parse_fecha_iso(getattr(inst, "fecha_vencimiento", None) or "")
                 if not venc or venc < hoy:
                     inst.fecha_vencimiento = (hoy + timedelta(days=30)).isoformat()
+                # Por defecto al reactivar desde pánico: no auto-suspender hasta configurar
+                try:
+                    inst.auto_suspender = False
+                except Exception:
+                    pass
             except Exception:
                 pass
             db.session.commit()
             registrar_auditoria("Reactivar colegio", f"{inst.nombre} venc={getattr(inst,'fecha_vencimiento',None)}")
-            msg = f"Colegio «{inst.nombre}» reactivado · licencia hasta {inst.fecha_vencimiento or '—'}."
+            msg = f"Colegio «{inst.nombre}» reactivado · licencia hasta {inst.fecha_vencimiento or '—'} · auto-suspensión OFF."
     filas = ""
     for i in Institucion.query.order_by(Institucion.nombre.asc()).limit(200).all():
         est = i.estado or "—"
@@ -55196,6 +55230,190 @@ def gerencia_landing_ventas():
 </section>
 """
     return page("Landing ventas", shell(body))
+
+
+
+
+def _ensure_inst_auto_suspender():
+    try:
+        try:
+            db.session.execute(text("ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS auto_suspender BOOLEAN DEFAULT TRUE"))
+        except Exception:
+            try:
+                db.session.execute(text("ALTER TABLE instituciones ADD COLUMN auto_suspender BOOLEAN DEFAULT 1"))
+            except Exception:
+                pass
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+@app.route("/gerencia/colegios-config", methods=["GET", "POST"])
+def gerencia_colegios_config():
+    """Configuración de licencia, corte, estado y auto-suspensión por colegio."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    _ensure_inst_auto_suspender()
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            iid = int(request.form.get("institucion_id") or 0)
+        except Exception:
+            iid = 0
+        inst = Institucion.query.get(iid) if iid else None
+        if not inst:
+            err = "Colegio no encontrado."
+        else:
+            accion = (request.form.get("accion") or "guardar").strip()
+            if accion == "guardar":
+                inst.estado = (request.form.get("estado") or inst.estado or "ACTIVA").strip().upper()
+                inst.plan = (request.form.get("plan") or inst.plan or "")[:80]
+                fv = (request.form.get("fecha_vencimiento") or "").strip()[:20]
+                fi = (request.form.get("fecha_inicio_licencia") or "").strip()[:20]
+                if fv:
+                    inst.fecha_vencimiento = fv
+                if fi and hasattr(inst, "fecha_inicio_licencia"):
+                    inst.fecha_inicio_licencia = fi
+                if hasattr(inst, "fecha_corte_plan"):
+                    fc = (request.form.get("fecha_corte_plan") or "").strip()[:20]
+                    inst.fecha_corte_plan = fc
+                if hasattr(inst, "dias_aviso"):
+                    try:
+                        inst.dias_aviso = int(request.form.get("dias_aviso") or 7)
+                    except Exception:
+                        pass
+                inst.motivo_bloqueo = (request.form.get("motivo_bloqueo") or "")[:255]
+                auto = request.form.get("auto_suspender") == "1"
+                try:
+                    inst.auto_suspender = auto
+                except Exception:
+                    pass
+                if inst.estado == "ACTIVA":
+                    inst.motivo_bloqueo = ""
+                db.session.commit()
+                try:
+                    registrar_auditoria(
+                        "Config colegio",
+                        "%s estado=%s venc=%s auto=%s" % (inst.codigo, inst.estado, inst.fecha_vencimiento, auto),
+                    )
+                except Exception:
+                    pass
+                msg = "Guardado: %s · %s · vence %s" % (inst.codigo, inst.estado, inst.fecha_vencimiento or "—")
+            elif accion == "reactivar_30":
+                from datetime import timedelta
+                hoy = ahora().date() if hasattr(ahora(), "date") else __import__("datetime").date.today()
+                inst.estado = "ACTIVA"
+                inst.motivo_bloqueo = ""
+                inst.fecha_vencimiento = (hoy + timedelta(days=30)).isoformat()
+                try:
+                    inst.auto_suspender = request.form.get("auto_suspender") == "1"
+                except Exception:
+                    pass
+                # anular facturas pendientes en $0 que ensucian saldo
+                try:
+                    for f in FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all():
+                        if float(f.valor or 0) <= 0:
+                            f.estado = "ANULADA"
+                except Exception:
+                    pass
+                db.session.commit()
+                msg = "Reactivado 30 días: %s hasta %s" % (inst.codigo, inst.fecha_vencimiento)
+            elif accion == "reactivar_90":
+                from datetime import timedelta
+                hoy = ahora().date() if hasattr(ahora(), "date") else __import__("datetime").date.today()
+                inst.estado = "ACTIVA"
+                inst.motivo_bloqueo = ""
+                inst.fecha_vencimiento = (hoy + timedelta(days=90)).isoformat()
+                try:
+                    inst.auto_suspender = False  # piloto: no auto-suspender
+                except Exception:
+                    pass
+                db.session.commit()
+                msg = "Reactivado 90 días sin auto-suspensión: %s" % inst.codigo
+            elif accion == "desactivar_auto":
+                try:
+                    inst.auto_suspender = False
+                    inst.estado = "ACTIVA"
+                    inst.motivo_bloqueo = ""
+                    db.session.commit()
+                    msg = "Auto-suspensión OFF y ACTIVA: %s" % inst.codigo
+                except Exception as e:
+                    err = str(e)[:100]
+
+    lista = Institucion.query.order_by(Institucion.nombre.asc()).limit(300).all()
+    filas = []
+    for i in lista:
+        try:
+            pend = FacturaCobro.query.filter_by(institucion_id=i.id, estado="PENDIENTE").all()
+            saldo = sum(float(x.valor or 0) for x in pend if float(x.valor or 0) > 0)
+        except Exception:
+            saldo = 0
+        auto = getattr(i, "auto_suspender", True)
+        if auto is None:
+            auto = True
+        color = "#16a34a" if (i.estado or "").upper() == "ACTIVA" else "#b91c1c"
+        filas.append(f"""
+<form method="POST" style="display:grid;grid-template-columns:1.2fr 0.7fr 0.9fr 0.9fr 0.7fr 1.1fr;gap:6px;align-items:center;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-bottom:8px">
+  <input type="hidden" name="institucion_id" value="{i.id}">
+  <div>
+    <div style="font-weight:800;color:#0B2D57">{_esc(i.codigo)}</div>
+    <div style="font-size:12px;color:#64748b">{_esc((i.nombre or '')[:40])}</div>
+    <div style="font-size:11px;color:{color};font-weight:700">{_esc(i.estado or '—')} · saldo $ {saldo:,.0f}</div>
+  </div>
+  <div>
+    <label style="font-size:10px;font-weight:700">Estado</label>
+    <select name="estado" style="width:100%;padding:6px;font-size:12px">
+      <option value="ACTIVA" {"selected" if (i.estado or "").upper()=="ACTIVA" else ""}>ACTIVA</option>
+      <option value="SUSPENDIDA" {"selected" if (i.estado or "").upper()=="SUSPENDIDA" else ""}>SUSPENDIDA</option>
+      <option value="MANTENIMIENTO" {"selected" if (i.estado or "").upper()=="MANTENIMIENTO" else ""}>MANTENIMIENTO</option>
+    </select>
+  </div>
+  <div>
+    <label style="font-size:10px;font-weight:700">Vencimiento licencia</label>
+    <input type="date" name="fecha_vencimiento" value="{_esc(i.fecha_vencimiento or '')}" style="width:100%;padding:6px;font-size:12px">
+  </div>
+  <div>
+    <label style="font-size:10px;font-weight:700">Fecha corte plan</label>
+    <input type="date" name="fecha_corte_plan" value="{_esc(getattr(i,'fecha_corte_plan',None) or '')}" style="width:100%;padding:6px;font-size:12px">
+  </div>
+  <div>
+    <label style="font-size:10px;font-weight:700">Plan</label>
+    <input name="plan" value="{_esc(i.plan or '')}" style="width:100%;padding:6px;font-size:12px">
+    <label style="font-size:10px;display:block;margin-top:4px">
+      <input type="checkbox" name="auto_suspender" value="1" {"checked" if auto else ""}> Auto-suspender
+    </label>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:4px">
+    <button name="accion" value="guardar" style="background:#0B2D57;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Guardar</button>
+    <button name="accion" value="reactivar_30" style="background:#15803d;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">+30 días</button>
+    <button name="accion" value="reactivar_90" style="background:#0f766e;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">+90 sin auto</button>
+    <button name="accion" value="desactivar_auto" style="background:#64748b;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Solo ACTIVA</button>
+  </div>
+</form>
+""")
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Configuración de colegios</h1>
+  <p>Estado, fecha de vencimiento, corte de plan y auto-suspensión. Evita que se suspendan solos sin deuda.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px;margin-bottom:14px;font-size:13px;color:#1e3a8a">
+    <b>Regla del sistema:</b> un colegio <b>no se suspende solo</b> si el saldo de facturas PENDIENTE es $0.
+    Solo se auto-suspende si hay <b>deuda real</b> y la <b>fecha de vencimiento ya pasó</b>.
+    Puedes desmarcar <b>Auto-suspender</b> para pilotos (ej. Nuevo Amanecer).
+  </div>
+  {"".join(filas)}
+</section>
+"""
+    return page("Config colegios", shell(body))
 
 
 
