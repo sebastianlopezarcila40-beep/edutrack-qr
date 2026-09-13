@@ -878,6 +878,10 @@ class Estudiante(db.Model):
     mora_pension = db.Column(db.Boolean, default=False)
     mora_detalle = db.Column(db.String(255), default="")
     eps = db.Column(db.String(120), default="")
+    alergias = db.Column(db.Text, default="")
+    enfermedades = db.Column(db.Text, default="")
+    medicamentos = db.Column(db.Text, default="")
+    alerta_medica = db.Column(db.String(255), default="")
     nro_matricula = db.Column(db.String(40), default="")
     folio_matricula = db.Column(db.String(40), default="")
     foto_path = db.Column(db.String(255), default="")
@@ -949,6 +953,38 @@ class IngresoPorteria(db.Model):
     periodo = db.Column(db.String(30), nullable=False)
     registrado_por = db.Column(db.String(120), default="Portal móvil")
     estudiante = db.relationship("Estudiante")
+
+
+
+class AutorizacionSalida(db.Model):
+    __tablename__ = "autorizaciones_salida"
+    id = db.Column(db.Integer, primary_key=True)
+    estudiante_id = db.Column(db.Integer, db.ForeignKey("estudiantes.id"), index=True)
+    institucion_id = db.Column(db.Integer, index=True, nullable=True)
+    fecha = db.Column(db.String(20), default="")
+    nombre_recoge = db.Column(db.String(160), default="")
+    documento_recoge = db.Column(db.String(40), default="")
+    parentesco = db.Column(db.String(80), default="")
+    acudiente_nombre = db.Column(db.String(160), default="")
+    acudiente_doc = db.Column(db.String(40), default="")
+    texto_legal = db.Column(db.Text, default="")
+    ip = db.Column(db.String(80), default="")
+    user_agent = db.Column(db.String(255), default="")
+    hash_firma = db.Column(db.String(80), default="")
+    timestamp_ms = db.Column(db.String(40), default="")
+    estado = db.Column(db.String(40), default="ACTIVA")
+    usado_en = db.Column(db.String(40), default="")
+    tipo = db.Column(db.String(40), default="DELEGACION")
+
+
+class ClienteAlianza(db.Model):
+    __tablename__ = "clientes_alianzas"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(160), default="")
+    url = db.Column(db.String(255), default="")
+    logo_path = db.Column(db.Text, default="")
+    activo = db.Column(db.Boolean, default=True)
+    orden = db.Column(db.Integer, default=0)
 
 
 class AsistenciaClase(db.Model):
@@ -4500,7 +4536,7 @@ def ruta_publica():
         or p.startswith("/qr/")
         or p.startswith("/matricula")
         or p.startswith("/colegio")
-        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/legal", "/cookies", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva"]
+        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/legal", "/cookies", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva", "/acudiente/autorizar-salida", "/acudiente/ficha-medica"]
         or p.startswith("/verificar-certificado")
         or p.startswith("/demo/invitar")
         or p.startswith("/pqr/")
@@ -7907,6 +7943,39 @@ def registrar_ingreso(codigo, estado, registrado_por=None):
         return "Estudiante no registrado", "No registrado"
     if not registrado_por:
         registrado_por = f"{session.get('usuario', 'Portería')} ({session.get('rol', 'Portal móvil')})" if requiere_login() else "Portería / Portal móvil"
+    alerta_med = (getattr(e, "alerta_medica", None) or "").strip()
+    if not alerta_med:
+        parts = []
+        if (getattr(e, "alergias", None) or "").strip():
+            parts.append("ALERGICO: " + (e.alergias or "")[:60])
+        if (getattr(e, "enfermedades", None) or "").strip():
+            parts.append((e.enfermedades or "")[:60])
+        alerta_med = " · ".join(parts)
+    try:
+        auth = AutorizacionSalida.query.filter_by(
+            estudiante_id=e.id, fecha=fecha_hoy(), estado="ACTIVA"
+        ).order_by(AutorizacionSalida.id.desc()).first()
+    except Exception:
+        auth = None
+    if auth:
+        msg_out = "SALIDA AUTORIZADA: Entregar a %s - C.C. %s" % (auth.nombre_recoge, auth.documento_recoge)
+        if alerta_med:
+            msg_out = "ATENCION MEDICA: %s | %s" % (alerta_med, msg_out)
+        try:
+            auth.estado = "USADA"
+            auth.usado_en = hora_actual()
+            db.session.add(IngresoPorteria(
+                estudiante_id=e.id, fecha=fecha_hoy(), hora=hora_actual(),
+                dia=ahora().strftime("%A"), estado="Salida autorizada",
+                periodo=periodo_actual(), registrado_por=registrado_por or "Porteria",
+            ))
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        return msg_out, "Salida autorizada"
     # Anti-suplantación: mismo QR en menos de 15 min
     try:
         ok_qr, wait_s = _qr_anti_suplantacion_ok(codigo, segundos=900)
@@ -7941,7 +8010,13 @@ def registrar_ingreso(codigo, estado, registrado_por=None):
     extra = ""
     if (estado or "").lower() in ("tarde", "retardo"):
         extra = " (%s min tarde)" % mins if mins else " (retardo)"
-    return f"Registro guardado: {e.nombre} {e.apellido} - {estado}{extra}", estado
+    msg_ok = f"Registro guardado: {e.nombre} {e.apellido} - {estado}{extra}"
+    try:
+        if alerta_med:
+            msg_ok = "ATENCION: %s | %s" % (alerta_med, msg_ok)
+    except Exception:
+        pass
+    return msg_ok, estado
 
 def enviar_pin(correo_destino, pin):
     if not SOPORTE_EMAIL or not SOPORTE_PASSWORD: return False
@@ -9027,6 +9102,7 @@ def login():
           </div>
           <div class="sinai-portals">
             <a href="/acudiente-asistencia" style="background:#0B2D57;color:#fff">Consulta asistencia en vivo · Acudientes</a>
+            <a href="/acudiente/autorizar-salida" style="background:#1e3a8a;color:#fff">Autorizar salida · Acudientes</a>
             <a href="/familia-login" style="background:#ecfdf5;color:#065f46">Portal familiar · Padres</a>
             <a href="/ayuda">Centro de ayuda</a>
             <a href="/atencion-directivos">Atención al directivo · PQR</a>
@@ -20659,6 +20735,7 @@ def gerencia_hq():
           <a class="c-azul" href="/tenants">Instituciones</a>
           <a class="c-azul" href="/calendario">Calendario escolar</a>
           <a class="c-azul" href="/retardos-acumulados">Control de retardos y convivencia</a>
+          <a class="c-azul" href="/coordinacion/retiro-medico">Retiro medico autorizado</a>
         </div>
 
         <div class="hq-cat naranja">🟠 Comunicación y herramientas</div>
@@ -45999,6 +46076,10 @@ def pagina_corporativa_procsis():
   </footer>
 </div>
 """
+    try:
+        body = (body or "") + _html_carrusel_clientes()
+    except Exception:
+        pass
     return page(f"{brand_nom} · {brand_sub}", body)
 
 
@@ -57181,6 +57262,331 @@ def paz_y_salvo(est_id=None):
 """
     return page("Paz y salvo", shell(body))
 
+
+
+
+
+@app.route("/acudiente/autorizar-salida", methods=["GET", "POST"])
+def acudiente_autorizar_salida():
+    """Delegacion de salida con firma digital (IP, timestamp, hash SHA256)."""
+    err = msg = ""
+    eid = session.get("acu_est_id")
+    e = Estudiante.query.get(eid) if eid else None
+    if request.method == "POST":
+        doc = (request.form.get("documento") or "").strip()
+        codigo = (request.form.get("codigo_carne") or "").strip()
+        if not e and doc and codigo:
+            e = Estudiante.query.filter_by(documento=doc, codigo=codigo).first()
+            if e:
+                session["acu_est_id"] = e.id
+                session["acu_doc"] = doc
+        if not e:
+            err = "Valide documento y codigo del carne primero en /acudiente-asistencia"
+        elif request.form.get("acepto_legal") != "1":
+            err = "Debe aceptar la autorizacion expresa."
+        else:
+            nombre_r = (request.form.get("nombre_recoge") or "").strip()[:160]
+            doc_r = (request.form.get("documento_recoge") or "").strip()[:40]
+            parentesco = (request.form.get("parentesco") or "").strip()[:80]
+            acu_nom = (request.form.get("acudiente_nombre") or (e.acudiente if e else "") or "").strip()[:160]
+            acu_doc = (request.form.get("acudiente_doc") or session.get("acu_doc") or "").strip()[:40]
+            if not nombre_r or not doc_r:
+                err = "Nombre y documento de quien recoge son obligatorios."
+            else:
+                import hashlib
+                from datetime import datetime as _dt
+                ts = _dt.now().strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]
+                ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+                ua = (request.headers.get("User-Agent") or "")[:255]
+                texto = (
+                    "Yo, %s, C.C. %s, acudiente del menor %s %s, AUTORIZO de manera expresa a %s "
+                    "doc. %s para retirar al estudiante el dia de hoy (Ley 527 de 1999)."
+                ) % (acu_nom, acu_doc, e.nombre or "", e.apellido or "", nombre_r, doc_r)
+                h = hashlib.sha256(
+                    ("%s|%s|%s|%s|%s|%s" % (e.id, nombre_r, doc_r, acu_doc, ts, ip)).encode("utf-8")
+                ).hexdigest()
+                try:
+                    db.create_all()
+                except Exception:
+                    pass
+                try:
+                    row = AutorizacionSalida(
+                        estudiante_id=e.id,
+                        institucion_id=getattr(e, "institucion_id", None),
+                        fecha=fecha_hoy(),
+                        nombre_recoge=nombre_r,
+                        documento_recoge=doc_r,
+                        parentesco=parentesco,
+                        acudiente_nombre=acu_nom,
+                        acudiente_doc=acu_doc,
+                        texto_legal=texto,
+                        ip=ip,
+                        user_agent=ua,
+                        hash_firma=h,
+                        timestamp_ms=ts,
+                        estado="ACTIVA",
+                        tipo="DELEGACION",
+                    )
+                    db.session.add(row)
+                    db.session.commit()
+                    msg = "Autorizacion firmada. Hash %s... IP %s · %s" % (h[:12], ip, ts)
+                except Exception as ex:
+                    err = str(ex)[:140]
+    body = (
+        '<div style="max-width:440px;margin:24px auto;font-family:Segoe UI,sans-serif;padding:16px">'
+        '<h1 style="color:#0B2D57;font-size:1.2rem">Autorizar salida</h1>'
+        + (('<div style="background:#ecfdf5;color:#065f46;padding:10px;border-radius:8px;margin:8px 0">' + _esc(msg) + "</div>") if msg else "")
+        + (('<div style="background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;margin:8px 0">' + _esc(err) + "</div>") if err else "")
+        + '<form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">'
+        + '<label style="font-size:12px;font-weight:700">Documento estudiante</label>'
+        + '<input name="documento" style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
+        + '<label style="font-size:12px;font-weight:700">Codigo carne</label>'
+        + '<input name="codigo_carne" style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
+        + '<label style="font-size:12px;font-weight:700">Nombre de quien recoge</label>'
+        + '<input name="nombre_recoge" required style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
+        + '<label style="font-size:12px;font-weight:700">Documento quien recoge</label>'
+        + '<input name="documento_recoge" required style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
+        + '<label style="font-size:12px;font-weight:700">Parentesco</label>'
+        + '<input name="parentesco" style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
+        + '<label style="font-size:12px;font-weight:700">Su nombre (acudiente)</label>'
+        + '<input name="acudiente_nombre" style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
+        + '<label style="font-size:12px;font-weight:700">Su documento</label>'
+        + '<input name="acudiente_doc" style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
+        + '<label style="display:flex;gap:8px;font-size:11px;margin:12px 0"><input type="checkbox" name="acepto_legal" value="1" required>'
+        + '<span>AUTORIZO de manera expresa, libre y voluntaria el retiro del menor por la persona indicada '
+        + "y exonero a la institucion una vez cruce el control perimetral (Ley 527 de 1999).</span></label>"
+        + '<button type="submit" style="width:100%;padding:12px;border:0;border-radius:6px;background:#0B2D57;color:#fff;font-weight:800">Confirmar y firmar</button>'
+        + '</form><p style="text-align:center;margin-top:12px"><a href="/acudiente-asistencia">Asistencia</a> · '
+        + '<a href="/acudiente/ficha-medica">Ficha medica</a></p></div>'
+    )
+    return page("Autorizar salida", body)
+
+
+@app.route("/acudiente/ficha-medica", methods=["GET", "POST"])
+def acudiente_ficha_medica():
+    err = msg = ""
+    eid = session.get("acu_est_id")
+    e = Estudiante.query.get(eid) if eid else None
+    if request.method == "POST":
+        doc = (request.form.get("documento") or "").strip()
+        codigo = (request.form.get("codigo_carne") or "").strip()
+        if not e and doc and codigo:
+            e = Estudiante.query.filter_by(documento=doc, codigo=codigo).first()
+            if e:
+                session["acu_est_id"] = e.id
+        if not e:
+            err = "Valide documento y codigo."
+        else:
+            try:
+                e.alergias = (request.form.get("alergias") or "")[:2000]
+                e.enfermedades = (request.form.get("enfermedades") or "")[:2000]
+                e.medicamentos = (request.form.get("medicamentos") or "")[:2000]
+                e.eps = (request.form.get("eps") or e.eps or "")[:120]
+                alertas = []
+                if (e.alergias or "").strip():
+                    alertas.append("ALERGICO: " + e.alergias[:80])
+                if (e.enfermedades or "").strip():
+                    alertas.append(e.enfermedades[:80])
+                e.alerta_medica = " · ".join(alertas)[:255]
+                db.session.commit()
+                msg = "Ficha medica guardada."
+            except Exception as ex:
+                err = str(ex)[:120]
+    body = (
+        '<div style="max-width:440px;margin:24px auto;font-family:Segoe UI,sans-serif;padding:16px">'
+        '<h1 style="color:#0B2D57;font-size:1.2rem">Ficha medica digital</h1>'
+        + (('<div style="background:#ecfdf5;padding:10px;border-radius:8px">' + _esc(msg) + "</div>") if msg else "")
+        + (('<div style="background:#fef2f2;padding:10px;border-radius:8px">' + _esc(err) + "</div>") if err else "")
+        + '<form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">'
+        + '<input name="documento" placeholder="Documento estudiante" style="width:100%;padding:10px;margin-bottom:8px;box-sizing:border-box">'
+        + '<input name="codigo_carne" placeholder="Codigo carne" style="width:100%;padding:10px;margin-bottom:8px;box-sizing:border-box">'
+        + '<input name="eps" placeholder="EPS" value="' + _esc(getattr(e, "eps", None) or "") + '" style="width:100%;padding:10px;margin-bottom:8px;box-sizing:border-box">'
+        + '<textarea name="alergias" rows="2" placeholder="Alergias" style="width:100%;padding:10px;margin-bottom:8px;box-sizing:border-box">' + _esc(getattr(e, "alergias", None) or "") + "</textarea>"
+        + '<textarea name="enfermedades" rows="2" placeholder="Enfermedades (ej. asma)" style="width:100%;padding:10px;margin-bottom:8px;box-sizing:border-box">' + _esc(getattr(e, "enfermedades", None) or "") + "</textarea>"
+        + '<textarea name="medicamentos" rows="2" placeholder="Medicamentos" style="width:100%;padding:10px;margin-bottom:8px;box-sizing:border-box">' + _esc(getattr(e, "medicamentos", None) or "") + "</textarea>"
+        + '<button type="submit" style="width:100%;padding:12px;border:0;border-radius:6px;background:#15803d;color:#fff;font-weight:800">Guardar</button></form>'
+        + '<p style="text-align:center"><a href="/acudiente-asistencia">Asistencia</a> · <a href="/acudiente/autorizar-salida">Autorizar salida</a></p></div>'
+    )
+    return page("Ficha medica", body)
+
+
+@app.route("/coordinacion/retiro-medico", methods=["GET", "POST"])
+def coordinacion_retiro_medico():
+    if not requiere_login():
+        return redirect("/login")
+    msg = err = ficha = ""
+    if request.method == "POST":
+        codigo = limpiar_codigo(request.form.get("codigo") or "")
+        e = Estudiante.query.filter_by(codigo=codigo).first()
+        if not e:
+            err = "Estudiante no encontrado."
+        else:
+            quien = (request.form.get("nombre_retiro") or "").strip()[:160]
+            obs = (request.form.get("observacion") or "").strip()[:500]
+            hora = hora_actual()
+            try:
+                db.session.add(IngresoPorteria(
+                    estudiante_id=e.id, fecha=fecha_hoy(), hora=hora,
+                    dia=ahora().strftime("%A"), estado="Retiro medico",
+                    periodo=periodo_actual(),
+                    registrado_por=session.get("usuario") or "Coordinacion",
+                ))
+                try:
+                    db.session.add(AutorizacionSalida(
+                        estudiante_id=e.id,
+                        institucion_id=getattr(e, "institucion_id", None),
+                        fecha=fecha_hoy(),
+                        nombre_recoge=quien or "Acudiente",
+                        documento_recoge=(request.form.get("doc_retiro") or "")[:40],
+                        parentesco="Retiro medico",
+                        texto_legal=obs,
+                        ip=(request.remote_addr or "")[:80],
+                        timestamp_ms=hora,
+                        estado="ACTIVA",
+                        tipo="RETIRO_MEDICO",
+                    ))
+                except Exception:
+                    pass
+                db.session.commit()
+                msg = "Retiro medico registrado."
+            except Exception as ex:
+                err = str(ex)[:120]
+            alerta = (getattr(e, "alerta_medica", None) or "") or " · ".join(
+                filter(None, [getattr(e, "alergias", None), getattr(e, "enfermedades", None)])
+            )
+            ficha = (
+                '<div style="background:#fefce8;border:1px solid #fde047;padding:14px;border-radius:8px;margin-top:12px">'
+                "<b>ATENCION MEDICA:</b> " + _esc(alerta or "Sin alertas") + "<br>EPS: "
+                + _esc(getattr(e, "eps", None) or "—") + " · RH: " + _esc(getattr(e, "rh", None) or "—")
+                + "<br>Acudiente: " + _esc(e.acudiente or "—") + " · Tel: "
+                + _esc(getattr(e, "telefono_acudiente", None) or "—") + "</div>"
+            )
+    body = (
+        '<header class="role-hero"><div><h1>Retiro medico autorizado</h1>'
+        "<p>Coordinacion · pasaporte de salud</p></div>"
+        '<a class="btn" href="/dashboard">Volver</a></header><section class="role-panel" style="max-width:520px">'
+        + (('<div class="msg ok">' + _esc(msg) + "</div>") if msg else "")
+        + (('<div class="msg danger">' + _esc(err) + "</div>") if err else "")
+        + '<form method="POST" style="display:grid;gap:10px">'
+        + "<label>Codigo carne</label><input name=\"codigo\" required>"
+        + "<label>Quien viene por el</label><input name=\"nombre_retiro\">"
+        + "<label>Documento</label><input name=\"doc_retiro\">"
+        + "<label>Observacion</label><textarea name=\"observacion\" rows=\"2\"></textarea>"
+        + '<button type="submit" class="btn">Registrar retiro medico</button></form>'
+        + ficha + "</section>"
+    )
+    return page("Retiro medico", shell(body))
+
+
+@app.route("/gerencia/alianzas-clientes", methods=["GET", "POST"])
+def gerencia_alianzas_clientes():
+    g = _guard_gerencia()
+    if g:
+        return g
+    msg = err = ""
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    if request.method == "POST":
+        if (request.form.get("accion") or "crear") == "crear":
+            nombre = (request.form.get("nombre") or "").strip()[:160]
+            url = (request.form.get("url") or "").strip()[:255]
+            logo = ""
+            f = request.files.get("logo")
+            if f and f.filename:
+                try:
+                    logo = _archivo_a_data_uri(f, max_bytes=800_000) or ""
+                except Exception:
+                    logo = ""
+            if not nombre:
+                err = "Nombre requerido."
+            else:
+                try:
+                    db.session.add(ClienteAlianza(nombre=nombre, url=url, logo_path=logo, activo=True))
+                    db.session.commit()
+                    msg = "Agregado al carrusel."
+                except Exception as ex:
+                    err = str(ex)[:100]
+        elif request.form.get("accion") == "borrar":
+            try:
+                row = ClienteAlianza.query.get(int(request.form.get("id") or 0))
+                if row:
+                    db.session.delete(row)
+                    db.session.commit()
+                    msg = "Eliminado."
+            except Exception as ex:
+                err = str(ex)[:80]
+    try:
+        items = ClienteAlianza.query.order_by(ClienteAlianza.orden, ClienteAlianza.id).all()
+    except Exception:
+        items = []
+    rows = []
+    for it in items:
+        rows.append(
+            "<tr><td>%s</td><td><img src='%s' style='height:36px;object-fit:contain;filter:grayscale(100%%);opacity:.7'></td>"
+            "<td>%s</td><td><form method='POST'><input type='hidden' name='accion' value='borrar'>"
+            "<input type='hidden' name='id' value='%s'><button type='submit'>Quitar</button></form></td></tr>"
+            % (_esc(it.nombre), _esc(it.logo_path or ""), _esc(it.url or "—"), it.id)
+        )
+    body = (
+        '<header class="role-hero"><div><h1>Alianzas y clientes</h1>'
+        "<p>Logos del carrusel web PROCSIS (PNG transparente).</p></div>"
+        '<a class="btn" href="/gerencia/hq">HQ</a></header><section class="role-panel">'
+        + (('<div class="msg ok">' + _esc(msg) + "</div>") if msg else "")
+        + (('<div class="msg danger">' + _esc(err) + "</div>") if err else "")
+        + '<form method="POST" enctype="multipart/form-data" style="display:grid;gap:8px;max-width:420px;margin-bottom:20px">'
+        + '<input type="hidden" name="accion" value="crear">'
+        + '<input name="nombre" placeholder="Nombre institucion" required>'
+        + '<input name="url" placeholder="https://sitio (opcional)">'
+        + '<input type="file" name="logo" accept="image/png,image/svg+xml,image/jpeg">'
+        + '<button class="btn" type="submit">Anadir al carrusel</button></form>'
+        + '<table class="table" style="width:100%"><thead><tr><th>Nombre</th><th>Logo</th><th>URL</th><th></th></tr></thead><tbody>'
+        + ("".join(rows) or "<tr><td colspan=4>Sin clientes</td></tr>")
+        + "</tbody></table></section>"
+    )
+    return page("Alianzas", shell(body))
+
+
+def _html_carrusel_clientes():
+    try:
+        items = ClienteAlianza.query.filter_by(activo=True).order_by(ClienteAlianza.orden, ClienteAlianza.id).all()
+    except Exception:
+        items = []
+    if not items:
+        return ""
+    logos = []
+    for it in items:
+        if not it.logo_path:
+            continue
+        logos.append(
+            '<a class="cli-logo" href="%s" target="_blank" rel="noopener" title="%s"><img src="%s" alt="%s"></a>'
+            % (_esc(it.url or "#"), _esc(it.nombre), _esc(it.logo_path), _esc(it.nombre))
+        )
+    if not logos:
+        return ""
+    track = "".join(logos * 2)
+    return (
+        '<section class="cli-strip"><p class="cli-kicker">PARA NOSOTROS NUESTROS CLIENTES SON PRIMERO</p>'
+        '<h2 class="cli-title">Algunos de nuestros clientes</h2>'
+        '<div class="cli-viewport"><div class="cli-track">' + track + "</div></div></section>"
+        "<style>.cli-strip{padding:48px 16px 56px;background:#f8fafc;text-align:center;overflow:hidden}"
+        ".cli-kicker{margin:0 0 8px;font-size:14px;letter-spacing:2px;font-weight:700;color:#3b82f6;text-transform:uppercase}"
+        ".cli-title{margin:0 0 28px;font-size:1.75rem;font-weight:800;color:#0B2D57}"
+        ".cli-viewport{overflow:hidden;max-width:1100px;margin:0 auto}"
+        ".cli-track{display:flex;gap:40px;align-items:center;width:max-content;animation:cli-scroll 32s linear infinite}"
+        ".cli-logo{flex:0 0 auto;width:120px;height:80px;display:flex;align-items:center;justify-content:center}"
+        ".cli-logo img{max-width:120px;max-height:72px;object-fit:contain;filter:grayscale(100%);opacity:.55;transition:.25s}"
+        ".cli-logo:hover img{filter:grayscale(0%);opacity:1}"
+        "@keyframes cli-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>"
+    )
+
+
+@app.route("/aceptar-terminos-pago", methods=["POST"])
+def aceptar_terminos_pago():
+    if request.form.get("acepto") == "1":
+        session["acepto_terminos_wompi"] = True
+    return redirect(request.form.get("next") or request.referrer or "/pagar")
 
 
 if __name__ == "__main__":
