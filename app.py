@@ -1177,6 +1177,7 @@ class Plataforma(db.Model):
     regimen_dian = db.Column(db.String(80), default="No responsable de IVA")
     email_empresa = db.Column(db.String(160), default="")
     telefono_empresa = db.Column(db.String(40), default="")
+    logo_es_custom = db.Column(db.Boolean, default=False)  # True solo si subieron logo PROCSIS en Datos empresa
     # Personalización de logins (colores / diseño)
     login_color_primario = db.Column(db.String(20), default="#0B2D57")
     login_color_acento = db.Column(db.String(20), default="#f59e0b")
@@ -2767,10 +2768,7 @@ class PreMatricula(db.Model):
 
 
 def html_anuncio_global():
-    """Aviso institucional: se muestra una sola vez por versión.
-    Al cerrar con X se guarda en localStorage (y sesión servidor) para que no
-    vuelva a salir al cambiar de pestaña o navegar. Si Gerencia publica una
-    nueva versión del anuncio, vuelve a mostrarse una vez."""
+    """Aviso institucional + anuncio técnico de desarrolladores."""
     try:
         p = plataforma()
         try:
@@ -2780,6 +2778,19 @@ def html_anuncio_global():
             pass
     except Exception:
         return ""
+    # Anuncio técnico (Consola Desarrollo) — barra superior simple
+    try:
+        if getattr(p, "anuncio_tecnico_activo", False) and (getattr(p, "anuncio_tecnico", None) or "").strip():
+            path0 = (request.path or "")
+            if not path0.startswith(("/backoffice", "/dev-console", "/gerencia", "/ventas-login", "/soporte-login")):
+                txt = _esc((p.anuncio_tecnico or "")[:500])
+                return (
+                    '<div style="background:#0B2D57;color:#fff;padding:10px 16px;font-size:13px;text-align:center;'
+                    'font-family:Segoe UI,system-ui,sans-serif">'
+                    '<b>Aviso técnico</b> · ' + txt + '</div>'
+                )
+    except Exception:
+        pass
     if not getattr(p, "anuncio_activo", False):
         return ""
     ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")[:40]
@@ -5100,76 +5111,42 @@ def nombre_producto():
 
 
 def logo_plataforma():
-    """Logo corporativo PROCSIS (nunca logo de colegio, LogixWARE ni EduTrack producto)."""
+    """Logo corporativo PROCSIS para paneles internos (nunca EduTrack de producto)."""
+    import os as _os
+    base = _os.path.dirname(_os.path.abspath(__file__))
+    # 1) Logo custom subido en Datos de la empresa (data URI o archivo procsis)
     try:
         p = plataforma()
         ruta = (getattr(p, "logo_path", None) or "").strip()
+        es_custom = bool(getattr(p, "logo_es_custom", False))
     except Exception:
-        ruta = ""
-    # Forzar: EduTrack es producto, no marca de accesos internos
-    if "logo-edutrack" in (ruta or "").lower() or not ruta:
-        ruta = ""
-        try:
-            db.session.execute(text(
-                "UPDATE plataforma SET logo_path=:lp WHERE logo_path IS NULL OR logo_path='' OR lower(logo_path) LIKE '%logo-edutrack%'"
-            ), {"lp": DEFAULT_LOGO})
-            db.session.commit()
-            ruta = DEFAULT_LOGO
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            try:
-                if p is not None:
-                    p.logo_path = DEFAULT_LOGO
-                    db.session.commit()
-                    ruta = DEFAULT_LOGO
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                ruta = DEFAULT_LOGO
-    # data URI guardado en BD (persiste en Railway)
-    if ruta.startswith("data:image"):
+        p, ruta, es_custom = None, "", False
+    if ruta.startswith("data:image") and es_custom:
         return ruta
-    bad = (
-        "logo-colegio", "logixware", "logix", "/logos/logo_1_", "/logos/logo_2_",
-        "/logos/logo_inst", "colegio",
-    )
-    low = (ruta or "").lower()
-    if (not ruta) or any(b in low for b in bad):
-        ruta = ""
-    if ruta.startswith("http://") or ruta.startswith("https://"):
-        return ruta
-    # Si alguien guardó el logo de producto EduTrack como corporativo, no usarlo aquí
-    if "logo-edutrack" in low:
-        ruta = ""
-    if ruta.startswith("/static/"):
-        ok = _logo_ruta_valida(ruta)
-        if ok:
-            if str(ok).startswith("data:"):
-                return ok
-            return ok + ("&v=12" if "?" in str(ok) else "?v=12")
-    # Preferir archivos PROCSIS en static/img
-    import os as _os
-    base = _os.path.dirname(_os.path.abspath(__file__))
+    if ruta and es_custom and "logo-edutrack" not in ruta.lower():
+        if ruta.startswith("http://") or ruta.startswith("https://"):
+            return ruta
+        if ruta.startswith("/static/"):
+            ok = _logo_ruta_valida(ruta)
+            if ok:
+                return ok if str(ok).startswith("data:") else (str(ok) + ("&v=20" if "?" in str(ok) else "?v=20"))
+    # 2) Archivos PROCSIS en disco (prioridad absoluta)
     for rel in (
         "/static/img/logo-procsis.png",
         "/static/img/logo-procsis.jpeg",
         "/static/img/logo-procsis.jpg",
         "/static/img/logo_empresa.jpeg",
-        "/static/img/logo empresa.jpeg",
+        "/static/img/logoempresa.jpeg",
         DEFAULT_LOGO,
     ):
         fs = _os.path.join(base, rel.lstrip("/"))
         if _os.path.isfile(fs) or _os.path.isfile(rel.lstrip("/")):
-            return rel + "?v=12"
+            return rel + "?v=20"
         ok = _logo_ruta_valida(rel)
-        if ok:
-            return ok if str(ok).startswith("data:") else (str(ok) + ("&v=12" if "?" in str(ok) else "?v=12"))
-    return DEFAULT_LOGO + "?v=12"
+        if ok and "logo-edutrack" not in str(ok).lower():
+            return ok if str(ok).startswith("data:") else (str(ok) + ("&v=20" if "?" in str(ok) else "?v=20"))
+    return (DEFAULT_LOGO or "/static/img/logo-procsis.png") + "?v=20"
+
 
 
 def shell_soporte(content):
@@ -26430,11 +26407,35 @@ def gerencia_datos_empresa():
         return g
     p = plataforma()
     mensaje = err = ""
-    # Si el logo corporativo quedó como EduTrack (producto), forzar PROCSIS
+    # Forzar marca PROCSIS en paneles internos (EduTrack = solo producto escolar)
     try:
-        lp = (getattr(p, "logo_path", None) or "").lower()
-        if (not lp) or "logo-edutrack" in lp:
+        db.session.execute(text(
+            "ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS logo_es_custom BOOLEAN DEFAULT FALSE"
+        ))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        lp = (getattr(p, "logo_path", None) or "")
+        low = lp.lower()
+        # Cualquier rastro de EduTrack o logo vacío → PROCSIS por defecto
+        if (not lp) or "logo-edutrack" in low or "edutrack" in low:
             p.logo_path = DEFAULT_LOGO
+            try:
+                p.logo_es_custom = False
+            except Exception:
+                pass
+            db.session.commit()
+        # data URI antiguo sin flag custom: no confiar (suele ser EduTrack)
+        elif lp.startswith("data:image") and not bool(getattr(p, "logo_es_custom", False)):
+            p.logo_path = DEFAULT_LOGO
+            try:
+                p.logo_es_custom = False
+            except Exception:
+                pass
             db.session.commit()
     except Exception:
         try:
@@ -26549,6 +26550,18 @@ def gerencia_datos_empresa():
                 pass
             if not err:
                 err = "No se pudieron guardar algunos campos: " + str(_se)[:100]
+        if (request.form.get("accion_logo") or "") == "restablecer_procsis":
+            p.logo_path = DEFAULT_LOGO
+            try:
+                p.logo_es_custom = False
+            except Exception:
+                pass
+            try:
+                db.session.execute(text("UPDATE plataforma SET logo_path=:lp, logo_es_custom=FALSE"), {"lp": DEFAULT_LOGO})
+            except Exception:
+                pass
+            db.session.commit()
+            mensaje = "Logo restablecido a PROCSIS (archivo corporativo)."
         # Logo PROCSIS → BD (data URI) para que no se borre en Railway
         flogo = request.files.get("logo_empresa")
         if flogo and getattr(flogo, "filename", ""):
@@ -26556,6 +26569,14 @@ def gerencia_datos_empresa():
                 data_uri = _archivo_a_data_uri(flogo, max_bytes=1_800_000)
                 if data_uri:
                     p.logo_path = data_uri
+                    try:
+                        p.logo_es_custom = True
+                    except Exception:
+                        pass
+                    try:
+                        db.session.execute(text("UPDATE plataforma SET logo_es_custom = TRUE"))
+                    except Exception:
+                        pass
                     mensaje = "Datos y logo PROCSIS guardados (permanentes en base de datos)."
                 else:
                     err = "No se pudo procesar el logo (use JPG/PNG menor a 1.5 MB)."
@@ -26617,8 +26638,11 @@ def gerencia_datos_empresa():
         <div style="flex:1;min-width:220px">
           <input type="file" name="logo_empresa" accept="image/png,image/jpeg,image/webp,image/gif"
             style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff">
-          <p style="font-size:11px;color:#64748b;margin:8px 0 0">Predeterminado corporativo: <b>logo PROCSIS</b> (EduTrack es solo marca de producto).
-          El logo se guarda en base de datos y no se pierde al cerrar sesión.</p>
+          <p style="font-size:11px;color:#64748b;margin:8px 0 0">Predeterminado: <b>PROCSIS</b>. EduTrack solo aparece en el producto escolar de los colegios.</p>
+          <button type="submit" name="accion_logo" value="restablecer_procsis"
+            style="margin-top:8px;background:#fff;color:#0B2D57;border:1px solid #0B2D57;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px">
+            Restablecer logo PROCSIS ahora
+          </button>
         </div>
       </div>
     </div>
@@ -55897,6 +55921,37 @@ def _dev_log_error(msg, level="ERROR"):
         pass
 
 
+
+
+def _ensure_dev_version_cols():
+    try:
+        for col, typ in [
+            ("version_sistema", "VARCHAR(40) DEFAULT '1.0.0'"),
+            ("changelog_publico", "TEXT DEFAULT ''"),
+            ("anuncio_tecnico", "TEXT DEFAULT ''"),
+            ("anuncio_tecnico_activo", "BOOLEAN DEFAULT FALSE"),
+        ]:
+            try:
+                db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+            except Exception:
+                pass
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _footer_version_txt():
+    try:
+        p = plataforma()
+        v = (getattr(p, "version_sistema", None) or "1.0.0").strip()
+        return v
+    except Exception:
+        return "1.0.0"
+
+
 def _guard_dev_console():
     """Solo Superadmin o Desarrollador. Ruta separada de colegios y de gerencia."""
     if not requiere_login():
@@ -55913,15 +55968,17 @@ def _guard_dev_console():
 @app.route("/dev-console", methods=["GET", "POST"])
 @app.route("/gerencia/dev-console", methods=["GET", "POST"])
 def dev_console():
-    """Consola de Desarrollo: logs, env, mantenimiento, backups. Portal aislado."""
+    """Consola de Desarrollo — solo técnica. Sin empresa/NIT/nómina/contratos/ventas."""
     if not requiere_login():
         return redirect("/dev-console-login")
     g = _guard_dev_console()
     if g:
         return g
-
+    _ensure_dev_version_cols()
     msg = err = ""
-    # Estado mantenimiento global (en Configuracion o Plataforma)
+    tab = (request.args.get("tab") or request.form.get("tab") or "sistema").strip().lower()
+    if tab not in ("sistema", "versiones", "anuncios"):
+        tab = "sistema"
     try:
         p = plataforma()
     except Exception:
@@ -55929,161 +55986,247 @@ def dev_console():
 
     if request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
-        # Registrar IP
         ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
         try:
-            registrar_auditoria("Dev console", "%s · IP %s · user %s" % (accion, ip, session.get("usuario")))
+            registrar_auditoria("Dev console", "%s · IP %s · %s" % (accion, ip, session.get("usuario")))
         except Exception:
             pass
+        tab = (request.form.get("tab") or tab).strip().lower()
 
-        if accion == "mantenimiento_on":
+        if accion == "guardar_version":
+            ver = (request.form.get("version_sistema") or "").strip()[:40]
+            chg = (request.form.get("changelog_publico") or "").strip()[:8000]
+            if not ver:
+                err = "Indique el número de versión (ej. 1.5.0)."
+            else:
+                try:
+                    if p is not None:
+                        p.version_sistema = ver
+                        p.changelog_publico = chg
+                    db.session.execute(text(
+                        "UPDATE plataforma SET version_sistema=:v, changelog_publico=:c"
+                    ), {"v": ver, "c": chg})
+                    db.session.commit()
+                    msg = "Versión %s publicada. El pie de página del sistema se actualizó." % ver
+                except Exception as e:
+                    err = str(e)[:120]
+            tab = "versiones"
+        elif accion == "guardar_anuncio_tec":
+            texto = (request.form.get("anuncio_tecnico") or "").strip()[:4000]
+            activo = request.form.get("anuncio_tecnico_activo") == "1"
+            # Solo permitido si hay versión o texto de mantenimiento
+            if activo and not texto:
+                err = "Escriba el mensaje técnico antes de activar el anuncio."
+            else:
+                try:
+                    if p is not None:
+                        p.anuncio_tecnico = texto
+                        p.anuncio_tecnico_activo = activo
+                    db.session.execute(text(
+                        "UPDATE plataforma SET anuncio_tecnico=:t, anuncio_tecnico_activo=:a"
+                    ), {"t": texto, "a": activo})
+                    db.session.commit()
+                    msg = "Anuncio técnico %s." % ("activado" if activo else "guardado (inactivo)")
+                except Exception as e:
+                    err = str(e)[:120]
+            tab = "anuncios"
+        elif accion == "mantenimiento_on":
             try:
                 if p is not None and hasattr(p, "modo_mantenimiento"):
                     p.modo_mantenimiento = True
-                else:
-                    # guardar en tabla generica via raw
-                    try:
-                        db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS modo_mantenimiento BOOLEAN DEFAULT FALSE"))
-                    except Exception:
-                        pass
-                    try:
-                        db.session.execute(text("UPDATE plataforma SET modo_mantenimiento = TRUE"))
-                    except Exception:
-                        pass
+                db.session.execute(text("UPDATE plataforma SET modo_mantenimiento = TRUE"))
                 db.session.commit()
-                msg = "Modo mantenimiento GLOBAL activado. Los colegios verán aviso de actualización."
+                msg = "Modo mantenimiento GLOBAL activado."
             except Exception as e:
-                err = str(e)[:120]
+                err = str(e)[:100]
+            tab = "sistema"
         elif accion == "mantenimiento_off":
             try:
                 if p is not None and hasattr(p, "modo_mantenimiento"):
                     p.modo_mantenimiento = False
-                try:
-                    db.session.execute(text("UPDATE plataforma SET modo_mantenimiento = FALSE"))
-                except Exception:
-                    pass
+                db.session.execute(text("UPDATE plataforma SET modo_mantenimiento = FALSE"))
                 db.session.commit()
                 msg = "Modo mantenimiento desactivado."
             except Exception as e:
-                err = str(e)[:120]
+                err = str(e)[:100]
+            tab = "sistema"
         elif accion == "clear_logs":
             _DEV_ERROR_LOG.clear()
-            msg = "Buffer de logs en memoria limpiado."
-        elif accion == "backup_csv":
-            # Export liviano: instituciones + conteos (NO bancarios, NO nómina, NO contratos)
-            try:
-                import csv
-                from io import StringIO
-                buf = StringIO()
-                w = csv.writer(buf)
-                w.writerow(["codigo", "nombre", "estado", "plan", "fecha_vencimiento", "municipio"])
-                for inst in Institucion.query.order_by(Institucion.id.asc()).limit(5000).all():
-                    w.writerow([
-                        inst.codigo or "",
-                        (inst.nombre or "")[:120],
-                        inst.estado or "",
-                        inst.plan or "",
-                        getattr(inst, "fecha_vencimiento", None) or "",
-                        getattr(inst, "municipio", None) or "",
-                    ])
-                data = buf.getvalue().encode("utf-8")
-                from flask import Response
-                return Response(
-                    data,
-                    mimetype="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=backup_colegios_%s.csv" % (fecha_hoy() or "hoy")},
-                )
-            except Exception as e:
-                err = "Backup falló: " + str(e)[:100]
+            msg = "Buffer de logs limpiado."
+            tab = "sistema"
         elif accion == "ping_db":
             try:
                 db.session.execute(text("SELECT 1"))
                 msg = "Base de datos OK (SELECT 1)."
             except Exception as e:
-                err = "DB error: " + str(e)[:150]
+                err = "DB: " + str(e)[:120]
                 _dev_log_error(err)
+            tab = "sistema"
+        elif accion == "backup_csv":
+            try:
+                import csv
+                from io import StringIO
+                buf = StringIO()
+                w = csv.writer(buf)
+                w.writerow(["codigo", "nombre", "estado", "plan", "fecha_vencimiento"])
+                for inst in Institucion.query.order_by(Institucion.id.asc()).limit(5000).all():
+                    w.writerow([inst.codigo or "", (inst.nombre or "")[:120], inst.estado or "", inst.plan or "", getattr(inst, "fecha_vencimiento", None) or ""])
+                from flask import Response
+                return Response(buf.getvalue().encode("utf-8"), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=backup_colegios.csv"})
+            except Exception as e:
+                err = "Backup: " + str(e)[:100]
+                tab = "sistema"
 
-    # Env vars: SOLO nombres, nunca valores secretos
-    env_names = sorted([
-        k for k in __import__("os").environ.keys()
-        if any(x in k.upper() for x in (
-            "DATABASE", "SECRET", "WATI", "WOMPI", "SMTP", "RAILWAY", "PORT",
-            "FLASK", "GMAIL", "WHATSAPP", "EDUTRACK", "SENTRY"
-        ))
-    ])[:80]
-    env_rows = "".join(
-        "<tr><td style='padding:6px 8px;font-family:ui-monospace,monospace;font-size:12px'>%s</td>"
-        "<td style='padding:6px 8px;color:#64748b;font-size:12px'>•••••••• (oculto)</td></tr>" % _esc(k)
-        for k in env_names
-    ) or "<tr><td colspan='2' style='padding:8px;color:#64748b'>Sin variables relevantes</td></tr>"
+    # Datos UI
+    try:
+        ver = (getattr(p, "version_sistema", None) or _landing_get("version_sistema", "1.0.0") or "1.0.0")
+    except Exception:
+        ver = "1.0.0"
+    try:
+        chg = getattr(p, "changelog_publico", None) or _landing_get("changelog_publico", "") or ""
+    except Exception:
+        chg = ""
+    try:
+        anuncio = getattr(p, "anuncio_tecnico", None) or ""
+        anuncio_on = bool(getattr(p, "anuncio_tecnico_activo", False))
+    except Exception:
+        anuncio, anuncio_on = "", False
+    try:
+        mant = bool(getattr(p, "modo_mantenimiento", False))
+    except Exception:
+        mant = False
 
     logs = list(reversed(_DEV_ERROR_LOG[-80:]))
     log_html = "".join(
         "<div style='padding:6px 0;border-bottom:1px solid #e2e8f0;font-size:12px;font-family:ui-monospace,Consolas,monospace'>"
-        "<span style='color:#b91c1c;font-weight:700'>%s</span> "
-        "<span style='color:#94a3b8'>%s</span><br>%s</div>" % (
-            _esc(x.get("level")), _esc(x.get("ts")), _esc(x.get("msg"))
-        )
+        "<b style='color:#b91c1c'>%s</b> <span style='color:#94a3b8'>%s</span><br>%s</div>"
+        % (_esc(x.get("level")), _esc(x.get("ts")), _esc(x.get("msg")))
         for x in logs
-    ) or "<p style='color:#64748b;font-size:13px'>Sin errores capturados en este proceso. Los tracebacks 500 se listan aquí cuando ocurran.</p>"
+    ) or "<p style='color:#64748b;font-size:13px'>Sin errores en este proceso.</p>"
 
-    # Mantenimiento flag
+    # Monitoreo liviano (sin secretos)
+    import os as _os
+    mem_info = "N/D"
     try:
-        mant = bool(getattr(p, "modo_mantenimiento", False)) if p else False
+        import resource
+        mem_info = "%.1f MB (RSS proceso)" % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0)
     except Exception:
-        mant = False
+        pass
+    try:
+        n_inst = Institucion.query.count()
+    except Exception:
+        n_inst = "—"
+    try:
+        n_est = Estudiante.query.count()
+    except Exception:
+        n_est = "—"
+
+    def tab_btn(id_, label):
+        active = tab == id_
+        return (
+            '<a href="/dev-console?tab=%s" style="padding:10px 14px;font-size:12px;font-weight:800;text-decoration:none;'
+            'border-bottom:3px solid %s;color:%s;letter-spacing:.04em">%s</a>'
+            % (id_, "#0B2D57" if active else "transparent", "#0B2D57" if active else "#64748b", label)
+        )
+
+    tabs_nav = (
+        '<div style="display:flex;gap:4px;border-bottom:1px solid #e2e8f0;margin-bottom:16px">'
+        + tab_btn("sistema", "SISTEMA & CORE")
+        + tab_btn("versiones", "CONTROL DE VERSIONES")
+        + tab_btn("anuncios", "ANUNCIOS TÉCNICOS")
+        + "</div>"
+    )
+
+    panel = ""
+    if tab == "sistema":
+        panel = f"""
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+      <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Infraestructura</h3>
+      <p style="font-size:12px;margin:4px 0">Memoria proceso: <b>{_esc(mem_info)}</b></p>
+      <p style="font-size:12px;margin:4px 0">Colegios en BD: <b>{n_inst}</b></p>
+      <p style="font-size:12px;margin:4px 0">Estudiantes: <b>{n_est}</b></p>
+      <p style="font-size:12px;margin:4px 0">Mantenimiento: <b style="color:{'#b91c1c' if mant else '#15803d'}">{'ON' if mant else 'OFF'}</b></p>
+      <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <input type="hidden" name="tab" value="sistema">
+        <button name="accion" value="ping_db" style="background:#0B2D57;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Probar DB</button>
+        <button name="accion" value="backup_csv" style="background:#334155;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Backup CSV</button>
+        <button name="accion" value="mantenimiento_on" style="background:#b91c1c;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Mant. ON</button>
+        <button name="accion" value="mantenimiento_off" style="background:#15803d;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Mant. OFF</button>
+      </form>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+      <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Restricciones</h3>
+      <p style="font-size:12px;color:#991b1b;margin:0">Sin acceso a: NIT/RUT, cuentas bancarias, nómina, contratos firmados, noticias comerciales ni facturación.</p>
+    </div>
+  </div>
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0;font-size:14px;color:#0B2D57">Visor de errores (logs)</h3>
+      <form method="POST"><input type="hidden" name="tab" value="sistema">
+        <button name="accion" value="clear_logs" style="border:1px solid #cbd5e1;background:#f8fafc;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer">Limpiar</button>
+      </form>
+    </div>
+    <div style="max-height:300px;overflow:auto;margin-top:8px">{log_html}</div>
+  </div>
+"""
+    elif tab == "versiones":
+        panel = f"""
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:640px">
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Control de versión (changelog)</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 12px">Al guardar, el número de versión se refleja en el pie de página del sistema para los colegios.</p>
+    <form method="POST" style="display:grid;gap:10px">
+      <input type="hidden" name="tab" value="versiones">
+      <input type="hidden" name="accion" value="guardar_version">
+      <div>
+        <label style="font-size:12px;font-weight:700">Versión</label>
+        <input name="version_sistema" value="{_esc(ver)}" placeholder="1.5.0" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700">Cambios técnicos (texto plano)</label>
+        <textarea name="changelog_publico" rows="8" placeholder="Ej: Se optimizó el escáner QR en porterías." style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">{_esc(chg)}</textarea>
+      </div>
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Publicar versión</button>
+    </form>
+  </div>
+"""
+    else:
+        panel = f"""
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:640px">
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Anuncios técnicos</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 12px">Solo alertas de mantenimiento o nueva versión. <b>No</b> noticias comerciales ni precios.</p>
+    <form method="POST" style="display:grid;gap:10px">
+      <input type="hidden" name="tab" value="anuncios">
+      <input type="hidden" name="accion" value="guardar_anuncio_tec">
+      <div>
+        <label style="font-size:12px;font-weight:700">Mensaje</label>
+        <textarea name="anuncio_tecnico" rows="5" placeholder="El sistema estará fuera de servicio 10 minutos por mejoras en el servidor." style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">{_esc(anuncio)}</textarea>
+      </div>
+      <label style="font-size:12px;display:flex;gap:8px;align-items:center">
+        <input type="checkbox" name="anuncio_tecnico_activo" value="1" {"checked" if anuncio_on else ""}>
+        Activar anuncio en pantallas de colegios
+      </label>
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar anuncio técnico</button>
+    </form>
+  </div>
+"""
 
     body = f"""
 <header class="role-hero"><div>
-  <h1>⚙️ Consola de Desarrollo</h1>
-  <p>Ingeniería · logs · mantenimiento · backups técnicos · sin acceso a banca / nómina / contratos firmados</p>
+  <h1>Consola de Desarrollo</h1>
+  <p>Entorno técnico · v{_esc(ver)} · sin datos financieros ni corporativos sensibles</p>
 </div>
 <a class="btn" href="/backoffice">← Backoffice</a></header>
-
-<section class="role-panel" style="max-width:900px;margin:0 auto">
+<section class="role-panel" style="max-width:920px;margin:0 auto">
   {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
   {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-
-  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:12px;margin-bottom:14px;font-size:12px;color:#991b1b">
-    <b>Restricciones absolutas:</b> esta consola <b>no</b> permite ver cuentas bancarias, editar contratos firmados ni manipular nóminas.
-    Toda acción queda en auditoría con IP.
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
-      <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Modo mantenimiento global</h3>
-      <p style="font-size:12px;color:#64748b;margin:0 0 10px">Estado: <b style="color:{'#b91c1c' if mant else '#15803d'}">{'ACTIVADO' if mant else 'OFF'}</b></p>
-      <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap">
-        <button name="accion" value="mantenimiento_on" style="background:#b91c1c;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Activar</button>
-        <button name="accion" value="mantenimiento_off" style="background:#15803d;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Desactivar</button>
-      </form>
-    </div>
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
-      <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Base de datos / backup</h3>
-      <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap">
-        <button name="accion" value="ping_db" style="background:#0B2D57;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Probar DB</button>
-        <button name="accion" value="backup_csv" style="background:#334155;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Backup colegios CSV</button>
-      </form>
-      <p style="font-size:11px;color:#94a3b8;margin:8px 0 0">CSV solo instituciones (sin bancarios ni nómina).</p>
-    </div>
-  </div>
-
-  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-bottom:14px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <h3 style="margin:0;font-size:14px;color:#0B2D57">Visor de logs / errores</h3>
-      <form method="POST"><button name="accion" value="clear_logs" style="border:1px solid #cbd5e1;background:#f8fafc;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer">Limpiar buffer</button></form>
-    </div>
-    <div style="max-height:280px;overflow:auto">{log_html}</div>
-  </div>
-
-  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
-    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Variables de entorno (solo nombres)</h3>
-    <p style="font-size:12px;color:#64748b;margin:0 0 8px">Los valores secretos nunca se muestran ni se editan desde aquí (Habeas Data / seguridad).</p>
-    <table style="width:100%;border-collapse:collapse">{env_rows}</table>
-  </div>
+  {tabs_nav}
+  {panel}
 </section>
 """
     return page("Consola Desarrollo", shell(body))
+
 
 
 @app.errorhandler(500)
