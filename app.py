@@ -4845,9 +4845,9 @@ def contenido_login_novedades():
     if not habeas:
         habeas = (
             "Protección de datos personales (Habeas Data – Colombia, Ley 1581 de 2012). "
-            "EduTrack / Procsis trata la información con finalidad educativa y de soporte, "
-            "bajo medidas de seguridad técnicas. El titular puede conocer, actualizar y rectificar sus datos "
-            "escribiendo a soporte."
+            "EduTrack / PROCSIS trata la información con finalidad educativa, de seguridad escolar y de soporte, "
+            "bajo medidas de seguridad técnicas y organizativas. El titular puede conocer, actualizar y rectificar "
+            "sus datos escribiendo a soporte@procsis.com o mediante el módulo de tickets del Backoffice."
         )
     imgs = []
     for i in (1, 2, 3):
@@ -9378,10 +9378,35 @@ def login():
       {faq_html}
     </section>
 
-    <section class="lp-section">
+    <section class="lp-section" id="proteccion-datos">
       <h2>Protección de datos</h2>
-      <p class="lp-sub">Habeas Data · Colombia</p>
-      <p style="font-size:13px;color:#475569;line-height:1.6">{nov["habeas"]}</p>
+      <p class="lp-sub">Habeas Data · Colombia · Ley 1581 de 2012</p>
+      <p style="font-size:13px;color:#475569;line-height:1.65;margin-bottom:18px">{nov["habeas"]}</p>
+      <div style="display:grid;gap:16px;text-align:left;max-width:820px;margin:0 auto">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px">
+          <h3 style="margin:0 0 8px;font-size:15px;color:#0B2D57">1. Finalidades del tratamiento de los datos</h3>
+          <p style="margin:0 0 8px;font-size:13px;color:#475569;line-height:1.6">Los datos personales recolectados a través del ecosistema EduTrack - PROCSIS (incluyendo nombres, identificaciones, registros biométricos de códigos QR, marcas de tiempo, fotografías de 3.5 x 4.5 cm e información médica de emergencia como RH y EPS) serán utilizados estrictamente para las siguientes finalidades institucionales:</p>
+          <ul style="margin:0;padding-left:18px;font-size:13px;color:#334155;line-height:1.55">
+            <li>Garantizar el control perimetral de acceso, seguridad y asistencia en la portería de las instituciones educativas vinculadas.</li>
+            <li>Enviar notificaciones automáticas y alertas en vivo a los acudientes sobre los ingresos, retardos (después de las 7:00 AM), horas hueco y salidas autorizadas por Coordinación.</li>
+            <li>Sincronizar las planillas de los docentes en tiempo real para la justificación de retiros médicos.</li>
+            <li>Gestionar la facturación de servicios, planes, precios y cuotas de implementación contratadas por los colegios.</li>
+          </ul>
+        </div>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px">
+          <h3 style="margin:0 0 8px;font-size:15px;color:#0B2D57">2. Tratamiento especial de datos de menores de edad</h3>
+          <p style="margin:0;font-size:13px;color:#475569;line-height:1.65">En estricto cumplimiento del Artículo 7 de la Ley 1581 de 2012 y el Decreto 1377 de 2013, PROCSIS manifiesta que el tratamiento de datos personales de niños, niñas y adolescentes responderá y respetará el interés superior de los menores y sus derechos fundamentales. La recolección de estos datos cuenta con la autorización previa, expresa e informada del acudiente principal (padre de familia), validada mediante marcas de tiempo, capturas de direcciones IP de confianza y firmas digitales Hash inmutables en nuestro portal de padres.</p>
+        </div>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px">
+          <h3 style="margin:0 0 8px;font-size:15px;color:#0B2D57">3. Canales para el ejercicio de los derechos (Hábeas Data)</h3>
+          <p style="margin:0 0 8px;font-size:13px;color:#475569;line-height:1.65">Los titulares de los datos (rectores, profesores, estudiantes y acudientes) pueden conocer, actualizar, rectificar o solicitar la supresión de su información en cualquier momento. Para radicar una solicitud formal de PQR, se han dispuesto los siguientes canales institucionales:</p>
+          <ul style="margin:0 0 10px;padding-left:18px;font-size:13px;color:#334155;line-height:1.55">
+            <li><b>Correo electrónico oficial:</b> soporte@procsis.com (administrado desde nuestro módulo operativo de soporte).</li>
+            <li><b>Módulo interno de tickets:</b> sección disponible dentro de la suite de Backoffice.</li>
+          </ul>
+          <p style="margin:0;font-size:13px;color:#475569;line-height:1.6">El tiempo de respuesta institucional para consultas será de máximo diez (10) días hábiles, y para reclamos de quince (15) días hábiles, según lo estipulado por la ley colombiana.</p>
+        </div>
+      </div>
     </section>
 
     {lideres_section}
@@ -9390,7 +9415,7 @@ def login():
   <footer class="lp-footer">
     <b>{APP_NAME}</b> © 2026 · {SLOGAN}<br>
     Desarrollado por <b>{DESARROLLADOR}</b> · Versión {nov["version"]}<br>
-    Contenido del login administrado desde el panel de Soporte
+    PROCSIS v{nov["version"]} | Política de Privacidad Corporativa y Tratamiento de Datos Personales de Base Tecnológica. Actividad Económica DIAN: 6201.
   </footer>
 </div>
 
@@ -46360,8 +46385,8 @@ def pagina_corporativa_procsis():
 .pc-grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
 .pc-grid2{{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center}}
 @media(max-width:860px){{.pc-grid3,.pc-grid2{{grid-template-columns:1fr}}.pc-hero h1{{font-size:30px}}.pc-nav-in{{flex-direction:column;align-items:flex-start}}}}
-.pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px;transition:transform .35s cubic-bezier(.22,1,.36,1),box-shadow .35s ease,border-color .35s ease;animation:pc-fade-up .7s cubic-bezier(.22,1,.36,1) both}}.pc-grid3 .pc-card:nth-child(1){{animation-delay:.05s}}.pc-grid3 .pc-card:nth-child(2){{animation-delay:.15s}}.pc-grid3 .pc-card:nth-child(3){{animation-delay:.25s}}.pc-grid3 .pc-card:nth-child(4){{animation-delay:.12s}}.pc-grid3 .pc-card:nth-child(5){{animation-delay:.22s}}.pc-grid3 .pc-card:nth-child(6){{animation-delay:.32s}}.pc-card:hover{{transform:translateY(-6px);box-shadow:0 16px 40px rgba(11,45,87,.12);border-color:#c7d2fe;background:#fff}}
-.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px;transition:transform .35s ease,background .35s ease}}.pc-card:hover .ico{{transform:scale(1.08);background:#c7d2fe}}
+.pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px;transition:transform .4s cubic-bezier(.22,1,.36,1),box-shadow .4s ease,border-color .35s ease;animation:pc-fade-up .75s cubic-bezier(.22,1,.36,1) both}}.pc-grid3 .pc-card:nth-child(1){{animation-delay:.06s}}.pc-grid3 .pc-card:nth-child(2){{animation-delay:.14s}}.pc-grid3 .pc-card:nth-child(3){{animation-delay:.22s}}.pc-grid3 .pc-card:nth-child(4){{animation-delay:.1s}}.pc-grid3 .pc-card:nth-child(5){{animation-delay:.18s}}.pc-grid3 .pc-card:nth-child(6){{animation-delay:.26s}}.pc-grid3 .pc-card:nth-child(7){{animation-delay:.12s}}.pc-grid3 .pc-card:nth-child(8){{animation-delay:.2s}}.pc-grid3 .pc-card:nth-child(9){{animation-delay:.28s}}.pc-card:hover{{transform:translateY(-8px);box-shadow:0 20px 48px rgba(11,45,87,.14);border-color:#93c5fd;background:#fff}}
+.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px;transition:transform .35s ease,background .35s ease,box-shadow .35s ease}}.pc-card:hover .ico{{transform:scale(1.1);background:#bfdbfe;box-shadow:0 6px 16px rgba(37,99,235,.2)}}
 .pc-card h3{{margin:0 0 8px;font-size:17px;color:#0B2D57}}
 .pc-card p{{margin:0;font-size:14px;color:#475569;line-height:1.5}}
 .pc-band{{background:#f1f5f9;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}}
@@ -46369,10 +46394,10 @@ def pagina_corporativa_procsis():
 @media(max-width:700px){{.pc-stats{{grid-template-columns:1fr 1fr}}}}
 .pc-stat b{{display:block;font-size:26px;color:#0B2D57}}
 .pc-stat span{{font-size:12px;color:#64748b;font-weight:600}}
-.pc-cta{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:20px;padding:36px 28px;text-align:center;box-shadow:0 12px 40px rgba(11,45,87,.25);animation:pc-fade-up .8s cubic-bezier(.22,1,.36,1) .15s both;transition:transform .35s ease,box-shadow .35s ease}}.pc-cta:hover{{transform:translateY(-3px);box-shadow:0 18px 48px rgba(11,45,87,.32)}}
+.pc-cta{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:20px;padding:36px 28px;text-align:center;box-shadow:0 14px 44px rgba(11,45,87,.28);animation:pc-fade-up .8s cubic-bezier(.22,1,.36,1) .12s both;transition:transform .35s ease,box-shadow .35s ease}}.pc-cta:hover{{transform:translateY(-4px);box-shadow:0 22px 56px rgba(11,45,87,.36)}}
 .pc-cta h2{{margin:0 0 10px;font-size:26px;color:#fff}}
 .pc-cta p{{margin:0 0 18px;opacity:.92}}
-.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px;transition:transform .25s ease,box-shadow .25s ease}}.pc-cta a:hover{{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.15)}}@keyframes pc-fade-up{{from{{opacity:0;transform:translateY(22px)}}to{{opacity:1;transform:translateY(0)}}}}@media (prefers-reduced-motion:reduce){{.pc-card,.pc-cta{{animation:none!important;transition:none!important}}}}
+.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px;transition:transform .25s ease,box-shadow .25s ease}}.pc-cta a:hover{{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.18)}}@keyframes pc-fade-up{{from{{opacity:0;transform:translateY(28px)}}to{{opacity:1;transform:translateY(0)}}}}@media (prefers-reduced-motion:reduce){{.pc-card,.pc-cta{{animation:none!important;transition:none!important}}}}
 .pc-foot{{background:#071a33;color:#94a3b8;padding:36px 20px 20px;font-size:13px}}
 .pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:24px}}
 @media(max-width:800px){{.pc-foot-in{{grid-template-columns:1fr}}}}
@@ -58098,10 +58123,10 @@ def _html_carrusel_clientes():
         ".cli-kicker{margin:0 0 8px;font-size:14px;letter-spacing:2px;font-weight:700;color:#3b82f6;text-transform:uppercase}"
         ".cli-title{margin:0 0 28px;font-size:1.75rem;font-weight:800;color:#0B2D57}"
         ".cli-viewport{overflow:hidden;max-width:1100px;margin:0 auto}"
-        ".cli-track{display:flex;gap:40px;align-items:center;width:max-content;animation:cli-scroll 32s linear infinite}"
-        ".cli-logo{flex:0 0 auto;width:120px;height:80px;display:flex;align-items:center;justify-content:center}"
-        ".cli-logo img{max-width:120px;max-height:72px;object-fit:contain;filter:grayscale(100%);opacity:.55;transition:.25s}"
-        ".cli-logo:hover img{filter:grayscale(0%);opacity:1}"
+        ".cli-track{display:flex;gap:56px;align-items:center;width:max-content;animation:cli-scroll 32s linear infinite}"
+        ".cli-logo{flex:0 0 auto;width:200px;height:130px;display:flex;align-items:center;justify-content:center}"
+        ".cli-logo img{max-width:200px;max-height:120px;object-fit:contain;filter:none;opacity:1;transition:.25s}"
+        ".cli-logo:hover img{transform:scale(1.08);opacity:1}"
         "@keyframes cli-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>"
     )
 
