@@ -5218,11 +5218,19 @@ def nombre_producto():
 def media_logo_corporativo():
     """Sirve el logo PROCSIS guardado en BD (data URI o archivo). Nunca EduTrack de producto."""
     from flask import Response
+    ruta = ""
     try:
-        p = plataforma()
-        ruta = (getattr(p, "logo_path", None) or "").strip()
+        row = db.session.execute(text(
+            "SELECT logo_path FROM plataforma ORDER BY id ASC LIMIT 1"
+        )).first()
+        if row:
+            ruta = (row[0] or "").strip()
     except Exception:
-        ruta = ""
+        try:
+            p = plataforma()
+            ruta = (getattr(p, "logo_path", None) or "").strip()
+        except Exception:
+            ruta = ""
     if ruta.startswith("data:image"):
         # data:image/png;base64,XXXX
         try:
@@ -5265,15 +5273,22 @@ def logo_plataforma():
     """Logo corporativo PROCSIS (imagen real subida en Datos de la empresa)."""
     import os as _os
     try:
-        p = plataforma()
-        # refrescar desde BD por si quedó cacheado el placeholder
-        try:
-            db.session.refresh(p)
-        except Exception:
-            pass
-        ruta = (getattr(p, "logo_path", None) or "").strip()
+        # Lectura directa SQL para evitar ORM stale / "not mapped"
+        row = db.session.execute(text(
+            "SELECT logo_path, COALESCE(logo_es_custom, FALSE) FROM plataforma ORDER BY id ASC LIMIT 1"
+        )).first()
+        if row:
+            ruta = (row[0] or "").strip()
+            es_custom = bool(row[1])
+        else:
+            ruta, es_custom = "", False
     except Exception:
-        ruta = ""
+        try:
+            p = plataforma()
+            ruta = (getattr(p, "logo_path", None) or "").strip()
+            es_custom = bool(getattr(p, "logo_es_custom", False))
+        except Exception:
+            ruta, es_custom = "", False
     if ruta.startswith("data:image"):
         return ruta
     # Endpoint que sirve el blob guardado en BD
@@ -5291,13 +5306,8 @@ def logo_plataforma():
                 return ruta + ("&v=30" if "?" in ruta else "?v=30")
             # ruta en BD pero archivo efímero → intentar media endpoint
             return "/media/logo-corporativo?v=30"
-    # Si hay flag custom, servir siempre desde media (lee BD)
-    try:
-        if bool(getattr(p, "logo_es_custom", False)):
-            return "/media/logo-corporativo?v=30"
-    except Exception:
-        pass
-    # Fallback: SVG generado PROCSIS (solo si nunca subieron logo)
+    if es_custom:
+        return "/media/logo-corporativo?v=30"
     return "/media/logo-corporativo?v=30"
 
 
@@ -26707,11 +26717,10 @@ def gerencia_datos_empresa():
                 pass
             db.session.commit()
             mensaje = "Logo restablecido a PROCSIS (archivo corporativo)."
-        # Logo PROCSIS → data URI en BD (sobrevive redeploy Railway) + archivo local
+        # Logo PROCSIS → data URI en BD (solo SQL, sin session.add/refresh)
         flogo = request.files.get("logo_empresa")
         if flogo and getattr(flogo, "filename", ""):
             try:
-                # Asegurar columna TEXT (data URI no cabe en VARCHAR 255)
                 try:
                     db.session.execute(text("ALTER TABLE plataforma ALTER COLUMN logo_path TYPE TEXT"))
                     db.session.commit()
@@ -26730,7 +26739,6 @@ def gerencia_datos_empresa():
                         db.session.rollback()
                     except Exception:
                         pass
-                # Leer bytes UNA vez desde el upload
                 try:
                     flogo.stream.seek(0)
                 except Exception:
@@ -26746,21 +26754,15 @@ def gerencia_datos_empresa():
                     from werkzeug.utils import secure_filename
                     fn = (secure_filename(flogo.filename or "logo.png")).lower()
                     if fn.endswith(".png"):
-                        mime = "image/png"
-                        ext = ".png"
+                        mime, ext = "image/png", ".png"
                     elif fn.endswith(".webp"):
-                        mime = "image/webp"
-                        ext = ".webp"
+                        mime, ext = "image/webp", ".webp"
                     elif fn.endswith(".gif"):
-                        mime = "image/gif"
-                        ext = ".gif"
+                        mime, ext = "image/gif", ".gif"
                     elif fn.endswith(".svg"):
-                        mime = "image/svg+xml"
-                        ext = ".svg"
+                        mime, ext = "image/svg+xml", ".svg"
                     else:
-                        mime = "image/jpeg"
-                        ext = ".jpg"
-                        # comprimir jpeg si es grande
+                        mime, ext = "image/jpeg", ".jpg"
                         try:
                             from PIL import Image
                             from io import BytesIO
@@ -26771,17 +26773,10 @@ def gerencia_datos_empresa():
                             buf = BytesIO()
                             im.save(buf, format="JPEG", quality=85)
                             raw = buf.getvalue()
-                            mime = "image/jpeg"
-                            ext = ".jpg"
                         except Exception:
                             pass
                     data_uri = "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
-                    p.logo_path = data_uri
-                    try:
-                        p.logo_es_custom = True
-                    except Exception:
-                        pass
-                    # Guardar también en disco (best-effort)
+                    # Guardar archivo local (best-effort, no crítico)
                     try:
                         folder = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static", "uploads", "corp")
                         _os.makedirs(folder, exist_ok=True)
@@ -26789,31 +26784,24 @@ def gerencia_datos_empresa():
                             _out.write(raw)
                     except Exception:
                         pass
-                    db.session.add(p)
-                    db.session.commit()
-                    # Forzar SQL por si el ORM no mapeó logo_es_custom
-                    try:
+                    # SOLO SQL — evita "Class is not mapped"
+                    pid = getattr(p, "id", None)
+                    if pid:
                         db.session.execute(text(
                             "UPDATE plataforma SET logo_path=:lp, logo_es_custom=TRUE WHERE id=:id"
-                        ), {"lp": data_uri, "id": p.id})
-                        db.session.commit()
-                    except Exception as _sq:
-                        try:
-                            db.session.execute(text(
-                                "UPDATE plataforma SET logo_path=:lp WHERE id=:id"
-                            ), {"lp": data_uri, "id": p.id})
-                            db.session.commit()
-                        except Exception as _sq2:
-                            print("logo sql:", _sq, _sq2)
-                    # Verificar lectura
+                        ), {"lp": data_uri, "id": int(pid)})
+                    else:
+                        db.session.execute(text(
+                            "UPDATE plataforma SET logo_path=:lp, logo_es_custom=TRUE"
+                        ), {"lp": data_uri})
+                    db.session.commit()
+                    # Actualizar el objeto en memoria sin refresh ORM
                     try:
-                        db.session.refresh(p)
+                        p.logo_path = data_uri
+                        p.logo_es_custom = True
                     except Exception:
                         pass
-                    if (getattr(p, "logo_path", None) or "").startswith("data:image"):
-                        mensaje = "Logo PROCSIS guardado correctamente. Ya debe verse en HQ y Backoffice."
-                    else:
-                        mensaje = "Se intentó guardar el logo; recargue con Ctrl+F5. Si no aparece, el archivo puede ser muy grande."
+                    mensaje = "Logo PROCSIS guardado correctamente. Ya debe verse en HQ y Backoffice (Ctrl+F5)."
             except Exception as e_logo:
                 try:
                     db.session.rollback()
