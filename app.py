@@ -1189,7 +1189,6 @@ class Plataforma(db.Model):
     version_sistema = db.Column(db.String(40), default="2.5.0")
     novedades = db.Column(db.Text, default="")
     faq = db.Column(db.Text, default="")
-    novedades_tecnicas = db.Column(db.Text, default="")  # changelog técnico (Consola Desarrollo)
     mantenimiento_programado = db.Column(db.Text, default="")
     habeas_data = db.Column(db.Text, default="")
     reinicio_aviso = db.Column(db.String(255), default="")
@@ -1259,8 +1258,8 @@ class Plataforma(db.Model):
     smtp_notif_password = db.Column(db.String(255), default="")
     smtp_notif_conectado_por = db.Column(db.String(120), default="")
     smtp_notif_conectado_en = db.Column(db.String(20), default="")
-    horario_lunes = db.Column(db.String(80), default="8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
-    horario_semana = db.Column(db.String(80), default="7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
+    horario_lunes = db.Column(db.String(80), default="8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
+    horario_semana = db.Column(db.String(80), default="7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
     soporte_mensaje = db.Column(db.Text, default="")
     # Página corporativa /procsis (editable desde Gerencia)
     corp_tag = db.Column(db.String(120), default="SOLUCIONES DIGITALES · COLOMBIA")
@@ -3777,7 +3776,6 @@ def migrar_columnas():
         ("plataforma", "faq", "ALTER TABLE plataforma ADD COLUMN faq TEXT DEFAULT ''"),
         ("plataforma", "mantenimiento_programado", "ALTER TABLE plataforma ADD COLUMN mantenimiento_programado TEXT DEFAULT ''"),
         ("plataforma", "habeas_data", "ALTER TABLE plataforma ADD COLUMN habeas_data TEXT DEFAULT ''"),
-        ("plataforma", "novedades_tecnicas", "ALTER TABLE plataforma ADD COLUMN novedades_tecnicas TEXT DEFAULT ''"),
         ("estudiantes", "estado", "ALTER TABLE estudiantes ADD COLUMN estado VARCHAR(30) DEFAULT 'ACTIVO'"),
         ("estudiantes", "tipo_doc", "ALTER TABLE estudiantes ADD COLUMN tipo_doc VARCHAR(20) DEFAULT 'TI'"),
         ("estudiantes", "exp_depa", "ALTER TABLE estudiantes ADD COLUMN exp_depa VARCHAR(80) DEFAULT ''"),
@@ -4821,7 +4819,6 @@ def contenido_login_novedades():
     p = plataforma()
     version = getattr(p, "version_sistema", None) or "2.5.0"
     novedades = (getattr(p, "novedades", None) or "").strip()
-    novedades_tecnicas = (getattr(p, "novedades_tecnicas", None) or "").strip()
     faq = (getattr(p, "faq", None) or "").strip()
     mant = (getattr(p, "mantenimiento_programado", None) or "").strip()
     habeas = (getattr(p, "habeas_data", None) or "").strip()
@@ -4830,10 +4827,7 @@ def contenido_login_novedades():
         novedades = (
             "Gracias por creer en nuestra empresa. Con su apoyo hemos implementado cambios que mejoran "
             "el servicio y lo optimizan: módulos de notas SIEE, boletines, pre-matrícula SIMAT, PQR, "
-            "multi-inquilino y más herramientas para las Instituciones Educativas."
-        )
-    if not (novedades_tecnicas or "").strip():
-        novedades_tecnicas = (
+            "multi-inquilino y más herramientas para las Instituciones Educativas.\n\n"
             "• Planilla de notas por materia con auto-guardado\n"
             "• Boletín académico con docente, NM y faltas\n"
             "• Portal PQR y panel de soporte Procsis\n"
@@ -4841,7 +4835,7 @@ def contenido_login_novedades():
         )
     if not faq:
         faq = (
-            "¿Olvidé mi contraseña?\nUse "¿Olvidaste tu contraseña?" en el login o contacte a su administrador.\n\n"
+            "¿Olvidé mi contraseña?\nUse «¿Olvidaste tu contraseña?» en el login o contacte a su administrador.\n\n"
 
             "¿Cómo ingreso como docente?\nUse el enlace Docentes o el usuario asignado por el colegio.\n\n"
             "¿Qué es multi-inquilino?\nCada colegio tiene sus datos aislados: no ve información de otra institución.\n\n"
@@ -4851,14 +4845,9 @@ def contenido_login_novedades():
     if not habeas:
         habeas = (
             "Protección de datos personales (Habeas Data – Colombia, Ley 1581 de 2012). "
-            "EduTrack / PROCSIS trata la información con finalidad educativa, de seguridad escolar y de soporte, "
-            "bajo medidas de seguridad técnicas y organizativas.\n\n"
-            "1. FINALIDADES: control perimetral y asistencia; notificaciones a acudientes (ingresos, retardos después de las 7:00 AM, horas hueco y salidas); "
-            "sincronización de planillas docentes; facturación de planes y cuotas de implementación.\n\n"
-            "2. MENORES DE EDAD: conforme al Art. 7 Ley 1581 de 2012 y Decreto 1377 de 2013, con autorización previa del acudiente "
-            "(marcas de tiempo, IP y firmas Hash en portal de padres).\n\n"
-            "3. DERECHOS: conocer, actualizar, rectificar o suprimir datos vía soporte@procsis.com o tickets de Backoffice. "
-            "Consultas: máx. 10 días hábiles; reclamos: máx. 15 días hábiles."
+            "EduTrack / Procsis trata la información con finalidad educativa y de soporte, "
+            "bajo medidas de seguridad técnicas. El titular puede conocer, actualizar y rectificar sus datos "
+            "escribiendo a soporte."
         )
     imgs = []
     for i in (1, 2, 3):
@@ -4879,7 +4868,6 @@ def contenido_login_novedades():
     return {
         "version": version,
         "novedades": novedades,
-        "novedades_tecnicas": (novedades_tecnicas or "").strip(),
         "faq": faq,
         "mant": mant,
         "habeas": habeas,
@@ -8947,7 +8935,6 @@ def login():
     nov = contenido_login_novedades()
     lideres_section = _html_lideres_login()
     nov_html = _txt_a_html_lista(nov["novedades"])
-    nov_tec_html = _txt_a_html_lista(nov.get("novedades_tecnicas") or "")
     faq_html = _txt_a_html_lista(nov["faq"])
     mant_html = _txt_a_html_lista(nov["mant"]) if nov["mant"] else ""
     gal_parts = []
@@ -9021,14 +9008,14 @@ def login():
             "demostración y prueba piloto con Procsis. ¡Gracias!"
         )
         wa_link = (f"https://wa.me/{wa_num}?text={_uq(_wa_txt)}" if wa_num else "/ventas")
-        hor_lun = (getattr(_pp, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
-        hor_sem = (getattr(_pp, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
+        hor_lun = (getattr(_pp, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
+        hor_sem = (getattr(_pp, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
         soporte_msg = (getattr(_pp, "soporte_mensaje", None) or "¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo de expertos está listo para asistirle. Consulte a continuación nuestros canales y horarios de atención.")
         anio = ahora().year
     except Exception:
         corp_tel, corp_email, wa_link = "—", "soporte@procsis.com", "/contacto"
-        hor_lun = "8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
-        hor_sem = "7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
+        hor_lun = "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
+        hor_sem = "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
         soporte_msg = "¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo está listo para asistirle."
         anio = 2026
     return page("Login", f"""
@@ -9081,18 +9068,24 @@ def login():
 .sr-only{{position:absolute;left:-9999px}}
 .promo-row{{max-width:1100px;margin:0 auto 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 20px}}
 @media(max-width:800px){{.promo-row{{grid-template-columns:1fr}}}}
-.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12)}}
+.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12);transition:transform .2s ease-in-out,box-shadow .2s ease-in-out;animation:corp-fade-up .45s ease-out both}}
+.promo-row .promo-card:nth-child(1){{animation-delay:.04s}}
+.promo-row .promo-card:nth-child(2){{animation-delay:.1s}}
+.promo-card:hover{{transform:translateY(-4px);box-shadow:0 14px 32px rgba(15,23,42,.16)}}
 .promo-card h3{{margin:8px 0 6px;font-size:20px;line-height:1.25}}
 .promo-card p{{margin:0 0 14px;font-size:13px;opacity:.95;line-height:1.4}}
 .promo-card .badge{{display:inline-block;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.2)}}
-.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none}}
+.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none;transition:border-color .2s ease,color .2s ease,font-weight .2s ease,background .2s ease,transform .2s ease}}
 .promo-a{{background:linear-gradient(135deg,#0B2D57,#1e40af)}}
-.promo-a a.btn-promo{{background:#fff;color:#0B2D57}}
+.promo-a a.btn-promo{{background:#fff;color:#0B2D57;border:1px solid transparent}}
+.promo-a a.btn-promo:hover{{border-color:#0B2D57;font-weight:900;transform:translateX(2px)}}
 .promo-b{{background:linear-gradient(135deg,#0369a1,#0d9488)}}
 .promo-b a.btn-promo{{background:#fbbf24;color:#0f172a}}
+.promo-b a.btn-promo:hover{{filter:brightness(1.05);transform:translateX(2px)}}
 
 .corp-support{{max-width:1100px;margin:8px auto 24px;padding:0 20px}}
-.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05)}}
+.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05);animation:corp-fade-up .5s ease-out both;transition:box-shadow .2s ease-in-out}}
+.corp-support-inner:hover{{box-shadow:0 10px 28px rgba(15,23,42,.08)}}
 @media(max-width:800px){{.corp-support-inner{{grid-template-columns:1fr}}}}
 .corp-ico{{width:56px;height:56px;border-radius:14px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}}
 .corp-support-left h2{{margin:0 0 10px;color:#0B2D57;font-size:24px}}
@@ -9312,7 +9305,7 @@ def login():
           <div class="corp-hour"><b>Martes a viernes</b><br>{hor_sem}</div>
         </div>
         <div class="corp-note">Fuera de horario puede dejar su mensaje por WhatsApp o correo. Lo atenderemos al volver.</div>
-        <p style="margin-top:12px"><a class="btn" href="/whatsapp" style="background:#16a34a">💬 Escribir a soporte por WhatsApp</a></p>
+        <p style="margin-top:12px"><a class="btn btn-wa-corp" href="/whatsapp" style="background:#0B2D57;display:inline-block;transition:background .2s ease,transform .2s ease">💬 Escribir a soporte por WhatsApp <span class="wa-arrow" style="display:inline-block;transition:transform .2s ease">›</span></a></p><style>.btn-wa-corp:hover{{background:#062447!important}}.btn-wa-corp:hover .wa-arrow{{transform:translateX(3px)}}@keyframes corp-fade-up{{from{{opacity:0;transform:translateY(15px)}}to{{opacity:1;transform:translateY(0)}} }}@media (prefers-reduced-motion:reduce){{.promo-card,.corp-support-inner{{animation:none!important;transition:none!important}}}}</style>
       </div>
     </div>
   </section>
@@ -9339,49 +9332,40 @@ def login():
     <section class="lp-section" id="novedades">
       <h2>Últimas actualizaciones y mejoras</h2>
       <p class="lp-sub">Procsis · EduTrack · v{nov["version"]}</p>
-      <h3 style="color:#0B2D57;font-size:15px;margin:12px 0 6px">Novedades {nov["empresa"]}</h3>
-      <div style="font-size:14px;color:#334155;line-height:1.6;margin-bottom:12px">{nov_html}</div>
-      <h3 style="color:#1d4ed8;font-size:14px;margin:14px 0 6px">Mejoras técnicas · v{nov["version"]}</h3>
-      <div style="font-size:14px;color:#334155;line-height:1.55">{nov_tec_html}</div>
+      <h3>Novedades {nov["empresa"]}</h3>
+      {nov_html}
     </section>
 
-    <style>
-    .lp-tech-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px;transition:transform .4s cubic-bezier(.22,1,.36,1),box-shadow .4s ease,border-color .35s ease;animation:pc-fade-up .7s cubic-bezier(.22,1,.36,1) both}}
-    .lp-tech-card:nth-child(1){{animation-delay:.05s}}.lp-tech-card:nth-child(2){{animation-delay:.12s}}.lp-tech-card:nth-child(3){{animation-delay:.19s}}
-    .lp-tech-card:nth-child(4){{animation-delay:.1s}}.lp-tech-card:nth-child(5){{animation-delay:.17s}}.lp-tech-card:nth-child(6){{animation-delay:.24s}}
-    .lp-tech-card:hover{{transform:translateY(-7px);box-shadow:0 16px 40px rgba(11,45,87,.12);border-color:#86efac;background:#fff}}
-    @keyframes pc-fade-up{{from{{opacity:0;transform:translateY(22px)}}to{{opacity:1;transform:translateY(0)}}}}
-    </style>
     <section class="lp-section" id="tecnologia" style="background:#fff;border-radius:16px;padding:28px 22px;margin:18px 0;border:1px solid #e2e8f0">
       <p style="margin:0;color:#0B2D57;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase">Tecnología que</p>
       <h2 style="margin:8px 0 18px;font-size:28px;line-height:1.2;color:#0f172a">Tecnología que <span style="color:#16a34a">impulsa instituciones</span></h2>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-        <div class="lp-tech-card">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
           <div style="font-size:22px;margin-bottom:8px">🖥️</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Plataforma EduTrack</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Asistencia, notas, boletines, horarios, matrícula y PQR según el plan contratado.</span>
         </div>
-        <div class="lp-tech-card">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
           <div style="font-size:22px;margin-bottom:8px">⬡</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Tres módulos de acceso</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Directivos, docentes, estudiantes y familias, cada uno con su portal.</span>
         </div>
-        <div class="lp-tech-card">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
           <div style="font-size:22px;margin-bottom:8px">▦</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Sistemas de evaluación</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Planillas SIEE (cognitivo, procedimental y actitudinal) con promedios automáticos.</span>
         </div>
-        <div class="lp-tech-card">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
           <div style="font-size:22px;margin-bottom:8px">📊</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Informes y reportes</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Boletines PDF, reprobación por niveles, cuadro de honor y rendimiento por salón.</span>
         </div>
-        <div class="lp-tech-card">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
           <div style="font-size:22px;margin-bottom:8px">🛡️</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Alojamiento y respaldo</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Nube con copias de seguridad y protección de datos educativos (Ley 1581).</span>
         </div>
-        <div class="lp-tech-card">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
           <div style="font-size:22px;margin-bottom:8px">🎧</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Soporte y acompañamiento</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Canales de atención para directivos y docentes en la implementación.</span>
@@ -9400,11 +9384,10 @@ def login():
       {faq_html}
     </section>
 
-    <section class="lp-section" id="proteccion-datos">
+    <section class="lp-section">
       <h2>Protección de datos</h2>
-      <p class="lp-sub">Habeas Data · Colombia · Ley 1581 de 2012</p>
-      <div style="font-size:13px;color:#475569;line-height:1.65;margin-bottom:14px">{nov["habeas"]}</div>
-      <p style="font-size:12px;color:#64748b;margin:0">Texto legal editable desde Gerencia (panel de contenido público / Habeas Data). Soporte no modifica este bloque.</p>
+      <p class="lp-sub">Habeas Data · Colombia</p>
+      <p style="font-size:13px;color:#475569;line-height:1.6">{nov["habeas"]}</p>
     </section>
 
     {lideres_section}
@@ -9413,7 +9396,7 @@ def login():
   <footer class="lp-footer">
     <b>{APP_NAME}</b> © 2026 · {SLOGAN}<br>
     Desarrollado por <b>{DESARROLLADOR}</b> · Versión {nov["version"]}<br>
-    PROCSIS v{nov["version"]} | Política de Privacidad Corporativa y Tratamiento de Datos Personales de Base Tecnológica. Actividad Económica DIAN: 6201.
+    Contenido del login administrado desde el panel de Soporte
   </footer>
 </div>
 
@@ -17532,11 +17515,11 @@ body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#eef5fb;colo
 .chips a:hover{{border-color:#0ea5e9;background:#e0f2fe}}
 .wrap{{max-width:1080px;margin:0 auto;padding:8px 16px 48px}}
 .cats{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin:28px 0 8px}}
-.cat{{background:#fff;border-radius:14px;padding:18px 12px;text-align:center;text-decoration:none;color:#0B2D57;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(15,23,42,.05);border:1px solid #e8eef5}}
+.cat{{background:#fff;border-radius:14px;padding:18px 12px;text-align:center;text-decoration:none;color:#0B2D57;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(15,23,42,.05);border:1px solid #e8eef5;transition:transform .2s ease-in-out,box-shadow .2s ease-in-out;animation:corp-fade-up .4s ease-out both}}.cat:hover{{transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.1)}}.cat:nth-child(1){{animation-delay:.03s}}.cat:nth-child(2){{animation-delay:.06s}}.cat:nth-child(3){{animation-delay:.09s}}.cat:nth-child(4){{animation-delay:.12s}}.cat:nth-child(5){{animation-delay:.05s}}.cat:nth-child(6){{animation-delay:.08s}}.cat:nth-child(7){{animation-delay:.11s}}.cat:nth-child(8){{animation-delay:.14s}}
 .cat span{{display:block;font-size:28px;margin-bottom:8px}}
 .section-title{{color:#0B2D57;font-size:20px;font-weight:900;margin:28px 0 14px}}
 .pop{{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}}
-.pop a{{background:#fff;border-radius:14px;padding:16px 18px;text-decoration:none;color:#0f172a;border:1px solid #e8eef5;box-shadow:0 4px 12px rgba(15,23,42,.04);display:flex;justify-content:space-between;align-items:center;gap:10px}}
+.pop a{{background:#fff;border-radius:14px;padding:16px 18px;text-decoration:none;color:#0f172a;border:1px solid #e8eef5;box-shadow:0 4px 12px rgba(15,23,42,.04);transition:transform .2s ease-in-out,box-shadow .2s ease-in-out;animation:corp-fade-up .45s ease-out both;display:flex;justify-content:space-between;align-items:center;gap:10px}.pop a:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.1)}@keyframes corp-fade-up{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}}
 .pop a b{{display:block;color:#0B2D57;font-size:14px;margin-bottom:4px}}
 .pop a span{{font-size:12px;color:#64748b}}
 .pop a .ic{{width:36px;height:36px;border-radius:50%;background:#e0f2fe;display:flex;align-items:center;justify-content:center;flex-shrink:0}}
@@ -17657,8 +17640,8 @@ def portal_whatsapp_soporte():
             or ""
         ) if c.isdigit())
         logo = (getattr(p, "logo_path", None) or "/static/img/logo-edutrack.png")
-        hor_lun = getattr(p, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
-        hor_sem = getattr(p, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
+        hor_lun = getattr(p, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
+        hor_sem = getattr(p, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
     except Exception:
         tel, email, wa_num, logo = "—", "—", "", "/static/img/logo-edutrack.png"
         hor_lun = hor_sem = "Horario laboral"
@@ -39530,8 +39513,6 @@ def soporte_actualizaciones():
             if accion == "guardar":
                 p.version_sistema = (request.form.get("version_sistema") or "2.5.0").strip()[:40]
                 p.novedades = (request.form.get("novedades") or "").strip()
-                if hasattr(p, "novedades_tecnicas") and request.form.get("novedades_tecnicas") is not None:
-                    p.novedades_tecnicas = (request.form.get("novedades_tecnicas") or "").strip()
                 p.faq = (request.form.get("faq") or "").strip()
                 p.mantenimiento_programado = (request.form.get("mantenimiento_programado") or "").strip()
                 p.habeas_data = (request.form.get("habeas_data") or "").strip()
@@ -39599,16 +39580,13 @@ def soporte_actualizaciones():
     <label>Texto (párrafos separados por línea en blanco)</label>
     <textarea name="hero_texto" rows="5">{(getattr(p,'hero_texto',None) or '')}</textarea>
     <p class="mini-text">Todo lo que guardes aquí se muestra en el <b>login</b> (bloque con scroll). Usa párrafos separados y viñetas con <code>•</code> o <code>-</code>.</p>
-    <p style="background:#eff6ff;border:1px solid #bfdbfe;padding:10px;border-radius:8px;font-size:12px;color:#1e40af"><b>Roles:</b> el párrafo comercial de novedades lo define <b>Gerencia</b>. Las viñetas técnicas las publica <b>Desarrollo</b> (Consola). Usted (Soporte) administra el <b>FAQ</b>. Gerencia supervisa el tono.</p>
-    <label><b>Mensaje comercial de novedades</b> <span style="color:#64748b;font-weight:500">(preferible Gerencia; Soporte puede ajustar en contingencia)</span></label>
-    <textarea name="novedades" rows="6" placeholder="Gracias por creer en nuestra empresa...">{(getattr(p,'novedades',None) or '')}</textarea>
-    <label><b>Changelog técnico (viñetas)</b> <span style="color:#64748b;font-weight:500">(Consola Desarrollo; contingencia en Soporte)</span></label>
-    <textarea name="novedades_tecnicas" rows="6" placeholder="• Planilla de notas...">{(getattr(p,'novedades_tecnicas',None) or '')}</textarea>
-    <label><b>Preguntas frecuentes (FAQ)</b> <span style="color:#15803d;font-weight:600">— rol Soporte</span> · Gerencia supervisa el tono (separa cada pregunta con una línea en blanco)</label>
+    <label><b>Últimas actualizaciones / novedades</b></label>
+    <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa...">{(getattr(p,'novedades',None) or '')}</textarea>
+    <label><b>Preguntas frecuentes</b> (separa cada pregunta con una línea en blanco)</label>
     <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...&#10;&#10;¿Cómo ingreso como docente?&#10;Respuesta...">{(getattr(p,'faq',None) or '')}</textarea>
     <label><b>Mantenimiento programado</b> (fecha, hora, mensaje)</label>
     <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores">{(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
-    <label><b>Texto Habeas Data (Colombia)</b> <span style="color:#b45309;font-weight:600">— preferible Gerencia</span> · <a href="/gerencia/contenido-login">editar en Gerencia</a></label>
+    <label><b>Texto Habeas Data (Colombia)</b></label>
     <textarea name="habeas_data" rows="4">{(getattr(p,'habeas_data',None) or '')}</textarea>
     <label><b>Aviso corto de reinicio / plataforma</b></label>
     <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min">
@@ -40188,7 +40166,7 @@ def soporte_contacto_publico():
   <label><b>Horario lunes</b></label>
   <input name="horario_lunes" value="{getattr(p,'horario_lunes',None) or '8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.'}">
   <label><b>Horario martes a viernes</b></label>
-  <input name="horario_semana" value="{getattr(p,'horario_semana',None) or '7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.'}">
+  <input name="horario_semana" value="{getattr(p,'horario_semana',None) or '7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.'}">
   <label><b>Mensaje de soporte</b></label>
   <textarea name="mensaje" rows="3">{getattr(p,'soporte_mensaje',None) or '¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo está listo para asistirle.'}</textarea>
   <button type="submit">Guardar</button>
@@ -46388,8 +46366,8 @@ def pagina_corporativa_procsis():
 .pc-grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
 .pc-grid2{{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center}}
 @media(max-width:860px){{.pc-grid3,.pc-grid2{{grid-template-columns:1fr}}.pc-hero h1{{font-size:30px}}.pc-nav-in{{flex-direction:column;align-items:flex-start}}}}
-.pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px;transition:transform .4s cubic-bezier(.22,1,.36,1),box-shadow .4s ease,border-color .35s ease;animation:pc-fade-up .75s cubic-bezier(.22,1,.36,1) both}}.pc-grid3 .pc-card:nth-child(1){{animation-delay:.06s}}.pc-grid3 .pc-card:nth-child(2){{animation-delay:.14s}}.pc-grid3 .pc-card:nth-child(3){{animation-delay:.22s}}.pc-grid3 .pc-card:nth-child(4){{animation-delay:.1s}}.pc-grid3 .pc-card:nth-child(5){{animation-delay:.18s}}.pc-grid3 .pc-card:nth-child(6){{animation-delay:.26s}}.pc-grid3 .pc-card:nth-child(7){{animation-delay:.12s}}.pc-grid3 .pc-card:nth-child(8){{animation-delay:.2s}}.pc-grid3 .pc-card:nth-child(9){{animation-delay:.28s}}.pc-card:hover{{transform:translateY(-8px);box-shadow:0 20px 48px rgba(11,45,87,.14);border-color:#93c5fd;background:#fff}}
-.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px;transition:transform .35s ease,background .35s ease}}.pc-card:hover .ico{{transform:scale(1.1);background:#bfdbfe}}
+.pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px}}
+.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}}
 .pc-card h3{{margin:0 0 8px;font-size:17px;color:#0B2D57}}
 .pc-card p{{margin:0;font-size:14px;color:#475569;line-height:1.5}}
 .pc-band{{background:#f1f5f9;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}}
@@ -46397,10 +46375,10 @@ def pagina_corporativa_procsis():
 @media(max-width:700px){{.pc-stats{{grid-template-columns:1fr 1fr}}}}
 .pc-stat b{{display:block;font-size:26px;color:#0B2D57}}
 .pc-stat span{{font-size:12px;color:#64748b;font-weight:600}}
-.pc-cta{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:20px;padding:36px 28px;text-align:center;box-shadow:0 14px 44px rgba(11,45,87,.28);animation:pc-fade-up .8s cubic-bezier(.22,1,.36,1) .12s both;transition:transform .35s ease,box-shadow .35s ease}}.pc-cta:hover{{transform:translateY(-4px);box-shadow:0 22px 56px rgba(11,45,87,.36)}}
+.pc-cta{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:20px;padding:36px 28px;text-align:center}}
 .pc-cta h2{{margin:0 0 10px;font-size:26px;color:#fff}}
 .pc-cta p{{margin:0 0 18px;opacity:.92}}
-.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px;transition:transform .25s ease,box-shadow .25s ease}}.pc-cta a:hover{{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.18)}}@keyframes pc-fade-up{{from{{opacity:0;transform:translateY(28px)}}to{{opacity:1;transform:translateY(0)}}}}@media (prefers-reduced-motion:reduce){{.pc-card,.pc-cta,.lp-tech-card{{animation:none!important;transition:none!important}}}}
+.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px}}
 .pc-foot{{background:#071a33;color:#94a3b8;padding:36px 20px 20px;font-size:13px}}
 .pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:24px}}
 @media(max-width:800px){{.pc-foot-in{{grid-template-columns:1fr}}}}
@@ -58126,10 +58104,10 @@ def _html_carrusel_clientes():
         ".cli-kicker{margin:0 0 8px;font-size:14px;letter-spacing:2px;font-weight:700;color:#3b82f6;text-transform:uppercase}"
         ".cli-title{margin:0 0 28px;font-size:1.75rem;font-weight:800;color:#0B2D57}"
         ".cli-viewport{overflow:hidden;max-width:1100px;margin:0 auto}"
-        ".cli-track{display:flex;gap:56px;align-items:center;width:max-content;animation:cli-scroll 32s linear infinite}"
-        ".cli-logo{flex:0 0 auto;width:200px;height:130px;display:flex;align-items:center;justify-content:center}"
-        ".cli-logo img{max-width:200px;max-height:120px;object-fit:contain;filter:none;opacity:1;transition:.25s}"
-        ".cli-logo:hover img{transform:scale(1.08);opacity:1}"
+        ".cli-track{display:flex;gap:40px;align-items:center;width:max-content;animation:cli-scroll 32s linear infinite}"
+        ".cli-logo{flex:0 0 auto;width:120px;height:80px;display:flex;align-items:center;justify-content:center}"
+        ".cli-logo img{max-width:120px;max-height:72px;object-fit:contain;filter:grayscale(100%);opacity:.55;transition:.25s}"
+        ".cli-logo:hover img{filter:grayscale(0%);opacity:1}"
         "@keyframes cli-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>"
     )
 
@@ -58138,14 +58116,7 @@ def _html_carrusel_clientes():
 
 @app.route("/gerencia/contenido-login", methods=["GET", "POST"])
 def gerencia_contenido_login():
-    """Gerencia: mensaje comercial de novedades + Habeas Data del login público."""
-    g = None
-    try:
-        g = _guard_gerencia()
-    except Exception:
-        pass
-    if g:
-        return g
+    """Gerencia: contactos, horarios, mensaje comercial y Habeas del login público."""
     if not requiere_login():
         return redirect("/gerencia-login")
     rol = (rol_actual() or "").strip()
@@ -58157,34 +58128,66 @@ def gerencia_contenido_login():
         try:
             p.novedades = (request.form.get("novedades") or "").strip()
             p.habeas_data = (request.form.get("habeas_data") or "").strip()
-            if request.form.get("faq") is not None and rol in ("Gerente", "Superadmin", "Administrador"):
-                # supervisión FAQ
+            if request.form.get("faq") is not None:
                 p.faq = (request.form.get("faq") or "").strip()
+            tel = (request.form.get("contacto_publico_tel") or "").strip()[:40]
+            email = (request.form.get("contacto_publico_email") or "").strip()[:160]
+            if hasattr(p, "contacto_publico_tel"):
+                p.contacto_publico_tel = tel
+            if hasattr(p, "telefono_soporte"):
+                p.telefono_soporte = tel
+            if hasattr(p, "contacto_publico_email"):
+                p.contacto_publico_email = email
+            if hasattr(p, "email_soporte") and email:
+                p.email_soporte = email
+            if hasattr(p, "horario_lunes"):
+                p.horario_lunes = (request.form.get("horario_lunes") or "").strip()[:80]
+            hv = (request.form.get("horario_semana") or "").strip()[:80]
+            for _hk in ("horario_semana", "horario_martes_viernes"):
+                if hasattr(p, _hk):
+                    setattr(p, _hk, hv)
             db.session.commit()
-            msg = "Contenido público del login guardado."
+            msg = "Contenido público guardado (contactos, horarios, novedades, habeas, FAQ)."
         except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             err = str(ex)[:160]
+    tel_v = getattr(p, "contacto_publico_tel", None) or getattr(p, "telefono_soporte", None) or ""
+    email_v = getattr(p, "contacto_publico_email", None) or getattr(p, "email_soporte", None) or ""
+    hl = getattr(p, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
+    hs = getattr(p, "horario_semana", None) or getattr(p, "horario_martes_viernes", None) or "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
     body = f"""
 <header class="role-hero"><div>
-  <h1>Contenido del login público</h1>
-  <p>Gerencia controla el mensaje comercial y el Habeas Data. Soporte administra el FAQ (usted supervisa).</p>
+  <h1>Contenido del login y soporte público</h1>
+  <p>Gerencia: teléfono, correo, horarios, mensaje comercial y Habeas Data. FAQ supervisado (Soporte redacta).</p>
 </div>
 <a class="btn" href="/gerencia/hq">← HQ</a> · <a class="btn" href="/soporte/actualizaciones">Panel Soporte</a></header>
 <section class="role-panel" style="max-width:720px">
   {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
   {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
   <form method="POST" style="display:grid;gap:12px">
-    <label><b>Mensaje comercial · Novedades</b> (aparece en «Últimas actualizaciones»)</label>
+    <label><b>Teléfono público de soporte</b></label>
+    <input name="contacto_publico_tel" value="{_esc(tel_v)}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label><b>Correo público de soporte</b></label>
+    <input name="contacto_publico_email" value="{_esc(email_v)}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label><b>Horario lunes</b></label>
+    <input name="horario_lunes" value="{_esc(hl)}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label><b>Horario martes a viernes</b></label>
+    <input name="horario_semana" value="{_esc(hs)}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label><b>Mensaje comercial · Novedades</b></label>
     <textarea name="novedades" rows="5" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'novedades',None) or "")}</textarea>
-    <label><b>Habeas Data / Protección de datos</b> (texto legal del login)</label>
-    <textarea name="habeas_data" rows="12" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-family:ui-monospace,Consolas,monospace;font-size:12px">{_esc(getattr(p,'habeas_data',None) or "")}</textarea>
-    <label><b>FAQ (supervisión Gerencia)</b></label>
+    <label><b>Habeas Data / Protección de datos</b></label>
+    <textarea name="habeas_data" rows="10" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-family:ui-monospace,Consolas,monospace;font-size:12px">{_esc(getattr(p,'habeas_data',None) or "")}</textarea>
+    <label><b>FAQ (supervisión)</b> — Soporte redacta; Gerencia revisa tono</label>
     <textarea name="faq" rows="10" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'faq',None) or "")}</textarea>
     <button class="btn" type="submit">Guardar</button>
   </form>
 </section>
 """
     return page("Contenido login · Gerencia", shell(body))
+
 
 
 @app.route("/aceptar-terminos-pago", methods=["POST"])
