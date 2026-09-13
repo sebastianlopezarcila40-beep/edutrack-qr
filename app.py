@@ -1173,6 +1173,10 @@ class Plataforma(db.Model):
     ventas_landing_nota_planes = db.Column(db.String(255), default="")
     ventas_landing_h2_planes = db.Column(db.String(160), default="")
     ventas_landing_img = db.Column(db.String(255), default="")  # imagen hero / banner
+    actividad_ciiu = db.Column(db.String(20), default="6201")
+    regimen_dian = db.Column(db.String(80), default="No responsable de IVA")
+    email_empresa = db.Column(db.String(160), default="")
+    telefono_empresa = db.Column(db.String(40), default="")
     # Personalización de logins (colores / diseño)
     login_color_primario = db.Column(db.String(20), default="#0B2D57")
     login_color_acento = db.Column(db.String(20), default="#f59e0b")
@@ -5096,12 +5100,24 @@ def nombre_producto():
 
 
 def logo_plataforma():
-    """Logo corporativo PROCSIS (nunca logo de colegio ni LogixWARE)."""
+    """Logo corporativo PROCSIS (nunca logo de colegio, LogixWARE ni EduTrack producto)."""
     try:
         p = plataforma()
         ruta = (getattr(p, "logo_path", None) or "").strip()
     except Exception:
         ruta = ""
+    # Forzar: EduTrack es producto, no marca de accesos internos
+    if "logo-edutrack" in (ruta or "").lower():
+        ruta = ""
+        try:
+            if p is not None and getattr(p, "logo_path", None):
+                p.logo_path = DEFAULT_LOGO
+                db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
     # data URI guardado en BD (persiste en Railway)
     if ruta.startswith("data:image"):
         return ruta
@@ -18529,11 +18545,11 @@ puntualmente.</p>
 def portal_backoffice():
     """Portal unificado EduTrack Backoffice — filas corporativas compactas."""
     try:
+        logo = logo_plataforma()
         p = plataforma()
-        logo = (getattr(p, "logo_path", None) or "/static/img/logo-edutrack.png")
         empresa = getattr(p, "empresa", None) or "Procsis"
     except Exception:
-        logo, empresa = "/static/img/logo-edutrack.png", "Procsis"
+        logo, empresa = "/static/img/logo-procsis.png", "Procsis"
     body = f"""
 <style>
 .bo{{min-height:100vh;background:#0B2D57;font-family:Segoe UI,system-ui,sans-serif;color:#fff;
@@ -26164,7 +26180,7 @@ def gerencia_usuarios():
             usuario = (request.form.get("usuario") or "").strip().lower()
             password = (request.form.get("password") or "").strip()
             rol = (request.form.get("rol") or "Comercial").strip()
-            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza"):
+            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif not usuario or len(password) < 8:
                 error = "Usuario obligatorio y contraseña de al menos 8 caracteres."
@@ -26182,7 +26198,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo = (request.form.get("nuevo_usuario") or "").strip().lower()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Desarrollador"):
                 error = "Usuario no válido."
             elif not nuevo or len(nuevo) < 3:
                 error = "Nuevo nombre de usuario inválido."
@@ -26203,9 +26219,9 @@ def gerencia_usuarios():
             u = Usuario.query.get(uid) if uid else None
             if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
                 error = "Solo Gerencia puede cambiar roles de usuarios."
-            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
+            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Desarrollador"):
                 error = "Usuario no válido."
-            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente"):
+            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif session.get("uid") == u.id and nuevo_rol != u.rol:
                 error = "No puede cambiarse el rol a usted mismo — pídaselo a otro Gerente/Superadmin."
@@ -26219,7 +26235,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nueva_clave = (request.form.get("nueva_clave") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Desarrollador"):
                 error = "Usuario no válido."
             elif len(nueva_clave) < 8:
                 error = "La contraseña debe tener mínimo 8 caracteres."
@@ -26235,7 +26251,7 @@ def gerencia_usuarios():
         elif accion == "toggle_activo":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Desarrollador"):
                 error = "Usuario no válido."
             elif session.get("uid") == u.id:
                 error = "No puede desactivarse a sí mismo."
@@ -26332,7 +26348,7 @@ def gerencia_usuarios():
   {"<p style='color:#b91c1c;background:#fef2f2;padding:10px;border-radius:8px'>"+error+"</p>" if error else ""}
   <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:20px;box-shadow:0 4px 12px rgba(15,23,42,.04)">
     <input type="hidden" name="accion" value="crear">
-    <h3 style="margin:0 0 12px;color:#0B2D57">Crear usuario de la empresa</h3><p style="margin:0 0 12px;font-size:13px;color:#64748b">Soporte, Ventas (Comercial), Cobranza o Gerente. Cada uno entra por su portal: /soporte-login · /ventas-login · /cobranza-login · /gerencia-login</p>
+    <h3 style="margin:0 0 12px;color:#0B2D57">Crear usuario de la empresa</h3><p style="margin:0 0 12px;font-size:13px;color:#64748b">Soporte, Ventas, Cobranza, Gerente, Superadmin o Desarrollador. Portales: /soporte-login · /ventas-login · /cobranza-login · /gerencia-login · /dev-console-login</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div><label style="font-size:13px;font-weight:600">Usuario (login)</label>
       <input name="usuario" required style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
@@ -26366,12 +26382,23 @@ def gerencia_usuarios():
 @app.route("/gerencia/datos-empresa", methods=["GET", "POST"])
 @app.route("/gerencia/empresa", methods=["GET", "POST"])
 def gerencia_datos_empresa():
-    """Datos legales de Procsis (NIT, DANE, dirección, logo) para documentos y paneles staff."""
+    """Datos legales de Procsis (NIT, dirección, logo, CIIU) para documentos y paneles staff."""
     g = _guard_gerencia()
     if g:
         return g
     p = plataforma()
     mensaje = err = ""
+    # Si el logo corporativo quedó como EduTrack (producto), forzar PROCSIS
+    try:
+        lp = (getattr(p, "logo_path", None) or "").lower()
+        if (not lp) or "logo-edutrack" in lp:
+            p.logo_path = DEFAULT_LOGO
+            db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     if request.method == "POST":
         try:
             for col, typ in [
@@ -26398,6 +26425,56 @@ def gerencia_datos_empresa():
                 p.representante_legal = (request.form.get("representante_legal") or "").strip()[:160]
             if (request.form.get("empresa") or "").strip():
                 p.empresa = (request.form.get("empresa") or "").strip()[:160]
+
+            # Campos tributarios / contacto empresa
+            try:
+                for col, typ in [
+                    ("actividad_ciiu", "VARCHAR(20)"),
+                    ("regimen_dian", "VARCHAR(80)"),
+                    ("email_empresa", "VARCHAR(160)"),
+                    ("telefono_empresa", "VARCHAR(40)"),
+                ]:
+                    try:
+                        db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+                    except Exception:
+                        pass
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+            ciiu = (request.form.get("actividad_ciiu") or "6201").strip()[:20]
+            regimen = (request.form.get("regimen_dian") or "No responsable de IVA").strip()[:80]
+            email_emp = (request.form.get("email_empresa") or "").strip()[:160]
+            tel_emp = (request.form.get("telefono_empresa") or "").strip()[:40]
+            try:
+                p.actividad_ciiu = ciiu
+                p.regimen_dian = regimen
+                if email_emp:
+                    p.email_empresa = email_emp
+                    if hasattr(p, "email_soporte") and not (p.email_soporte or "").strip():
+                        p.email_soporte = email_emp
+                if tel_emp:
+                    p.telefono_empresa = tel_emp
+                    if hasattr(p, "telefono_soporte") and not (p.telefono_soporte or "").strip():
+                        p.telefono_soporte = tel_emp
+                    if hasattr(p, "contacto_publico_tel"):
+                        p.contacto_publico_tel = tel_emp
+                if email_emp and hasattr(p, "contacto_publico_email"):
+                    p.contacto_publico_email = email_emp
+            except Exception:
+                pass
+            try:
+                db.session.execute(text(
+                    "UPDATE plataforma SET actividad_ciiu=:c, regimen_dian=:r, email_empresa=:e, telefono_empresa=:t"
+                ), {"c": ciiu, "r": regimen, "e": email_emp, "t": tel_emp})
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
         except Exception as _e:
             err = "Error al asignar campos: " + str(_e)[:120]
 
@@ -26455,7 +26532,7 @@ def gerencia_datos_empresa():
             mensaje = "Datos guardados."
     logo_actual = (getattr(p, "logo_path", None) or "").strip()
     if logo_actual.startswith("data:image"):
-        preview = logo_actual
+        preview = logo_plataforma()
         logo_nota = "Logo actual guardado en base de datos (no se pierde al reiniciar Railway)."
     else:
         preview = logo_plataforma()
@@ -26472,12 +26549,22 @@ def gerencia_datos_empresa():
   <form method="POST" enctype="multipart/form-data">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div><label><b>Nombre empresa</b></label><input name="empresa" value="{_esc(getattr(p,'empresa',None) or 'PROCSIS')}" placeholder="PROCSIS"></div>
-      <div><label><b>NIT</b></label><input name="nit" value="{_esc(getattr(p, "nit", None) or "")}" placeholder="900.999.999-1"></div>
-      <div><label><b>Código DANE</b></label><input name="codigo_dane" value="{_esc(getattr(p, "codigo_dane", None) or "")}" placeholder="199999999999"></div>
-      <div><label><b>Ciudad</b></label><input name="ciudad" value="{_esc(getattr(p, "ciudad", None) or "")}" placeholder="Bogotá D.C."></div>
-      <div><label><b>Representante legal</b></label><input name="representante_legal" value="{_esc(getattr(p, "representante_legal", None) or "")}"></div>
+      <div><label><b>NIT</b></label><input name="nit" value="{_esc(getattr(p, "nit", None) or "")}" placeholder="1038062294-3"></div>
+      <div><label><b>Representante legal</b></label><input name="representante_legal" value="{_esc(getattr(p, "representante_legal", None) or "")}" placeholder="MARÍA DUBER LÓPEZ ARCILA"></div>
+      <div><label><b>Ciudad</b></label><input name="ciudad" value="{_esc(getattr(p, "ciudad", None) or "")}" placeholder="Caracolí, Antioquia"></div>
       <div style="grid-column:1/3"><label><b>Dirección</b></label><input name="direccion" value="{_esc(getattr(p, "direccion", None) or "")}"></div>
+      <div><label><b>Actividad económica (CIIU)</b></label><input name="actividad_ciiu" value="{_esc(getattr(p, "actividad_ciiu", None) or "6201")}" placeholder="6201"></div>
+      <div><label><b>Régimen / responsabilidad DIAN</b></label>
+        <select name="regimen_dian" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+          <option value="No responsable de IVA" {"selected" if (getattr(p,"regimen_dian",None) or "No responsable de IVA")=="No responsable de IVA" else ""}>No responsable de IVA</option>
+          <option value="Responsable de IVA" {"selected" if (getattr(p,"regimen_dian",None) or "")=="Responsable de IVA" else ""}>Responsable de IVA</option>
+          <option value="Régimen ordinario" {"selected" if (getattr(p,"regimen_dian",None) or "")=="Régimen ordinario" else ""}>Régimen ordinario</option>
+        </select>
+      </div>
+      <div><label><b>Correo institucional empresa</b></label><input name="email_empresa" type="email" value="{_esc(getattr(p, "email_empresa", None) or getattr(p,"email_soporte",None) or "")}" placeholder="sebastianlopezarcila40@gmail.com"></div>
+      <div><label><b>Teléfono / celular corporativo</b></label><input name="telefono_empresa" value="{_esc(getattr(p, "telefono_empresa", None) or getattr(p,"telefono_soporte",None) or "")}" placeholder="3122837769"></div>
     </div>
+    <p style="font-size:12px;color:#64748b;margin:8px 0 0">El <b>código DANE</b> no aplica a PROCSIS (solo colegios). Se configura en Instituciones / editar colegio.</p>
     <div style="margin-top:18px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
       <label style="font-weight:800;color:#0B2D57;display:block;margin-bottom:8px">Logo oficial PROCSIS</label>
       <p style="font-size:12px;color:#64748b;margin:0 0 10px">{_esc(logo_nota)}</p>
