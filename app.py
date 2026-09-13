@@ -18611,6 +18611,14 @@ font-size:12px;font-weight:700;white-space:nowrap}}
       </div>
       <span class="bo-cta">Ingresar →</span>
     </a>
+    <a class="bo-row d" href="/dev-console-login">
+      <div class="bo-ico">⚙️</div>
+      <div class="bo-mid">
+        <h2>Consola de Desarrollo</h2>
+        <p>Logs, mantenimiento global, backups técnicos y variables de entorno.</p>
+      </div>
+      <span class="bo-cta">Ingresar →</span>
+    </a>
   </div>
   <p class="bo-foot">
     <a href="/login">Portal instituciones</a> ·
@@ -26351,6 +26359,7 @@ def gerencia_usuarios():
 
 
 @app.route("/gerencia/datos-empresa", methods=["GET", "POST"])
+@app.route("/gerencia/empresa", methods=["GET", "POST"])
 def gerencia_datos_empresa():
     """Datos legales de Procsis (NIT, DANE, dirección, logo) para documentos y paneles staff."""
     g = _guard_gerencia()
@@ -26359,13 +26368,33 @@ def gerencia_datos_empresa():
     p = plataforma()
     mensaje = err = ""
     if request.method == "POST":
-        p.nit = (request.form.get("nit") or "").strip()[:40]
-        p.codigo_dane = (request.form.get("codigo_dane") or "").strip()[:40]
-        p.direccion = (request.form.get("direccion") or "").strip()[:255]
-        p.ciudad = (request.form.get("ciudad") or "").strip()[:120]
-        p.representante_legal = (request.form.get("representante_legal") or "").strip()[:160]
-        if (request.form.get("empresa") or "").strip():
-            p.empresa = (request.form.get("empresa") or "").strip()[:160]
+        try:
+            for col, typ in [
+                ("nit", "VARCHAR(40)"), ("codigo_dane", "VARCHAR(40)"), ("direccion", "VARCHAR(255)"),
+                ("ciudad", "VARCHAR(120)"), ("representante_legal", "VARCHAR(160)"),
+            ]:
+                try:
+                    db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+                except Exception:
+                    pass
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        try:
+            p.nit = (request.form.get("nit") or "").strip()[:40]
+            if hasattr(p, "codigo_dane"):
+                p.codigo_dane = (request.form.get("codigo_dane") or "").strip()[:40]
+            p.direccion = (request.form.get("direccion") or "").strip()[:255]
+            p.ciudad = (request.form.get("ciudad") or "").strip()[:120]
+            if hasattr(p, "representante_legal"):
+                p.representante_legal = (request.form.get("representante_legal") or "").strip()[:160]
+            if (request.form.get("empresa") or "").strip():
+                p.empresa = (request.form.get("empresa") or "").strip()[:160]
+        except Exception as _e:
+            err = "Error al asignar campos: " + str(_e)[:120]
         # Logo PROCSIS → BD (data URI) para que no se borre en Railway
         flogo = request.files.get("logo_empresa")
         if flogo and getattr(flogo, "filename", ""):
@@ -26408,11 +26437,11 @@ def gerencia_datos_empresa():
   <form method="POST" enctype="multipart/form-data">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div><label><b>Nombre empresa</b></label><input name="empresa" value="{_esc(getattr(p,'empresa',None) or 'PROCSIS')}" placeholder="PROCSIS"></div>
-      <div><label><b>NIT</b></label><input name="nit" value="{_esc(p.nit)}" placeholder="900.999.999-1"></div>
-      <div><label><b>Código DANE</b></label><input name="codigo_dane" value="{_esc(p.codigo_dane)}" placeholder="199999999999"></div>
-      <div><label><b>Ciudad</b></label><input name="ciudad" value="{_esc(p.ciudad)}" placeholder="Bogotá D.C."></div>
-      <div><label><b>Representante legal</b></label><input name="representante_legal" value="{_esc(p.representante_legal)}"></div>
-      <div style="grid-column:1/3"><label><b>Dirección</b></label><input name="direccion" value="{_esc(p.direccion)}"></div>
+      <div><label><b>NIT</b></label><input name="nit" value="{_esc(getattr(p, "nit", None) or "")}" placeholder="900.999.999-1"></div>
+      <div><label><b>Código DANE</b></label><input name="codigo_dane" value="{_esc(getattr(p, "codigo_dane", None) or "")}" placeholder="199999999999"></div>
+      <div><label><b>Ciudad</b></label><input name="ciudad" value="{_esc(getattr(p, "ciudad", None) or "")}" placeholder="Bogotá D.C."></div>
+      <div><label><b>Representante legal</b></label><input name="representante_legal" value="{_esc(getattr(p, "representante_legal", None) or "")}"></div>
+      <div style="grid-column:1/3"><label><b>Dirección</b></label><input name="direccion" value="{_esc(getattr(p, "direccion", None) or "")}"></div>
     </div>
     <div style="margin-top:18px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
       <label style="font-weight:800;color:#0B2D57;display:block;margin-bottom:8px">Logo oficial PROCSIS</label>
@@ -55909,6 +55938,74 @@ def _dev_capture_500(e):
         ), 500
     except Exception:
         return "Error interno", 500
+
+
+
+
+@app.route("/dev-console-login", methods=["GET", "POST"])
+def dev_console_login():
+    """Login exclusivo Consola de Desarrollo (Superadmin / Desarrollador)."""
+    error = ""
+    if request.method == "POST":
+        ok_rl, wait_m = _rate_limit_login(portal="dev")
+        if not ok_rl:
+            return _rate_limit_response(wait_m)
+        user = login_usuario(request.form.get("usuario"), request.form.get("password"))
+        rol = (user.rol or "").strip() if user else ""
+        if user and rol in ("Superadmin", "Desarrollador", "Developer"):
+            if not _usuario_activo_ok(user):
+                error = "Usuario desactivado."
+            else:
+                session.clear()
+                session["usuario"] = user.usuario
+                session["rol"] = rol
+                session["uid"] = user.id
+                session["panel"] = "dev"
+                try:
+                    registrar_sesion_empleado(user)
+                    if getattr(user, "session_token", None):
+                        session["session_token"] = user.session_token
+                except Exception:
+                    pass
+                registrar_auditoria("Login consola desarrollo", f"{rol} {user.usuario}")
+                return redirect("/dev-console")
+        elif user:
+            error = f"Esta cuenta tiene rol «{user.rol}». Solo Superadmin / Desarrollador."
+        else:
+            _rate_limit_fail(portal="dev")
+            error = "Usuario o contraseña incorrectos."
+    try:
+        logo = logo_plataforma()
+    except Exception:
+        logo = "/static/img/logo-edutrack.png"
+    body = f"""
+{_login_theme_css() if '_login_theme_css' in dir() else ''}
+<style>
+.gl{{min-height:100vh;background:#0f172a;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
+.gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:28px;max-width:400px;width:100%}}
+.gl-c h1{{margin:0 0 4px;color:#0B2D57;font-size:1.35rem}}
+.gl-c .sub{{color:#64748b;font-size:13px;margin:0 0 16px}}
+.gl-c label{{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}}
+.gl-c input{{width:100%;padding:11px 12px;margin:0 0 12px;border:1px solid #e2e8f0;border-radius:4px;box-sizing:border-box;font-size:14px}}
+.gl-c button{{width:100%;padding:12px;border:0;border-radius:4px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer}}
+.gl-c .err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:4px;font-size:13px;margin-bottom:12px}}
+</style>
+<div class="gl"><div class="gl-c">
+  <div style="text-align:center;margin-bottom:12px"><img src="{logo}" alt="" style="height:48px"></div>
+  <h1>Consola de Desarrollo</h1>
+  <p class="sub">Acceso restringido · Superadmin / Desarrollador</p>
+  {"<div class='err'>"+_esc(error)+"</div>" if error else ""}
+  <form method="POST">
+    <label>Usuario</label>
+    <input name="usuario" required autocomplete="username">
+    <label>Contraseña</label>
+    <input type="password" name="password" required autocomplete="current-password">
+    <button type="submit">Entrar a la consola</button>
+  </form>
+  <p style="margin-top:14px;font-size:12px;text-align:center"><a href="/backoffice" style="color:#64748b">← Backoffice</a></p>
+</div></div>
+"""
+    return page("Consola Desarrollo · Login", body)
 
 
 
