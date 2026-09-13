@@ -58098,10 +58098,10 @@ def _html_carrusel_clientes():
         ".cli-kicker{margin:0 0 8px;font-size:14px;letter-spacing:2px;font-weight:700;color:#3b82f6;text-transform:uppercase}"
         ".cli-title{margin:0 0 28px;font-size:1.75rem;font-weight:800;color:#0B2D57}"
         ".cli-viewport{overflow:hidden;max-width:1100px;margin:0 auto}"
-        ".cli-track{display:flex;gap:48px;align-items:center;width:max-content;animation:cli-scroll 32s linear infinite}"
-        ".cli-logo{flex:0 0 auto;width:180px;height:120px;display:flex;align-items:center;justify-content:center}"
-        ".cli-logo img{max-width:180px;max-height:110px;object-fit:contain;filter:none;opacity:1;transition:.25s}"
-        ".cli-logo:hover img{transform:scale(1.06);opacity:1}"
+        ".cli-track{display:flex;gap:40px;align-items:center;width:max-content;animation:cli-scroll 32s linear infinite}"
+        ".cli-logo{flex:0 0 auto;width:120px;height:80px;display:flex;align-items:center;justify-content:center}"
+        ".cli-logo img{max-width:120px;max-height:72px;object-fit:contain;filter:grayscale(100%);opacity:.55;transition:.25s}"
+        ".cli-logo:hover img{filter:grayscale(0%);opacity:1}"
         "@keyframes cli-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>"
     )
 
