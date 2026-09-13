@@ -1199,6 +1199,7 @@ class Plataforma(db.Model):
     anuncio_img1 = db.Column(db.Text, default="")
     anuncio_img2 = db.Column(db.Text, default="")
     tema_fuente = db.Column(db.String(80), default="Segoe UI")
+    tema_color_secundario = db.Column(db.String(20), default="#F2C12E")
     tema_color_primario = db.Column(db.String(20), default="#0B2D57")
     tema_color_acento = db.Column(db.String(20), default="#1e40af")
     tema_color_fondo = db.Column(db.String(20), default="#f1f5f9")
@@ -2918,34 +2919,90 @@ def anuncio_cerrar():
     return ("", 204)
 
 def css_tema_global():
-    """Fuente y colores globales configurados desde soporte."""
+    """Inyecta Variables Globales CSS desde BD (Gestor de Temas de la Consola de Desarrollo)."""
     try:
         p = plataforma()
     except Exception:
         return ""
     fuente = (getattr(p, "tema_fuente", None) or "Segoe UI").replace('"', "").replace("<", "")
-    # Paleta corporativa unificada
-    if (getattr(p, "tema_color_fondo", None) or "").lower() in ("#eef2ff", "#eaf2ff", "#eef6fc", "#e8eef5"):
-        try:
-            p.tema_color_fondo = "#f1f5f9"
-            if not getattr(p, "tema_color_primario", None):
-                p.tema_color_primario = "#0B2D57"
-            if not getattr(p, "tema_color_acento", None):
-                p.tema_color_acento = "#1e3a8a"
-            db.session.commit()
-        except Exception:
-            pass
-    prim = (getattr(p, "tema_color_primario", None) or "#0B2D57").replace('"', "") or "#0B2D57"
-    acento = (getattr(p, "tema_color_acento", None) or "#1e3a8a").replace('"', "") or "#1e3a8a"
-    fondo = "#f1f5f9"  # fondo corporativo unificado
+    def _hex(val, default):
+        v = (val or default or "").strip().replace('"', "").replace("'", "")[:20]
+        if not v.startswith("#") or len(v) < 4:
+            return default
+        return v
+    # Defaults institucionales exactos
+    prim = _hex(getattr(p, "tema_color_primario", None), "#0B4A8F")
+    # Secundario: bordes/alertas/carnés (amarillo)
+    sec = _hex(getattr(p, "tema_color_secundario", None) or getattr(p, "tema_color_acento", None), "#F2C12E")
+    fondo = _hex(getattr(p, "tema_color_fondo", None), "#F8FAFC")
     return (
         '<style id="tema-global">'
-        ':root{--azul:' + prim + ';--azul2:' + acento + ';--fondo-app:#f1f5f9;--negro:#0f172a;--gris:#f1f5f9;--borde:#e2e8f0;}'+'body{background:#f1f5f9!important;color:#0f172a}'+'.shell,.main-wrap,.content{background:#f1f5f9}'+'.role-panel,.table-card,.card{background:#fff;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(15,23,42,.05)}'+'.topbar,.app-header,header.bar{background:linear-gradient(90deg,#0B2D57,#0f172a)!important}'+'button,.btn{background:#0B2D57;border-radius:10px}'+'button:hover,.btn:hover{background:#1e3a8a}'
-        'body,.shell,.login-shell,input,button,select,textarea{'
+        ':root{'
+        '--primary-color:' + prim + ';'
+        '--secondary-color:' + sec + ';'
+        '--dashboard-bg:' + fondo + ';'
+        '--azul:' + prim + ';'
+        '--azul2:' + prim + ';'
+        '--acento:' + sec + ';'
+        '--fondo-app:' + fondo + ';'
+        '--negro:#0f172a;--gris:' + fondo + ';--borde:#e2e8f0'
+        '}'
+        'body{background:var(--dashboard-bg,' + fondo + ')!important;color:#0f172a}'
+        '.shell,.main-wrap,.content,.role-main{background:var(--dashboard-bg,' + fondo + ')}'
+        '.role-panel,.table-card,.card{background:#fff;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(15,23,42,.05)}'
+        '.topbar,.app-header,header.bar,.hq-corp{background:var(--primary-color,' + prim + ')!important}'
+        'button.btn,.btn,button[type=submit]{background:var(--primary-color,' + prim + ');border-radius:6px}'
+        'button.btn:hover,.btn:hover{filter:brightness(1.08)}'
+        'body,.shell,input,button,select,textarea{'
         'font-family:' + fuente + ',Segoe UI,Arial,sans-serif!important}'
-        'body{background:var(--fondo-app,' + fondo + ')}'
         '</style>'
     )
+
+
+def feature_enabled(clave, default=False):
+    """Feature Flags globales (institucion_id NULL). Usar: if feature_enabled('whatsapp_api'): ..."""
+    try:
+        row = FeatureFlag.query.filter_by(clave=clave, institucion_id=None).first()
+        if row is None:
+            return bool(default)
+        return bool(row.activo)
+    except Exception:
+        return bool(default)
+
+
+def _set_feature_flag(clave, activo, descripcion=""):
+    try:
+        row = FeatureFlag.query.filter_by(clave=clave, institucion_id=None).first()
+        if not row:
+            row = FeatureFlag(clave=clave, institucion_id=None, activo=bool(activo), descripcion=descripcion or clave)
+            db.session.add(row)
+        else:
+            row.activo = bool(activo)
+            if descripcion:
+                row.descripcion = descripcion
+        db.session.commit()
+        return True
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def _disk_usage_txt():
+    """Espacio en disco del volumen / app (Railway o local)."""
+    try:
+        import shutil
+        import os as _os
+        path = _os.path.dirname(_os.path.abspath(__file__)) or "/"
+        u = shutil.disk_usage(path)
+        used_gb = u.used / (1024 ** 3)
+        total_gb = u.total / (1024 ** 3)
+        pct = (100.0 * u.used / u.total) if u.total else 0
+        return "%.1f GB / %.1f GB (%.0f%% usado)" % (used_gb, total_gb, pct)
+    except Exception as e:
+        return "N/D (%s)" % str(e)[:40]
 
 
 
@@ -55952,6 +56009,9 @@ def _ensure_dev_version_cols():
             ("changelog_publico", "TEXT DEFAULT ''"),
             ("anuncio_tecnico", "TEXT DEFAULT ''"),
             ("anuncio_tecnico_activo", "BOOLEAN DEFAULT FALSE"),
+            ("tema_color_primario", "VARCHAR(20) DEFAULT '#0B4A8F'"),
+            ("tema_color_secundario", "VARCHAR(20) DEFAULT '#F2C12E'"),
+            ("tema_color_fondo", "VARCHAR(20) DEFAULT '#F8FAFC'"),
         ]:
             try:
                 db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
@@ -55999,7 +56059,7 @@ def dev_console():
     _ensure_dev_version_cols()
     msg = err = ""
     tab = (request.args.get("tab") or request.form.get("tab") or "sistema").strip().lower()
-    if tab not in ("sistema", "versiones", "anuncios"):
+    if tab not in ("sistema", "versiones", "anuncios", "temas", "flags"):
         tab = "sistema"
     try:
         p = plataforma()
@@ -56072,6 +56132,51 @@ def dev_console():
             except Exception as e:
                 err = str(e)[:100]
             tab = "sistema"
+
+        elif accion == "guardar_tema":
+            prim = (request.form.get("tema_color_primario") or "#0B4A8F").strip()[:20]
+            sec = (request.form.get("tema_color_secundario") or "#F2C12E").strip()[:20]
+            fondo = (request.form.get("tema_color_fondo") or "#F8FAFC").strip()[:20]
+            try:
+                if p is not None:
+                    p.tema_color_primario = prim
+                    try:
+                        p.tema_color_secundario = sec
+                    except Exception:
+                        pass
+                    try:
+                        p.tema_color_acento = sec
+                    except Exception:
+                        pass
+                    p.tema_color_fondo = fondo
+                db.session.execute(text(
+                    "UPDATE plataforma SET tema_color_primario=:a, tema_color_fondo=:c"
+                ), {"a": prim, "c": fondo})
+                try:
+                    db.session.execute(text("UPDATE plataforma SET tema_color_secundario=:b, tema_color_acento=:b"), {"b": sec})
+                except Exception:
+                    pass
+                db.session.commit()
+                msg = "Paleta corporativa guardada. Se aplica en toda la suite al recargar."
+            except Exception as e:
+                err = str(e)[:120]
+            tab = "temas"
+        elif accion == "toggle_flag":
+            clave = (request.form.get("clave") or "").strip()[:80]
+            estado = (request.form.get("estado") or "OFF").strip().upper() == "ON"
+            desc_map = {
+                "whatsapp_api": "Módulo de Conexión WhatsApp API",
+                "carnetizacion_masiva_pdf": "Módulo de Carnetización Masiva PDF",
+                "liquidacion_prestaciones": "Módulo de Liquidación con Prestaciones",
+            }
+            if clave in desc_map:
+                if _set_feature_flag(clave, estado, desc_map[clave]):
+                    msg = "%s → %s" % (desc_map[clave], "ON" if estado else "OFF")
+                else:
+                    err = "No se pudo guardar el feature flag."
+            else:
+                err = "Flag no permitido."
+            tab = "flags"
         elif accion == "clear_logs":
             _DEV_ERROR_LOG.clear()
             msg = "Buffer de logs limpiado."
@@ -56143,6 +56248,10 @@ def dev_console():
         n_est = Estudiante.query.count()
     except Exception:
         n_est = "—"
+    try:
+        disk_txt = _disk_usage_txt()
+    except Exception:
+        disk_txt = "N/D"
 
     def tab_btn(id_, label):
         active = tab == id_
@@ -56153,10 +56262,12 @@ def dev_console():
         )
 
     tabs_nav = (
-        '<div style="display:flex;gap:4px;border-bottom:1px solid #e2e8f0;margin-bottom:16px">'
+        '<div style="display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;margin-bottom:16px">'
         + tab_btn("sistema", "SISTEMA & CORE")
         + tab_btn("versiones", "CONTROL DE VERSIONES")
         + tab_btn("anuncios", "ANUNCIOS TÉCNICOS")
+        + tab_btn("temas", "TEMAS CSS")
+        + tab_btn("flags", "FEATURE FLAGS")
         + "</div>"
     )
 
@@ -56167,8 +56278,9 @@ def dev_console():
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
       <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Infraestructura</h3>
       <p style="font-size:12px;margin:4px 0">Memoria proceso: <b>{_esc(mem_info)}</b></p>
-      <p style="font-size:12px;margin:4px 0">Colegios en BD: <b>{n_inst}</b></p>
-      <p style="font-size:12px;margin:4px 0">Estudiantes: <b>{n_est}</b></p>
+      <p style="font-size:12px;margin:4px 0">Colegios en BD: <b>{n_inst}</b> <span style="color:#94a3b8">(COUNT instituciones)</span></p>
+      <p style="font-size:12px;margin:4px 0">Estudiantes: <b>{n_est}</b> <span style="color:#94a3b8">(COUNT estudiantes)</span></p>
+      <p style="font-size:12px;margin:4px 0">Espacio en disco (Railway/Volume): <b>{_esc(disk_txt)}</b></p>
       <p style="font-size:12px;margin:4px 0">Mantenimiento: <b style="color:{'#b91c1c' if mant else '#15803d'}">{'ON' if mant else 'OFF'}</b></p>
       <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <input type="hidden" name="tab" value="sistema">
@@ -56213,7 +56325,7 @@ def dev_console():
     </form>
   </div>
 """
-    else:
+    elif tab == "anuncios":
         panel = f"""
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:640px">
     <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Anuncios técnicos</h3>
@@ -56231,6 +56343,77 @@ def dev_console():
       </label>
       <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar anuncio técnico</button>
     </form>
+  </div>
+"""
+    elif tab == "temas":
+        try:
+            prim_v = (getattr(p, "tema_color_primario", None) or "#0B4A8F")
+            sec_v = (getattr(p, "tema_color_secundario", None) or getattr(p, "tema_color_acento", None) or "#F2C12E")
+            fondo_v = (getattr(p, "tema_color_fondo", None) or "#F8FAFC")
+        except Exception:
+            prim_v, sec_v, fondo_v = "#0B4A8F", "#F2C12E", "#F8FAFC"
+        panel = f"""
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:560px">
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Sistema de Personalización Corporativa (Temas CSS)</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 14px">Colores en base de datos como variables globales. Al guardar se inyectan <code>--primary-color</code>, <code>--secondary-color</code> y <code>--dashboard-bg</code> en toda la suite.</p>
+    <form method="POST" style="display:grid;gap:14px">
+      <input type="hidden" name="tab" value="temas">
+      <input type="hidden" name="accion" value="guardar_tema">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">
+        <label style="font-size:12px;font-weight:700">Color Primario (Encabezados/Botones activos)</label>
+        <input type="color" name="tema_color_primario" value="{_esc(prim_v if str(prim_v).startswith('#') else '#0B4A8F')}" style="width:52px;height:36px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">
+        <label style="font-size:12px;font-weight:700">Color Secundario (Bordes/Alertas / carnés)</label>
+        <input type="color" name="tema_color_secundario" value="{_esc(sec_v if str(sec_v).startswith('#') else '#F2C12E')}" style="width:52px;height:36px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">
+        <label style="font-size:12px;font-weight:700">Fondo del Tablero (Dashboard BG)</label>
+        <input type="color" name="tema_color_fondo" value="{_esc(fondo_v if str(fondo_v).startswith('#') else '#F8FAFC')}" style="width:52px;height:36px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+      <div style="height:48px;border-radius:6px;border:1px solid #e2e8f0;background:{_esc(fondo_v)};display:flex;align-items:center;justify-content:center;gap:8px">
+        <span style="background:{_esc(prim_v)};color:#fff;padding:8px 14px;border-radius:4px;font-size:12px;font-weight:700">Primario</span>
+        <span style="background:{_esc(sec_v)};color:#0f172a;padding:8px 14px;border-radius:4px;font-size:12px;font-weight:700">Secundario</span>
+      </div>
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar paleta corporativa</button>
+    </form>
+  </div>
+"""
+    else:
+        # flags
+        flags_def = [
+            ("whatsapp_api", "Módulo de Conexión WhatsApp API"),
+            ("carnetizacion_masiva_pdf", "Módulo de Carnetización Masiva PDF"),
+            ("liquidacion_prestaciones", "Módulo de Liquidación con Prestaciones"),
+        ]
+        filas_f = []
+        for clave, label in flags_def:
+            on = feature_enabled(clave, False)
+            filas_f.append(f"""
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:8px;background:#fff">
+    <div style="font-size:13px;font-weight:700;color:#0f172a">{_esc(label)}</div>
+    <div style="display:flex;gap:6px">
+      <form method="POST" style="margin:0">
+        <input type="hidden" name="tab" value="flags">
+        <input type="hidden" name="accion" value="toggle_flag">
+        <input type="hidden" name="clave" value="{clave}">
+        <input type="hidden" name="estado" value="ON">
+        <button type="submit" style="padding:8px 14px;border-radius:4px;font-weight:800;font-size:12px;cursor:pointer;border:0;background:{'#15803d' if on else '#e2e8f0'};color:{'#fff' if on else '#64748b'}">ON</button>
+      </form>
+      <form method="POST" style="margin:0">
+        <input type="hidden" name="tab" value="flags">
+        <input type="hidden" name="accion" value="toggle_flag">
+        <input type="hidden" name="clave" value="{clave}">
+        <input type="hidden" name="estado" value="OFF">
+        <button type="submit" style="padding:8px 14px;border-radius:4px;font-weight:800;font-size:12px;cursor:pointer;border:0;background:{'#b91c1c' if not on else '#e2e8f0'};color:{'#fff' if not on else '#64748b'}">OFF</button>
+      </form>
+    </div>
+  </div>""")
+        panel = f"""
+  <div style="max-width:640px">
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Gestor de Nuevas Funciones (Feature Flags)</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 14px">Interruptores globales ON/OFF. En el código: <code>if feature_enabled('whatsapp_api'):</code> … Si está OFF el módulo se oculta para los colegios.</p>
+    {''.join(filas_f)}
   </div>
 """
 
