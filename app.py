@@ -46360,8 +46360,8 @@ def pagina_corporativa_procsis():
 .pc-grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
 .pc-grid2{{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center}}
 @media(max-width:860px){{.pc-grid3,.pc-grid2{{grid-template-columns:1fr}}.pc-hero h1{{font-size:30px}}.pc-nav-in{{flex-direction:column;align-items:flex-start}}}}
-.pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px}}
-.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}}
+.pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px;transition:transform .35s cubic-bezier(.22,1,.36,1),box-shadow .35s ease,border-color .35s ease;animation:pc-fade-up .7s cubic-bezier(.22,1,.36,1) both}}.pc-grid3 .pc-card:nth-child(1){{animation-delay:.05s}}.pc-grid3 .pc-card:nth-child(2){{animation-delay:.15s}}.pc-grid3 .pc-card:nth-child(3){{animation-delay:.25s}}.pc-grid3 .pc-card:nth-child(4){{animation-delay:.12s}}.pc-grid3 .pc-card:nth-child(5){{animation-delay:.22s}}.pc-grid3 .pc-card:nth-child(6){{animation-delay:.32s}}.pc-card:hover{{transform:translateY(-6px);box-shadow:0 16px 40px rgba(11,45,87,.12);border-color:#c7d2fe;background:#fff}}
+.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px;transition:transform .35s ease,background .35s ease}}.pc-card:hover .ico{{transform:scale(1.08);background:#c7d2fe}}
 .pc-card h3{{margin:0 0 8px;font-size:17px;color:#0B2D57}}
 .pc-card p{{margin:0;font-size:14px;color:#475569;line-height:1.5}}
 .pc-band{{background:#f1f5f9;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}}
@@ -46369,10 +46369,10 @@ def pagina_corporativa_procsis():
 @media(max-width:700px){{.pc-stats{{grid-template-columns:1fr 1fr}}}}
 .pc-stat b{{display:block;font-size:26px;color:#0B2D57}}
 .pc-stat span{{font-size:12px;color:#64748b;font-weight:600}}
-.pc-cta{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:20px;padding:36px 28px;text-align:center}}
+.pc-cta{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:20px;padding:36px 28px;text-align:center;box-shadow:0 12px 40px rgba(11,45,87,.25);animation:pc-fade-up .8s cubic-bezier(.22,1,.36,1) .15s both;transition:transform .35s ease,box-shadow .35s ease}}.pc-cta:hover{{transform:translateY(-3px);box-shadow:0 18px 48px rgba(11,45,87,.32)}}
 .pc-cta h2{{margin:0 0 10px;font-size:26px;color:#fff}}
 .pc-cta p{{margin:0 0 18px;opacity:.92}}
-.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px}}
+.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px;transition:transform .25s ease,box-shadow .25s ease}}.pc-cta a:hover{{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.15)}}@keyframes pc-fade-up{{from{{opacity:0;transform:translateY(22px)}}to{{opacity:1;transform:translateY(0)}}}}@media (prefers-reduced-motion:reduce){{.pc-card,.pc-cta{{animation:none!important;transition:none!important}}}}
 .pc-foot{{background:#071a33;color:#94a3b8;padding:36px 20px 20px;font-size:13px}}
 .pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:24px}}
 @media(max-width:800px){{.pc-foot-in{{grid-template-columns:1fr}}}}
