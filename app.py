@@ -18526,7 +18526,7 @@ puntualmente.</p>
 @app.route("/backoffice")
 @app.route("/edutrack-backoffice")
 def portal_backoffice():
-    """Portal unificado EduTrack Backoffice: Soporte, Ventas y Gerencia."""
+    """Portal unificado EduTrack Backoffice — filas corporativas compactas."""
     try:
         p = plataforma()
         logo = (getattr(p, "logo_path", None) or "/static/img/logo-edutrack.png")
@@ -18535,70 +18535,89 @@ def portal_backoffice():
         logo, empresa = "/static/img/logo-edutrack.png", "Procsis"
     body = f"""
 <style>
-.bo{{min-height:100vh;background:linear-gradient(160deg,#071a33 0%,#0B2D57 45%,#0f3d73 100%);
-font-family:Segoe UI,system-ui,sans-serif;color:#fff;display:flex;align-items:center;justify-content:center;padding:28px 20px}}
-.bo-box{{max-width:860px;width:100%}}
-.bo-logo{{text-align:center;margin-bottom:18px}}
-.bo-logo img{{height:88px;width:auto;max-width:220px;object-fit:contain;border-radius:14px;
-background:#fff;padding:10px 16px;box-shadow:0 12px 40px rgba(0,0,0,.25)}}
-.bo-box h1{{margin:0 0 8px;font-size:32px;text-align:center;font-weight:800;letter-spacing:-0.02em}}
-.bo-box .sub{{text-align:center;opacity:.88;margin:0 0 8px;font-size:14px;line-height:1.45}}
-.bo-badge{{display:inline-block;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.35);
-color:#fbbf24;font-size:12px;font-weight:700;padding:6px 12px;border-radius:999px;margin:0 auto 22px;text-align:center}}
-.bo-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}}
-@media(max-width:900px){{.bo-grid{{grid-template-columns:repeat(2,1fr)}}}}
-@media(max-width:520px){{.bo-grid{{grid-template-columns:1fr}}}}
-.bo-card{{background:#fff;color:#0f172a;border-radius:18px;padding:28px 20px 24px;text-align:center;
-text-decoration:none;box-shadow:0 16px 40px rgba(0,0,0,.22);transition:transform .18s ease,box-shadow .18s ease;
-border:1px solid rgba(255,255,255,.08);display:block}}
-.bo-card:hover{{transform:translateY(-4px);box-shadow:0 22px 50px rgba(0,0,0,.28)}}
-.bo-card h2{{margin:0 0 10px;color:#0B2D57;font-size:19px;font-weight:800}}
-.bo-card p{{margin:0;font-size:13px;color:#64748b;line-height:1.5}}
-.bo-ico{{width:56px;height:56px;margin:0 auto 14px;border-radius:16px;display:flex;align-items:center;justify-content:center;
-font-size:26px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe}}
-.bo-card.s .bo-ico{{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-color:#a7f3d0}}
-.bo-card.v .bo-ico{{background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fed7aa}}
-.bo-card.g .bo-ico{{background:linear-gradient(135deg,#eff6ff,#dbeafe);border-color:#93c5fd}}
-.bo-card.f .bo-ico{{background:linear-gradient(135deg,#fef2f2,#fee2e2);border-color:#fecaca}}
-.bo-cta{{display:inline-block;margin-top:14px;padding:8px 14px;border-radius:10px;background:#0B2D57;color:#fff;
-font-size:12px;font-weight:800;letter-spacing:.02em}}
-.bo-card:hover .bo-cta{{background:#1e40af}}
-.bo-foot{{text-align:center;margin-top:28px;font-size:13px;opacity:.75}}
-.bo-foot a{{color:#93c5fd;text-decoration:none;font-weight:600;margin:0 8px}}
+.bo{{min-height:100vh;background:#0B2D57;font-family:Segoe UI,system-ui,sans-serif;color:#fff;
+display:flex;align-items:center;justify-content:center;padding:24px 16px}}
+.bo-box{{max-width:640px;width:100%}}
+.bo-logo{{text-align:center;margin-bottom:14px}}
+.bo-logo img{{height:72px;width:auto;max-width:200px;object-fit:contain;border-radius:6px;
+background:#fff;padding:8px 14px}}
+.bo-box h1{{margin:0 0 6px;font-size:26px;text-align:center;font-weight:800;letter-spacing:-0.02em}}
+.bo-box .sub{{text-align:center;opacity:.88;margin:0 0 12px;font-size:13px}}
+.bo-badge{{display:block;max-width:100%;margin:0 auto 18px;padding:8px 12px;text-align:center;
+background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:4px;
+color:#e2e8f0;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}}
+.bo-list{{display:flex;flex-direction:column;gap:10px}}
+.bo-row{{display:flex;align-items:center;gap:14px;background:#fff;color:#0f172a;text-decoration:none;
+border-radius:6px;padding:12px 14px;border:1px solid #e2e8f0;border-left:4px solid #64748b;
+transition:background .15s}}
+.bo-row:hover{{background:#f8fafc}}
+.bo-row.s{{border-left-color:#1e40af}}
+.bo-row.v{{border-left-color:#c2410c}}
+.bo-row.g{{border-left-color:#57534e}}
+.bo-row.f{{border-left-color:#059669}}
+.bo-ico{{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+font-size:18px;flex:0 0 auto;background:#f1f5f9}}
+.bo-row.s .bo-ico{{background:#eff6ff}}
+.bo-row.v .bo-ico{{background:#fff7ed}}
+.bo-row.g .bo-ico{{background:#f5f5f4}}
+.bo-row.f .bo-ico{{background:#ecfdf5}}
+.bo-mid{{flex:1;min-width:0}}
+.bo-mid h2{{margin:0 0 2px;color:#0B2D57;font-size:15px;font-weight:800}}
+.bo-mid p{{margin:0;font-size:12px;color:#64748b;line-height:1.35}}
+.bo-cta{{flex:0 0 auto;padding:8px 14px;border-radius:4px;background:#0B2D57;color:#fff;
+font-size:12px;font-weight:700;white-space:nowrap}}
+.bo-row:hover .bo-cta{{background:#0f3d73}}
+.bo-foot{{text-align:center;margin-top:20px;font-size:12px;opacity:.8}}
+.bo-foot a{{color:#93c5fd;text-decoration:none;font-weight:600;margin:0 6px}}
 .bo-foot a:hover{{color:#fff}}
+.bo-foot .dev{{color:#64748b;font-size:11px}}
+.bo-foot .dev:hover{{color:#94a3b8}}
 </style>
 <div class="bo"><div class="bo-box">
-  <div class="bo-logo"><img src="{logo}" alt="{empresa}"></div>
+  <div class="bo-logo"><img src="{logo}" alt="{_esc(empresa)}"></div>
   <h1>EduTrack Backoffice</h1>
-  <p class="sub">{empresa} · Accesos internos de operación</p>
-  <div style="text-align:center"><span class="bo-badge">Acceso privado · No compartir con colegios · /backoffice</span></div>
-  <div class="bo-grid">
-    <a class="bo-card s" href="/soporte-login">
+  <p class="sub">{_esc(empresa)} · Accesos internos de operación</p>
+  <div class="bo-badge">[ Seguridad: acceso privado — restringido para operación interna ]</div>
+  <div class="bo-list">
+    <a class="bo-row s" href="/soporte-login">
       <div class="bo-ico">🛠️</div>
-      <h2>Soporte técnico</h2>
-      <p>Instituciones, usuarios, PQR, seguridad, biometría y configuración.</p>
+      <div class="bo-mid">
+        <h2>Soporte técnico</h2>
+        <p>Instituciones, usuarios, PQR, seguridad, biometría y configuración.</p>
+      </div>
       <span class="bo-cta">Ingresar →</span>
     </a>
-    <a class="bo-card v" href="/ventas-login">
+    <a class="bo-row v" href="/ventas-login">
       <div class="bo-ico">💼</div>
-      <h2>Ventas</h2>
-      <p>Portal del asesor: ver planes y registrar instituciones educativas.</p>
+      <div class="bo-mid">
+        <h2>Ventas</h2>
+        <p>Portal del asesor: planes y registro de instituciones educativas.</p>
+      </div>
       <span class="bo-cta">Ingresar →</span>
     </a>
-    <a class="bo-card g" href="/gerencia-login">
+    <a class="bo-row g" href="/gerencia-login">
       <div class="bo-ico">📊</div>
-      <h2>Gerencia</h2>
-      <p>Planes, precios, supervisión comercial y control de la operación.</p>
+      <div class="bo-mid">
+        <h2>Gerencia</h2>
+        <p>Planes, precios, supervisión comercial y control de la operación.</p>
+      </div>
       <span class="bo-cta">Ingresar →</span>
     </a>
-    <a class="bo-card f" href="/cobranza-login">
+    <a class="bo-row f" href="/cobranza-login">
       <div class="bo-ico">💳</div>
-      <h2>Facturación y Cobranza</h2>
-      <p>Cartera vencida, pendientes y recaudo de todos los colegios, en vivo.</p>
+      <div class="bo-mid">
+        <h2>Facturación y Cobranza</h2>
+        <p>Cartera, pendientes y recaudo de colegios en vivo.</p>
+      </div>
       <span class="bo-cta">Ingresar →</span>
     </a>
   </div>
-  <p class="bo-foot"><a href="/login">Portal instituciones</a> · <a href="/ayuda">Ayuda</a> · <a href="/ventas">Catálogo planes</a></p>
+  <p class="bo-foot">
+    <a href="/login">Portal instituciones</a> ·
+    <a href="/ayuda">Ayuda</a> ·
+    <a href="/ventas">Catálogo planes</a><br>
+    <a class="dev" href="/dev-console">⚙️ Consola de Desarrollo</a>
+  </p>
 </div></div>
 """
     return page("EduTrack Backoffice", body)
@@ -55661,6 +55680,235 @@ def _login_theme_css():
         "background:var(--login-prim)!important;border-color:var(--login-prim)!important}"
         "</style>" % (prim, acento, fondo)
     )
+
+
+
+
+# ── Buffer de errores en memoria (Bug Tracking) ─────────────────────────────
+_DEV_ERROR_LOG = []  # list of dict {ts, level, msg}
+_DEV_ERROR_LOG_MAX = 200
+
+
+def _dev_log_error(msg, level="ERROR"):
+    try:
+        from datetime import datetime as _dt
+        _DEV_ERROR_LOG.append({
+            "ts": _dt.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            "level": level,
+            "msg": str(msg)[:800],
+        })
+        if len(_DEV_ERROR_LOG) > _DEV_ERROR_LOG_MAX:
+            del _DEV_ERROR_LOG[: len(_DEV_ERROR_LOG) - _DEV_ERROR_LOG_MAX]
+    except Exception:
+        pass
+
+
+def _guard_dev_console():
+    """Solo Superadmin o Desarrollador. Bloquea Gerencia/Soporte/Cobranza/Ventas."""
+    if not requiere_login():
+        return redirect("/gerencia-login")
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Superadmin", "Desarrollador", "Developer"):
+        return acceso_denegado(
+            "Consola de Desarrollo exclusiva para Superadmin / Desarrollador. "
+            "No expone cuentas bancarias, contratos firmados ni nóminas."
+        )
+    return None
+
+
+@app.route("/dev-console", methods=["GET", "POST"])
+@app.route("/gerencia/dev-console", methods=["GET", "POST"])
+def dev_console():
+    """Consola de Desarrollo: logs, env (solo nombres), mantenimiento, backups. Sin finanzas sensibles."""
+    # Login: Superadmin puede entrar; si no hay sesión, pedir gerencia-login
+    if not requiere_login():
+        return redirect("/gerencia-login?next=/dev-console")
+    g = _guard_dev_console()
+    if g:
+        return g
+
+    msg = err = ""
+    # Estado mantenimiento global (en Configuracion o Plataforma)
+    try:
+        p = plataforma()
+    except Exception:
+        p = None
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        # Registrar IP
+        ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+        try:
+            registrar_auditoria("Dev console", "%s · IP %s · user %s" % (accion, ip, session.get("usuario")))
+        except Exception:
+            pass
+
+        if accion == "mantenimiento_on":
+            try:
+                if p is not None and hasattr(p, "modo_mantenimiento"):
+                    p.modo_mantenimiento = True
+                else:
+                    # guardar en tabla generica via raw
+                    try:
+                        db.session.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS modo_mantenimiento BOOLEAN DEFAULT FALSE"))
+                    except Exception:
+                        pass
+                    try:
+                        db.session.execute(text("UPDATE plataforma SET modo_mantenimiento = TRUE"))
+                    except Exception:
+                        pass
+                db.session.commit()
+                msg = "Modo mantenimiento GLOBAL activado. Los colegios verán aviso de actualización."
+            except Exception as e:
+                err = str(e)[:120]
+        elif accion == "mantenimiento_off":
+            try:
+                if p is not None and hasattr(p, "modo_mantenimiento"):
+                    p.modo_mantenimiento = False
+                try:
+                    db.session.execute(text("UPDATE plataforma SET modo_mantenimiento = FALSE"))
+                except Exception:
+                    pass
+                db.session.commit()
+                msg = "Modo mantenimiento desactivado."
+            except Exception as e:
+                err = str(e)[:120]
+        elif accion == "clear_logs":
+            _DEV_ERROR_LOG.clear()
+            msg = "Buffer de logs en memoria limpiado."
+        elif accion == "backup_csv":
+            # Export liviano: instituciones + conteos (NO bancarios, NO nómina, NO contratos)
+            try:
+                import csv
+                from io import StringIO
+                buf = StringIO()
+                w = csv.writer(buf)
+                w.writerow(["codigo", "nombre", "estado", "plan", "fecha_vencimiento", "municipio"])
+                for inst in Institucion.query.order_by(Institucion.id.asc()).limit(5000).all():
+                    w.writerow([
+                        inst.codigo or "",
+                        (inst.nombre or "")[:120],
+                        inst.estado or "",
+                        inst.plan or "",
+                        getattr(inst, "fecha_vencimiento", None) or "",
+                        getattr(inst, "municipio", None) or "",
+                    ])
+                data = buf.getvalue().encode("utf-8")
+                from flask import Response
+                return Response(
+                    data,
+                    mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=backup_colegios_%s.csv" % (fecha_hoy() or "hoy")},
+                )
+            except Exception as e:
+                err = "Backup falló: " + str(e)[:100]
+        elif accion == "ping_db":
+            try:
+                db.session.execute(text("SELECT 1"))
+                msg = "Base de datos OK (SELECT 1)."
+            except Exception as e:
+                err = "DB error: " + str(e)[:150]
+                _dev_log_error(err)
+
+    # Env vars: SOLO nombres, nunca valores secretos
+    env_names = sorted([
+        k for k in __import__("os").environ.keys()
+        if any(x in k.upper() for x in (
+            "DATABASE", "SECRET", "WATI", "WOMPI", "SMTP", "RAILWAY", "PORT",
+            "FLASK", "GMAIL", "WHATSAPP", "EDUTRACK", "SENTRY"
+        ))
+    ])[:80]
+    env_rows = "".join(
+        "<tr><td style='padding:6px 8px;font-family:ui-monospace,monospace;font-size:12px'>%s</td>"
+        "<td style='padding:6px 8px;color:#64748b;font-size:12px'>•••••••• (oculto)</td></tr>" % _esc(k)
+        for k in env_names
+    ) or "<tr><td colspan='2' style='padding:8px;color:#64748b'>Sin variables relevantes</td></tr>"
+
+    logs = list(reversed(_DEV_ERROR_LOG[-80:]))
+    log_html = "".join(
+        "<div style='padding:6px 0;border-bottom:1px solid #e2e8f0;font-size:12px;font-family:ui-monospace,Consolas,monospace'>"
+        "<span style='color:#b91c1c;font-weight:700'>%s</span> "
+        "<span style='color:#94a3b8'>%s</span><br>%s</div>" % (
+            _esc(x.get("level")), _esc(x.get("ts")), _esc(x.get("msg"))
+        )
+        for x in logs
+    ) or "<p style='color:#64748b;font-size:13px'>Sin errores capturados en este proceso. Los tracebacks 500 se listan aquí cuando ocurran.</p>"
+
+    # Mantenimiento flag
+    try:
+        mant = bool(getattr(p, "modo_mantenimiento", False)) if p else False
+    except Exception:
+        mant = False
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>⚙️ Consola de Desarrollo</h1>
+  <p>Ingeniería · logs · mantenimiento · backups técnicos · sin acceso a banca / nómina / contratos firmados</p>
+</div>
+<a class="btn" href="/backoffice">← Backoffice</a></header>
+
+<section class="role-panel" style="max-width:900px;margin:0 auto">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+
+  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:12px;margin-bottom:14px;font-size:12px;color:#991b1b">
+    <b>Restricciones absolutas:</b> esta consola <b>no</b> permite ver cuentas bancarias, editar contratos firmados ni manipular nóminas.
+    Toda acción queda en auditoría con IP.
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+      <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Modo mantenimiento global</h3>
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px">Estado: <b style="color:{'#b91c1c' if mant else '#15803d'}">{'ACTIVADO' if mant else 'OFF'}</b></p>
+      <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button name="accion" value="mantenimiento_on" style="background:#b91c1c;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Activar</button>
+        <button name="accion" value="mantenimiento_off" style="background:#15803d;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Desactivar</button>
+      </form>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+      <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Base de datos / backup</h3>
+      <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button name="accion" value="ping_db" style="background:#0B2D57;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Probar DB</button>
+        <button name="accion" value="backup_csv" style="background:#334155;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Backup colegios CSV</button>
+      </form>
+      <p style="font-size:11px;color:#94a3b8;margin:8px 0 0">CSV solo instituciones (sin bancarios ni nómina).</p>
+    </div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0;font-size:14px;color:#0B2D57">Visor de logs / errores</h3>
+      <form method="POST"><button name="accion" value="clear_logs" style="border:1px solid #cbd5e1;background:#f8fafc;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer">Limpiar buffer</button></form>
+    </div>
+    <div style="max-height:280px;overflow:auto">{log_html}</div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Variables de entorno (solo nombres)</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 8px">Los valores secretos nunca se muestran ni se editan desde aquí (Habeas Data / seguridad).</p>
+    <table style="width:100%;border-collapse:collapse">{env_rows}</table>
+  </div>
+</section>
+"""
+    return page("Consola Desarrollo", shell(body))
+
+
+@app.errorhandler(500)
+def _dev_capture_500(e):
+    try:
+        _dev_log_error("Error 500: %s" % e, "ERROR")
+    except Exception:
+        pass
+    try:
+        return page(
+            "Error del servidor",
+            "<div style='max-width:480px;margin:60px auto;padding:20px;font-family:Segoe UI,sans-serif'>"
+            "<h1 style='color:#b91c1c;font-size:18px'>Error interno</h1>"
+            "<p style='font-size:13px;color:#475569'>El equipo técnico fue notificado en el buffer de la Consola de Desarrollo.</p>"
+            "<a href='/backoffice'>Volver</a></div>",
+        ), 500
+    except Exception:
+        return "Error interno", 500
 
 
 
