@@ -1164,6 +1164,23 @@ class Plataforma(db.Model):
     hero_chip = db.Column(db.String(120), default="Plataforma institucional · Acceso seguro")
     hero_titulo = db.Column(db.String(220), default="Tecnología educativa con control y transparencia")
     hero_texto = db.Column(db.Text, default="")
+    # Landing pública /ventas (editable desde Gerencia)
+    ventas_landing_titulo = db.Column(db.String(255), default="")
+    ventas_landing_subtitulo = db.Column(db.Text, default="")
+    ventas_landing_precio_desde = db.Column(db.Float, default=149000.0)
+    ventas_landing_cta_demo = db.Column(db.String(160), default="")
+    ventas_landing_cta_sub = db.Column(db.String(255), default="")
+    ventas_landing_nota_planes = db.Column(db.String(255), default="")
+    ventas_landing_h2_planes = db.Column(db.String(160), default="")
+    ventas_landing_img = db.Column(db.String(255), default="")  # imagen hero / banner
+    # Personalización de logins (colores / diseño)
+    login_color_primario = db.Column(db.String(20), default="#0B2D57")
+    login_color_acento = db.Column(db.String(20), default="#f59e0b")
+    login_color_fondo = db.Column(db.String(20), default="#f8fafc")
+    login_titulo = db.Column(db.String(160), default="")
+    login_subtitulo = db.Column(db.Text, default="")
+    login_logo_path = db.Column(db.String(255), default="")
+    login_mostrar_marca = db.Column(db.Boolean, default=True)
     anuncio_activo = db.Column(db.Boolean, default=False)
     anuncio_titulo = db.Column(db.String(220), default="")
     anuncio_cuerpo = db.Column(db.Text, default="")
@@ -17619,19 +17636,20 @@ def portal_ventas():
     wa = f"https://wa.me/{tel_wa}?text={msg_wa}"
     # Textos editables desde Gerencia → Landing /ventas
     try:
-        p_cfg = plataforma()
+        _ensure_ventas_landing_cols()
     except Exception:
-        p_cfg = None
-    lv_titulo = (getattr(p_cfg, "ventas_landing_titulo", None) or "").strip() or "Software escolar\ncompleto para tu institución"
-    lv_sub = (getattr(p_cfg, "ventas_landing_subtitulo", None) or "").strip() or "Notas SIEE, boletines, asistencia, horarios, PQR y multi-inquilino. Implementación y capacitación incluidas según el plan."
+        pass
+    lv_titulo = (str(_landing_get("ventas_landing_titulo", "") or "")).strip() or ("Software escolar" + chr(10) + "completo para tu institución")
+    lv_sub = (str(_landing_get("ventas_landing_subtitulo", "") or "")).strip() or "Notas SIEE, boletines, asistencia, horarios, PQR y multi-inquilino. Implementación y capacitación incluidas según el plan."
     try:
-        lv_precio = float(getattr(p_cfg, "ventas_landing_precio_desde", None) or 149000)
+        lv_precio = float(_landing_get("ventas_landing_precio_desde", 149000) or 149000)
     except Exception:
         lv_precio = 149000
-    lv_cta = (getattr(p_cfg, "ventas_landing_cta_demo", None) or "").strip() or "¡Agenda una demo!"
-    lv_cta_sub = (getattr(p_cfg, "ventas_landing_cta_sub", None) or "").strip() or "Te contactamos para mostrar EduTrack a rectores y secretaría."
-    lv_nota = (getattr(p_cfg, "ventas_landing_nota_planes", None) or "").strip() or "Solo consulta de tarifas · la activación la hace el equipo PROCSIS / Ventas"
-    lv_h2 = (getattr(p_cfg, "ventas_landing_h2_planes", None) or "").strip() or "Planes EduTrack completo"
+    lv_cta = (str(_landing_get("ventas_landing_cta_demo", "") or "")).strip() or "¡Agenda una demo!"
+    lv_cta_sub = (str(_landing_get("ventas_landing_cta_sub", "") or "")).strip() or "Te contactamos para mostrar EduTrack a rectores y secretaría."
+    lv_nota = (str(_landing_get("ventas_landing_nota_planes", "") or "")).strip() or "Solo consulta de tarifas · la activación la hace el equipo PROCSIS / Ventas"
+    lv_h2 = (str(_landing_get("ventas_landing_h2_planes", "") or "")).strip() or "Planes EduTrack completo"
+    lv_img = (str(_landing_get("ventas_landing_img", "") or "")).strip()
     # título con posible salto de línea → em en segunda línea
     if "\n" in lv_titulo:
         parts = lv_titulo.split("\n", 1)
@@ -17821,6 +17839,7 @@ def portal_ventas():
         <div class="price">Desde {_cop(lv_precio)} / mes</div>
       </div>
       <div class="lv-box">
+        {('<img src="'+_esc(lv_img)+'" alt="" style="width:100%;max-height:120px;object-fit:contain;margin-bottom:10px;border-radius:8px">') if lv_img else ""}
         <h3>{_esc(lv_cta)}</h3>
         <p style="font-size:13px;color:#64748b;margin:0 0 8px">{_esc(lv_cta_sub)}</p>
         <a class="btn" href="{wa}" target="_blank" rel="noopener">Hablar por WhatsApp</a>
@@ -18846,7 +18865,7 @@ def gerencia_login():
     _logo_proc = logo_plataforma()
     body = f"""
 <style>
-.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
+{_login_theme_css()}.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
 .gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(15,23,42,.08)}}
 .gl-logo{{display:flex;align-items:center;gap:12px;margin-bottom:18px}}
 .gl-logo img{{height:48px;width:auto;border-radius:8px}}
@@ -20432,7 +20451,8 @@ def gerencia_hq():
           <a class="c-naranja-lad" href="/gerencia/web-corporativa">Página web / Web corporativa</a>
           <a class="c-naranja-lad" href="/feature_flags">Parámetros dinámicos / Feature flags</a>
           <a class="c-naranja-lad" href="/gerencia/facturacion">Facturación auto</a>
-          <a class="c-naranja-lad" href="/gerencia/landing-ventas">Landing /ventas (textos)</a>
+          <a class="c-naranja-lad" href="/gerencia/landing-ventas">Landing /ventas (textos + imagen)</a>
+          <a class="c-naranja-lad" href="/gerencia/diseno-login">Diseño de logins</a>
           <a class="c-naranja-lad" href="/gerencia/planes">Aprobar precios y planes</a>
           <a class="c-naranja-lad" href="/gerencia/descuentos">Descuentos especiales</a>
           <a class="c-naranja-lad" href="/gerencia/lideres">Equipo directivo (web)</a>
@@ -43550,7 +43570,7 @@ def cobranza_login():
         logo = "/static/img/logo-edutrack.png"
     body = f"""
 <style>
-.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
+{_login_theme_css()}.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
 .gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(15,23,42,.08)}}
 .gl-c h1{{margin:0 0 4px;color:#0B2D57;font-size:1.45rem}}
 .gl-c .sub{{color:#64748b;font-size:13px;margin:0 0 18px}}
@@ -55107,6 +55127,13 @@ def _ensure_ventas_landing_cols():
             ("ventas_landing_cta_sub", "VARCHAR(255) DEFAULT ''"),
             ("ventas_landing_nota_planes", "VARCHAR(255) DEFAULT ''"),
             ("ventas_landing_h2_planes", "VARCHAR(160) DEFAULT ''"),
+            ("ventas_landing_img", "VARCHAR(255) DEFAULT ''"),
+            ("login_color_primario", "VARCHAR(20) DEFAULT '#0B2D57'"),
+            ("login_color_acento", "VARCHAR(20) DEFAULT '#f59e0b'"),
+            ("login_color_fondo", "VARCHAR(20) DEFAULT '#f8fafc'"),
+            ("login_titulo", "VARCHAR(160) DEFAULT ''"),
+            ("login_subtitulo", "TEXT DEFAULT ''"),
+            ("login_logo_path", "VARCHAR(255) DEFAULT ''"),
         ]
         for name, typ in cols:
             try:
@@ -55124,6 +55151,24 @@ def _ensure_ventas_landing_cols():
             pass
 
 
+def _landing_get(attr, default=""):
+    """Lee campo de landing con fallback SQL (por si el ORM no ve columnas nuevas)."""
+    try:
+        p = plataforma()
+        v = getattr(p, attr, None)
+        if v not in (None, ""):
+            return v
+    except Exception:
+        p = None
+    try:
+        row = db.session.execute(text("SELECT %s FROM plataforma ORDER BY id ASC LIMIT 1" % attr)).fetchone()
+        if row and row[0] not in (None, ""):
+            return row[0]
+    except Exception:
+        pass
+    return default
+
+
 @app.route("/gerencia/landing-ventas", methods=["GET", "POST"])
 def gerencia_landing_ventas():
     """Editor del panel público /ventas (hero, precio desde, textos de planes). No es el login."""
@@ -55135,26 +55180,70 @@ def gerencia_landing_ventas():
     p = plataforma()
     if request.method == "POST":
         try:
-            p.ventas_landing_titulo = (request.form.get("titulo") or "")[:255]
-            p.ventas_landing_subtitulo = (request.form.get("subtitulo") or "")[:2000]
+            titulo = (request.form.get("titulo") or "")[:255]
+            subtitulo = (request.form.get("subtitulo") or "")[:2000]
             try:
-                p.ventas_landing_precio_desde = float((request.form.get("precio_desde") or "149000").replace(".", "").replace(",", ".") or 149000)
+                precio = float((request.form.get("precio_desde") or "149000").replace(".", "").replace(",", ".") or 149000)
             except Exception:
-                p.ventas_landing_precio_desde = 149000
-            p.ventas_landing_cta_demo = (request.form.get("cta_demo") or "")[:160]
-            p.ventas_landing_cta_sub = (request.form.get("cta_sub") or "")[:255]
-            p.ventas_landing_nota_planes = (request.form.get("nota_planes") or "")[:255]
-            p.ventas_landing_h2_planes = (request.form.get("h2_planes") or "")[:160]
-            # contacto visible en landing
-            if hasattr(p, "contacto_publico_tel"):
-                tel = (request.form.get("tel") or "").strip()[:40]
-                if tel:
-                    p.contacto_publico_tel = tel
-            if hasattr(p, "contacto_publico_email"):
-                em = (request.form.get("email") or "").strip()[:120]
-                if em:
-                    p.contacto_publico_email = em
+                precio = 149000.0
+            cta = (request.form.get("cta_demo") or "")[:160]
+            cta_sub = (request.form.get("cta_sub") or "")[:255]
+            nota = (request.form.get("nota_planes") or "")[:255]
+            h2 = (request.form.get("h2_planes") or "")[:160]
+            # ORM
+            try:
+                p.ventas_landing_titulo = titulo
+                p.ventas_landing_subtitulo = subtitulo
+                p.ventas_landing_precio_desde = precio
+                p.ventas_landing_cta_demo = cta
+                p.ventas_landing_cta_sub = cta_sub
+                p.ventas_landing_nota_planes = nota
+                p.ventas_landing_h2_planes = h2
+            except Exception:
+                pass
+            # Imagen (upload)
+            fimg = request.files.get("imagen")
+            if fimg and getattr(fimg, "filename", None):
+                import os as _os
+                from werkzeug.utils import secure_filename
+                fn = secure_filename(fimg.filename or "landing.png")
+                ext = (_os.path.splitext(fn)[1] or ".png").lower()
+                if ext not in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+                    ext = ".png"
+                folder = _os.path.join("static", "uploads", "landing")
+                _os.makedirs(folder, exist_ok=True)
+                path_rel = "static/uploads/landing/hero" + ext
+                fimg.save(path_rel)
+                try:
+                    p.ventas_landing_img = "/" + path_rel.replace("\\", "/")
+                except Exception:
+                    pass
+                try:
+                    db.session.execute(text("UPDATE plataforma SET ventas_landing_img=:v"), {"v": "/" + path_rel.replace("\\", "/")})
+                except Exception:
+                    pass
+            # contacto
+            tel = (request.form.get("tel") or "").strip()[:40]
+            em = (request.form.get("email") or "").strip()[:120]
+            if tel and hasattr(p, "contacto_publico_tel"):
+                p.contacto_publico_tel = tel
+            if em and hasattr(p, "contacto_publico_email"):
+                p.contacto_publico_email = em
             db.session.commit()
+            # SQL directo por si el ORM no persistió columnas nuevas
+            try:
+                db.session.execute(text(
+                    "UPDATE plataforma SET ventas_landing_titulo=:t, ventas_landing_subtitulo=:s, "
+                    "ventas_landing_precio_desde=:p, ventas_landing_cta_demo=:c, ventas_landing_cta_sub=:cs, "
+                    "ventas_landing_nota_planes=:n, ventas_landing_h2_planes=:h"
+                ), {"t": titulo, "s": subtitulo, "p": precio, "c": cta, "cs": cta_sub, "n": nota, "h": h2})
+                db.session.commit()
+            except Exception as _e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                print("landing sql update:", _e)
             try:
                 registrar_auditoria("Landing ventas actualizada", "precio=%s" % p.ventas_landing_precio_desde)
             except Exception:
@@ -55181,7 +55270,12 @@ def gerencia_landing_ventas():
 <section class="role-panel" style="max-width:720px">
   {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
   {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-  <form method="POST" style="display:grid;gap:12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px">
+  <form method="POST" enctype="multipart/form-data" style="display:grid;gap:12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px">
+    <div>
+      <label style="font-size:12px;font-weight:700">Imagen / banner (opcional)</label>
+      <input type="file" name="imagen" accept="image/*" style="width:100%;padding:8px">
+      <p style="font-size:11px;color:#64748b;margin:4px 0 0">Se muestra en la caja de demo de /ventas</p>
+    </div>
     <div>
       <label style="font-size:12px;font-weight:700">Título principal (usa Enter o \\n para segunda línea en cursiva)</label>
       <input name="titulo" value="{_esc(_g('ventas_landing_titulo', 'Software escolar\\ncompleto para tu institución'))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
@@ -55414,6 +55508,159 @@ def gerencia_colegios_config():
 </section>
 """
     return page("Config colegios", shell(body))
+
+
+
+
+@app.route("/gerencia/diseno-login", methods=["GET", "POST"])
+def gerencia_diseno_login():
+    """Personalizar colores y textos de los portales de login (colegio, gerencia, ventas, soporte, cobranza)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    _ensure_ventas_landing_cols()
+    msg = err = ""
+    p = plataforma()
+    if request.method == "POST":
+        try:
+            prim = (request.form.get("color_primario") or "#0B2D57")[:20]
+            acento = (request.form.get("color_acento") or "#f59e0b")[:20]
+            fondo = (request.form.get("color_fondo") or "#f8fafc")[:20]
+            titulo = (request.form.get("titulo") or "")[:160]
+            sub = (request.form.get("subtitulo") or "")[:1000]
+            try:
+                p.login_color_primario = prim
+                p.login_color_acento = acento
+                p.login_color_fondo = fondo
+                p.login_titulo = titulo
+                p.login_subtitulo = sub
+            except Exception:
+                pass
+            fimg = request.files.get("logo")
+            if fimg and getattr(fimg, "filename", None):
+                import os as _os
+                from werkzeug.utils import secure_filename
+                fn = secure_filename(fimg.filename or "login_logo.png")
+                ext = (_os.path.splitext(fn)[1] or ".png").lower()
+                if ext not in (".png", ".jpg", ".jpeg", ".webp", ".svg"):
+                    ext = ".png"
+                folder = _os.path.join("static", "uploads", "login")
+                _os.makedirs(folder, exist_ok=True)
+                path_rel = "static/uploads/login/logo" + ext
+                fimg.save(path_rel)
+                try:
+                    p.login_logo_path = "/" + path_rel.replace("\\\\", "/")
+                except Exception:
+                    pass
+            db.session.commit()
+            try:
+                db.session.execute(text(
+                    "UPDATE plataforma SET login_color_primario=:a, login_color_acento=:b, login_color_fondo=:c, "
+                    "login_titulo=:t, login_subtitulo=:s"
+                ), {"a": prim, "b": acento, "c": fondo, "t": titulo, "s": sub})
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+            try:
+                registrar_auditoria("Diseño login", "prim=%s" % prim)
+            except Exception:
+                pass
+            msg = "Diseño de login guardado. Aplica en los portales al recargar."
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:150]
+
+    prim = str(_landing_get("login_color_primario", "#0B2D57") or "#0B2D57")
+    acento = str(_landing_get("login_color_acento", "#f59e0b") or "#f59e0b")
+    fondo = str(_landing_get("login_color_fondo", "#f8fafc") or "#f8fafc")
+    titulo = str(_landing_get("login_titulo", "") or "")
+    sub = str(_landing_get("login_subtitulo", "") or "")
+    logo = str(_landing_get("login_logo_path", "") or "")
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Diseño de logins</h1>
+  <p>Colores, logo y textos de los portales de ingreso (colegio, gerencia, ventas, soporte, cobranza)</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel" style="max-width:720px">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" enctype="multipart/form-data" style="display:grid;gap:12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div>
+        <label style="font-size:12px;font-weight:700">Color primario</label>
+        <input type="color" name="color_primario" value="{_esc(prim)}" style="width:100%;height:40px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700">Color acento</label>
+        <input type="color" name="color_acento" value="{_esc(acento)}" style="width:100%;height:40px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700">Color fondo</label>
+        <input type="color" name="color_fondo" value="{_esc(fondo)}" style="width:100%;height:40px;border:1px solid #cbd5e1;border-radius:4px">
+      </div>
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Título del login</label>
+      <input name="titulo" value="{_esc(titulo)}" placeholder="EduTrack · Acceso institucional" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Subtítulo</label>
+      <textarea name="subtitulo" rows="2" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px" placeholder="Ingrese con su usuario del colegio">{_esc(sub)}</textarea>
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:700">Logo del login</label>
+      <input type="file" name="logo" accept="image/*" style="width:100%;padding:8px">
+      {('<img src="'+_esc(logo)+'" alt="" style="max-height:64px;margin-top:8px">') if logo else ''}
+    </div>
+    <button type="submit" style="background:{_esc(prim)};color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800">Guardar diseño</button>
+  </form>
+  <div style="margin-top:18px;padding:16px;border-radius:8px;background:{_esc(fondo)};border:1px solid #e2e8f0">
+    <div style="max-width:320px;margin:0 auto;background:#fff;border-radius:12px;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,.08)">
+      {('<img src="'+_esc(logo)+'" style="height:48px;display:block;margin:0 auto 12px">') if logo else ''}
+      <div style="text-align:center;font-weight:800;color:{_esc(prim)};font-size:18px">{_esc(titulo or 'EduTrack')}</div>
+      <div style="text-align:center;font-size:12px;color:#64748b;margin:6px 0 14px">{_esc(sub or 'Vista previa del login')}</div>
+      <div style="height:36px;background:#f1f5f9;border-radius:8px;margin-bottom:8px"></div>
+      <div style="height:36px;background:#f1f5f9;border-radius:8px;margin-bottom:12px"></div>
+      <div style="height:40px;background:{_esc(prim)};border-radius:8px"></div>
+      <div style="height:6px;background:{_esc(acento)};border-radius:3px;margin-top:12px"></div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#64748b;margin-top:12px">
+    Vista previa. Los logins de
+    <a href="/login">/login</a>,
+    <a href="/gerencia-login">/gerencia-login</a>,
+    <a href="/ventas-login">/ventas-login</a>,
+    <a href="/soporte-login">/soporte-login</a> y
+    <a href="/cobranza-login">/cobranza-login</a>
+    usan estos colores cuando está configurado.
+  </p>
+</section>
+"""
+    return page("Diseño login", shell(body))
+
+
+def _login_theme_css():
+    """CSS variables inyectables en páginas de login."""
+    try:
+        _ensure_ventas_landing_cols()
+    except Exception:
+        pass
+    prim = str(_landing_get("login_color_primario", "#0B2D57") or "#0B2D57")
+    acento = str(_landing_get("login_color_acento", "#f59e0b") or "#f59e0b")
+    fondo = str(_landing_get("login_color_fondo", "#f8fafc") or "#f8fafc")
+    return (
+        "<style>:root{--login-prim:%s;--login-acento:%s;--login-fondo:%s}"
+        ".gl{background:var(--login-fondo)!important}"
+        ".gl-c h1, .gl h1{color:var(--login-prim)!important}"
+        ".gl-c button, .gl button[type=submit], .gl-c .btn-login{"
+        "background:var(--login-prim)!important;border-color:var(--login-prim)!important}"
+        "</style>" % (prim, acento, fondo)
+    )
 
 
 
