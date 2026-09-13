@@ -3210,8 +3210,7 @@ def menu_items_por_rol():
             ("/usuarios", "Usuarios (reset / altas)"),
             ("/soporte/equipo", "Equipo Procsis"),
             ("/tenants", "Instituciones"),
-            ("/soporte/actualizaciones", "FAQ y actualizaciones"),
-            ("/ayuda", "Ver centro de ayuda"),
+            ("/soporte/actualizaciones", "Actualizaciones"),
             ("/soporte/marca", "Marca y contacto"),
             ("/sedes", "Sedes (colegios)"),
             ("/soporte/pqr", "Centro PQR"),
@@ -5518,8 +5517,7 @@ def shell_soporte(content):
         ("/soporte/prorroga", "Prórroga 24h"),
         ("/tenants", "Instituciones"),
         ("/nueva_institucion", "Nueva institución"),
-        ("/soporte/actualizaciones", "FAQ y actualizaciones"),
-            ("/ayuda", "Ver centro de ayuda"),
+        ("/soporte/actualizaciones", "Actualizaciones"),
         ("/servidores", "Servidores"),
         ("/auditoria", "Auditoría"),
         ("/modo_prueba", "Modo prueba"),
@@ -20664,7 +20662,6 @@ def gerencia_hq():
         <p class="hq-note" style="margin-top:0">Infraestructura, feature flags, temas CSS y monitoreo (rol técnico).</p>
         <div class="grid-mod">
           <a class="own" href="/dev-console">Abrir consola de desarrollo</a>
-          <a class="own" href="/dev-console/changelog">Changelog técnico · versión login</a>
           <a class="own" href="/dev-console?tab=flags">Feature flags</a>
           <a class="own" href="/dev-console?tab=temas">Temas CSS / CSS inyectado</a>
           <a class="own" href="/dev-console?tab=sistema">Logs y sesiones técnicas</a>
@@ -20907,8 +20904,6 @@ def gerencia_hq():
           <a class="c-naranja" href="/gerencia/correo-soporte">Conectar Gmail · Soporte</a>
           <a class="c-naranja" href="/gerencia/correo-notificaciones">Conectar Gmail · Notificaciones</a>
           <a class="c-naranja" href="/gerencia/procsis-web">Noticias y productos web</a>
-          <a class="c-naranja" href="/gerencia/banners-login">Carrusel login (banners)</a>
-          <a class="c-naranja" href="/gerencia/supervision-contenido">Supervisión contenido público</a>
           <a class="c-naranja" href="/gerencia/anuncios">Anuncios (editar)</a>
         </div>
 
@@ -20949,16 +20944,6 @@ def gerencia_hq():
           <a class="c-verde-corp" href="/gerencia/documentos/politica-datos">Textos legales (PQR / Habeas Data)</a>
           <a class="c-verde-corp" href="/gerencia/certificaciones">Certificaciones corporativas</a>
           <a class="c-verde-corp" href="/gerencia/requerimientos-autoridades">Requerimientos de autoridades</a>
-        </div>
-
-        <div class="hq-cat naranja-lad">🟠 Marketing · Login · Contenido público</div>
-        <div class="grid-mod">
-          <a class="c-naranja-lad" href="/gerencia/banners-login">Carrusel / banners del login</a>
-          <a class="c-naranja-lad" href="/gerencia/supervision-contenido">Supervisión FAQ · Novedades · Habeas</a>
-          <a class="c-naranja-lad" href="/gerencia/anuncios">Anuncios (editar)</a>
-          <a class="c-naranja-lad" href="/gerencia/planes">Planes · precios · paywalls</a>
-          <a class="c-naranja-lad" href="/gerencia/procsis-web">Noticias y productos web</a>
-          <a class="c-naranja-lad" href="/soporte/actualizaciones">Ver panel Soporte (FAQ)</a>
         </div>
 
         <div class="hq-cat azul-rey">🔵 Finanzas y conexiones del servidor</div>
@@ -21089,16 +21074,21 @@ def gerencia_hq():
       </p>
     </div>
 
-    <div class="sec">
-      <h2>Botón de pánico · Suspender colegio</h2>
-      <p style="font-size:13px;color:#64748b;margin:0 0 10px">
-        Un clic pone el colegio en <b>SUSPENDIDA</b>. Al intentar ingresar verán:
-        «Plataforma en mantenimiento por actualización de cuenta. Comuníquese con la administración».
+    <div class="sec" style="border:1px solid #e2e8f0;border-radius:4px;padding:18px 16px;background:#fafbfc">
+      <h2 style="margin:0 0 6px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0B2D57;font-weight:800;border-left:3px solid #0B2D57;padding-left:10px">
+        🔒 Acciones críticas de infraestructura y control global
+      </h2>
+      <p style="font-size:12px;color:#64748b;margin:0 0 14px;line-height:1.5;max-width:720px">
+        Controles exclusivos de dirección. Suspender pone el colegio en <b>SUSPENDIDA</b>
+        (mensaje de mantenimiento por actualización de cuenta). El reinicio de datos es irreversible
+        y solo aplica a entornos de pre-lanzamiento. La suplantación queda registrada por Habeas Data (Ley 1581).
       </p>
-      <a href="/gerencia/suspender" style="display:inline-block;background:#7c2d12;color:#fff;padding:10px 16px;border-radius:10px;font-weight:800;text-decoration:none">⚠ Panel suspender / reactivar colegios</a>
-      <a href="/gerencia/reinicio-datos" style="display:inline-block;margin-left:8px;background:#b91c1c;color:#fff;padding:10px 16px;border-radius:10px;font-weight:800;text-decoration:none">⚠ Reinicio de datos (pre-lanzamiento)</a>
-      <a href="/ventas/crm" style="display:inline-block;margin-left:8px;background:#0B2D57;color:#fff;padding:10px 16px;border-radius:10px;font-weight:800;text-decoration:none">CRM embudo ventas</a>
-      <a href="/soporte/impersonar" style="display:inline-block;margin-left:8px;background:#0f766e;color:#fff;padding:10px 16px;border-radius:10px;font-weight:800;text-decoration:none">Soporte · suplantar</a>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <a href="/gerencia/suspender" style="display:inline-block;background:#7c2d12;color:#fff;padding:10px 14px;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none">Panel suspender / reactivar colegios</a>
+        <a href="/gerencia/reinicio-datos" style="display:inline-block;background:#b91c1c;color:#fff;padding:10px 14px;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none">Reinicio de datos (pre-lanzamiento)</a>
+        <a href="/ventas/crm" style="display:inline-block;background:#0B2D57;color:#fff;padding:10px 14px;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none">CRM embudo ventas</a>
+        <a href="/soporte/impersonar" style="display:inline-block;background:#0f766e;color:#fff;padding:10px 14px;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none">Auditoría · suplantar sesión</a>
+      </div>
     </div>
 
   </div>
@@ -21158,7 +21148,7 @@ def gerencia_reinicio_datos():
                 error = f"No se pudo completar el reinicio: {ex}"
     content = f"""
 <header class="role-hero"><div>
-  <h1>⚠ Reinicio de datos · Gerencia</h1>
+  <h1>Reinicio de datos · Pre-lanzamiento</h1>
   <p>Vacía la información académica y operativa de <b>todos</b> los colegios (estudiantes, notas, asistencia, PQR,
   facturas, inventario, etc.) para dejar la plataforma lista antes de salir al público.</p>
 </div>
@@ -23298,7 +23288,7 @@ def gerencia_suspender():
     body = f"""
 <div style="max-width:960px;margin:0 auto;padding:20px;font-family:Segoe UI,sans-serif">
   <p><a href="/gerencia/hq">← Gerencia HQ</a></p>
-  <h1 style="color:#7c2d12">Botón de pánico · Suspender colegio</h1>
+  <h1 style="color:#7c2d12">Suspender / reactivar colegios</h1>
   <p style="color:#64748b;font-size:14px">Al suspender, el login muestra: <i>«Plataforma en mantenimiento por actualización de cuenta…»</i></p>
   {"<div style='background:#ecfdf5;padding:10px;border-radius:10px;margin:10px 0'>"+msg+"</div>" if msg else ""}
   <table style="width:100%;border-collapse:collapse;background:#fff;font-size:13px">
@@ -58121,203 +58111,20 @@ def _html_carrusel_clientes():
     )
 
 
-
-
-@app.route("/gerencia/banners-login", methods=["GET", "POST"])
-def gerencia_banners_login():
-    """Gerencia: carrusel de imagenes del login. Solo direccion."""
-    if not requiere_login():
-        return redirect("/gerencia-login")
-    rol = (rol_actual() or "").strip()
-    if rol not in ("Gerente", "Superadmin", "Administrador"):
-        return redirect("/dashboard")
-    p = plataforma()
-    msg = err = ""
-    if request.method == "POST":
-        try:
-            for i in range(1, 6):
-                clear = request.form.get(f"novedad_img{i}_clear") == "1"
-                cap = (request.form.get(f"novedad_img{i}_cap") or "").strip()[:120]
-                activo = request.form.get(f"novedad_img{i}_activo") == "1"
-                url = (request.form.get(f"novedad_img{i}_url") or "").strip()
-                f = request.files.get(f"novedad_img{i}")
-                if clear:
-                    setattr(p, f"novedad_img{i}", "")
-                elif f and getattr(f, "filename", None):
-                    try:
-                        raw = f.read()
-                        if raw and len(raw) < 1_500_000:
-                            import base64
-                            mime = (f.mimetype or "image/jpeg").split(";")[0]
-                            data = "data:%s;base64,%s" % (mime, base64.b64encode(raw).decode("ascii"))
-                            setattr(p, f"novedad_img{i}", data)
-                    except Exception:
-                        pass
-                elif url:
-                    setattr(p, f"novedad_img{i}", url[:500])
-                setattr(p, f"novedad_img{i}_cap", cap)
-                path_now = (getattr(p, f"novedad_img{i}", None) or "").strip()
-                if path_now.startswith("[OFF]"):
-                    path_now = path_now[5:]
-                if not activo and path_now:
-                    setattr(p, f"novedad_img{i}", "[OFF]" + path_now)
-                elif activo and path_now:
-                    setattr(p, f"novedad_img{i}", path_now)
-            db.session.commit()
-            msg = "Banners del login actualizados."
-        except Exception as ex:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            err = str(ex)[:160]
-    filas = []
-    for i in range(1, 6):
-        path = (getattr(p, f"novedad_img{i}", None) or "").strip()
-        activo = not path.startswith("[OFF]")
-        show = path[5:] if path.startswith("[OFF]") else path
-        cap = getattr(p, f"novedad_img{i}_cap", None) or ""
-        if show and (show.startswith("data:") or show.startswith("http") or show.startswith("/")):
-            prev = '<img src="%s" style="max-height:64px;border-radius:8px;object-fit:cover">' % _esc(show)
-        else:
-            prev = "<span style='color:#94a3b8'>Sin imagen</span>"
-        chk = "checked" if activo else ""
-        filas.append(
-            '<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px;background:#fff">'
-            '<b style="color:#0B2D57">Banner %d</b> · orden %d'
-            '<div style="margin:8px 0">%s</div>'
-            '<label style="font-size:12px">Archivo</label>'
-            '<input type="file" name="novedad_img%d" accept="image/*">'
-            '<label style="font-size:12px">O URL</label>'
-            '<input name="novedad_img%d_url" placeholder="https://..." style="width:100%%;padding:8px;margin:4px 0">'
-            '<label style="font-size:12px">Titulo / texto alternativo</label>'
-            '<input name="novedad_img%d_cap" value="%s" style="width:100%%;padding:8px;margin:4px 0">'
-            '<label style="font-size:12px;display:flex;gap:8px;align-items:center;margin-top:6px">'
-            '<input type="checkbox" name="novedad_img%d_activo" value="1" %s> ACTIVADO</label>'
-            '<label style="font-size:12px;display:flex;gap:8px;align-items:center">'
-            '<input type="checkbox" name="novedad_img%d_clear" value="1"> Quitar imagen</label></div>'
-            % (i, i, prev, i, i, i, _esc(cap), i, chk, i)
-        )
-    body = (
-        '<header class="role-hero"><div>'
-        '<h1>Anuncios y banners del login</h1>'
-        '<p>Carrusel de la portada · proporciones horizontales</p></div>'
-        '<a class="btn" href="/gerencia/hq">HQ</a> '
-        '<a class="btn" href="/gerencia/supervision-contenido">Supervision contenido</a></header>'
-        '<section class="role-panel" style="max-width:640px">'
-        + (("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else "")
-        + (("<div class='msg danger'>%s</div>" % _esc(err)) if err else "")
-        + '<form method="POST" enctype="multipart/form-data">'
-        + "".join(filas)
-        + '<button class="btn" type="submit">Guardar banners</button></form></section>'
-    )
-    return page("Banners login", shell(body))
-
-
-@app.route("/gerencia/supervision-contenido", methods=["GET", "POST"])
-def gerencia_supervision_contenido():
-    """Gerencia: supervisar FAQ, novedades comerciales, Habeas, contactos."""
-    if not requiere_login():
-        return redirect("/gerencia-login")
-    rol = (rol_actual() or "").strip()
-    if rol not in ("Gerente", "Superadmin", "Administrador"):
-        return redirect("/dashboard")
-    p = plataforma()
-    msg = err = ""
-    if request.method == "POST":
-        try:
-            p.novedades = (request.form.get("novedades") or "").strip()
-            p.faq = (request.form.get("faq") or "").strip()
-            p.habeas_data = (request.form.get("habeas_data") or "").strip()
-            if hasattr(p, "contacto_publico_tel"):
-                p.contacto_publico_tel = (request.form.get("contacto_publico_tel") or "").strip()[:40]
-            if hasattr(p, "contacto_publico_email"):
-                p.contacto_publico_email = (request.form.get("contacto_publico_email") or "").strip()[:160]
-            if hasattr(p, "horario_lunes"):
-                p.horario_lunes = (request.form.get("horario_lunes") or "").strip()[:80]
-            if hasattr(p, "horario_semana"):
-                p.horario_semana = (request.form.get("horario_semana") or "").strip()[:80]
-            db.session.commit()
-            msg = "Contenido supervisado y guardado."
-        except Exception as ex:
-            err = str(ex)[:160]
-    body = f"""
-<header class="role-hero"><div>
-  <h1>Supervisión de contenido público</h1>
-  <p>FAQ, novedades comerciales, Habeas Data, contactos y horarios</p>
-</div>
-<a class="btn" href="/gerencia/hq">HQ</a>
-<a class="btn" href="/gerencia/banners-login">Banners login</a>
-<a class="btn" href="/soporte/actualizaciones">Panel Soporte FAQ</a>
-</header>
-<section class="role-panel" style="max-width:720px">
-  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-  <form method="POST" style="display:grid;gap:12px">
-    <label><b>Últimas actualizaciones · mensaje comercial</b></label>
-    <textarea name="novedades" rows="5" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'novedades',None) or '')}</textarea>
-    <label><b>Preguntas frecuentes (supervisión)</b></label>
-    <textarea name="faq" rows="12" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'faq',None) or '')}</textarea>
-    <label><b>Habeas Data</b></label>
-    <textarea name="habeas_data" rows="8" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'habeas_data',None) or '')}</textarea>
-    <label><b>Teléfono soporte</b></label>
-    <input name="contacto_publico_tel" value="{_esc(getattr(p,'contacto_publico_tel',None) or '')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <label><b>Correo soporte</b></label>
-    <input name="contacto_publico_email" value="{_esc(getattr(p,'contacto_publico_email',None) or getattr(p,'email_soporte',None) or '')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <label><b>Horario lunes</b></label>
-    <input name="horario_lunes" value="{_esc(getattr(p,'horario_lunes',None) or '')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <label><b>Horario martes–viernes</b></label>
-    <input name="horario_semana" value="{_esc(getattr(p,'horario_semana',None) or '')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <button class="btn" type="submit">Guardar supervisión</button>
-  </form>
-  <p style="margin-top:16px;font-size:13px;color:#64748b">Centro de ayuda: <a href="/ayuda">/ayuda</a></p>
-</section>
-"""
-    return page("Supervisión contenido", shell(body))
-
-
-@app.route("/dev-console/changelog", methods=["GET", "POST"])
-def dev_console_changelog():
-    """Desarrollo: changelog tecnico del login."""
-    if not requiere_login():
-        return redirect("/dev-console-login")
-    rol = (rol_actual() or "").strip()
-    if rol not in ("Desarrollador", "Developer", "Superadmin"):
-        return redirect("/dashboard")
-    p = plataforma()
-    msg = err = ""
-    if request.method == "POST":
-        try:
-            if hasattr(p, "novedades_tecnicas"):
-                p.novedades_tecnicas = (request.form.get("novedades_tecnicas") or "").strip()
-            p.version_sistema = (request.form.get("version_sistema") or getattr(p, "version_sistema", None) or "2.5.0").strip()[:40]
-            db.session.commit()
-            msg = "Changelog tecnico y version actualizados."
-        except Exception as ex:
-            err = str(ex)[:160]
-    body = f"""
-<header class="role-hero"><div>
-  <h1>Changelog técnico · Login</h1>
-  <p>Viñetas de mejoras y versión del sistema</p>
-</div>
-<a class="btn" href="/dev-console">Consola</a></header>
-<section class="role-panel" style="max-width:640px">
-  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-  <form method="POST" style="display:grid;gap:12px">
-    <label><b>Versión</b></label>
-    <input name="version_sistema" value="{_esc(getattr(p,'version_sistema',None) or '2.5.0')}" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <label><b>Mejoras técnicas (use • por línea)</b></label>
-    <textarea name="novedades_tecnicas" rows="10" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-family:ui-monospace,Consolas,monospace">{_esc(getattr(p,'novedades_tecnicas',None) or '')}</textarea>
-    <button class="btn" type="submit">Publicar en login</button>
-  </form>
-</section>
-"""
-    return page("Changelog dev", shell(body))
-
-
 @app.route("/aceptar-terminos-pago", methods=["POST"])
 def aceptar_terminos_pago():
     if request.form.get("acepto") == "1":
         session["acepto_terminos_wompi"] = True
     return redirect(request.form.get("next") or request.referrer or "/pagar")
+
+
+if __name__ == "__main__":
+    with app.app_context():
+        inicializar_bd()
+        try:
+            sincronizar_licencias()
+            aplicar_cambios_plan_pendientes()
+            _ciclo_facturacion_automatica()
+        except Exception as _e:
+            print("ciclo facturacion:", _e)
+    app.run(debug=True, host="0.0.0.0")
