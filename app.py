@@ -9068,18 +9068,26 @@ def login():
 .sr-only{{position:absolute;left:-9999px}}
 .promo-row{{max-width:1100px;margin:0 auto 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 20px}}
 @media(max-width:800px){{.promo-row{{grid-template-columns:1fr}}}}
-.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12)}}
+.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12);transition:transform .25s ease-in-out,box-shadow .25s ease-in-out;animation:corp-fade-up .5s ease-out both;cursor:default}}
+.promo-row .promo-card:nth-child(1){{animation-delay:.05s}}
+.promo-row .promo-card:nth-child(2){{animation-delay:.12s}}
+.promo-card:hover{{transform:translateY(-4px);box-shadow:0 16px 36px rgba(15,23,42,.18)}}
 .promo-card h3{{margin:8px 0 6px;font-size:20px;line-height:1.25}}
 .promo-card p{{margin:0 0 14px;font-size:13px;opacity:.95;line-height:1.4}}
 .promo-card .badge{{display:inline-block;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.2)}}
-.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none}}
+.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none;border:1px solid transparent;transition:transform .2s ease,border-color .2s ease,background .2s ease,color .2s ease}}
 .promo-a{{background:linear-gradient(135deg,#0B2D57,#1e40af)}}
 .promo-a a.btn-promo{{background:#fff;color:#0B2D57}}
+.promo-a a.btn-promo:hover{{border-color:#0B2D57;transform:translateX(3px);font-weight:900}}
+.promo-b a.btn-promo:hover{{transform:translateX(3px);filter:brightness(1.06)}}
 .promo-b{{background:linear-gradient(135deg,#0369a1,#0d9488)}}
 .promo-b a.btn-promo{{background:#fbbf24;color:#0f172a}}
 
 .corp-support{{max-width:1100px;margin:8px auto 24px;padding:0 20px}}
-.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05)}}
+.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05);animation:corp-fade-up .55s ease-out both;transition:box-shadow .25s ease-in-out,transform .25s ease-in-out}}
+.corp-support-inner:hover{{box-shadow:0 12px 32px rgba(15,23,42,.1);transform:translateY(-2px)}}
+@keyframes corp-fade-up{{from{{opacity:0;transform:translateY(16px)}}to{{opacity:1;transform:translateY(0)}}}}
+@media (prefers-reduced-motion:reduce){{.promo-card,.corp-support-inner{{animation:none!important;transition:none!important}}}}
 @media(max-width:800px){{.corp-support-inner{{grid-template-columns:1fr}}}}
 .corp-ico{{width:56px;height:56px;border-radius:14px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}}
 .corp-support-left h2{{margin:0 0 10px;color:#0B2D57;font-size:24px}}
@@ -9299,7 +9307,7 @@ def login():
           <div class="corp-hour"><b>Martes a viernes</b><br>{hor_sem}</div>
         </div>
         <div class="corp-note">Fuera de horario puede dejar su mensaje por WhatsApp o correo. Lo atenderemos al volver.</div>
-        <p style="margin-top:12px"><a class="btn" href="/whatsapp" style="background:#16a34a">💬 Escribir a soporte por WhatsApp</a></p>
+        <p style="margin-top:12px"><a class="btn btn-wa-corp" href="/whatsapp" style="background:#0B2D57;display:inline-flex;align-items:center;gap:8px;transition:background .2s ease,transform .2s ease,box-shadow .2s ease">💬 Escribir a soporte por WhatsApp <span style="display:inline-block;transition:transform .2s ease">›</span></a><style>.btn-wa-corp:hover{{background:#062447!important;transform:translateY(-2px);box-shadow:0 8px 20px rgba(11,45,87,.25)}}.btn-wa-corp:hover span{{transform:translateX(3px)}}</style></p>
       </div>
     </div>
   </section>
@@ -17513,7 +17521,7 @@ body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#eef5fb;colo
 .cat span{{display:block;font-size:28px;margin-bottom:8px}}
 .section-title{{color:#0B2D57;font-size:20px;font-weight:900;margin:28px 0 14px}}
 .pop{{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}}
-.pop a{{background:#fff;border-radius:14px;padding:16px 18px;text-decoration:none;color:#0f172a;border:1px solid #e8eef5;box-shadow:0 4px 12px rgba(15,23,42,.04);display:flex;justify-content:space-between;align-items:center;gap:10px;transition:transform .2s ease-in-out,box-shadow .2s ease-in-out;animation:corp-fade-up .45s ease-out both}}.pop a:hover{{transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.1)}}@keyframes corp-fade-up{{from{{opacity:0;transform:translateY(15px)}}to{{opacity:1;transform:translateY(0)}}}}
+.pop a{{background:#fff;border-radius:14px;padding:16px 18px;text-decoration:none;color:#0f172a;border:1px solid #e8eef5;box-shadow:0 4px 12px rgba(15,23,42,.04);display:flex;justify-content:space-between;align-items:center;gap:10px}}
 .pop a b{{display:block;color:#0B2D57;font-size:14px;margin-bottom:4px}}
 .pop a span{{font-size:12px;color:#64748b}}
 .pop a .ic{{width:36px;height:36px;border-radius:50%;background:#e0f2fe;display:flex;align-items:center;justify-content:center;flex-shrink:0}}
