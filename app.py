@@ -80,9 +80,14 @@ def serve_static_img(fname):
             return send_from_directory(base, fname)
     # fallback SVG response
     from flask import Response
+    # Si piden logo-procsis o logo corporativo → texto PROCSIS; resto EduTrack solo producto
+    label = "PROCSIS"
+    low = (fname or "").lower()
+    if "edutrack" in low and "procsis" not in low:
+        label = "EduTrack"
     svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80'>
-      <rect width='240' height='80' fill='#0B2D57'/>
-      <text x='120' y='48' text-anchor='middle' fill='white' font-family='Arial' font-size='22' font-weight='bold'>EduTrack</text>
+      <rect width='240' height='80' rx='8' fill='#0B2D57'/>
+      <text x='120' y='48' text-anchor='middle' fill='white' font-family='Arial,sans-serif' font-size='22' font-weight='bold'>""" + label + """</text>
     </svg>"""
     return Response(svg, mimetype="image/svg+xml")
 
@@ -547,7 +552,7 @@ UPLOAD_DIR = os.path.join("static", "uploads", "excusas")
 LOGO_DIR = os.path.join("static", "uploads", "logos")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(LOGO_DIR, exist_ok=True)
-DEFAULT_LOGO = "/static/img/logo-procsis.png"  # marca PROCSIS (staff panels y documentos internos)
+DEFAULT_LOGO = "/static/img/logo-procsis.svg"  # marca PROCSIS (staff; si no hay archivo, serve_static_img genera SVG)
 LOGO_SVG_FALLBACK = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20120%20120%27%3E%3Crect%20width%3D%27120%27%20height%3D%27120%27%20rx%3D%2724%27%20fill%3D%27%230B2D57%27/%3E%3Ctext%20x%3D%2760%27%20y%3D%2752%27%20text-anchor%3D%27middle%27%20fill%3D%27%23fff%27%20font-family%3D%27Arial%27%20font-size%3D%2714%27%20font-weight%3D%27bold%27%3EEduTrack%3C/text%3E%3Ctext%20x%3D%2760%27%20y%3D%2778%27%20text-anchor%3D%27middle%27%20fill%3D%27%2393c5fd%27%20font-family%3D%27Arial%27%20font-size%3D%2711%27%3EProcsis%3C/text%3E%3C/svg%3E"
 
 
@@ -5132,6 +5137,7 @@ def logo_plataforma():
                 return ok if str(ok).startswith("data:") else (str(ok) + ("&v=20" if "?" in str(ok) else "?v=20"))
     # 2) Archivos PROCSIS en disco (prioridad absoluta)
     for rel in (
+        "/static/img/logo-procsis.svg",
         "/static/img/logo-procsis.png",
         "/static/img/logo-procsis.jpeg",
         "/static/img/logo-procsis.jpg",
@@ -5145,7 +5151,7 @@ def logo_plataforma():
         ok = _logo_ruta_valida(rel)
         if ok and "logo-edutrack" not in str(ok).lower():
             return ok if str(ok).startswith("data:") else (str(ok) + ("&v=20" if "?" in str(ok) else "?v=20"))
-    return (DEFAULT_LOGO or "/static/img/logo-procsis.png") + "?v=20"
+    return (DEFAULT_LOGO or "/static/img/logo-procsis.svg") + "?v=21"
 
 
 
@@ -8723,7 +8729,7 @@ def login():
   <nav class="lp-topnav">
     <div class="lp-topnav-inner">
       <a class="brand" href="/login">
-        <img src="{datos['logo']}" alt="EduTrack">
+        <img src="{datos['logo']}" alt="PROCSIS">
         <span>EduTrack · PROCSIS</span>
       </a>
       <div class="lp-topnav-links">
@@ -17513,7 +17519,7 @@ def ventas_panel():
 <div class="vp">
   <div class="vp-hero">
     <div class="logos">
-      <img src="{logo_et}" alt="EduTrack" onerror="this.style.display='none'">
+      <img src="{logo_et}" alt="PROCSIS" onerror="this.style.display='none'">
       <div>
         <div class="brand-line">Procsis · EduTrack</div>
         <h1>Bienvenido, Asesor {asesor_label}</h1>
@@ -18610,8 +18616,8 @@ font-size:12px;font-weight:700;white-space:nowrap}}
 .bo-foot .dev:hover{{color:#94a3b8}}
 </style>
 <div class="bo"><div class="bo-box">
-  <div class="bo-logo"><img src="{logo}" alt="{_esc(empresa)}"></div>
-  <h1>EduTrack Backoffice</h1>
+  <div class="bo-logo"><img src="{logo}" alt="PROCSIS" style="height:72px;width:auto;max-width:220px;object-fit:contain;border-radius:6px;background:#fff;padding:8px 14px" onerror="this.onerror=null;this.src='/static/img/logo-procsis.svg?v=21'"></div>
+  <h1>PROCSIS Backoffice</h1>
   <p class="sub">{_esc(empresa)} · Accesos internos de operación</p>
   <div class="bo-badge">[ Seguridad: acceso privado — restringido para operación interna ]</div>
   <div class="bo-list">
@@ -20196,7 +20202,7 @@ def gerencia_pqr_limpieza():
 
 @app.route("/gerencia/hq")
 def gerencia_hq():
-    """EduTrack HQ — indicadores financieros, crecimiento, producto y control del dueño."""
+    """PROCSIS HQ — indicadores financieros, crecimiento, producto y control del dueño."""
     try:
         _migrate_facturas_cobro_columns()
     except Exception:
@@ -20222,7 +20228,7 @@ def gerencia_hq():
         producto = (getattr(p_plat, "nombre_producto", None) or "EduTrack").strip()
         nit_emp = (getattr(p_plat, "nit", None) or "").strip()
     except Exception:
-        logo_et, empresa, producto, nit_emp = "/static/img/logo-edutrack.png", "Procsis", "EduTrack", ""
+        logo_et, empresa, producto, nit_emp = "/static/img/logo-procsis.svg?v=21", "PROCSIS", "EduTrack", ""
     try:
         from datetime import datetime as _dt
         hoy_txt = _dt.now().strftime("%d de %B de %Y")
@@ -20363,11 +20369,11 @@ def gerencia_hq():
     <div class="hq-corp-inner">
       <div class="hq-brand">
         <div class="hq-logos">
-          <img src="{logo_et}" alt="EduTrack" onerror="this.src='/static/img/logo-edutrack.png'">
+          <img src="{logo_et}" alt="PROCSIS" style="height:52px;width:auto;max-width:160px;object-fit:contain;background:#fff;border-radius:6px;padding:6px 10px" onerror="this.onerror=null;this.src='/static/img/logo-procsis.svg?v=21'">
           <div class="sep"></div>
           <div class="names">
             <div class="co">{empresa} · Colombia</div>
-            <div class="pr">{producto} HQ</div>
+            <div class="pr">PROCSIS HQ</div>
           </div>
         </div>
         <div class="hq-welcome">
@@ -26357,7 +26363,7 @@ def gerencia_usuarios():
     body = f"""
 <div style="max-width:960px;margin:20px auto;font-family:Segoe UI,sans-serif;padding:16px">
   <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
-    <img src="/static/img/logo-edutrack.png" alt="EduTrack" style="height:42px;width:auto" onerror="this.style.display='none'">
+    <img src="/static/img/logo-edutrack.png" alt="PROCSIS" style="height:42px;width:auto" onerror="this.style.display='none'">
     <div>
       <h1 style="margin:0;color:#0B2D57">Gerencia · Equipo y roles</h1>
       <p style="margin:4px 0 0;color:#64748b;font-size:13px">Cree, renombre, desactive o elimine usuarios de Ventas, Soporte, Cobranza y Gerencia</p>
@@ -26632,18 +26638,34 @@ def gerencia_datos_empresa():
       <label style="font-weight:800;color:#0B2D57;display:block;margin-bottom:8px">Logo oficial PROCSIS</label>
       <p style="font-size:12px;color:#64748b;margin:0 0 10px">{_esc(logo_nota)}</p>
       <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-width:120px;text-align:center">
-          <img src="{preview}" alt="Logo PROCSIS" style="max-height:72px;max-width:160px;object-fit:contain">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-width:140px;text-align:center">
+          <img id="logo-preview" src="{preview}" alt="PROCSIS" style="max-height:80px;max-width:160px;object-fit:contain"
+            onerror="this.onerror=null;this.src='/static/img/logo-procsis.svg?v=21'">
         </div>
         <div style="flex:1;min-width:220px">
-          <input type="file" name="logo_empresa" accept="image/png,image/jpeg,image/webp,image/gif"
+          <label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px">Cargar logo PROCSIS</label>
+          <input type="file" name="logo_empresa" id="logo_empresa_input" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
             style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff">
-          <p style="font-size:11px;color:#64748b;margin:8px 0 0">Predeterminado: <b>PROCSIS</b>. EduTrack solo aparece en el producto escolar de los colegios.</p>
+          <p style="font-size:11px;color:#64748b;margin:8px 0 0">Al elegir el archivo verá la vista previa aquí. Luego pulse <b>Guardar datos y logo</b>.</p>
           <button type="submit" name="accion_logo" value="restablecer_procsis"
-            style="margin-top:8px;background:#fff;color:#0B2D57;border:1px solid #0B2D57;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px">
+            style="margin-top:8px;background:#0B2D57;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px">
             Restablecer logo PROCSIS ahora
           </button>
         </div>
+<script>
+(function(){{
+  var inp = document.getElementById('logo_empresa_input');
+  var img = document.getElementById('logo-preview');
+  if (!inp || !img) return;
+  inp.addEventListener('change', function(){{
+    var f = inp.files && inp.files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function(e){{ img.src = e.target.result; }};
+    r.readAsDataURL(f);
+  }});
+}})();
+</script>
       </div>
     </div>
     <button type="submit" style="margin-top:14px;background:#0B2D57;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer">Guardar datos y logo</button>
@@ -29732,7 +29754,7 @@ def _modulos_por_rol(rol):
         ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
     ]
     gerencia = ventas + [
-        ("EduTrack HQ", "/gerencia/hq", "#0B2D57"),
+        ("PROCSIS HQ", "/gerencia/hq", "#0B2D57"),
         ("💙 Fidelización CSAT", "/gerencia/fidelizacion", "#0d9488"),
         ("📊 Reportes de pago", "/gerencia/reportes-pago", "#0B2D57"),
         ("Anuncios globales", "/gerencia/anuncios", "#0B2D57"),
