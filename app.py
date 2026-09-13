@@ -20850,6 +20850,7 @@ def gerencia_hq():
         <div class="grid-mod">
           <a class="c-naranja-lad" href="/gerencia/empresa">Datos de la empresa</a>
           <a class="c-naranja-lad" href="/gerencia/web-corporativa">Página web / Web corporativa</a>
+          <a class="c-naranja-lad" href="/gerencia/alianzas-clientes">Gestionar alianzas y clientes</a>
           <a class="c-naranja-lad" href="/feature_flags">Parámetros dinámicos / Feature flags</a>
           <a class="c-naranja-lad" href="/gerencia/facturacion">Facturación auto</a>
           <a class="c-naranja-lad" href="/gerencia/landing-ventas">Landing /ventas (textos + imagen)</a>
@@ -24876,31 +24877,120 @@ def gerencia_web_corporativa():
                     p.logo_path = data_uri
         except Exception as _lg:
             print("corp logo:", _lg)
+        # Guardado robusto: SQL directo (evita fallos ORM / columnas no mapeadas / objeto _P)
         try:
-            db.session.add(p)
+            for _sql_m in (
+                "ALTER TABLE plataforma ALTER COLUMN corp_hero_fondo TYPE TEXT",
+                "ALTER TABLE plataforma ALTER COLUMN corp_hero_texto TYPE TEXT",
+                "ALTER TABLE plataforma ALTER COLUMN corp_nosotros_texto TYPE TEXT",
+                "ALTER TABLE plataforma ALTER COLUMN corp_cta_texto TYPE TEXT",
+                "ALTER TABLE plataforma ALTER COLUMN corp_footer_texto TYPE TEXT",
+                "ALTER TABLE plataforma ALTER COLUMN corp_caracteristicas TYPE TEXT",
+                "ALTER TABLE plataforma ALTER COLUMN corp_empresa_puntos TYPE TEXT",
+                "ALTER TABLE plataforma ALTER COLUMN logo_path TYPE TEXT",
+            ):
+                try:
+                    db.session.execute(text(_sql_m))
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+            # Asegurar fila plataforma
+            try:
+                _pid = getattr(p, "id", None)
+            except Exception:
+                _pid = None
+            if not _pid:
+                try:
+                    _row = db.session.execute(text("SELECT id FROM plataforma ORDER BY id ASC LIMIT 1")).first()
+                    _pid = _row[0] if _row else None
+                except Exception:
+                    _pid = None
+            if not _pid:
+                try:
+                    db.session.execute(text("INSERT INTO plataforma (empresa) VALUES ('PROCSIS')"))
+                    db.session.commit()
+                    _row = db.session.execute(text("SELECT id FROM plataforma ORDER BY id ASC LIMIT 1")).first()
+                    _pid = _row[0] if _row else 1
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    _pid = 1
+            params = {
+                "id": _pid,
+                "tel": (request.form.get("contacto_publico_tel") or "").strip()[:40],
+                "email": (request.form.get("contacto_publico_email") or "").strip()[:120],
+                "wa": (request.form.get("contacto_whatsapp_ventas") or "").strip()[:40],
+                "barra": (request.form.get("corp_barra_extra") or "").strip()[:255],
+                "topd": (request.form.get("corp_top_derecha") or "").strip()[:160],
+                "bnom": (request.form.get("corp_brand_nombre") or "PROCSIS").strip()[:80] or "PROCSIS",
+                "bsub": (request.form.get("corp_brand_sub") or "Innovación que gestiona").strip()[:80],
+                "tag": (request.form.get("corp_tag") or "SOLUCIONES DIGITALES · COLOMBIA").strip()[:120],
+                "htit": (request.form.get("corp_hero_titulo") or "").strip()[:255],
+                "htxt": (request.form.get("corp_hero_texto") or "").strip(),
+                "ntit": (request.form.get("corp_nosotros_titulo") or "").strip()[:120],
+                "ntxt": (request.form.get("corp_nosotros_texto") or "").strip(),
+                "ctit": (request.form.get("corp_cta_titulo") or "").strip()[:160],
+                "ctxt": (request.form.get("corp_cta_texto") or "").strip(),
+                "ftxt": (request.form.get("corp_footer_texto") or "").strip(),
+                "ptit": (request.form.get("corp_portafolio_titulo") or "").strip()[:160],
+                "ptxt": (request.form.get("corp_portafolio_texto") or "").strip(),
+                "car": (request.form.get("corp_caracteristicas") or "").strip(),
+                "emp": (request.form.get("corp_empresa_puntos") or "").strip(),
+                "b1t": (request.form.get("corp_btn1_texto") or "Conocer PROCSIS").strip()[:80],
+                "b1u": (request.form.get("corp_btn1_url") or "#nosotros").strip()[:160],
+                "b2t": (request.form.get("corp_btn2_texto") or "Hablar con un asesor").strip()[:80],
+                "b2u": (request.form.get("corp_btn2_url") or "").strip()[:160],
+                "b3t": (request.form.get("corp_btn3_texto") or "Entrar al sistema").strip()[:80],
+                "b3u": (request.form.get("corp_btn3_url") or "/login").strip()[:160],
+            }
+            db.session.execute(text("""
+                UPDATE plataforma SET
+                  contacto_publico_tel=:tel,
+                  contacto_publico_email=:email,
+                  contacto_whatsapp_ventas=:wa,
+                  corp_barra_extra=:barra,
+                  corp_top_derecha=:topd,
+                  corp_brand_nombre=:bnom,
+                  corp_brand_sub=:bsub,
+                  corp_tag=:tag,
+                  corp_hero_titulo=:htit,
+                  corp_hero_texto=:htxt,
+                  corp_nosotros_titulo=:ntit,
+                  corp_nosotros_texto=:ntxt,
+                  corp_cta_titulo=:ctit,
+                  corp_cta_texto=:ctxt,
+                  corp_footer_texto=:ftxt,
+                  corp_portafolio_titulo=:ptit,
+                  corp_portafolio_texto=:ptxt,
+                  corp_caracteristicas=:car,
+                  corp_empresa_puntos=:emp,
+                  corp_btn1_texto=:b1t,
+                  corp_btn1_url=:b1u,
+                  corp_btn2_texto=:b2t,
+                  corp_btn2_url=:b2u,
+                  corp_btn3_texto=:b3t,
+                  corp_btn3_url=:b3u
+                WHERE id=:id
+            """), params)
             db.session.commit()
+            # Re-leer hero/logo por si se guardaron en pasos anteriores del mismo POST
+            try:
+                db.session.expire_all()
+            except Exception:
+                pass
+            mensaje = "Guardado en base de datos. Abra /procsis con Ctrl+F5 para ver los cambios."
         except Exception as _cm:
             try:
                 db.session.rollback()
             except Exception:
                 pass
-            # Reintento solo campos de texto sin logo
-            try:
-                db.session.execute(text(
-                    "UPDATE plataforma SET corp_hero_titulo=:t, corp_hero_texto=:x WHERE id=:id"
-                ), {
-                    "t": (getattr(p, "corp_hero_titulo", None) or "")[:255],
-                    "x": getattr(p, "corp_hero_texto", None) or "",
-                    "id": p.id,
-                })
-                db.session.commit()
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
+            mensaje = "Error al guardar: " + str(_cm)[:200]
             print("corp commit:", _cm)
-        mensaje = "Página corporativa guardada. Revise /procsis (Ctrl+F5). Hero y textos se leen desde la base de datos."
         try:
             registrar_auditoria("Gerencia web corporativa", "Actualizó textos /procsis")
         except Exception:
@@ -45831,10 +45921,15 @@ def coord_reportes_areas():
 @app.route("/quienes-somos")
 def pagina_corporativa_procsis():
     """Sitio corporativo — diseño tipo Pacsis (header + portafolio). Textos desde Gerencia."""
+    _rowc = None
+    def _rc(i, default=""):
+        return default
     # Ver planes solo Ventas / Soporte / Gerencia
     _rol = (session.get("rol") or "").strip()
     _puede_planes = _rol in ("Soporte", "Comercial", "Gerente", "Superadmin", "Administrador")
     hero_fondo = ""
+    top_der = "Software para instituciones educativas · Colombia"
+    barra_extra = "Facturación / Cartera / Ventas"
     caract_raw = ""
     empresa_pts = ""
     btn1_t, btn1_u = "Conocer PROCSIS", "#nosotros"
@@ -45866,8 +45961,53 @@ def pagina_corporativa_procsis():
             brand_nom = _bn
         brand_sub = (getattr(_pp, "corp_brand_sub", None) or "Innovación que gestiona").strip() or "Innovación que gestiona"
         corp_tag = (getattr(_pp, "corp_tag", None) or "SOLUCIONES DIGITALES · COLOMBIA").strip()
-        hero_tit = (getattr(_pp, "corp_hero_titulo", None) or "Software y solución digital para instituciones educativas").strip()
-        hero_txt = (getattr(_pp, "corp_hero_texto", None) or "Diseñamos y operamos plataformas serias para colegios: gestión académica, reportes de coordinación, boletines y acompañamiento a directivos y docentes.").strip()
+        # Lectura preferente por SQL (misma fuente que el guardado de Gerencia)
+        try:
+            _rowc = db.session.execute(text(
+                "SELECT corp_hero_titulo, corp_hero_texto, corp_tag, corp_brand_nombre, corp_brand_sub, "
+                "corp_nosotros_titulo, corp_nosotros_texto, corp_cta_titulo, corp_cta_texto, corp_footer_texto, "
+                "corp_portafolio_titulo, corp_portafolio_texto, corp_caracteristicas, corp_empresa_puntos, "
+                "corp_btn1_texto, corp_btn1_url, corp_btn2_texto, corp_btn2_url, corp_btn3_texto, corp_btn3_url, "
+                "corp_top_derecha, corp_barra_extra, contacto_publico_tel, contacto_publico_email, contacto_whatsapp_ventas, logo_path "
+                "FROM plataforma ORDER BY id ASC LIMIT 1"
+            )).first()
+        except Exception:
+            _rowc = None
+        if _rowc:
+            def _rc(i, default=""):
+                try:
+                    v = _rowc[i]
+                    return (v if v is not None else default) or default
+                except Exception:
+                    return default
+            if _rc(0):
+                pass  # used below
+            _sql_hero_tit = (_rc(0) or "").strip()
+            _sql_hero_txt = (_rc(1) or "").strip()
+            _sql_tag = (_rc(2) or "").strip()
+            _sql_bn = (_rc(3) or "").strip()
+            _sql_bsub = (_rc(4) or "").strip()
+            if _sql_bn and _sql_bn.lower() not in ("edutrack",):
+                brand_nom = _sql_bn
+            if _sql_bsub:
+                brand_sub = _sql_bsub
+            if _sql_tag:
+                corp_tag = _sql_tag
+            if _rc(22):
+                corp_tel = _rc(22).strip() or corp_tel
+            if _rc(23):
+                corp_email = _rc(23).strip() or corp_email
+            _wa2 = "".join(c for c in (_rc(24) or "") if c.isdigit())
+            if _wa2:
+                wa_num = _wa2
+                wa_link = f"https://wa.me/{wa_num}?text={_uq('Hola, deseo información sobre EduTrack para mi institución.')}"
+            _lp2 = (_rc(25) or "").strip()
+            if _lp2 and "edutrack" not in _lp2.lower():
+                logo = _lp2 if not _lp2.startswith("data:") else "/media/logo-corporativo"
+        else:
+            _sql_hero_tit = _sql_hero_txt = ""
+        hero_tit = (_sql_hero_tit or getattr(_pp, "corp_hero_titulo", None) or "Software y solución digital para instituciones educativas").strip()
+        hero_txt = (_sql_hero_txt or getattr(_pp, "corp_hero_texto", None) or "Diseñamos y operamos plataformas serias para colegios: gestión académica, reportes de coordinación, boletines y acompañamiento a directivos y docentes.").strip()
         try:
             _row_h = db.session.execute(text(
                 "SELECT corp_hero_fondo FROM plataforma ORDER BY id ASC LIMIT 1"
@@ -45885,11 +46025,38 @@ def pagina_corporativa_procsis():
         btn3_u = (getattr(_pp, "corp_btn3_url", None) or "/login").strip()
         top_der = (getattr(_pp, "corp_top_derecha", None) or "Software para instituciones educativas · Colombia").strip()
         barra_extra = (getattr(_pp, "corp_barra_extra", None) or "Facturación / Cartera / Ventas").strip()
-        nos_tit = (getattr(_pp, "corp_nosotros_titulo", None) or "Quiénes somos").strip()
-        nos_txt = (getattr(_pp, "corp_nosotros_texto", None) or "Equipo enfocado en software educativo confiable, claro y listo para operar en colegios reales.").strip()
-        cta_tit = (getattr(_pp, "corp_cta_titulo", None) or "¿Listo para ver EduTrack en su colegio?").strip()
-        cta_txt = (getattr(_pp, "corp_cta_texto", None) or "Solicite una demostración o hable con un asesor comercial.").strip()
-        foot_txt = (getattr(_pp, "corp_footer_texto", None) or "Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.").strip()
+        if _rowc:
+            nos_tit = (_rc(5) or getattr(_pp, "corp_nosotros_titulo", None) or "Quiénes somos").strip()
+            nos_txt = (_rc(6) or getattr(_pp, "corp_nosotros_texto", None) or "Equipo enfocado en software educativo confiable, claro y listo para operar en colegios reales.").strip()
+            cta_tit = (_rc(7) or getattr(_pp, "corp_cta_titulo", None) or "¿Listo para ver EduTrack en su colegio?").strip()
+            cta_txt = (_rc(8) or getattr(_pp, "corp_cta_texto", None) or "Solicite una demostración o hable con un asesor comercial.").strip()
+            foot_txt = (_rc(9) or getattr(_pp, "corp_footer_texto", None) or "Soluciones digitales para el sector educativo.").strip()
+            if _rc(12):
+                caract_raw = _rc(12)
+            if _rc(13):
+                empresa_pts = _rc(13)
+            if _rc(14):
+                btn1_t = _rc(14)
+            if _rc(15):
+                btn1_u = _rc(15)
+            if _rc(16):
+                btn2_t = _rc(16)
+            if _rc(17):
+                btn2_u = _rc(17) or btn2_u
+            if _rc(18):
+                btn3_t = _rc(18)
+            if _rc(19):
+                btn3_u = _rc(19)
+            if _rc(20):
+                top_der = _rc(20)
+            if _rc(21):
+                barra_extra = _rc(21)
+        else:
+            nos_tit = (getattr(_pp, "corp_nosotros_titulo", None) or "Quiénes somos").strip()
+            nos_txt = (getattr(_pp, "corp_nosotros_texto", None) or "Equipo enfocado en software educativo confiable, claro y listo para operar en colegios reales.").strip()
+            cta_tit = (getattr(_pp, "corp_cta_titulo", None) or "¿Listo para ver EduTrack en su colegio?").strip()
+            cta_txt = (getattr(_pp, "corp_cta_texto", None) or "Solicite una demostración o hable con un asesor comercial.").strip()
+            foot_txt = (getattr(_pp, "corp_footer_texto", None) or "Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.").strip()
     except Exception:
         corp_tel, corp_email, wa_link = "—", "contacto@procsis.com", "/contacto"
         logo = "/static/img/logo-procsis.jpeg"
@@ -57595,9 +57762,21 @@ def gerencia_alianzas_clientes():
         return g
     msg = err = ""
     try:
-        db.create_all()
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS clientes_alianzas ("
+            "id SERIAL PRIMARY KEY, nombre VARCHAR(160) DEFAULT '', url VARCHAR(255) DEFAULT '', "
+            "logo_path TEXT DEFAULT '', activo BOOLEAN DEFAULT TRUE, orden INT DEFAULT 0)"
+        ))
+        db.session.commit()
     except Exception:
-        pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            db.create_all()
+        except Exception:
+            pass
     if request.method == "POST":
         if (request.form.get("accion") or "crear") == "crear":
             nombre = (request.form.get("nombre") or "").strip()[:160]
