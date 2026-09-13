@@ -5107,17 +5107,30 @@ def logo_plataforma():
     except Exception:
         ruta = ""
     # Forzar: EduTrack es producto, no marca de accesos internos
-    if "logo-edutrack" in (ruta or "").lower():
+    if "logo-edutrack" in (ruta or "").lower() or not ruta:
         ruta = ""
         try:
-            if p is not None and getattr(p, "logo_path", None):
-                p.logo_path = DEFAULT_LOGO
-                db.session.commit()
+            db.session.execute(text(
+                "UPDATE plataforma SET logo_path=:lp WHERE logo_path IS NULL OR logo_path='' OR lower(logo_path) LIKE '%logo-edutrack%'"
+            ), {"lp": DEFAULT_LOGO})
+            db.session.commit()
+            ruta = DEFAULT_LOGO
         except Exception:
             try:
                 db.session.rollback()
             except Exception:
                 pass
+            try:
+                if p is not None:
+                    p.logo_path = DEFAULT_LOGO
+                    db.session.commit()
+                    ruta = DEFAULT_LOGO
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                ruta = DEFAULT_LOGO
     # data URI guardado en BD (persiste en Railway)
     if ruta.startswith("data:image"):
         return ruta
@@ -7820,7 +7833,7 @@ def seguridad_empleados_gate():
     path = request.path or ""
     if path.startswith("/static") or path in (
         "/login", "/soporte-login", "/docente-login", "/logout",
-        "/recuperar", "/cookies", "/legal", "/ayuda", "/centro-ayuda", "/backoffice", "/edutrack-backoffice", "/ventas-login", "/gerencia-login",
+        "/recuperar", "/cookies", "/legal", "/ayuda", "/centro-ayuda", "/backoffice", "/edutrack-backoffice", "/dev-console-login", "/dev-console", "/ventas-login", "/gerencia-login",
         "/cobranza-login", "/cobranza", "/cobranza/panel",
         "/ventas", "/ventas-login", "/ventas/panel", "/gerencia-login", "/gerencia/planes", "/whatsapp", "/whatsapp-soporte", "/contacto", "/pqr",
         "/familia-login", "/familia", "/familia/boletin", "/familia/certificado",
@@ -7852,7 +7865,7 @@ def seguridad_empleados_gate():
         return
     if not _usuario_activo_ok(u):
         session.clear()
-        return redirect(_login_portal(rol) if rol in ROLES_INTERNOS else "/login")
+        return redirect(_login_portal(rol) if (rol in ROLES_INTERNOS or rol in ("Desarrollador", "Developer")) else "/login")
     # sesión revocada
     tok = session.get("session_token") or ""
     if getattr(u, "session_token", None) and tok and u.session_token != tok:
@@ -16798,7 +16811,9 @@ def _home_portal(rol=None):
         "Administrador": "/gerencia/hq",
         "Superadmin": "/gerencia/hq",
         "Cobranza": "/cobranza/panel",
-    }.get(r, "/login")
+        "Desarrollador": "/dev-console",
+        "Developer": "/dev-console",
+    }.get(r, "/backoffice")
 
 
 def _login_portal(rol=None):
@@ -16810,7 +16825,9 @@ def _login_portal(rol=None):
         "Administrador": "/gerencia-login",
         "Superadmin": "/gerencia-login",
         "Cobranza": "/cobranza-login",
-    }.get(r, "/login")
+        "Desarrollador": "/dev-console-login",
+        "Developer": "/dev-console-login",
+    }.get(r, "/backoffice")
 
 
 @app.before_request
@@ -16819,6 +16836,11 @@ def _aislar_paneles_internos():
     path = request.path or ""
     if path.startswith("/static") or path.startswith("/api/webhooks"):
         return None
+    # Login y panel de desarrollo: no mezclar con login de colegios
+    if path in ("/dev-console-login",) or (path.startswith("/dev-console") and not session.get("usuario")):
+        if path.startswith("/dev-console") and path != "/dev-console-login" and not session.get("usuario"):
+            return redirect("/dev-console-login")
+        return None
 
     # Páginas de login de portales: limpiar sesión ajena y no mezclar
     login_map = {
@@ -16826,6 +16848,7 @@ def _aislar_paneles_internos():
         "/soporte-login": "Soporte",
         "/gerencia-login": ("Gerente", "Superadmin", "Administrador"),
         "/cobranza-login": "Cobranza",
+        "/dev-console-login": ("Desarrollador", "Developer", "Superadmin"),
     }
     if path in login_map and request.method == "GET":
         rol = (session.get("rol") or "").strip()
@@ -16871,6 +16894,8 @@ def _aislar_paneles_internos():
             return "/ventas-login"
         if p.startswith("/cobranza"):
             return "/cobranza-login"
+        if p.startswith("/dev-console"):
+            return "/dev-console-login"
         return home
 
     # Rutas de colegio: staff no debe entrar al dashboard escolar
@@ -16939,12 +16964,29 @@ def _aislar_paneles_internos():
         if not ok_cob and (path.startswith("/gerencia") or path.startswith("/usuarios")):
             return redirect("/cobranza/panel")
 
+    elif rol in ("Desarrollador", "Developer"):
+        # Solo consola de desarrollo; nunca login de colegios ni otros paneles
+        ok_dev = (
+            path.startswith("/dev-console")
+            or path == "/backoffice"
+            or path.startswith("/logout")
+            or path.startswith("/mi-perfil")
+            or path.startswith("/cambiar_password")
+        )
+        if not ok_dev:
+            if path.startswith("/gerencia") or path.startswith("/soporte") or path.startswith("/ventas") or path.startswith("/cobranza"):
+                return redirect("/dev-console-login")
+            if path in ("/login", "/dashboard") or path.startswith("/familia"):
+                return redirect("/dev-console")
+            return redirect("/dev-console")
+
     elif rol in ("Gerente", "Superadmin", "Administrador"):
-        # Gerencia NO opera el panel de ventas ni soporte_admin como home ajeno
+        # Superadmin puede usar consola de desarrollo
+        if rol == "Superadmin" and path.startswith("/dev-console"):
+            return None
         if path.startswith("/ventas/panel") or path.startswith("/ventas/comisiones"):
             return redirect(_login_del_portal(path))
         if path.startswith("/cobranza/panel") or path == "/cobranza":
-            # cobranza panel es para rol Cobranza; gerencia usa /gerencia/facturacion-cobranza
             return redirect("/gerencia/facturacion-cobranza")
 
     # Headers anti-caché en portales internos (botón atrás no reusa página de otro rol)
@@ -18909,7 +18951,7 @@ def gerencia_login():
     _logo_proc = logo_plataforma()
     body = f"""
 <style>
-{_login_theme_css()}.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
+.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
 .gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(15,23,42,.08)}}
 .gl-logo{{display:flex;align-items:center;gap:12px;margin-bottom:18px}}
 .gl-logo img{{height:48px;width:auto;border-radius:8px}}
@@ -43739,7 +43781,7 @@ def cobranza_login():
         logo = "/static/img/logo-edutrack.png"
     body = f"""
 <style>
-{_login_theme_css()}.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
+.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
 .gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(15,23,42,.08)}}
 .gl-c h1{{margin:0 0 4px;color:#0B2D57;font-size:1.45rem}}
 .gl-c .sub{{color:#64748b;font-size:13px;margin:0 0 18px}}
@@ -55814,22 +55856,24 @@ def gerencia_diseno_login():
 
 
 def _login_theme_css():
-    """CSS variables inyectables en páginas de login."""
+    """Solo reglas CSS (sin etiquetas style) para inyectar dentro de un <style> del login."""
     try:
         _ensure_ventas_landing_cols()
     except Exception:
         pass
-    prim = str(_landing_get("login_color_primario", "#0B2D57") or "#0B2D57")
-    acento = str(_landing_get("login_color_acento", "#f59e0b") or "#f59e0b")
-    fondo = str(_landing_get("login_color_fondo", "#f8fafc") or "#f8fafc")
+    try:
+        prim = str(_landing_get("login_color_primario", "#0B2D57") or "#0B2D57")
+        acento = str(_landing_get("login_color_acento", "#f59e0b") or "#f59e0b")
+        fondo = str(_landing_get("login_color_fondo", "#f8fafc") or "#f8fafc")
+    except Exception:
+        prim, acento, fondo = "#0B2D57", "#f59e0b", "#f8fafc"
     return (
-        "<style>:root{--login-prim:%s;--login-acento:%s;--login-fondo:%s}"
+        ":root{--login-prim:%s;--login-acento:%s;--login-fondo:%s}"
         ".gl{background:var(--login-fondo)!important}"
-        ".gl-c h1, .gl h1{color:var(--login-prim)!important}"
-        ".gl-c button, .gl button[type=submit], .gl-c .btn-login{"
+        ".gl-c h1,.gl h1{color:var(--login-prim)!important}"
+        ".gl-c button,.gl button[type=submit],.gl-c .btn-login{"
         "background:var(--login-prim)!important;border-color:var(--login-prim)!important}"
-        "</style>" % (prim, acento, fondo)
-    )
+    ) % (prim, acento, fondo)
 
 
 
@@ -55854,9 +55898,9 @@ def _dev_log_error(msg, level="ERROR"):
 
 
 def _guard_dev_console():
-    """Solo Superadmin o Desarrollador. Bloquea Gerencia/Soporte/Cobranza/Ventas."""
+    """Solo Superadmin o Desarrollador. Ruta separada de colegios y de gerencia."""
     if not requiere_login():
-        return redirect("/gerencia-login")
+        return redirect("/dev-console-login")
     rol = (rol_actual() or "").strip()
     if rol not in ("Superadmin", "Desarrollador", "Developer"):
         return acceso_denegado(
@@ -55869,10 +55913,9 @@ def _guard_dev_console():
 @app.route("/dev-console", methods=["GET", "POST"])
 @app.route("/gerencia/dev-console", methods=["GET", "POST"])
 def dev_console():
-    """Consola de Desarrollo: logs, env (solo nombres), mantenimiento, backups. Sin finanzas sensibles."""
-    # Login: Superadmin puede entrar; si no hay sesión, pedir gerencia-login
+    """Consola de Desarrollo: logs, env, mantenimiento, backups. Portal aislado."""
     if not requiere_login():
-        return redirect("/gerencia-login?next=/dev-console")
+        return redirect("/dev-console-login")
     g = _guard_dev_console()
     if g:
         return g
@@ -56100,7 +56143,6 @@ def dev_console_login():
     except Exception:
         logo = "/static/img/logo-edutrack.png"
     body = f"""
-{_login_theme_css() if '_login_theme_css' in dir() else ''}
 <style>
 .gl{{min-height:100vh;background:#0f172a;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
 .gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:28px;max-width:400px;width:100%}}
