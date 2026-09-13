@@ -1189,6 +1189,7 @@ class Plataforma(db.Model):
     version_sistema = db.Column(db.String(40), default="2.5.0")
     novedades = db.Column(db.Text, default="")
     faq = db.Column(db.Text, default="")
+    novedades_tecnicas = db.Column(db.Text, default="")  # changelog técnico (Consola Desarrollo)
     mantenimiento_programado = db.Column(db.Text, default="")
     habeas_data = db.Column(db.Text, default="")
     reinicio_aviso = db.Column(db.String(255), default="")
@@ -3776,6 +3777,7 @@ def migrar_columnas():
         ("plataforma", "faq", "ALTER TABLE plataforma ADD COLUMN faq TEXT DEFAULT ''"),
         ("plataforma", "mantenimiento_programado", "ALTER TABLE plataforma ADD COLUMN mantenimiento_programado TEXT DEFAULT ''"),
         ("plataforma", "habeas_data", "ALTER TABLE plataforma ADD COLUMN habeas_data TEXT DEFAULT ''"),
+        ("plataforma", "novedades_tecnicas", "ALTER TABLE plataforma ADD COLUMN novedades_tecnicas TEXT DEFAULT ''"),
         ("estudiantes", "estado", "ALTER TABLE estudiantes ADD COLUMN estado VARCHAR(30) DEFAULT 'ACTIVO'"),
         ("estudiantes", "tipo_doc", "ALTER TABLE estudiantes ADD COLUMN tipo_doc VARCHAR(20) DEFAULT 'TI'"),
         ("estudiantes", "exp_depa", "ALTER TABLE estudiantes ADD COLUMN exp_depa VARCHAR(80) DEFAULT ''"),
@@ -4819,6 +4821,7 @@ def contenido_login_novedades():
     p = plataforma()
     version = getattr(p, "version_sistema", None) or "2.5.0"
     novedades = (getattr(p, "novedades", None) or "").strip()
+    novedades_tecnicas = (getattr(p, "novedades_tecnicas", None) or "").strip()
     faq = (getattr(p, "faq", None) or "").strip()
     mant = (getattr(p, "mantenimiento_programado", None) or "").strip()
     habeas = (getattr(p, "habeas_data", None) or "").strip()
@@ -4827,7 +4830,10 @@ def contenido_login_novedades():
         novedades = (
             "Gracias por creer en nuestra empresa. Con su apoyo hemos implementado cambios que mejoran "
             "el servicio y lo optimizan: módulos de notas SIEE, boletines, pre-matrícula SIMAT, PQR, "
-            "multi-inquilino y más herramientas para las Instituciones Educativas.\n\n"
+            "multi-inquilino y más herramientas para las Instituciones Educativas."
+        )
+    if not (novedades_tecnicas or "").strip():
+        novedades_tecnicas = (
             "• Planilla de notas por materia con auto-guardado\n"
             "• Boletín académico con docente, NM y faltas\n"
             "• Portal PQR y panel de soporte Procsis\n"
@@ -4835,7 +4841,7 @@ def contenido_login_novedades():
         )
     if not faq:
         faq = (
-            "¿Olvidé mi contraseña?\nUse «¿Olvidaste tu contraseña?» en el login o contacte a su administrador.\n\n"
+            "¿Olvidé mi contraseña?\nUse "¿Olvidaste tu contraseña?" en el login o contacte a su administrador.\n\n"
 
             "¿Cómo ingreso como docente?\nUse el enlace Docentes o el usuario asignado por el colegio.\n\n"
             "¿Qué es multi-inquilino?\nCada colegio tiene sus datos aislados: no ve información de otra institución.\n\n"
@@ -4846,8 +4852,13 @@ def contenido_login_novedades():
         habeas = (
             "Protección de datos personales (Habeas Data – Colombia, Ley 1581 de 2012). "
             "EduTrack / PROCSIS trata la información con finalidad educativa, de seguridad escolar y de soporte, "
-            "bajo medidas de seguridad técnicas y organizativas. El titular puede conocer, actualizar y rectificar "
-            "sus datos escribiendo a soporte@procsis.com o mediante el módulo de tickets del Backoffice."
+            "bajo medidas de seguridad técnicas y organizativas.\n\n"
+            "1. FINALIDADES: control perimetral y asistencia; notificaciones a acudientes (ingresos, retardos después de las 7:00 AM, horas hueco y salidas); "
+            "sincronización de planillas docentes; facturación de planes y cuotas de implementación.\n\n"
+            "2. MENORES DE EDAD: conforme al Art. 7 Ley 1581 de 2012 y Decreto 1377 de 2013, con autorización previa del acudiente "
+            "(marcas de tiempo, IP y firmas Hash en portal de padres).\n\n"
+            "3. DERECHOS: conocer, actualizar, rectificar o suprimir datos vía soporte@procsis.com o tickets de Backoffice. "
+            "Consultas: máx. 10 días hábiles; reclamos: máx. 15 días hábiles."
         )
     imgs = []
     for i in (1, 2, 3):
@@ -4868,6 +4879,7 @@ def contenido_login_novedades():
     return {
         "version": version,
         "novedades": novedades,
+        "novedades_tecnicas": (novedades_tecnicas or "").strip(),
         "faq": faq,
         "mant": mant,
         "habeas": habeas,
@@ -8935,6 +8947,7 @@ def login():
     nov = contenido_login_novedades()
     lideres_section = _html_lideres_login()
     nov_html = _txt_a_html_lista(nov["novedades"])
+    nov_tec_html = _txt_a_html_lista(nov.get("novedades_tecnicas") or "")
     faq_html = _txt_a_html_lista(nov["faq"])
     mant_html = _txt_a_html_lista(nov["mant"]) if nov["mant"] else ""
     gal_parts = []
@@ -9326,40 +9339,49 @@ def login():
     <section class="lp-section" id="novedades">
       <h2>Últimas actualizaciones y mejoras</h2>
       <p class="lp-sub">Procsis · EduTrack · v{nov["version"]}</p>
-      <h3>Novedades {nov["empresa"]}</h3>
-      {nov_html}
+      <h3 style="color:#0B2D57;font-size:15px;margin:12px 0 6px">Novedades {nov["empresa"]}</h3>
+      <div style="font-size:14px;color:#334155;line-height:1.6;margin-bottom:12px">{nov_html}</div>
+      <h3 style="color:#1d4ed8;font-size:14px;margin:14px 0 6px">Mejoras técnicas · v{nov["version"]}</h3>
+      <div style="font-size:14px;color:#334155;line-height:1.55">{nov_tec_html}</div>
     </section>
 
+    <style>
+    .lp-tech-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px;transition:transform .4s cubic-bezier(.22,1,.36,1),box-shadow .4s ease,border-color .35s ease;animation:pc-fade-up .7s cubic-bezier(.22,1,.36,1) both}}
+    .lp-tech-card:nth-child(1){{animation-delay:.05s}}.lp-tech-card:nth-child(2){{animation-delay:.12s}}.lp-tech-card:nth-child(3){{animation-delay:.19s}}
+    .lp-tech-card:nth-child(4){{animation-delay:.1s}}.lp-tech-card:nth-child(5){{animation-delay:.17s}}.lp-tech-card:nth-child(6){{animation-delay:.24s}}
+    .lp-tech-card:hover{{transform:translateY(-7px);box-shadow:0 16px 40px rgba(11,45,87,.12);border-color:#86efac;background:#fff}}
+    @keyframes pc-fade-up{{from{{opacity:0;transform:translateY(22px)}}to{{opacity:1;transform:translateY(0)}}}}
+    </style>
     <section class="lp-section" id="tecnologia" style="background:#fff;border-radius:16px;padding:28px 22px;margin:18px 0;border:1px solid #e2e8f0">
       <p style="margin:0;color:#0B2D57;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase">Tecnología que</p>
       <h2 style="margin:8px 0 18px;font-size:28px;line-height:1.2;color:#0f172a">Tecnología que <span style="color:#16a34a">impulsa instituciones</span></h2>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">🖥️</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Plataforma EduTrack</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Asistencia, notas, boletines, horarios, matrícula y PQR según el plan contratado.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">⬡</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Tres módulos de acceso</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Directivos, docentes, estudiantes y familias, cada uno con su portal.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">▦</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Sistemas de evaluación</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Planillas SIEE (cognitivo, procedimental y actitudinal) con promedios automáticos.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">📊</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Informes y reportes</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Boletines PDF, reprobación por niveles, cuadro de honor y rendimiento por salón.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">🛡️</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Alojamiento y respaldo</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Nube con copias de seguridad y protección de datos educativos (Ley 1581).</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
+        <div class="lp-tech-card">
           <div style="font-size:22px;margin-bottom:8px">🎧</div>
           <b style="color:#0B2D57;display:block;margin-bottom:6px">Soporte y acompañamiento</b>
           <span style="font-size:13px;color:#475569;line-height:1.45">Canales de atención para directivos y docentes en la implementación.</span>
@@ -9381,32 +9403,8 @@ def login():
     <section class="lp-section" id="proteccion-datos">
       <h2>Protección de datos</h2>
       <p class="lp-sub">Habeas Data · Colombia · Ley 1581 de 2012</p>
-      <p style="font-size:13px;color:#475569;line-height:1.65;margin-bottom:18px">{nov["habeas"]}</p>
-      <div style="display:grid;gap:16px;text-align:left;max-width:820px;margin:0 auto">
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px">
-          <h3 style="margin:0 0 8px;font-size:15px;color:#0B2D57">1. Finalidades del tratamiento de los datos</h3>
-          <p style="margin:0 0 8px;font-size:13px;color:#475569;line-height:1.6">Los datos personales recolectados a través del ecosistema EduTrack - PROCSIS (incluyendo nombres, identificaciones, registros biométricos de códigos QR, marcas de tiempo, fotografías de 3.5 x 4.5 cm e información médica de emergencia como RH y EPS) serán utilizados estrictamente para las siguientes finalidades institucionales:</p>
-          <ul style="margin:0;padding-left:18px;font-size:13px;color:#334155;line-height:1.55">
-            <li>Garantizar el control perimetral de acceso, seguridad y asistencia en la portería de las instituciones educativas vinculadas.</li>
-            <li>Enviar notificaciones automáticas y alertas en vivo a los acudientes sobre los ingresos, retardos (después de las 7:00 AM), horas hueco y salidas autorizadas por Coordinación.</li>
-            <li>Sincronizar las planillas de los docentes en tiempo real para la justificación de retiros médicos.</li>
-            <li>Gestionar la facturación de servicios, planes, precios y cuotas de implementación contratadas por los colegios.</li>
-          </ul>
-        </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px">
-          <h3 style="margin:0 0 8px;font-size:15px;color:#0B2D57">2. Tratamiento especial de datos de menores de edad</h3>
-          <p style="margin:0;font-size:13px;color:#475569;line-height:1.65">En estricto cumplimiento del Artículo 7 de la Ley 1581 de 2012 y el Decreto 1377 de 2013, PROCSIS manifiesta que el tratamiento de datos personales de niños, niñas y adolescentes responderá y respetará el interés superior de los menores y sus derechos fundamentales. La recolección de estos datos cuenta con la autorización previa, expresa e informada del acudiente principal (padre de familia), validada mediante marcas de tiempo, capturas de direcciones IP de confianza y firmas digitales Hash inmutables en nuestro portal de padres.</p>
-        </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px">
-          <h3 style="margin:0 0 8px;font-size:15px;color:#0B2D57">3. Canales para el ejercicio de los derechos (Hábeas Data)</h3>
-          <p style="margin:0 0 8px;font-size:13px;color:#475569;line-height:1.65">Los titulares de los datos (rectores, profesores, estudiantes y acudientes) pueden conocer, actualizar, rectificar o solicitar la supresión de su información en cualquier momento. Para radicar una solicitud formal de PQR, se han dispuesto los siguientes canales institucionales:</p>
-          <ul style="margin:0 0 10px;padding-left:18px;font-size:13px;color:#334155;line-height:1.55">
-            <li><b>Correo electrónico oficial:</b> soporte@procsis.com (administrado desde nuestro módulo operativo de soporte).</li>
-            <li><b>Módulo interno de tickets:</b> sección disponible dentro de la suite de Backoffice.</li>
-          </ul>
-          <p style="margin:0;font-size:13px;color:#475569;line-height:1.6">El tiempo de respuesta institucional para consultas será de máximo diez (10) días hábiles, y para reclamos de quince (15) días hábiles, según lo estipulado por la ley colombiana.</p>
-        </div>
-      </div>
+      <div style="font-size:13px;color:#475569;line-height:1.65;margin-bottom:14px">{nov["habeas"]}</div>
+      <p style="font-size:12px;color:#64748b;margin:0">Texto legal editable desde Gerencia (panel de contenido público / Habeas Data). Soporte no modifica este bloque.</p>
     </section>
 
     {lideres_section}
@@ -39532,6 +39530,8 @@ def soporte_actualizaciones():
             if accion == "guardar":
                 p.version_sistema = (request.form.get("version_sistema") or "2.5.0").strip()[:40]
                 p.novedades = (request.form.get("novedades") or "").strip()
+                if hasattr(p, "novedades_tecnicas") and request.form.get("novedades_tecnicas") is not None:
+                    p.novedades_tecnicas = (request.form.get("novedades_tecnicas") or "").strip()
                 p.faq = (request.form.get("faq") or "").strip()
                 p.mantenimiento_programado = (request.form.get("mantenimiento_programado") or "").strip()
                 p.habeas_data = (request.form.get("habeas_data") or "").strip()
@@ -39599,13 +39599,16 @@ def soporte_actualizaciones():
     <label>Texto (párrafos separados por línea en blanco)</label>
     <textarea name="hero_texto" rows="5">{(getattr(p,'hero_texto',None) or '')}</textarea>
     <p class="mini-text">Todo lo que guardes aquí se muestra en el <b>login</b> (bloque con scroll). Usa párrafos separados y viñetas con <code>•</code> o <code>-</code>.</p>
-    <label><b>Últimas actualizaciones / novedades</b></label>
-    <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa...">{(getattr(p,'novedades',None) or '')}</textarea>
-    <label><b>Preguntas frecuentes</b> (separa cada pregunta con una línea en blanco)</label>
+    <p style="background:#eff6ff;border:1px solid #bfdbfe;padding:10px;border-radius:8px;font-size:12px;color:#1e40af"><b>Roles:</b> el párrafo comercial de novedades lo define <b>Gerencia</b>. Las viñetas técnicas las publica <b>Desarrollo</b> (Consola). Usted (Soporte) administra el <b>FAQ</b>. Gerencia supervisa el tono.</p>
+    <label><b>Mensaje comercial de novedades</b> <span style="color:#64748b;font-weight:500">(preferible Gerencia; Soporte puede ajustar en contingencia)</span></label>
+    <textarea name="novedades" rows="6" placeholder="Gracias por creer en nuestra empresa...">{(getattr(p,'novedades',None) or '')}</textarea>
+    <label><b>Changelog técnico (viñetas)</b> <span style="color:#64748b;font-weight:500">(Consola Desarrollo; contingencia en Soporte)</span></label>
+    <textarea name="novedades_tecnicas" rows="6" placeholder="• Planilla de notas...">{(getattr(p,'novedades_tecnicas',None) or '')}</textarea>
+    <label><b>Preguntas frecuentes (FAQ)</b> <span style="color:#15803d;font-weight:600">— rol Soporte</span> · Gerencia supervisa el tono (separa cada pregunta con una línea en blanco)</label>
     <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...&#10;&#10;¿Cómo ingreso como docente?&#10;Respuesta...">{(getattr(p,'faq',None) or '')}</textarea>
     <label><b>Mantenimiento programado</b> (fecha, hora, mensaje)</label>
     <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores">{(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
-    <label><b>Texto Habeas Data (Colombia)</b></label>
+    <label><b>Texto Habeas Data (Colombia)</b> <span style="color:#b45309;font-weight:600">— preferible Gerencia</span> · <a href="/gerencia/contenido-login">editar en Gerencia</a></label>
     <textarea name="habeas_data" rows="4">{(getattr(p,'habeas_data',None) or '')}</textarea>
     <label><b>Aviso corto de reinicio / plataforma</b></label>
     <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min">
@@ -46386,7 +46389,7 @@ def pagina_corporativa_procsis():
 .pc-grid2{{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center}}
 @media(max-width:860px){{.pc-grid3,.pc-grid2{{grid-template-columns:1fr}}.pc-hero h1{{font-size:30px}}.pc-nav-in{{flex-direction:column;align-items:flex-start}}}}
 .pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px;transition:transform .4s cubic-bezier(.22,1,.36,1),box-shadow .4s ease,border-color .35s ease;animation:pc-fade-up .75s cubic-bezier(.22,1,.36,1) both}}.pc-grid3 .pc-card:nth-child(1){{animation-delay:.06s}}.pc-grid3 .pc-card:nth-child(2){{animation-delay:.14s}}.pc-grid3 .pc-card:nth-child(3){{animation-delay:.22s}}.pc-grid3 .pc-card:nth-child(4){{animation-delay:.1s}}.pc-grid3 .pc-card:nth-child(5){{animation-delay:.18s}}.pc-grid3 .pc-card:nth-child(6){{animation-delay:.26s}}.pc-grid3 .pc-card:nth-child(7){{animation-delay:.12s}}.pc-grid3 .pc-card:nth-child(8){{animation-delay:.2s}}.pc-grid3 .pc-card:nth-child(9){{animation-delay:.28s}}.pc-card:hover{{transform:translateY(-8px);box-shadow:0 20px 48px rgba(11,45,87,.14);border-color:#93c5fd;background:#fff}}
-.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px;transition:transform .35s ease,background .35s ease,box-shadow .35s ease}}.pc-card:hover .ico{{transform:scale(1.1);background:#bfdbfe;box-shadow:0 6px 16px rgba(37,99,235,.2)}}
+.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px;transition:transform .35s ease,background .35s ease}}.pc-card:hover .ico{{transform:scale(1.1);background:#bfdbfe}}
 .pc-card h3{{margin:0 0 8px;font-size:17px;color:#0B2D57}}
 .pc-card p{{margin:0;font-size:14px;color:#475569;line-height:1.5}}
 .pc-band{{background:#f1f5f9;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}}
@@ -46397,7 +46400,7 @@ def pagina_corporativa_procsis():
 .pc-cta{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:20px;padding:36px 28px;text-align:center;box-shadow:0 14px 44px rgba(11,45,87,.28);animation:pc-fade-up .8s cubic-bezier(.22,1,.36,1) .12s both;transition:transform .35s ease,box-shadow .35s ease}}.pc-cta:hover{{transform:translateY(-4px);box-shadow:0 22px 56px rgba(11,45,87,.36)}}
 .pc-cta h2{{margin:0 0 10px;font-size:26px;color:#fff}}
 .pc-cta p{{margin:0 0 18px;opacity:.92}}
-.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px;transition:transform .25s ease,box-shadow .25s ease}}.pc-cta a:hover{{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.18)}}@keyframes pc-fade-up{{from{{opacity:0;transform:translateY(28px)}}to{{opacity:1;transform:translateY(0)}}}}@media (prefers-reduced-motion:reduce){{.pc-card,.pc-cta{{animation:none!important;transition:none!important}}}}
+.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px;transition:transform .25s ease,box-shadow .25s ease}}.pc-cta a:hover{{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.18)}}@keyframes pc-fade-up{{from{{opacity:0;transform:translateY(28px)}}to{{opacity:1;transform:translateY(0)}}}}@media (prefers-reduced-motion:reduce){{.pc-card,.pc-cta,.lp-tech-card{{animation:none!important;transition:none!important}}}}
 .pc-foot{{background:#071a33;color:#94a3b8;padding:36px 20px 20px;font-size:13px}}
 .pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:24px}}
 @media(max-width:800px){{.pc-foot-in{{grid-template-columns:1fr}}}}
@@ -58129,6 +58132,59 @@ def _html_carrusel_clientes():
         ".cli-logo:hover img{transform:scale(1.08);opacity:1}"
         "@keyframes cli-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>"
     )
+
+
+
+
+@app.route("/gerencia/contenido-login", methods=["GET", "POST"])
+def gerencia_contenido_login():
+    """Gerencia: mensaje comercial de novedades + Habeas Data del login público."""
+    g = None
+    try:
+        g = _guard_gerencia()
+    except Exception:
+        pass
+    if g:
+        return g
+    if not requiere_login():
+        return redirect("/gerencia-login")
+    rol = (rol_actual() or "").strip()
+    if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte"):
+        return redirect("/dashboard")
+    p = plataforma()
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            p.novedades = (request.form.get("novedades") or "").strip()
+            p.habeas_data = (request.form.get("habeas_data") or "").strip()
+            if request.form.get("faq") is not None and rol in ("Gerente", "Superadmin", "Administrador"):
+                # supervisión FAQ
+                p.faq = (request.form.get("faq") or "").strip()
+            db.session.commit()
+            msg = "Contenido público del login guardado."
+        except Exception as ex:
+            err = str(ex)[:160]
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Contenido del login público</h1>
+  <p>Gerencia controla el mensaje comercial y el Habeas Data. Soporte administra el FAQ (usted supervisa).</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a> · <a class="btn" href="/soporte/actualizaciones">Panel Soporte</a></header>
+<section class="role-panel" style="max-width:720px">
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" style="display:grid;gap:12px">
+    <label><b>Mensaje comercial · Novedades</b> (aparece en «Últimas actualizaciones»)</label>
+    <textarea name="novedades" rows="5" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'novedades',None) or "")}</textarea>
+    <label><b>Habeas Data / Protección de datos</b> (texto legal del login)</label>
+    <textarea name="habeas_data" rows="12" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-family:ui-monospace,Consolas,monospace;font-size:12px">{_esc(getattr(p,'habeas_data',None) or "")}</textarea>
+    <label><b>FAQ (supervisión Gerencia)</b></label>
+    <textarea name="faq" rows="10" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(p,'faq',None) or "")}</textarea>
+    <button class="btn" type="submit">Guardar</button>
+  </form>
+</section>
+"""
+    return page("Contenido login · Gerencia", shell(body))
 
 
 @app.route("/aceptar-terminos-pago", methods=["POST"])
