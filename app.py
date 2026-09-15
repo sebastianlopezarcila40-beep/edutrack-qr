@@ -827,6 +827,35 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(37,99,235
 .eduaura-hero{background:linear-gradient(135deg,rgba(6,43,99,.74),rgba(11,99,206,.55))!important;color:white;border-radius:30px;border:1.5px solid rgba(255,255,255,.40);box-shadow:var(--glass-shadow-heavy), inset 0 1px 0 rgba(255,255,255,.26);padding:28px;margin-bottom:18px;backdrop-filter:blur(28px) saturate(180%);position:relative;overflow:hidden}.eduaura-hero h1{margin:0;color:white}.eduaura-hero p{color:#eaf2ff}.aura-badge{display:inline-block;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:8px 12px;font-weight:900;font-size:12px;margin-bottom:12px}.risk-low{color:#047857;font-weight:900}.risk-mid{color:#b45309;font-weight:900}.risk-high{color:#b91c1c;font-weight:900}.aura-score{height:10px;background:rgba(15,23,42,.10);border-radius:999px;overflow:hidden}.aura-score span{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);border-radius:999px}
 @media(max-width:850px){.login-liquid-wrap{grid-template-columns:1fr}.login-brand-panel{display:none}.login-form-panel{padding:28px}.login-shell{padding:16px}}
 
+/* ===== Movimiento estilo Apple (sitewide) ===============================
+   Se inyecta aquí porque CSS es el bloque global que carga página() en TODO
+   el sistema (login, dashboards, gerencia, soporte, ventas...). Cualquier
+   página que use page(...) recibe esto automáticamente sin tocar cada ruta. */
+@media (prefers-reduced-motion: no-preference){
+  :root{--ease-apple:cubic-bezier(.22,1,.36,1)}
+  body{animation:apple-body-in .5s var(--ease-apple)}
+  @keyframes apple-body-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  .card,.role-panel,.role-hero,section.card,.login-card,.pedit,.grid-mod,.eduaura-hero{
+    animation:apple-card-in .45s var(--ease-apple) both
+  }
+  @keyframes apple-card-in{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+  button,.btn,a.btn,input[type=submit]{
+    transition:transform .18s var(--ease-apple),box-shadow .18s var(--ease-apple),filter .18s var(--ease-apple),background-color .18s var(--ease-apple)
+  }
+  button:hover,.btn:hover,a.btn:hover{transform:translateY(-1px);filter:brightness(1.05);box-shadow:0 10px 24px rgba(15,23,42,.16)}
+  button:active,.btn:active,a.btn:active{transform:translateY(0) scale(.97);transition-duration:.08s}
+  input,select,textarea{transition:border-color .18s var(--ease-apple),box-shadow .18s var(--ease-apple)}
+  input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0 0 4px rgba(30,58,138,.12);outline:none}
+  a{transition:opacity .15s var(--ease-apple)}
+  a:hover{opacity:.75}
+  table tbody tr{transition:background-color .15s var(--ease-apple)}
+  .grid-mod>a,.grid-mod>div{transition:transform .2s var(--ease-apple),box-shadow .2s var(--ease-apple)}
+  .grid-mod>a:hover,.grid-mod>div:hover{transform:translateY(-2px)}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+}
+
 </style>
 """
 
@@ -945,8 +974,8 @@ class Usuario(db.Model):
 class IngresoPorteria(db.Model):
     __tablename__ = "ingresos"
     id = db.Column(db.Integer, primary_key=True)
-    estudiante_id = db.Column(db.Integer, db.ForeignKey("estudiantes.id"), nullable=False)
-    fecha = db.Column(db.String(20), nullable=False)
+    estudiante_id = db.Column(db.Integer, db.ForeignKey("estudiantes.id"), nullable=False, index=True)
+    fecha = db.Column(db.String(20), nullable=False, index=True)
     hora = db.Column(db.String(20), nullable=False)
     dia = db.Column(db.String(30), nullable=False)
     estado = db.Column(db.String(30), nullable=False)
@@ -3156,6 +3185,24 @@ window.addEventListener('pageshow', function (event) {
     window.location.reload();
   }
 });
+// Movimiento estilo Apple: fundido de salida al navegar a otro enlace interno,
+// para que el cambio de página no se sienta "brusco". Respeta prefers-reduced-motion.
+(function(){
+  try{
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    document.addEventListener('click', function(e){
+      var a = e.target.closest && e.target.closest('a[href]');
+      if(!a) return;
+      var href = a.getAttribute('href') || '';
+      if(!href || href.startsWith('#') || href.startsWith('javascript:') || a.target === '_blank' || e.metaKey || e.ctrlKey) return;
+      if(href.startsWith('http') && href.indexOf(location.host) === -1) return;
+      e.preventDefault();
+      document.body.style.transition = 'opacity .16s ease';
+      document.body.style.opacity = '0';
+      setTimeout(function(){ window.location.href = href; }, 140);
+    }, true);
+  }catch(_e){}
+})();
 </script>"""
     try:
         _path = (request.path or "").lower()
@@ -3179,7 +3226,7 @@ window.addEventListener('pageshow', function (event) {
     else:
         _tab = f"EduTrack | {title}"
         _icon = "/static/img/favicon.png?v=7"
-    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}">{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}</body></html>"""
+    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0B2D57"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}</body></html>"""
 
 
 
@@ -4288,6 +4335,12 @@ def inicializar_bd():
                 "CREATE INDEX IF NOT EXISTS ix_est_codigo ON estudiantes (codigo)",
                 "CREATE INDEX IF NOT EXISTS ix_usu_inst ON usuarios (institucion_id)",
                 "CREATE INDEX IF NOT EXISTS ix_pm_inst ON pre_matriculas (institucion_id)",
+                # Asistencia QR / portería: sin estos índices, cada escaneo (anti-duplicado,
+                # anti-suplantación y reportes diarios/semanales/mensuales) hace un barrido
+                # completo de la tabla "ingresos", que se vuelve más lento cada día que pasa.
+                "CREATE INDEX IF NOT EXISTS ix_ing_est_fecha ON ingresos (estudiante_id, fecha)",
+                "CREATE INDEX IF NOT EXISTS ix_ing_fecha ON ingresos (fecha)",
+                "CREATE INDEX IF NOT EXISTS ix_ing_est ON ingresos (estudiante_id)",
             ]:
                 try:
                     conn.execute(db.text(sql))
@@ -15222,19 +15275,56 @@ def backup():
     return send_file(b, as_attachment=True, download_name=f"backup_edutrack_{fecha_hoy()}.xlsx")
 
 
-def datos_reporte():
+def datos_reporte(periodo=None):
+    q = q_ingresos()
+    if periodo:
+        desde, hasta = _rango_periodo_asistencia(periodo)
+        q = q.filter(IngresoPorteria.fecha >= desde, IngresoPorteria.fecha <= hasta)
     data = []
-    for i in q_ingresos().order_by(Estudiante.grado.asc(), IngresoPorteria.fecha.desc()).all():
+    for i in q.order_by(Estudiante.grado.asc(), IngresoPorteria.fecha.desc()).all():
         data.append([i.estudiante.codigo, f"{i.estudiante.nombre} {i.estudiante.apellido}", i.estudiante.grado, i.estudiante.director, i.fecha, i.hora, i.registrado_por])
     return data
+
+
+def _rango_periodo_asistencia(periodo):
+    """Devuelve (desde, hasta) en formato YYYY-MM-DD para el periodo pedido,
+    usado por /reportes (asistencia QR) en diario/semanal/quincenal/mensual."""
+    import datetime as _dt
+    hoy = ahora().date()
+    periodo = (periodo or "mensual").strip().lower()
+    if periodo == "diario":
+        desde = hasta = hoy
+    elif periodo == "semanal":
+        desde = hoy - _dt.timedelta(days=hoy.weekday())  # lunes
+        hasta = desde + _dt.timedelta(days=6)
+    elif periodo == "quincenal":
+        if hoy.day <= 15:
+            desde = hoy.replace(day=1)
+            hasta = hoy.replace(day=15)
+        else:
+            desde = hoy.replace(day=16)
+            ultimo = (hoy.replace(day=28) + _dt.timedelta(days=4)).replace(day=1) - _dt.timedelta(days=1)
+            hasta = ultimo
+    else:  # mensual
+        desde = hoy.replace(day=1)
+        hasta = (hoy.replace(day=28) + _dt.timedelta(days=4)).replace(day=1) - _dt.timedelta(days=1)
+    return desde.strftime("%Y-%m-%d"), hasta.strftime("%Y-%m-%d")
 
 
 @app.route("/reportes")
 def reportes():
     if not requiere_login(): return redirect("/login")
     if not puede_reportes(): return acceso_denegado()
-    filas = ''.join(f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td></tr>" for r in datos_reporte())
-    content = f"<header class='header'><div class='header-info'><img src='{logo_actual()}'><div><h1>Reportes institucionales</h1><p>Formato tipo planilla.</p></div></div><div><a class='btn' href='/exportar_excel_reportes'>Excel</a> <a class='btn' href='/exportar_pdf'>PDF</a> <a class='btn' href='/exportar_word'>Word</a></div></header><div class='table-card'><table><tr><th>Código</th><th>Nombre y apellido</th><th>Grado</th><th>Director</th><th>Fecha</th><th>Hora</th><th>Quién reporta</th></tr>{filas}</table></div>"
+    periodo = (request.args.get("periodo") or "").strip().lower()
+    if periodo not in ("diario", "semanal", "quincenal", "mensual"):
+        periodo = ""  # "" = histórico completo (comportamiento anterior)
+    filas = ''.join(f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td></tr>" for r in datos_reporte(periodo or None))
+    _tabs = "".join(
+        f'<a class="btn" href="/reportes?periodo={p}" style="background:{"#0B2D57" if periodo==p else "#94a3b8"};margin-right:6px;padding:7px 14px;font-size:12px">{lbl}</a>'
+        for p, lbl in (("diario","Diario"),("semanal","Semanal"),("quincenal","Quincenal"),("mensual","Mensual"))
+    )
+    _tabs += f'<a class="btn" href="/reportes" style="background:{"#0B2D57" if not periodo else "#94a3b8"};padding:7px 14px;font-size:12px">Histórico completo</a>'
+    content = f"<header class='header'><div class='header-info'><img src='{logo_actual()}'><div><h1>Reportes institucionales</h1><p>Asistencia por portería/QR — filtra por periodo.</p></div></div><div><a class='btn' href='/exportar_excel_reportes?periodo={periodo}'>Excel</a> <a class='btn' href='/exportar_pdf?periodo={periodo}'>PDF</a> <a class='btn' href='/exportar_word?periodo={periodo}'>Word</a></div></header><div style='margin:10px 0 14px'>{_tabs}</div><div class='table-card'><table><tr><th>Código</th><th>Nombre y apellido</th><th>Grado</th><th>Director</th><th>Fecha</th><th>Hora</th><th>Quién reporta</th></tr>{filas}</table></div>"
     return page("Reportes", shell(content))
 
 
@@ -15265,38 +15355,47 @@ def exportar_estudiantes():
 def exportar_excel():
     if not requiere_login(): return redirect("/login")
     if not puede_reportes(): return acceso_denegado()
+    periodo = (request.args.get("periodo") or "").strip().lower()
+    if periodo not in ("diario", "semanal", "quincenal", "mensual"):
+        periodo = None
     wb = Workbook(); ws = wb.active
     for l in encabezado(): ws.append([l])
     ws.append([]); header_row = ws.max_row + 1; ws.append(["CÓDIGO", "NOMBRE Y APELLIDO", "GRADO", "DIRECTOR DE GRUPO", "FECHA", "HORA", "QUIÉN REPORTA"])
-    for r in datos_reporte(): ws.append(r)
-    estilo_excel(ws, header_row); b = BytesIO(); wb.save(b); b.seek(0); return send_file(b, as_attachment=True, download_name="reporte_ingresos_edutrack.xlsx")
+    for r in datos_reporte(periodo): ws.append(r)
+    estilo_excel(ws, header_row); b = BytesIO(); wb.save(b); b.seek(0); return send_file(b, as_attachment=True, download_name=f"reporte_ingresos_edutrack{'_'+periodo if periodo else ''}.xlsx")
 
 
 @app.route("/exportar_pdf")
 def exportar_pdf():
     if not requiere_login(): return redirect("/login")
     if not puede_reportes(): return acceso_denegado()
+    periodo = (request.args.get("periodo") or "").strip().lower()
+    if periodo not in ("diario", "semanal", "quincenal", "mensual"):
+        periodo = None
     b = BytesIO(); pdf = canvas.Canvas(b, pagesize=landscape(letter)); width, height = landscape(letter); y = height - 45
     try: pdf.drawImage(logo_fs(), 70, y - 65, width=65, height=65, preserveAspectRatio=True)
     except Exception: pass
     pdf.setFont("Helvetica-Bold", 14); pdf.drawCentredString(width / 2, y, INST_NOMBRE); y -= 17; pdf.setFont("Helvetica", 9)
     for linea in encabezado()[1:]: pdf.drawCentredString(width / 2, y, linea); y -= 13
-    y -= 20; pdf.setFont("Helvetica-Bold", 12); pdf.drawString(40, y, "REPORTE DE INGRESOS"); y -= 22
-    data = [["CÓDIGO", "NOMBRE Y APELLIDO", "GRADO", "DIRECTOR DE GRUPO", "FECHA", "HORA", "QUIÉN REPORTA"]] + datos_reporte()
+    y -= 20; pdf.setFont("Helvetica-Bold", 12); pdf.drawString(40, y, "REPORTE DE INGRESOS" + (f" ({periodo.upper()})" if periodo else "")); y -= 22
+    data = [["CÓDIGO", "NOMBRE Y APELLIDO", "GRADO", "DIRECTOR DE GRUPO", "FECHA", "HORA", "QUIÉN REPORTA"]] + datos_reporte(periodo)
     table = Table(data, colWidths=[70, 160, 60, 140, 80, 70, 120]); table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.yellow),("GRID", (0, 0), (-1, -1), 0.7, colors.black),("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),("ALIGN", (0, 0), (-1, -1), "CENTER"),("FONTSIZE", (0, 0), (-1, -1), 8)])); table.wrapOn(pdf, width, height); table.drawOn(pdf, 40, max(80, y - (len(data) * 22)))
-    pdf.setFont("Helvetica", 8); pdf.drawCentredString(width / 2, 25, f"{APP_NAME} © 2026 | {SLOGAN} | Desarrollado por {DESARROLLADOR}"); pdf.save(); b.seek(0); return send_file(b, as_attachment=True, download_name="reporte_ingresos_edutrack.pdf")
+    pdf.setFont("Helvetica", 8); pdf.drawCentredString(width / 2, 25, f"{APP_NAME} © 2026 | {SLOGAN} | Desarrollado por {DESARROLLADOR}"); pdf.save(); b.seek(0); return send_file(b, as_attachment=True, download_name=f"reporte_ingresos_edutrack{'_'+periodo if periodo else ''}.pdf")
 
 
 @app.route("/exportar_word")
 def exportar_word():
     if not requiere_login(): return redirect("/login")
     if not puede_reportes(): return acceso_denegado()
-    doc = Document(); doc.add_paragraph("\n".join(encabezado())); doc.add_heading("REPORTE DE INGRESOS", level=1); t = doc.add_table(rows=1, cols=7); t.style = "Table Grid"; headers = ["CÓDIGO", "NOMBRE Y APELLIDO", "GRADO", "DIRECTOR DE GRUPO", "FECHA", "HORA", "QUIÉN REPORTA"]
+    periodo = (request.args.get("periodo") or "").strip().lower()
+    if periodo not in ("diario", "semanal", "quincenal", "mensual"):
+        periodo = None
+    doc = Document(); doc.add_paragraph("\n".join(encabezado())); doc.add_heading("REPORTE DE INGRESOS" + (f" ({periodo.upper()})" if periodo else ""), level=1); t = doc.add_table(rows=1, cols=7); t.style = "Table Grid"; headers = ["CÓDIGO", "NOMBRE Y APELLIDO", "GRADO", "DIRECTOR DE GRUPO", "FECHA", "HORA", "QUIÉN REPORTA"]
     for i, h in enumerate(headers): t.rows[0].cells[i].text = h
-    for r in datos_reporte():
+    for r in datos_reporte(periodo):
         cells = t.add_row().cells
         for i, v in enumerate(r): cells[i].text = str(v)
-    doc.add_paragraph(f"{APP_NAME} © 2026 | {SLOGAN}"); doc.add_paragraph(f"Desarrollado por {DESARROLLADOR}"); b = BytesIO(); doc.save(b); b.seek(0); return send_file(b, as_attachment=True, download_name="reporte_ingresos_edutrack.docx")
+    doc.add_paragraph(f"{APP_NAME} © 2026 | {SLOGAN}"); doc.add_paragraph(f"Desarrollado por {DESARROLLADOR}"); b = BytesIO(); doc.save(b); b.seek(0); return send_file(b, as_attachment=True, download_name=f"reporte_ingresos_edutrack{'_'+periodo if periodo else ''}.docx")
 
 
 
@@ -39604,8 +39703,29 @@ def soporte_actualizaciones():
                         setattr(p, f"novedad_img{i}", url_manual[:255])
                     if request.form.get(f"novedad_img{i}_clear"):
                         setattr(p, f"novedad_img{i}", "")
+                # Auto-anuncio: si Desarrollador marcó la casilla, la actualización que
+                # acaba de publicar también aparece como anuncio institucional (banner
+                # que ya se ve en /login y portales, gestionado en /gerencia/anuncios).
+                if es_desarrollo and request.form.get("publicar_como_anuncio"):
+                    tipo_upd = (request.form.get("tipo_actualizacion") or "mejora").strip()
+                    _icono = "🔒" if tipo_upd == "seguridad" else "🚀"
+                    _etiqueta = "Actualización de seguridad" if tipo_upd == "seguridad" else "Nueva actualización"
+                    primera_linea = (p.novedades or "").strip().split("\n")[0][:120] or "Mejoras en la plataforma"
+                    p.anuncio_activo = True
+                    p.anuncio_titulo = f"{_icono} {_etiqueta}: {primera_linea}"
+                    p.anuncio_cuerpo = (p.novedades or "").strip()[:2000]
+                    try:
+                        p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
+                    except Exception:
+                        p.anuncio_version = "1"
+                    try:
+                        registrar_auditoria("Anuncio automático por actualización", f"Desarrollador publicó {tipo_upd}: {primera_linea}")
+                    except Exception:
+                        pass
                 db.session.commit()
                 mensaje = "Actualizaciones e imágenes publicadas en el login."
+                if es_desarrollo and request.form.get("publicar_como_anuncio"):
+                    mensaje += " También se publicó como anuncio institucional (ya está activo)."
             elif accion == "aviso_reinicio":
                 p.reinicio_aviso = (request.form.get("reinicio_aviso") or "La plataforma se reiniciará en breve por mantenimiento técnico.").strip()[:255]
                 db.session.commit()
@@ -39651,6 +39771,13 @@ def soporte_actualizaciones():
     <p class="mini-text">Todo lo que guardes aquí se muestra en el <b>login</b> (bloque con scroll). Usa párrafos separados y viñetas con <code>•</code> o <code>-</code>.</p>
     <label><b>Últimas actualizaciones / novedades</b> {"" if es_desarrollo else "(solo lectura · lo edita Desarrollador)"}</label>
     <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa..."{_ro_nov}>{(getattr(p,'novedades',None) or '')}</textarea>
+    {('''<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin:6px 0 12px">
+      <label style="display:flex;gap:8px;align-items:center;font-weight:700;font-size:13px"><input type="checkbox" name="publicar_como_anuncio" value="1" style="width:auto"> Publicar también como anuncio institucional (aparece como banner en el login)</label>
+      <select name="tipo_actualizacion" style="margin-top:8px;padding:8px">
+        <option value="mejora">Mejora / nueva función</option>
+        <option value="seguridad">Actualización de seguridad</option>
+      </select>
+    </div>''') if es_desarrollo else ''}
     <label><b>Preguntas frecuentes</b> {"" if es_soporte else "(solo lectura · lo edita Soporte)"} (separa cada pregunta con una línea en blanco)</label>
     <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...&#10;&#10;¿Cómo ingreso como docente?&#10;Respuesta..."{_ro_faq}>{(getattr(p,'faq',None) or '')}</textarea>
     <label><b>Mantenimiento programado</b> (fecha, hora, mensaje)</label>
