@@ -829,31 +829,40 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(37,99,235
 
 /* ===== Movimiento estilo Apple (sitewide) ===============================
    Se inyecta aquí porque CSS es el bloque global que carga página() en TODO
-   el sistema (login, dashboards, gerencia, soporte, ventas...). Cualquier
-   página que use page(...) recibe esto automáticamente sin tocar cada ruta. */
-@media (prefers-reduced-motion: no-preference){
-  :root{--ease-apple:cubic-bezier(.22,1,.36,1)}
-  body{animation:apple-body-in .5s var(--ease-apple)}
-  @keyframes apple-body-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-  .card,.role-panel,.role-hero,section.card,.login-card,.pedit,.grid-mod,.eduaura-hero{
-    animation:apple-card-in .45s var(--ease-apple) both
-  }
-  @keyframes apple-card-in{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
-  button,.btn,a.btn,input[type=submit]{
-    transition:transform .18s var(--ease-apple),box-shadow .18s var(--ease-apple),filter .18s var(--ease-apple),background-color .18s var(--ease-apple)
-  }
-  button:hover,.btn:hover,a.btn:hover{transform:translateY(-1px);filter:brightness(1.05);box-shadow:0 10px 24px rgba(15,23,42,.16)}
-  button:active,.btn:active,a.btn:active{transform:translateY(0) scale(.97);transition-duration:.08s}
-  input,select,textarea{transition:border-color .18s var(--ease-apple),box-shadow .18s var(--ease-apple)}
-  input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0 0 4px rgba(30,58,138,.12);outline:none}
-  a{transition:opacity .15s var(--ease-apple)}
-  a:hover{opacity:.75}
-  table tbody tr{transition:background-color .15s var(--ease-apple)}
-  .grid-mod>a,.grid-mod>div{transition:transform .2s var(--ease-apple),box-shadow .2s var(--ease-apple)}
-  .grid-mod>a:hover,.grid-mod>div:hover{transform:translateY(-2px)}
+   el sistema. Animaciones activas por defecto; solo se reducen si el SO
+   tiene "reducir movimiento" activado. */
+:root{--ease-apple:cubic-bezier(.22,1,.36,1)}
+@keyframes apple-body-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes apple-card-in{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes apple-fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+body{animation:apple-body-in .55s var(--ease-apple) both}
+.card,.role-panel,.role-hero,section.card,.login-card,.pedit,.grid-mod,.eduaura-hero,.table-card,.hq-tab-panel,section.role-panel{
+  animation:apple-card-in .5s var(--ease-apple) both
 }
+.grid-mod>a,.grid-mod>div{animation:apple-fade-up .45s var(--ease-apple) both}
+.grid-mod>a:nth-child(1),.grid-mod>div:nth-child(1){animation-delay:.04s}
+.grid-mod>a:nth-child(2),.grid-mod>div:nth-child(2){animation-delay:.08s}
+.grid-mod>a:nth-child(3),.grid-mod>div:nth-child(3){animation-delay:.12s}
+.grid-mod>a:nth-child(4),.grid-mod>div:nth-child(4){animation-delay:.16s}
+.grid-mod>a:nth-child(5),.grid-mod>div:nth-child(5){animation-delay:.20s}
+.grid-mod>a:nth-child(6),.grid-mod>div:nth-child(6){animation-delay:.24s}
+button,.btn,a.btn,input[type=submit],.own{
+  transition:transform .2s var(--ease-apple),box-shadow .2s var(--ease-apple),filter .2s var(--ease-apple),background-color .2s var(--ease-apple)
+}
+button:hover,.btn:hover,a.btn:hover,.own:hover{transform:translateY(-2px);filter:brightness(1.06);box-shadow:0 12px 28px rgba(15,23,42,.18)}
+button:active,.btn:active,a.btn:active,.own:active{transform:translateY(0) scale(.97);transition-duration:.08s}
+input,select,textarea{transition:border-color .18s var(--ease-apple),box-shadow .18s var(--ease-apple)}
+input:focus,select:focus,textarea:focus{border-color:var(--azul2,#1e3a8a);box-shadow:0 0 0 4px rgba(30,58,138,.14);outline:none}
+a{transition:opacity .15s var(--ease-apple),color .15s var(--ease-apple)}
+table tbody tr{transition:background-color .15s var(--ease-apple)}
+.grid-mod>a,.grid-mod>div{transition:transform .22s var(--ease-apple),box-shadow .22s var(--ease-apple)}
+.grid-mod>a:hover,.grid-mod>div:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(15,23,42,.12)}
+/* Solo si el usuario/OS pide reducir movimiento */
 @media (prefers-reduced-motion: reduce){
-  *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  body,.card,.role-panel,.role-hero,section.card,.login-card,.pedit,.grid-mod,.eduaura-hero,.table-card,.hq-tab-panel,.grid-mod>a,.grid-mod>div{
+    animation:none!important
+  }
+  button,.btn,a.btn,input[type=submit],.own,.grid-mod>a,.grid-mod>div{transition-duration:.01ms!important}
 }
 
 </style>
@@ -20817,12 +20826,38 @@ def gerencia_hq():
     )
     tab_tecnica_panel = f"""
       <div id="hq-tab-tecnica" class="hq-tab-panel">
-        <p class="hq-note" style="margin-top:0">Infraestructura, feature flags, temas CSS y monitoreo (rol técnico).</p>
-        <div class="grid-mod">
-          <a class="own" href="/dev-console">Abrir consola de desarrollo</a>
-          <a class="own" href="/dev-console?tab=flags">Feature flags</a>
-          <a class="own" href="/dev-console?tab=temas">Temas CSS / CSS inyectado</a>
-          <a class="own" href="/dev-console?tab=sistema">Logs y sesiones técnicas</a>
+        <p class="hq-note" style="margin-top:0">Módulos de <b>Desarrollo</b>: actualizaciones, diseño global, pruebas y seguridad. Solo roles técnicos.</p>
+        <div class="grid-mod" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          <a class="own" href="/dev-console?tab=versiones" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;text-decoration:none">
+            <div style="font-size:22px;margin-bottom:6px">📦</div>
+            <div style="font-weight:800;font-size:13px">Actualizaciones de mejora</div>
+            <div style="font-size:11px;opacity:.85;margin-top:4px">Publicar versión + notas de cambios (historial inmutable)</div>
+          </a>
+          <a class="own" href="/dev-console?tab=anuncios" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#7c2d12,#b45309);color:#fff;text-decoration:none">
+            <div style="font-size:22px;margin-bottom:6px">🛡️</div>
+            <div style="font-weight:800;font-size:13px">Actualizaciones de seguridad</div>
+            <div style="font-size:11px;opacity:.85;margin-top:4px">Anuncios técnicos y alertas de mantenimiento</div>
+          </a>
+          <a class="own" href="/dev-console?tab=temas" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#0f766e,#0d9488);color:#fff;text-decoration:none">
+            <div style="font-size:22px;margin-bottom:6px">🎨</div>
+            <div style="font-weight:800;font-size:13px">Diseño / colores / letra</div>
+            <div style="font-size:11px;opacity:.85;margin-top:4px">Temas globales + CSS inyectado en todo el sistema</div>
+          </a>
+          <a class="own" href="/dev-console?tab=flags" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#5b21b6,#7c3aed);color:#fff;text-decoration:none">
+            <div style="font-size:22px;margin-bottom:6px">🧪</div>
+            <div style="font-weight:800;font-size:13px">Espacio de pruebas (Sandbox)</div>
+            <div style="font-size:11px;opacity:.85;margin-top:4px">Feature flags y pruebas solo en colegio de test</div>
+          </a>
+          <a class="own" href="/dev-console?tab=sistema" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#334155,#475569);color:#fff;text-decoration:none">
+            <div style="font-size:22px;margin-bottom:6px">⚙️</div>
+            <div style="font-weight:800;font-size:13px">Sistema & Core</div>
+            <div style="font-size:11px;opacity:.85;margin-top:4px">Logs, sesiones, mantenimiento, backup</div>
+          </a>
+          <a class="own" href="/dev-console" style="display:block;padding:16px;border-radius:12px;background:#f1f5f9;color:#0B2D57;text-decoration:none;border:1px solid #e2e8f0">
+            <div style="font-size:22px;margin-bottom:6px">🛠️</div>
+            <div style="font-weight:800;font-size:13px">Abrir consola completa</div>
+            <div style="font-size:11px;opacity:.75;margin-top:4px">Todas las pestañas de desarrollo</div>
+          </a>
         </div>
       </div>
 """ if _ver_tecnica else ""
@@ -57612,12 +57647,12 @@ def dev_console():
         )
 
     tabs_nav = (
-        '<div style="display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;margin-bottom:16px">'
-        + tab_btn("sistema", "SISTEMA & CORE")
-        + tab_btn("versiones", "CONTROL DE VERSIONES")
-        + tab_btn("anuncios", "ANUNCIOS TÉCNICOS")
-        + tab_btn("temas", "TEMAS CSS")
-        + tab_btn("flags", "FEATURE FLAGS")
+        '<div style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid #e2e8f0;margin-bottom:16px;padding-bottom:0">'
+        + tab_btn("sistema", "⚙️ SISTEMA & CORE")
+        + tab_btn("versiones", "📦 ACTUALIZACIONES DE MEJORA")
+        + tab_btn("anuncios", "🛡️ SEGURIDAD / ANUNCIOS")
+        + tab_btn("temas", "🎨 DISEÑO / COLORES / LETRA")
+        + tab_btn("flags", "🧪 SANDBOX / FLAGS")
         + "</div>"
     )
 
