@@ -49967,51 +49967,70 @@ def contabilidad_trabajador_memos(tid):
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/certificacion", methods=["GET", "POST"])
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/certificacion.pdf", methods=["GET", "POST"])
 def contabilidad_constancia_laboral(tid):
-    """Formulario previo + PDF de Certificación Laboral corporativa (alias: constancia)."""
+    """Formulario + PDF de Certificación Laboral (distinta de constancia simple)."""
     g = _guard_contabilidad()
     if g is not None:
         return g
+    # Limpiar transacción abortada de PostgreSQL (InFailedSqlTransaction)
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
     t = ContTrabajador.query.get_or_404(tid)
     meta = _cont_empresa_meta()
-    # Autocompletar desde Hoja de Vida si falta fecha_inicio / cargo
+    # Datos extra desde Hoja de Vida (consulta segura)
+    hv_tipo_doc = "C.C."
+    hv_nacionalidad = "Colombiano"
+    hv_nombres = t.nombre or ""
     try:
-        hv = HojaVida.query.filter(
-            db.or_(
-                HojaVida.documento == (t.documento or ""),
-                db.func.lower(HojaVida.nombres + " " + HojaVida.primer_apellido).like("%" + (t.nombre or "").lower()[:40] + "%"),
-            )
-        ).order_by(HojaVida.id.desc()).first()
+        hv = None
+        doc = (t.documento or "").strip()
+        if doc:
+            hv = HojaVida.query.filter(HojaVida.documento == doc).order_by(HojaVida.id.desc()).first()
         if hv:
-            if not (t.fecha_inicio or "").strip() and (getattr(hv, "creado_en", None) or "").strip():
-                t.fecha_inicio = (hv.creado_en or "")[:40]
-            if not (t.cargo or "").strip() and (getattr(hv, "cargo_postula", None) or "").strip():
-                t.cargo = (hv.cargo_postula or "")[:120]
-            if not (t.tipo_contrato or "").strip():
-                t.tipo_contrato = "Prestación de Servicios Civiles (Fase de Pre-lanzamiento)"
-            if not (t.honorarios or "").strip():
-                t.honorarios = "Variables según cumplimiento de metas comerciales y cierres de implementación efectivas"
+            if not (t.fecha_inicio or "").strip():
+                t.fecha_inicio = (getattr(hv, "creado_en", None) or getattr(hv, "fecha_entrevista", None) or "")[:40]
+            if not (t.cargo or "").strip():
+                t.cargo = (getattr(hv, "cargo_postula", None) or "")[:120]
+            hv_tipo_doc = (getattr(hv, "tipo_doc", None) or "C.C.")[:20]
+            hv_nacionalidad = (getattr(hv, "nacionalidad", None) or "Colombiano")[:40]
+            parts = [
+                (getattr(hv, "nombres", None) or "").strip(),
+                (getattr(hv, "primer_apellido", None) or "").strip(),
+                (getattr(hv, "segundo_apellido", None) or "").strip(),
+            ]
+            full = " ".join(p for p in parts if p)
+            if full:
+                hv_nombres = full
             try:
                 db.session.commit()
             except Exception:
                 db.session.rollback()
     except Exception:
-        pass
-    # Defaults si siguen vacíos
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    # Defaults contractuales PROCSIS
     if not (t.tipo_contrato or "").strip():
-        t.tipo_contrato = "Prestación de Servicios Civiles (Fase de Pre-lanzamiento)"
+        t.tipo_contrato = "Contrato Civil de Prestación de Servicios"
     if not (t.honorarios or "").strip():
-        t.honorarios = "Variables según cumplimiento de metas comerciales y cierres de implementación efectivas"
-    # Actualizar datos desde formulario antes de PDF
+        t.honorarios = "Honorarios variables calculados según el cumplimiento de metas comerciales y cierres de implementación de la suite"
+    if not (t.cargo or "").strip():
+        t.cargo = "SUPERVISOR DE VENTAS Y DESARROLLO"
+    # POST: guardar y generar PDF
     if request.method == "POST":
+        t.nombre = (request.form.get("nombre_completo") or t.nombre or "").strip()[:160]
         t.cargo = (request.form.get("cargo") or t.cargo or "").strip()[:120]
         t.objeto_funciones = (request.form.get("objeto_funciones") or t.objeto_funciones or "").strip()[:2000]
         t.fecha_inicio = (request.form.get("fecha_inicio") or t.fecha_inicio or "").strip()[:40]
-        t.honorarios = (request.form.get("honorarios") or t.honorarios or "").strip()[:200]
+        t.honorarios = (request.form.get("honorarios") or t.honorarios or "").strip()[:250]
         t.telefono = (request.form.get("telefono") or t.telefono or "").strip()[:40]
         t.email = (request.form.get("email") or t.email or "").strip()[:120]
         t.direccion = (request.form.get("direccion") or getattr(t, "direccion", "") or "").strip()[:255]
         t.tipo_contrato = (request.form.get("tipo_contrato") or t.tipo_contrato or "").strip()[:120]
         t.solicitante = (request.form.get("solicitante") or getattr(t, "solicitante", "") or "").strip()[:200]
+        t.documento = (request.form.get("documento") or t.documento or "").strip()[:40]
         try:
             db.session.commit()
         except Exception:
@@ -50019,42 +50038,84 @@ def contabilidad_constancia_laboral(tid):
         incluir_h = request.form.get("incluir_honorarios") == "1"
         generar = request.form.get("accion") == "pdf" or (request.path or "").endswith(".pdf")
         if generar:
-            return _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=incluir_h)
-    # GET: formulario obligatorio
+            extra = {
+                "tipo_doc": (request.form.get("tipo_doc") or hv_tipo_doc or "C.C.")[:20],
+                "nacionalidad": (request.form.get("nacionalidad") or hv_nacionalidad or "Colombiano")[:40],
+                "fecha_retiro": (request.form.get("fecha_retiro") or "").strip()[:40],
+                "ciudad_expedicion": (request.form.get("ciudad_expedicion") or "Caracolí, Antioquia")[:80],
+            }
+            return _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=incluir_h, extra=extra)
     if not (request.path or "").endswith(".pdf") or request.method == "GET":
         if (request.path or "").endswith(".pdf") and request.method == "GET":
             return redirect("/gerencia/contabilidad/trabajador/%s/certificacion" % tid)
+        fecha_retiro_val = ""
         content = f"""
-        <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px">
-          <h2 style="margin:0 0 6px;color:#0B2D57">Certificación Laboral · {_esc(t.nombre)}</h2>
-          <p style="font-size:13px;color:#64748b;margin:0 0 14px">Los campos se autocompletan desde la base de datos (Hoja de vida / trabajador). Confirme y descargue el PDF.</p>
+        <div style="max-width:680px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px">
+          <h2 style="margin:0 0 6px;color:#0B2D57">Certificación Laboral · {_esc(hv_nombres or t.nombre)}</h2>
+          <p style="font-size:13px;color:#64748b;margin:0 0 14px">Documento formal PROCSIS. Los campos se cargan desde la base de datos. Confirme y descargue el PDF.</p>
           <form method="POST">
-            <label style="font-size:12px;font-weight:700">Cargo oficial *</label>
-            <input name="cargo" required value="{_esc(t.cargo or 'SUPERVISOR DE VENTAS Y DESARROLLO')}" placeholder="SUPERVISOR DE VENTAS Y DESARROLLO" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
-            <label style="font-size:12px;font-weight:700">Objeto de sus funciones *</label>
-            <textarea name="objeto_funciones" required rows="3" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Labores que desempeña...">{_esc(getattr(t,'objeto_funciones',None) or '')}</textarea>
-            <label style="font-size:12px;font-weight:700">Fecha de ingreso *</label>
-            <input name="fecha_inicio" required value="{_esc(getattr(t,'fecha_inicio',None) or '')}" placeholder="Día exacto de registro de la HV" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
-            <label style="font-size:12px;font-weight:700">Tipo de contratación *</label>
-            <select name="tipo_contrato" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
-              <option value="Prestación de Servicios Civiles (Fase de Pre-lanzamiento)" {"selected" if not (t.tipo_contrato or "") or "prest" in (t.tipo_contrato or "").lower() or "civil" in (t.tipo_contrato or "").lower() else ""}>Prestación de Servicios Civiles (Fase de Pre-lanzamiento)</option>
-              <option value="Prestación de servicios" {"selected" if (t.tipo_contrato or "") == "Prestación de servicios" else ""}>Prestación de servicios</option>
-              <option value="Laboral término fijo" {"selected" if "fijo" in (t.tipo_contrato or "").lower() else ""}>Laboral término fijo</option>
-              <option value="Laboral indefinido" {"selected" if "indefinido" in (t.tipo_contrato or "").lower() else ""}>Laboral indefinido</option>
-              <option value="Obra o labor" {"selected" if "obra" in (t.tipo_contrato or "").lower() else ""}>Obra o labor</option>
-            </select>
-            <label style="font-size:12px;font-weight:700">Entidad / persona solicitante de la constancia *</label>
-            <input name="solicitante" required value="{_esc(getattr(t,'solicitante',None) or '')}" placeholder="Empresa, banco, entidad o persona a quien va dirigida" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
-            <label style="font-size:12px;font-weight:700">Honorarios / Sueldo</label>
-            <input name="honorarios" value="{_esc(getattr(t,'honorarios',None) or 'Variables según cumplimiento de metas comerciales y cierres de implementación efectivas')}" placeholder="Variables según cumplimiento de metas..." style="width:100%;padding:10px;margin-bottom:6px;border-radius:8px;border:1px solid #cbd5e1">
-            <p style="font-size:11px;color:#64748b;margin:0 0 10px">Por modelo de comisiones se recomienda declarar variables (no sueldo fijo) para evitar enredos contables.</p>
-            <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:12px">
-              <input type="checkbox" name="incluir_honorarios" value="1" style="width:auto"> ¿Incluir asignación económica en el PDF?
-            </label>
+            <h3 style="margin:12px 0 8px;font-size:13px;color:#0B2D57;border-bottom:1px solid #e2e8f0;padding-bottom:4px">1. Identificación del trabajador</h3>
+            <label style="font-size:12px;font-weight:700">Nombres y apellidos completos *</label>
+            <input name="nombre_completo" required value="{_esc(hv_nombres or t.nombre)}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              <div><label style="font-size:12px;font-weight:700">Teléfono</label>
+              <div>
+                <label style="font-size:12px;font-weight:700">Tipo de documento *</label>
+                <select name="tipo_doc" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+                  <option value="C.C." {"selected" if hv_tipo_doc in ("C.C.","CC","Cédula") else ""}>Cédula de Ciudadanía (C.C.)</option>
+                  <option value="C.E." {"selected" if hv_tipo_doc in ("C.E.","CE") else ""}>Cédula de Extranjería (C.E.)</option>
+                  <option value="PAS." {"selected" if "PAS" in (hv_tipo_doc or "").upper() else ""}>Pasaporte (PAS.)</option>
+                  <option value="PPT" {"selected" if "PPT" in (hv_tipo_doc or "").upper() else ""}>Permiso por Protección Temporal (PPT)</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:700">Número de documento *</label>
+                <input name="documento" required value="{_esc(t.documento)}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+              </div>
+            </div>
+            <label style="font-size:12px;font-weight:700">Nacionalidad *</label>
+            <input name="nacionalidad" required value="{_esc(hv_nacionalidad)}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+
+            <h3 style="margin:16px 0 8px;font-size:13px;color:#0B2D57;border-bottom:1px solid #e2e8f0;padding-bottom:4px">2. Vínculo contractual</h3>
+            <label style="font-size:12px;font-weight:700">Cargo oficial desempeñado *</label>
+            <input name="cargo" required value="{_esc(t.cargo or 'SUPERVISOR DE VENTAS Y DESARROLLO')}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Objeto de sus funciones</label>
+            <textarea name="objeto_funciones" rows="2" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(t,'objeto_funciones',None) or '')}</textarea>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <label style="font-size:12px;font-weight:700">Fecha exacta de ingreso *</label>
+                <input name="fecha_inicio" required value="{_esc(getattr(t,'fecha_inicio',None) or '')}" placeholder="Ej: 15 de enero de 2026" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:700">Fecha de retiro (si aplica)</label>
+                <input name="fecha_retiro" value="{_esc(fecha_retiro_val)}" placeholder="Vacío = vinculado a la fecha actual" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+              </div>
+            </div>
+            <label style="font-size:12px;font-weight:700">Tipo de contrato *</label>
+            <select name="tipo_contrato" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+              <option value="Contrato Civil de Prestación de Servicios" selected>Contrato Civil de Prestación de Servicios</option>
+              <option value="Prestación de Servicios Civiles (Fase de Pre-lanzamiento)">Prestación de Servicios Civiles (Fase de Pre-lanzamiento)</option>
+              <option value="Laboral término fijo">Laboral término fijo</option>
+              <option value="Laboral indefinido">Laboral indefinido</option>
+              <option value="Obra o labor">Obra o labor</option>
+            </select>
+
+            <h3 style="margin:16px 0 8px;font-size:13px;color:#0B2D57;border-bottom:1px solid #e2e8f0;padding-bottom:4px">3. Remuneración</h3>
+            <label style="font-size:12px;font-weight:700">Honorarios / Sueldo</label>
+            <textarea name="honorarios" rows="2" style="width:100%;padding:10px;margin-bottom:6px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(t,'honorarios',None) or 'Honorarios variables calculados según el cumplimiento de metas comerciales y cierres de implementación de la suite')}</textarea>
+            <p style="font-size:11px;color:#64748b;margin:0 0 10px">Modelo comisiones PROCSIS: declare variables, no sueldo fijo, para evitar enredos contables.</p>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:12px">
+              <input type="checkbox" name="incluir_honorarios" value="1" checked style="width:auto"> Incluir asignación económica en el PDF
+            </label>
+
+            <h3 style="margin:16px 0 8px;font-size:13px;color:#0B2D57;border-bottom:1px solid #e2e8f0;padding-bottom:4px">4. Destinatario y expedición</h3>
+            <label style="font-size:12px;font-weight:700">Entidad / persona a quien se dirige *</label>
+            <input name="solicitante" required value="{_esc(getattr(t,'solicitante',None) or '')}" placeholder="Empresa, banco, entidad o interesado" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Ciudad de expedición</label>
+            <input name="ciudad_expedicion" value="Caracolí, Antioquia" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div><label style="font-size:12px;font-weight:700">Teléfono trabajador</label>
               <input name="telefono" value="{_esc(t.telefono)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
-              <div><label style="font-size:12px;font-weight:700">Email</label>
+              <div><label style="font-size:12px;font-weight:700">Email trabajador</label>
               <input name="email" value="{_esc(t.email)}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
             </div>
             <label style="font-size:12px;font-weight:700;margin-top:10px;display:block">Dirección / residencia</label>
@@ -50068,44 +50129,55 @@ def contabilidad_constancia_laboral(tid):
         return page("Constancia laboral", _cont_shell("Constancia laboral", content))
 
 
-def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
-    """Carta formal de certificación de empleo actual — diseño corporativo PROCSIS."""
+def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False, extra=None):
+    """Carta formal de Certificación Laboral — diseño corporativo PROCSIS."""
+    extra = extra or {}
     try:
         from datetime import datetime as _dt
+        import hashlib as _hashlib
         _now = _dt.now()
         _meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio",
                   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
         fecha_larga = "%d de %s de %d" % (_now.day, _meses[_now.month - 1], _now.year)
+        ts_ntp = _now.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     except Exception:
         fecha_larga = fecha_hoy() if "fecha_hoy" in dir() else ""
+        ts_ntp = fecha_larga
 
-    nit = (meta.get("nit") or "").strip() or "—"
+    nit = (meta.get("nit") or "").strip() or "1038062294-3"
     emp = "PROCSIS"
     ciudad = ""
     direccion_emp = ""
     tel_emp = ""
-    email_emp = ""
+    email_emp = "soporte@procsis.com"
     rep = ""
     try:
         p = plataforma()
-        ciudad = (getattr(p, "ciudad", None) or "").strip() or "Colombia"
+        ciudad = (getattr(p, "ciudad", None) or "").strip() or "Caracolí, Antioquia"
         direccion_emp = (getattr(p, "direccion", None) or "").strip()
         tel_emp = (getattr(p, "telefono_soporte", None) or "").strip()
-        email_emp = (getattr(p, "email_soporte", None) or "").strip()
-        rep = (getattr(p, "representante_legal", None) or "").strip() or "Gerencia / Dirección de personal"
+        email_emp = (getattr(p, "email_soporte", None) or "").strip() or "soporte@procsis.com"
+        rep = (getattr(p, "representante_legal", None) or "").strip() or "María Duber / Gerencia"
         if (getattr(p, "empresa", None) or "").strip():
             emp_name = (p.empresa or "").strip()
             if "procsis" in emp_name.lower() or emp_name.upper() == "PROCSIS":
                 emp = "PROCSIS"
             else:
                 emp = emp_name
+        if (getattr(p, "nit", None) or "").strip():
+            nit = (p.nit or "").strip()
     except Exception:
-        ciudad = "Colombia"
+        ciudad = "Caracolí, Antioquia"
+
+    ciudad_exp = (extra.get("ciudad_expedicion") or ciudad or "Caracolí, Antioquia").strip()
+    tipo_doc = (extra.get("tipo_doc") or "C.C.").strip()
+    nacionalidad = (extra.get("nacionalidad") or "Colombiano").strip()
+    fecha_retiro = (extra.get("fecha_retiro") or "").strip()
 
     nombre = (t.nombre or "—").strip()
     doc = (t.documento or "—").strip()
     cargo = (t.cargo or "colaborador(a)").strip()
-    tipo_c = (t.tipo_contrato or "prestación de servicios").strip()
+    tipo_c = (t.tipo_contrato or "Contrato Civil de Prestación de Servicios").strip()
     desde = (getattr(t, "fecha_inicio", None) or "").strip() or "la fecha de su vinculación"
     objeto = (getattr(t, "objeto_funciones", None) or "").strip()
     honorarios = (getattr(t, "honorarios", None) or "").strip()
@@ -50113,8 +50185,18 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
     email_t = (t.email or "").strip()
     dir_t = (getattr(t, "direccion", None) or "").strip()
     solicitante = (getattr(t, "solicitante", None) or "").strip() or "A quien interese"
-    # Firmante = gerente / representante legal de la EMPRESA (Datos de la empresa), NO el trabajador
     firmante = rep if rep else "Gerencia / Dirección de personal"
+    # Código de verificación + hash
+    try:
+        consecutivo = "CERT-%s-%s" % ((fecha_hoy() or "0000").replace("-", ""), str(getattr(t, "id", 0) or 0).zfill(4))
+        raw_hash = "|".join([consecutivo, nombre, doc, cargo, desde, ts_ntp, nit])
+        hash_sha = _hashlib.sha256(raw_hash.encode("utf-8")).hexdigest()[:32].upper()
+    except Exception:
+        consecutivo, hash_sha = "CERT-0000", "—"
+    try:
+        ip_emision = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
+    except Exception:
+        ip_emision = ""
 
     bio = BytesIO()
     c = canvas.Canvas(bio, pagesize=letter)
@@ -50161,10 +50243,10 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
     # Fecha (derecha, estilo carta)
     c.setFillColor(colors.HexColor("#0f172a"))
     c.setFont("Helvetica", 11)
-    c.drawRightString(right, y, "%s, %s" % (ciudad or "Colombia", fecha_larga))
+    c.drawRightString(right, y, "%s, %s" % (ciudad_exp or "Caracolí, Antioquia", fecha_larga))
     y -= 28
 
-    # Destinatario: entidad/persona que solicita
+    # Destinatario
     c.setFont("Helvetica", 11)
     c.drawString(left, y, "A:")
     y -= 14
@@ -50180,13 +50262,12 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
 
     # Asunto
     c.setFont("Helvetica-Bold", 11)
-    asunto = "Asunto: Certificación de empleo actual de %s" % nombre
+    asunto = "Asunto: Certificación Laboral de %s" % nombre
     for ln in simpleSplit(asunto, "Helvetica-Bold", 11, width):
         c.drawString(left, y, ln)
         y -= 14
     y -= 12
 
-    # Saludo con nombre del solicitante
     c.setFont("Helvetica", 11)
     saludo = "Estimado(a) %s:" % solicitante
     for ln in simpleSplit(saludo, "Helvetica", 11, width):
@@ -50194,40 +50275,45 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
         y -= 15
     y -= 6
 
-    # Cuerpo principal (unificado, justificado por líneas)
+    # Vinculación activa o con retiro
+    if fecha_retiro:
+        vinculo = "quien laboró en %s desde %s hasta %s" % (emp, desde, fecha_retiro)
+    else:
+        vinculo = "quien se encuentra vinculado(a) a %s desde %s y a la fecha actual" % (emp, desde)
+
     cuerpo1 = (
-        "El propósito de esta carta es confirmar que %s, identificado(a) con documento de identidad "
-        "No. %s, es colaborador(a) actual de %s desde %s y ocupa activamente el cargo de %s, "
-        "bajo la modalidad de contrato %s."
-    ) % (nombre, doc, emp, desde, cargo, tipo_c)
+        "Por medio de la presente, %s (NIT %s), con actividad económica principal CIIU 6201 "
+        "(Desarrollo de sistemas de informática), certifica que %s, de nacionalidad %s, "
+        "identificado(a) con %s No. %s, %s, ocupando el cargo oficial de %s, "
+        "bajo la modalidad de %s."
+    ) % (emp, nit, nombre, nacionalidad, tipo_doc, doc, vinculo, cargo, tipo_c)
     if objeto:
         cuerpo1 += " En el ejercicio de sus funciones se desempeña en: %s." % objeto
-    cuerpo1 += (
-        " La empresa tiene autorización para divulgar la siguiente información a fin de satisfacer "
-        "los requisitos de la solicitud de constancia laboral:"
-    )
+    cuerpo1 += " Se autoriza divulgar la siguiente información para satisfacer los requisitos de la solicitud:"
     for ln in simpleSplit(cuerpo1, "Helvetica", 11, width):
         c.drawString(left, y, ln)
         y -= 15
-        if y < 120:
+        if y < 140:
             c.showPage()
             y = H - 60
     y -= 8
 
-    # Viñetas de información
     bullets = []
+    bullets.append("Razón social emisora: %s · NIT %s · CIIU 6201." % (emp, nit))
+    bullets.append("Cargo oficial: %s." % cargo)
+    bullets.append("Tipo de contrato: %s." % tipo_c)
+    bullets.append("Fecha de ingreso: %s." % desde)
+    if fecha_retiro:
+        bullets.append("Fecha de retiro: %s." % fecha_retiro)
+    else:
+        bullets.append("Estado: se encuentra vinculado(a) a la fecha actual.")
     if incluir_honorarios and honorarios:
-        bullets.append(
-            "Asignación económica / honorarios: %s, pagaderos según lo pactado en el contrato de vinculación." % honorarios
-        )
-    bullets.append("Tipo de vinculación: %s." % tipo_c)
-    bullets.append("Cargo actual: %s." % cargo)
-    bullets.append("Fecha de inicio de vinculación: %s." % desde)
+        bullets.append("Honorarios / remuneración: %s." % honorarios)
     if objeto:
         bullets.append("Objeto de las funciones: %s." % objeto)
     bullets.append(
-        "La presente constancia se expide el %s a solicitud del interesado(a), sin perjuicio de las obligaciones "
-        "legales vigentes en Colombia." % fecha_larga
+        "La presente certificación laboral se expide en %s el %s a solicitud del interesado(a)."
+        % (ciudad_exp or "Caracolí, Antioquia", fecha_larga)
     )
 
     c.setFont("Helvetica", 11)
@@ -50272,28 +50358,32 @@ def _cont_constancia_pdf_bytes(t, meta, incluir_honorarios=False):
         c.setFillColor(colors.HexColor("#475569"))
         c.drawString(left, y, "NIT %s" % nit)
 
-    # Pie sutil: datos del trabajador (no en medio del texto legal)
+    # Sellos de validación PROCSIS
+    c.setFillColor(colors.HexColor("#475569"))
+    c.setFont("Helvetica", 7)
+    y_meta = 52
+    c.drawString(left, y_meta, "Código de verificación: %s  ·  Hash SHA-256: %s" % (consecutivo, hash_sha))
+    y_meta -= 10
+    c.drawString(left, y_meta, "Marca de tiempo NTP: %s  ·  IP emisión: %s" % (ts_ntp, ip_emision or "—"))
+    y_meta -= 10
     c.setFillColor(colors.HexColor("#94a3b8"))
-    c.setFont("Helvetica", 7.5)
-    pie = "Datos de contacto del colaborador (uso interno): %s · %s · %s" % (
-        tel_t or "—", email_t or "—", dir_t or "—",
-    )
-    for ln in simpleSplit(pie, "Helvetica", 7.5, width):
-        c.drawString(left, 36, ln)
-        break
-    c.drawString(left, 24, "Documento interno PROCSIS · No constituye certificado tributario DIAN por sí solo.")
+    c.setFont("Helvetica", 7)
+    pie = "Contacto colaborador: %s · %s · %s" % (tel_t or "—", email_t or "—", dir_t or "—")
+    c.drawString(left, y_meta, pie)
+    y_meta -= 10
+    c.drawString(left, y_meta, "PROCSIS · Certificación Laboral · No constituye certificado tributario DIAN por sí solo.")
 
     c.save()
     bio.seek(0)
     try:
-        registrar_auditoria("Constancia laboral PDF", "trab=%s" % t.id)
+        registrar_auditoria("Certificación laboral PDF", "trab=%s cert=%s" % (t.id, consecutivo))
     except Exception:
         pass
     safe = "".join(ch if ch.isalnum() else "_" for ch in (nombre or "trabajador"))[:40]
     return send_file(
         bio,
         as_attachment=True,
-        download_name="PROCSIS_Certificacion_Empleo_%s.pdf" % safe,
+        download_name="PROCSIS_Certificacion_Laboral_%s.pdf" % safe,
         mimetype="application/pdf",
     )
 
