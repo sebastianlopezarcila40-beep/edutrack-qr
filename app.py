@@ -2461,6 +2461,18 @@ class ContTrabajador(db.Model):
     creado_en = db.Column(db.String(30), default="")
 
 
+class TrabajadorMemo(db.Model):
+    """Memos / notas internas de talento humano por trabajador (historial inmutable)."""
+    __tablename__ = "trabajadores_memos"
+    id = db.Column(db.Integer, primary_key=True)
+    trabajador_id = db.Column(db.Integer, index=True, nullable=False)
+    tipo_nota = db.Column(db.String(40), default="Administrativo")  # Comercial | Administrativo | Logro
+    contenido_memo = db.Column(db.Text, default="")
+    timestamp_registro = db.Column(db.String(40), default="")  # YYYY-MM-DD HH:MM:SS.mmm
+    registrado_por = db.Column(db.String(120), default="")
+    registrado_por_rol = db.Column(db.String(40), default="")
+
+
 class NominaPago(db.Model):
     """Pagos de nómina / honorarios por periodo a trabajadores PROCSIS."""
     __tablename__ = "nomina_pagos"
@@ -4870,7 +4882,16 @@ def datos_login_institucion(inst_id=None):
 def contenido_login_novedades():
     """Textos del bloque inferior del login (editables desde Soporte)."""
     p = plataforma()
-    version = getattr(p, "version_sistema", None) or "2.5.0"
+    version = (getattr(p, "version_sistema", None) or "").strip() or None
+    # Preferir la última versión del historial inmutable si la columna está vacía/desactualizada
+    if not version:
+        try:
+            last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
+            if last and last.version:
+                version = last.version
+        except Exception:
+            pass
+    version = version or "2.5.0"
     novedades = (getattr(p, "novedades", None) or "").strip()
     faq = (getattr(p, "faq", None) or "").strip()
     mant = (getattr(p, "mantenimiento_programado", None) or "").strip()
@@ -49157,6 +49178,14 @@ def contabilidad_trabajadores():
                 contrato_lnk = ' · <a href="/gerencia/contratos-personal/%s/editar">Contrato</a>' % cp.id
         except Exception:
             pass
+        # Contador de memos + enlaces de acción
+        n_memos = 0
+        try:
+            n_memos = TrabajadorMemo.query.filter_by(trabajador_id=tw.id).count()
+        except Exception:
+            pass
+        memos_lnk = ' · <a href="/gerencia/contabilidad/trabajador/%s/memos">Memos (%s)</a>' % (tw.id, n_memos)
+        cert_lnk = ' · <a href="/gerencia/contabilidad/trabajador/%s/constancia">Certificación</a>' % tw.id
         filas.append(
             "<tr>"
             "<td style='padding:8px'>%s</td>"
@@ -49166,7 +49195,7 @@ def contabilidad_trabajadores():
             "<td style='padding:8px'>%s</td>"
             "<td style='padding:8px'>%s</td>"
             "<td style='padding:8px'><span style='padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700;%s'>%s</span></td>"
-            "<td style='padding:8px'>%s%s</td>"
+            "<td style='padding:8px'>%s%s%s%s</td>"
             "</tr>"
             % (
                 _esc(tw.nombre),
@@ -49179,6 +49208,8 @@ def contabilidad_trabajadores():
                 estado,
                 btn,
                 contrato_lnk,
+                memos_lnk,
+                cert_lnk,
             )
         )
     filas_html = "".join(filas) or (
@@ -49729,6 +49760,157 @@ def contabilidad_export_trab_excel():
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
+@app.route("/gerencia/contabilidad/trabajador/<int:tid>/memos", methods=["GET", "POST"])
+def contabilidad_trabajador_memos(tid):
+    """Memos e historial de notas del trabajador. RBAC: Gerencia total; Supervisor solo lectura propia."""
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    rol = (rol_actual() or "").strip()
+    usuario = (session.get("usuario") or session.get("nombre") or "").strip()
+    # Bloqueo absoluto para Cobranza / Soporte en esta sección de talento
+    if rol in ("Cobranza", "Soporte"):
+        return acceso_denegado("Esta sección de notas de personal es exclusiva de Gerencia / Supervisor de Ventas.")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    t = ContTrabajador.query.get_or_404(tid)
+    # Supervisor de Ventas: solo puede ver su propio perfil (lectura)
+    es_gerencia = rol in ("Gerente", "Gerencia", "Superadmin", "Administrador", "Desarrollador", "Developer")
+    es_supervisor = rol in ("Supervisor de Ventas", "Ventas", "Supervisor")
+    if es_supervisor and not es_gerencia:
+        # Solo lectura de su propia hoja (match por documento o nombre)
+        propio = False
+        try:
+            u_doc = (session.get("documento") or "").strip()
+            if u_doc and (t.documento or "") == u_doc:
+                propio = True
+            if (t.nombre or "").lower() in (usuario or "").lower() or (usuario or "").lower() in (t.nombre or "").lower():
+                propio = True
+        except Exception:
+            pass
+        if not propio:
+            return acceso_denegado("Solo puedes ver las notas de tu propio perfil.")
+        puede_crear = False
+    else:
+        puede_crear = es_gerencia
+
+    msg = ""
+    err = ""
+    if request.method == "POST" and puede_crear:
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "agregar_memo":
+            tipo = (request.form.get("tipo_nota") or "Administrativo").strip()[:40]
+            if tipo not in ("Comercial", "Administrativo", "Logro"):
+                tipo = "Administrativo"
+            contenido = (request.form.get("contenido_memo") or "").strip()[:5000]
+            if not contenido:
+                err = "Escribe el memo o anotación."
+            else:
+                try:
+                    from datetime import datetime as _dt
+                    ts = _dt.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                    m = TrabajadorMemo(
+                        trabajador_id=t.id,
+                        tipo_nota=tipo,
+                        contenido_memo=contenido,
+                        timestamp_registro=ts,
+                        registrado_por=usuario or "Gerencia",
+                        registrado_por_rol=rol or "Gerencia",
+                    )
+                    db.session.add(m)
+                    db.session.commit()
+                    msg = "Nota registrada."
+                    try:
+                        registrar_auditoria("Memo trabajador", "tid=%s tipo=%s" % (t.id, tipo))
+                    except Exception:
+                        pass
+                except Exception as e:
+                    db.session.rollback()
+                    err = str(e)[:120]
+        elif accion == "borrar_memo" and es_gerencia:
+            try:
+                mid = int(request.form.get("memo_id") or 0)
+                m = TrabajadorMemo.query.get(mid)
+                if m and m.trabajador_id == t.id:
+                    db.session.delete(m)
+                    db.session.commit()
+                    msg = "Memo eliminado."
+            except Exception as e:
+                db.session.rollback()
+                err = str(e)[:80]
+
+    memos = TrabajadorMemo.query.filter_by(trabajador_id=t.id).order_by(TrabajadorMemo.id.desc()).limit(200).all()
+    iconos = {"Comercial": "📌", "Administrativo": "💼", "Logro": "🏆"}
+    historial = []
+    for m in memos:
+        icon = iconos.get(m.tipo_nota, "📝")
+        borrar_btn = ""
+        if es_gerencia:
+            borrar_btn = (
+                '<form method="POST" style="display:inline;margin-left:8px" onsubmit="return confirm(\'¿Borrar esta nota?\')">'
+                '<input type="hidden" name="accion" value="borrar_memo">'
+                '<input type="hidden" name="memo_id" value="%s">'
+                '<button type="submit" style="font-size:10px;padding:2px 6px;background:#fee2e2;color:#991b1b;border:0;border-radius:4px;cursor:pointer">Borrar</button></form>'
+            ) % m.id
+        historial.append(
+            "<div style='border-bottom:1px solid #e2e8f0;padding:10px 0'>"
+            "<div style='font-size:12px;font-weight:700;color:#0B2D57'>%s %s · %s</div>"
+            "<p style='margin:6px 0;font-size:13px;color:#334155;white-space:pre-wrap'>%s</p>"
+            "<div style='font-size:11px;color:#64748b'>Registrado por: %s (%s)%s</div>"
+            "</div>" % (
+                icon, _esc(m.tipo_nota), _esc(m.timestamp_registro),
+                _esc(m.contenido_memo),
+                _esc(m.registrado_por), _esc(m.registrado_por_rol),
+                borrar_btn,
+            )
+        )
+    form_html = ""
+    if puede_crear:
+        form_html = f"""
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:16px">
+    <h3 style="margin:0 0 10px;font-size:14px;color:#0B2D57">Agregar nota / memo</h3>
+    {"<div style='background:#dcfce7;color:#166534;padding:8px;border-radius:6px;margin-bottom:8px;font-size:13px'>"+_esc(msg)+"</div>" if msg else ""}
+    {"<div style='background:#fee2e2;color:#991b1b;padding:8px;border-radius:6px;margin-bottom:8px;font-size:13px'>"+_esc(err)+"</div>" if err else ""}
+    <form method="POST" style="display:grid;gap:10px">
+      <input type="hidden" name="accion" value="agregar_memo">
+      <textarea name="contenido_memo" rows="3" placeholder="Escribe aquí el memo o anotación..." required
+        style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical"></textarea>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <select name="tipo_nota" style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
+          <option value="Comercial">📌 Comercial</option>
+          <option value="Administrativo">💼 Administrativo</option>
+          <option value="Logro">🏆 Logro / Reconocimiento</option>
+        </select>
+        <button type="submit" style="background:#1e40af;color:#fff;border:0;padding:10px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer">+ Agregar Nota</button>
+      </div>
+    </form>
+  </div>
+"""
+    else:
+        if msg or err:
+            form_html = ("<div style='background:#dcfce7;padding:8px;border-radius:6px;margin-bottom:8px'>%s</div>" % _esc(msg)) if msg else ""
+            form_html += ("<div style='background:#fee2e2;padding:8px;border-radius:6px;margin-bottom:8px'>%s</div>" % _esc(err)) if err else ""
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Memos · {_esc(t.nombre)}</h1>
+  <p>Historial de notas internas · {_esc(t.cargo or '')} · {_esc(t.documento or '')}</p>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+  <a class="btn" href="/gerencia/contabilidad/trabajador/{t.id}/constancia">Certificación</a>
+  <a class="btn" href="/gerencia/contabilidad/trabajadores">← Trabajadores</a>
+</div></header>
+<section class="role-panel">
+  {form_html}
+  <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Historial de notas ({len(memos)})</h3>
+  {''.join(historial) or "<p style='color:#64748b;font-size:13px'>Sin notas registradas aún.</p>"}
+</section>
+"""
+    return page("Memos · " + (t.nombre or "Trabajador"), shell(body))
+
+
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia", methods=["GET", "POST"])
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia.pdf", methods=["GET", "POST"])
 def contabilidad_constancia_laboral(tid):
@@ -49773,18 +49955,19 @@ def contabilidad_constancia_laboral(tid):
             <textarea name="objeto_funciones" required rows="3" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Labores que desempeña...">{_esc(getattr(t,'objeto_funciones',None) or '')}</textarea>
             <label style="font-size:12px;font-weight:700">Fecha de inicio de vinculación *</label>
             <input name="fecha_inicio" required value="{_esc(getattr(t,'fecha_inicio',None) or '')}" placeholder="15 de enero de 2026" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
-            <label style="font-size:12px;font-weight:700">Tipo de contrato (filtro)</label>
+            <label style="font-size:12px;font-weight:700">Tipo de contratación *</label>
             <select name="tipo_contrato" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
-              <option value="Prestación de servicios" {"selected" if (t.tipo_contrato or "").lower().startswith("prest") else ""}>Prestación de servicios</option>
+              <option value="Prestación de Servicios Civiles (Fase de Pre-lanzamiento)" {"selected" if not (t.tipo_contrato or "") or "prest" in (t.tipo_contrato or "").lower() or "civil" in (t.tipo_contrato or "").lower() else ""}>Prestación de Servicios Civiles (Fase de Pre-lanzamiento)</option>
+              <option value="Prestación de servicios" {"selected" if (t.tipo_contrato or "") == "Prestación de servicios" else ""}>Prestación de servicios</option>
               <option value="Laboral término fijo" {"selected" if "fijo" in (t.tipo_contrato or "").lower() else ""}>Laboral término fijo</option>
               <option value="Laboral indefinido" {"selected" if "indefinido" in (t.tipo_contrato or "").lower() else ""}>Laboral indefinido</option>
               <option value="Obra o labor" {"selected" if "obra" in (t.tipo_contrato or "").lower() else ""}>Obra o labor</option>
-              <option value="Contrato indefinido" {"selected" if (t.tipo_contrato or "") == "Contrato indefinido" else ""}>Contrato indefinido</option>
             </select>
             <label style="font-size:12px;font-weight:700">Entidad / persona solicitante de la constancia *</label>
             <input name="solicitante" required value="{_esc(getattr(t,'solicitante',None) or '')}" placeholder="Empresa, banco, entidad o persona a quien va dirigida" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
-            <label style="font-size:12px;font-weight:700">Honorarios / salario (opcional)</label>
-            <input name="honorarios" value="{_esc(getattr(t,'honorarios',None) or '')}" placeholder="$ 2.500.000 mensuales" style="width:100%;padding:10px;margin-bottom:6px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Honorarios / Sueldo</label>
+            <input name="honorarios" value="{_esc(getattr(t,'honorarios',None) or 'Variables según cumplimiento de metas comerciales y cierres de implementación efectivas')}" placeholder="Variables según cumplimiento de metas..." style="width:100%;padding:10px;margin-bottom:6px;border-radius:8px;border:1px solid #cbd5e1">
+            <p style="font-size:11px;color:#64748b;margin:0 0 10px">Por modelo de comisiones se recomienda declarar variables (no sueldo fijo) para evitar enredos contables.</p>
             <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:12px">
               <input type="checkbox" name="incluir_honorarios" value="1" style="width:auto"> ¿Incluir asignación económica en el PDF?
             </label>
@@ -57139,8 +57322,12 @@ def _ensure_dev_version_cols():
 def _footer_version_txt():
     try:
         p = plataforma()
-        v = (getattr(p, "version_sistema", None) or "1.0.0").strip()
-        return v
+        v = (getattr(p, "version_sistema", None) or "").strip()
+        if not v:
+            last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
+            if last and last.version:
+                v = last.version
+        return v or "1.0.0"
     except Exception:
         return "1.0.0"
 
@@ -57207,9 +57394,32 @@ def dev_console():
                     db.session.execute(text(
                         "UPDATE plataforma SET version_sistema=:v, changelog_publico=:c"
                     ), {"v": ver, "c": chg})
+                    # Historial inmutable: siempre se agrega una fila, nunca se borra
+                    try:
+                        from datetime import datetime as _dt
+                        _ts = _dt.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                        db.session.add(ChangelogVersion(
+                            version=ver,
+                            fecha=fecha_hoy() or "",
+                            resumen=chg or ("Publicación de versión %s" % ver),
+                            publico=True,
+                            creado_en=_ts,
+                            creado_por=session.get("usuario") or "dev-console",
+                        ))
+                    except Exception:
+                        pass
                     db.session.commit()
-                    msg = "Versión %s publicada. El pie de página del sistema se actualizó." % ver
+                    # Forzar relectura para que el login y footers muestren la nueva versión de inmediato
+                    try:
+                        db.session.expire_all()
+                    except Exception:
+                        pass
+                    msg = "Versión %s publicada e histórica registrada (inmutable). El login y pie de página se actualizaron." % ver
                 except Exception as e:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                     err = str(e)[:120]
             tab = "versiones"
         elif accion == "guardar_anuncio_tec":
@@ -57451,10 +57661,22 @@ def dev_console():
   </div>
 """
     elif tab == "versiones":
+        hist_html = ""
+        try:
+            hist_rows = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).limit(30).all()
+            for r in hist_rows:
+                hist_html += (
+                    "<div style='border-bottom:1px solid #e2e8f0;padding:8px 0'>"
+                    "<div style='font-weight:800;color:#0B2D57;font-size:13px'>v%s · %s</div>"
+                    "<p style='margin:4px 0 0;font-size:12px;color:#334155;white-space:pre-wrap'>%s</p>"
+                    "<div style='font-size:11px;color:#94a3b8'>%s · %s</div></div>"
+                ) % (_esc(r.version), _esc(r.fecha), _esc(r.resumen or ""), _esc(r.creado_en or ""), _esc(r.creado_por or ""))
+        except Exception:
+            hist_html = "<p style='color:#64748b;font-size:12px'>Sin historial aún.</p>"
         panel = f"""
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:640px">
     <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Control de versión (changelog)</h3>
-    <p style="font-size:12px;color:#64748b;margin:0 0 12px">Al guardar, el número de versión se refleja en el pie de página del sistema para los colegios.</p>
+    <p style="font-size:12px;color:#64748b;margin:0 0 12px">Al publicar, el número se refleja en el login de colegios y en el pie de página. <b>Cada publicación se guarda en historial inmutable</b> (no se puede borrar).</p>
     <form method="POST" style="display:grid;gap:10px">
       <input type="hidden" name="tab" value="versiones">
       <input type="hidden" name="accion" value="guardar_version">
@@ -57463,11 +57685,13 @@ def dev_console():
         <input name="version_sistema" value="{_esc(ver)}" placeholder="1.5.0" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
       </div>
       <div>
-        <label style="font-size:12px;font-weight:700">Cambios técnicos (texto plano)</label>
-        <textarea name="changelog_publico" rows="8" placeholder="Ej: Se optimizó el escáner QR en porterías." style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">{_esc(chg)}</textarea>
+        <label style="font-size:12px;font-weight:700">Notas de las mejoras (texto plano)</label>
+        <textarea name="changelog_publico" rows="8" placeholder="Ej: Se optimizó el escáner QR en porterías.&#10;• Memos de trabajadores&#10;• Certificación laboral mejorada" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">{_esc(chg)}</textarea>
       </div>
       <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Publicar versión</button>
     </form>
+    <h4 style="margin:20px 0 8px;font-size:13px;color:#0B2D57">Historial inmutable de versiones</h4>
+    <div style="max-height:320px;overflow:auto">{hist_html or "<p style='color:#64748b;font-size:12px'>Aún no hay publicaciones.</p>"}</div>
   </div>
 """
     elif tab == "anuncios":
