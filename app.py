@@ -39670,7 +39670,6 @@ def soporte_actualizaciones():
                 if es_desarrollo:
                     p.novedades = (request.form.get("novedades") or "").strip()
                 if es_soporte:
-                    p.version_sistema = (request.form.get("version_sistema") or "2.5.0").strip()[:40]
                     p.faq = (request.form.get("faq") or "").strip()
                     p.mantenimiento_programado = (request.form.get("mantenimiento_programado") or "").strip()
                     p.habeas_data = (request.form.get("habeas_data") or "").strip()
@@ -39757,10 +39756,9 @@ def soporte_actualizaciones():
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
 <div class="msg" style="background:#eff6ff;color:#1e3a8a;border-radius:10px;padding:10px 14px;margin-bottom:12px">{_nota_rol}</div>
 <div class="role-panel">
+  <p class="mini-text">La <b>versión del sistema</b> ahora se publica exclusivamente desde <a href="/dev-console?tab=versiones">Consola de Desarrollo → Versiones</a>, para que nunca se sobrescriba sin querer al guardar aquí. Versión actual: <b>{(getattr(p,'version_sistema',None) or '2.5.0')}</b></p>
   <form method="POST" enctype="multipart/form-data">
     <input type="hidden" name="accion" value="guardar">
-    <label><b>Versión del sistema</b></label>
-    <input name="version_sistema" value="{(getattr(p,'version_sistema',None) or '2.5.0')}" placeholder="2.5.0"{_ro_faq}>
     <h3 style="margin-top:16px;color:#0B2D57">Panel derecho del login (mensaje ejecutivo)</h3>
     <label>Chip / etiqueta</label>
     <input name="hero_chip" value="{(getattr(p,'hero_chip',None) or '')}" placeholder="Plataforma institucional · Acceso seguro">
