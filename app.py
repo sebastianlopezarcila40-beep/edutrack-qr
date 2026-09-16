@@ -4892,16 +4892,32 @@ def contenido_login_novedades():
     """Textos del bloque inferior del login (editables desde Soporte)."""
     p = plataforma()
     version = (getattr(p, "version_sistema", None) or "").strip() or None
-    # Preferir la última versión del historial inmutable si la columna está vacía/desactualizada
+    # Fuente de verdad: última fila del historial inmutable (ChangelogVersion)
+    try:
+        last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
+        if last and (last.version or "").strip():
+            version = (last.version or "").strip()
+            # Si hay resumen de mejoras, usarlo como novedades cuando el campo está vacío
+            # (no sobrescribe si ya hay texto editado en Soporte)
+    except Exception:
+        last = None
     if not version:
+        version = "2.5.0"
+    # Sincronizar plataforma.version_sistema con el historial
+    try:
+        if p is not None and (getattr(p, "version_sistema", None) or "").strip() != version:
+            p.version_sistema = version
+            db.session.execute(text("UPDATE plataforma SET version_sistema=:v"), {"v": version})
+            db.session.commit()
+    except Exception:
         try:
-            last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
-            if last and last.version:
-                version = last.version
+            db.session.rollback()
         except Exception:
             pass
-    version = version or "2.5.0"
     novedades = (getattr(p, "novedades", None) or "").strip()
+    # Si no hay novedades manuales, mostrar el resumen de la última versión publicada
+    if not novedades and last is not None and (getattr(last, "resumen", None) or "").strip():
+        novedades = (last.resumen or "").strip()
     faq = (getattr(p, "faq", None) or "").strip()
     mant = (getattr(p, "mantenimiento_programado", None) or "").strip()
     habeas = (getattr(p, "habeas_data", None) or "").strip()
@@ -49220,7 +49236,7 @@ def contabilidad_trabajadores():
         except Exception:
             pass
         memos_lnk = ' · <a href="/gerencia/contabilidad/trabajador/%s/memos">Memos (%s)</a>' % (tw.id, n_memos)
-        cert_lnk = ' · <a href="/gerencia/contabilidad/trabajador/%s/constancia">Certificación</a>' % tw.id
+        cert_lnk = ' · <a href="/gerencia/contabilidad/trabajador/%s/certificacion">Certificación</a>' % tw.id
         filas.append(
             "<tr>"
             "<td style='padding:8px'>%s</td>"
@@ -49934,7 +49950,7 @@ def contabilidad_trabajador_memos(tid):
   <p>Historial de notas internas · {_esc(t.cargo or '')} · {_esc(t.documento or '')}</p>
 </div>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
-  <a class="btn" href="/gerencia/contabilidad/trabajador/{t.id}/constancia">Certificación</a>
+  <a class="btn" href="/gerencia/contabilidad/trabajador/{t.id}/certificacion">Certificación</a>
   <a class="btn" href="/gerencia/contabilidad/trabajadores">← Trabajadores</a>
 </div></header>
 <section class="role-panel">
@@ -49948,23 +49964,53 @@ def contabilidad_trabajador_memos(tid):
 
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia", methods=["GET", "POST"])
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/constancia.pdf", methods=["GET", "POST"])
+@app.route("/gerencia/contabilidad/trabajador/<int:tid>/certificacion", methods=["GET", "POST"])
+@app.route("/gerencia/contabilidad/trabajador/<int:tid>/certificacion.pdf", methods=["GET", "POST"])
 def contabilidad_constancia_laboral(tid):
-    """Formulario previo + PDF constancia laboral corporativa."""
+    """Formulario previo + PDF de Certificación Laboral corporativa (alias: constancia)."""
     g = _guard_contabilidad()
     if g is not None:
         return g
     t = ContTrabajador.query.get_or_404(tid)
     meta = _cont_empresa_meta()
+    # Autocompletar desde Hoja de Vida si falta fecha_inicio / cargo
+    try:
+        hv = HojaVida.query.filter(
+            db.or_(
+                HojaVida.documento == (t.documento or ""),
+                db.func.lower(HojaVida.nombres + " " + HojaVida.primer_apellido).like("%" + (t.nombre or "").lower()[:40] + "%"),
+            )
+        ).order_by(HojaVida.id.desc()).first()
+        if hv:
+            if not (t.fecha_inicio or "").strip() and (getattr(hv, "creado_en", None) or "").strip():
+                t.fecha_inicio = (hv.creado_en or "")[:40]
+            if not (t.cargo or "").strip() and (getattr(hv, "cargo_postula", None) or "").strip():
+                t.cargo = (hv.cargo_postula or "")[:120]
+            if not (t.tipo_contrato or "").strip():
+                t.tipo_contrato = "Prestación de Servicios Civiles (Fase de Pre-lanzamiento)"
+            if not (t.honorarios or "").strip():
+                t.honorarios = "Variables según cumplimiento de metas comerciales y cierres de implementación efectivas"
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+    except Exception:
+        pass
+    # Defaults si siguen vacíos
+    if not (t.tipo_contrato or "").strip():
+        t.tipo_contrato = "Prestación de Servicios Civiles (Fase de Pre-lanzamiento)"
+    if not (t.honorarios or "").strip():
+        t.honorarios = "Variables según cumplimiento de metas comerciales y cierres de implementación efectivas"
     # Actualizar datos desde formulario antes de PDF
     if request.method == "POST":
         t.cargo = (request.form.get("cargo") or t.cargo or "").strip()[:120]
         t.objeto_funciones = (request.form.get("objeto_funciones") or t.objeto_funciones or "").strip()[:2000]
         t.fecha_inicio = (request.form.get("fecha_inicio") or t.fecha_inicio or "").strip()[:40]
-        t.honorarios = (request.form.get("honorarios") or t.honorarios or "").strip()[:80]
+        t.honorarios = (request.form.get("honorarios") or t.honorarios or "").strip()[:200]
         t.telefono = (request.form.get("telefono") or t.telefono or "").strip()[:40]
         t.email = (request.form.get("email") or t.email or "").strip()[:120]
         t.direccion = (request.form.get("direccion") or getattr(t, "direccion", "") or "").strip()[:255]
-        t.tipo_contrato = (request.form.get("tipo_contrato") or t.tipo_contrato or "").strip()[:60]
+        t.tipo_contrato = (request.form.get("tipo_contrato") or t.tipo_contrato or "").strip()[:120]
         t.solicitante = (request.form.get("solicitante") or getattr(t, "solicitante", "") or "").strip()[:200]
         try:
             db.session.commit()
@@ -49977,19 +50023,18 @@ def contabilidad_constancia_laboral(tid):
     # GET: formulario obligatorio
     if not (request.path or "").endswith(".pdf") or request.method == "GET":
         if (request.path or "").endswith(".pdf") and request.method == "GET":
-            # forzar pasar por formulario
-            return redirect("/gerencia/contabilidad/trabajador/%s/constancia" % tid)
+            return redirect("/gerencia/contabilidad/trabajador/%s/certificacion" % tid)
         content = f"""
         <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px">
-          <h2 style="margin:0 0 6px;color:#0B2D57">Constancia laboral · {_esc(t.nombre)}</h2>
-          <p style="font-size:13px;color:#64748b;margin:0 0 14px">Complete o confirme los datos antes de descargar el PDF. Documento interno PROCSIS.</p>
+          <h2 style="margin:0 0 6px;color:#0B2D57">Certificación Laboral · {_esc(t.nombre)}</h2>
+          <p style="font-size:13px;color:#64748b;margin:0 0 14px">Los campos se autocompletan desde la base de datos (Hoja de vida / trabajador). Confirme y descargue el PDF.</p>
           <form method="POST">
-            <label style="font-size:12px;font-weight:700">Cargo exacto *</label>
-            <input name="cargo" required value="{_esc(t.cargo)}" placeholder="Desarrollador Full Stack, Asesor Comercial..." style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Cargo oficial *</label>
+            <input name="cargo" required value="{_esc(t.cargo or 'SUPERVISOR DE VENTAS Y DESARROLLO')}" placeholder="SUPERVISOR DE VENTAS Y DESARROLLO" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
             <label style="font-size:12px;font-weight:700">Objeto de sus funciones *</label>
             <textarea name="objeto_funciones" required rows="3" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Labores que desempeña...">{_esc(getattr(t,'objeto_funciones',None) or '')}</textarea>
-            <label style="font-size:12px;font-weight:700">Fecha de inicio de vinculación *</label>
-            <input name="fecha_inicio" required value="{_esc(getattr(t,'fecha_inicio',None) or '')}" placeholder="15 de enero de 2026" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+            <label style="font-size:12px;font-weight:700">Fecha de ingreso *</label>
+            <input name="fecha_inicio" required value="{_esc(getattr(t,'fecha_inicio',None) or '')}" placeholder="Día exacto de registro de la HV" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
             <label style="font-size:12px;font-weight:700">Tipo de contratación *</label>
             <select name="tipo_contrato" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
               <option value="Prestación de Servicios Civiles (Fase de Pre-lanzamiento)" {"selected" if not (t.tipo_contrato or "") or "prest" in (t.tipo_contrato or "").lower() or "civil" in (t.tipo_contrato or "").lower() else ""}>Prestación de Servicios Civiles (Fase de Pre-lanzamiento)</option>
@@ -50015,7 +50060,7 @@ def contabilidad_constancia_laboral(tid):
             <label style="font-size:12px;font-weight:700;margin-top:10px;display:block">Dirección / residencia</label>
             <input name="direccion" value="{_esc(getattr(t,'direccion',None) or '')}" style="width:100%;padding:10px;margin-bottom:14px;border-radius:8px;border:1px solid #cbd5e1">
             <input type="hidden" name="accion" value="pdf">
-            <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Descargar PDF constancia</button>
+            <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Descargar PDF Certificación Laboral</button>
             <a href="/gerencia/contabilidad/trabajadores" style="margin-left:10px;font-size:13px">Cancelar</a>
           </form>
         </div>
@@ -57356,12 +57401,12 @@ def _ensure_dev_version_cols():
 
 def _footer_version_txt():
     try:
+        # Prioridad: historial inmutable → plataforma → default
+        last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
+        if last and (last.version or "").strip():
+            return (last.version or "").strip()
         p = plataforma()
         v = (getattr(p, "version_sistema", None) or "").strip()
-        if not v:
-            last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
-            if last and last.version:
-                v = last.version
         return v or "1.0.0"
     except Exception:
         return "1.0.0"
@@ -57426,9 +57471,17 @@ def dev_console():
                     if p is not None:
                         p.version_sistema = ver
                         p.changelog_publico = chg
+                        # También actualizar el bloque "Últimas actualizaciones" del login
+                        if chg:
+                            p.novedades = chg
                     db.session.execute(text(
                         "UPDATE plataforma SET version_sistema=:v, changelog_publico=:c"
                     ), {"v": ver, "c": chg})
+                    if chg:
+                        try:
+                            db.session.execute(text("UPDATE plataforma SET novedades=:n"), {"n": chg})
+                        except Exception:
+                            pass
                     # Historial inmutable: siempre se agrega una fila, nunca se borra
                     try:
                         from datetime import datetime as _dt
