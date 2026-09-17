@@ -3991,6 +3991,8 @@ def migrar_columnas():
         ("plataforma", "bo_login_texto", "ALTER TABLE plataforma ADD COLUMN bo_login_texto VARCHAR(300) DEFAULT ''"),
         ("plataforma", "bo_login_img", "ALTER TABLE plataforma ADD COLUMN bo_login_img TEXT DEFAULT ''"),
         ("plataforma", "bo_login_img2", "ALTER TABLE plataforma ADD COLUMN bo_login_img2 TEXT DEFAULT ''"),
+        ("plataforma", "salida_segura_activa", "ALTER TABLE plataforma ADD COLUMN salida_segura_activa BOOLEAN DEFAULT TRUE"),
+        ("login_banners", "_create", "CREATE TABLE IF NOT EXISTS login_banners (id SERIAL PRIMARY KEY, url_imagen TEXT DEFAULT '', frase_eslogan VARCHAR(280) DEFAULT '', titulo VARCHAR(160) DEFAULT '', estado VARCHAR(20) DEFAULT 'activo', orden INTEGER DEFAULT 0, creado_en VARCHAR(40) DEFAULT '')"),
         ("plataforma", "corp_caracteristicas", "ALTER TABLE plataforma ADD COLUMN corp_caracteristicas TEXT"),
         ("plataforma", "corp_empresa_puntos", "ALTER TABLE plataforma ADD COLUMN corp_empresa_puntos TEXT"),
         ("plataforma", "corp_btn1_texto", "ALTER TABLE plataforma ADD COLUMN corp_btn1_texto VARCHAR(80) DEFAULT 'Conocer PROCSIS'"),
@@ -8560,19 +8562,32 @@ def _nav_public_html(active=""):
 .nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1d1d1f;font-weight:600;font-size:14px;flex-shrink:0}
 .nav-logo-apple .logo-micro{height:22px;width:auto;object-fit:contain}
 .nav-links-center{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:center;flex:1}
-.link-apple{
-  font-size:14px;font-weight:400;letter-spacing:-.01em;color:#1d1d1f;text-decoration:none;opacity:.85;
-  padding:8px 12px;border-radius:8px;background:transparent;border:0;cursor:pointer;font-family:inherit;
-  transition:opacity .2s ease,color .2s ease;white-space:nowrap
+/* Importante: anular estilos globales de button (pastillas azules del sistema) */
+.navbar-apple-wrap button.link-apple,
+.navbar-apple-wrap .link-apple{
+  font-size:14px !important;font-weight:400 !important;letter-spacing:-.01em !important;
+  color:#1d1d1f !important;text-decoration:none !important;opacity:.88 !important;
+  padding:8px 12px !important;border-radius:0 !important;background:transparent !important;
+  border:0 !important;cursor:pointer !important;font-family:inherit !important;
+  box-shadow:none !important;width:auto !important;margin:0 !important;
+  transition:opacity .2s ease,color .2s ease !important;white-space:nowrap !important;
+  background-image:none !important;
 }
-.link-apple:hover,.link-apple.is-hot{opacity:1;color:#0071e3}
+.navbar-apple-wrap button.link-apple:hover,
+.navbar-apple-wrap .link-apple:hover,
+.navbar-apple-wrap .link-apple.is-hot{
+  opacity:1 !important;color:#0B63CE !important;background:transparent !important;box-shadow:none !important;
+}
 .nav-button-right{flex-shrink:0}
 .btn-apple-oval{
-  font-size:13px;font-weight:400;color:#1d1d1f;background-color:#f5f5f7;
-  padding:8px 18px;text-decoration:none;border-radius:980px;display:inline-block;
-  transition:background-color .2s ease,transform .1s ease;
+  font-size:13px !important;font-weight:500 !important;color:#fff !important;
+  background-color:#0B63CE !important;background-image:none !important;
+  padding:8px 18px !important;text-decoration:none !important;border-radius:980px !important;
+  display:inline-block !important;border:0 !important;box-shadow:none !important;
+  width:auto !important;margin:0 !important;
+  transition:background-color .2s ease,transform .1s ease !important;
 }
-.btn-apple-oval:hover{background-color:#e8e8ed}
+.btn-apple-oval:hover{background-color:#0a56b3 !important}
 .btn-apple-oval:active{transform:scale(.97)}
 .apple-dropdown-menu{
   position:absolute;top:100%;left:0;width:100%;
@@ -8588,7 +8603,7 @@ def _nav_public_html(active=""):
 .dropdown-column{display:flex;flex-direction:column;gap:10px;min-width:200px;max-width:260px}
 .dropdown-column h4{font-size:11px;color:#86868b;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;font-weight:600}
 .dropdown-link{font-size:14px;font-weight:500;color:#1d1d1f;text-decoration:none;transition:color .2s ease;line-height:1.35}
-.dropdown-link:hover{color:#0071e3}
+.dropdown-link:hover{color:#0B63CE}
 .dd-panel{display:none}
 .dd-panel.on{display:flex;gap:48px;flex-wrap:wrap;width:100%;justify-content:center}
 @media(max-width:800px){
@@ -8700,6 +8715,26 @@ def _public_shell(title, body_html, active=""):
 </footer>
 """
     content = f"""
+<style>
+/* Botones estilo Apple · azul PROCSIS (logo) */
+a.btn, .btn, .sx-cta a, .cta a, button.btn-primary,
+a[href*="whatsapp"], .btn-wa, .btn-apple {{
+  border-radius: 980px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em;
+  transition: background-color .2s ease, transform .1s ease, box-shadow .2s ease !important;
+  box-shadow: none !important;
+}}
+a.btn:active, .btn:active, .sx-cta a:active {{ transform: scale(.97) !important; }}
+.sx-cta a, a.btn-primary {{ background: #0B2D57 !important; color: #fff !important; border: 0 !important; padding: 12px 22px !important; }}
+.sx-cta a[href*="whatsapp"], a[href*="whatsapp"].btn, a[style*="16a34a"] {{
+  background: #0B4A8F !important; color: #fff !important;
+}}
+.sx-cta a[href="/login"], a.btn-ghost {{
+  background: #f5f5f7 !important; color: #1d1d1f !important; border: 0 !important;
+}}
+</style>
 <div style="background:#f8fafc;min-height:100vh">
 {nav}
 {body_html}
@@ -19701,62 +19736,119 @@ def _file_to_data_uri(fs, max_bytes=2_500_000):
 @app.route("/gerencia/backoffice-branding", methods=["GET", "POST"])
 @app.route("/gerencia/login-banners", methods=["GET", "POST"])
 def gerencia_backoffice_branding():
-    """Gestor de banners del login interno + salida segura."""
+    """Gestor de banners del login interno + salida segura (hasta 4 activos)."""
     g = _guard_gerencia()
     if g is not None:
         return g
+    # Crear tabla si no existe (evita InFailedSqlTransaction)
     try:
         db.session.rollback()
-        db.create_all()
     except Exception:
         pass
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS login_banners ("
+            "id SERIAL PRIMARY KEY, url_imagen TEXT DEFAULT '', frase_eslogan VARCHAR(280) DEFAULT '', "
+            "titulo VARCHAR(160) DEFAULT '', estado VARCHAR(20) DEFAULT 'activo', "
+            "orden INTEGER DEFAULT 0, creado_en VARCHAR(40) DEFAULT '')"
+        ))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        db.session.execute(text(
+            "ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS salida_segura_activa BOOLEAN DEFAULT TRUE"
+        ))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     msg = ""
     err = ""
-    p = plataforma()
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    p = None
+    try:
+        p = plataforma()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        p = None
     if request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
         try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
             if accion == "salida_segura":
-                p.salida_segura_activa = (request.form.get("salida_segura") == "1")
+                on = 1 if request.form.get("salida_segura") == "1" else 0
+                db.session.execute(text(
+                    "UPDATE plataforma SET salida_segura_activa = :v WHERE id = (SELECT id FROM plataforma ORDER BY id LIMIT 1)"
+                ), {"v": bool(on)})
                 db.session.commit()
-                msg = "Salida segura %s." % ("activada" if p.salida_segura_activa else "desactivada")
+                msg = "Salida segura %s." % ("activada" if on else "desactivada")
             elif accion == "toggle":
                 bid = int(request.form.get("id") or 0)
-                b = LoginBanner.query.get(bid)
-                if b:
-                    b.estado = "inactivo" if b.estado == "activo" else "activo"
-                    db.session.commit()
-                    msg = "Banner %s." % b.estado
+                row = db.session.execute(text("SELECT estado FROM login_banners WHERE id=:id"), {"id": bid}).first()
+                if row:
+                    cur = (row[0] or "").strip()
+                    if cur != "activo":
+                        n_act = db.session.execute(text(
+                            "SELECT COUNT(*) FROM login_banners WHERE estado='activo'"
+                        )).scalar() or 0
+                        if int(n_act) >= 4:
+                            err = "Ya hay 4 banners activos. Desactive otro primero."
+                        else:
+                            db.session.execute(text("UPDATE login_banners SET estado='activo' WHERE id=:id"), {"id": bid})
+                            db.session.commit()
+                            msg = "Banner activo."
+                    else:
+                        db.session.execute(text("UPDATE login_banners SET estado='inactivo' WHERE id=:id"), {"id": bid})
+                        db.session.commit()
+                        msg = "Banner inactivo."
             elif accion == "eliminar":
                 bid = int(request.form.get("id") or 0)
-                b = LoginBanner.query.get(bid)
-                if b:
-                    db.session.delete(b)
-                    db.session.commit()
-                    msg = "Banner eliminado."
+                db.session.execute(text("DELETE FROM login_banners WHERE id=:id"), {"id": bid})
+                db.session.commit()
+                msg = "Banner eliminado."
             elif accion == "nuevo":
-                n_act = LoginBanner.query.filter_by(estado="activo").count()
-                if n_act >= 4 and (request.form.get("estado") or "activo") == "activo":
-                    err = "Máximo 4 banners activos. Desactive uno antes de agregar otro activo."
+                n_act = int(db.session.execute(text(
+                    "SELECT COUNT(*) FROM login_banners WHERE estado='activo'"
+                )).scalar() or 0)
+                want_activo = (request.form.get("estado") or "activo") == "activo"
+                if want_activo and n_act >= 4:
+                    err = "Máximo 4 banners activos. Desactive uno o guarde como Inactivo."
                 else:
-                    img = _file_to_data_uri(request.files.get("url_imagen"))
+                    img = _file_to_data_uri(request.files.get("url_imagen"), max_bytes=2_000_000)
                     url = (request.form.get("url_imagen_url") or "").strip()
                     if not img and url.startswith("http"):
                         img = url[:4000]
                     if not img:
-                        err = "Debe cargar una imagen o pegar una URL."
+                        err = "Debe cargar una imagen (PNG/JPG ≤ 2 MB) o pegar una URL https."
                     else:
-                        b = LoginBanner(
-                            url_imagen=img,
-                            titulo=(request.form.get("titulo") or "")[:160],
-                            frase_eslogan=(request.form.get("frase_eslogan") or "")[:280],
-                            estado=(request.form.get("estado") or "activo")[:20],
-                            orden=int(request.form.get("orden") or 0),
-                            creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
-                        )
-                        db.session.add(b)
+                        n_total = int(db.session.execute(text("SELECT COUNT(*) FROM login_banners")).scalar() or 0)
+                        tit = (request.form.get("titulo") or "")[:160]
+                        slog = (request.form.get("frase_eslogan") or "")[:280]
+                        est = "activo" if want_activo else "inactivo"
+                        creado = (fecha_hoy() or "") + " " + (hora_actual() or "")
+                        db.session.execute(text(
+                            "INSERT INTO login_banners (url_imagen, frase_eslogan, titulo, estado, orden, creado_en) "
+                            "VALUES (:img, :slog, :tit, :est, :ord, :cre)"
+                        ), {"img": img, "slog": slog, "tit": tit, "est": est, "ord": n_total + 1, "cre": creado})
                         db.session.commit()
-                        msg = "Banner agregado. Rotación cada 5 s en /backoffice."
+                        msg = "Banner #%s guardado. Activos: %s de 4." % (
+                            n_total + 1, n_act + (1 if want_activo else 0)
+                        )
             if msg and not err:
                 try:
                     registrar_auditoria("Login banners / salida segura", session.get("usuario") or "")
@@ -19767,18 +19859,26 @@ def gerencia_backoffice_branding():
                 db.session.rollback()
             except Exception:
                 pass
-            err = "Error: %s" % str(e)[:120]
-    banners = []
+            err = "Error: %s" % str(e)[:200]
+    banners_rows = []
     try:
-        banners = LoginBanner.query.order_by(LoginBanner.orden.asc(), LoginBanner.id.desc()).all()
+        db.session.rollback()
+        banners_rows = db.session.execute(text(
+            "SELECT id, url_imagen, titulo, frase_eslogan, estado FROM login_banners ORDER BY orden ASC, id DESC"
+        )).fetchall()
     except Exception:
-        banners = []
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        banners_rows = []
     filas = []
-    for b in banners:
+    for b in banners_rows:
+        bid, uimg, tit, slog, est = b[0], (b[1] or ""), (b[2] or ""), (b[3] or ""), (b[4] or "")
         thumb = ""
-        if (b.url_imagen or "").strip():
-            thumb = '<img src="%s" alt="" style="width:96px;height:54px;object-fit:cover;border-radius:8px">' % _esc(b.url_imagen)
-        on = b.estado == "activo"
+        if uimg.strip():
+            thumb = '<img src="%s" alt="" style="width:96px;height:54px;object-fit:cover;border-radius:8px">' % _esc(uimg)
+        on = est == "activo"
         filas.append(
             "<tr><td>%s</td><td><b>%s</b><br><span style='font-size:12px;color:#64748b'>%s</span></td>"
             "<td>%s</td><td>"
@@ -19792,17 +19892,32 @@ def gerencia_backoffice_branding():
             "background:#fff;cursor:pointer;color:#b91c1c'>Eliminar</button></form></td></tr>"
             % (
                 thumb,
-                _esc(b.titulo or "—"),
-                _esc(b.frase_eslogan or ""),
+                _esc(tit or "—"),
+                _esc(slog),
                 "Activo" if on else "Inactivo",
-                b.id,
+                bid,
                 "#16a34a" if on else "#64748b",
                 "ON" if on else "OFF",
-                b.id,
+                bid,
             )
         )
     tabla = "".join(filas) or "<tr><td colspan='4' style='padding:12px;color:#64748b'>Sin banners. Agregue hasta 4 activos.</td></tr>"
-    ss_on = bool(getattr(p, "salida_segura_activa", True))
+    ss_on = True
+    try:
+        if p is not None:
+            ss_on = bool(getattr(p, "salida_segura_activa", True))
+        else:
+            r = db.session.execute(text(
+                "SELECT salida_segura_activa FROM plataforma ORDER BY id LIMIT 1"
+            )).first()
+            if r is not None and r[0] is not None:
+                ss_on = bool(r[0])
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        ss_on = True
     body = f"""
 <header class="role-hero"><div>
   <h1>Gestor de Banners del Login Interno</h1>
