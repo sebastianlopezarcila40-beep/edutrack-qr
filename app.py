@@ -1338,6 +1338,19 @@ class Plataforma(db.Model):
     bo_login_texto = db.Column(db.String(300), default="Gestión académica, soporte y control para instituciones educativas.")
     bo_login_img = db.Column(db.Text, default="")  # data URI o URL
     bo_login_img2 = db.Column(db.Text, default="")  # imagen secundaria opcional
+    salida_segura_activa = db.Column(db.Boolean, default=True)  # cierra sesión al cerrar pestaña
+
+
+class LoginBanner(db.Model):
+    """Banners del login /backoffice — hasta 4 activos, rotación 5s estilo Apple."""
+    __tablename__ = "login_banners"
+    id = db.Column(db.Integer, primary_key=True)
+    url_imagen = db.Column(db.Text, default="")
+    frase_eslogan = db.Column(db.String(280), default="")
+    titulo = db.Column(db.String(160), default="")
+    estado = db.Column(db.String(20), default="activo")  # activo | inactivo
+    orden = db.Column(db.Integer, default=0)
+    creado_en = db.Column(db.String(40), default="")
 
 
 class ProductoProcsis(db.Model):
@@ -3557,6 +3570,33 @@ def shell(content):
         )
     icons.append(f'<a class="out" href="/logout" title="Salir"><div class="ic">{_icono_menu("Salir")}</div>Salir</a>')
     icon_html = "".join(icons)
+    # Salida segura: al cerrar pestaña cierra sesión (si Gerencia lo activó)
+    ss_js = ""
+    try:
+        if session.get("usuario"):
+            p_ss = plataforma()
+            if bool(getattr(p_ss, "salida_segura_activa", True)):
+                ss_js = """
+<script>
+(function(){
+  var sent=false, nav=false;
+  document.addEventListener("click",function(e){
+    var a=e.target&&e.target.closest?e.target.closest("a"):null;
+    if(a&&a.href){ try{ if(new URL(a.href).origin===location.origin) nav=true; }catch(x){} }
+  },true);
+  document.addEventListener("submit",function(){ nav=true; },true);
+  function salir(){
+    if(sent||nav) return; sent=true;
+    try{
+      if(navigator.sendBeacon) navigator.sendBeacon("/api/salida-segura");
+      else fetch("/api/salida-segura",{method:"POST",keepalive:true,credentials:"same-origin"});
+    }catch(e){}
+  }
+  window.addEventListener("pagehide",salir);
+})();
+</script>"""
+    except Exception:
+        ss_js = ""
     return f"""
 <div class="role-layout">
   <div class="role-topbar">
@@ -3573,6 +3613,7 @@ def shell(content):
   <div class="role-welcome">Bienvenido(a) a <b>{APP_NAME}</b>. Gestión académica institucional · PROCSIS</div>
   <main class="role-main">{banner_licencia_html()}{content}{footer()}</main>
 </div>
+{ss_js}
 """
 
 
@@ -19415,64 +19456,103 @@ def portal_backoffice():
                 pass
             error = "No se pudo iniciar sesión. Intente de nuevo. (%s)" % str(e)[:80]
 
-    # Textos e imagen del panel derecho (editables desde Gerencia)
-    bo_tit = "EduTrack · Operación interna PROCSIS"
-    bo_txt = "Gestión académica, soporte y control para instituciones educativas."
-    bo_img = ""
-    bo_img2 = ""
+    # Banners activos (máx 4) — si no hay, fallback a campos bo_login_*
+    banners = []
     try:
-        p2 = plataforma()
-        bo_tit = (getattr(p2, "bo_login_titulo", None) or "").strip() or bo_tit
-        bo_txt = (getattr(p2, "bo_login_texto", None) or "").strip() or bo_txt
-        bo_img = (getattr(p2, "bo_login_img", None) or "").strip()
-        bo_img2 = (getattr(p2, "bo_login_img2", None) or "").strip()
-        if not bo_img:
-            bo_img = (getattr(p2, "corp_hero_fondo", None) or "").strip()
+        try:
+            db.create_all()
+        except Exception:
+            pass
+        rows = (
+            LoginBanner.query.filter_by(estado="activo")
+            .order_by(LoginBanner.orden.asc(), LoginBanner.id.asc())
+            .limit(4)
+            .all()
+        )
+        for b in rows:
+            img = (b.url_imagen or "").strip()
+            if not img:
+                continue
+            banners.append({
+                "img": img,
+                "titulo": (b.titulo or "").strip() or "EduTrack · PROCSIS",
+                "eslogan": (b.frase_eslogan or "").strip() or "Operación interna",
+            })
+    except Exception:
+        banners = []
+    if not banners:
+        bo_tit = "EduTrack · Operación interna PROCSIS"
+        bo_txt = "Gestión académica, soporte y control para instituciones educativas."
+        bo_img = ""
+        try:
+            p2 = plataforma()
+            bo_tit = (getattr(p2, "bo_login_titulo", None) or "").strip() or bo_tit
+            bo_txt = (getattr(p2, "bo_login_texto", None) or "").strip() or bo_txt
+            bo_img = (getattr(p2, "bo_login_img", None) or getattr(p2, "corp_hero_fondo", None) or "").strip()
+        except Exception:
+            pass
+        banners = [{"img": bo_img, "titulo": bo_tit, "eslogan": bo_txt}]
+    # Orden aleatorio al cargar (cada F5 puede empezar en banner distinto)
+    try:
+        import random as _rnd
+        _rnd.shuffle(banners)
     except Exception:
         pass
-    panel_bg = (
-        'background-image:url(\"%s\");background-size:cover;background-position:center;' % bo_img
-        if bo_img else
-        "background:linear-gradient(135deg,#0B2D57 0%,#1e3a8a 45%,#7c3aed 100%);"
-    )
-    extra_card = ""
-    if bo_img2:
-        extra_card = (
-            '<div class="bo-float2"><img src="%s" alt=""></div>' % _esc(bo_img2)
+    slides_html = []
+    for i, b in enumerate(banners):
+        bg = ""
+        if b.get("img"):
+            bg = 'style="background-image:url(\'%s\')"' % _esc(b["img"]).replace("'", "\\'")
+        slides_html.append(
+            '<div class="bo-slide%s" %s>'
+            '<div class="bo-slide-copy"><h3>%s</h3><p>%s</p></div></div>'
+            % (" active" if i == 0 else "", bg, _esc(b["titulo"]), _esc(b["eslogan"]))
         )
+    dots = "".join(
+        '<button type="button" class="bo-dot%s" data-i="%d" aria-label="Banner %d"></button>'
+        % (" on" if i == 0 else "", i, i + 1)
+        for i in range(len(banners))
+    )
     body = f"""
 <style>
-.bo-wrap{{min-height:100vh;display:flex;font-family:Segoe UI,system-ui,-apple-system,sans-serif;background:#fff}}
+.bo-wrap{{min-height:100vh;display:flex;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,system-ui,sans-serif;background:#fff}}
 .bo-left{{flex:0 0 42%;max-width:480px;display:flex;flex-direction:column;justify-content:center;
 padding:40px 48px;box-sizing:border-box}}
 .bo-left .brand{{display:flex;align-items:center;gap:12px;margin-bottom:36px}}
 .bo-left .brand img{{height:44px;width:auto;max-width:140px;object-fit:contain}}
-.bo-left .brand span{{font-size:22px;font-weight:800;color:#0B2D57;letter-spacing:-.02em}}
-.bo-left h1{{margin:0 0 8px;font-size:28px;color:#0f172a;font-weight:800;letter-spacing:-.03em}}
+.bo-left .brand span{{font-size:22px;font-weight:700;color:#0B2D57;letter-spacing:-.02em}}
+.bo-left h1{{margin:0 0 8px;font-size:28px;color:#0f172a;font-weight:700;letter-spacing:-.03em}}
 .bo-left .hint{{margin:0 0 28px;font-size:14px;color:#64748b;line-height:1.45}}
-.bo-left label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:0 0 6px}}
-.bo-left input[type=text],.bo-left input[type=password],.bo-left input[type=email]{{
-width:100%;padding:12px 14px;margin:0 0 16px;border:1.5px solid #e2e8f0;border-radius:8px;
-box-sizing:border-box;font-size:14px;background:#fff;transition:border .15s,box-shadow .15s}}
+.bo-left label{{display:block;font-size:12px;font-weight:600;color:#334155;margin:0 0 6px}}
+.bo-left input[type=text],.bo-left input[type=password]{{
+width:100%;padding:12px 14px;margin:0 0 16px;border:1.5px solid #e2e8f0;border-radius:10px;
+box-sizing:border-box;font-size:14px;background:#fff}}
 .bo-left input:focus{{outline:none;border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}}
 .bo-row{{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}}
-.bo-left button[type=submit]{{padding:12px 28px;border:0;border-radius:8px;background:#0B2D57;color:#fff;
-font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.02em}}
-.bo-left button[type=submit]:hover{{background:#0a2447}}
+.bo-left button[type=submit]{{padding:12px 28px;border:0;border-radius:10px;background:#0B2D57;color:#fff;
+font-weight:700;font-size:14px;cursor:pointer}}
 .bo-check{{font-size:13px;color:#475569;display:flex;align-items:center;gap:6px}}
 .bo-check input{{width:auto;margin:0}}
-.err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px 12px;border-radius:8px;margin-bottom:14px}}
+.err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px 12px;border-radius:10px;margin-bottom:14px}}
 .bo-links{{margin-top:28px;font-size:12px;color:#64748b}}
 .bo-links a{{color:#0B2D57;text-decoration:none;font-weight:600;margin-right:12px}}
-.bo-right{{flex:1;min-height:100vh;position:relative;overflow:hidden;{panel_bg}}}
-.bo-right::before{{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(11,45,87,.55),rgba(124,58,237,.35));pointer-events:none}}
-.bo-float{{position:absolute;top:12%;left:8%;right:8%;z-index:2;background:rgba(255,255,255,.95);
-border-radius:16px;padding:16px 18px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-width:420px}}
-.bo-float h3{{margin:0 0 6px;font-size:16px;color:#0f172a;font-weight:800;line-height:1.35}}
-.bo-float p{{margin:0;font-size:13px;color:#475569;line-height:1.45}}
-.bo-float2{{position:absolute;bottom:10%;right:8%;z-index:2;border-radius:16px;overflow:hidden;
-box-shadow:0 20px 50px rgba(0,0,0,.3);max-width:280px;background:#fff}}
-.bo-float2 img{{display:block;width:100%;height:auto;max-height:220px;object-fit:cover}}
+.bo-right{{flex:1;min-height:100vh;position:relative;overflow:hidden;padding:28px;box-sizing:border-box;
+background:linear-gradient(135deg,#0B2D57 0%,#1e3a8a 45%,#7c3aed 100%)}}
+.bo-stage{{position:relative;width:100%;height:calc(100vh - 56px);border-radius:24px;overflow:hidden;
+box-shadow:0 24px 60px rgba(0,0,0,.28)}}
+.bo-slide{{position:absolute;inset:0;opacity:0;pointer-events:none;
+background-size:cover;background-position:center;
+transition:opacity .6s cubic-bezier(0.25,1,0.5,1);
+filter:brightness(0.72)}}
+.bo-slide.active{{opacity:1;pointer-events:auto}}
+.bo-slide-copy{{position:absolute;left:8%;right:8%;top:14%;z-index:2;color:#fff}}
+.bo-slide-copy h3{{margin:0 0 8px;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.3;
+text-shadow:0 2px 16px rgba(0,0,0,.35)}}
+.bo-slide-copy p{{margin:0;font-size:15px;font-weight:400;opacity:.92;line-height:1.45;
+text-shadow:0 1px 10px rgba(0,0,0,.3)}}
+.bo-dots{{position:absolute;bottom:18px;left:0;right:0;z-index:3;display:flex;justify-content:center;gap:8px}}
+.bo-dot{{width:8px;height:8px;border-radius:50%;border:0;padding:0;background:rgba(255,255,255,.4);cursor:pointer}}
+.bo-dot.on{{background:#fff;transform:scale(1.15)}}
 @media(max-width:900px){{
 .bo-right{{display:none}}
 .bo-left{{flex:1;max-width:100%;padding:32px 24px}}
@@ -19503,13 +19583,33 @@ box-shadow:0 20px 50px rgba(0,0,0,.3);max-width:280px;background:#fff}}
     </div>
   </div>
   <div class="bo-right">
-    <div class="bo-float">
-      <h3>{_esc(bo_tit)}</h3>
-      <p>{_esc(bo_txt)}</p>
+    <div class="bo-stage" id="boStage">
+      {"".join(slides_html)}
+      <div class="bo-dots">{dots}</div>
     </div>
-    {extra_card}
   </div>
 </div>
+<script>
+(function(){{
+  var slides=document.querySelectorAll(".bo-slide");
+  var dots=document.querySelectorAll(".bo-dot");
+  if(!slides.length) return;
+  var i=0, n=slides.length, t=null;
+  function go(x){{
+    slides[i].classList.remove("active");
+    if(dots[i]) dots[i].classList.remove("on");
+    i=(x+n)%n;
+    slides[i].classList.add("active");
+    if(dots[i]) dots[i].classList.add("on");
+  }}
+  function tick(){{ go(i+1); }}
+  if(n>1) t=setInterval(tick,5000);
+  dots.forEach(function(d){{ d.addEventListener("click",function(){{
+    go(parseInt(d.getAttribute("data-i")||0,10));
+    if(t){{ clearInterval(t); t=setInterval(tick,5000); }}
+  }}); }});
+}})();
+</script>
 """
     return page("PROCSIS Backoffice", body)
 
@@ -19554,107 +19654,180 @@ def _file_to_data_uri(fs, max_bytes=2_500_000):
 
 
 @app.route("/gerencia/backoffice-branding", methods=["GET", "POST"])
+@app.route("/gerencia/login-banners", methods=["GET", "POST"])
 def gerencia_backoffice_branding():
-    """Gerencia: textos e imágenes del login unificado /backoffice."""
+    """Gestor de banners del login interno + salida segura."""
     g = _guard_gerencia()
     if g is not None:
         return g
     try:
         db.session.rollback()
+        db.create_all()
     except Exception:
         pass
     msg = ""
     err = ""
     p = plataforma()
     if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
         try:
-            p.bo_login_titulo = (request.form.get("bo_login_titulo") or "")[:200]
-            p.bo_login_texto = (request.form.get("bo_login_texto") or "")[:300]
-            # Imagen principal (fondo panel derecho)
-            img1 = _file_to_data_uri(request.files.get("bo_login_img"))
-            if img1:
-                p.bo_login_img = img1
-            elif (request.form.get("limpiar_img1") or "") == "1":
-                p.bo_login_img = ""
-            # Imagen secundaria (tarjeta flotante)
-            img2 = _file_to_data_uri(request.files.get("bo_login_img2"))
-            if img2:
-                p.bo_login_img2 = img2
-            elif (request.form.get("limpiar_img2") or "") == "1":
-                p.bo_login_img2 = ""
-            # URL alternativa si no suben archivo
-            url1 = (request.form.get("bo_login_img_url") or "").strip()
-            if url1.startswith("http") and not img1:
-                p.bo_login_img = url1[:2000]
-            url2 = (request.form.get("bo_login_img2_url") or "").strip()
-            if url2.startswith("http") and not img2:
-                p.bo_login_img2 = url2[:2000]
-            db.session.commit()
-            msg = "Backoffice actualizado. Abra /backoffice para ver el resultado."
-            try:
-                registrar_auditoria("Backoffice branding", session.get("usuario") or "")
-            except Exception:
-                pass
+            if accion == "salida_segura":
+                p.salida_segura_activa = (request.form.get("salida_segura") == "1")
+                db.session.commit()
+                msg = "Salida segura %s." % ("activada" if p.salida_segura_activa else "desactivada")
+            elif accion == "toggle":
+                bid = int(request.form.get("id") or 0)
+                b = LoginBanner.query.get(bid)
+                if b:
+                    b.estado = "inactivo" if b.estado == "activo" else "activo"
+                    db.session.commit()
+                    msg = "Banner %s." % b.estado
+            elif accion == "eliminar":
+                bid = int(request.form.get("id") or 0)
+                b = LoginBanner.query.get(bid)
+                if b:
+                    db.session.delete(b)
+                    db.session.commit()
+                    msg = "Banner eliminado."
+            elif accion == "nuevo":
+                n_act = LoginBanner.query.filter_by(estado="activo").count()
+                if n_act >= 4 and (request.form.get("estado") or "activo") == "activo":
+                    err = "Máximo 4 banners activos. Desactive uno antes de agregar otro activo."
+                else:
+                    img = _file_to_data_uri(request.files.get("url_imagen"))
+                    url = (request.form.get("url_imagen_url") or "").strip()
+                    if not img and url.startswith("http"):
+                        img = url[:4000]
+                    if not img:
+                        err = "Debe cargar una imagen o pegar una URL."
+                    else:
+                        b = LoginBanner(
+                            url_imagen=img,
+                            titulo=(request.form.get("titulo") or "")[:160],
+                            frase_eslogan=(request.form.get("frase_eslogan") or "")[:280],
+                            estado=(request.form.get("estado") or "activo")[:20],
+                            orden=int(request.form.get("orden") or 0),
+                            creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                        )
+                        db.session.add(b)
+                        db.session.commit()
+                        msg = "Banner agregado. Rotación cada 5 s en /backoffice."
+            if msg and not err:
+                try:
+                    registrar_auditoria("Login banners / salida segura", session.get("usuario") or "")
+                except Exception:
+                    pass
         except Exception as e:
             try:
                 db.session.rollback()
             except Exception:
                 pass
-            err = "No se pudo guardar: %s" % str(e)[:120]
-    tit = (getattr(p, "bo_login_titulo", None) or "") or "EduTrack · Operación interna PROCSIS"
-    txt = (getattr(p, "bo_login_texto", None) or "") or "Gestión académica, soporte y control para instituciones educativas."
-    img1 = (getattr(p, "bo_login_img", None) or "")[:80]
-    img2 = (getattr(p, "bo_login_img2", None) or "")[:80]
-    prev1 = ""
-    prev2 = ""
+            err = "Error: %s" % str(e)[:120]
+    banners = []
     try:
-        full1 = (getattr(p, "bo_login_img", None) or "").strip()
-        full2 = (getattr(p, "bo_login_img2", None) or "").strip()
-        if full1:
-            prev1 = '<div style="margin:8px 0"><img src="%s" alt="" style="max-width:100%%;max-height:160px;border-radius:10px;object-fit:cover"></div>' % _esc(full1)
-        if full2:
-            prev2 = '<div style="margin:8px 0"><img src="%s" alt="" style="max-width:100%%;max-height:120px;border-radius:10px;object-fit:cover"></div>' % _esc(full2)
+        banners = LoginBanner.query.order_by(LoginBanner.orden.asc(), LoginBanner.id.desc()).all()
     except Exception:
-        pass
+        banners = []
+    filas = []
+    for b in banners:
+        thumb = ""
+        if (b.url_imagen or "").strip():
+            thumb = '<img src="%s" alt="" style="width:96px;height:54px;object-fit:cover;border-radius:8px">' % _esc(b.url_imagen)
+        on = b.estado == "activo"
+        filas.append(
+            "<tr><td>%s</td><td><b>%s</b><br><span style='font-size:12px;color:#64748b'>%s</span></td>"
+            "<td>%s</td><td>"
+            "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='toggle'>"
+            "<input type='hidden' name='id' value='%s'>"
+            "<button type='submit' style='font-size:11px;padding:4px 10px;border-radius:6px;border:0;cursor:pointer;"
+            "background:%s;color:#fff'>%s</button></form> "
+            "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Eliminar?')\">"
+            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
+            "<button type='submit' style='font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;"
+            "background:#fff;cursor:pointer;color:#b91c1c'>Eliminar</button></form></td></tr>"
+            % (
+                thumb,
+                _esc(b.titulo or "—"),
+                _esc(b.frase_eslogan or ""),
+                "Activo" if on else "Inactivo",
+                b.id,
+                "#16a34a" if on else "#64748b",
+                "ON" if on else "OFF",
+                b.id,
+            )
+        )
+    tabla = "".join(filas) or "<tr><td colspan='4' style='padding:12px;color:#64748b'>Sin banners. Agregue hasta 4 activos.</td></tr>"
+    ss_on = bool(getattr(p, "salida_segura_activa", True))
     body = f"""
 <header class="role-hero"><div>
-  <h1>Imágenes del Backoffice</h1>
-  <p>Personaliza el login unificado de <b>/backoffice</b> (estilo panel izquierdo + visual derecho).</p>
+  <h1>Gestor de Banners del Login Interno</h1>
+  <p>Hasta <b>4 imágenes activas</b> · rotación 5 s · fade Apple 0.6 s en <code>/backoffice</code></p>
 </div>
 <a class="btn" href="/gerencia/hq">Volver a HQ</a>
 <a class="btn" href="/backoffice" target="_blank" style="margin-left:8px">Ver login →</a>
 </header>
-<section class="role-panel" style="max-width:640px">
+
+<section class="role-panel" style="max-width:720px;margin-bottom:16px;border:2px solid #0B2D57">
+  <h2 style="margin:0 0 8px;font-size:16px;color:#0B2D57">Salida segura</h2>
+  <p style="font-size:13px;color:#64748b;margin:0 0 12px">Si está activa, al <b>cerrar la pestaña</b> se cierra la sesión del backoffice (no queda abierta).</p>
+  <form method="POST">
+    <input type="hidden" name="accion" value="salida_segura">
+    <label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700">
+      <input type="checkbox" name="salida_segura" value="1" {"checked" if ss_on else ""} style="width:auto;transform:scale(1.2)">
+      Salida segura activada
+    </label>
+    <button type="submit" style="margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer">Guardar</button>
+  </form>
+</section>
+
+<section class="role-panel" style="max-width:720px;margin-bottom:16px">
   {"<p style='color:#16a34a;font-weight:700'>"+_esc(msg)+"</p>" if msg else ""}
   {"<p style='color:#b91c1c'>"+_esc(err)+"</p>" if err else ""}
+  <h2 style="margin:0 0 10px;font-size:15px;color:#0B2D57">Cargar nueva imagen</h2>
   <form method="POST" enctype="multipart/form-data">
-    <label style="font-size:12px;font-weight:700">Título del recuadro (panel derecho)</label>
-    <input name="bo_login_titulo" value="{_esc(tit)}" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1">
-    <label style="font-size:12px;font-weight:700">Texto del recuadro</label>
-    <textarea name="bo_login_texto" rows="2" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1">{_esc(txt)}</textarea>
-
-    <h3 style="margin:16px 0 8px;font-size:14px;color:#0B2D57">Imagen de fondo (panel derecho)</h3>
-    {prev1}
-    <input type="file" name="bo_login_img" accept="image/*" style="margin-bottom:8px">
-    <input name="bo_login_img_url" placeholder="O pega una URL https://..." style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1">
-    <label style="font-size:12px;display:flex;gap:6px;align-items:center;margin-bottom:14px">
-      <input type="checkbox" name="limpiar_img1" value="1" style="width:auto"> Quitar imagen de fondo
-    </label>
-
-    <h3 style="margin:16px 0 8px;font-size:14px;color:#0B2D57">Imagen secundaria (tarjeta flotante, opcional)</h3>
-    {prev2}
-    <input type="file" name="bo_login_img2" accept="image/*" style="margin-bottom:8px">
-    <input name="bo_login_img2_url" placeholder="O pega una URL https://..." style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1">
-    <label style="font-size:12px;display:flex;gap:6px;align-items:center;margin-bottom:18px">
-      <input type="checkbox" name="limpiar_img2" value="1" style="width:auto"> Quitar imagen secundaria
-    </label>
-
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Guardar cambios</button>
+    <input type="hidden" name="accion" value="nuevo">
+    <label style="font-size:12px;font-weight:700">Imagen (PNG/JPG horizontal)</label>
+    <input type="file" name="url_imagen" accept="image/*" style="margin-bottom:8px">
+    <input name="url_imagen_url" placeholder="O URL https://..." style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px;font-weight:700">Título</label>
+    <input name="titulo" placeholder="Ej: EduTrack · Meta comercial Q3" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px;font-weight:700">Texto del eslogan</label>
+    <input name="frase_eslogan" placeholder="Frase corta sobre la imagen" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px;font-weight:700">Estado</label>
+    <select name="estado" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1">
+      <option value="activo">Activo (ON)</option>
+      <option value="inactivo">Inactivo (OFF)</option>
+    </select>
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Cargar nueva imagen</button>
   </form>
-  <p style="font-size:12px;color:#64748b;margin-top:14px">Recomendado: JPG/PNG ≤ 2 MB. Si no hay imagen, se usa un degradado PROCSIS.</p>
+</section>
+
+<section class="role-panel" style="max-width:720px;overflow:auto">
+  <h2 style="margin:0 0 10px;font-size:15px;color:#0B2D57">Banners registrados</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:#f1f5f9;text-align:left">
+      <th style="padding:8px">Preview</th><th>Título / eslogan</th><th>Estado</th><th>Acciones</th>
+    </tr></thead>
+    <tbody>{tabla}</tbody>
+  </table>
 </section>
 """
-    return page("Backoffice branding", shell(body))
+    return page("Banners login + Salida segura", shell(body))
+
+
+@app.route("/api/salida-segura", methods=["POST", "GET"])
+def api_salida_segura():
+    """Cierra sesión al cerrar pestaña (beacon)."""
+    try:
+        if session.get("usuario"):
+            try:
+                registrar_auditoria("Salida segura (cierre pestaña)", session.get("usuario") or "")
+            except Exception:
+                pass
+            session.clear()
+    except Exception:
+        pass
+    return ("", 204)
 
 
 
