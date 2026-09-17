@@ -1333,6 +1333,11 @@ class Plataforma(db.Model):
     corp_btn2_url = db.Column(db.String(160), default="")
     corp_btn3_texto = db.Column(db.String(80), default="Entrar al sistema")
     corp_btn3_url = db.Column(db.String(160), default="/login")
+    # Backoffice login (panel visual derecho — editable desde Gerencia)
+    bo_login_titulo = db.Column(db.String(200), default="EduTrack · Operación interna PROCSIS")
+    bo_login_texto = db.Column(db.String(300), default="Gestión académica, soporte y control para instituciones educativas.")
+    bo_login_img = db.Column(db.Text, default="")  # data URI o URL
+    bo_login_img2 = db.Column(db.Text, default="")  # imagen secundaria opcional
 
 
 class ProductoProcsis(db.Model):
@@ -3941,6 +3946,10 @@ def migrar_columnas():
         ("plataforma", "corp_brand_nombre", "ALTER TABLE plataforma ADD COLUMN corp_brand_nombre VARCHAR(80) DEFAULT 'EduTrack'"),
         ("plataforma", "corp_brand_sub", "ALTER TABLE plataforma ADD COLUMN corp_brand_sub VARCHAR(80) DEFAULT 'Soluciones digitales'"),
         ("plataforma", "corp_hero_fondo", "ALTER TABLE plataforma ADD COLUMN corp_hero_fondo TEXT DEFAULT ''"),
+        ("plataforma", "bo_login_titulo", "ALTER TABLE plataforma ADD COLUMN bo_login_titulo VARCHAR(200) DEFAULT ''"),
+        ("plataforma", "bo_login_texto", "ALTER TABLE plataforma ADD COLUMN bo_login_texto VARCHAR(300) DEFAULT ''"),
+        ("plataforma", "bo_login_img", "ALTER TABLE plataforma ADD COLUMN bo_login_img TEXT DEFAULT ''"),
+        ("plataforma", "bo_login_img2", "ALTER TABLE plataforma ADD COLUMN bo_login_img2 TEXT DEFAULT ''"),
         ("plataforma", "corp_caracteristicas", "ALTER TABLE plataforma ADD COLUMN corp_caracteristicas TEXT"),
         ("plataforma", "corp_empresa_puntos", "ALTER TABLE plataforma ADD COLUMN corp_empresa_puntos TEXT"),
         ("plataforma", "corp_btn1_texto", "ALTER TABLE plataforma ADD COLUMN corp_btn1_texto VARCHAR(80) DEFAULT 'Conocer PROCSIS'"),
@@ -19408,51 +19417,101 @@ def portal_backoffice():
                 pass
             error = "No se pudo iniciar sesión. Intente de nuevo. (%s)" % str(e)[:80]
 
+    # Textos e imagen del panel derecho (editables desde Gerencia)
+    bo_tit = "EduTrack · Operación interna PROCSIS"
+    bo_txt = "Gestión académica, soporte y control para instituciones educativas."
+    bo_img = ""
+    bo_img2 = ""
+    try:
+        p2 = plataforma()
+        bo_tit = (getattr(p2, "bo_login_titulo", None) or "").strip() or bo_tit
+        bo_txt = (getattr(p2, "bo_login_texto", None) or "").strip() or bo_txt
+        bo_img = (getattr(p2, "bo_login_img", None) or "").strip()
+        bo_img2 = (getattr(p2, "bo_login_img2", None) or "").strip()
+        if not bo_img:
+            bo_img = (getattr(p2, "corp_hero_fondo", None) or "").strip()
+    except Exception:
+        pass
+    panel_bg = (
+        'background-image:url(\"%s\");background-size:cover;background-position:center;' % bo_img
+        if bo_img else
+        "background:linear-gradient(135deg,#0B2D57 0%,#1e3a8a 45%,#7c3aed 100%);"
+    )
+    extra_card = ""
+    if bo_img2:
+        extra_card = (
+            '<div class="bo-float2"><img src="%s" alt=""></div>' % _esc(bo_img2)
+        )
     body = f"""
 <style>
-.bo{{min-height:100vh;background:#0B2D57;font-family:Segoe UI,system-ui,sans-serif;color:#fff;
-display:flex;align-items:center;justify-content:center;padding:24px 16px}}
-.bo-box{{max-width:420px;width:100%}}
-.bo-logo{{text-align:center;margin-bottom:14px}}
-.bo-logo img{{height:72px;width:auto;max-width:200px;object-fit:contain;border-radius:6px;
-background:#fff;padding:8px 14px}}
-.bo-box h1{{margin:0 0 6px;font-size:24px;text-align:center;font-weight:800;letter-spacing:-0.02em}}
-.bo-box .sub{{text-align:center;opacity:.88;margin:0 0 18px;font-size:13px}}
-.bo-card{{background:#fff;color:#0f172a;border-radius:14px;padding:24px 22px;box-shadow:0 20px 40px rgba(0,0,0,.2)}}
-.bo-card label{{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}}
-.bo-card input{{width:100%;padding:12px 14px;margin:0 0 14px;border:1px solid #e2e8f0;border-radius:10px;
-box-sizing:border-box;font-size:14px;background:#f8fafc}}
-.bo-card input:focus{{outline:none;border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}}
-.bo-card button{{width:100%;padding:13px;border:0;border-radius:10px;background:linear-gradient(180deg,#0B2D57,#0a2447);
-color:#fff;font-weight:800;font-size:14px;cursor:pointer}}
-.bo-card button:hover{{filter:brightness(1.06)}}
-.err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px;border-radius:8px;margin-bottom:12px}}
-.bo-foot{{text-align:center;margin-top:18px;font-size:12px;opacity:.85}}
-.bo-foot a{{color:#93c5fd;text-decoration:none;font-weight:600;margin:0 6px}}
-.bo-badge{{display:block;text-align:center;margin:0 0 14px;padding:8px 12px;
-background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:4px;
-color:#e2e8f0;font-size:11px;font-weight:700;letter-spacing:.04em}}
+.bo-wrap{{min-height:100vh;display:flex;font-family:Segoe UI,system-ui,-apple-system,sans-serif;background:#fff}}
+.bo-left{{flex:0 0 42%;max-width:480px;display:flex;flex-direction:column;justify-content:center;
+padding:40px 48px;box-sizing:border-box}}
+.bo-left .brand{{display:flex;align-items:center;gap:12px;margin-bottom:36px}}
+.bo-left .brand img{{height:44px;width:auto;max-width:140px;object-fit:contain}}
+.bo-left .brand span{{font-size:22px;font-weight:800;color:#0B2D57;letter-spacing:-.02em}}
+.bo-left h1{{margin:0 0 8px;font-size:28px;color:#0f172a;font-weight:800;letter-spacing:-.03em}}
+.bo-left .hint{{margin:0 0 28px;font-size:14px;color:#64748b;line-height:1.45}}
+.bo-left label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:0 0 6px}}
+.bo-left input[type=text],.bo-left input[type=password],.bo-left input[type=email]{{
+width:100%;padding:12px 14px;margin:0 0 16px;border:1.5px solid #e2e8f0;border-radius:8px;
+box-sizing:border-box;font-size:14px;background:#fff;transition:border .15s,box-shadow .15s}}
+.bo-left input:focus{{outline:none;border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}}
+.bo-row{{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}}
+.bo-left button[type=submit]{{padding:12px 28px;border:0;border-radius:8px;background:#0B2D57;color:#fff;
+font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.02em}}
+.bo-left button[type=submit]:hover{{background:#0a2447}}
+.bo-check{{font-size:13px;color:#475569;display:flex;align-items:center;gap:6px}}
+.bo-check input{{width:auto;margin:0}}
+.err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px 12px;border-radius:8px;margin-bottom:14px}}
+.bo-links{{margin-top:28px;font-size:12px;color:#64748b}}
+.bo-links a{{color:#0B2D57;text-decoration:none;font-weight:600;margin-right:12px}}
+.bo-right{{flex:1;min-height:100vh;position:relative;overflow:hidden;{panel_bg}}}
+.bo-right::before{{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(11,45,87,.55),rgba(124,58,237,.35));pointer-events:none}}
+.bo-float{{position:absolute;top:12%;left:8%;right:8%;z-index:2;background:rgba(255,255,255,.95);
+border-radius:16px;padding:16px 18px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-width:420px}}
+.bo-float h3{{margin:0 0 6px;font-size:16px;color:#0f172a;font-weight:800;line-height:1.35}}
+.bo-float p{{margin:0;font-size:13px;color:#475569;line-height:1.45}}
+.bo-float2{{position:absolute;bottom:10%;right:8%;z-index:2;border-radius:16px;overflow:hidden;
+box-shadow:0 20px 50px rgba(0,0,0,.3);max-width:280px;background:#fff}}
+.bo-float2 img{{display:block;width:100%;height:auto;max-height:220px;object-fit:cover}}
+@media(max-width:900px){{
+.bo-right{{display:none}}
+.bo-left{{flex:1;max-width:100%;padding:32px 24px}}
+}}
 </style>
-<div class="bo"><div class="bo-box">
-  <div class="bo-logo"><img src="{logo}" alt="PROCSIS"></div>
-  <h1>PROCSIS Backoffice</h1>
-  <p class="sub">{_esc(empresa)} · Acceso interno unificado</p>
-  <div class="bo-badge">Un solo inicio de sesión · redirección automática por rol</div>
-  <div class="bo-card">
+<div class="bo-wrap">
+  <div class="bo-left">
+    <div class="brand">
+      <img src="{logo}" alt="PROCSIS">
+      <span>PROCSIS</span>
+    </div>
+    <h1>Backoffice</h1>
+    <p class="hint">{_esc(empresa)} · Acceso interno unificado por rol</p>
     {"<div class='err'>"+_esc(error)+"</div>" if error else ""}
     <form method="POST" autocomplete="username">
-      <label>Usuario o correo</label>
-      <input name="usuario" required autofocus placeholder="usuario" autocomplete="username">
+      <label>Usuario / Correo</label>
+      <input type="text" name="usuario" required autofocus placeholder="Usuario o correo" autocomplete="username">
       <label>Contraseña</label>
-      <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password">
-      <button type="submit">Iniciar sesión</button>
+      <input type="password" name="password" required placeholder="Contraseña" autocomplete="current-password">
+      <div class="bo-row">
+        <label class="bo-check"><input type="checkbox" name="recordar" value="1"> Recordar usuario</label>
+        <button type="submit">Iniciar sesión</button>
+      </div>
     </form>
+    <div class="bo-links">
+      <a href="/login">Portal instituciones</a>
+      <a href="/recuperar-staff">Recuperar acceso</a>
+    </div>
   </div>
-  <p class="bo-foot">
-    <a href="/login">Portal instituciones</a> ·
-    <a href="/recuperar-staff">Recuperar acceso</a>
-  </p>
-</div></div>
+  <div class="bo-right">
+    <div class="bo-float">
+      <h3>{_esc(bo_tit)}</h3>
+      <p>{_esc(bo_txt)}</p>
+    </div>
+    {extra_card}
+  </div>
+</div>
 """
     return page("PROCSIS Backoffice", body)
 
@@ -19472,6 +19531,132 @@ def backoffice_hub_gerencia():
     except Exception:
         logo, empresa = "/static/img/logo-procsis.png", "Procsis"
     return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario")))
+
+
+def _file_to_data_uri(fs, max_bytes=2_500_000):
+    """Convierte upload a data URI (JPEG/PNG/WebP)."""
+    if not fs or not getattr(fs, "filename", None):
+        return None
+    try:
+        raw = fs.read(max_bytes + 1)
+        if not raw or len(raw) > max_bytes:
+            return None
+        name = (fs.filename or "").lower()
+        mime = "image/jpeg"
+        if name.endswith(".png"):
+            mime = "image/png"
+        elif name.endswith(".webp"):
+            mime = "image/webp"
+        elif name.endswith(".gif"):
+            mime = "image/gif"
+        import base64 as _b64
+        return "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+    except Exception:
+        return None
+
+
+@app.route("/gerencia/backoffice-branding", methods=["GET", "POST"])
+def gerencia_backoffice_branding():
+    """Gerencia: textos e imágenes del login unificado /backoffice."""
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    msg = ""
+    err = ""
+    p = plataforma()
+    if request.method == "POST":
+        try:
+            p.bo_login_titulo = (request.form.get("bo_login_titulo") or "")[:200]
+            p.bo_login_texto = (request.form.get("bo_login_texto") or "")[:300]
+            # Imagen principal (fondo panel derecho)
+            img1 = _file_to_data_uri(request.files.get("bo_login_img"))
+            if img1:
+                p.bo_login_img = img1
+            elif (request.form.get("limpiar_img1") or "") == "1":
+                p.bo_login_img = ""
+            # Imagen secundaria (tarjeta flotante)
+            img2 = _file_to_data_uri(request.files.get("bo_login_img2"))
+            if img2:
+                p.bo_login_img2 = img2
+            elif (request.form.get("limpiar_img2") or "") == "1":
+                p.bo_login_img2 = ""
+            # URL alternativa si no suben archivo
+            url1 = (request.form.get("bo_login_img_url") or "").strip()
+            if url1.startswith("http") and not img1:
+                p.bo_login_img = url1[:2000]
+            url2 = (request.form.get("bo_login_img2_url") or "").strip()
+            if url2.startswith("http") and not img2:
+                p.bo_login_img2 = url2[:2000]
+            db.session.commit()
+            msg = "Backoffice actualizado. Abra /backoffice para ver el resultado."
+            try:
+                registrar_auditoria("Backoffice branding", session.get("usuario") or "")
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = "No se pudo guardar: %s" % str(e)[:120]
+    tit = (getattr(p, "bo_login_titulo", None) or "") or "EduTrack · Operación interna PROCSIS"
+    txt = (getattr(p, "bo_login_texto", None) or "") or "Gestión académica, soporte y control para instituciones educativas."
+    img1 = (getattr(p, "bo_login_img", None) or "")[:80]
+    img2 = (getattr(p, "bo_login_img2", None) or "")[:80]
+    prev1 = ""
+    prev2 = ""
+    try:
+        full1 = (getattr(p, "bo_login_img", None) or "").strip()
+        full2 = (getattr(p, "bo_login_img2", None) or "").strip()
+        if full1:
+            prev1 = '<div style="margin:8px 0"><img src="%s" alt="" style="max-width:100%%;max-height:160px;border-radius:10px;object-fit:cover"></div>' % _esc(full1)
+        if full2:
+            prev2 = '<div style="margin:8px 0"><img src="%s" alt="" style="max-width:100%%;max-height:120px;border-radius:10px;object-fit:cover"></div>' % _esc(full2)
+    except Exception:
+        pass
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Imágenes del Backoffice</h1>
+  <p>Personaliza el login unificado de <b>/backoffice</b> (estilo panel izquierdo + visual derecho).</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver a HQ</a>
+<a class="btn" href="/backoffice" target="_blank" style="margin-left:8px">Ver login →</a>
+</header>
+<section class="role-panel" style="max-width:640px">
+  {"<p style='color:#16a34a;font-weight:700'>"+_esc(msg)+"</p>" if msg else ""}
+  {"<p style='color:#b91c1c'>"+_esc(err)+"</p>" if err else ""}
+  <form method="POST" enctype="multipart/form-data">
+    <label style="font-size:12px;font-weight:700">Título del recuadro (panel derecho)</label>
+    <input name="bo_login_titulo" value="{_esc(tit)}" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px;font-weight:700">Texto del recuadro</label>
+    <textarea name="bo_login_texto" rows="2" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1">{_esc(txt)}</textarea>
+
+    <h3 style="margin:16px 0 8px;font-size:14px;color:#0B2D57">Imagen de fondo (panel derecho)</h3>
+    {prev1}
+    <input type="file" name="bo_login_img" accept="image/*" style="margin-bottom:8px">
+    <input name="bo_login_img_url" placeholder="O pega una URL https://..." style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px;display:flex;gap:6px;align-items:center;margin-bottom:14px">
+      <input type="checkbox" name="limpiar_img1" value="1" style="width:auto"> Quitar imagen de fondo
+    </label>
+
+    <h3 style="margin:16px 0 8px;font-size:14px;color:#0B2D57">Imagen secundaria (tarjeta flotante, opcional)</h3>
+    {prev2}
+    <input type="file" name="bo_login_img2" accept="image/*" style="margin-bottom:8px">
+    <input name="bo_login_img2_url" placeholder="O pega una URL https://..." style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px;display:flex;gap:6px;align-items:center;margin-bottom:18px">
+      <input type="checkbox" name="limpiar_img2" value="1" style="width:auto"> Quitar imagen secundaria
+    </label>
+
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Guardar cambios</button>
+  </form>
+  <p style="font-size:12px;color:#64748b;margin-top:14px">Recomendado: JPG/PNG ≤ 2 MB. Si no hay imagen, se usa un degradado PROCSIS.</p>
+</section>
+"""
+    return page("Backoffice branding", shell(body))
 
 
 
@@ -21069,6 +21254,11 @@ def gerencia_hq():
             <div style="font-size:22px;margin-bottom:6px">🛠️</div>
             <div style="font-weight:800;font-size:13px">Abrir consola completa</div>
             <div style="font-size:11px;opacity:.75;margin-top:4px">Todas las pestañas de desarrollo</div>
+          </a>
+          <a class="own" href="/gerencia/backoffice-branding" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#1e3a8a,#4f46e5);color:#fff;text-decoration:none">
+            <div style="font-size:22px;margin-bottom:6px">🖼️</div>
+            <div style="font-weight:800;font-size:13px">Imágenes del Backoffice</div>
+            <div style="font-size:11px;opacity:.85;margin-top:4px">Foto y textos del login unificado (/backoffice)</div>
           </a>
         </div>
       </div>
