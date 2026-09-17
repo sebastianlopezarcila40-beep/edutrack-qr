@@ -993,6 +993,16 @@ class IngresoPorteria(db.Model):
     estudiante = db.relationship("Estudiante")
 
 
+class RetardoExcusa(db.Model):
+    """Excusas de retardo autorizadas por Gerencia / Coordinación (resta 1 del contador del mes)."""
+    __tablename__ = "retardo_excusas"
+    id = db.Column(db.Integer, primary_key=True)
+    estudiante_id = db.Column(db.Integer, index=True, nullable=False)
+    mes = db.Column(db.String(7), default="", index=True)  # YYYY-MM
+    motivo = db.Column(db.String(255), default="")
+    registrado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(40), default="")
+
 
 class AutorizacionSalida(db.Model):
     __tablename__ = "autorizaciones_salida"
@@ -3688,6 +3698,13 @@ def migrar_columnas():
         "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS correo_acudiente VARCHAR(160) DEFAULT ''",
         "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS direccion VARCHAR(220) DEFAULT ''",
         "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS observacion TEXT DEFAULT ''",
+        "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS eps VARCHAR(120) DEFAULT ''",
+        "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS alergias TEXT DEFAULT ''",
+        "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS enfermedades TEXT DEFAULT ''",
+        "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS medicamentos TEXT DEFAULT ''",
+        "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS alerta_medica VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS mora_pension BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS mora_detalle VARCHAR(255) DEFAULT ''",
         "ALTER TABLE novedades ADD COLUMN IF NOT EXISTS motivo VARCHAR(160) DEFAULT ''",
         "ALTER TABLE novedades ADD COLUMN IF NOT EXISTS observacion TEXT DEFAULT ''",
         "ALTER TABLE novedades ADD COLUMN IF NOT EXISTS estado VARCHAR(60) DEFAULT 'Abierta'",
@@ -3883,6 +3900,12 @@ def migrar_columnas():
         ("estudiantes", "jornada", "ALTER TABLE estudiantes ADD COLUMN jornada VARCHAR(40) DEFAULT ''"),
         ("estudiantes", "grupo", "ALTER TABLE estudiantes ADD COLUMN grupo VARCHAR(30) DEFAULT ''"),
         ("estudiantes", "eps", "ALTER TABLE estudiantes ADD COLUMN eps VARCHAR(120) DEFAULT ''"),
+        ("estudiantes", "alergias", "ALTER TABLE estudiantes ADD COLUMN alergias TEXT DEFAULT ''"),
+        ("estudiantes", "enfermedades", "ALTER TABLE estudiantes ADD COLUMN enfermedades TEXT DEFAULT ''"),
+        ("estudiantes", "medicamentos", "ALTER TABLE estudiantes ADD COLUMN medicamentos TEXT DEFAULT ''"),
+        ("estudiantes", "alerta_medica", "ALTER TABLE estudiantes ADD COLUMN alerta_medica VARCHAR(255) DEFAULT ''"),
+        ("estudiantes", "mora_pension", "ALTER TABLE estudiantes ADD COLUMN mora_pension BOOLEAN DEFAULT FALSE"),
+        ("estudiantes", "mora_detalle", "ALTER TABLE estudiantes ADD COLUMN mora_detalle VARCHAR(255) DEFAULT ''"),
         ("configuracion", "horario_grados", "ALTER TABLE configuracion ADD COLUMN horario_grados TEXT DEFAULT ''"),
         ("configuracion", "horario_notas", "ALTER TABLE configuracion ADD COLUMN horario_notas TEXT DEFAULT ''"),
         ("configuracion", "last_backup", "ALTER TABLE configuracion ADD COLUMN last_backup VARCHAR(20) DEFAULT ''"),
@@ -21103,7 +21126,6 @@ def gerencia_hq():
           <a class="c-azul" href="/tenants">Instituciones</a>
           <a class="c-azul" href="/calendario">Calendario escolar</a>
           <a class="c-azul" href="/retardos-acumulados">Control de retardos y convivencia</a>
-          <a class="c-azul" href="/coordinacion/retiro-medico">Retiro medico autorizado</a>
         </div>
 
         <div class="hq-cat naranja">🟠 Comunicación y herramientas</div>
@@ -44285,8 +44307,8 @@ def modulo_turnos():
         if area == "Gerencia" or (request.path or "").startswith("/gerencia"):
             live_box = (
                 '<div style="background:#fff;border:2px solid #16a34a;border-radius:12px;padding:14px 16px;margin-bottom:14px">'
-                '<h2 style="margin:0 0 6px;font-size:15px;color:#166534">En vivo · Quién está en turno</h2>'
-                '<p style="margin:0 0 10px;font-size:12px;color:#64748b">Actualice la página para ver el estado al momento. Ventas, Soporte y Cobranza.</p>'
+                '<h2 style="margin:0 0 6px;font-size:15px;color:#166534">TOTALMENTE EN TURNO</h2>'
+                '<p style="margin:0 0 10px;font-size:12px;color:#64748b">Estado en vivo de quienes tienen turno abierto. Ventas, Soporte y Cobranza.</p>'
                 + "".join(en_vivo)
                 + '<p style="margin:8px 0 0;font-size:12px"><a href="/gerencia/turnos" style="font-weight:700">Actualizar vista →</a></p>'
                 "</div>"
@@ -58289,17 +58311,67 @@ def acudiente_asistencia_viva():
     return page("Asistencia acudiente", body)
 
 
-@app.route("/retardos-acumulados")
+@app.route("/retardos-acumulados", methods=["GET", "POST"])
 def retardos_acumulados():
-    """Tablero de retardos del mes para coordinación."""
+    """Tablero de retardos: Coordinación revisa; Gerencia puede excusar (modo maestro)."""
     if not requiere_login():
         return redirect("/login")
+    rol = (rol_actual() or "").strip()
+    puede_excusar = rol in (
+        "Gerente", "Gerencia", "Superadmin", "Administrador",
+        "Coordinación", "Coordinacion", "Rectoría", "Rectoria",
+    )
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    # Excusar retardo (-1 del contador del mes)
+    if request.method == "POST" and puede_excusar:
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "excusar":
+            try:
+                eid = int(request.form.get("estudiante_id") or 0)
+                mes_x = (request.form.get("mes") or "")[:7]
+                motivo = (request.form.get("motivo") or "Excusa autorizada")[:255]
+                if eid and mes_x:
+                    db.session.add(RetardoExcusa(
+                        estudiante_id=eid,
+                        mes=mes_x,
+                        motivo=motivo,
+                        registrado_por=session.get("usuario") or rol,
+                        creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+                    ))
+                    db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
     corte = _hora_corte_tarde()
-    hoy = fecha_hoy()
-    mes = hoy[:7]
+    hoy = fecha_hoy() or ""
+    mes = (request.args.get("mes") or hoy[:7] or "")[:7]
+    # Meses disponibles (últimos 6)
+    meses_opts = []
+    try:
+        from datetime import datetime as _dt, timedelta
+        base = _dt.strptime(hoy[:7] + "-01", "%Y-%m-%d") if len(hoy) >= 7 else _dt.now()
+        for i in range(0, 6):
+            y = base.year
+            m = base.month - i
+            while m <= 0:
+                m += 12
+                y -= 1
+            key = "%04d-%02d" % (y, m)
+            meses_opts.append(key)
+    except Exception:
+        meses_opts = [mes]
     filas = []
     try:
-        ests = Estudiante.query.order_by(Estudiante.grado, Estudiante.apellido).limit(2000).all()
+        iid = institucion_id_actual()
+        q = Estudiante.query
+        if iid:
+            q = q.filter_by(institucion_id=iid)
+        ests = q.order_by(Estudiante.grado, Estudiante.apellido).limit(3000).all()
     except Exception:
         ests = []
     for e in ests:
@@ -58315,24 +58387,49 @@ def retardos_acumulados():
                     n += 1
         except Exception:
             continue
+        # Restar excusas del mes
+        try:
+            n_exc = RetardoExcusa.query.filter_by(estudiante_id=e.id, mes=mes).count()
+            n = max(0, n - int(n_exc or 0))
+        except Exception:
+            pass
         if n <= 0:
             continue
         estado = "Seguimiento" if n < 3 else "CITACIÓN A ACUDIENTE PENDIENTE"
         color = "#ca8a04" if n < 3 else "#c2410c"
+        btn_exc = ""
+        if puede_excusar:
+            btn_exc = (
+                '<form method="POST" style="display:inline" onsubmit="return confirm(\'¿Excusar 1 retardo de este mes?\')">'
+                '<input type="hidden" name="accion" value="excusar">'
+                '<input type="hidden" name="estudiante_id" value="%s">'
+                '<input type="hidden" name="mes" value="%s">'
+                '<input type="hidden" name="motivo" value="Cita médica / calamidad justificada">'
+                '<button type="submit" style="font-size:11px;padding:4px 8px;background:#0B2D57;color:#fff;border:0;border-radius:6px;cursor:pointer">Excusar Retardo</button></form>'
+            ) % (e.id, _esc(mes))
         filas.append(
             "<tr><td>%s</td><td>%s %s</td><td>%s</td><td><b>%s</b></td>"
-            "<td style='color:%s;font-weight:700'>%s</td></tr>" % (
-                _esc(e.codigo), _esc(e.nombre), _esc(e.apellido), _esc(e.grado), n, color, estado)
+            "<td style='color:%s;font-weight:700'>%s</td><td>%s</td></tr>" % (
+                _esc(e.codigo), _esc(e.nombre), _esc(e.apellido), _esc(e.grado), n, color, estado, btn_exc)
         )
-    tabla = "".join(filas) or "<tr><td colspan='5' style='padding:12px;color:#64748b'>Sin retardos registrados este mes</td></tr>"
+    tabla = "".join(filas) or "<tr><td colspan='6' style='padding:12px;color:#64748b'>Sin retardos registrados en este periodo</td></tr>"
+    opts = "".join(
+        '<option value="%s" %s>%s</option>' % (m, "selected" if m == mes else "", m)
+        for m in meses_opts
+    )
     body = f"""
 <header class="role-hero"><div>
   <h1>Tablero de retardos acumulados</h1>
-  <p>Periodo {mes} · corte de llegada {corte} · 3 o más = citación pendiente</p>
+  <p>Auditoría de convivencia · corte {corte} · 3 o más = citación pendiente</p>
 </div><a class="btn" href="/dashboard">Volver</a></header>
 <section class="role-panel">
+  <form method="GET" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <label style="font-size:13px;font-weight:700">Periodo (mes)</label>
+    <select name="mes" onchange="this.form.submit()" style="padding:8px;border-radius:6px;border:1px solid #cbd5e1">{opts}</select>
+  </form>
+  <p style="font-size:12px;color:#64748b;margin:0 0 10px">Portería solo escanea QR; Coordinación/Soporte revisan diariamente. Gerencia y Coordinación pueden <b>Excusar Retardo</b> (−1 del contador del mes).</p>
   <table class="table" style="width:100%;border-collapse:collapse">
-    <thead><tr><th>Código</th><th>Estudiante</th><th>Grado</th><th>Retardos mes</th><th>Estado</th></tr></thead>
+    <thead><tr><th>Código</th><th>Estudiante</th><th>Grado</th><th>Retardos mes</th><th>Estado</th><th>Acción</th></tr></thead>
     <tbody>{tabla}</tbody>
   </table>
 </section>
