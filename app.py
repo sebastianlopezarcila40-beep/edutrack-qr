@@ -17482,9 +17482,9 @@ def _aislar_paneles_internos():
         return None
 
     # Rutas siempre permitidas para staff
-    if path in ("/logout", "/mi-perfil", "/cambiar_password", "/mfa") or path.startswith("/biometria"):
+    if path in ("/logout", "/mi-perfil", "/cambiar_password", "/mfa", "/backoffice", "/edutrack-backoffice", "/backoffice/login", "/backoffice/hub") or path.startswith("/biometria"):
         return None
-    if path.startswith("/api/interno"):
+    if path.startswith("/api/interno") or path.startswith("/backoffice"):
         return None
 
     home = _home_portal(rol)
@@ -19197,7 +19197,7 @@ def _destino_por_rol_staff(rol):
     """Redirección automática tras login único de backoffice (RBAC)."""
     r = (rol or "").strip()
     if r in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
-        return "/backoffice/hub"  # Tablero maestro solo Gerencia
+        return "/gerencia/hq"
     if r in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor"):
         return "/ventas/panel"
     if r in ("Cobranza",):
@@ -19302,65 +19302,111 @@ def portal_backoffice():
         logo, empresa = "/static/img/logo-procsis.png", "Procsis"
 
     # Ya autenticado: redirigir según rol (empleados nunca ven el hub)
-    if session.get("usuario") and session.get("rol"):
-        rol = (session.get("rol") or "").strip()
-        if rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
-            # Si pide hub explícito o está en /backoffice, mostrar tablero maestro
-            if (request.path or "").endswith("/hub") or request.args.get("hub") == "1":
-                return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario")))
-            # Por defecto Gerencia va al HQ; puede volver al hub
-            if request.path in ("/backoffice", "/edutrack-backoffice", "/backoffice/login") and request.method == "GET":
-                return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario")))
-        dest = _destino_por_rol_staff(rol)
-        if dest != "/backoffice":
-            return redirect(dest)
+    try:
+        if session.get("usuario") and session.get("rol"):
+            rol = (session.get("rol") or "").strip()
+            if rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+                if request.args.get("hub") == "1" or (request.path or "").rstrip("/").endswith("hub"):
+                    return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario") or ""))
+                # Gerencia en /backoffice → tablero maestro
+                if request.method == "GET":
+                    return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario") or ""))
+            else:
+                dest = _destino_por_rol_staff(rol)
+                if dest and dest not in ("/backoffice", "/backoffice/hub"):
+                    return redirect(dest)
+    except Exception:
+        pass
 
     error = ""
     if request.method == "POST":
-        ok_rl, wait_m = _rate_limit_login(portal="backoffice")
-        if not ok_rl:
-            return _rate_limit_response(wait_m)
-        user = login_usuario(request.form.get("usuario"), request.form.get("password"))
-        if not user:
-            _rate_limit_fail(portal="backoffice")
-            error = "Usuario o contraseña incorrectos."
-        elif not _usuario_activo_ok(user):
-            _rate_limit_fail(portal="backoffice")
-            error = "Usuario desactivado. Contacte a Gerencia."
-        else:
-            rol = (user.rol or "").strip()
-            roles_staff = (
-                "Gerente", "Gerencia", "Superadmin", "Administrador",
-                "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                "Cobranza", "Soporte", "Desarrollador", "Developer",
-            )
-            if rol not in roles_staff:
-                _rate_limit_fail(portal="backoffice")
-                error = "Este acceso es solo para personal PROCSIS. Use el portal de instituciones."
-            else:
-                _rate_limit_ok(portal="backoffice")
-                session.clear()
-                session["usuario"] = user.usuario
-                session["rol"] = rol
-                session["uid"] = user.id
-                session["password_temporal"] = bool(getattr(user, "password_temporal", False))
-                session["panel"] = "backoffice"
+        try:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            # Sin bloqueo agresivo (mismo criterio que gerencia)
+            try:
+                ok_rl, wait_m = _rate_limit_login(portal="gerencia")
+                if not ok_rl:
+                    try:
+                        return _rate_limit_response(wait_m)
+                    except Exception:
+                        error = "Demasiados intentos. Espere un momento."
+            except Exception:
+                pass
+            if not error:
+                user = None
                 try:
-                    registrar_sesion_empleado(user)
+                    user = login_usuario(request.form.get("usuario"), request.form.get("password"))
                 except Exception:
-                    pass
-                try:
-                    registrar_auditoria("Login backoffice unificado", "%s · %s" % (user.usuario, rol))
-                except Exception:
-                    pass
-                try:
-                    _rate_limit_clear_all()
-                except Exception:
-                    pass
-                dest = _destino_por_rol_staff(rol)
-                if dest == "/backoffice/hub" or rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
-                    return redirect("/backoffice?hub=1")
-                return redirect(dest)
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    user = None
+                if not user:
+                    try:
+                        _rate_limit_fail(portal="gerencia")
+                    except Exception:
+                        pass
+                    error = "Usuario o contraseña incorrectos."
+                else:
+                    activo = True
+                    try:
+                        activo = bool(_usuario_activo_ok(user))
+                    except Exception:
+                        activo = True
+                    if not activo:
+                        error = "Usuario desactivado. Contacte a Gerencia."
+                    else:
+                        rol = (user.rol or "").strip()
+                        roles_staff = (
+                            "Gerente", "Gerencia", "Superadmin", "Administrador",
+                            "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
+                            "Cobranza", "Soporte", "Desarrollador", "Developer",
+                        )
+                        if rol not in roles_staff:
+                            error = "Este acceso es solo para personal PROCSIS. Use el portal de instituciones (/login)."
+                        else:
+                            try:
+                                session.clear()
+                            except Exception:
+                                pass
+                            session["usuario"] = user.usuario
+                            session["rol"] = rol
+                            session["uid"] = user.id
+                            try:
+                                session["password_temporal"] = bool(getattr(user, "password_temporal", False))
+                            except Exception:
+                                session["password_temporal"] = False
+                            session["panel"] = "backoffice"
+                            try:
+                                registrar_sesion_empleado(user)
+                            except Exception:
+                                pass
+                            try:
+                                registrar_auditoria("Login backoffice unificado", "%s · %s" % (user.usuario, rol))
+                            except Exception:
+                                pass
+                            # Destinos probados por rol
+                            if rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+                                return redirect("/gerencia/hq")
+                            if rol in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor"):
+                                return redirect("/ventas/panel")
+                            if rol == "Cobranza":
+                                return redirect("/cobranza/panel")
+                            if rol == "Soporte":
+                                return redirect("/soporte")
+                            if rol in ("Desarrollador", "Developer"):
+                                return redirect("/dev-console")
+                            return redirect("/backoffice")
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            error = "No se pudo iniciar sesión. Intente de nuevo. (%s)" % str(e)[:80]
 
     body = f"""
 <style>
