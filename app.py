@@ -19545,43 +19545,53 @@ def portal_backoffice():
                 pass
             error = "No se pudo iniciar sesión. Intente de nuevo. (%s)" % str(e)[:80]
 
-    # Banners activos (máx 4) — si no hay, fallback a campos bo_login_*
+    # Banners activos (máx 4) — se sirven por /media/login-banner/<id>
     banners = []
     try:
         try:
-            db.create_all()
+            db.session.rollback()
         except Exception:
             pass
-        rows = (
-            LoginBanner.query.filter_by(estado="activo")
-            .order_by(LoginBanner.orden.asc(), LoginBanner.id.asc())
-            .limit(4)
-            .all()
-        )
-        for b in rows:
-            img = (b.url_imagen or "").strip()
-            if not img:
-                continue
+        try:
+            db.session.execute(text(
+                "CREATE TABLE IF NOT EXISTS login_banners ("
+                "id SERIAL PRIMARY KEY, url_imagen TEXT DEFAULT '', frase_eslogan VARCHAR(280) DEFAULT '', "
+                "titulo VARCHAR(160) DEFAULT '', estado VARCHAR(20) DEFAULT 'activo', "
+                "orden INTEGER DEFAULT 0, creado_en VARCHAR(40) DEFAULT '')"
+            ))
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        rows = db.session.execute(text(
+            "SELECT id, titulo, frase_eslogan FROM login_banners "
+            "WHERE estado='activo' AND url_imagen IS NOT NULL AND url_imagen <> '' "
+            "ORDER BY orden ASC, id ASC LIMIT 4"
+        )).fetchall()
+        for r in rows:
             banners.append({
-                "img": img,
-                "titulo": (b.titulo or "").strip() or "EduTrack · PROCSIS",
-                "eslogan": (b.frase_eslogan or "").strip() or "Operación interna",
+                "id": int(r[0]),
+                "titulo": (r[1] or "").strip() or "EduTrack · PROCSIS",
+                "eslogan": (r[2] or "").strip() or "Operación interna",
             })
     except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         banners = []
     if not banners:
         bo_tit = "EduTrack · Operación interna PROCSIS"
         bo_txt = "Gestión académica, soporte y control para instituciones educativas."
-        bo_img = ""
         try:
             p2 = plataforma()
             bo_tit = (getattr(p2, "bo_login_titulo", None) or "").strip() or bo_tit
             bo_txt = (getattr(p2, "bo_login_texto", None) or "").strip() or bo_txt
-            bo_img = (getattr(p2, "bo_login_img", None) or getattr(p2, "corp_hero_fondo", None) or "").strip()
         except Exception:
             pass
-        banners = [{"img": bo_img, "titulo": bo_tit, "eslogan": bo_txt}]
-    # Orden aleatorio al cargar (cada F5 puede empezar en banner distinto)
+        banners = [{"id": 0, "titulo": bo_tit, "eslogan": bo_txt}]
     try:
         import random as _rnd
         _rnd.shuffle(banners)
@@ -19589,13 +19599,19 @@ def portal_backoffice():
         pass
     slides_html = []
     for i, b in enumerate(banners):
-        bg = ""
-        if b.get("img"):
-            bg = 'style="background-image:url(\'%s\')"' % _esc(b["img"]).replace("'", "\\'")
+        bid = int(b.get("id") or 0)
+        if bid > 0:
+            img_tag = (
+                '<img class="bo-slide-img" src="/media/login-banner/%d" alt="" '
+                'onerror="this.style.display=\'none\'">' % bid
+            )
+        else:
+            img_tag = ""
         slides_html.append(
-            '<div class="bo-slide%s" %s>'
+            '<div class="bo-slide%s">'
+            '%s'
             '<div class="bo-slide-copy"><h3>%s</h3><p>%s</p></div></div>'
-            % (" active" if i == 0 else "", bg, _esc(b["titulo"]), _esc(b["eslogan"]))
+            % (" active" if i == 0 else "", img_tag, _esc(b["titulo"]), _esc(b["eslogan"]))
         )
     dots = "".join(
         '<button type="button" class="bo-dot%s" data-i="%d" aria-label="Banner %d"></button>'
@@ -19630,10 +19646,10 @@ background:linear-gradient(135deg,#0B2D57 0%,#1e3a8a 45%,#7c3aed 100%)}}
 .bo-stage{{position:relative;width:100%;height:calc(100vh - 56px);border-radius:24px;overflow:hidden;
 box-shadow:0 24px 60px rgba(0,0,0,.28)}}
 .bo-slide{{position:absolute;inset:0;opacity:0;pointer-events:none;
-background-size:cover;background-position:center;
-transition:opacity .6s cubic-bezier(0.25,1,0.5,1);
-filter:brightness(0.72)}}
+transition:opacity .6s cubic-bezier(0.25,1,0.5,1);background:#0B2D57}}
 .bo-slide.active{{opacity:1;pointer-events:auto}}
+.bo-slide-img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+filter:brightness(0.72);display:block}}
 .bo-slide-copy{{position:absolute;left:8%;right:8%;top:14%;z-index:2;color:#fff}}
 .bo-slide-copy h3{{margin:0 0 8px;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.3;
 text-shadow:0 2px 16px rgba(0,0,0,.35)}}
@@ -19998,6 +20014,49 @@ def api_salida_segura():
         pass
     return ("", 204)
 
+
+@app.route("/media/login-banner/<int:bid>")
+def media_login_banner(bid):
+    """Sirve imagen de banner del login backoffice (data URI o URL)."""
+    try:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        row = db.session.execute(text(
+            "SELECT url_imagen FROM login_banners WHERE id=:id LIMIT 1"
+        ), {"id": bid}).first()
+        if not row or not (row[0] or "").strip():
+            return ("", 404)
+        data = (row[0] or "").strip()
+        if data.startswith("http://") or data.startswith("https://"):
+            return redirect(data)
+        if data.startswith("data:"):
+            # data:image/png;base64,XXXX
+            try:
+                header, b64 = data.split(",", 1)
+                mime = "image/jpeg"
+                if "image/png" in header:
+                    mime = "image/png"
+                elif "image/webp" in header:
+                    mime = "image/webp"
+                elif "image/gif" in header:
+                    mime = "image/gif"
+                import base64 as _b64
+                raw = _b64.b64decode(b64)
+                from flask import Response
+                resp = Response(raw, mimetype=mime)
+                resp.headers["Cache-Control"] = "public, max-age=3600"
+                return resp
+            except Exception:
+                return ("", 404)
+        return ("", 404)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return ("", 404)
 
 
 @app.route("/recuperar-staff", methods=["GET", "POST"])
