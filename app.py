@@ -8545,80 +8545,55 @@ def _html_lideres_login():
 
 
 def _nav_public_html(active=""):
-    """Menú superior con desplegables (Soluciones / Nosotros / Eventos)."""
+    """Barra superior estilo Apple (cristal / glass) — logo | enlaces | botón óvalo."""
     return """
 <style>
-.pn{background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:200;font-family:Segoe UI,system-ui,sans-serif}
-.pn-in{max-width:1120px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:10px 18px;gap:12px}
-.pn-brand{text-decoration:none;color:#0B2D57;font-weight:800;font-size:15px}
-.pn-links{display:flex;align-items:center;gap:2px;flex-wrap:wrap}
-.pn-link{color:#334155;text-decoration:none;font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px}
-.pn-link:hover{background:#eff6ff;color:#0B2D57}
-.pn-drop{position:relative}
-.pn-drop > button{background:transparent;border:0;color:#334155;font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px;cursor:pointer;font-family:inherit}
-.pn-drop:hover > button,.pn-drop.open > button{background:#eff6ff;color:#0B2D57}
-.pn-menu{display:none;position:absolute;top:calc(100% - 2px);left:0;min-width:280px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 16px 40px rgba(15,23,42,.14);padding:8px;z-index:250}
-.pn-drop:hover .pn-menu,.pn-drop.open .pn-menu{display:block}
-.pn-menu a{display:block;padding:10px 12px;border-radius:8px;text-decoration:none;color:#0B2D57;font-size:13px;font-weight:600}
-.pn-menu a:hover{background:#f1f5f9}
-.pn-menu .sub{position:relative}
-.pn-menu .sub > a{display:flex;justify-content:space-between;align-items:center}
-.pn-menu .sub-menu{display:none;position:absolute;left:100%;top:0;min-width:270px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.12);padding:8px;margin-left:4px}
-.pn-menu .sub:hover .sub-menu{display:block}
-.pn-menu .hint{display:block;font-size:11px;color:#64748b;font-weight:500;margin-top:2px}
-.pn-cta{background:#0B2D57;color:#fff!important;border-radius:10px;padding:9px 14px!important}
-.pn-cta:hover{background:#1e40af!important}
-@media(max-width:900px){.pn-menu .sub-menu{position:static;margin:4px 0 4px 12px;box-shadow:none;border:0}}
+.navbar-apple-glass{
+  position:sticky;top:0;left:0;width:100%;z-index:9999;box-sizing:border-box;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 28px;gap:16px;
+  background-color:rgba(255,255,255,.72);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(0,0,0,.08);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+.nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1d1d1f;font-weight:600;font-size:14px;flex-shrink:0}
+.nav-logo-apple .logo-micro{height:22px;width:auto;object-fit:contain}
+.nav-links-center{display:flex;align-items:center;gap:28px;flex-wrap:wrap;justify-content:center;flex:1}
+.link-apple{font-size:12px;font-weight:400;color:#1d1d1f;text-decoration:none;opacity:.8;
+  transition:opacity .2s ease,color .2s ease;white-space:nowrap}
+.link-apple:hover{opacity:1;color:#0071e3}
+.nav-button-right{flex-shrink:0;display:flex;align-items:center;gap:10px}
+.btn-apple-oval{
+  font-size:12px;font-weight:400;color:#fff;background-color:#0071e3;
+  padding:8px 18px;text-decoration:none;border-radius:980px;display:inline-block;
+  transition:background-color .2s ease,transform .1s ease;
+}
+.btn-apple-oval:hover{background-color:#0077ed}
+.btn-apple-oval:active{transform:scale(.97)}
+.btn-apple-ghost{font-size:12px;color:#1d1d1f;text-decoration:none;opacity:.85;padding:6px 10px}
+.btn-apple-ghost:hover{color:#0071e3;opacity:1}
+@media(max-width:800px){
+  .navbar-apple-glass{padding:10px 14px;flex-wrap:wrap}
+  .nav-links-center{display:none}
+}
 </style>
-<nav class="pn">
-  <div class="pn-in">
-    <a class="pn-brand" href="/login">EduTrack · PROCSIS</a>
-    <div class="pn-links">
-      <div class="pn-drop">
-        <button type="button">Soluciones ▾</button>
-        <div class="pn-menu">
-          <a href="/soluciones">Todas las soluciones<span class="hint">Plataforma académica completa</span></a>
-          <a href="/soluciones#notas">Notas y SIEE<span class="hint">Planillas y boletines</span></a>
-          <a href="/soluciones#asistencia">Asistencia y QR<span class="hint">Control de ingreso</span></a>
-          <a href="/soluciones#admisiones">Admisiones<span class="hint">Pre-matrícula en línea</span></a>
-          <a href="/soluciones#pqr">PQR institucional<span class="hint">Canal de la comunidad</span></a>
-        </div>
-      </div>
-      <div class="pn-drop">
-        <button type="button">Nosotros ▾</button>
-        <div class="pn-menu">
-          <a href="/quienes-somos">¿Quiénes somos?<span class="hint">Procsis y EduTrack</span></a>
-          <a href="/quienes-somos#lideres">Nuestro equipo<span class="hint">Líderes y dirección</span></a>
-          <a href="/trabaja-con-nosotros">Trabaja con nosotros<span class="hint">Vacantes y cultura</span></a>
-          <a href="/casos-exito">Casos de éxito<span class="hint">Instituciones que confían</span></a>
-          <a href="/historias-decision">Historias de decisión<span class="hint">Cómo evolucionamos el producto</span></a>
-          <div class="sub">
-            <a href="/politicas">Políticas ▸</a>
-            <div class="sub-menu">
-              <a href="/politicas/seguridad-informacion">Política de seguridad de la información</a>
-              <a href="/politicas/ciberseguridad">Política de ciberseguridad</a>
-              <a href="/politicas/cookies">Política de cookies</a>
-              <a href="/politicas/datos-personales">Política de protección de datos personales</a>
-              <a href="/tratamiento-datos">Tratamiento de datos (Ley 1581)</a>
-              <a href="/politica-pqr">Política de PQR</a>
-              <a href="/pqr-info">Cómo radicar una PQR</a>
-              <a href="/politicas/aviso-privacidad">Aviso de privacidad</a>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="pn-drop">
-        <button type="button">Eventos ▾</button>
-        <div class="pn-menu">
-          <a href="/eventos-virtuales">Eventos virtuales<span class="hint">Webinars y demos</span></a>
-          <a href="/eventos-virtuales#capacitaciones">Capacitaciones<span class="hint">Docentes y secretaría</span></a>
-          <a href="/eventos-virtuales#demo">Agenda una demo<span class="hint">Recorrido guiado</span></a>
-        </div>
-      </div>
-      <a class="pn-link" href="/login">Ingresar</a>
-      <a class="pn-link" href="/ayuda">Ayuda</a>
-      <a class="pn-link pn-cta" href="/whatsapp">Contáctanos</a>
-    </div>
+<nav class="navbar-apple-glass">
+  <a class="nav-logo-apple" href="/procsis">
+    <img src="/media/logo-corporativo" alt="PROCSIS" class="logo-micro" onerror="this.style.display='none'">
+    <span>EduTrack · PROCSIS</span>
+  </a>
+  <div class="nav-links-center">
+    <a href="/procsis" class="link-apple">Procsis</a>
+    <a href="/soluciones" class="link-apple">Soluciones</a>
+    <a href="/ventas" class="link-apple">Planes</a>
+    <a href="/eventos-virtuales" class="link-apple">Novedades</a>
+    <a href="/ayuda" class="link-apple">Ayuda</a>
+    <a href="/login" class="link-apple">Ingresar colegio</a>
+  </div>
+  <div class="nav-button-right">
+    <a href="/whatsapp" class="btn-apple-oval">WhatsApp</a>
+    <a href="/backoffice" class="btn-apple-oval" style="background:#1d1d1f">Backoffice</a>
   </div>
 </nav>
 """
@@ -9338,23 +9313,7 @@ def login():
 
 
 <div class="login-page" style="background:#f1f5f9;min-height:100vh">
-  <nav class="lp-topnav">
-    <div class="lp-topnav-inner">
-      <a class="brand" href="/login">
-        <img src="{datos['logo']}" alt="PROCSIS">
-        <span>EduTrack · PROCSIS</span>
-      </a>
-      <div class="lp-topnav-links">
-        <a href="/procsis">Procsis</a>
-        <a href="/soluciones">Soluciones</a>
-        <a href="/tecnologia">EduTrack</a>
-        <a href="/eventos-virtuales">Eventos</a>
-        <a href="#novedades">Novedades</a>
-        <a href="/ayuda">Ayuda</a>
-        <a href="/whatsapp">WhatsApp</a>
-        </div>
-    </div>
-  </nav>
+  {_nav_public_html("login")}
 
   <section class="sinai-portal">
     <div class="sinai-grid">
@@ -21671,10 +21630,12 @@ def gerencia_hq():
           <a class="c-naranja" href="/gerencia/procsis-web">Noticias y productos web</a>
           <a class="c-naranja" href="/gerencia/anuncios">Anuncios (editar)</a>
           <a class="c-naranja" href="/gerencia/actualizaciones">Actualizaciones / FAQ / Ayuda (ver)</a>
+          <a class="c-naranja" href="/gerencia/login-banners" style="border:2px solid #4f46e5;font-weight:800">🖼️ Banners del Login + Salida segura</a>
         </div>
 
         <div class="hq-cat gris">⚫ Seguridad e internos</div>
         <div class="grid-mod">
+          <a class="c-gris" href="/gerencia/login-banners" style="border:2px solid #0B2D57;font-weight:800">Salida segura · Banners backoffice</a>
           <a class="c-gris" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
           <a class="c-gris" href="/gerencia/turnos">Turnos y notas</a>
           <a class="c-gris" href="/gerencia/auditoria">Auditoría IP / ubicación</a>
@@ -47188,24 +47149,35 @@ def pagina_corporativa_procsis():
     link_planes_foot = '<a href="/ventas">Planes</a>' if _puede_planes else '<a href="/contacto">Contacto comercial</a>'
     body = f"""
 <style>
-.pc{{font-family:Segoe UI,system-ui,Arial,sans-serif;color:#0f172a;background:#fff;margin:0}}
+.pc{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;color:#0f172a;background:#fff;margin:0}}
 .pc a{{text-decoration:none}}
-.pc-top{{background:#0B2D57;color:#e2e8f0;font-size:11px;padding:8px 16px}}
-.pc-top-in{{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 18px;justify-content:space-between;align-items:center}}
-.pc-top a{{color:#93c5fd}}
-.pc-top .pc-top-contacts{{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}}
-.pc-nav{{background:#0a2748;border-bottom:1px solid rgba(255,255,255,.08);position:sticky;top:0;z-index:40}}
-.pc-nav-in{{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}}
-.pc-brand{{display:flex;align-items:center;gap:10px;color:#fff}}
-.pc-brand .globe{{display:flex;align-items:center;justify-content:center;width:44px;height:44px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}}
-.pc-brand img{{height:42px;width:auto;object-fit:contain;display:block;background:#fff;border-radius:10px;padding:3px}}.pc-brand .globe{{display:none}}
-.pc-brand b{{font-size:17px;display:block;line-height:1.1;color:#fff}}
-.pc-brand small{{font-size:10px;color:#93c5fd;font-weight:600;letter-spacing:.04em;text-transform:uppercase}}
-.pc-links{{display:flex;flex-wrap:wrap;gap:2px 4px;align-items:center}}
-.pc-links a{{color:#e2e8f0;font-weight:700;font-size:12px;padding:8px 11px;border-radius:6px;letter-spacing:.02em}}
-.pc-links a:hover{{background:rgba(255,255,255,.1);color:#fff}}
-.pc-links a.on{{color:#fff;box-shadow:inset 0 -2px 0 #60a5fa}}
-.pc-links a.cta{{background:#fff;color:#0B2D57!important;border-radius:999px;padding:8px 14px}}
+/* Barra cristal Apple — fija, difumina el contenido al hacer scroll */
+.navbar-apple-glass{{position:fixed;top:0;left:0;width:100%;display:flex;justify-content:space-between;align-items:center;
+padding:10px 36px;z-index:9999;box-sizing:border-box;
+background-color:rgba(255,255,255,.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+border-bottom:1px solid rgba(0,0,0,.08)}}
+.nav-logo-apple{{display:flex;align-items:center;gap:8px;font-weight:600;color:#1d1d1f;font-size:14px;text-decoration:none}}
+.nav-logo-apple .logo-micro{{height:22px;width:auto;object-fit:contain;display:block}}
+.nav-links-center{{display:flex;gap:28px;align-items:center;flex-wrap:wrap}}
+.link-apple{{font-size:12px;font-weight:400;color:#1d1d1f;text-decoration:none;opacity:.8;
+transition:opacity .2s ease,color .2s ease}}
+.link-apple:hover{{opacity:1;color:#0071e3}}
+.link-apple.on{{opacity:1;color:#0071e3}}
+.nav-button-right{{display:flex;align-items:center;gap:10px}}
+.btn-apple-oval{{font-size:12px;font-weight:400;color:#fff;background-color:#0071e3;padding:8px 18px;
+text-decoration:none;border-radius:980px;display:inline-block;
+transition:background-color .2s ease,transform .1s ease}}
+.btn-apple-oval:hover{{background-color:#0077ed}}
+.btn-apple-oval:active{{transform:scale(.97)}}
+.btn-apple-ghost{{font-size:12px;font-weight:400;color:#1d1d1f;padding:8px 14px;border-radius:980px;
+border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9}}
+.btn-apple-ghost:hover{{color:#0071e3;border-color:#0071e3}}
+.pc-nav-spacer{{height:52px}}
+@media(max-width:860px){{
+.navbar-apple-glass{{padding:10px 16px;flex-wrap:wrap;gap:10px}}
+.nav-links-center{{gap:14px;order:3;width:100%;justify-content:center;padding-bottom:4px}}
+.nav-logo-apple span{{font-size:12px}}
+}}
 .pc-hero{{background:linear-gradient(135deg,#f1f5f9 0%,#e8eef5 50%,#dbe3ee 100%);color:#0f172a;position:relative;overflow:hidden;min-height:420px}}
 .pc-hero::after{{content:"";position:absolute;right:-60px;top:-30px;width:320px;height:320px;border-radius:50%;background:rgba(11,45,87,.04);pointer-events:none}}
 .pc-hero-in{{max-width:1120px;margin:0 auto;padding:64px 20px 72px;position:relative;z-index:1}}
@@ -47223,7 +47195,7 @@ def pagina_corporativa_procsis():
 .pc-sec .sub{{text-align:center;color:#64748b;margin:0 0 28px;font-size:15px}}
 .pc-grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
 .pc-grid2{{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center}}
-@media(max-width:860px){{.pc-grid3,.pc-grid2{{grid-template-columns:1fr}}.pc-hero h1{{font-size:30px}}.pc-nav-in{{flex-direction:column;align-items:flex-start}}}}
+@media(max-width:860px){{.pc-grid3,.pc-grid2{{grid-template-columns:1fr}}.pc-hero h1{{font-size:30px}}}}
 .pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px}}
 .pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}}
 .pc-card h3{{margin:0 0 8px;font-size:17px;color:#0B2D57}}
@@ -47245,36 +47217,26 @@ def pagina_corporativa_procsis():
 .pc-copy{{max-width:1120px;margin:20px auto 0;padding-top:14px;border-top:1px solid rgba(255,255,255,.1);text-align:center;font-size:12px}}
 </style>
 <div class="pc">
-  <div class="pc-top">
-    <div class="pc-top-in">
-      <div class="pc-top-contacts">
-        <span>Soporte: {corp_tel}</span>
-        <span>{barra_extra}</span>
-        <a href="mailto:{corp_email}">{corp_email}</a>
-        <a href="{wa_link}" target="_blank" rel="noopener">WhatsApp</a>
-      </div>
-      <span style="opacity:.9">{top_der}</span>
+  <nav class="navbar-apple-glass">
+    <a class="nav-logo-apple" href="/procsis">
+      <img src="{logo}" alt="PROCSIS" class="logo-micro" onerror="this.style.display='none'">
+      <span>EduTrack · {brand_nom}</span>
+    </a>
+    <div class="nav-links-center">
+      <a href="/procsis" class="link-apple on">Procsis</a>
+      <a href="/procsis#nosotros" class="link-apple">Nosotros</a>
+      <a href="/portafolio" class="link-apple">Soluciones</a>
+      <a href="/tecnologia" class="link-apple">Software</a>
+      {('<a href="/ventas" class="link-apple">Planes</a>' if _puede_planes else '')}
+      <a href="/procsis#servicios" class="link-apple">Novedades</a>
+      <a href="/ayuda" class="link-apple">Ayuda</a>
     </div>
-  </div>
-  <nav class="pc-nav">
-    <div class="pc-nav-in">
-      <a class="pc-brand" href="/procsis">
-        <img src="{logo}" alt="PROCSIS" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <span class="globe">{globe_svg}</span>
-        <span><b>{brand_nom}</b><small>{brand_sub}</small></span>
-      </a>
-      <div class="pc-links">
-        <a class="on" href="/procsis">HOME</a>
-        <a href="/procsis#nosotros">NOSOTROS</a>
-        <a href="/portafolio">PORTAFOLIO</a>
-        <a href="/procsis#servicios">SERVICIOS</a>
-        <a href="/tecnologia">SOFTWARE</a>
-        {link_planes_nav}
-        <a href="/contacto">CONTACTO</a>
-        <a class="cta" href="/login">Acceso instituciones</a>
-      </div>
+    <div class="nav-button-right">
+      <a href="{wa_link}" class="btn-apple-ghost" target="_blank" rel="noopener">WhatsApp</a>
+      <a href="/login" class="btn-apple-oval">Ingresar</a>
     </div>
   </nav>
+  <div class="pc-nav-spacer" aria-hidden="true"></div>
   <header class="pc-hero" style="{hero_bg_style}">
     <div class="pc-hero-in">
       <div class="tag">
