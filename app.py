@@ -8545,57 +8545,143 @@ def _html_lideres_login():
 
 
 def _nav_public_html(active=""):
-    """Barra superior estilo Apple (cristal / glass) — logo | enlaces | botón óvalo."""
+    """Barra Apple glass + mega-menú. Sin Backoffice público (solo URL interna)."""
     return """
 <style>
+.navbar-apple-wrap{position:sticky;top:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 .navbar-apple-glass{
-  position:sticky;top:0;left:0;width:100%;z-index:9999;box-sizing:border-box;
+  position:relative;width:100%;box-sizing:border-box;
   display:flex;justify-content:space-between;align-items:center;
-  padding:10px 28px;gap:16px;
+  padding:12px 28px;gap:16px;
   background-color:rgba(255,255,255,.72);
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border-bottom:1px solid rgba(0,0,0,.08);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
 }
 .nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1d1d1f;font-weight:600;font-size:14px;flex-shrink:0}
 .nav-logo-apple .logo-micro{height:22px;width:auto;object-fit:contain}
-.nav-links-center{display:flex;align-items:center;gap:28px;flex-wrap:wrap;justify-content:center;flex:1}
-.link-apple{font-size:12px;font-weight:400;color:#1d1d1f;text-decoration:none;opacity:.8;
-  transition:opacity .2s ease,color .2s ease;white-space:nowrap}
-.link-apple:hover{opacity:1;color:#0071e3}
-.nav-button-right{flex-shrink:0;display:flex;align-items:center;gap:10px}
+.nav-links-center{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:center;flex:1}
+.link-apple{
+  font-size:14px;font-weight:400;letter-spacing:-.01em;color:#1d1d1f;text-decoration:none;opacity:.85;
+  padding:8px 12px;border-radius:8px;background:transparent;border:0;cursor:pointer;font-family:inherit;
+  transition:opacity .2s ease,color .2s ease;white-space:nowrap
+}
+.link-apple:hover,.link-apple.is-hot{opacity:1;color:#0071e3}
+.nav-button-right{flex-shrink:0}
 .btn-apple-oval{
-  font-size:12px;font-weight:400;color:#fff;background-color:#0071e3;
+  font-size:13px;font-weight:400;color:#1d1d1f;background-color:#f5f5f7;
   padding:8px 18px;text-decoration:none;border-radius:980px;display:inline-block;
   transition:background-color .2s ease,transform .1s ease;
 }
-.btn-apple-oval:hover{background-color:#0077ed}
+.btn-apple-oval:hover{background-color:#e8e8ed}
 .btn-apple-oval:active{transform:scale(.97)}
-.btn-apple-ghost{font-size:12px;color:#1d1d1f;text-decoration:none;opacity:.85;padding:6px 10px}
-.btn-apple-ghost:hover{color:#0071e3;opacity:1}
+.apple-dropdown-menu{
+  position:absolute;top:100%;left:0;width:100%;
+  background-color:rgba(255,255,255,.96);
+  backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);
+  border-bottom:1px solid rgba(0,0,0,.08);
+  display:flex;justify-content:center;gap:48px;flex-wrap:wrap;
+  padding:36px 8%;box-sizing:border-box;z-index:9998;
+  opacity:0;visibility:hidden;transform:translateY(-12px);pointer-events:none;
+  transition:opacity .4s cubic-bezier(.25,1,.5,1),transform .4s cubic-bezier(.25,1,.5,1),visibility .4s;
+}
+.apple-dropdown-menu.is-active{opacity:1;visibility:visible;transform:translateY(0);pointer-events:auto}
+.dropdown-column{display:flex;flex-direction:column;gap:10px;min-width:200px;max-width:260px}
+.dropdown-column h4{font-size:11px;color:#86868b;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;font-weight:600}
+.dropdown-link{font-size:14px;font-weight:500;color:#1d1d1f;text-decoration:none;transition:color .2s ease;line-height:1.35}
+.dropdown-link:hover{color:#0071e3}
+.dd-panel{display:none}
+.dd-panel.on{display:flex;gap:48px;flex-wrap:wrap;width:100%;justify-content:center}
 @media(max-width:800px){
-  .navbar-apple-glass{padding:10px 14px;flex-wrap:wrap}
+  .navbar-apple-glass{padding:10px 14px}
   .nav-links-center{display:none}
+  .apple-dropdown-menu{display:none!important}
 }
 </style>
+<div class="navbar-apple-wrap" id="navAppleWrap">
 <nav class="navbar-apple-glass">
   <a class="nav-logo-apple" href="/procsis">
     <img src="/media/logo-corporativo" alt="PROCSIS" class="logo-micro" onerror="this.style.display='none'">
     <span>EduTrack · PROCSIS</span>
   </a>
   <div class="nav-links-center">
-    <a href="/procsis" class="link-apple">Procsis</a>
-    <a href="/soluciones" class="link-apple">Soluciones</a>
-    <a href="/ventas" class="link-apple">Planes</a>
-    <a href="/eventos-virtuales" class="link-apple">Novedades</a>
-    <a href="/ayuda" class="link-apple">Ayuda</a>
-    <a href="/login" class="link-apple">Ingresar colegio</a>
+    <button type="button" class="link-apple" data-dd="procsis">Procsis</button>
+    <button type="button" class="link-apple" data-dd="soluciones">Soluciones</button>
+    <button type="button" class="link-apple" data-dd="planes">Planes</button>
+    <button type="button" class="link-apple" data-dd="ayuda">Ayuda</button>
   </div>
   <div class="nav-button-right">
-    <a href="/whatsapp" class="btn-apple-oval">WhatsApp</a>
-    <a href="/backoffice" class="btn-apple-oval" style="background:#1d1d1f">Backoffice</a>
+    <a href="/login" class="btn-apple-oval">Ingresar Colegio</a>
   </div>
 </nav>
+<div class="apple-dropdown-menu" id="appleDropdown">
+  <div class="dd-panel" data-panel="procsis">
+    <div class="dropdown-column">
+      <h4>PROCSIS</h4>
+      <a class="dropdown-link" href="/procsis">¿Qué es Procsis?</a>
+      <a class="dropdown-link" href="/tecnologia">Infraestructura en la Nube</a>
+      <a class="dropdown-link" href="/procsis">Sello de Auditoría Digital</a>
+      <a class="dropdown-link" href="/politicas/ciberseguridad">Seguridad Jurídica y Ciberseguridad</a>
+    </div>
+  </div>
+  <div class="dd-panel" data-panel="soluciones">
+    <div class="dropdown-column">
+      <h4>Gestión Escolar</h4>
+      <a class="dropdown-link" href="/soluciones#notas">Módulo de Notas SIEE</a>
+      <a class="dropdown-link" href="/soluciones#notas">Boletines Académicos</a>
+      <a class="dropdown-link" href="/soluciones#admisiones">Pre-Matrícula SIMAT</a>
+      <a class="dropdown-link" href="/soluciones#admisiones">Formularios de Matrícula</a>
+    </div>
+    <div class="dropdown-column">
+      <h4>Seguridad Perimetral</h4>
+      <a class="dropdown-link" href="/soluciones#asistencia">Control de Portería QR</a>
+      <a class="dropdown-link" href="/soluciones#asistencia">Alertas Rojas (7:00 AM)</a>
+      <a class="dropdown-link" href="/soluciones">Módulo de Salida Segura</a>
+      <a class="dropdown-link" href="/soluciones">Despacho de Rutas Escolares</a>
+    </div>
+  </div>
+  <div class="dd-panel" data-panel="planes">
+    <div class="dropdown-column">
+      <h4>Planes y tarifas</h4>
+      <a class="dropdown-link" href="/ventas">Planes Institucionales Completos</a>
+      <a class="dropdown-link" href="/ventas">Planes Solo QR</a>
+      <a class="dropdown-link" href="/ventas">Tarifas de Lanzamiento</a>
+      <a class="dropdown-link" href="/casos-exito">Casos de Éxito</a>
+    </div>
+  </div>
+  <div class="dd-panel" data-panel="ayuda">
+    <div class="dropdown-column">
+      <h4>Ayuda y soporte</h4>
+      <a class="dropdown-link" href="/ayuda">Tutoriales para Profesores</a>
+      <a class="dropdown-link" href="/login">Portal de Consulta para Padres</a>
+      <a class="dropdown-link" href="/pqr">Radicar PQR</a>
+      <a class="dropdown-link" href="/whatsapp">Soporte por WhatsApp</a>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+(function(){
+  var wrap=document.getElementById("navAppleWrap");
+  var dd=document.getElementById("appleDropdown");
+  if(!wrap||!dd) return;
+  var tabs=wrap.querySelectorAll(".link-apple[data-dd]");
+  var panels=dd.querySelectorAll(".dd-panel");
+  function show(key){
+    panels.forEach(function(p){ p.classList.toggle("on", p.getAttribute("data-panel")===key); });
+    tabs.forEach(function(t){ t.classList.toggle("is-hot", t.getAttribute("data-dd")===key); });
+    dd.classList.add("is-active");
+  }
+  function hide(){
+    dd.classList.remove("is-active");
+    tabs.forEach(function(t){ t.classList.remove("is-hot"); });
+  }
+  tabs.forEach(function(t){
+    t.addEventListener("mouseenter", function(){ show(t.getAttribute("data-dd")); });
+    t.addEventListener("focus", function(){ show(t.getAttribute("data-dd")); });
+  });
+  wrap.addEventListener("mouseleave", hide);
+})();
+</script>
 """
 
 
@@ -21546,6 +21632,11 @@ def gerencia_hq():
           <div class="meta">Periodo de referencia: {m['mes'] or '—'}</div>
           <div class="meta" id="hq-reloj-co" style="font-variant-numeric:tabular-nums;font-weight:700;color:#fbbf24;margin-top:6px;font-size:13px;letter-spacing:.02em">
             🇨🇴 <span id="hq-reloj-txt">—:—:—</span> · Hora Colombia
+          </div>
+          <div style="margin-top:14px">
+            <a href="/gerencia/login-banners" style="display:inline-block;padding:12px 18px;border-radius:12px;background:linear-gradient(135deg,#4f46e5,#0B2D57);color:#fff;text-decoration:none;font-weight:800;font-size:13px;box-shadow:0 8px 20px rgba(15,23,42,.25)">
+              🖼️ Banners del Login Backoffice · Salida segura →
+            </a>
           </div>
 
 <script>
