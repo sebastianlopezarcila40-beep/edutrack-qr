@@ -19310,20 +19310,18 @@ def portal_backoffice():
     except Exception:
         logo, empresa = "/static/img/logo-procsis.png", "Procsis"
 
-    # Ya autenticado: redirigir según rol (empleados nunca ven el hub)
+    # Ya autenticado: ir al panel del rol. El login split solo se muestra SIN sesión.
+    # Tablero Maestro solo en /backoffice/hub o ?hub=1
     try:
-        if session.get("usuario") and session.get("rol"):
+        if session.get("usuario") and session.get("rol") and request.method == "GET":
             rol = (session.get("rol") or "").strip()
+            if request.args.get("hub") == "1" and rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+                return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario") or ""))
+            dest = _destino_por_rol_staff(rol)
+            if dest and dest not in ("/backoffice", "/backoffice/login"):
+                return redirect(dest)
             if rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
-                if request.args.get("hub") == "1" or (request.path or "").rstrip("/").endswith("hub"):
-                    return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario") or ""))
-                # Gerencia en /backoffice → tablero maestro
-                if request.method == "GET":
-                    return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario") or ""))
-            else:
-                dest = _destino_por_rol_staff(rol)
-                if dest and dest not in ("/backoffice", "/backoffice/hub"):
-                    return redirect(dest)
+                return redirect("/gerencia/hq")
     except Exception:
         pass
 
