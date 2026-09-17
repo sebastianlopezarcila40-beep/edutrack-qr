@@ -8547,9 +8547,10 @@ def _html_lideres_login():
 
 
 def _nav_public_html(active=""):
-    """Barra Apple glass + mega-menú. Sin Backoffice público (solo URL interna)."""
+    """Barra Apple glass + mega-menú. Sin Backoffice público (solo URL interna). v2026-09-17b"""
     return """
 <style>
+/* NAV-APPLE-V2 span-not-button */
 .navbar-apple-wrap{position:sticky;top:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 .navbar-apple-glass{
   position:relative;width:100%;box-sizing:border-box;
@@ -8562,21 +8563,22 @@ def _nav_public_html(active=""):
 .nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1d1d1f;font-weight:600;font-size:14px;flex-shrink:0}
 .nav-logo-apple .logo-micro{height:22px;width:auto;object-fit:contain}
 .nav-links-center{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:center;flex:1}
-/* Importante: anular estilos globales de button (pastillas azules del sistema) */
-.navbar-apple-wrap button.link-apple,
+/* Texto plano estilo Apple — NO button (el CSS global pinta todos los button de azul) */
+.navbar-apple-wrap span.link-apple,
 .navbar-apple-wrap .link-apple{
   font-size:14px !important;font-weight:400 !important;letter-spacing:-.01em !important;
   color:#1d1d1f !important;text-decoration:none !important;opacity:.88 !important;
   padding:8px 12px !important;border-radius:0 !important;background:transparent !important;
   border:0 !important;cursor:pointer !important;font-family:inherit !important;
-  box-shadow:none !important;width:auto !important;margin:0 !important;
+  box-shadow:none !important;width:auto !important;margin:0 !important;display:inline-block !important;
   transition:opacity .2s ease,color .2s ease !important;white-space:nowrap !important;
-  background-image:none !important;
+  background-image:none !important;filter:none !important;transform:none !important;
 }
-.navbar-apple-wrap button.link-apple:hover,
+.navbar-apple-wrap span.link-apple:hover,
 .navbar-apple-wrap .link-apple:hover,
 .navbar-apple-wrap .link-apple.is-hot{
   opacity:1 !important;color:#0B63CE !important;background:transparent !important;box-shadow:none !important;
+  filter:none !important;transform:none !important;
 }
 .nav-button-right{flex-shrink:0}
 .btn-apple-oval{
@@ -8619,10 +8621,10 @@ def _nav_public_html(active=""):
     <span>EduTrack · PROCSIS</span>
   </a>
   <div class="nav-links-center">
-    <button type="button" class="link-apple" data-dd="procsis">Procsis</button>
-    <button type="button" class="link-apple" data-dd="soluciones">Soluciones</button>
-    <button type="button" class="link-apple" data-dd="planes">Planes</button>
-    <button type="button" class="link-apple" data-dd="ayuda">Ayuda</button>
+    <span class="link-apple" role="button" tabindex="0" data-dd="procsis">Procsis</span>
+    <span class="link-apple" role="button" tabindex="0" data-dd="soluciones">Soluciones</span>
+    <span class="link-apple" role="button" tabindex="0" data-dd="planes">Planes</span>
+    <span class="link-apple" role="button" tabindex="0" data-dd="ayuda">Ayuda</span>
   </div>
   <div class="nav-button-right">
     <a href="/login" class="btn-apple-oval">Ingresar Colegio</a>
@@ -8631,11 +8633,18 @@ def _nav_public_html(active=""):
 <div class="apple-dropdown-menu" id="appleDropdown">
   <div class="dd-panel" data-panel="procsis">
     <div class="dropdown-column">
-      <h4>PROCSIS</h4>
+      <h4>Explorar PROCSIS</h4>
       <a class="dropdown-link" href="/procsis">¿Qué es Procsis?</a>
       <a class="dropdown-link" href="/tecnologia">Infraestructura en la Nube</a>
       <a class="dropdown-link" href="/procsis">Sello de Auditoría Digital</a>
       <a class="dropdown-link" href="/politicas/ciberseguridad">Seguridad Jurídica y Ciberseguridad</a>
+    </div>
+    <div class="dropdown-column">
+      <h4>Más de PROCSIS</h4>
+      <a class="dropdown-link" href="/quienes-somos">Quiénes somos</a>
+      <a class="dropdown-link" href="/casos-exito">Casos de éxito</a>
+      <a class="dropdown-link" href="/politicas">Políticas y datos</a>
+      <a class="dropdown-link" href="/contacto">Contacto comercial</a>
     </div>
   </div>
   <div class="dd-panel" data-panel="soluciones">
@@ -9576,7 +9585,7 @@ def login():
           <div class="corp-hour"><b>Martes a viernes</b><br>{hor_sem}</div>
         </div>
         <div class="corp-note">Fuera de horario puede dejar su mensaje por WhatsApp o correo. Lo atenderemos al volver.</div>
-        <p style="margin-top:12px"><a class="btn" href="/whatsapp" style="background:#16a34a">💬 Escribir a soporte por WhatsApp</a></p>
+        <p style="margin-top:12px"><a href="/whatsapp" style="display:inline-block;background:#0B63CE;color:#fff;font-weight:500;text-decoration:none;padding:10px 20px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">Escribir a soporte por WhatsApp</a></p>
       </div>
     </div>
   </section>
@@ -9643,7 +9652,7 @@ def login():
         </div>
       </div>
       <p style="text-align:center;margin:20px 0 0">
-        <a href="/tecnologia" style="display:inline-block;background:#16a34a;color:#fff;font-weight:800;text-decoration:none;padding:11px 20px;border-radius:999px;font-size:14px">Más información</a>
+        <a href="/tecnologia" style="display:inline-block;background:#0B63CE;color:#fff;font-weight:500;text-decoration:none;padding:10px 20px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">Más información</a>
       </p>
     </section>
 
@@ -47365,19 +47374,20 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 .nav-logo-apple{{display:flex;align-items:center;gap:8px;font-weight:600;color:#1d1d1f;font-size:14px;text-decoration:none}}
 .nav-logo-apple .logo-micro{{height:22px;width:auto;object-fit:contain;display:block}}
 .nav-links-center{{display:flex;gap:28px;align-items:center;flex-wrap:wrap}}
-.link-apple{{font-size:12px;font-weight:400;color:#1d1d1f;text-decoration:none;opacity:.8;
-transition:opacity .2s ease,color .2s ease}}
-.link-apple:hover{{opacity:1;color:#0071e3}}
-.link-apple.on{{opacity:1;color:#0071e3}}
+.link-apple{{font-size:14px;font-weight:400;letter-spacing:-.01em;color:#1d1d1f;text-decoration:none;opacity:.88;
+transition:opacity .2s ease,color .2s ease;background:transparent!important;border:0!important;box-shadow:none!important;
+padding:6px 8px;border-radius:0!important}}
+.link-apple:hover{{opacity:1;color:#0B63CE}}
+.link-apple.on{{opacity:1;color:#0B63CE}}
 .nav-button-right{{display:flex;align-items:center;gap:10px}}
-.btn-apple-oval{{font-size:12px;font-weight:400;color:#fff;background-color:#0071e3;padding:8px 18px;
-text-decoration:none;border-radius:980px;display:inline-block;
+.btn-apple-oval{{font-size:13px;font-weight:500;color:#fff;background-color:#0B63CE;padding:8px 18px;
+text-decoration:none;border-radius:980px;display:inline-block;box-shadow:none!important;
 transition:background-color .2s ease,transform .1s ease}}
-.btn-apple-oval:hover{{background-color:#0077ed}}
+.btn-apple-oval:hover{{background-color:#0a56b3}}
 .btn-apple-oval:active{{transform:scale(.97)}}
-.btn-apple-ghost{{font-size:12px;font-weight:400;color:#1d1d1f;padding:8px 14px;border-radius:980px;
-border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9}}
-.btn-apple-ghost:hover{{color:#0071e3;border-color:#0071e3}}
+.btn-apple-ghost{{font-size:13px;font-weight:400;color:#1d1d1f;padding:8px 14px;border-radius:980px;
+border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f5f7}}
+.btn-apple-ghost:hover{{color:#0B63CE;border-color:#0B63CE}}
 .pc-nav-spacer{{height:52px}}
 @media(max-width:860px){{
 .navbar-apple-glass{{padding:10px 16px;flex-wrap:wrap;gap:10px}}
@@ -47387,15 +47397,15 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9}}
 .pc-hero{{background:linear-gradient(135deg,#f1f5f9 0%,#e8eef5 50%,#dbe3ee 100%);color:#0f172a;position:relative;overflow:hidden;min-height:420px}}
 .pc-hero::after{{content:"";position:absolute;right:-60px;top:-30px;width:320px;height:320px;border-radius:50%;background:rgba(11,45,87,.04);pointer-events:none}}
 .pc-hero-in{{max-width:1120px;margin:0 auto;padding:64px 20px 72px;position:relative;z-index:1}}
-.pc-hero .tag{{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#0B2D57;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(15,23,42,.06);-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;letter-spacing:.04em;margin-bottom:16px}}
+.pc-hero .tag{{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#0B2D57;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(15,23,42,.06);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:600;letter-spacing:.04em;margin-bottom:16px}}
 .pc-hero .tag svg{{width:16px;height:16px;stroke:#93c5fd}}
-.pc-hero h1{{margin:0 0 14px;font-size:42px;line-height:1.12;font-weight:800;max-width:640px;color:#0B2D57}}
-.pc-hero p{{margin:0 0 22px;font-size:16px;line-height:1.55;max-width:520px;color:#475569}}
+.pc-hero h1{{margin:0 0 14px;font-size:42px;line-height:1.12;font-weight:700;max-width:640px;color:#0B2D57;letter-spacing:-.02em}}
+.pc-hero p{{margin:0 0 22px;font-size:16px;line-height:1.55;max-width:520px;color:#475569;font-weight:400}}
 .pc-hero-btns{{display:flex;flex-wrap:wrap;gap:12px}}
-.pc-hero-btns a{{padding:13px 20px;border-radius:10px;font-weight:800;font-size:14px}}
-.pc-btn-w{{background:#0B2D57;color:#fff;box-shadow:0 6px 16px rgba(11,45,87,.2)}}
-.pc-btn-g{{background:#16a34a;color:#fff}}
-.pc-btn-o{{background:#fff;color:#0B2D57;border:1px solid #cbd5e1}}.pc-btn-w{{background:#0B2D57;color:#fff}}.pc-btn-g{{background:#15803d;color:#fff}}
+.pc-hero-btns a{{padding:10px 20px;border-radius:980px;font-weight:500;font-size:14px;text-decoration:none}}
+.pc-btn-w{{background:#0B63CE;color:#fff}}
+.pc-btn-g{{background:#0B2D57;color:#fff}}
+.pc-btn-o{{background:#f5f5f7;color:#1d1d1f;border:1px solid rgba(0,0,0,.08)}}
 .pc-sec{{max-width:1120px;margin:0 auto;padding:48px 20px}}
 .pc-sec h2{{margin:0 0 8px;font-size:28px;color:#0B2D57;text-align:center}}
 .pc-sec .sub{{text-align:center;color:#64748b;margin:0 0 28px;font-size:15px}}
@@ -47722,7 +47732,7 @@ def pagina_tecnologia_edutrack():
 .tech-card h3{margin:0 0 8px;font-size:17px;color:#0B2D57}
 .tech-card p{margin:0;font-size:14px;color:#475569;line-height:1.5}
 .tech-cta{text-align:center;padding-bottom:40px}
-.tech-cta a{display:inline-block;background:#16a34a;color:#fff;font-weight:800;text-decoration:none;padding:12px 22px;border-radius:999px}
+.tech-cta a{display:inline-block;background:#0B63CE;color:#fff;font-weight:500;text-decoration:none;padding:10px 22px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}
 .tech-top{border-bottom:1px solid #e2e8f0;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
 .tech-top a{color:#0B2D57;font-weight:700;text-decoration:none;font-size:14px}
 </style>
