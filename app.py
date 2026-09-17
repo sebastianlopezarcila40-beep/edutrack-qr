@@ -19193,17 +19193,25 @@ puntualmente.</p>
 """)
 
 
-@app.route("/backoffice")
-@app.route("/edutrack-backoffice")
-def portal_backoffice():
-    """Portal unificado EduTrack Backoffice — filas corporativas compactas."""
-    try:
-        logo = logo_plataforma()
-        p = plataforma()
-        empresa = getattr(p, "empresa", None) or "Procsis"
-    except Exception:
-        logo, empresa = "/static/img/logo-procsis.png", "Procsis"
-    body = f"""
+def _destino_por_rol_staff(rol):
+    """Redirección automática tras login único de backoffice (RBAC)."""
+    r = (rol or "").strip()
+    if r in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+        return "/backoffice/hub"  # Tablero maestro solo Gerencia
+    if r in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor"):
+        return "/ventas/panel"
+    if r in ("Cobranza",):
+        return "/cobranza/panel"
+    if r in ("Soporte",):
+        return "/soporte"
+    if r in ("Desarrollador", "Developer"):
+        return "/dev-console"
+    return "/backoffice"
+
+
+def _html_hub_gerencia(logo, empresa, usuario=""):
+    """Tablero maestro de control — exclusivo Gerencia / Superadmin."""
+    return f"""
 <style>
 .bo{{min-height:100vh;background:#0B2D57;font-family:Segoe UI,system-ui,sans-serif;color:#fff;
 display:flex;align-items:center;justify-content:center;padding:24px 16px}}
@@ -19219,86 +19227,205 @@ color:#e2e8f0;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform
 .bo-list{{display:flex;flex-direction:column;gap:10px}}
 .bo-row{{display:flex;align-items:center;gap:14px;background:#fff;color:#0f172a;text-decoration:none;
 border-radius:6px;padding:12px 14px;border:1px solid #e2e8f0;border-left:4px solid #64748b;
-transition:background .15s}}
-.bo-row:hover{{background:#f8fafc}}
+transition:background .15s,transform .15s}}
+.bo-row:hover{{background:#f8fafc;transform:translateY(-1px)}}
 .bo-row.s{{border-left-color:#1e40af}}
 .bo-row.v{{border-left-color:#c2410c}}
 .bo-row.g{{border-left-color:#57534e}}
 .bo-row.f{{border-left-color:#059669}}
+.bo-row.d{{border-left-color:#7c3aed}}
 .bo-ico{{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center;
 font-size:18px;flex:0 0 auto;background:#f1f5f9}}
 .bo-row.s .bo-ico{{background:#eff6ff}}
 .bo-row.v .bo-ico{{background:#fff7ed}}
 .bo-row.g .bo-ico{{background:#f5f5f4}}
 .bo-row.f .bo-ico{{background:#ecfdf5}}
+.bo-row.d .bo-ico{{background:#f5f3ff}}
 .bo-mid{{flex:1;min-width:0}}
 .bo-mid h2{{margin:0 0 2px;color:#0B2D57;font-size:15px;font-weight:800}}
 .bo-mid p{{margin:0;font-size:12px;color:#64748b;line-height:1.35}}
 .bo-cta{{flex:0 0 auto;padding:8px 14px;border-radius:4px;background:#0B2D57;color:#fff;
 font-size:12px;font-weight:700;white-space:nowrap}}
-.bo-row:hover .bo-cta{{background:#0f3d73}}
 .bo-foot{{text-align:center;margin-top:20px;font-size:12px;opacity:.8}}
 .bo-foot a{{color:#93c5fd;text-decoration:none;font-weight:600;margin:0 6px}}
-.bo-foot a:hover{{color:#fff}}
-.bo-foot .dev{{color:#64748b;font-size:11px}}
-.bo-foot .dev:hover{{color:#94a3b8}}
 </style>
 <div class="bo"><div class="bo-box">
-  <div class="bo-logo"><img src="{logo}" alt="PROCSIS" style="height:72px;width:auto;max-width:220px;object-fit:contain;border-radius:6px;background:#fff;padding:8px 14px" ></div>
-  <h1>PROCSIS Backoffice</h1>
-  <p class="sub">{_esc(empresa)} · Accesos internos de operación</p>
-  <div class="bo-badge">[ Seguridad: acceso privado — restringido para operación interna ]</div>
+  <div class="bo-logo"><img src="{logo}" alt="PROCSIS" style="height:72px;width:auto;max-width:220px;object-fit:contain;border-radius:6px;background:#fff;padding:8px 14px"></div>
+  <h1>Tablero Maestro de Control</h1>
+  <p class="sub">{_esc(empresa)} · Gerencia · {_esc(usuario or session.get('usuario') or '')}</p>
+  <div class="bo-badge">[ Solo Gerencia / Superadmin — supervisión de todas las áreas ]</div>
   <div class="bo-list">
-    <a class="bo-row s" href="/soporte-login">
-      <div class="bo-ico">🛠️</div>
-      <div class="bo-mid">
-        <h2>Soporte técnico</h2>
-        <p>Instituciones, usuarios, PQR, seguridad, biometría y configuración.</p>
-      </div>
-      <span class="bo-cta">Ingresar →</span>
-    </a>
-    <a class="bo-row v" href="/ventas-login">
-      <div class="bo-ico">💼</div>
-      <div class="bo-mid">
-        <h2>Ventas</h2>
-        <p>Portal del asesor: planes y registro de instituciones educativas.</p>
-      </div>
-      <span class="bo-cta">Ingresar →</span>
-    </a>
-    <a class="bo-row g" href="/gerencia-login">
+    <a class="bo-row g" href="/gerencia/hq">
       <div class="bo-ico">📊</div>
-      <div class="bo-mid">
-        <h2>Gerencia</h2>
-        <p>Planes, precios, supervisión comercial y control de la operación.</p>
-      </div>
-      <span class="bo-cta">Ingresar →</span>
+      <div class="bo-mid"><h2>Gerencia HQ</h2><p>Centro ejecutivo, métricas, talento y operación.</p></div>
+      <span class="bo-cta">Abrir →</span>
     </a>
-    <a class="bo-row f" href="/cobranza-login">
+    <a class="bo-row s" href="/soporte">
+      <div class="bo-ico">🛠️</div>
+      <div class="bo-mid"><h2>Soporte técnico</h2><p>Instituciones, usuarios, PQR, seguridad y configuración.</p></div>
+      <span class="bo-cta">Supervisar →</span>
+    </a>
+    <a class="bo-row v" href="/ventas/panel">
+      <div class="bo-ico">💼</div>
+      <div class="bo-mid"><h2>Ventas</h2><p>Planes, comisiones y registro de instituciones.</p></div>
+      <span class="bo-cta">Supervisar →</span>
+    </a>
+    <a class="bo-row f" href="/cobranza/panel">
       <div class="bo-ico">💳</div>
-      <div class="bo-mid">
-        <h2>Facturación y Cobranza</h2>
-        <p>Cartera, pendientes y recaudo de colegios en vivo.</p>
-      </div>
-      <span class="bo-cta">Ingresar →</span>
+      <div class="bo-mid"><h2>Facturación y Cobranza</h2><p>Cartera, pendientes y recaudo en vivo.</p></div>
+      <span class="bo-cta">Supervisar →</span>
     </a>
-    <a class="bo-row d" href="/dev-console-login">
+    <a class="bo-row d" href="/dev-console">
       <div class="bo-ico">⚙️</div>
-      <div class="bo-mid">
-        <h2>Consola de Desarrollo</h2>
-        <p>Logs, mantenimiento global, backups técnicos y variables de entorno.</p>
-      </div>
-      <span class="bo-cta">Ingresar →</span>
+      <div class="bo-mid"><h2>Consola de Desarrollo</h2><p>Versiones, temas, flags, logs y mantenimiento.</p></div>
+      <span class="bo-cta">Abrir →</span>
     </a>
   </div>
   <p class="bo-foot">
-    <a href="/login">Portal instituciones</a> ·
-    <a href="/ayuda">Ayuda</a> ·
-    <a href="/ventas">Catálogo planes</a><br>
-    <a class="dev" href="/dev-console">⚙️ Consola de Desarrollo</a>
+    <a href="/logout">Cerrar sesión</a> ·
+    <a href="/login">Portal instituciones</a>
   </p>
 </div></div>
 """
-    return page("EduTrack Backoffice", body)
+
+
+@app.route("/backoffice", methods=["GET", "POST"])
+@app.route("/edutrack-backoffice", methods=["GET", "POST"])
+@app.route("/backoffice/login", methods=["GET", "POST"])
+def portal_backoffice():
+    """Login único unificado por roles (RBAC). El hub de paneles solo lo ve Gerencia."""
+    try:
+        logo = logo_plataforma()
+        p = plataforma()
+        empresa = getattr(p, "empresa", None) or "Procsis"
+    except Exception:
+        logo, empresa = "/static/img/logo-procsis.png", "Procsis"
+
+    # Ya autenticado: redirigir según rol (empleados nunca ven el hub)
+    if session.get("usuario") and session.get("rol"):
+        rol = (session.get("rol") or "").strip()
+        if rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+            # Si pide hub explícito o está en /backoffice, mostrar tablero maestro
+            if (request.path or "").endswith("/hub") or request.args.get("hub") == "1":
+                return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario")))
+            # Por defecto Gerencia va al HQ; puede volver al hub
+            if request.path in ("/backoffice", "/edutrack-backoffice", "/backoffice/login") and request.method == "GET":
+                return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario")))
+        dest = _destino_por_rol_staff(rol)
+        if dest != "/backoffice":
+            return redirect(dest)
+
+    error = ""
+    if request.method == "POST":
+        ok_rl, wait_m = _rate_limit_login(portal="backoffice")
+        if not ok_rl:
+            return _rate_limit_response(wait_m)
+        user = login_usuario(request.form.get("usuario"), request.form.get("password"))
+        if not user:
+            _rate_limit_fail(portal="backoffice")
+            error = "Usuario o contraseña incorrectos."
+        elif not _usuario_activo_ok(user):
+            _rate_limit_fail(portal="backoffice")
+            error = "Usuario desactivado. Contacte a Gerencia."
+        else:
+            rol = (user.rol or "").strip()
+            roles_staff = (
+                "Gerente", "Gerencia", "Superadmin", "Administrador",
+                "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
+                "Cobranza", "Soporte", "Desarrollador", "Developer",
+            )
+            if rol not in roles_staff:
+                _rate_limit_fail(portal="backoffice")
+                error = "Este acceso es solo para personal PROCSIS. Use el portal de instituciones."
+            else:
+                _rate_limit_ok(portal="backoffice")
+                session.clear()
+                session["usuario"] = user.usuario
+                session["rol"] = rol
+                session["uid"] = user.id
+                session["password_temporal"] = bool(getattr(user, "password_temporal", False))
+                session["panel"] = "backoffice"
+                try:
+                    registrar_sesion_empleado(user)
+                except Exception:
+                    pass
+                try:
+                    registrar_auditoria("Login backoffice unificado", "%s · %s" % (user.usuario, rol))
+                except Exception:
+                    pass
+                try:
+                    _rate_limit_clear_all()
+                except Exception:
+                    pass
+                dest = _destino_por_rol_staff(rol)
+                if dest == "/backoffice/hub" or rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+                    return redirect("/backoffice?hub=1")
+                return redirect(dest)
+
+    body = f"""
+<style>
+.bo{{min-height:100vh;background:#0B2D57;font-family:Segoe UI,system-ui,sans-serif;color:#fff;
+display:flex;align-items:center;justify-content:center;padding:24px 16px}}
+.bo-box{{max-width:420px;width:100%}}
+.bo-logo{{text-align:center;margin-bottom:14px}}
+.bo-logo img{{height:72px;width:auto;max-width:200px;object-fit:contain;border-radius:6px;
+background:#fff;padding:8px 14px}}
+.bo-box h1{{margin:0 0 6px;font-size:24px;text-align:center;font-weight:800;letter-spacing:-0.02em}}
+.bo-box .sub{{text-align:center;opacity:.88;margin:0 0 18px;font-size:13px}}
+.bo-card{{background:#fff;color:#0f172a;border-radius:14px;padding:24px 22px;box-shadow:0 20px 40px rgba(0,0,0,.2)}}
+.bo-card label{{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}}
+.bo-card input{{width:100%;padding:12px 14px;margin:0 0 14px;border:1px solid #e2e8f0;border-radius:10px;
+box-sizing:border-box;font-size:14px;background:#f8fafc}}
+.bo-card input:focus{{outline:none;border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}}
+.bo-card button{{width:100%;padding:13px;border:0;border-radius:10px;background:linear-gradient(180deg,#0B2D57,#0a2447);
+color:#fff;font-weight:800;font-size:14px;cursor:pointer}}
+.bo-card button:hover{{filter:brightness(1.06)}}
+.err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px;border-radius:8px;margin-bottom:12px}}
+.bo-foot{{text-align:center;margin-top:18px;font-size:12px;opacity:.85}}
+.bo-foot a{{color:#93c5fd;text-decoration:none;font-weight:600;margin:0 6px}}
+.bo-badge{{display:block;text-align:center;margin:0 0 14px;padding:8px 12px;
+background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:4px;
+color:#e2e8f0;font-size:11px;font-weight:700;letter-spacing:.04em}}
+</style>
+<div class="bo"><div class="bo-box">
+  <div class="bo-logo"><img src="{logo}" alt="PROCSIS"></div>
+  <h1>PROCSIS Backoffice</h1>
+  <p class="sub">{_esc(empresa)} · Acceso interno unificado</p>
+  <div class="bo-badge">Un solo inicio de sesión · redirección automática por rol</div>
+  <div class="bo-card">
+    {"<div class='err'>"+_esc(error)+"</div>" if error else ""}
+    <form method="POST" autocomplete="username">
+      <label>Usuario o correo</label>
+      <input name="usuario" required autofocus placeholder="usuario" autocomplete="username">
+      <label>Contraseña</label>
+      <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password">
+      <button type="submit">Iniciar sesión</button>
+    </form>
+  </div>
+  <p class="bo-foot">
+    <a href="/login">Portal instituciones</a> ·
+    <a href="/recuperar-staff">Recuperar acceso</a>
+  </p>
+</div></div>
+"""
+    return page("PROCSIS Backoffice", body)
+
+
+@app.route("/backoffice/hub")
+def backoffice_hub_gerencia():
+    """Tablero maestro — solo Gerencia / Superadmin."""
+    if not session.get("usuario"):
+        return redirect("/backoffice")
+    rol = (session.get("rol") or "").strip()
+    if rol not in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+        return redirect(_destino_por_rol_staff(rol))
+    try:
+        logo = logo_plataforma()
+        p = plataforma()
+        empresa = getattr(p, "empresa", None) or "Procsis"
+    except Exception:
+        logo, empresa = "/static/img/logo-procsis.png", "Procsis"
+    return page("Tablero Maestro", _html_hub_gerencia(logo, empresa, session.get("usuario")))
 
 
 
