@@ -9421,24 +9421,29 @@ def login():
         # se muestran 3 paneles corporativos con degradados distintos, para que el
         # carrusel se vea "vivo" en vez de repetir la misma imagen sin cambios.
         slides = [
-            ("linear-gradient(135deg,#0B2D57 0%,#1e3a8a 60%,#0ea5e9 100%)", "EduTrack · Tecnología educativa"),
-            ("linear-gradient(135deg,#0f172a 0%,#0B2D57 55%,#1e40af 100%)", "Gestión multi-institucional"),
-            ("linear-gradient(135deg,#1e3a8a 0%,#0369a1 55%,#0d9488 100%)", "Asistencia, notas y reportes"),
+            ("#000000", "EduTrack. Una infraestructura que te dejará sin aliento."),
+            ("#002060", "Un solo acceso · Rectoría · Coordinación · Secretaría · Docente"),
+            ("#0a1628", "Tecnología educativa moderna y responsable"),
         ]
     slides_html = ""
     dots_html = ""
     for i, (img, cap) in enumerate(slides):
+        logo_src = datos.get("logo") or "/static/img/logo-edutrack.png"
         if slides_tienen_fotos:
-            visual_html = f'<img src="{img}" alt="Slide {i+1}" loading="eager">'
-        else:
             visual_html = (
-                f'<div class="sinai-slide-ph" style="background:{img}">'
-                f'<img src="{datos.get("logo") or "/static/img/logo-edutrack.png"}" alt="EduTrack" class="sinai-slide-ph-logo"></div>'
+                f'<img src="{img}" alt="Slide {i+1}" loading="eager" class="sinai-slide-photo">'
+                f'<div class="sinai-slide-veil"></div>'
             )
+        else:
+            visual_html = f'<div class="sinai-slide-ph" style="background:{img}"></div>'
         slides_html += (
             f'<div class="sinai-slide" data-i="{i}">'
             f'{visual_html}'
-            f'<div class="sinai-slide-cap"><b>{cap}</b><span>EduTrack · PROCSIS</span></div>'
+            f'<div class="sinai-slide-brand">'
+            f'<img src="{logo_src}" alt="EduTrack" class="sinai-brand-logo">'
+            f'<p class="sinai-brand-slogan">{cap}</p>'
+            f'<span class="sinai-brand-sub">EduTrack · PROCSIS</span>'
+            f'</div>'
             f"</div>"
         )
         dots_html += f'<button type="button" class="sinai-dot{" is-on" if i==0 else ""}" data-i="{i}" aria-label="Slide {i+1}"></button>'
@@ -9476,49 +9481,53 @@ def login():
 .lp-topnav-links{{display:flex;gap:8px;flex-wrap:wrap}}
 .lp-topnav-links a{{color:#334155;text-decoration:none;font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px}}
 .lp-topnav-links a:hover{{background:#f1f5f9;color:#0B2D57}}
-.sinai-portal{{background:#f1f5f9;padding:24px 20px 32px;font-family:Segoe UI,system-ui,Arial,sans-serif}}
-.sinai-grid{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.2fr .9fr;gap:24px;align-items:stretch}}
+.sinai-portal{{background:#f5f5f7;padding:28px 20px 36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.sinai-grid{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.15fr .95fr;gap:28px;align-items:stretch}}
 @media(max-width:900px){{.sinai-grid{{grid-template-columns:1fr}}}}
-.sinai-carousel{{position:relative;border-radius:20px;overflow:hidden;height:420px;background:linear-gradient(145deg,#0B2D57 0%,#1e3a8a 50%,#0ea5e9 100%);box-shadow:0 16px 40px rgba(15,23,42,.18);border:1px solid #e2e8f0}}
+.sinai-carousel{{position:relative;border-radius:24px;overflow:hidden;height:460px;background:#000;box-shadow:0 20px 50px rgba(0,0,0,.18);border:0}}
 .sinai-viewport{{width:100%;height:100%;overflow:hidden}}
-.sinai-track{{display:flex;height:100%;width:100%;transition:transform .55s ease}}
-.sinai-slide{{position:relative;min-width:100%;width:100%;height:100%;flex-shrink:0;overflow:hidden}}
-.sinai-slide img{{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.92);animation:sinai-kenburns 9s ease-in-out infinite alternate}}
-.sinai-slide-ph{{width:100%;height:100%;display:flex;align-items:center;justify-content:center;animation:sinai-kenburns 9s ease-in-out infinite alternate}}
-.sinai-slide-ph-logo{{width:96px;height:96px;object-fit:contain;background:rgba(255,255,255,.92);border-radius:20px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}}
-@keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.08)}}}}
-.sinai-slide-cap{{animation:sinai-fade-up .6s ease}}
-@keyframes sinai-fade-up{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
+.sinai-track{{display:flex;height:100%;width:100%;transition:transform .6s cubic-bezier(.22,1,.36,1)}}
+.sinai-slide{{position:relative;min-width:100%;width:100%;height:100%;flex-shrink:0;overflow:hidden;background:#000}}
+.sinai-slide-photo{{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.55)}}
+.sinai-slide-veil{{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.55) 100%);pointer-events:none}}
+.sinai-slide-ph{{width:100%;height:100%;background:#000}}
+.sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 28px 48px;text-align:center;pointer-events:none}}
+.sinai-brand-logo{{width:120px;height:120px;object-fit:contain;border-radius:22px;background:rgba(255,255,255,.96);padding:14px;box-shadow:0 12px 32px rgba(0,0,0,.35);margin-bottom:22px}}
+.sinai-brand-slogan{{margin:0;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.35;color:#ffffff;max-width:340px;text-shadow:0 2px 12px rgba(0,0,0,.35)}}
+.sinai-brand-sub{{margin-top:12px;font-size:12px;font-weight:500;color:rgba(255,255,255,.55);letter-spacing:.04em}}
+@keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.06)}}}}
 .sinai-card{{animation:sinai-fade-in .5s ease}}
 @keyframes sinai-fade-in{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
-.sinai-slide-cap{{position:absolute;left:0;right:0;bottom:0;padding:22px 24px 40px;background:linear-gradient(transparent,rgba(11,45,87,.92));color:#fff}}
-.sinai-slide-cap b{{display:block;font-size:20px;line-height:1.3;margin-bottom:4px}}
-.sinai-slide-cap span{{font-size:12px;opacity:.9}}
-.sinai-visual-badge{{position:absolute;top:14px;left:14px;z-index:4;background:rgba(255,255,255,.95);color:#0B2D57;font-size:11px;font-weight:800;padding:8px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.12);letter-spacing:.02em}}
-.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:42px;height:42px;border:0;border-radius:50%;background:rgba(255,255,255,.96);color:#0B2D57;font-size:26px;line-height:42px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.14)}}
+.sinai-visual-badge{{display:none}}
+.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:36px;height:36px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:22px;line-height:36px;cursor:pointer;backdrop-filter:blur(8px);transition:background .2s}}
+.sinai-nav:hover{{background:rgba(255,255,255,.22)}}
 .sinai-prev{{left:12px}}.sinai-next{{right:12px}}
-.sinai-dots{{position:absolute;bottom:12px;left:0;right:0;z-index:3;display:flex;justify-content:center;gap:7px}}
-.sinai-dot{{width:8px;height:8px;border-radius:50%;border:0;background:rgba(255,255,255,.4);cursor:pointer;padding:0}}
-.sinai-dot.is-on{{background:#fff;transform:scale(1.2)}}
-.sinai-access h1{{margin:0 0 6px;color:#0B2D57;font-size:26px;font-weight:800}}
-.sinai-sub{{margin:0 0 14px;color:#64748b;font-size:14px;line-height:1.45}}
-.sinai-card{{background:#fff;border-radius:16px;padding:24px;box-shadow:0 8px 28px rgba(15,23,42,.08);border:1px solid #e2e8f0}}
-.sinai-card-label{{font-size:11px;font-weight:800;letter-spacing:.06em;color:#64748b;margin-bottom:10px}}
-.sinai-form label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}}
-.sinai-form input,.sinai-form select{{width:100%;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;box-sizing:border-box;background:#f8fafc}}
-.sinai-form input:focus,.sinai-form select:focus{{outline:none;border-color:#93c5fd;background:#fff;box-shadow:0 0 0 3px rgba(59,130,246,.15)}}
+.sinai-dots{{position:absolute;bottom:16px;left:0;right:0;z-index:3;display:flex;justify-content:center;gap:6px}}
+.sinai-dot{{width:6px;height:6px;border-radius:50%;border:0;background:rgba(255,255,255,.35);cursor:pointer;padding:0;transition:background .3s ease,transform .3s ease}}
+.sinai-dot.is-on{{background:#005BEA;transform:scale(1.35)}}
+.sinai-access h1{{margin:0 0 6px;color:#1d1d1f;font-size:26px;font-weight:700;letter-spacing:-.02em}}
+.sinai-sub{{margin:0 0 16px;color:#86868b;font-size:14px;line-height:1.45}}
+.sinai-card{{background:#fff;border-radius:16px;padding:26px 24px;box-shadow:0 4px 24px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.06)}}
+.sinai-card-label{{font-size:11px;font-weight:600;letter-spacing:.06em;color:#86868b;margin-bottom:12px;text-transform:uppercase}}
+.sinai-form label{{display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin:12px 0 6px}}
+.sinai-form input,.sinai-form select{{width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;box-sizing:border-box;background:#fff;font-family:-apple-system,sans-serif;color:#1d1d1f;transition:border-color .2s,box-shadow .2s}}
+.sinai-form input:focus,.sinai-form select:focus{{outline:none;border-color:#005BEA;background:#fff;box-shadow:0 0 0 4px rgba(0,91,234,.1)}}
 .sinai-search{{position:relative}}
-.sinai-search-ico{{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8}}
+.sinai-search-ico{{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#86868b}}
 .sinai-search select{{padding-left:34px}}
-.sinai-btn{{width:100%;margin-top:14px;padding:14px 16px;border:0;border-radius:12px;background:linear-gradient(180deg,#1e3a8a,#0B2D57);color:#fff;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 6px 16px rgba(11,45,87,.25)}}
-.sinai-btn:hover{{background:#1e40af}}
-.sinai-roles{{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:14px}}
-.sinai-roles span{{font-size:11px;font-weight:700;color:#0B2D57;background:#eff6ff;border:1px solid #bfdbfe;padding:4px 10px;border-radius:999px}}
-.sinai-help{{margin-top:12px;text-align:center;font-size:12px}}
-.sinai-help a{{color:#1e40af;text-decoration:none}}
-.sinai-portals{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0}}
-.sinai-portals a{{font-size:12px;color:#0B2D57;text-decoration:none;font-weight:700;padding:6px 10px;background:#f1f5f9;border-radius:8px}}
-.sinai-ver{{margin:12px 0 0;font-size:12px;color:#94a3b8;text-align:center}}
+.sinai-btn{{width:100%;margin-top:16px;padding:14px 24px;border:0;border-radius:980px;background:#005BEA;color:#fff;font-weight:600;font-size:15px;cursor:pointer;font-family:-apple-system,sans-serif;letter-spacing:-.01em;transition:background .2s cubic-bezier(.25,1,.5,1),transform .1s}}
+.sinai-btn:hover{{background:#002060}}
+.sinai-btn:active{{transform:scale(.98)}}
+.sinai-roles{{display:none}}
+.sinai-help{{margin-top:16px;text-align:center;font-size:12px;color:#86868b;line-height:1.5}}
+.sinai-help a{{color:#005BEA;text-decoration:none;font-weight:500}}
+.sinai-help a:hover{{text-decoration:underline}}
+.sinai-portals{{display:flex;flex-direction:column;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(0,0,0,.06)}}
+.sinai-pill-row{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}}
+.sinai-pill-row .pill-label{{width:100%;text-align:center;font-size:11px;font-weight:600;color:#86868b;margin-bottom:2px;letter-spacing:.02em}}
+.sinai-portals a,.sinai-pill{{font-size:12px;color:#1d1d1f;text-decoration:none;font-weight:500;padding:8px 14px;background:#f5f5f7;border-radius:980px;border:0;transition:background .15s,color .15s}}
+.sinai-portals a:hover,.sinai-pill:hover{{background:#e8e8ed;color:#000}}
+.sinai-ver{{margin:14px 0 0;font-size:11px;color:#86868b;text-align:center}}
 .sr-only{{position:absolute;left:-9999px}}
 .promo-row{{max-width:1100px;margin:0 auto 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 20px}}
 @media(max-width:800px){{.promo-row{{grid-template-columns:1fr}}}}
@@ -9581,7 +9590,7 @@ def login():
     }}
     function next(){{ go(i+1); }}
     function prev(){{ go(i-1); }}
-    function arm(){{ clearInterval(timer); if(n>1) timer=setInterval(next, 4500); }}
+    function arm(){{ clearInterval(timer); if(n>1) timer=setInterval(next, 5000); }}
     var nb=document.getElementById("sinai-next");
     var pb=document.getElementById("sinai-prev");
     if(nb) nb.onclick=function(e){{ e.preventDefault(); next(); arm(); }};
@@ -9620,16 +9629,16 @@ def login():
             <div class="sinai-search" style="position:relative">
               <span class="sinai-search-ico">⌕</span>
               <input type="text" id="inst-filter" placeholder="Escriba nombre, código o municipio…" autocomplete="off"
-                style="width:100%;padding:10px 12px 10px 36px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;box-sizing:border-box;margin-bottom:8px">
+                style="width:100%;padding:12px 14px 12px 36px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;box-sizing:border-box;margin-bottom:8px;background:#fff">
             </div>
             <select name="institucion_id" id="inst-select" required size="1"
-              style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;margin-bottom:4px">
+              style="width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;margin-bottom:4px;background:#fff">
               {opciones if opciones else '<option value="">Sin instituciones activas</option>'}
             </select>
             <div id="sede-wrap" style="display:none;margin-top:8px">
               <label>Sede (principal · primaria · rural / urbana)</label>
               <select name="sede_id" id="sede-select"
-                style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px">
+                style="width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;background:#fff">
                 <option value="">— Sede principal / única —</option>
               </select>
               <p style="margin:4px 0 0;font-size:11px;color:#64748b">Si el colegio tiene varias sedes, elija a cuál ingresa.</p>
@@ -9687,19 +9696,22 @@ def login():
             fillSedes();
           }})();
           </script>
-          <div class="sinai-roles">
-            <span>Rectoría</span><span>Coordinación</span><span>Secretaría</span><span>Docente</span>
+          <div class="sinai-portals">
+            <div class="sinai-pill-row">
+              <div class="pill-label">Accesos institucionales</div>
+              <a href="/login">Portal Docente</a>
+              <a href="/login">Secretaría</a>
+              <a href="/pqr">Radicar PQR</a>
+            </div>
+            <div class="sinai-pill-row">
+              <div class="pill-label">Conectividad para familias</div>
+              <a href="/acudiente-asistencia">Consulta de Asistencia</a>
+              <a href="/acudiente/autorizar-salida">Autorizar Salidas</a>
+              <a href="/familia-login">Portal familiar</a>
+            </div>
           </div>
           <div class="sinai-help">
-            <a href="/recuperar">¿Problemas para ingresar? Contacta a Soporte</a>
-          </div>
-          <div class="sinai-portals">
-            <a href="/acudiente-asistencia" style="background:#0B2D57;color:#fff">Consulta asistencia en vivo · Acudientes</a>
-            <a href="/acudiente/autorizar-salida" style="background:#1e3a8a;color:#fff">Autorizar salida · Acudientes</a>
-            <a href="/familia-login" style="background:#ecfdf5;color:#065f46">Portal familiar · Padres</a>
-            <a href="/ayuda">Centro de ayuda</a>
-            <a href="/atencion-directivos">Atención al directivo · PQR</a>
-            <a href="/contacto">Contacto</a>
+            ¿Tienes dudas sobre el ingreso? <a href="/ayuda">Explora nuestro Centro de Ayuda</a> o <a href="/whatsapp">habla con Soporte</a>.
           </div>
         </div>
         <p class="sinai-ver">Versión <b>{nov["version"]}</b> · {DESARROLLADOR}</p>
@@ -9837,21 +9849,18 @@ def login():
     <div class="corp-footer-inner">
       <div>
         <div class="corp-footer-brand">EduTrack · PROCSIS</div>
-        <p style="margin:0 0 12px;line-height:1.5">Privacidad y protección de datos para instituciones educativas.</p>
         <a href="/legal">Privacidad y protección de datos</a>
         <a href="/cookies">Cookies</a>
       </div>
       <div>
         <h4>Contacto</h4>
         <p>En internet, a un clic de distancia.</p>
-        <p style="margin-top:10px">{corp_email}</p>
+        <p>{corp_email}</p>
         <p>{corp_tel}</p>
       </div>
       <div>
         <h4>Plataforma</h4>
         <p>Gestión académica multi-institucional para colegios de Colombia.</p>
-        <a href="/ventas" style="margin-top:10px">Ver planes</a>
-        <a href="/ventas#planes-qr">Planes Solo QR</a>
       </div>
     </div>
     <div class="corp-copy">© {anio} EduTrack · PROCSIS. Todos los derechos reservados.</div>
@@ -60102,12 +60111,3 @@ def aceptar_terminos_pago():
 
 
 if __name__ == "__main__":
-    with app.app_context():
-        inicializar_bd()
-        try:
-            sincronizar_licencias()
-            aplicar_cambios_plan_pendientes()
-            _ciclo_facturacion_automatica()
-        except Exception as _e:
-            print("ciclo facturacion:", _e)
-    app.run(debug=True, host="0.0.0.0")
