@@ -20404,12 +20404,14 @@ padding:40px 48px;box-sizing:border-box}}
 .bo-left .hint{{margin:0 0 28px;font-size:14px;color:#64748b;line-height:1.45}}
 .bo-left label{{display:block;font-size:12px;font-weight:600;color:#334155;margin:0 0 6px}}
 .bo-left input[type=text],.bo-left input[type=password]{{
-width:100%;padding:12px 14px;margin:0 0 16px;border:1.5px solid #e2e8f0;border-radius:10px;
+width:100%;padding:12px 14px;margin:0 0 16px;border:1px solid #d2d2d7;border-radius:12px;
 box-sizing:border-box;font-size:14px;background:#fff}}
 .bo-left input:focus{{outline:none;border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}}
 .bo-row{{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}}
-.bo-left button[type=submit]{{padding:12px 28px;border:0;border-radius:10px;background:#0B2D57;color:#fff;
-font-weight:700;font-size:14px;cursor:pointer}}
+.bo-left button[type=submit]{{padding:12px 32px;border:0;border-radius:980px;background:#005BEA;color:#fff;
+font-weight:600;font-size:14px;cursor:pointer;transition:background .2s ease,transform .1s ease}}
+.bo-left button[type=submit]:hover{{background:#002060}}
+.bo-left button[type=submit]:active{{transform:scale(.98)}}
 .bo-check{{font-size:13px;color:#475569;display:flex;align-items:center;gap:6px}}
 .bo-check input{{width:auto;margin:0}}
 .err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px 12px;border-radius:10px;margin-bottom:14px}}
@@ -20422,9 +20424,8 @@ box-shadow:0 24px 60px rgba(0,0,0,.28)}}
 .bo-slide{{position:absolute;inset:0;opacity:0;pointer-events:none;
 transition:opacity .6s cubic-bezier(0.25,1,0.5,1);background:#0B2D57}}
 .bo-slide.active{{opacity:1;pointer-events:auto}}
-.bo-slide-img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-filter:brightness(0.72);display:block}}
-.bo-slide-copy{{position:absolute;left:8%;right:8%;top:14%;z-index:2;color:#fff}}
+.bo-slide-img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(0.85);display:block}}.bo-slide::after{{content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(0,32,96,.4) 0%,rgba(0,0,0,.2) 50%,rgba(0,0,0,.5) 100%)}}
+.bo-slide-copy{{position:absolute;left:8%;right:8%;top:14%;z-index:3;color:#fff;text-shadow:0 1px 12px rgba(0,0,0,.35)}}
 .bo-slide-copy h3{{margin:0 0 8px;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.3;
 text-shadow:0 2px 16px rgba(0,0,0,.35)}}
 .bo-slide-copy p{{margin:0;font-size:15px;font-weight:400;opacity:.92;line-height:1.45;
@@ -20448,7 +20449,7 @@ text-shadow:0 1px 10px rgba(0,0,0,.3)}}
     {"<div class='err'>"+_esc(error)+"</div>" if error else ""}
     <form method="POST" autocomplete="username">
       <label>Usuario / Correo</label>
-      <input type="text" name="usuario" required autofocus placeholder="Usuario o correo" autocomplete="username">
+      <input type="text" name="usuario" required autofocus placeholder="usuario@procsis.com" autocomplete="username">
       <label>Contraseña</label>
       <input type="password" name="password" required placeholder="Contraseña" autocomplete="current-password">
       <div class="bo-row">
