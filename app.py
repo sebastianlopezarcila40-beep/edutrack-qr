@@ -18460,7 +18460,7 @@ def ventas_panel():
   text-decoration:none;border:0;cursor:pointer;color:#fff;letter-spacing:.01em}}
 .funnel{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}}
 @media(max-width:800px){{.funnel{{grid-template-columns:1fr}}}}
-.funnel-col{border-radius:20px !important;background:#f5f5f7 !important;padding:14px !important;{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;min-height:140px}}
+.funnel-col{{border-radius:20px;background:#f5f5f7;border:1px solid #e2e8f0;padding:14px;min-height:140px}}
 .funnel-col h3{{margin:0 0 10px;font-size:12px;color:#0B2D57;text-transform:uppercase;letter-spacing:.04em;font-weight:800}}
 .funnel-col .n{{font-size:18px;font-weight:800;color:#334155}}
 .kit{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:12px 0}}
