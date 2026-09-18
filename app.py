@@ -18212,7 +18212,6 @@ def portal_whatsapp_soporte():
 
 
 @app.route("/ventas/panel", methods=["GET", "POST"])
-@app.route("/ventas/crm", methods=["GET", "POST"])
 def ventas_panel():
     """Panel comercial: embudo, metas, links demo, kit mensajes, validación MEN."""
     _g = _guard_ventas()
@@ -18506,7 +18505,7 @@ def ventas_panel():
     <form method="POST" style="display:inline;margin:0">
       <input type="hidden" name="accion" value="crear_link_demo">
       <input type="hidden" name="dias" value="15">
-      <button type="submit" style="background:#1e3a5f">Crear link invitación demo</button>
+      <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:10px 18px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;font-family:-apple-system,sans-serif">Crear link invitación demo</button>
     </form>
   </div>
 
@@ -25405,13 +25404,15 @@ def ventas_kit_mensajes():
     ]
     bloques = ""
     for tit, txt in textos:
-        bloques += f"""
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:10px">
-          <h3 style="margin:0 0 6px;color:#0B2D57;font-size:15px">{tit}</h3>
-          <p style="font-size:13px;color:#334155;line-height:1.45" id="t-{tit[:6]}">{txt}</p>
-          <button type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.innerText);this.textContent='Copiado ✓'"
-            style="background:#0B2D57;color:#fff;border:0;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer">Copiar texto</button>
-        </div>"""
+        bloques += (
+            '<div class="kit-box" style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:14px;margin-bottom:10px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">'
+            f'<h3 style="margin:0 0 6px;color:#002060;font-size:15px;font-weight:600">{tit}</h3>'
+            f'<p class="kit-msg" style="font-size:13px;color:#334155;line-height:1.45">{txt}</p>'
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+            '<button type="button" class="kit-copy" style="background:#f5f5f7;color:#1d1d1f;border:0;padding:8px 14px;border-radius:980px;font-weight:600;cursor:pointer;font-size:12px">Copiar texto</button>'
+            '<button type="button" class="kit-wa" style="background:#005BEA;color:#fff;border:0;padding:8px 14px;border-radius:980px;font-weight:600;cursor:pointer;font-size:12px">Enviar por WhatsApp</button>'
+            '</div></div>'
+        )
     try:
         _pp = plataforma()
         habeas_txt = (getattr(_pp, "kit_habeas_data", None) or "").strip()
@@ -25457,6 +25458,26 @@ def ventas_kit_mensajes():
     <a href="/whatsapp-mensaje-legal">Mensaje de bienvenida / consentimiento (legal)</a> ·
     <a href="/gerencia/pqr-info">Editar estos textos</a>
   </p>
+  <script>
+  document.querySelectorAll('.kit-copy').forEach(function(btn){{
+    btn.addEventListener('click',function(){{
+      var box=btn.closest('.kit-box');
+      var p=box?box.querySelector('.kit-msg'):null;
+      if(!p) return;
+      navigator.clipboard.writeText(p.innerText||'');
+      btn.textContent='Copiado \u2713';
+      setTimeout(function(){{btn.textContent='Copiar texto';}},1500);
+    }});
+  }});
+  document.querySelectorAll('.kit-wa').forEach(function(btn){{
+    btn.addEventListener('click',function(){{
+      var box=btn.closest('.kit-box');
+      var p=box?box.querySelector('.kit-msg'):null;
+      if(!p) return;
+      window.open('https://wa.me/?text='+encodeURIComponent(p.innerText||''),'_blank');
+    }});
+  }});
+  </script>
 </div>
 """
     return page("Plantillas de Prospección", body)
@@ -25719,7 +25740,8 @@ def ventas_contrato_digital():
     return page("Contrato digital", shell(content))
 
 
-
+@app.route("/ventas/crm", methods=["GET", "POST"])
+def ventas_crm():
     """Embudo de ventas tipo Trello: Contacto → Demo → Negociación → Ganado."""
     _g = _guard_ventas()
     if _g is not None:
@@ -25783,26 +25805,21 @@ def ventas_contrato_digital():
     for key, titulo, color in etapas:
         cards = ""
         for L in LeadCRM.query.filter_by(etapa=key).order_by(LeadCRM.id.desc()).limit(40).all():
-            next_opts = "".join(
-                f'<option value="{k}">{t.split(". ")[-1] if ". " in t else t}</option>'
-                for k, t, _ in etapas if k != key
-            )
+            tel_digits = "".join(c for c in (L.telefono or "") if c.isdigit())
+            if tel_digits and not tel_digits.startswith("57") and len(tel_digits) == 10:
+                tel_digits = "57" + tel_digits
+            wa_href = ("https://wa.me/" + tel_digits) if tel_digits else "#"
             cards += f"""
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,.04)">
-              <b style="color:#0f172a">{L.colegio}</b>
-              <div style="font-size:12px;color:#64748b;margin:4px 0">{L.rector or '—'} · {L.telefono or ''}</div>
-              <div style="font-size:11px;color:#94a3b8">{L.municipio or ''} · {L.plan_interes or ''} · {L.vendedor or ''}</div>
-              <form method="POST" style="margin-top:6px;display:flex;gap:4px">
-                <input type="hidden" name="accion" value="mover">
-                <input type="hidden" name="lead_id" value="{L.id}">
-                <select name="etapa" style="flex:1;font-size:11px;padding:4px">{next_opts}</select>
-                <button style="font-size:11px;padding:4px 8px;background:#0B2D57;color:#fff;border:0;border-radius:6px">Mover</button>
-              </form>
+            <div class="crm-card" draggable="true" data-lead-id="{L.id}" style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:14px;padding:12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,.04);cursor:grab;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+              <b style="color:#002060;font-size:14px">{_esc(L.colegio)}</b>
+              <div style="font-size:12px;color:#86868b;margin:4px 0">{_esc(L.rector or '—')} · {_esc(L.telefono or '')}</div>
+              <div style="font-size:11px;color:#a1a1a6">{_esc(L.municipio or '')} · {_esc(L.plan_interes or '')}</div>
+              <div style="margin-top:8px"><a href="{wa_href}" target="_blank" rel="noopener" style="font-size:11px;padding:5px 12px;border-radius:980px;background:#f5f5f7;color:#005BEA;text-decoration:none;font-weight:600">WhatsApp</a></div>
             </div>"""
         cols += f"""
-        <div style="background:#f1f5f9;border-radius:12px;padding:10px;min-width:200px;flex:1">
-          <div style="font-weight:800;color:{color};margin-bottom:8px;font-size:13px">{titulo}</div>
-          {cards or '<p style="font-size:12px;color:#94a3b8">Vacío</p>'}
+        <div class="crm-col" data-etapa="{key}" style="background:#f5f5f7;border-radius:16px;padding:12px;min-width:220px;flex:1;min-height:120px">
+          <div style="font-weight:700;color:#002060;margin-bottom:10px;font-size:13px">{titulo}</div>
+          <div class="crm-col-body">{cards or '<p style="font-size:12px;color:#86868b">Vacío · suelte aquí</p>'}</div>
         </div>"""
     body = f"""
 <div style="max-width:1100px;margin:0 auto;padding:16px;font-family:Segoe UI,sans-serif">
@@ -25814,9 +25831,33 @@ def ventas_contrato_digital():
     </div>
   </div>
   {"<div style='background:#ecfdf5;padding:10px;border-radius:10px;margin:10px 0'>"+msg+"</div>" if msg else ""}
-  <div style="display:flex;gap:10px;overflow-x:auto;margin:14px 0">{cols}</div>
-  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;max-width:520px">
-    <h2 style="margin:0 0 10px;font-size:16px;color:#0B2D57">Nuevo contacto (rector)</h2>
+  <div style="display:flex;gap:10px;overflow-x:auto;margin:14px 0;padding-bottom:8px">{cols}</div>
+  <script>
+  (function(){{
+    var dragId=null;
+    document.querySelectorAll('.crm-card').forEach(function(card){{
+      card.addEventListener('dragstart',function(e){{dragId=card.getAttribute('data-lead-id');card.style.opacity='.5';e.dataTransfer.setData('text/plain',dragId);}});
+      card.addEventListener('dragend',function(){{card.style.opacity='1';}});
+    }});
+    document.querySelectorAll('.crm-col').forEach(function(col){{
+      col.addEventListener('dragover',function(e){{e.preventDefault();col.style.outline='2px solid #005BEA';}});
+      col.addEventListener('dragleave',function(){{col.style.outline='none';}});
+      col.addEventListener('drop',function(e){{
+        e.preventDefault();col.style.outline='none';
+        var id=e.dataTransfer.getData('text/plain')||dragId;
+        var etapa=col.getAttribute('data-etapa');
+        if(!id||!etapa)return;
+        var fd=new FormData();
+        fd.append('accion','mover');fd.append('lead_id',id);fd.append('etapa',etapa);
+        fetch(window.location.pathname,{{method:'POST',body:fd,credentials:'same-origin'}})
+          .then(function(){{window.location.reload();}})
+          .catch(function(){{window.location.reload();}});
+      }});
+    }});
+  }})();
+  </script>
+  <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px;max-width:520px">
+    <h2 style="margin:0 0 10px;font-size:16px;color:#002060">Nuevo contacto (rector)</h2>
     <form method="POST">
       <input type="hidden" name="accion" value="crear">
       <label style="font-size:12px;font-weight:700">Colegio *</label>
@@ -32041,16 +32082,28 @@ def _modulos_por_rol(rol):
 
 def _html_modulos_rol(rol):
     titulo, mods = _modulos_por_rol(rol)
-    btns = "".join(
-        f'<a class="btn" href="{href}" style="text-align:center;background:{color};border-radius:10px;font-weight:700;font-size:13px;padding:12px 10px">{label}</a>'
-        for label, href, color in mods
-    )
+    es_ventas = (rol or "").strip() in ("Comercial", "Ventas")
+    btns = []
+    for label, href, color in mods:
+        lab = (label or "")
+        for em in ("📅 ", "💬 ", "💙 ", "👥 ", "🕵️ "):
+            lab = lab.replace(em, "")
+        primary = es_ventas and ("Crear link" in lab or "link demo" in lab.lower())
+        if es_ventas:
+            if primary:
+                st = "background:#005BEA;color:#fff;border-radius:980px;font-weight:600;font-size:12px;padding:10px 16px;text-align:center;text-decoration:none;display:inline-block;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"
+            else:
+                st = "background:#f5f5f7;color:#1d1d1f;border-radius:980px;font-weight:500;font-size:12px;padding:10px 16px;text-align:center;text-decoration:none;display:inline-block;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;border:1px solid rgba(0,0,0,.04)"
+            btns.append(f'<a href="{href}" style="{st}">{lab}</a>')
+        else:
+            btns.append(f'<a class="btn" href="{href}" style="text-align:center;background:{color};border-radius:980px;font-weight:600;font-size:12px;padding:10px 14px">{lab}</a>')
+    btns_html = "".join(btns)
     return f"""
-<section class="role-panel" style="margin:0 0 12px 0;padding:16px 18px;border-radius:14px;border-top:4px solid #0B2D57">
-  <h2 style="margin:0 0 4px;font-size:15px;color:#0B2D57;text-transform:uppercase;letter-spacing:.04em">Módulos · {titulo}</h2>
-  <p class="mini-text" style="margin:0 0 12px">Accesos según su rol (<b>{rol or 'Soporte'}</b>). Soporte = operación técnica · Ventas = clientes y planes.</p>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
-    {btns}
+<section class="role-panel" style="margin:0 0 12px 0;padding:20px 18px;border-radius:20px;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 12px rgba(0,0,0,.03);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+  <h2 style="margin:0 0 4px;font-size:13px;color:#002060;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Módulos · {titulo}</h2>
+  <p class="mini-text" style="margin:0 0 14px;color:#86868b;font-size:12px">Accesos según su rol (<b>{rol or 'Soporte'}</b>). Soporte = operación técnica · Ventas = clientes y planes.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    {btns_html}
   </div>
 </section>
 """
