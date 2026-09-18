@@ -9613,18 +9613,21 @@ _CONTRATO_DEFAULT = (
 
 _CONSENT_PRESENCIAL_DEFAULT = (
     "<h2>CONSENTIMIENTO INFORMADO — CANAL PRESENCIAL</h2>"
-    "<p>La institucion <b>{{NOMBRE_COLEGIO}}</b>, NIT <b>{{NIT_COLEGIO}}</b>, DANE <b>{{DANE_COLEGIO}}</b>, "
-    "representada por <b>{{NOMBRE_RECTOR}}</b> (doc. {{DOC_RECTOR}}), acepta implementacion presencial "
-    "EduTrack (PROCSIS), plan <b>{{PLAN}}</b>, fecha <b>{{FECHA}}</b>.</p>"
-    "<p>Tratamiento de datos Ley 1581 de 2012. Lugar {{CIUDAD}}. Hora {{HORA}}. IP {{IP}}. Asesor {{ASESOR}}.</p>"
+    "<p>Por una parte, la suite tecnologica <b>{{PROVEEDOR}}</b>, en adelante &quot;EL PROVEEDOR&quot;; "
+    "y por la otra, la institucion <b>{{NOMBRE_COLEGIO}}</b>, NIT <b>{{NIT_COLEGIO}}</b>, DANE <b>{{DANE_COLEGIO}}</b>, "
+    "representada por <b>{{NOMBRE_RECTOR}}</b> (doc. {{DOC_RECTOR}}), acepta la implementacion presencial "
+    "del plan <b>{{PLAN}}</b> con fecha <b>{{FECHA}}</b>.</p>"
+    "<p>Tratamiento de datos conforme a la Ley 1581 de 2012. Lugar {{CIUDAD}}. Hora legal Colombia {{HORA}}. "
+    "IP {{IP}}. Asesor {{ASESOR}}.</p>"
 )
+
 _CONSENT_ONLINE_DEFAULT = (
     "<h2>CONSENTIMIENTO INFORMADO — CANAL ONLINE</h2>"
     "<p><b>AVISO DE GRABACION Y MONITOREO OMNICANAL:</b> Esta gestion puede grabarse y monitorearse "
-    "(voz, chat, WhatsApp) por calidad y trazabilidad. Al continuar se acepta dicho monitoreo.</p>"
-    "<p>La institucion <b>{{NOMBRE_COLEGIO}}</b>, NIT <b>{{NIT_COLEGIO}}</b>, DANE <b>{{DANE_COLEGIO}}</b>, "
-    "representada por <b>{{NOMBRE_RECTOR}}</b> (doc. {{DOC_RECTOR}}), acepta activacion remota del plan "
-    "<b>{{PLAN}}</b> el <b>{{FECHA}}</b>.</p>"
+    "(voz, chat, WhatsApp) por calidad, seguridad y trazabilidad. Al continuar se acepta dicho monitoreo.</p>"
+    "<p>Por una parte, <b>{{PROVEEDOR}}</b> (&quot;EL PROVEEDOR&quot;); y por la otra, <b>{{NOMBRE_COLEGIO}}</b>, "
+    "NIT <b>{{NIT_COLEGIO}}</b>, DANE <b>{{DANE_COLEGIO}}</b>, representada por <b>{{NOMBRE_RECTOR}}</b> "
+    "(doc. {{DOC_RECTOR}}), acepta la activacion remota del plan <b>{{PLAN}}</b> el <b>{{FECHA}}</b>.</p>"
     "<p>Ley 1581 de 2012. Hora {{HORA}}. IP {{IP}}. Asesor {{ASESOR}}.</p>"
 )
 
@@ -9667,12 +9670,112 @@ def _get_consentimiento(canal_tipo):
     return "Consentimiento canal presencial", _CONSENT_PRESENCIAL_DEFAULT
 
 
+
+def _datos_proveedor():
+    """Datos legales/comerciales de la empresa (tabla plataforma) para contratos y PDFs.
+    Fuente unica: /gerencia/datos-empresa — no hardcodear NIT ni representante en plantillas.
+    """
+    out = {
+        "empresa": "PROCSIS",
+        "producto": "EduTrack",
+        "nit": "",
+        "representante": "",
+        "direccion": "",
+        "ciudad": "Colombia",
+        "ciiu": "6201",
+        "regimen": "",
+        "email": "",
+        "telefono": "",
+        "logo_url": "",
+        "proveedor_corto": "PROCSIS (EduTrack)",
+        "firma_micro": "",
+        "division": "PROCSIS · DIVISION DE INFRAESTRUCTURA LEGAL Y CIBERSEGURIDAD",
+    }
+    try:
+        p = plataforma()
+        if p:
+            out["empresa"] = (getattr(p, "empresa", None) or "PROCSIS").strip() or "PROCSIS"
+            out["producto"] = (getattr(p, "nombre_producto", None) or "EduTrack").strip() or "EduTrack"
+            out["nit"] = (getattr(p, "nit", None) or "").strip()
+            out["representante"] = (getattr(p, "representante_legal", None) or "").strip()
+            out["direccion"] = (getattr(p, "direccion", None) or "").strip()
+            out["ciudad"] = (getattr(p, "ciudad", None) or "Colombia").strip() or "Colombia"
+            out["ciiu"] = (getattr(p, "actividad_ciiu", None) or "6201").strip() or "6201"
+            out["regimen"] = (getattr(p, "regimen_dian", None) or "").strip()
+            out["email"] = (getattr(p, "email_empresa", None) or getattr(p, "email_soporte", None) or "").strip()
+            out["telefono"] = (getattr(p, "telefono_empresa", None) or getattr(p, "telefono_soporte", None) or "").strip()
+            logo = (getattr(p, "logo_path", None) or "").strip()
+            if logo:
+                if logo.startswith("data:image") or logo.startswith("http"):
+                    out["logo_url"] = logo
+                elif logo.startswith("/"):
+                    try:
+                        out["logo_url"] = (request.url_root or "").rstrip("/") + logo
+                    except Exception:
+                        out["logo_url"] = logo
+                else:
+                    out["logo_url"] = logo
+            out["proveedor_corto"] = "%s (%s)" % (out["empresa"].upper() if out["empresa"].lower() == "procsis" else out["empresa"], out["producto"])
+            # Bloque micro de firma (solo pie) — se actualiza al cambiar datos de empresa
+            lineas = [
+                "POR EL PROVEEDOR:",
+                "________________________________________",
+                "%s · DIVISION LEGAL" % out["empresa"].upper(),
+                "Suite Academica y Control Perimetral %s" % out["producto"],
+                "",
+            ]
+            if out["representante"] or out["nit"]:
+                lineas.append("Soporte Tributario y Facturacion:")
+                if out["representante"]:
+                    lineas.append("%s (Representante Legal)" % out["representante"])
+                bits = []
+                if out["nit"]:
+                    bits.append("RUT / NIT: %s" % out["nit"])
+                if out["ciiu"]:
+                    bits.append("Actividad Economica DIAN: %s" % out["ciiu"])
+                if bits:
+                    lineas.append(" · ".join(bits))
+            if out["direccion"] or out["ciudad"]:
+                lineas.append("Sede operativa: %s" % ", ".join(x for x in [out["direccion"], out["ciudad"]] if x))
+            out["firma_micro"] = "\n".join(lineas)
+    except Exception:
+        pass
+    return out
+
+
+def _tokens_proveedor_contrato():
+    """Tokens de proveedor para fusion de plantillas (vienen de datos de empresa)."""
+    d = _datos_proveedor()
+    return {
+        "PROVEEDOR": d["proveedor_corto"],
+        "EMPRESA": d["empresa"],
+        "PRODUCTO": d["producto"],
+        "NIT_PROVEEDOR": d["nit"] or "—",
+        "REPRESENTANTE_LEGAL": d["representante"] or "—",
+        "DIRECCION_PROVEEDOR": d["direccion"] or "—",
+        "CIUDAD_PROVEEDOR": d["ciudad"],
+        "CIIU": d["ciiu"],
+        "FIRMA_PROVEEDOR_MICRO": d["firma_micro"].replace("\n", "<br>"),
+        "DIVISION_LEGAL": d["division"],
+        "LOGO_PROVEEDOR_URL": d["logo_url"],
+    }
+
+
 def _fusion_consentimiento(canal_tipo, tokens):
     _, cuerpo = _get_consentimiento(canal_tipo)
-    for k, v in (tokens or {}).items():
+    tok = dict(_tokens_proveedor_contrato())
+    tok.update(tokens or {})
+    for k, v in tok.items():
         cuerpo = cuerpo.replace("{{" + k + "}}", str(v if v is not None else "-"))
     import re as _re
     cuerpo = _re.sub(r"\{\{[A-Z0-9_]+\}\}", "-", cuerpo)
+    # Pie legal desde datos de empresa (no hardcode)
+    firma = tok.get("FIRMA_PROVEEDOR_MICRO") or ""
+    if firma and "POR EL PROVEEDOR" not in cuerpo:
+        cuerpo += (
+            '<div style="margin-top:28px;padding-top:16px;border-top:1px solid #e5e5ea;'
+            'font-size:10px;color:#86868b;line-height:1.45">' + firma + "</div>"
+        )
     return cuerpo
 
 
@@ -9692,10 +9795,18 @@ def _get_plantilla_contrato():
 
 def _fusion_contrato(tokens):
     cuerpo = _get_plantilla_contrato()
-    for k, v in (tokens or {}).items():
+    tok = dict(_tokens_proveedor_contrato())
+    tok.update(tokens or {})
+    for k, v in tok.items():
         cuerpo = cuerpo.replace("{{" + k + "}}", str(v if v is not None else "-"))
     import re as _re
     cuerpo = _re.sub(r"\{\{[A-Z0-9_]+\}\}", "-", cuerpo)
+    firma = tok.get("FIRMA_PROVEEDOR_MICRO") or ""
+    if firma and "POR EL PROVEEDOR" not in cuerpo:
+        cuerpo += (
+            '<div style="margin-top:28px;padding-top:16px;border-top:1px solid #e5e5ea;'
+            'font-size:10px;color:#86868b;line-height:1.45">' + firma + "</div>"
+        )
     return cuerpo
 
 
@@ -20204,7 +20315,7 @@ def ventas_comprar():
           <input name="dane" placeholder="12 dígitos" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>NIT</label>
           <input name="nit" placeholder="NIT" style="border-radius:12px;border:1px solid #d2d2d7">
-          <button type="button" onclick="vcStep(2)" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;width:100%">Siguiente</button>
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 6px;color:#1d1d1f">Logo oficial del colegio *</label><label for="logo_colegio" id="logo-drop-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #d2d2d7;border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:12px"><span style="font-size:22px">📷</span><span>Sube el logotipo oficial de la institucion (.PNG transparente)</span></label><button type="button" id="btn-vc-siguiente" onclick="vcStep(2)" disabled style="margin-top:4px;background:#d2d2d7;color:#86868b;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:not-allowed;width:100%">Siguiente</button><script>(function(){{function enableSig(){{var f=document.getElementById("logo_colegio");var b=document.getElementById("btn-vc-siguiente");var l=document.getElementById("logo-drop-label");if(!f||!b)return;if(f.files&&f.files[0]){{b.disabled=false;b.style.background="#005BEA";b.style.color="#fff";b.style.cursor="pointer";if(l)l.innerHTML="<span style=\"color:#15803d\">✓ "+f.files[0].name+"</span>";}}else{{b.disabled=true;b.style.background="#d2d2d7";b.style.color="#86868b";b.style.cursor="not-allowed";}}}}document.addEventListener("change",function(e){{if(e.target&&e.target.id==="logo_colegio")enableSig();}});setTimeout(function(){{var f=document.getElementById("logo_colegio");if(f){{f.required=true;var box=document.getElementById("vc-step1");if(box&&f.parentElement&&f.parentElement.id!=="vc-step1"){{box.insertBefore(f,document.getElementById("btn-vc-siguiente"));f.style.display="none";}}}}enableSig();}},300);}})();</script>
         </div>
 
         <div id="vc-step2" style="display:none">
@@ -23100,7 +23211,24 @@ def ventas_api_consentimiento_preview():
     }
     html = _fusion_consentimiento(canal, tokens)
     titulo, _ = _get_consentimiento(canal)
-    return jsonify({"ok": True, "titulo": titulo, "html": html, "canal": canal})
+    prov = _datos_proveedor()
+    header = (
+        '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;padding-bottom:12px;'
+        'border-bottom:1px solid #e5e5ea">'
+        + (
+            ('<img src="' + prov["logo_url"] + '" alt="logo" style="width:120px;height:auto;max-height:52px;object-fit:contain">')
+            if prov.get("logo_url") else
+            ('<div style="font-weight:800;color:#002060;font-size:18px">' + (prov.get("empresa") or "PROCSIS") + "</div>")
+        )
+        + '<div style="width:1px;height:36px;background:#d2d2d7"></div>'
+        + '<div style="font-size:10px;font-weight:600;color:#1d1d1f;letter-spacing:.04em;text-transform:uppercase;line-height:1.35">'
+        + (prov.get("division") or "PROCSIS · DIVISION LEGAL") + "</div></div>"
+        + '<div style="position:fixed;left:50%;top:40%;transform:translate(-50%,-50%) rotate(-28deg);'
+        'font-size:72px;font-weight:800;color:#000;opacity:0.03;pointer-events:none;z-index:0;white-space:nowrap">'
+        + (prov.get("producto") or "EduTrack") + "</div>"
+    )
+    return jsonify({"ok": True, "titulo": titulo, "html": header + html, "canal": canal, "logo": prov.get("logo_url") or ""})
+
 
 
 @app.route("/gerencia/contrato-plantilla", methods=["GET", "POST"])
