@@ -1401,6 +1401,18 @@ class NoticiaProcsis(db.Model):
     activo = db.Column(db.Boolean, default=True)
 
 
+class PaginaLegal(db.Model):
+    """Textos legales publicos editables desde Gerencia (modulos separados)."""
+    __tablename__ = "paginas_legales"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    titulo = db.Column(db.String(200), default="")
+    cuerpo_html = db.Column(db.Text, default="")
+    activo = db.Column(db.Boolean, default=True)
+    updated_at = db.Column(db.String(30), default="")
+    updated_by = db.Column(db.String(80), default="")
+
+
 class SolicitudCancelacion(db.Model):
     """Cancelación de servicio: portal colegio, PQR, soporte o gerencia. Cuenta regresiva + corte de facturación."""
     __tablename__ = "solicitudes_cancelacion"
@@ -9158,6 +9170,175 @@ def pagina_historias_decision():
     return _public_shell("Historias de decisión · PROCSIS", body, "nosotros")
 
 
+
+_PAGINAS_LEGALES_DEFAULT = {
+    "privacidad": {
+        "titulo": "Aviso de privacidad",
+        "cuerpo": (
+            "<h2>Responsable</h2><p>Procsis — plataforma EduTrack. Los datos de cada colegio se tratan "
+            "en el marco del contrato con la institucion.</p>"
+            "<h2>Datos que tratamos</h2><p>Identificacion de usuarios autorizados, registros academicos y de "
+            "asistencia, y datos de contacto necesarios para la operacion del servicio.</p>"
+            "<h2>Derechos</h2><p>Consulta, actualizacion y reclamo a traves de la institucion y canales oficiales "
+            "(Ley 1581 de 2012). Ver tambien <a href='/tratamiento-datos'>Tratamiento de datos</a> y "
+            "<a href='/legal'>Terminos</a>.</p>"
+        ),
+    },
+    "cookies": {
+        "titulo": "Politica de cookies",
+        "cuerpo": (
+            "<h2>Cookies tecnicas</h2><p>Se usan cookies de sesion para autenticacion y seguridad. "
+            "No se usan cookies publicitarias de terceros.</p>"
+            "<h2>Finalidad</h2><p>Mantener la sesion del usuario, proteger el acceso y recordar preferencias "
+            "tecnicas minimas del navegador.</p>"
+            "<h2>Gestion</h2><p>Puede borrar cookies desde su navegador. Al hacerlo debera iniciar sesion de nuevo.</p>"
+        ),
+    },
+    "terminos": {
+        "titulo": "Terminos y condiciones / Aviso legal",
+        "cuerpo": (
+            "<h2>1. Objeto</h2><p>Software educativo multi-inquilino (EduTrack) para asistencia, notas, "
+            "pre-matricula, PQR y modulos contratados por cada institucion.</p>"
+            "<h2>2. Responsable tecnologico</h2><p>Procsis provee la plataforma. Cada colegio es responsable "
+            "del uso de los datos de su comunidad educativa dentro de su espacio.</p>"
+            "<h2>3. Uso aceptable</h2><p>Acceso solo para usuarios autorizados. Prohibido vulnerar seguridad "
+            "o acceder a datos de otras instituciones.</p>"
+            "<h2>4. Contrato y planes</h2><p>Las condiciones comerciales vigentes son las del plan activado "
+            "y el contrato con la institucion.</p>"
+            "<h2>5. Contacto</h2><p>Canal oficial: soporte y gerencia Procsis a traves del portal.</p>"
+        ),
+    },
+    "habeas": {
+        "titulo": "Habeas data · Ley 1581 de 2012",
+        "cuerpo": (
+            "<h2>Marco legal</h2><p>EduTrack/Procsis aplica la Ley 1581 de 2012 y normas complementarias "
+            "sobre proteccion de datos personales, con especial cuidado de datos de menores de edad.</p>"
+            "<h2>Autorizacion</h2><p>El tratamiento de datos de estudiantes se realiza bajo autorizacion "
+            "de los padres/acudientes y/o de la institucion educativa contratante.</p>"
+            "<h2>Derechos del titular</h2><ul>"
+            "<li>Conocer, actualizar y rectificar sus datos</li>"
+            "<li>Solicitar prueba de la autorizacion</li>"
+            "<li>Ser informado del uso de los datos</li>"
+            "<li>Presentar quejas ante la Superintendencia de Industria y Comercio</li>"
+            "<li>Revocar la autorizacion y/o solicitar la supresion del dato cuando proceda</li>"
+            "</ul>"
+            "<h2>Canal de reclamo</h2><p>Radique su solicitud por <a href='/pqr'>PQR</a> o escriba a "
+            "soporte institucional. El colegio y Procsis coordinan la respuesta dentro de los terminos de ley.</p>"
+        ),
+    },
+    "tratamiento": {
+        "titulo": "Tratamiento de datos personales",
+        "cuerpo": (
+            "<h2>Marco</h2><p>Ley 1581 de 2012 y normas complementarias, con especial cuidado de datos "
+            "de estudiantes y menores.</p>"
+            "<h2>Finalidad</h2><p>Prestar el servicio educativo digital: asistencia, notas, comunicacion "
+            "con familias, control de acceso y modulos contratados.</p>"
+            "<h2>Responsables</h2><p>La institucion educativa es responsable del tratamiento de los datos "
+            "de su comunidad. Procsis actua como encargado tecnologico de la plataforma.</p>"
+            "<h2>Seguridad</h2><p>Acceso por roles, aislamiento multi-sede/institucion y registros de auditoria.</p>"
+            "<h2>Mas informacion</h2><p><a href='/privacidad'>Privacidad</a> · <a href='/legal'>Terminos</a> · "
+            "<a href='/politicas/habeas'>Habeas data</a></p>"
+        ),
+    },
+}
+
+
+def _seed_paginas_legales():
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        for cod, meta in _PAGINAS_LEGALES_DEFAULT.items():
+            row = PaginaLegal.query.filter_by(codigo=cod).first()
+            if not row:
+                row = PaginaLegal(
+                    codigo=cod,
+                    titulo=meta["titulo"],
+                    cuerpo_html=meta["cuerpo"],
+                    activo=True,
+                    updated_at="",
+                )
+                db.session.add(row)
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _get_pagina_legal(codigo):
+    """Devuelve (titulo, cuerpo_html) desde BD o default."""
+    try:
+        _seed_paginas_legales()
+        row = PaginaLegal.query.filter_by(codigo=codigo, activo=True).first()
+        if row and (row.cuerpo_html or "").strip():
+            return (
+                row.titulo or _PAGINAS_LEGALES_DEFAULT.get(codigo, {}).get("titulo") or codigo,
+                row.cuerpo_html,
+            )
+    except Exception:
+        pass
+    meta = _PAGINAS_LEGALES_DEFAULT.get(codigo) or {
+        "titulo": codigo.title(),
+        "cuerpo": "<p>Contenido pendiente de publicacion en Gerencia.</p>",
+    }
+    return meta["titulo"], meta["cuerpo"]
+
+
+def _legal_page_shell(titulo, cuerpo_html, activo_codigo=""):
+    """Plantilla publica unificada con navegacion entre modulos legales."""
+    nav = [
+        ("privacidad", "Privacidad", "/privacidad"),
+        ("tratamiento", "Tratamiento de datos", "/tratamiento-datos"),
+        ("cookies", "Cookies", "/cookies"),
+        ("terminos", "Terminos / Aviso legal", "/legal"),
+        ("habeas", "Habeas data", "/politicas/habeas"),
+    ]
+    links = []
+    for cod, lab, href in nav:
+        if cod == activo_codigo:
+            links.append(
+                '<span style="color:#005BEA;font-weight:700;font-size:13px;margin-right:12px">'
+                + lab + "</span>"
+            )
+        else:
+            links.append(
+                '<a href="' + href + '" style="color:#1d4ed8;font-weight:600;font-size:13px;'
+                'margin-right:12px;text-decoration:none">' + lab + "</a>"
+            )
+    nav_html = "".join(links) + (
+        '<a href="/login" style="color:#86868b;font-size:13px;margin-left:8px">Volver</a>'
+    )
+    year = "2026"
+    try:
+        year = str(ahora().year)
+    except Exception:
+        pass
+    body = (
+        "<style>"
+        ".legal-wrap{max-width:780px;margin:24px auto;padding:0 16px 48px;"
+        "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#1d1d1f}"
+        ".legal-wrap h1{color:#002060;font-size:26px;margin:0 0 8px;letter-spacing:-.02em}"
+        ".legal-wrap h2{color:#002060;font-size:16px;margin:22px 0 8px}"
+        ".legal-wrap p,.legal-wrap li{font-size:14px;line-height:1.65;color:#334155}"
+        ".legal-card{background:#fff;border-radius:20px;padding:28px;"
+        "box-shadow:0 8px 30px rgba(15,23,42,.06);border:1px solid rgba(0,0,0,.04)}"
+        ".legal-nav{margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #e5e5ea;"
+        "display:flex;flex-wrap:wrap;gap:6px;align-items:center}"
+        ".legal-foot{margin-top:24px;font-size:12px;color:#86868b}"
+        "</style>"
+        '<div class="legal-wrap"><div class="legal-card">'
+        '<div class="legal-nav">' + nav_html + "</div>"
+        "<h1>" + _esc(titulo) + "</h1>"
+        '<div class="legal-body">' + cuerpo_html + "</div>"
+        '<p class="legal-foot">© ' + year + " PROCSIS · EduTrack. Textos administrados desde Gerencia.</p>"
+        "</div></div>"
+    )
+    return page(titulo, body)
+
+
 def _politica_page(titulo, cuerpo):
     body = (
         '<div style="font-family:Segoe UI,system-ui,sans-serif;color:#0f172a">'
@@ -9201,6 +9382,16 @@ def pol_ciber():
 
 @app.route("/politicas/cookies")
 def pol_cookies():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("cookies")
+    return _legal_page_shell(titulo, cuerpo, "cookies")
+
+
+
+def pol_cookies():
     return _politica_page(
         "Política de cookies",
         "<h2 style='color:#0B2D57'>Cookies técnicas</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Se usan cookies de sesión para autenticación y seguridad. No se usan con fines publicitarios de terceros. Ver también <a href='/cookies'>/cookies</a>.</p>",
@@ -9208,6 +9399,16 @@ def pol_cookies():
 
 
 @app.route("/politicas/datos-personales")
+def pol_datos():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("tratamiento")
+    return _legal_page_shell(titulo, cuerpo, "tratamiento")
+
+
+
 def pol_datos():
     return _politica_page(
         "Política de protección de datos personales",
@@ -9218,12 +9419,32 @@ def pol_datos():
 
 @app.route("/politicas/aviso-privacidad")
 def pol_aviso():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("privacidad")
+    return _legal_page_shell(titulo, cuerpo, "privacidad")
+
+
+
+def pol_aviso():
     return _politica_page(
         "Aviso de privacidad",
         "<h2 style='color:#0B2D57'>Responsable</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Procsis — plataforma EduTrack. Los datos de cada colegio se tratan en el marco del contrato con la institución.</p>"
         "<h2 style='color:#0B2D57'>Derechos</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Consulta y actualización a través de la institución y canales oficiales. Ver <a href='/legal'>/legal</a>.</p>",
     )
 
+
+
+@app.route("/politicas/habeas")
+def pol_habeas():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("habeas")
+    return _legal_page_shell(titulo, cuerpo, "habeas")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -17219,6 +17440,16 @@ def eduaura_historial(estudiante_id):
 
 @app.route("/legal")
 def legal():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("terminos")
+    return _legal_page_shell(titulo, cuerpo, "terminos")
+
+
+
+def legal():
     body = f"""
 <style>
 .legal-wrap{{max-width:760px;margin:24px auto;padding:0 16px 40px;font-family:Segoe UI,Arial;color:#0f172a}}
@@ -17246,6 +17477,16 @@ def legal():
 
 
 @app.route("/cookies")
+def cookies():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("cookies")
+    return _legal_page_shell(titulo, cuerpo, "cookies")
+
+
+
 def cookies():
     body = """
 <style>
@@ -17277,6 +17518,16 @@ def cookies():
 
 
 @app.route("/privacidad")
+def privacidad():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("privacidad")
+    return _legal_page_shell(titulo, cuerpo, "privacidad")
+
+
+
 def privacidad():
     body = f"""
 <style>
@@ -17312,6 +17563,16 @@ def privacidad():
 
 
 @app.route("/tratamiento-datos")
+def tratamiento_datos():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("tratamiento")
+    return _legal_page_shell(titulo, cuerpo, "tratamiento")
+
+
+
 def tratamiento_datos():
     body = f"""
 <style>
@@ -22069,6 +22330,153 @@ def gerencia_pqr_limpieza():
     except Exception:
         return page("Limpieza PQR", content)
 
+
+
+
+
+@app.route("/gerencia/paginas-legales", methods=["GET", "POST"])
+def gerencia_paginas_legales():
+    """CMS: un modulo por texto legal."""
+    if not requiere_gerencia():
+        return redirect("/gerencia-login")
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    msg = ""
+    err = ""
+    codigos = [
+        ("privacidad", "Privacidad / Aviso de privacidad", "/privacidad"),
+        ("tratamiento", "Tratamiento de datos personales", "/tratamiento-datos"),
+        ("cookies", "Politica de cookies", "/cookies"),
+        ("terminos", "Terminos y condiciones / Aviso legal", "/legal"),
+        ("habeas", "Habeas data (Ley 1581)", "/politicas/habeas"),
+    ]
+    edit = (request.args.get("edit") or request.form.get("codigo") or "").strip().lower()
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "guardar").strip()
+        codigo = (request.form.get("codigo") or "").strip().lower()
+        if codigo not in [c[0] for c in codigos]:
+            err = "Modulo no valido."
+        else:
+            try:
+                row = PaginaLegal.query.filter_by(codigo=codigo).first()
+                if not row:
+                    row = PaginaLegal(codigo=codigo)
+                    db.session.add(row)
+                if accion == "restaurar":
+                    meta = _PAGINAS_LEGALES_DEFAULT.get(codigo) or {}
+                    row.titulo = meta.get("titulo") or row.titulo
+                    row.cuerpo_html = meta.get("cuerpo") or ""
+                    row.activo = True
+                    msg = "Texto restaurado al valor por defecto."
+                else:
+                    row.titulo = (request.form.get("titulo") or "").strip()[:200]
+                    row.cuerpo_html = (request.form.get("cuerpo_html") or "").strip()
+                    row.activo = True
+                    msg = "Modulo guardado. Ya es visible en el portal publico."
+                try:
+                    row.updated_at = ahora().strftime("%Y-%m-%d %H:%M") if hasattr(ahora(), "strftime") else ""
+                except Exception:
+                    row.updated_at = ""
+                row.updated_by = session.get("usuario") or ""
+                db.session.commit()
+                try:
+                    registrar_auditoria("Paginas legales", "%s · %s" % (accion, codigo))
+                except Exception:
+                    pass
+                edit = codigo
+            except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = "No se pudo guardar: %s" % str(e)[:120]
+
+    cards = []
+    for cod, lab, href in codigos:
+        try:
+            row = PaginaLegal.query.filter_by(codigo=cod).first()
+        except Exception:
+            row = None
+        tit = (row.titulo if row else None) or (_PAGINAS_LEGALES_DEFAULT.get(cod, {}) or {}).get("titulo") or lab
+        upd = (row.updated_at if row else "") or "-"
+        cards.append(
+            '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;'
+            'box-shadow:0 2px 10px rgba(0,0,0,.03);font-family:-apple-system,sans-serif">'
+            '<div style="font-size:11px;font-weight:600;color:#005BEA;letter-spacing:.04em;text-transform:uppercase">'
+            + _esc(cod) + "</div>"
+            '<div style="font-weight:700;color:#002060;font-size:15px;margin:6px 0">' + _esc(tit) + "</div>"
+            '<div style="font-size:12px;color:#86868b;margin-bottom:12px">Actualizado: ' + _esc(upd) + "</div>"
+            '<div style="display:flex;flex-wrap:wrap;gap:8px">'
+            '<a href="/gerencia/paginas-legales?edit=' + cod + '" style="background:#005BEA;color:#fff;padding:8px 16px;'
+            'border-radius:980px;font-size:12px;font-weight:600;text-decoration:none">Editar modulo</a>'
+            '<a href="' + href + '" target="_blank" style="background:#f5f5f7;color:#1d1d1f;padding:8px 16px;'
+            'border-radius:980px;font-size:12px;font-weight:500;text-decoration:none">Ver publico</a>'
+            "</div></div>"
+        )
+
+    form_html = ""
+    if edit in [c[0] for c in codigos]:
+        try:
+            row = PaginaLegal.query.filter_by(codigo=edit).first()
+        except Exception:
+            row = None
+        meta = _PAGINAS_LEGALES_DEFAULT.get(edit) or {}
+        tit = (row.titulo if row else None) or meta.get("titulo") or edit
+        cuerpo = (row.cuerpo_html if row else None) or meta.get("cuerpo") or ""
+        form_html = (
+            '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px;margin-top:18px;'
+            'box-shadow:0 2px 12px rgba(0,0,0,.04);font-family:-apple-system,sans-serif">'
+            '<h2 style="margin:0 0 4px;color:#002060;font-size:18px">Editar: ' + _esc(edit) + "</h2>"
+            '<p style="margin:0 0 14px;font-size:13px;color:#86868b">Solo este modulo. Los demas no se modifican.</p>'
+            '<form method="POST">'
+            '<input type="hidden" name="codigo" value="' + _esc(edit) + '">'
+            '<label style="display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:4px">Titulo publico</label>'
+            '<input name="titulo" value="' + _esc(tit) + '" required '
+            'style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;margin-bottom:12px">'
+            '<label style="display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:4px">'
+            "Contenido (HTML: h2, p, ul, li, a, b)</label>"
+            '<textarea name="cuerpo_html" rows="16" required '
+            'style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-size:13px;'
+            'font-family:ui-monospace,monospace;line-height:1.45">' + _esc(cuerpo) + "</textarea>"
+            '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px">'
+            '<button type="submit" name="accion" value="guardar" '
+            'style="background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;'
+            'font-weight:600;font-size:13px;cursor:pointer">Guardar este modulo</button>'
+            '<button type="submit" name="accion" value="restaurar" '
+            'style="background:#f5f5f7;color:#1d1d1f;border:0;padding:12px 24px;border-radius:980px;'
+            'font-weight:500;font-size:13px;cursor:pointer" '
+            "onclick=\"return confirm('Restaurar default de este modulo?')\">Restaurar default</button>"
+            '<a href="/gerencia/paginas-legales" style="padding:12px 20px;color:#86868b;font-size:13px">Cancelar</a>'
+            "</div></form></div>"
+        )
+
+    msg_html = ""
+    if msg:
+        msg_html = (
+            "<div style='background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:12px 14px;"
+            "border-radius:12px;margin-bottom:14px;font-size:13px'>" + _esc(msg) + "</div>"
+        )
+    err_html = ""
+    if err:
+        err_html = (
+            "<div style='background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;"
+            "border-radius:12px;margin-bottom:14px;font-size:13px'>" + _esc(err) + "</div>"
+        )
+    body = (
+        '<div style="max-width:960px;margin:0 auto;padding:24px 16px 48px;'
+        'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">'
+        '<div style="margin-bottom:8px"><a href="/gerencia/hq" style="color:#86868b;font-size:13px;'
+        'text-decoration:none">← Gerencia HQ</a></div>'
+        '<h1 style="margin:0 0 6px;color:#002060;font-size:24px;letter-spacing:-.02em">Paginas legales</h1>'
+        '<p style="margin:0 0 18px;color:#86868b;font-size:14px">'
+        "Cada bloque es un modulo independiente. Edite solo el que necesite cambiar.</p>"
+        + msg_html + err_html
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">'
+        + "".join(cards) + "</div>" + form_html + "</div>"
+    )
+    return page("Paginas legales · Gerencia", body)
 
 
 @app.route("/gerencia/hq")
