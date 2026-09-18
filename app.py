@@ -226,6 +226,24 @@ def _security_headers(resp):
     return resp
 
 
+
+@app.after_request
+def _set_tab_auth_cookie(resp):
+    """Cookie corta (90s) legible por JS para armar sessionStorage al entrar."""
+    try:
+        if session.pop("_set_tab_cookie", None):
+            resp.set_cookie(
+                "procsis_just_logged_in",
+                "1",
+                max_age=90,
+                httponly=False,
+                samesite="Lax",
+                path="/",
+            )
+    except Exception:
+        pass
+    return resp
+
 @app.before_request
 def _security_before():
     # Evitar métodos raros
@@ -3197,36 +3215,171 @@ def _disk_usage_txt():
 
 
 
-# Estilos Apple globales (staff: gerencia, ventas, soporte, cobranza, dev)
+
+# Estilos Apple globales + layout enterprise (staff)
 _APPLE_SHELL_CSS = (
     "<style id=\"apple-shell-global\">"
-    "html,body{font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"Segoe UI\",sans-serif!important}"
-    "body.apple-staff{background:#f5f5f7!important;margin:0;padding:0}"
-    ".sidebar-apple-glass{position:fixed;top:0;left:0;width:260px;height:100vh;"
-    "background:rgba(0,32,96,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);"
-    "border-right:1px solid rgba(255,255,255,.1);padding:24px 16px;box-sizing:border-box;z-index:9999;"
-    "color:#f5f5f7;overflow-y:auto}"
-    ".sidebar-apple-glass a{display:block;color:#e8e8ed;text-decoration:none;font-size:13px;font-weight:400;"
-    "padding:10px 14px;border-radius:980px;margin:2px 0;transition:background .2s}"
-    ".sidebar-apple-glass a:hover,.sidebar-apple-glass a.active{background:#005BEA;color:#fff;font-weight:500}"
-    ".navbar-apple-glass{position:sticky;top:0;z-index:9000;background:rgba(255,255,255,.72);"
-    "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,.05);"
-    "padding:12px 20px;display:flex;align-items:center;justify-content:space-between}"
-    ".navbar-apple-glass .mod-title{font-size:14px;font-weight:700;color:#1d1d1f}"
-    ".card-bento-apple{background:#fff;border-radius:24px;padding:28px;"
-    "box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02);"
-    "transition:transform .3s cubic-bezier(.25,1,.5,1)}"
-    ".card-bento-apple:hover{transform:translateY(-2px)}"
-    ".btn-apple-primary{display:inline-block;background:#005BEA;color:#fff!important;border:0;"
-    "border-radius:980px;padding:10px 20px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}"
-    ".btn-apple-secondary{display:inline-block;background:#f5f5f7;color:#002060!important;border:0;"
-    "border-radius:980px;padding:10px 20px;font-size:13px;font-weight:500;text-decoration:none;cursor:pointer}"
+    "html,body{font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"Segoe UI\",sans-serif!important;"
+    "background:#f5f5f7!important;margin:0;padding:0;overflow-x:hidden}"
+    ".app-layout-enterprise{display:flex;width:100%;min-height:100vh}"
+    ".sidebar-apple-glass{width:260px;min-height:100vh;background:rgba(0,32,96,.92);"
+    "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);"
+    "border-right:1px solid rgba(255,255,255,.1);padding:24px 16px;box-sizing:border-box;"
+    "position:fixed;left:0;top:0;z-index:9999;color:#f5f5f7;overflow-y:auto;"
+    "display:flex;flex-direction:column}"
+    ".brand-container-apple{display:flex;align-items:center;gap:10px;padding-bottom:20px;"
+    "border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px}"
+    ".brand-text-apple{color:#fff;font-weight:700;font-size:16px;letter-spacing:-.02em}"
+    ".menu-category-title{font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;"
+    "letter-spacing:.05em;margin:12px 0 8px;padding-left:8px}"
+    ".nav-item-apple{display:block;font-size:13px;color:rgba(255,255,255,.85);text-decoration:none;"
+    "padding:10px 14px;border-radius:12px;margin:2px 0;font-weight:400;transition:all .2s ease}"
+    ".nav-item-apple:hover{background:rgba(255,255,255,.08);color:#fff}"
+    ".nav-item-apple.is-active{background:#005BEA;color:#fff;font-weight:500}"
+    ".sidebar-footer-legal{font-size:11px;color:rgba(255,255,255,.35);padding:16px 8px 0;margin-top:auto}"
+    ".main-content-container{margin-left:260px;width:calc(100% - 260px);min-height:100vh;"
+    "display:flex;flex-direction:column;background:#f5f5f7}"
+    ".navbar-top-apple{height:60px;background:rgba(255,255,255,.72);"
+    "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);"
+    "border-bottom:1px solid rgba(0,0,0,.05);display:flex;justify-content:space-between;"
+    "align-items:center;padding:0 28px;box-sizing:border-box;position:sticky;top:0;z-index:9000}"
+    ".navbar-module-title{font-size:14px;color:#1d1d1f}.navbar-module-title strong{font-weight:700}"
+    ".navbar-actions-right{display:flex;align-items:center;gap:12px}"
+    ".badge-periodo{font-size:12px;background:rgba(0,0,0,.04);padding:6px 12px;border-radius:980px;color:#1d1d1f}"
+    ".user-profile-circle{width:28px;height:28px;background:#002060;color:#fff;border-radius:50%;"
+    "display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}"
+    ".bento-workspace-apple{padding:28px;box-sizing:border-box;flex:1}"
+    ".card-bento-apple{background:#fff;border-radius:24px;padding:24px;"
+    "box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02)}"
+    ".btn-apple-primary,.btn-apple-capsule-primary{display:inline-block;background:#005BEA;color:#fff!important;"
+    "border:0;border-radius:980px;padding:10px 20px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}"
+    ".btn-apple-secondary,.btn-apple-capsule-secondary{display:inline-block;background:#f5f5f7;color:#002060!important;"
+    "border:0;border-radius:980px;padding:10px 20px;font-size:13px;font-weight:500;text-decoration:none;cursor:pointer}"
+    "@media(max-width:900px){.sidebar-apple-glass{position:relative;width:100%;min-height:auto}"
+    ".main-content-container{margin-left:0;width:100%}.app-layout-enterprise{flex-direction:column}}"
     "</style>"
 )
 
+_STAFF_TAB_JS = (
+    "<script id=\"procsis-tab-auth\">"
+    "(function(){"
+    "var K='procsis_staff_tab';"
+    "var path=location.pathname||'';"
+    "if(path.indexOf('/logout')>=0)return;"
+    "var isLogin=/\\/(login|gerencia-login|ventas-login|soporte-login|cobranza-login)(\\/|$)/.test(path)"
+    "||path==='/backoffice'||path==='/backoffice/login'||path==='/edutrack-backoffice';"
+    "if(isLogin||path==='/' )return;"
+    "var staff=/\\/(backoffice\\/hub|gerencia|ventas|soporte|cobranza|dev-console|cerrar-turno)/.test(path);"
+    "if(!staff)return;"
+    "function justIn(){return document.cookie.indexOf('procsis_just_logged_in=1')>=0;}"
+    "if(sessionStorage.getItem(K)!=='1'){"
+    "  if(justIn()){sessionStorage.setItem(K,'1');}"
+    "  else{sessionStorage.clear();location.replace('/logout');return;}"
+    "}"
+    "sessionStorage.setItem(K,'1');"
+    "window.addEventListener('pagehide',function(){try{sessionStorage.removeItem(K);sessionStorage.clear();}catch(e){}});"
+    "window.addEventListener('beforeunload',function(){try{sessionStorage.removeItem(K);sessionStorage.clear();}catch(e){}});"
+    "})();"
+    "</script>"
+)
+
+
+def _is_staff_path(path):
+    path = (path or "").split("?")[0]
+    if not path:
+        return False
+    skip = (
+        "/logout", "/login", "/gerencia-login", "/ventas-login",
+        "/soporte-login", "/cobranza-login", "/backoffice",
+        "/backoffice/login", "/edutrack-backoffice",
+    )
+    if path in skip:
+        return False
+    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/backoffice/hub", "/dev-console", "/cerrar-turno")
+    return any(path == k or path.startswith(k + "/") or (k != "/gerencia" and path.startswith(k)) or path.startswith("/gerencia") for k in keys)
+
+
+def _staff_module_title(path, rol=""):
+    path = path or ""
+    rol = (rol or "").strip()
+    if path.startswith("/gerencia") or "Gerente" in rol or "Gerencia" in rol:
+        return "<strong>PROCSIS HQ</strong> · Panel de Gerencia"
+    if path.startswith("/ventas") or rol in ("Comercial", "Ventas"):
+        return "<strong>COMERCIAL</strong> · Acceso Ventas"
+    if path.startswith("/soporte") or rol == "Soporte":
+        return "<strong>SOPORTE</strong> · Mesa tecnica"
+    if path.startswith("/cobranza") or rol == "Cobranza":
+        return "<strong>COBRANZA</strong> · Cartera"
+    if "dev" in path or rol in ("Desarrollador", "Developer"):
+        return "<strong>DESARROLLO</strong> · Consola"
+    return "<strong>PROCSIS</strong> · Backoffice"
+
+
+def _staff_nav_items(path, rol=""):
+    path = path or ""
+    rol = (rol or "").strip()
+    if path.startswith("/ventas") or rol in ("Comercial", "Ventas", "Supervisor de Ventas"):
+        items = [("/ventas/panel", "Dashboard"), ("/ventas/verificacion", "Verificacion"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
+    elif path.startswith("/soporte") or rol == "Soporte":
+        items = [("/soporte", "Dashboard"), ("/soporte/turnos", "Turnos"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
+    elif path.startswith("/cobranza") or rol == "Cobranza":
+        items = [("/cobranza", "Dashboard"), ("/cobranza/contabilidad", "Contabilidad"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
+    else:
+        items = [("/gerencia/hq", "Dashboard"), ("/gerencia/paginas-legales", "Paginas legales"), ("/backoffice/hub", "Tablero maestro"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
+    html = []
+    for href, lab in items:
+        active = " is-active" if (path == href or path.startswith(href.rstrip("/") + "/")) else ""
+        if href == "/logout":
+            active = ""
+        html.append('<a class="nav-item-apple' + active + '" href="' + href + '">' + lab + "</a>")
+    return "".join(html)
+
+
+def _wrap_staff_layout(title, body, path):
+    try:
+        usuario = (session.get("usuario") or "?")[:1].upper()
+        rol = session.get("rol") or ""
+    except Exception:
+        usuario, rol = "?", ""
+    try:
+        periodo = ahora().strftime("%Y-%m") if hasattr(ahora(), "strftime") else "2026-09"
+    except Exception:
+        periodo = "2026-09"
+    mod = _staff_module_title(path, rol)
+    nav = _staff_nav_items(path, rol)
+    return (
+        '<div class="app-layout-enterprise">'
+        '<aside class="sidebar-apple-glass">'
+        '<div class="brand-container-apple"><span class="brand-text-apple">PROCSIS</span></div>'
+        '<div class="menu-category-title">Navegacion</div>'
+        '<nav>' + nav + "</nav>"
+        '<div class="sidebar-footer-legal">v2.6.0 · Ley 1581</div>'
+        "</aside>"
+        '<div class="main-content-container">'
+        '<header class="navbar-top-apple">'
+        '<div class="navbar-module-title">' + mod + "</div>"
+        '<div class="navbar-actions-right">'
+        '<span class="badge-periodo">Periodo: ' + periodo + "</span>"
+        '<span class="user-profile-circle">' + _esc(usuario) + "</span>"
+        '<a href="/logout" class="btn-apple-secondary" style="padding:8px 14px;font-size:12px">Salir</a>'
+        "</div></header>"
+        '<main class="bento-workspace-apple">' + body + "</main>"
+        "</div></div>"
+    )
+
 
 def page(title, body):
-    body = (_APPLE_SHELL_CSS or "") + (body or "")
+    body = body or ""
+    try:
+        path = request.path or ""
+    except Exception:
+        path = ""
+    try:
+        if _is_staff_path(path) and session.get("usuario"):
+            body = _wrap_staff_layout(title, body, path)
+    except Exception:
+        pass
+    body = (_APPLE_SHELL_CSS or "") + (_STAFF_TAB_JS or "") + body
 
     cookie_banner = """
 <div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;font-family:Segoe UI,Arial,sans-serif">
@@ -20065,6 +20218,7 @@ def portal_backoffice():
                             except Exception:
                                 session["password_temporal"] = False
                             session["panel"] = "backoffice"
+                            session["_set_tab_cookie"] = "1"
                             try:
                                 registrar_sesion_empleado(user)
                             except Exception:
