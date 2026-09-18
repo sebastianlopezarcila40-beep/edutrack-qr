@@ -28900,6 +28900,7 @@ def gerencia_procsis_web():
                 estado=(request.form.get("estado") or "Disponible").strip()[:30],
                 orden=int(request.form.get("orden") or 0),
                 creado_en=fecha_hoy(),
+                activo=True,
             )
             archivo = request.files.get("imagen")
             if archivo and archivo.filename:
@@ -28924,6 +28925,7 @@ def gerencia_procsis_web():
                 titulo=(request.form.get("titulo") or "").strip()[:200],
                 cuerpo=(request.form.get("cuerpo") or "").strip(),
                 fecha=fecha_hoy(),
+                activo=True,
             )
             archivo = request.files.get("imagen")
             if archivo and archivo.filename:
@@ -28943,29 +28945,73 @@ def gerencia_procsis_web():
                 db.session.delete(no)
                 db.session.commit()
                 mensaje = "Noticia eliminada."
+        elif accion == "toggle_producto":
+            pid = request.form.get("id", type=int)
+            pr = ProductoProcsis.query.get(pid) if pid else None
+            if pr:
+                pr.activo = not bool(pr.activo)
+                db.session.commit()
+                mensaje = "Producto " + ("publicado" if pr.activo else "ocultado") + "."
+        elif accion == "toggle_noticia":
+            nid = request.form.get("id", type=int)
+            no = NoticiaProcsis.query.get(nid) if nid else None
+            if no:
+                no.activo = not bool(no.activo)
+                db.session.commit()
+                mensaje = "Noticia " + ("publicada" if no.activo else "ocultada") + "."
+        elif accion == "reparar_publicacion":
+            # Fuerza activo=True en todos los registros existentes (corrige NULL/False antiguos)
+            n1 = n2 = 0
+            for pr in ProductoProcsis.query.all():
+                if not pr.activo:
+                    pr.activo = True
+                    n1 += 1
+            for no in NoticiaProcsis.query.all():
+                if not no.activo:
+                    no.activo = True
+                    n2 += 1
+            db.session.commit()
+            mensaje = f"Reparación: {n1} producto(s) y {n2} noticia(s) marcados como publicados."
+    try:
+        db.create_all()
+    except Exception:
+        pass
     productos = ProductoProcsis.query.order_by(ProductoProcsis.orden.asc(), ProductoProcsis.id.desc()).all()
     noticias = NoticiaProcsis.query.order_by(NoticiaProcsis.id.desc()).all()
     filas_prod = "".join(
         f"""<tr><td>{_esc(p.nombre)}</td><td>{_esc(p.estado)}</td><td>{p.orden}</td>
-        <td>{'✅' if p.activo else '⛔'}</td>
-        <td><form method="POST" onsubmit="return confirm('¿Eliminar {_esc(p.nombre)}?')">
+        <td>{'✅ Publicado' if p.activo else '⛔ Oculto'}</td>
+        <td style="white-space:nowrap">
+        <form method="POST" style="display:inline;margin-right:6px">
+        <input type="hidden" name="accion" value="toggle_producto"><input type="hidden" name="id" value="{p.id}">
+        <button type="submit" class="small-action">{'Ocultar' if p.activo else 'Publicar'}</button></form>
+        <form method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar {_esc(p.nombre)}?')">
         <input type="hidden" name="accion" value="eliminar_producto"><input type="hidden" name="id" value="{p.id}">
         <button type="submit" class="small-action">Eliminar</button></form></td></tr>"""
         for p in productos
     ) or '<tr><td colspan="5">Sin productos todavía</td></tr>'
     filas_noti = "".join(
         f"""<tr><td>{_esc(n.titulo)}</td><td>{_esc(n.fecha)}</td>
-        <td><form method="POST" onsubmit="return confirm('¿Eliminar esta noticia?')">
+        <td>{'✅ Publicado' if n.activo else '⛔ Oculto'}</td>
+        <td style="white-space:nowrap">
+        <form method="POST" style="display:inline;margin-right:6px">
+        <input type="hidden" name="accion" value="toggle_noticia"><input type="hidden" name="id" value="{n.id}">
+        <button type="submit" class="small-action">{'Ocultar' if n.activo else 'Publicar'}</button></form>
+        <form method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta noticia?')">
         <input type="hidden" name="accion" value="eliminar_noticia"><input type="hidden" name="id" value="{n.id}">
         <button type="submit" class="small-action">Eliminar</button></form></td></tr>"""
         for n in noticias
-    ) or '<tr><td colspan="3">Sin noticias todavía</td></tr>'
+    ) or '<tr><td colspan="4">Sin noticias todavía</td></tr>'
     content = f"""
 <header class="role-hero"><div>
   <h1>🌐 Página web de Procsis</h1>
-  <p>Administre los productos y noticias que ve el público en <a href="/procsis" target="_blank">/procsis</a>.</p>
+  <p>Administre los productos y noticias que ve el público en <a href="/procsis" target="_blank">/procsis</a>. Solo aparecen ítems con estado <b>Publicado</b>.</p>
 </div>
-<a class="btn" href="/gerencia/hq">Volver</a></header>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<form method="POST"><input type="hidden" name="accion" value="reparar_publicacion"><button type="submit" class="btn">Reparar publicación</button></form>
+<a class="btn" href="/procsis" target="_blank">Ver portal</a>
+<a class="btn" href="/gerencia/hq">Volver</a>
+</div></header>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
 <section class="role-panel">
   <h2>Agregar producto / servicio</h2>
@@ -28998,7 +29044,7 @@ def gerencia_procsis_web():
     <button type="submit" style="margin-top:10px">Publicar</button>
   </form>
   <div style="overflow-x:auto;margin-top:14px">
-    <table><tr><th>Título</th><th>Fecha</th><th></th></tr>{filas_noti}</table>
+    <table><tr><th>Título</th><th>Fecha</th><th>Estado</th><th></th></tr>{filas_noti}</table>
   </div>
 </section>
 """
@@ -47772,13 +47818,31 @@ def pagina_corporativa_procsis():
         cta_txt = "Solicite una demostración o hable con un asesor comercial."
         foot_txt = "Soluciones digitales para el sector educativo. Plataforma académica multi-institucional."
     try:
-        _productos_pub = ProductoProcsis.query.filter_by(activo=True).order_by(ProductoProcsis.orden.asc()).all()
+        # Publicado = activo True o NULL (registros antiguos sin flag)
+        _productos_pub = (
+            ProductoProcsis.query
+            .filter((ProductoProcsis.activo.is_(True)) | (ProductoProcsis.activo.is_(None)))
+            .order_by(ProductoProcsis.orden.asc(), ProductoProcsis.id.asc())
+            .all()
+        )
     except Exception:
-        _productos_pub = []
+        try:
+            _productos_pub = [p for p in ProductoProcsis.query.order_by(ProductoProcsis.orden.asc()).all() if p.activo is not False]
+        except Exception:
+            _productos_pub = []
     try:
-        _noticias_pub = NoticiaProcsis.query.filter_by(activo=True).order_by(NoticiaProcsis.id.desc()).limit(6).all()
+        _noticias_pub = (
+            NoticiaProcsis.query
+            .filter((NoticiaProcsis.activo.is_(True)) | (NoticiaProcsis.activo.is_(None)))
+            .order_by(NoticiaProcsis.id.desc())
+            .limit(8)
+            .all()
+        )
     except Exception:
-        _noticias_pub = []
+        try:
+            _noticias_pub = [n for n in NoticiaProcsis.query.order_by(NoticiaProcsis.id.desc()).limit(8).all() if n.activo is not False]
+        except Exception:
+            _noticias_pub = []
     try:
         anio = ahora().year
     except Exception:
