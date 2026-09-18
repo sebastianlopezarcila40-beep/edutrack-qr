@@ -9450,7 +9450,7 @@ def login():
     n_slides = len(slides)
     try:
         _pp = plataforma()
-        corp_tel = (getattr(_pp, "contacto_publico_tel", None) or "—").strip() or "—"
+        corp_tel = (getattr(_pp, "contacto_publico_tel", None) or getattr(_pp, "telefono_soporte", None) or SOPORTE_TELEFONO or "3105615621").strip() or "3105615621"
         corp_email = (getattr(_pp, "contacto_publico_email", None) or "soporte@procsis.com").strip()
         wa_num = "".join(c for c in (getattr(_pp, "contacto_whatsapp_ventas", None) or "") if c.isdigit())
         from urllib.parse import quote as _uq
@@ -9460,14 +9460,16 @@ def login():
             "demostración y prueba piloto con Procsis. ¡Gracias!"
         )
         wa_link = (f"https://wa.me/{wa_num}?text={_uq(_wa_txt)}" if wa_num else "/ventas")
-        hor_lun = (getattr(_pp, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
-        hor_sem = (getattr(_pp, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m.")
+        hor_lun = (getattr(_pp, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
+        hor_sem = (getattr(_pp, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
+        hor_lun = (hor_lun or "").replace(" y ", " / ")
+        hor_sem = (hor_sem or "").replace(" y ", " / ")
         soporte_msg = (getattr(_pp, "soporte_mensaje", None) or "¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo de expertos está listo para asistirle. Consulte a continuación nuestros canales y horarios de atención.")
         anio = ahora().year
     except Exception:
-        corp_tel, corp_email, wa_link = "—", "soporte@procsis.com", "/contacto"
-        hor_lun = "8:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
-        hor_sem = "7:00 a.m. - 12:30 p.m. y 2:00 p.m. - 5:00 p.m."
+        corp_tel, corp_email, wa_link = "3105615621", "soporte@procsis.com", "/contacto"
+        hor_lun = "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
+        hor_sem = "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m."
         soporte_msg = "¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo está listo para asistirle."
         anio = 2026
     return page("Login", f"""
@@ -9531,28 +9533,31 @@ def login():
 .sr-only{{position:absolute;left:-9999px}}
 .promo-row{{max-width:1100px;margin:0 auto 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 20px}}
 @media(max-width:800px){{.promo-row{{grid-template-columns:1fr}}}}
-.promo-card{{border-radius:16px;padding:20px;min-height:150px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.12)}}
-.promo-card h3{{margin:8px 0 6px;font-size:20px;line-height:1.25}}
-.promo-card p{{margin:0 0 14px;font-size:13px;opacity:.95;line-height:1.4}}
-.promo-card .badge{{display:inline-block;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.2)}}
-.promo-card a.btn-promo{{display:inline-block;padding:8px 14px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none}}
-.promo-a{{background:linear-gradient(135deg,#0B2D57,#1e40af)}}
-.promo-a a.btn-promo{{background:#fff;color:#0B2D57}}
-.promo-b{{background:linear-gradient(135deg,#0369a1,#0d9488)}}
-.promo-b a.btn-promo{{background:#fbbf24;color:#0f172a}}
+.promo-card{{border-radius:24px;padding:24px 22px;min-height:160px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.08);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.promo-card h3{{margin:10px 0 8px;font-size:20px;line-height:1.25;font-weight:700;letter-spacing:-.015em}}
+.promo-card p{{margin:0 0 16px;font-size:13px;opacity:.92;line-height:1.45;font-weight:400}}
+.promo-card .badge{{display:inline-block;font-size:11px;font-weight:600;padding:5px 12px;border-radius:980px;background:rgba(255,255,255,.2);letter-spacing:.02em}}
+.promo-card a.btn-promo{{display:inline-block;padding:10px 20px;border-radius:980px;font-weight:600;font-size:13px;text-decoration:none;transition:background .2s,color .2s,transform .1s}}
+.promo-card a.btn-promo:active{{transform:scale(.98)}}
+.promo-a{{background:linear-gradient(145deg,#002060 0%,#0B2D57 45%,#1e40af 100%)}}
+.promo-a a.btn-promo{{background:#fff;color:#002060}}
+.promo-a a.btn-promo:hover{{background:#f5f5f7}}
+.promo-b{{background:linear-gradient(145deg,#0369a1 0%,#0d9488 100%)}}
+.promo-b a.btn-promo{{background:#fff;color:#002060}}
+.promo-b a.btn-promo:hover{{background:#f5f5f7}}
 
 .corp-support{{max-width:1100px;margin:8px auto 24px;padding:0 20px}}
-.corp-support-inner{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 16px rgba(15,23,42,.05)}}
+.corp-support-inner{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:24px;padding:32px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 24px rgba(0,0,0,.04);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 @media(max-width:800px){{.corp-support-inner{{grid-template-columns:1fr}}}}
 .corp-ico{{width:56px;height:56px;border-radius:14px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}}
 .corp-support-left h2{{margin:0 0 10px;color:#0B2D57;font-size:24px}}
 .corp-support-left p{{color:#475569;line-height:1.55;font-size:14px;margin:0}}
 .corp-chan{{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}}
-.corp-pill{{display:flex;gap:10px;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;font-size:13px;color:#334155}}
-.corp-pill b{{color:#0B2D57}}
+.corp-pill{{display:flex;gap:10px;align-items:center;background:#f5f5f7;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:12px 14px;font-size:13px;color:#1d1d1f;box-shadow:none}}
+.corp-pill b{{color:#002060}}
 .corp-hours{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
-.corp-hour{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:13px;color:#475569}}
-.corp-hour b{{color:#0B2D57;display:block;margin-bottom:4px}}
+.corp-hour{{background:#f5f5f7;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:12px;font-size:13px;color:#475569;box-shadow:none}}
+.corp-hour b{{color:#002060;display:block;margin-bottom:4px}}
 .corp-note{{margin-top:12px;padding:12px;background:#eff6ff;border-left:4px solid #1e3a8a;border-radius:8px;font-size:12px;color:#1e3a8a}}
 .corp-cta{{max-width:1100px;margin:0 auto 28px;padding:0 20px}}
 .corp-cta-card{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:18px;padding:28px;max-width:420px}}
@@ -9730,6 +9735,7 @@ def login():
       <span class="badge">OFERTA INSTITUCIONAL</span>
       <h3>Impulse su colegio con EduTrack</h3>
       <p>Planes Demo, Básico, Estándar, Pro y Premium. Acompañamiento Procsis.</p>
+      <a class="btn-promo" href="/ventas">Ver planes</a>
       </div>
   </div>
 
@@ -9750,7 +9756,7 @@ def login():
           <div class="corp-hour"><b>Martes a viernes</b><br>{hor_sem}</div>
         </div>
         <div class="corp-note">Fuera de horario puede dejar su mensaje por WhatsApp o correo. Lo atenderemos al volver.</div>
-        <p style="margin-top:12px"><a href="/whatsapp" style="display:inline-block;background:#0B63CE;color:#fff;font-weight:500;text-decoration:none;padding:10px 20px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">Escribir a soporte por WhatsApp</a></p>
+        <p style="margin-top:12px"><a href="/whatsapp" style="display:inline-block;background:#005BEA;color:#fff;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;transition:background .3s ease" onmouseover="this.style.background='#002060'" onmouseout="this.style.background='#005BEA'">Escribir a soporte por WhatsApp</a></p>
       </div>
     </div>
   </section>
@@ -9782,42 +9788,42 @@ def login():
     </section>
 
     <section class="lp-section" id="tecnologia" style="background:#fff;border-radius:16px;padding:28px 22px;margin:18px 0;border:1px solid #e2e8f0">
-      <p style="margin:0;color:#0B2D57;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase">Tecnología que</p>
-      <h2 style="margin:8px 0 18px;font-size:28px;line-height:1.2;color:#0f172a">Tecnología que <span style="color:#16a34a">impulsa instituciones</span></h2>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
-          <div style="font-size:22px;margin-bottom:8px">🖥️</div>
-          <b style="color:#0B2D57;display:block;margin-bottom:6px">Plataforma EduTrack</b>
-          <span style="font-size:13px;color:#475569;line-height:1.45">Asistencia, notas, boletines, horarios, matrícula y PQR según el plan contratado.</span>
+      <p style="margin:0;color:#86868b;font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase">CARACTERÍSTICAS</p>
+      <h2 style="margin:8px 0 18px;font-size:28px;line-height:1.2;color:#002060;font-weight:700;letter-spacing:-.02em;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">Tecnología que impulsa instituciones</h2>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+        <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">▣</div>
+          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Plataforma EduTrack</b>
+          <span style="font-size:13px;color:#86868b;line-height:1.45">Asistencia, notas, boletines, horarios, matrícula y PQR según el plan contratado.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
-          <div style="font-size:22px;margin-bottom:8px">⬡</div>
-          <b style="color:#0B2D57;display:block;margin-bottom:6px">Tres módulos de acceso</b>
-          <span style="font-size:13px;color:#475569;line-height:1.45">Directivos, docentes, estudiantes y familias, cada uno con su portal.</span>
+        <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">⬡</div>
+          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Tres módulos de acceso</b>
+          <span style="font-size:13px;color:#86868b;line-height:1.45">Directivos, docentes, estudiantes y familias, cada uno con su portal.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
-          <div style="font-size:22px;margin-bottom:8px">▦</div>
-          <b style="color:#0B2D57;display:block;margin-bottom:6px">Sistemas de evaluación</b>
-          <span style="font-size:13px;color:#475569;line-height:1.45">Planillas SIEE (cognitivo, procedimental y actitudinal) con promedios automáticos.</span>
+        <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">▦</div>
+          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Sistemas de evaluación</b>
+          <span style="font-size:13px;color:#86868b;line-height:1.45">Planillas SIEE (cognitivo, procedimental y actitudinal) con promedios automáticos.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
-          <div style="font-size:22px;margin-bottom:8px">📊</div>
-          <b style="color:#0B2D57;display:block;margin-bottom:6px">Informes y reportes</b>
-          <span style="font-size:13px;color:#475569;line-height:1.45">Boletines PDF, reprobación por niveles, cuadro de honor y rendimiento por salón.</span>
+        <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">▥</div>
+          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Informes y reportes</b>
+          <span style="font-size:13px;color:#86868b;line-height:1.45">Boletines PDF, reprobación por niveles, cuadro de honor y rendimiento por salón.</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
-          <div style="font-size:22px;margin-bottom:8px">🛡️</div>
-          <b style="color:#0B2D57;display:block;margin-bottom:6px">Alojamiento y respaldo</b>
-          <span style="font-size:13px;color:#475569;line-height:1.45">Nube con copias de seguridad y protección de datos educativos (Ley 1581).</span>
+        <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">☁</div>
+          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Alojamiento y respaldo</b>
+          <span style="font-size:13px;color:#86868b;line-height:1.45">Nube con copias de seguridad y protección de datos educativos (Ley 1581).</span>
         </div>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:16px">
-          <div style="font-size:22px;margin-bottom:8px">🎧</div>
-          <b style="color:#0B2D57;display:block;margin-bottom:6px">Soporte y acompañamiento</b>
-          <span style="font-size:13px;color:#475569;line-height:1.45">Canales de atención para directivos y docentes en la implementación.</span>
+        <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">☎</div>
+          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Soporte y acompañamiento</b>
+          <span style="font-size:13px;color:#86868b;line-height:1.45">Canales de atención para directivos y docentes en la implementación.</span>
         </div>
       </div>
-      <p style="text-align:center;margin:20px 0 0">
-        <a href="/tecnologia" style="display:inline-block;background:#0B63CE;color:#fff;font-weight:500;text-decoration:none;padding:10px 20px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">Más información</a>
+<p style="text-align:center;margin:20px 0 0">
+        <a href="/tecnologia" style="display:inline-block;background:#005BEA;color:#fff;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;transition:background .3s ease" onmouseover="this.style.background='#002060'" onmouseout="this.style.background='#005BEA'">Más información</a>
       </p>
     </section>
 
