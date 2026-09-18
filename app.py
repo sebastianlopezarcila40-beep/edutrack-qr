@@ -48263,35 +48263,40 @@ def pagina_portafolio():
         return (s or "").replace("<", "&lt;").replace(">", "&gt;")
     brand_nom, brand_sub = _esc(brand_nom), _esc(brand_sub)
     pf_tit, pf_txt, top_der = _esc(pf_tit), _esc(pf_txt), _esc(top_der)
-    globe_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0B2D57" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M12 2v20"/></svg>"""
+    globe_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#005BEA" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M12 2v20"/></svg>"""
     body = f"""
 <style>
-.pf{{font-family:Segoe UI,system-ui,Arial,sans-serif;color:#0f172a;background:#fff;margin:0}}
+.pf{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#1d1d1f;background:#f5f5f7;margin:0}}
 .pf a{{text-decoration:none}}
-.pf-top{{background:#0B2D57;color:#e2e8f0;font-size:11px;padding:8px 16px}}
+.pf-top{{background:transparent;color:#86868b;font-size:11px;padding:8px 16px;position:relative;z-index:41}}
 .pf-top-in{{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 18px;justify-content:space-between}}
-.pf-top a{{color:#93c5fd}}
-.pf-nav{{background:#0a2748;position:sticky;top:0;z-index:40}}
-.pf-nav-in{{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}}
-.pf-brand{{display:flex;align-items:center;gap:10px;color:#fff}}
-.pf-brand .globe{{display:flex;align-items:center;justify-content:center;width:44px;height:44px;background:#fff;border-radius:12px}}
-.pf-brand b{{font-size:17px;color:#fff}}
-.pf-brand small{{font-size:10px;color:#93c5fd;font-weight:600;letter-spacing:.04em;text-transform:uppercase;display:block}}
-.pf-links a{{color:#e2e8f0;font-weight:700;font-size:12px;padding:8px 11px;border-radius:6px}}
-.pf-links a:hover{{background:rgba(255,255,255,.1)}}
-.pf-links a.on{{color:#fff;box-shadow:inset 0 -2px 0 #60a5fa}}
-.pf-hero{{background:linear-gradient(135deg,#071a33,#0B2D57);color:#fff;padding:48px 20px;text-align:center}}
-.pf-hero h1{{margin:0 0 10px;font-size:34px;font-weight:800}}
-.pf-hero p{{margin:0 auto;max-width:560px;opacity:.9}}
-.pf-sec{{max-width:1100px;margin:0 auto;padding:40px 20px}}
-.pf-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}
-@media(max-width:800px){{.pf-grid{{grid-template-columns:1fr}}}}
-.pf-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px}}
-.pf-card .ico{{font-size:28px;margin-bottom:10px}}
-.pf-card h3{{margin:0 0 8px;color:#0B2D57;font-size:17px}}
-.pf-card p{{margin:0;font-size:14px;color:#475569;line-height:1.5}}
-.pf-foot{{background:#071a33;color:#94a3b8;padding:28px 20px;text-align:center;font-size:13px;margin-top:20px}}
-.pf-foot a{{color:#93c5fd}}
+.pf-top a{{color:#005BEA}}
+.pf-nav{{background:rgba(255,255,255,0.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);position:sticky;top:0;z-index:40;border-bottom:1px solid rgba(0,0,0,.06);box-shadow:0 1px 0 rgba(255,255,255,.4)}}
+.pf-nav-in{{max-width:1200px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}}
+.pf-brand{{display:flex;align-items:center;gap:10px;color:#002060}}
+.pf-brand .globe{{display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:rgba(0,91,234,.08);border-radius:12px}}
+.pf-brand b{{font-size:16px;color:#002060;font-weight:700;letter-spacing:-.01em}}
+.pf-brand small{{font-size:10px;color:#86868b;font-weight:600;letter-spacing:.04em;text-transform:uppercase;display:block}}
+.pf-links{{display:flex;align-items:center;gap:4px;flex-wrap:wrap}}
+.pf-links a{{color:#1d1d1f;font-weight:500;font-size:13px;padding:8px 12px;border-radius:980px;transition:background .2s}}
+.pf-links a:hover{{background:rgba(0,0,0,.04)}}
+.pf-links a.on{{color:#005BEA;background:rgba(0,91,234,.08)}}
+.pf-links a.pf-access{{background:#005BEA;color:#fff;font-weight:600;padding:8px 18px;margin-left:6px}}
+.pf-links a.pf-access:hover{{background:#002060;color:#fff}}
+.pf-hero{{background:linear-gradient(145deg,#002060 0%,#0B2D57 50%,#0a3a78 100%);color:#fff;padding:56px 20px 48px;text-align:center}}
+.pf-hero h1{{margin:0 0 10px;font-size:34px;font-weight:700;letter-spacing:-.02em;color:#fff}}
+.pf-hero p{{margin:0 auto;max-width:560px;opacity:.88;font-size:15px;line-height:1.5;color:rgba(255,255,255,.9)}}
+.pf-sec{{max-width:1100px;margin:0 auto;padding:40px 20px 56px}}
+.pf-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}}
+@media(max-width:800px){{.pf-grid{{grid-template-columns:1fr}}.pf-hero h1{{font-size:28px}}}}
+.pf-card{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:24px;padding:24px 20px;box-shadow:0 2px 12px rgba(0,0,0,.03);transition:transform .3s ease,box-shadow .3s ease;cursor:pointer}}
+.pf-card:hover{{transform:scale(1.03);box-shadow:0 8px 28px rgba(0,0,0,.08)}}
+.pf-card .ico{{width:44px;height:44px;border-radius:50%;background:rgba(0,91,234,.06);color:#005BEA;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;margin-bottom:14px}}
+.pf-card h3{{margin:0 0 8px;color:#002060;font-size:16px;font-weight:600;letter-spacing:-.01em}}
+.pf-card p{{margin:0;font-size:14px;color:#86868b;line-height:1.5}}
+.pf-foot{{background:#1d1d1f;color:#6e6e73;padding:28px 20px;text-align:center;font-size:11px;line-height:1.6}}
+.pf-foot a{{color:#2997ff}}
+.pf-foot p{{margin:0;max-width:820px;margin-left:auto;margin-right:auto}}
 </style>
 <div class="pf">
   <div class="pf-top">
@@ -48313,7 +48318,7 @@ def pagina_portafolio():
         <a href="/procsis#servicios">SERVICIOS</a>
         <a href="/tecnologia">SOFTWARE</a>
         <a href="/contacto">CONTACTO</a>
-        <a href="/login" style="background:#fff;color:#0B2D57;border-radius:999px;padding:8px 14px">Acceso</a>
+        <a class="pf-access" href="/login">Acceso</a>
       </div>
     </div>
   </nav>
@@ -48323,22 +48328,22 @@ def pagina_portafolio():
   </header>
   <section class="pf-sec">
     <div class="pf-grid">
-      <div class="pf-card"><div class="ico">📱</div><h3>{brand_nom}</h3>
+      <div class="pf-card"><div class="ico">▣</div><h3>{brand_nom}</h3>
         <p>Plataforma académica multi-tenant: asistencia QR, notas, boletines, horarios, PQR y portal familias según el plan contratado.</p></div>
-      <div class="pf-card"><div class="ico">📊</div><h3>Reportes y SIEE</h3>
+      <div class="pf-card"><div class="ico">▤</div><h3>Reportes y SIEE</h3>
         <p>Planillas, componentes cognitivos/procedimentales/actitudinales, boletines PDF y reportes de coordinación.</p></div>
-      <div class="pf-card"><div class="ico">🪪</div><h3>Carné y control de acceso</h3>
+      <div class="pf-card"><div class="ico">⬡</div><h3>Carné y control de acceso</h3>
         <p>Carné digital con QR, ingreso por scanner y control de asistencia de estudiantes y docentes.</p></div>
-      <div class="pf-card"><div class="ico">☁️</div><h3>Nube y respaldo</h3>
+      <div class="pf-card"><div class="ico">☁</div><h3>Nube y respaldo</h3>
         <p>Operación en la nube, copias de seguridad y buenas prácticas de protección de datos (Ley 1581).</p></div>
-      <div class="pf-card"><div class="ico">🛠️</div><h3>Implementación</h3>
+      <div class="pf-card"><div class="ico">⚙</div><h3>Implementación</h3>
         <p>Alta de la institución, usuarios base, configuración de grados, materias e inducción al equipo.</p></div>
-      <div class="pf-card"><div class="ico">🎧</div><h3>Soporte continuo</h3>
+      <div class="pf-card"><div class="ico">☎</div><h3>Soporte continuo</h3>
         <p>Mesa de ayuda, PQR, acompañamiento a directivos y docentes durante el uso diario de la plataforma.</p></div>
     </div>
   </section>
   <div class="pf-foot">
-    <p>© {anio} {brand_nom} · {brand_sub} · <a href="/procsis">Inicio</a> · <a href="/contacto">Contacto</a></p>
+    <p>© {anio} {brand_nom} · {brand_sub}. Todos los derechos reservados. Operado provisionalmente bajo la representación legal de María Duber López Arcila (NIT: 1038062294-3). Actividad Económica DIAN: 6201. · <a href="/procsis">Inicio</a> · <a href="/contacto">Contacto</a> · <a href="/legal">Privacidad</a></p>
   </div>
 </div>
 """
