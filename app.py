@@ -9494,15 +9494,15 @@ def login():
 .sinai-slide-veil{{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.55) 100%);pointer-events:none}}
 .sinai-slide-ph{{width:100%;height:100%;background:#000}}
 .sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 28px 48px;text-align:center;pointer-events:none}}
-.sinai-brand-logo{{width:120px;height:120px;object-fit:contain;border-radius:22px;background:rgba(255,255,255,.96);padding:14px;box-shadow:0 12px 32px rgba(0,0,0,.35);margin-bottom:22px}}
+.sinai-brand-logo{{width:128px;height:128px;object-fit:contain;border-radius:0;background:transparent;padding:0;box-shadow:none;margin-bottom:22px;filter:drop-shadow(0 8px 24px rgba(0,0,0,.45))}}
 .sinai-brand-slogan{{margin:0;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.35;color:#ffffff;max-width:340px;text-shadow:0 2px 12px rgba(0,0,0,.35)}}
 .sinai-brand-sub{{margin-top:12px;font-size:12px;font-weight:500;color:rgba(255,255,255,.55);letter-spacing:.04em}}
 @keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.06)}}}}
 .sinai-card{{animation:sinai-fade-in .5s ease}}
 @keyframes sinai-fade-in{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
 .sinai-visual-badge{{display:none}}
-.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:36px;height:36px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:22px;line-height:36px;cursor:pointer;backdrop-filter:blur(8px);transition:background .2s}}
-.sinai-nav:hover{{background:rgba(255,255,255,.22)}}
+.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);font-size:20px;line-height:34px;cursor:pointer;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:background .25s ease,color .25s ease}}
+.sinai-nav:hover{{background:rgba(255,255,255,.22);color:#fff}}
 .sinai-prev{{left:12px}}.sinai-next{{right:12px}}
 .sinai-dots{{position:absolute;bottom:16px;left:0;right:0;z-index:3;display:flex;justify-content:center;gap:6px}}
 .sinai-dot{{width:6px;height:6px;border-radius:50%;border:0;background:rgba(255,255,255,.35);cursor:pointer;padding:0;transition:background .3s ease,transform .3s ease}}
@@ -9559,13 +9559,15 @@ def login():
 .corp-hour{{background:#f5f5f7;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:12px;font-size:13px;color:#475569;box-shadow:none}}
 .corp-hour b{{color:#002060;display:block;margin-bottom:4px}}
 .corp-note{{margin-top:12px;padding:12px;background:#eff6ff;border-left:4px solid #1e3a8a;border-radius:8px;font-size:12px;color:#1e3a8a}}
-.corp-cta{{max-width:1100px;margin:0 auto 28px;padding:0 20px}}
-.corp-cta-card{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:18px;padding:28px;max-width:420px}}
-.corp-cta-ico{{width:44px;height:44px;background:rgba(255,255,255,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}}
-.corp-cta-card h2{{margin:0 0 8px;font-size:22px;line-height:1.3}}
-.corp-cta-card p{{margin:0 0 16px;opacity:.95;font-size:14px;line-height:1.45}}
-.corp-wa{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 18px;border-radius:999px;text-decoration:none}}
-.corp-cta-foot{{margin-top:14px;font-size:11px;opacity:.75;letter-spacing:.02em}}
+.corp-cta{{max-width:1100px;margin:0 auto 28px;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.corp-cta-card{{background:linear-gradient(145deg,#002060 0%,#0B2D57 55%,#0a3a78 100%);color:#fff;border-radius:24px;padding:32px 28px;max-width:440px;box-shadow:0 12px 40px rgba(0,32,96,.25)}}
+.corp-cta-ico{{width:44px;height:44px;background:rgba(255,255,255,.1);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#fff;font-size:18px;font-weight:700;letter-spacing:-.02em}}
+.corp-cta-card h2{{margin:0 0 10px;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.02em;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
+.corp-cta-card p{{margin:0 0 20px;opacity:.88;font-size:14px;line-height:1.55;color:rgba(255,255,255,.85);font-weight:400}}
+.corp-wa{{display:inline-block;background:#f5f5f7;color:#002060;font-weight:600;padding:12px 28px;border-radius:980px;text-decoration:none;font-size:14px;letter-spacing:-.01em;transition:background .25s ease,transform .1s ease;border:0}}
+.corp-wa:hover{{background:#ffffff;color:#002060}}
+.corp-wa:active{{transform:scale(.98)}}
+.corp-cta-foot{{margin-top:16px;font-size:11px;opacity:.65;letter-spacing:.01em;color:rgba(255,255,255,.75);line-height:1.4}}
 .corp-footer{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .corp-footer-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:32px}}
 @media(max-width:800px){{.corp-footer-inner{{grid-template-columns:1fr}}}}
@@ -9763,10 +9765,10 @@ def login():
 
   <section class="corp-cta">
     <div class="corp-cta-card">
-      <div class="corp-cta-ico">🚀</div>
-      <h2>¿Quieres implementar EduTrack en tu institución?</h2>
-      <p>Contáctanos por WhatsApp y recibe asesoría comercial y cotización personalizada.</p>
-      <a class="corp-wa" href="{wa_link}" target="_blank" rel="noopener">💬 Hablar con ventas</a>
+      <div class="corp-cta-ico" aria-hidden="true">P</div>
+      <h2>Modernice la seguridad de su institución.</h2>
+      <p>Solicite una auditoría técnica en vivo y conozca el ecosistema cloud multi-inquilino de EduTrack. Conectamos su portería, controlamos retardos (7:00 AM) y blindamos sus actas judiciales en milisegundos.</p>
+      <a class="corp-wa" href="{wa_link}" target="_blank" rel="noopener">Hablar con ventas</a>
       <div class="corp-cta-foot">Canal exclusivo para instituciones interesadas en adquirir la plataforma.</div>
     </div>
   </section>
