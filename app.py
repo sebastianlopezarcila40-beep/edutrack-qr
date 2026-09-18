@@ -1451,6 +1451,17 @@ class ContratoColegio(db.Model):
     created_at = db.Column(db.String(30), default="")
 
 
+class PlantillaConsentimiento(db.Model):
+    """Plantillas de consentimiento por canal (solo Gerencia)."""
+    __tablename__ = "plantillas_consentimientos"
+    id = db.Column(db.Integer, primary_key=True)
+    canal_tipo = db.Column(db.String(20), unique=True, nullable=False)
+    titulo_publico = db.Column(db.String(255), default="")
+    contenido_html = db.Column(db.Text, default="")
+    updated_at = db.Column(db.String(40), default="")
+    updated_by = db.Column(db.String(80), default="")
+
+
 class ContratoPlantilla(db.Model):
     __tablename__ = "contrato_plantilla"
     id = db.Column(db.Integer, primary_key=True)
@@ -3388,7 +3399,7 @@ def _staff_nav_items(path, rol=""):
     elif path.startswith("/cobranza") or rol == "Cobranza":
         items = [("/cobranza", "Dashboard"), ("/cobranza/contabilidad", "Contabilidad"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
     else:
-        items = [("/gerencia/hq", "Dashboard"), ("/gerencia/plantilla-contrato", "Plantilla contrato"), ("/gerencia/contratos", "Contratos"), ("/gerencia/paginas-legales", "Paginas legales"), ("/backoffice/hub", "Tablero maestro"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
+        items = [("/gerencia/hq", "Dashboard"), ("/gerencia/plantilla-contrato", "Plantilla contrato"), ("/gerencia/contratos", "Contratos"), ("/gerencia/legal/consentimientos", "Consentimientos"), ("/gerencia/paginas-legales", "Paginas legales"), ("/backoffice/hub", "Tablero maestro"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
     html = []
     for href, lab in items:
         active = " is-active" if (path == href or path.startswith(href.rstrip("/") + "/")) else ""
@@ -9597,6 +9608,72 @@ _CONTRATO_DEFAULT = (
     "fecha <b>{{FECHA}}</b>, modalidad <b>{{MODALIDAD}}</b>.</p>"
     "<p>Firmado en {{CIUDAD}} el {{FECHA}} {{HORA}} (hora legal Colombia). IP: {{IP}}. Asesor: {{ASESOR}}.</p>"
 )
+
+
+
+_CONSENT_PRESENCIAL_DEFAULT = (
+    "<h2>CONSENTIMIENTO INFORMADO — CANAL PRESENCIAL</h2>"
+    "<p>La institucion <b>{{NOMBRE_COLEGIO}}</b>, NIT <b>{{NIT_COLEGIO}}</b>, DANE <b>{{DANE_COLEGIO}}</b>, "
+    "representada por <b>{{NOMBRE_RECTOR}}</b> (doc. {{DOC_RECTOR}}), acepta implementacion presencial "
+    "EduTrack (PROCSIS), plan <b>{{PLAN}}</b>, fecha <b>{{FECHA}}</b>.</p>"
+    "<p>Tratamiento de datos Ley 1581 de 2012. Lugar {{CIUDAD}}. Hora {{HORA}}. IP {{IP}}. Asesor {{ASESOR}}.</p>"
+)
+_CONSENT_ONLINE_DEFAULT = (
+    "<h2>CONSENTIMIENTO INFORMADO — CANAL ONLINE</h2>"
+    "<p><b>AVISO DE GRABACION Y MONITOREO OMNICANAL:</b> Esta gestion puede grabarse y monitorearse "
+    "(voz, chat, WhatsApp) por calidad y trazabilidad. Al continuar se acepta dicho monitoreo.</p>"
+    "<p>La institucion <b>{{NOMBRE_COLEGIO}}</b>, NIT <b>{{NIT_COLEGIO}}</b>, DANE <b>{{DANE_COLEGIO}}</b>, "
+    "representada por <b>{{NOMBRE_RECTOR}}</b> (doc. {{DOC_RECTOR}}), acepta activacion remota del plan "
+    "<b>{{PLAN}}</b> el <b>{{FECHA}}</b>.</p>"
+    "<p>Ley 1581 de 2012. Hora {{HORA}}. IP {{IP}}. Asesor {{ASESOR}}.</p>"
+)
+
+
+def _seed_plantillas_consentimiento():
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        for canal, titulo, cuerpo in (
+            ("presencial", "Consentimiento canal presencial", _CONSENT_PRESENCIAL_DEFAULT),
+            ("online", "Consentimiento canal online", _CONSENT_ONLINE_DEFAULT),
+        ):
+            if not PlantillaConsentimiento.query.filter_by(canal_tipo=canal).first():
+                db.session.add(PlantillaConsentimiento(
+                    canal_tipo=canal, titulo_publico=titulo, contenido_html=cuerpo
+                ))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _get_consentimiento(canal_tipo):
+    canal = (canal_tipo or "presencial").strip().lower()
+    if canal not in ("presencial", "online"):
+        canal = "presencial"
+    try:
+        _seed_plantillas_consentimiento()
+        row = PlantillaConsentimiento.query.filter_by(canal_tipo=canal).first()
+        if row and (row.contenido_html or "").strip():
+            return row.titulo_publico or canal, row.contenido_html
+    except Exception:
+        pass
+    if canal == "online":
+        return "Consentimiento canal online", _CONSENT_ONLINE_DEFAULT
+    return "Consentimiento canal presencial", _CONSENT_PRESENCIAL_DEFAULT
+
+
+def _fusion_consentimiento(canal_tipo, tokens):
+    _, cuerpo = _get_consentimiento(canal_tipo)
+    for k, v in (tokens or {}).items():
+        cuerpo = cuerpo.replace("{{" + k + "}}", str(v if v is not None else "-"))
+    import re as _re
+    cuerpo = _re.sub(r"\{\{[A-Z0-9_]+\}\}", "-", cuerpo)
+    return cuerpo
 
 
 def _get_plantilla_contrato():
@@ -20177,7 +20254,70 @@ def ventas_comprar():
         <label>Asesor</label>
         <input name="asesor" value="{session.get('usuario') or ''}">
         </div>
-        <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:8px"><div style="margin-top:16px;padding:16px;border:1px solid rgba(0,0,0,.06);border-radius:16px;background:#fafafa"><h3 style="margin:0 0 10px;color:#002060;font-size:15px">Modalidad y contrato</h3><div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap"><label style="padding:10px 16px;border-radius:980px;background:#f5f5f7;font-size:13px;cursor:pointer"><input type="radio" name="modalidad" value="PRESENCIAL" checked> Presencial</label><label style="padding:10px 16px;border-radius:980px;background:#f5f5f7;font-size:13px;cursor:pointer"><input type="radio" name="modalidad" value="ONLINE"> Online</label></div><label style="font-size:12px;font-weight:600">Cedula del rector</label><input name="rector_doc" placeholder="CC representante legal" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;margin:6px 0 12px;box-sizing:border-box"><label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer"><input type="checkbox" name="firma_acepta" value="1" required style="margin-top:3px"><span>El rector acepta y firma digitalmente el contrato (hora legal Colombia + IP).</span></label></div><button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:12px">Confirmar y activar plan {plan_nom}</button>
+        <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:8px">
+        <div style="margin-top:16px;padding:16px;border:1px solid rgba(0,0,0,.06);border-radius:16px;background:#fafafa">
+          <h3 style="margin:0 0 10px;color:#002060;font-size:15px">Consentimiento y canal</h3>
+          <p style="margin:0 0 10px;font-size:12px;color:#86868b">Texto legal solo editable en Gerencia. Aqui se fusiona con datos del colegio.</p>
+          <input type="hidden" name="modalidad" id="modalidad-val" value="PRESENCIAL">
+          <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <button type="button" id="btn-canal-presencial" onclick="vcCanal('presencial')"
+              style="border:0;cursor:pointer;padding:12px 20px;border-radius:980px;background:#005BEA;color:#fff;font-weight:600;font-size:13px">Canal presencial</button>
+            <button type="button" id="btn-canal-online" onclick="vcCanal('online')"
+              style="border:0;cursor:pointer;padding:12px 20px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;font-weight:500;font-size:13px">Canal online</button>
+          </div>
+          <label style="font-size:12px;font-weight:600">Cedula del rector</label>
+          <input name="rector_doc" id="rector_doc" placeholder="CC representante legal" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;margin:6px 0 12px;box-sizing:border-box">
+          <div id="consent-preview" style="display:none;background:#fff;border:1px solid #e5e5ea;border-radius:12px;padding:14px;font-size:13px;line-height:1.55;max-height:240px;overflow:auto;margin-bottom:12px"></div>
+          <button type="button" id="btn-descarga-consent" onclick="vcDescargaConsent()" style="display:none;width:100%;margin-bottom:12px;background:#005BEA;color:#fff;border:0;padding:14px 20px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Descargar consentimiento fusionado (PDF)</button>
+          <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">
+            <input type="checkbox" name="firma_acepta" value="1" required style="margin-top:3px">
+            <span>El rector acepta y firma digitalmente el consentimiento (hora legal Colombia + IP).</span>
+          </label>
+        </div>
+        <script>
+        window._vcCanal = "presencial";
+        function vcCanal(c) {{
+          window._vcCanal = c;
+          var m = document.getElementById("modalidad-val");
+          if (m) m.value = (c === "online" ? "ONLINE" : "PRESENCIAL");
+          var bp = document.getElementById("btn-canal-presencial");
+          var bo = document.getElementById("btn-canal-online");
+          if (bp && bo) {{
+            if (c === "presencial") {{ bp.style.background = "#005BEA"; bp.style.color = "#fff"; bo.style.background = "#f5f5f7"; bo.style.color = "#1d1d1f"; }}
+            else {{ bo.style.background = "#005BEA"; bo.style.color = "#fff"; bp.style.background = "#f5f5f7"; bp.style.color = "#1d1d1f"; }}
+          }}
+          vcPreviewConsent();
+        }}
+        function vcTokens() {{
+          var f = document.getElementById("form-activar-plan");
+          function v(n) {{ var el = f ? f.querySelector('[name="' + n + '"]') : null; return el ? el.value : ""; }}
+          return {{ canal: window._vcCanal, nombre: v("nombre"), nit: v("nit"), dane: v("dane"), codigo: v("codigo"),
+            rector: v("rector") || v("rector_nombre"), rector_doc: v("rector_doc"), plan: v("plan"), ciudad: v("ciudad") }};
+        }}
+        function vcPreviewConsent() {{
+          fetch("/ventas/api/consentimiento-preview", {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify(vcTokens()) }})
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{
+              if (!d || !d.ok) return;
+              var box = document.getElementById("consent-preview");
+              if (box) {{ box.style.display = "block"; box.innerHTML = "<b>" + (d.titulo || "") + "</b><hr style='border:none;border-top:1px solid #eee;margin:8px 0'>" + (d.html || ""); }}
+              var b = document.getElementById("btn-descarga-consent");
+              if (b) b.style.display = "block";
+              window._vcConsentHtml = d.html; window._vcConsentTitulo = d.titulo;
+            }}).catch(function() {{}});
+        }}
+        function vcDescargaConsent() {{
+          var html = window._vcConsentHtml;
+          if (!html) {{ vcPreviewConsent(); setTimeout(vcDescargaConsent, 700); return; }}
+          var w = window.open("", "_blank"); if (!w) return;
+          w.document.write("<html><head><title>Consentimiento</title><style>body{{font-family:-apple-system,Segoe UI,sans-serif;padding:32px;line-height:1.55}}</style></head><body>");
+          w.document.write("<h1 style='color:#002060'>PROCSIS · EduTrack</h1>" + html);
+          w.document.write("<p style='margin-top:24px;font-size:11px;color:#86868b'>Imprimir o Guardar como PDF. Sello IP/hora al confirmar activacion.</p></body></html>");
+          w.document.close(); setTimeout(function() {{ w.print(); }}, 350);
+        }}
+        setTimeout(function() {{ vcCanal("presencial"); }}, 200);
+        </script>
+<button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:12px">Confirmar y activar plan {plan_nom}</button>
       </form>
       <div style="margin-top:22px;padding-top:16px;border-top:1px solid #e2e8f0">
         <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57;font-weight:800">Confirmación · Planes disponibles</h3>
@@ -22850,6 +22990,117 @@ def gerencia_contratos():
     )
     return page("Contratos colegios", body)
 
+
+
+
+@app.route("/gerencia/legal/consentimientos", methods=["GET", "POST"])
+def gerencia_legal_consentimientos():
+    """Gestor de consentimientos: plantillas presencial y online (solo Gerencia)."""
+    if not requiere_gerencia():
+        return redirect("/backoffice")
+    msg = err = ""
+    try:
+        _seed_plantillas_consentimiento()
+    except Exception:
+        pass
+    if request.method == "POST":
+        canal = (request.form.get("canal_tipo") or "").strip().lower()
+        if canal not in ("presencial", "online"):
+            err = "Canal no valido."
+        else:
+            try:
+                row = PlantillaConsentimiento.query.filter_by(canal_tipo=canal).first()
+                if not row:
+                    row = PlantillaConsentimiento(canal_tipo=canal)
+                    db.session.add(row)
+                row.titulo_publico = (request.form.get("titulo_publico") or "").strip()[:255]
+                row.contenido_html = (request.form.get("contenido_html") or "").strip()
+                row.updated_by = session.get("usuario") or ""
+                try:
+                    row.updated_at = ahora().strftime("%Y-%m-%d %H:%M") if hasattr(ahora(), "strftime") else ""
+                except Exception:
+                    row.updated_at = ""
+                db.session.commit()
+                msg = "Plantilla %s guardada. Solo Gerencia puede editarla." % canal
+                try:
+                    registrar_auditoria("Consentimientos", "Guardar plantilla " + canal)
+                except Exception:
+                    pass
+            except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = str(e)[:160]
+    try:
+        pre = PlantillaConsentimiento.query.filter_by(canal_tipo="presencial").first()
+        onl = PlantillaConsentimiento.query.filter_by(canal_tipo="online").first()
+    except Exception:
+        pre = onl = None
+    pre_titulo = (pre.titulo_publico if pre else None) or "Consentimiento canal presencial"
+    pre_cuerpo = (pre.contenido_html if pre else None) or _CONSENT_PRESENCIAL_DEFAULT
+    onl_titulo = (onl.titulo_publico if onl else None) or "Consentimiento canal online"
+    onl_cuerpo = (onl.contenido_html if onl else None) or _CONSENT_ONLINE_DEFAULT
+    tokens_hint = "{{NOMBRE_COLEGIO}} {{NIT_COLEGIO}} {{DANE_COLEGIO}} {{NOMBRE_RECTOR}} {{DOC_RECTOR}} {{PLAN}} {{FECHA}} {{HORA}} {{CIUDAD}} {{IP}} {{ASESOR}}"
+    msg_html = ("<div style='background:#ecfdf5;padding:12px;border-radius:12px;color:#065f46;margin-bottom:14px;font-size:13px'>" + _esc(msg) + "</div>") if msg else ""
+    err_html = ("<div style='background:#fef2f2;padding:12px;border-radius:12px;color:#991b1b;margin-bottom:14px;font-size:13px'>" + _esc(err) + "</div>") if err else ""
+    body = (
+        '<div style="max-width:1100px;margin:0 auto;padding:24px 16px 48px;font-family:-apple-system,sans-serif">'
+        '<a href="/gerencia/hq" style="color:#86868b;font-size:13px;text-decoration:none">&larr; Gerencia HQ</a>'
+        '<h1 style="margin:8px 0 4px;color:#002060;font-size:24px">Gestor de consentimientos</h1>'
+        '<p style="margin:0 0 12px;color:#86868b;font-size:13px">Solo editable desde Gerencia. Tokens: <code style="font-size:11px">'
+        + tokens_hint + "</code></p>"
+        + msg_html + err_html
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">'
+        + '<div style="background:#fff;border-radius:24px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02)">'
+        + '<h2 style="margin:0 0 6px;font-size:15px;color:#002060">Plantilla canal presencial</h2>'
+        + '<p style="margin:0 0 12px;font-size:12px;color:#86868b">Implementaciones en el plantel.</p>'
+        + '<form method="POST"><input type="hidden" name="canal_tipo" value="presencial">'
+        + '<input name="titulo_publico" value="' + _esc(pre_titulo) + '" style="width:100%;padding:10px 12px;border:1px solid #d2d2d7;border-radius:12px;margin-bottom:10px;box-sizing:border-box">'
+        + '<textarea name="contenido_html" rows="14" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-family:ui-monospace,monospace;font-size:12px;box-sizing:border-box">'
+        + _esc(pre_cuerpo) + "</textarea>"
+        + '<button type="submit" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Guardar plantilla presencial</button></form></div>'
+        + '<div style="background:#fff;border-radius:24px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02)">'
+        + '<h2 style="margin:0 0 6px;font-size:15px;color:#002060">Plantilla canal online</h2>'
+        + '<p style="margin:0 0 12px;font-size:12px;color:#86868b">Remoto · aviso de grabacion/monitoreo.</p>'
+        + '<form method="POST"><input type="hidden" name="canal_tipo" value="online">'
+        + '<input name="titulo_publico" value="' + _esc(onl_titulo) + '" style="width:100%;padding:10px 12px;border:1px solid #d2d2d7;border-radius:12px;margin-bottom:10px;box-sizing:border-box">'
+        + '<textarea name="contenido_html" rows="14" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-family:ui-monospace,monospace;font-size:12px;box-sizing:border-box">'
+        + _esc(onl_cuerpo) + "</textarea>"
+        + '<button type="submit" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Guardar plantilla online</button></form></div></div></div>'
+    )
+    return page("Consentimientos · Gerencia", body)
+
+
+@app.route("/ventas/api/consentimiento-preview", methods=["POST"])
+def ventas_api_consentimiento_preview():
+    if not session.get("usuario"):
+        return jsonify({"ok": False, "error": "Sesion requerida"}), 401
+    data = request.get_json(silent=True) or request.form or {}
+    canal = (data.get("canal") or data.get("canal_tipo") or "presencial").strip().lower()
+    try:
+        fecha = ahora().strftime("%Y-%m-%d") if hasattr(ahora(), "strftime") else ""
+        hora = ahora().strftime("%H:%M:%S") if hasattr(ahora(), "strftime") else ""
+    except Exception:
+        fecha = hora = ""
+    tokens = {
+        "NOMBRE_COLEGIO": data.get("nombre") or "",
+        "NIT_COLEGIO": data.get("nit") or "",
+        "DANE_COLEGIO": data.get("dane") or "",
+        "NOMBRE_RECTOR": data.get("rector") or data.get("rector_nombre") or "",
+        "DOC_RECTOR": data.get("rector_doc") or "",
+        "PLAN": data.get("plan") or "",
+        "FECHA": data.get("fecha") or fecha,
+        "HORA": data.get("hora") or hora,
+        "MODALIDAD": "ONLINE" if canal == "online" else "PRESENCIAL",
+        "CIUDAD": data.get("ciudad") or "Colombia",
+        "IP": (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip(),
+        "ASESOR": session.get("usuario") or "",
+        "CODIGO": data.get("codigo") or "",
+    }
+    html = _fusion_consentimiento(canal, tokens)
+    titulo, _ = _get_consentimiento(canal)
+    return jsonify({"ok": True, "titulo": titulo, "html": html, "canal": canal})
 
 
 @app.route("/gerencia/contrato-plantilla", methods=["GET", "POST"])
