@@ -3244,7 +3244,7 @@ _APPLE_SHELL_CSS = (
     "border-bottom:1px solid rgba(0,0,0,.05);display:flex;justify-content:space-between;"
     "align-items:center;padding:0 28px;box-sizing:border-box;position:sticky;top:0;z-index:9000}"
     ".navbar-module-title{font-size:14px;color:#1d1d1f}.navbar-module-title strong{font-weight:700}"
-    ".navbar-actions-right{display:flex;align-items:center;gap:12px}"
+    ".navbar-actions-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}"".navbar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}"".badge-env{font-size:11px;font-weight:600;padding:5px 12px;border-radius:980px;white-space:nowrap}"".badge-env-prod{background:rgba(22,163,74,.12);color:#15803d}"".badge-env-staging{background:rgba(202,138,4,.15);color:#a16207}"".nav-ntp-clock{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#1d1d1f;font-weight:500;letter-spacing:-.02em;white-space:nowrap}"".nav-api-ping{font-size:12px;color:#86868b;white-space:nowrap}"".nav-api-ping.ok{color:#15803d}"".nav-api-ping.bad{color:#b91c1c;font-weight:600}"".nav-bell{position:relative;text-decoration:none;font-size:16px;color:#1d1d1f;padding:4px 6px}"".nav-bell-idle{opacity:.55}"".nav-bell-count{position:absolute;top:-2px;right:-4px;background:#df1c1c;color:#fff;font-size:10px;font-weight:700;border-radius:980px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}"
     ".badge-periodo{font-size:12px;background:rgba(0,0,0,.04);padding:6px 12px;border-radius:980px;color:#1d1d1f}"
     ".user-profile-circle{width:28px;height:28px;background:#002060;color:#fff;border-radius:50%;"
     "display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}"
@@ -3345,8 +3345,75 @@ def _wrap_staff_layout(title, body, path):
         periodo = ahora().strftime("%Y-%m") if hasattr(ahora(), "strftime") else "2026-09"
     except Exception:
         periodo = "2026-09"
+    env_raw = (
+        os.environ.get("PROCSIS_ENV")
+        or os.environ.get("RAILWAY_ENVIRONMENT")
+        or os.environ.get("ENVIRONMENT")
+        or os.environ.get("FLASK_ENV")
+        or "production"
+    ).strip().lower()
+    is_staging = any(x in env_raw for x in ("stag", "sandbox", "dev", "test", "local"))
+    if is_staging:
+        env_badge = '<span class="badge-env badge-env-staging" title="Entorno de pruebas">🟡 Staging</span>'
+    else:
+        env_badge = '<span class="badge-env badge-env-prod" title="Entorno en vivo">🟢 Producción</span>'
+    alert_n = 0
+    try:
+        alert_n += int(
+            db.session.execute(
+                __import__("sqlalchemy").text(
+                    "SELECT COUNT(*) FROM pqr WHERE estado IN ('ABIERTA','URGENTE','PENDIENTE')"
+                )
+            ).scalar()
+            or 0
+        )
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        alert_n += int(
+            db.session.execute(
+                __import__("sqlalchemy").text(
+                    "SELECT COUNT(*) FROM verificacion_identidad WHERE estado IN ('PENDIENTE','EN_REVISION')"
+                )
+            ).scalar()
+            or 0
+        )
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    if alert_n > 0:
+        bell = (
+            '<a href="/gerencia/pqr-limpieza" class="nav-bell" title="Alertas criticas">'
+            "🔔 <span class='nav-bell-count'>" + str(min(alert_n, 99)) + "</span></a>"
+        )
+    else:
+        bell = '<span class="nav-bell nav-bell-idle" title="Sin alertas">🔔</span>'
+    try:
+        hora0 = ahora().strftime("%H:%M:%S") if hasattr(ahora(), "strftime") else "--:--:--"
+    except Exception:
+        hora0 = "--:--:--"
     mod = _staff_module_title(path, rol)
     nav = _staff_nav_items(path, rol)
+    clock_js = (
+        "<script>(function(){"
+        "function tick(){var el=document.getElementById('nav-ntp-clock');if(!el)return;"
+        "var d=new Date();var p=function(n){return (n<10?'0':'')+n;};"
+        "var ms=('00'+d.getMilliseconds()).slice(-3);"
+        "el.textContent='⏱️ '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+ms+' NTP';}"
+        "tick();setInterval(tick,100);"
+        "var ping=document.getElementById('nav-api-ping');"
+        "if(ping){var t0=performance.now();"
+        "fetch(location.origin+'/',{method:'HEAD',cache:'no-store'}).then(function(){"
+        "var ms=Math.max(1,Math.round(performance.now()-t0));"
+        "ping.textContent='☁️ API: '+ms+'ms (Online)';ping.className='nav-api-ping ok';"
+        "}).catch(function(){ping.textContent='☁️ API: Offline';ping.className='nav-api-ping bad';});}"
+        "})();</script>"
+    )
     return (
         '<div class="app-layout-enterprise">'
         '<aside class="sidebar-apple-glass">'
@@ -3357,14 +3424,20 @@ def _wrap_staff_layout(title, body, path):
         "</aside>"
         '<div class="main-content-container">'
         '<header class="navbar-top-apple">'
+        '<div class="navbar-left">'
         '<div class="navbar-module-title">' + mod + "</div>"
+        + env_badge
+        + "</div>"
         '<div class="navbar-actions-right">'
-        '<span class="badge-periodo">Periodo: ' + periodo + "</span>"
+        '<span id="nav-ntp-clock" class="nav-ntp-clock">⏱️ ' + hora0 + " NTP</span>"
+        '<span id="nav-api-ping" class="nav-api-ping">☁️ API: …</span>'
+        + bell
+        + '<span class="badge-periodo">Periodo: ' + periodo + "</span>"
         '<span class="user-profile-circle">' + _esc(usuario) + "</span>"
         '<a href="/logout" class="btn-apple-secondary" style="padding:8px 14px;font-size:12px">Salir</a>'
         "</div></header>"
         '<main class="bento-workspace-apple">' + body + "</main>"
-        "</div></div>"
+        "</div></div>" + clock_js
     )
 
 
@@ -22838,16 +22911,18 @@ def gerencia_hq():
         <p class="hq-note" style="margin-top:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#86868b">Operación diaria · Tablero Bento de control financiero, clientes y seguridad.</p>
 
         <style>
-        .hq-bento{{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:16px 0 8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+        .hq-bento{{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin:16px 0 8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
         @media(max-width:900px){{.hq-bento{{grid-template-columns:1fr}}}}
-        .hq-bento-card{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px 20px;box-shadow:0 2px 12px rgba(0,0,0,.03)}}
-        .hq-bento-card h3{{margin:0 0 4px;font-size:13px;font-weight:600;color:#86868b;letter-spacing:.04em;text-transform:uppercase}}
-        .hq-bento-metric{{font-size:28px;font-weight:700;color:#002060;letter-spacing:-.03em;margin:8px 0 4px;line-height:1.15}}
-        .hq-bento-sub{{font-size:13px;color:#86868b;margin:0 0 16px}}
+        .hq-bento-card{{background:#fff;border:1px solid rgba(0,0,0,.02);border-radius:24px;padding:28px;box-shadow:0 8px 40px rgba(0,0,0,.03)}}
+        .hq-bento-card h3{{margin:0 0 4px;font-size:12px;font-weight:600;color:#86868b;letter-spacing:.03em;text-transform:uppercase}}
+        .hq-bento-metric{{font-size:34px;font-weight:700;color:#1d1d1f;letter-spacing:-.03em;margin:8px 0 4px;line-height:1.1;font-family:-apple-system,BlinkMacSystemFont,sans-serif}}
+        .hq-bento-sub{{font-size:13px;color:#86868b;margin:0 0 18px}}
         .hq-pills{{display:flex;flex-wrap:wrap;gap:8px}}
-        .hq-pills a{{display:inline-block;padding:8px 14px;border-radius:980px;background:#f5f5f7;color:#005BEA;font-size:12px;font-weight:600;text-decoration:none;transition:background .15s,color .15s;border:0}}
+        .hq-pills a{{display:inline-block;padding:10px 18px;border-radius:980px;background:#f5f5f7;color:#002060;font-size:13px;font-weight:500;text-decoration:none;transition:background .15s,color .15s;border:0}}
         .hq-pills a:hover{{background:#e8e8ed;color:#002060}}
-        .hq-pills a.hq-pill-more{{background:rgba(0,91,234,.08);color:#005BEA}}
+        .hq-pills a.hq-pill-primary{{background:#005BEA;color:#fff;font-weight:600}}
+        .hq-pills a.hq-pill-primary:hover{{background:#002060;color:#fff}}
+        .hq-pills a.hq-pill-more{{background:#f5f5f7;color:#1d1d1f}}
         </style>
 
         <div class="hq-bento">
@@ -22856,10 +22931,10 @@ def gerencia_hq():
             <div class="hq-bento-metric">${'{:,.0f}'.format(float(m.get('cartera') or 0)).replace(',', '.')} COP</div>
             <p class="hq-bento-sub">Deuda pendiente · MRR ${'{:,.0f}'.format(float(m.get('mrr') or 0)).replace(',', '.')} / mes</p>
             <div class="hq-pills">
-              <a href="/gerencia/cartera">Ver Cartera</a>
+              <a class="hq-pill-primary" href="/gerencia/cartera">Ver Cartera</a>
               <a href="/paz-y-salvo">Paz y Salvo</a>
               <a href="/gerencia/gastos">Gastos Cloud</a>
-              <a href="/gerencia/facturacion">Facturar</a>
+              <a class="hq-pill-primary" href="/gerencia/facturacion">Facturar</a>
               <a class="hq-pill-more" href="/gerencia/plazos-cuotas">Plazos</a>
               <a class="hq-pill-more" href="/gerencia/contabilidad">Contabilidad</a>
               <a class="hq-pill-more" href="/gerencia/reportes-pago">Reportes pago</a>
@@ -22873,7 +22948,7 @@ def gerencia_hq():
             <div class="hq-bento-metric">{m.get('activas', 0)} Colegios activos</div>
             <p class="hq-bento-sub">{m.get('suspendidas', 0)} suspendidos · Soporte y tracción comercial</p>
             <div class="hq-pills">
-              <a href="/gerencia/rectores">CRM Rectores</a>
+              <a class="hq-pill-primary" href="/gerencia/rectores">CRM Rectores</a>
               <a href="/soporte_admin">Centro Soporte</a>
               <a href="/calendario">Calendario</a>
               <a href="/gerencia/pqr-limpieza">PQR</a>
@@ -22889,7 +22964,7 @@ def gerencia_hq():
             <p class="hq-bento-sub">Corte de retardos · Citaciones y asistencia judicial</p>
             <div class="hq-pills">
               <a href="/retardos-acumulados">Registro Retardos</a>
-              <a href="/historial_novedades">Sello Asistencia Judicial</a>
+              <a class="hq-pill-primary" href="/historial_novedades">Sello Asistencia Judicial</a>
               <a class="hq-pill-more" href="/citaciones">Citaciones</a>
             </div>
           </div>
@@ -22902,13 +22977,13 @@ def gerencia_hq():
               <a href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
               <a href="/gerencia/wati-conexion">API WATI</a>
               <a href="/gerencia/procsis-web">Noticias / productos</a>
-              <a href="/gerencia/login-banners">Banners Login</a>
+              <a class="hq-pill-primary" href="/gerencia/login-banners">Banners Login</a>
               <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
               <a class="hq-pill-more" href="/gerencia/correo-notificaciones">Gmail Notif.</a>
               <a class="hq-pill-more" href="/gerencia/web-menu">Menú público</a>
               <a class="hq-pill-more" href="/gerencia/casos-exito">Casos de éxito</a>
               <a class="hq-pill-more" href="/gerencia/landing-ventas">Landing ventas</a>
-              <a class="hq-pill-more" href="/gerencia/anuncios">Anuncios</a>
+              <a class="hq-pill-primary" href="/gerencia/anuncios">Anuncios</a>
               <a class="hq-pill-more" href="/gerencia/actualizaciones">FAQ / Ayuda</a>
             </div>
           </div>
