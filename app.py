@@ -22064,43 +22064,12 @@ def gerencia_hq():
     )
     tab_tecnica_panel = f"""
       <div id="hq-tab-tecnica" class="hq-tab-panel">
-        <p class="hq-note" style="margin-top:0">Módulos de <b>Desarrollo</b>: actualizaciones, diseño global, pruebas y seguridad. Solo roles técnicos.</p>
-        <div class="grid-mod" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
-          <a class="own" href="/dev-console?tab=versiones" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;text-decoration:none">
-            <div style="font-size:22px;margin-bottom:6px">📦</div>
-            <div style="font-weight:800;font-size:13px">Actualizaciones de mejora</div>
-            <div style="font-size:11px;opacity:.85;margin-top:4px">Publicar versión + notas de cambios (historial inmutable)</div>
-          </a>
-          <a class="own" href="/dev-console?tab=anuncios" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#7c2d12,#b45309);color:#fff;text-decoration:none">
-            <div style="font-size:22px;margin-bottom:6px">🛡️</div>
-            <div style="font-weight:800;font-size:13px">Actualizaciones de seguridad</div>
-            <div style="font-size:11px;opacity:.85;margin-top:4px">Anuncios técnicos y alertas de mantenimiento</div>
-          </a>
-          <a class="own" href="/dev-console?tab=temas" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#0f766e,#0d9488);color:#fff;text-decoration:none">
-            <div style="font-size:22px;margin-bottom:6px">🎨</div>
-            <div style="font-weight:800;font-size:13px">Diseño / colores / letra</div>
-            <div style="font-size:11px;opacity:.85;margin-top:4px">Temas globales + CSS inyectado en todo el sistema</div>
-          </a>
-          <a class="own" href="/dev-console?tab=flags" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#5b21b6,#7c3aed);color:#fff;text-decoration:none">
-            <div style="font-size:22px;margin-bottom:6px">🧪</div>
-            <div style="font-weight:800;font-size:13px">Espacio de pruebas (Sandbox)</div>
-            <div style="font-size:11px;opacity:.85;margin-top:4px">Feature flags y pruebas solo en colegio de test</div>
-          </a>
-          <a class="own" href="/dev-console?tab=sistema" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#334155,#475569);color:#fff;text-decoration:none">
-            <div style="font-size:22px;margin-bottom:6px">⚙️</div>
-            <div style="font-weight:800;font-size:13px">Sistema & Core</div>
-            <div style="font-size:11px;opacity:.85;margin-top:4px">Logs, sesiones, mantenimiento, backup</div>
-          </a>
-          <a class="own" href="/dev-console" style="display:block;padding:16px;border-radius:12px;background:#f1f5f9;color:#0B2D57;text-decoration:none;border:1px solid #e2e8f0">
-            <div style="font-size:22px;margin-bottom:6px">🛠️</div>
-            <div style="font-weight:800;font-size:13px">Abrir consola completa</div>
-            <div style="font-size:11px;opacity:.75;margin-top:4px">Todas las pestañas de desarrollo</div>
-          </a>
-          <a class="own" href="/gerencia/backoffice-branding" style="display:block;padding:16px;border-radius:12px;background:linear-gradient(135deg,#1e3a8a,#4f46e5);color:#fff;text-decoration:none">
-            <div style="font-size:22px;margin-bottom:6px">🖼️</div>
-            <div style="font-weight:800;font-size:13px">Imágenes del Backoffice</div>
-            <div style="font-size:11px;opacity:.85;margin-top:4px">Foto y textos del login unificado (/backoffice)</div>
-          </a>
+        <p class="hq-note" style="color:#86868b">Modulos de desarrollo - Solo roles tecnicos</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;font-family:-apple-system,sans-serif">
+          <a href="/dev-console?tab=versiones" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,91,234,.06);color:#005BEA;line-height:40px;font-weight:700">v</div><div style="color:#002060;font-weight:600;font-size:13px">Actualizaciones</div></a>
+          <a href="/dev-console?tab=anuncios" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,91,234,.06);color:#005BEA;line-height:40px;font-weight:700">!</div><div style="color:#002060;font-weight:600;font-size:13px">Seguridad</div></a>
+          <a href="/dev-console?tab=temas" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,91,234,.06);color:#005BEA;line-height:40px;font-weight:700">Aa</div><div style="color:#002060;font-weight:600;font-size:13px">Diseno</div></a>
+          <a href="/dev-console" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,91,234,.1);color:#005BEA;line-height:40px;font-weight:700">&gt;</div><div style="color:#002060;font-weight:700;font-size:13px">Abrir consola completa</div></a>
         </div>
       </div>
 """ if _ver_tecnica else ""
@@ -22153,6 +22122,17 @@ def gerencia_hq():
         f"(alerta OFAC o rector marcado como PEP). <a href='/gerencia/verificaciones-pendientes' style='font-weight:700;color:#991b1b'>Revisar ahora →</a>"
         f"</div>" if n_pendientes else ""
     )
+    try:
+        n_trab = ContTrabajador.query.count()
+    except Exception:
+        n_trab = 0
+    try:
+        fondo_actual = float(m.get('fondo_formalizacion') or 0)
+    except Exception:
+        fondo_actual = 0.0
+    fondo_pct = min(100, int(100 * fondo_actual / 400000)) if fondo_actual else 0
+    fondo_txt = ('{:,.0f}'.format(fondo_actual)).replace(',', '.')
+
     body = f"""
 <style>
 .hq{{background:#eef2f6;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}}
@@ -22406,99 +22386,13 @@ def gerencia_hq():
       </div>
 
       
-<div id="hq-tab-gerencia" class="hq-tab-panel">
-        <p class="hq-note" style="margin-top:0">Exclusivo dirección · Talento, legal, finanzas corporativas y configuración</p>
+      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details></aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v2.6.0</div></div></div></div></div>
 
-        <div class="hq-cat marron">🟤 Talento y trabajadores</div>
-        <div class="grid-mod">
-          <a class="c-marron" href="/gerencia/contabilidad/trabajadores">Módulo trabajadores</a>
-          <a class="c-marron" href="/gerencia/hojas-vida">Hojas de vida / Talento</a>
-          <a class="c-marron" href="/gerencia/nomina">Nómina / Pagos</a>
-          <a class="c-marron" href="/gerencia/contratos-firmas">Contratos y firmas digitales</a>
-          <a class="c-marron" href="/gerencia/certificados-apoyo">Certificados apoyo familiar</a>
-          <a class="c-marron" href="/gerencia/contratos-personal">Admisión / gestión de contratos</a>
-          <a class="c-marron" href="/gerencia/comisiones-ventas">Comisiones de ventas</a>
-        </div>
-
-        <div class="hq-cat verde-corp">🟢 Legal y formalización PROCSIS</div>
-        <div class="grid-mod">
-          <a class="c-verde-corp" href="/gerencia/datos-rut">Datos del RUT (DIAN)</a>
-          <a class="c-verde-corp" href="/gerencia/libro-actas">Libro de actas societarias</a>
-          <a class="c-verde-corp" href="/gerencia/boveda-legal">Bóveda documentación legal</a>
-          <a class="c-verde-corp" href="/gerencia/changelog">Changelog institucional</a>
-          <a class="c-verde-corp" href="/gerencia/fondo-formalizacion">Fondo de Formalización</a>
-          <a class="c-verde-corp" href="/gerencia/contratos-saas">Contratos SaaS Colegios</a>
-          <a class="c-verde-corp" href="/gerencia/documentos/politica-datos">Textos legales (PQR / Habeas Data)</a>
-          <a class="c-verde-corp" href="/gerencia/certificaciones">Certificaciones corporativas</a>
-          <a class="c-verde-corp" href="/gerencia/requerimientos-autoridades">Requerimientos de autoridades</a>
-        </div>
-
-        <div class="hq-cat azul-rey">🔵 Finanzas y conexiones del servidor</div>
-        <div class="grid-mod">
-          <a class="c-azul-rey" href="/gerencia/indicadores">Ver indicadores</a>
-          <a class="c-azul-rey" href="/gerencia/metas">Metas PROCSIS</a>
-          <a class="c-azul-rey" href="/gerencia/recursos-financieros">Recursos Financieros y Consumo</a>
-          <a class="c-azul-rey" href="/gerencia/contabilidad">Contabilidad · compras/ventas/pagos</a>
-          <a class="c-azul-rey" href="/gerencia/tesoreria">Cuentas bancarias y pasarelas</a>
-          <a class="c-azul-rey" href="/gerencia/correo-soporte">Conectar Gmail · Soporte</a>
-          <a class="c-azul-rey" href="/gerencia/correo-notificaciones">Conectar Gmail · Notificaciones</a>
-          <a class="c-azul-rey" href="/gerencia/wati-conexion">Conectar WhatsApp · API WATI</a>
-        </div>
-
-        <div class="hq-cat naranja-lad">🟠 Configuración y web de la empresa</div>
-        <div class="grid-mod">
-          <a class="c-naranja-lad" href="/gerencia/empresa">Datos de la empresa</a>
-          <a class="c-naranja-lad" href="/gerencia/web-corporativa">Página web / Web corporativa</a>
-          <a class="c-naranja-lad" href="/gerencia/alianzas-clientes">Gestionar alianzas y clientes</a>
-          <a class="c-naranja-lad" href="/feature_flags">Parámetros dinámicos / Feature flags</a>
-          <a class="c-naranja-lad" href="/gerencia/facturacion">Facturación auto</a>
-          <a class="c-naranja-lad" href="/gerencia/landing-ventas">Landing /ventas (textos + imagen)</a>
-          <a class="c-naranja-lad" href="/gerencia/diseno-login">Diseño de logins</a>
-          <a class="c-naranja-lad" href="/gerencia/planes">Aprobar precios y planes</a>
-          <a class="c-naranja-lad" href="/gerencia/descuentos">Descuentos especiales</a>
-          <a class="c-naranja-lad" href="/gerencia/lideres">Equipo directivo (web)</a>
-          <a class="c-naranja-lad" href="/gerencia/contabilidad/partes">Clientes · Proveedores · Dominios</a>
-          <a class="c-naranja-lad" href="/gerencia/turnos">Turnos y notas de gestión</a>
-          <a class="c-naranja-lad" href="/gerencia/usuarios">Usuarios internos · claves y roles</a>
-          <a class="c-naranja-lad" href="/soporte/equipo">Equipo Procsis · carnés</a>
-          <a class="c-naranja-lad" href="/gerencia/cancelaciones">Cancelaciones de servicio</a>
-          <a class="c-naranja-lad" href="/retencion">Retención · validar casos</a>
-        </div>
-        <p class="hq-note">Las decisiones de precio, descuento, baja de plan y cancelación requieren autorización de gerencia. El acceso queda registrado en auditoría.</p>
-      </div>
-
-      <div id="hq-tab-contingencia" class="hq-tab-panel">
-        <p class="hq-note" style="margin-top:0">Documentos legales, DRP y biblioteca corporativa</p>
-        <div class="grid-mod">
-          <a class="own" href="/gerencia/documentos">Biblioteca de documentos</a>
-          <a class="own" href="/gerencia/documentos/opinion-publica">Opinión pública</a>
-          <a class="own" href="/gerencia/documentos/comunicado-prensa">Comunicado de prensa</a>
-          <a class="own" href="/gerencia/documentos/contrato-licenciamiento">Contrato SaaS EduTrack</a>
-          <a class="own" href="/gerencia/documentos/contrato-implementacion">Contrato implementación</a>
-          <a class="own" href="/gerencia/documentos/acta-compromiso-colegio">Acta de compromiso</a>
-          <a class="own" href="/gerencia/documentos/plan-contingencia">Plan de Contingencia</a>
-          <a class="own" href="/gerencia/documentos/plan-drp">Plan DRP (desastres)</a>
-          <a class="t" href="/gerencia/documentos/terminos-condiciones">Términos y condiciones</a>
-          <a class="t" href="/gerencia/documentos/politica-datos">Política de datos</a>
-          <a class="t" href="/gerencia/documentos/sg-sst">SG-SST simplificado</a>
-          <a class="own" href="/gerencia/talento-legal">Guía contratación · PILA · SG-SST</a>
-          <a class="own" href="/gerencia/contratos-personal">Gestión de contratos</a>
-          <a class="own" href="/gerencia/planillas-pila">Historial planillas PILA</a>
-          <a class="own" href="/gerencia/matriz-epp">Matriz EPP / visitas colegios</a>
-        </div>
-        <p class="hq-note">Editor tipo documento corporativo con descarga PDF. Los marcados como públicos se publican en /docs/…</p>
-      </div>
+      <div id="hq-tab-contingencia" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Boveda documental, juridica y DRP</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Boveda documental, juridica y DRP</h3><div style="display:flex;flex-wrap:wrap;gap:8px"><a href="/gerencia/documentos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Biblioteca</a><a href="/gerencia/documentos/plan-drp" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan DRP</a><a href="/gerencia/documentos/politica-datos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Politica de datos</a><a href="/gerencia/documentos/plan-contingencia" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan contingencia</a><a href="/gerencia/documentos/contrato-licenciamiento" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contrato SaaS</a><a href="/gerencia/contratos-personal" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contratos</a></div></div></div>
 
       {tab_tecnica_panel}
 
-      <div id="hq-tab-auditoria" class="hq-tab-panel">
-        <p class="hq-note" style="margin-top:0">Registro de accesos, IP y acciones críticas del sistema.</p>
-        <div class="grid-mod">
-          <a class="own" href="/auditoria">Auditoría global</a>
-          <a class="own" href="/gerencia/auditoria">Auditoría IP / ubicación</a>
-          <a class="own" href="/dev-console?tab=sistema">Sesiones técnicas activas</a>
-        </div>
-      </div>
+      <div id="hq-tab-auditoria" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Monitoreo de trafico, accesos y auditoria de red</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Monitoreo de trafico, accesos y auditoria de red</h3><div style="display:flex;flex-direction:column;gap:8px"><a href="/auditoria" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Auditoria global de logs</a><a href="/gerencia/auditoria" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Auditoria IP y ubicacion</a><a href="/dev-console?tab=sistema" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Sesiones tecnicas activas</a></div></div></div>
     </div>
 
     <script>
@@ -22526,8 +22420,8 @@ def gerencia_hq():
       <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
         <h2 style="margin:0;font-size:13px">Indicadores (resumen)</h2>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
-          <a href="/gerencia/indicadores" style="background:#0B2D57;color:#fff;padding:7px 12px;border-radius:4px;font-weight:700;font-size:11px;text-decoration:none;letter-spacing:.04em">VER INDICADORES</a>
-          <a href="/gerencia/reportes?periodo=mensual" style="background:#334155;color:#fff;padding:7px 12px;border-radius:4px;font-weight:700;font-size:11px;text-decoration:none">Reportes</a>
+          <a href="/gerencia/indicadores" style="background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;font-weight:600;font-size:12px;text-decoration:none">Ver indicadores</a>
+          <a href="/gerencia/reportes?periodo=mensual" style="background:#f5f5f7;color:#1d1d1f;padding:8px 16px;border-radius:980px;font-weight:500;font-size:12px;text-decoration:none">Reportes</a>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px">
@@ -22571,10 +22465,10 @@ def gerencia_hq():
         y solo aplica a entornos de pre-lanzamiento. La suplantación queda registrada por Habeas Data (Ley 1581).
       </p>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
-        <a href="/gerencia/suspender" style="display:inline-block;background:#7c2d12;color:#fff;padding:10px 14px;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none">Panel suspender / reactivar colegios</a>
-        <a href="/gerencia/reinicio-datos" style="display:inline-block;background:#b91c1c;color:#fff;padding:10px 14px;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none">Reinicio de datos (pre-lanzamiento)</a>
-        <a href="/ventas/crm" style="display:inline-block;background:#0B2D57;color:#fff;padding:10px 14px;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none">CRM embudo ventas</a>
-        <a href="/soporte/impersonar" style="display:inline-block;background:#0f766e;color:#fff;padding:10px 14px;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none">Auditoría · suplantar sesión</a>
+        <a href="/gerencia/suspender" style="display:inline-block;background:#f5f5f7;color:#1d1d1f;padding:10px 18px;border-radius:980px;font-weight:500;font-size:12px;text-decoration:none">Panel suspender / reactivar</a>
+        <a href="/gerencia/reinicio-datos" style="display:inline-block;background:#df1c1c;color:#fff;padding:10px 18px;border-radius:980px;font-weight:700;font-size:12px;text-decoration:none">Reinicio de datos (pre-lanzamiento)</a>
+        <a href="/ventas/crm" style="display:inline-block;background:#f5f5f7;color:#1d1d1f;padding:10px 18px;border-radius:980px;font-weight:500;font-size:12px;text-decoration:none">CRM embudo ventas</a>
+        <a href="/soporte/impersonar" style="display:inline-block;background:#f5f5f7;color:#1d1d1f;padding:10px 18px;border-radius:980px;font-weight:500;font-size:12px;text-decoration:none">Auditoria - suplantar sesion</a>
       </div>
     </div>
 
