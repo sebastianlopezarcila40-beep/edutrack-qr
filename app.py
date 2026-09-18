@@ -233,7 +233,7 @@ def _security_before():
         return "Method Not Allowed", 405
     # Sesión permanente corta
     if session.get("usuario"):
-        session.permanent = True
+        session.permanent = False
 
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///edutrack.db")
@@ -3196,7 +3196,38 @@ def _disk_usage_txt():
 
 
 
+
+# Estilos Apple globales (staff: gerencia, ventas, soporte, cobranza, dev)
+_APPLE_SHELL_CSS = (
+    "<style id=\"apple-shell-global\">"
+    "html,body{font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"Segoe UI\",sans-serif!important}"
+    "body.apple-staff{background:#f5f5f7!important;margin:0;padding:0}"
+    ".sidebar-apple-glass{position:fixed;top:0;left:0;width:260px;height:100vh;"
+    "background:rgba(0,32,96,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);"
+    "border-right:1px solid rgba(255,255,255,.1);padding:24px 16px;box-sizing:border-box;z-index:9999;"
+    "color:#f5f5f7;overflow-y:auto}"
+    ".sidebar-apple-glass a{display:block;color:#e8e8ed;text-decoration:none;font-size:13px;font-weight:400;"
+    "padding:10px 14px;border-radius:980px;margin:2px 0;transition:background .2s}"
+    ".sidebar-apple-glass a:hover,.sidebar-apple-glass a.active{background:#005BEA;color:#fff;font-weight:500}"
+    ".navbar-apple-glass{position:sticky;top:0;z-index:9000;background:rgba(255,255,255,.72);"
+    "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,.05);"
+    "padding:12px 20px;display:flex;align-items:center;justify-content:space-between}"
+    ".navbar-apple-glass .mod-title{font-size:14px;font-weight:700;color:#1d1d1f}"
+    ".card-bento-apple{background:#fff;border-radius:24px;padding:28px;"
+    "box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02);"
+    "transition:transform .3s cubic-bezier(.25,1,.5,1)}"
+    ".card-bento-apple:hover{transform:translateY(-2px)}"
+    ".btn-apple-primary{display:inline-block;background:#005BEA;color:#fff!important;border:0;"
+    "border-radius:980px;padding:10px 20px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}"
+    ".btn-apple-secondary{display:inline-block;background:#f5f5f7;color:#002060!important;border:0;"
+    "border-radius:980px;padding:10px 20px;font-size:13px;font-weight:500;text-decoration:none;cursor:pointer}"
+    "</style>"
+)
+
+
 def page(title, body):
+    body = (_APPLE_SHELL_CSS or "") + (body or "")
+
     cookie_banner = """
 <div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;font-family:Segoe UI,Arial,sans-serif">
   <div style="max-width:920px;margin:0 auto 16px;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.2);padding:22px 24px;border:1px solid #e5e7eb">
@@ -8439,7 +8470,7 @@ def session_idle_timeout():
                 return redirect("/soporte-login")
             return redirect("/login")
         session["_last_active"] = now
-        session.permanent = True
+        session.permanent = False
 
 
 
@@ -17709,18 +17740,21 @@ def whatsapp_mensaje_legal():
 
 @app.route("/logout")
 def logout():
-    """Cierra sesión y devuelve al login del portal correcto (no mezcla paneles)."""
+    """Cierra sesion. Staff PROCSIS -> /backoffice; colegios -> /login."""
     rol = (session.get("rol") or "").strip()
     panel = (session.get("panel") or "").strip()
-    session.clear()
-    if panel == "ventas" or rol == "Comercial":
-        return redirect("/ventas-login")
-    if panel == "soporte" or rol == "Soporte":
-        return redirect("/soporte-login")
-    if panel == "cobranza" or rol == "Cobranza":
-        return redirect("/cobranza-login")
-    if panel == "gerencia" or rol in ("Gerente", "Superadmin", "Administrador"):
-        return redirect("/gerencia-login")
+    roles_staff = (
+        "Gerente", "Gerencia", "Superadmin", "Administrador",
+        "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
+        "Cobranza", "Soporte", "Desarrollador", "Developer",
+    )
+    is_staff = panel in ("ventas", "soporte", "cobranza", "gerencia", "backoffice", "dev") or rol in roles_staff
+    try:
+        session.clear()
+    except Exception:
+        pass
+    if is_staff:
+        return redirect("/backoffice")
     return redirect("/login")
 
 
@@ -21008,103 +21042,8 @@ def ventas_login():
 
 @app.route("/gerencia-login", methods=["GET", "POST"])
 def gerencia_login():
-    """Login gerencia: planes y control."""
-    error = ""
-    if request.method == "POST":
-        ok_rl, wait_m = _rate_limit_login(portal="gerencia")
-        if not ok_rl:
-            return _rate_limit_response(wait_m)
-        if True:
-            user = login_usuario(request.form.get("usuario"), request.form.get("password"))
-            rol = (user.rol or "").strip() if user else ""
-            if user and rol in ("Gerente", "Superadmin", "Administrador"):
-                if not _usuario_activo_ok(user):
-                    error = "Usuario desactivado."
-                else:
-                    _rate_limit_ok(portal="gerencia")
-                    session.clear()
-                    session["usuario"] = user.usuario
-                    session["rol"] = rol
-                    session["uid"] = user.id
-                    session["password_temporal"] = bool(user.password_temporal)
-                    session["panel"] = "gerencia"
-                    try:
-                        registrar_sesion_empleado(user)
-                    except Exception:
-                        pass
-                    registrar_auditoria("Login gerencia", user.usuario)
-                    try:
-                        _rate_limit_clear_all()
-                    except Exception:
-                        pass
-                    return redirect("/gerencia/hq")
-            else:
-                _rate_limit_fail(portal="gerencia")
-                if not user:
-                    try:
-                        cand = Usuario.query.filter(
-                            func.lower(Usuario.usuario) == (request.form.get("usuario") or "").strip().lower()
-                        ).first()
-                    except Exception:
-                        cand = None
-                    if cand:
-                        error = (
-                            "Usuario existe pero la contrasena no coincide (rol: "
-                            + str(cand.rol or "-")
-                            + "). Pruebe gerencia / Gerencia2026* o use /recuperar-staff"
-                        )
-                    else:
-                        error = "Usuario no encontrado. Pruebe gerencia / Gerencia2026* o /recuperar-staff"
-                else:
-                    error = (
-                        "El usuario "
-                        + str(user.usuario)
-                        + " tiene el rol "
-                        + str(rol or "(sin rol)")
-                        + " y no tiene acceso a Gerencia. Use el portal de su rol."
-                    )
-    _logo_proc = logo_plataforma()
-    body = f"""
-<style>
-.gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
-.gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(15,23,42,.08)}}
-.gl-logo{{display:flex;align-items:center;gap:12px;margin-bottom:18px}}
-.gl-logo img{{height:48px;width:auto;border-radius:8px}}
-.gl-c h1{{margin:0 0 4px;color:#0B2D57;font-size:1.55rem;letter-spacing:-.02em}}
-.gl-c .sub{{color:#64748b;font-size:13px;margin:0 0 18px}}
-.gl-c label{{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}}
-.gl-c input{{width:100%;padding:12px 14px;margin:0 0 14px;border:1px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;background:#f8fafc}}
-.gl-c input:focus{{outline:none;border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}}
-.gl-c button{{width:100%;padding:13px;border:0;border-radius:10px;background:linear-gradient(180deg,#0B2D57,#0a2447);color:#fff;font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.02em}}
-.gl-c button:hover{{filter:brightness(1.06)}}
-.err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px;border-radius:8px;margin-bottom:12px}}
-.gl-foot{{margin-top:16px;font-size:12px;text-align:center}}
-.gl-foot a{{color:#0B2D57;text-decoration:none;font-weight:600}}
-</style>
-<div class="gl"><div class="gl-c">
-  <div class="gl-logo" style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
-    <img src="{_logo_proc}" alt="Procsis" style="height:52px;width:auto;max-width:160px;object-fit:contain;display:block">
-    <div>
-      <h1 style="margin:2px 0 0">Portal Gerencia</h1>
-      <p class="sub" style="margin:2px 0 0">Procsis · Control ejecutivo</p>
-    </div>
-  </div>
-  <p class="sub">Planes, precios y supervisión ejecutiva</p>
-  {"<div class='err'>"+error+"</div>" if error else ""}
-  <form method="POST">
-    <label>Usuario</label>
-    <input name="usuario" required>
-    <label>Contraseña</label>
-    <input name="password" type="password" required>
-    <button type="submit">Entrar a gerencia</button>
-  </form>
-  <p style="margin-top:12px;font-size:12px"><a href="/backoffice">Backoffice</a></p>
-</div></div>
-"""
-    return page("Login Gerencia", body)
-
-
-
+    """Deprecated: Gerencia entra solo por /backoffice (login unificado)."""
+    return redirect("/backoffice")
 
 
 
@@ -31034,7 +30973,7 @@ def api_biometria_estado(token):
             session["rol"] = (u.rol or "").strip()
             session["uid"] = u.id
             session["password_temporal"] = bool(u.password_temporal)
-            session.permanent = True
+            session.permanent = False
             try:
                 registrar_sesion_empleado(u)
             except Exception:
@@ -45745,7 +45684,11 @@ def cerrar_turno_laboral():
             pass
         for k in ("turno_id", "turno_nombre", "turno_documento", "turno_area"):
             session.pop(k, None)
-        return redirect(_login_portal(rol_actual()) if "_login_portal" in dir() else "/logout")
+        try:
+            session.clear()
+        except Exception:
+            pass
+        return redirect("/backoffice")
     content = (
         '<div class="role-panel" style="max-width:420px;margin:40px auto">'
         "<h2>Cerrar turno</h2>"
