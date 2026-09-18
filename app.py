@@ -1419,6 +1419,69 @@ class NoticiaProcsis(db.Model):
     activo = db.Column(db.Boolean, default=True)
 
 
+class PlantillaContrato(db.Model):
+    """Plantilla madre del contrato comercial (editable en Gerencia)."""
+    __tablename__ = "plantillas_contrato"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), default="Contrato licenciamiento EduTrack")
+    cuerpo = db.Column(db.Text, default="")
+    activo = db.Column(db.Boolean, default=True)
+    updated_at = db.Column(db.String(30), default="")
+    updated_by = db.Column(db.String(80), default="")
+
+
+class ContratoColegio(db.Model):
+    """Contratos generados al activar un colegio desde Ventas."""
+    __tablename__ = "contratos_colegio"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, default=0)
+    codigo_inst = db.Column(db.String(40), default="")
+    nombre_colegio = db.Column(db.String(220), default="")
+    nit = db.Column(db.String(40), default="")
+    dane = db.Column(db.String(40), default="")
+    rector = db.Column(db.String(160), default="")
+    correo = db.Column(db.String(160), default="")
+    plan = db.Column(db.String(60), default="")
+    modalidad = db.Column(db.String(20), default="presencial")  # presencial | online
+    cuerpo_html = db.Column(db.Text, default="")
+    pdf_path = db.Column(db.String(255), default="")
+    ip = db.Column(db.String(60), default="")
+    asesor = db.Column(db.String(80), default="")
+    estado = db.Column(db.String(30), default="ACTIVO")
+    created_at = db.Column(db.String(30), default="")
+
+
+class ContratoPlantilla(db.Model):
+    __tablename__ = "contrato_plantilla"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), default="Contrato PROCSIS EduTrack")
+    cuerpo = db.Column(db.Text, default="")
+    activo = db.Column(db.Boolean, default=True)
+    updated_at = db.Column(db.String(30), default="")
+    updated_by = db.Column(db.String(80), default="")
+
+
+class ContratoInstitucion(db.Model):
+    __tablename__ = "contratos_institucion"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, default=0)
+    codigo_inst = db.Column(db.String(40), default="")
+    nombre_colegio = db.Column(db.String(220), default="")
+    nit = db.Column(db.String(40), default="")
+    dane = db.Column(db.String(40), default="")
+    rector = db.Column(db.String(160), default="")
+    rector_doc = db.Column(db.String(40), default="")
+    plan = db.Column(db.String(60), default="")
+    modalidad = db.Column(db.String(20), default="PRESENCIAL")
+    cuerpo_html = db.Column(db.Text, default="")
+    firma_rector = db.Column(db.Text, default="")
+    ip_firma = db.Column(db.String(60), default="")
+    fecha_firma = db.Column(db.String(30), default="")
+    asesor = db.Column(db.String(80), default="")
+    estado = db.Column(db.String(30), default="ACTIVO")
+    created_at = db.Column(db.String(30), default="")
+
+
 class PaginaLegal(db.Model):
     """Textos legales publicos editables desde Gerencia (modulos separados)."""
     __tablename__ = "paginas_legales"
@@ -3325,7 +3388,7 @@ def _staff_nav_items(path, rol=""):
     elif path.startswith("/cobranza") or rol == "Cobranza":
         items = [("/cobranza", "Dashboard"), ("/cobranza/contabilidad", "Contabilidad"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
     else:
-        items = [("/gerencia/hq", "Dashboard"), ("/gerencia/paginas-legales", "Paginas legales"), ("/backoffice/hub", "Tablero maestro"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
+        items = [("/gerencia/hq", "Dashboard"), ("/gerencia/plantilla-contrato", "Plantilla contrato"), ("/gerencia/contratos", "Contratos"), ("/gerencia/paginas-legales", "Paginas legales"), ("/backoffice/hub", "Tablero maestro"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
     html = []
     for href, lab in items:
         active = " is-active" if (path == href or path.startswith(href.rstrip("/") + "/")) else ""
@@ -9525,6 +9588,40 @@ def _seed_paginas_legales():
             pass
 
 
+
+_CONTRATO_DEFAULT = (
+    "<h2>CONTRATO DE LICENCIAMIENTO DE SOFTWARE EDUCATIVO</h2>"
+    "<p>Entre <b>PROCSIS</b> (plataforma EduTrack) y la institucion educativa "
+    "<b>{{NOMBRE_COLEGIO}}</b>, NIT <b>{{NIT_COLEGIO}}</b>, DANE <b>{{DANE_COLEGIO}}</b>, "
+    "representada por <b>{{NOMBRE_RECTOR}}</b> (doc. {{DOC_RECTOR}}), plan <b>{{PLAN}}</b>, "
+    "fecha <b>{{FECHA}}</b>, modalidad <b>{{MODALIDAD}}</b>.</p>"
+    "<p>Firmado en {{CIUDAD}} el {{FECHA}} {{HORA}} (hora legal Colombia). IP: {{IP}}. Asesor: {{ASESOR}}.</p>"
+)
+
+
+def _get_plantilla_contrato():
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        row = ContratoPlantilla.query.filter_by(activo=True).order_by(ContratoPlantilla.id.desc()).first()
+        if row and (row.cuerpo or "").strip():
+            return row.cuerpo
+    except Exception:
+        pass
+    return _CONTRATO_DEFAULT
+
+
+def _fusion_contrato(tokens):
+    cuerpo = _get_plantilla_contrato()
+    for k, v in (tokens or {}).items():
+        cuerpo = cuerpo.replace("{{" + k + "}}", str(v if v is not None else "-"))
+    import re as _re
+    cuerpo = _re.sub(r"\{\{[A-Z0-9_]+\}\}", "-", cuerpo)
+    return cuerpo
+
+
 def _get_pagina_legal(codigo):
     """Devuelve (titulo, cuerpo_html) desde BD o default."""
     try:
@@ -9594,6 +9691,124 @@ def _legal_page_shell(titulo, cuerpo_html, activo_codigo=""):
         "</div></div>"
     )
     return page(titulo, body)
+
+
+
+_CONTRATO_DEFAULT = (
+    "CONTRATO DE LICENCIAMIENTO DE SOFTWARE EDUCATIVO (EduTrack / PROCSIS)\n\n"
+    "Entre PROCSIS, proveedor tecnológico de la plataforma EduTrack, y la institución educativa "
+    "{{NOMBRE_COLEGIO}}, identificada con NIT {{NIT_COLEGIO}} y código DANE {{DANE_COLEGIO}}, "
+    "representada legalmente por el/la señor(a) {{NOMBRE_RECTOR}}, se celebra el presente contrato "
+    "de licenciamiento del plan {{PLAN_NOMBRE}}.\n\n"
+    "Modalidad de venta: {{MODALIDAD}}.\n"
+    "Fecha del sistema: {{FECHA}}.\n"
+    "Código de institución en plataforma: {{CODIGO_INST}}.\n\n"
+    "CLAUSULAS\n"
+    "1. Objeto. PROCSIS otorga licencia de uso de EduTrack según el plan contratado.\n"
+    "2. Datos personales. Las partes dan cumplimiento a la Ley 1581 de 2012 (habeas data).\n"
+    "3. Vigencia. El servicio inicia a la activación en plataforma y se renueva según factura.\n"
+    "4. Soporte. Canales oficiales de PROCSIS / EduTrack.\n\n"
+    "Firma digital de aceptación del representante legal: {{NOMBRE_RECTOR}}.\n"
+    "Registro técnico: IP {{IP}} · Timestamp {{FECHA}}.\n"
+)
+
+
+def _seed_plantilla_contrato():
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        row = PlantillaContrato.query.filter_by(activo=True).first()
+        if not row:
+            row = PlantillaContrato(
+                nombre="Contrato licenciamiento EduTrack",
+                cuerpo=_CONTRATO_DEFAULT,
+                activo=True,
+            )
+            db.session.add(row)
+            db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _get_plantilla_contrato_texto():
+    try:
+        _seed_plantilla_contrato()
+        row = PlantillaContrato.query.filter_by(activo=True).order_by(PlantillaContrato.id.desc()).first()
+        if row and (row.cuerpo or "").strip():
+            return row.cuerpo
+    except Exception:
+        pass
+    return _CONTRATO_DEFAULT
+
+
+def _render_contrato_tokens(tpl, datos):
+    """Reemplaza {{TOKEN}} en la plantilla."""
+    out = tpl or ""
+    for k, v in (datos or {}).items():
+        out = out.replace("{{" + k + "}}", str(v or ""))
+    return out
+
+
+def _generar_pdf_contrato(contrato_id, texto, meta=None):
+    """Genera PDF simple del contrato. Devuelve ruta relativa o vacio."""
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
+        import os as _os
+        folder = _os.path.join("static", "contratos")
+        _os.makedirs(folder, exist_ok=True)
+        fname = "contrato_%s.pdf" % (contrato_id or "tmp")
+        fpath = _os.path.join(folder, fname)
+        c = canvas.Canvas(fpath, pagesize=letter)
+        width, height = letter
+        y = height - 2 * cm
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(2 * cm, y, "PROCSIS / EduTrack — Contrato de licenciamiento")
+        y -= 1 * cm
+        c.setFont("Helvetica", 9)
+        meta = meta or {}
+        for line in [
+            "Colegio: %s" % meta.get("nombre", ""),
+            "NIT: %s · DANE: %s" % (meta.get("nit", ""), meta.get("dane", "")),
+            "Rector: %s · Plan: %s · Modalidad: %s" % (
+                meta.get("rector", ""), meta.get("plan", ""), meta.get("modalidad", "")
+            ),
+            "Fecha: %s · IP: %s" % (meta.get("fecha", ""), meta.get("ip", "")),
+        ]:
+            c.drawString(2 * cm, y, line[:110])
+            y -= 0.45 * cm
+        y -= 0.3 * cm
+        c.setFont("Helvetica", 9)
+        for para in (texto or "").split("\n"):
+            # wrap simple
+            while len(para) > 95:
+                c.drawString(2 * cm, y, para[:95])
+                para = para[95:]
+                y -= 0.4 * cm
+                if y < 2 * cm:
+                    c.showPage()
+                    c.setFont("Helvetica", 9)
+                    y = height - 2 * cm
+            c.drawString(2 * cm, y, para[:110])
+            y -= 0.4 * cm
+            if y < 2 * cm:
+                c.showPage()
+                c.setFont("Helvetica", 9)
+                y = height - 2 * cm
+        c.save()
+        return "/" + fpath.replace("\\\\", "/")
+    except Exception as e:
+        try:
+            print("pdf contrato error:", e)
+        except Exception:
+            pass
+        return ""
 
 
 def _politica_page(titulo, cuerpo):
@@ -19608,15 +19823,25 @@ def ventas_comprar():
         correo = (request.form.get("correo") or "").strip()
         asesor = (request.form.get("asesor") or session.get("usuario") or "").strip()
         foto = request.files.get("logo_colegio")
+        rector_nombre = (request.form.get("rector_nombre") or rector or "").strip()
+        secretaria_nombre = (request.form.get("secretaria_nombre") or "").strip() or ("Secretaria " + (nombre[:40] if nombre else "IE"))
+        coord_nombre = (request.form.get("coord_nombre") or "").strip() or ("Coordinacion " + (nombre[:40] if nombre else "IE"))
+        base_u = (codigo or "ie").lower().replace(" ", "")[:20]
+        rector_usuario = (request.form.get("rector_usuario") or "").strip() or ("rector." + base_u)
+        secretaria_usuario = (request.form.get("secretaria_usuario") or "").strip() or ("secretaria." + base_u)
+        coord_usuario = (request.form.get("coord_usuario") or "").strip() or ("coord." + base_u)
+        clave_temporal = (request.form.get("clave_temporal") or "").strip() or "Colegio2026*"
+        modalidad = (request.form.get("modalidad") or "PRESENCIAL").strip().upper()
+        if modalidad not in ("ONLINE", "PRESENCIAL"):
+            modalidad = "PRESENCIAL"
+        firma_ok = (request.form.get("firma_acepta") or "") == "1"
         if not nombre or not codigo:
-            error = "Nombre y código de la institución son obligatorios."
-        elif not foto or not getattr(foto, "filename", ""):
-            error = "Debe adjuntar la foto / logo del colegio antes de activar el plan."
-        elif not (request.form.get("rector_usuario") or "").strip() or not (request.form.get("secretaria_usuario") or "").strip() or not (request.form.get("coord_usuario") or "").strip():
-            error = "Debe indicar usuario de Rectoría, Secretaría y Coordinación."
-        elif not (request.form.get("rector_nombre") or "").strip() or not (request.form.get("secretaria_nombre") or "").strip() or not (request.form.get("coord_nombre") or "").strip():
-            error = "Debe indicar el nombre completo del rector, secretaría y coordinación."
-        elif len((request.form.get("clave_temporal") or "").strip()) < 8:
+            error = "Nombre y codigo de la institucion son obligatorios."
+        elif not rector_nombre:
+            error = "Indique el nombre del rector / representante legal (paso Contacto o Usuarios)."
+        elif not firma_ok:
+            error = "Debe marcar la casilla de aceptacion y firma del contrato."
+        elif len(clave_temporal) < 8:
             error = "La clave temporal debe tener al menos 8 caracteres."
         else:
             try:
@@ -19720,12 +19945,12 @@ def ventas_comprar():
                         temp_pass = "Colegio2026*"
                     try:
                         pares = [
-                            ("Rectoría", (request.form.get("rector_usuario") or "").strip().lower(),
-                             (request.form.get("rector_nombre") or "").strip()),
-                            ("Secretaría", (request.form.get("secretaria_usuario") or "").strip().lower(),
-                             (request.form.get("secretaria_nombre") or "").strip()),
-                            ("Coordinación", (request.form.get("coord_usuario") or "").strip().lower(),
-                             (request.form.get("coord_nombre") or "").strip()),
+                            ("Rectoría", (rector_usuario or "").strip().lower(),
+                             (rector_nombre or "").strip()),
+                            ("Secretaría", (secretaria_usuario or "").strip().lower(),
+                             (secretaria_nombre or "").strip()),
+                            ("Coordinación", (coord_usuario or "").strip().lower(),
+                             (coord_nombre or "").strip()),
                         ]
                         for rol_u, uname, nom_completo in pares:
                             uname = "".join(ch for ch in uname if ch.isalnum() or ch in "._-")[:40]
@@ -19766,6 +19991,31 @@ def ventas_comprar():
                     )
                     n_fact = len(_r.get("facturas_creadas") or [])
                     creds_txt = (" · Usuarios: " + " / ".join(creds_creadas) + f" · clave temporal: <code>{temp_pass}</code>") if creds_creadas else ""
+                    try:
+                        _ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
+                        _fecha = ahora().strftime("%Y-%m-%d") if hasattr(ahora(), "strftime") else ""
+                        _hora = ahora().strftime("%H:%M:%S") if hasattr(ahora(), "strftime") else ""
+                        _tokens = {
+                            "NOMBRE_COLEGIO": nombre, "NIT_COLEGIO": nit, "DANE_COLEGIO": dane,
+                            "NOMBRE_RECTOR": rector_nombre, "DOC_RECTOR": (request.form.get("rector_doc") or "").strip(),
+                            "PLAN": plan_nom, "FECHA": _fecha, "HORA": _hora, "MODALIDAD": modalidad,
+                            "CIUDAD": ciudad or "Colombia", "IP": _ip, "ASESOR": asesor, "CODIGO": codigo,
+                        }
+                        db.session.add(ContratoInstitucion(
+                            institucion_id=getattr(inst, "id", 0) or 0, codigo_inst=codigo[:40],
+                            nombre_colegio=nombre[:220], nit=(nit or "")[:40], dane=(dane or "")[:40],
+                            rector=rector_nombre[:160], rector_doc=(request.form.get("rector_doc") or "")[:40],
+                            plan=(plan or plan_nom or "")[:60], modalidad=modalidad[:20],
+                            cuerpo_html=_fusion_contrato(_tokens), ip_firma=_ip[:60],
+                            fecha_firma=(_fecha + " " + _hora)[:30], asesor=(asesor or "")[:80],
+                            estado="ACTIVO", created_at=(_fecha + " " + _hora)[:30],
+                        ))
+                        db.session.commit()
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
                     ok = (
                         f"Institución <b>{nombre}</b> activada con plan <b>{plan_nom}</b> "
                         f"({_plan_label_estudiantes(lim_e)}, hasta {lim_s} sedes). "
@@ -19891,7 +20141,7 @@ def ventas_comprar():
           <label for="logo_colegio" style="display:block;border:1.5px dashed #d2d2d7;border-radius:16px;padding:28px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:12px">
             Arrastra o selecciona el logotipo del colegio aquí
           </label>
-          <input type="file" name="logo_colegio" id="logo_colegio" accept="image/*" required style="display:none" onchange="var l=document.querySelector('label[for=logo_colegio]');if(this.files[0])l.textContent='✓ '+this.files[0].name">
+          <input type="file" name="logo_colegio" id="logo_colegio" accept="image/*" style="display:none" onchange="var l=document.querySelector('label[for=logo_colegio]');if(this.files[0])l.textContent='✓ '+this.files[0].name">
           {geo_campos}
           <label>Sede principal</label>
           <input name="sede" placeholder="Principal" style="border-radius:12px;border:1px solid #d2d2d7">
@@ -19907,27 +20157,27 @@ def ventas_comprar():
         <p style="font-size:12px;color:#64748b;margin:0 0 12px">Se crearán con clave temporal. Al primer ingreso el sistema les pedirá cambiar la clave.</p>
 
         <label>Rector(a) — nombre completo *</label>
-        <input name="rector_nombre" required placeholder="Nombre del rector o rectora">
+        <input name="rector_nombre" placeholder="Nombre del rector o rectora">
         <label>Usuario de ingreso Rectoría *</label>
-        <input name="rector_usuario" required placeholder="Ej: rector.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+        <input name="rector_usuario" placeholder="Ej: rector.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
 
         <label>Secretaria(o) — nombre completo *</label>
-        <input name="secretaria_nombre" required placeholder="Nombre de secretaría académica">
+        <input name="secretaria_nombre" placeholder="Nombre de secretaría académica">
         <label>Usuario de ingreso Secretaría *</label>
-        <input name="secretaria_usuario" required placeholder="Ej: secretaria.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+        <input name="secretaria_usuario" placeholder="Ej: secretaria.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
 
         <label>Coordinador(a) — nombre completo *</label>
-        <input name="coord_nombre" required placeholder="Nombre de coordinación">
+        <input name="coord_nombre" placeholder="Nombre de coordinación">
         <label>Usuario de ingreso Coordinación *</label>
-        <input name="coord_usuario" required placeholder="Ej: coord.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+        <input name="coord_usuario" placeholder="Ej: coord.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
 
         <label>Clave temporal compartida (mín. 8 caracteres) *</label>
-        <input name="clave_temporal" required minlength="8" value="Colegio2026*" placeholder="La cambiarán al entrar">
+        <input name="clave_temporal" minlength="8" value="Colegio2026*" placeholder="La cambiarán al entrar">
 
         <label>Asesor</label>
         <input name="asesor" value="{session.get('usuario') or ''}">
         </div>
-        <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:8px">Confirmar y activar plan {plan_nom}</button>
+        <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:8px"><div style="margin-top:16px;padding:16px;border:1px solid rgba(0,0,0,.06);border-radius:16px;background:#fafafa"><h3 style="margin:0 0 10px;color:#002060;font-size:15px">Modalidad y contrato</h3><div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap"><label style="padding:10px 16px;border-radius:980px;background:#f5f5f7;font-size:13px;cursor:pointer"><input type="radio" name="modalidad" value="PRESENCIAL" checked> Presencial</label><label style="padding:10px 16px;border-radius:980px;background:#f5f5f7;font-size:13px;cursor:pointer"><input type="radio" name="modalidad" value="ONLINE"> Online</label></div><label style="font-size:12px;font-weight:600">Cedula del rector</label><input name="rector_doc" placeholder="CC representante legal" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;margin:6px 0 12px;box-sizing:border-box"><label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer"><input type="checkbox" name="firma_acepta" value="1" required style="margin-top:3px"><span>El rector acepta y firma digitalmente el contrato (hora legal Colombia + IP).</span></label></div><button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:12px">Confirmar y activar plan {plan_nom}</button>
       </form>
       <div style="margin-top:22px;padding-top:16px;border-top:1px solid #e2e8f0">
         <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57;font-weight:800">Confirmación · Planes disponibles</h3>
@@ -22499,6 +22749,210 @@ def gerencia_pqr_limpieza():
 
 
 
+
+
+
+@app.route("/gerencia/plantilla-contrato", methods=["GET", "POST"])
+def gerencia_plantilla_contrato():
+    if not requiere_gerencia():
+        return redirect("/backoffice")
+    try:
+        _seed_plantilla_contrato()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            row = PlantillaContrato.query.filter_by(activo=True).first()
+            if not row:
+                row = PlantillaContrato(activo=True)
+                db.session.add(row)
+            row.nombre = (request.form.get("nombre") or "Contrato EduTrack")[:120]
+            row.cuerpo = (request.form.get("cuerpo") or "").strip()
+            try:
+                row.updated_at = ahora().strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                row.updated_at = ""
+            row.updated_by = session.get("usuario") or ""
+            db.session.commit()
+            msg = "Plantilla contractual guardada."
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = str(e)[:120]
+    cuerpo = _get_plantilla_contrato_texto()
+    try:
+        row = PlantillaContrato.query.filter_by(activo=True).first()
+        nombre = (row.nombre if row else None) or "Contrato licenciamiento EduTrack"
+    except Exception:
+        nombre = "Contrato licenciamiento EduTrack"
+    body = (
+        '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
+        '<a href="/gerencia/hq" style="color:#86868b;font-size:13px">← Gerencia</a>'
+        '<h1 style="color:#002060;font-size:22px;margin:8px 0">Editor de plantilla contractual</h1>'
+        '<p style="color:#86868b;font-size:13px">Use tokens: '
+        "{{NOMBRE_COLEGIO}}, {{NIT_COLEGIO}}, {{DANE_COLEGIO}}, {{NOMBRE_RECTOR}}, "
+        "{{PLAN_NOMBRE}}, {{CODIGO_INST}}, {{MODALIDAD}}, {{FECHA}}, {{IP}}</p>"
+        + (('<div style="background:#ecfdf5;padding:10px;border-radius:10px;margin:10px 0">' + _esc(msg) + "</div>") if msg else "")
+        + (('<div style="background:#fef2f2;padding:10px;border-radius:10px;margin:10px 0">' + _esc(err) + "</div>") if err else "")
+        + '<form method="POST">'
+        '<label style="font-size:12px;font-weight:600">Nombre de la plantilla</label>'
+        '<input name="nombre" value="' + _esc(nombre) + '" style="width:100%;padding:12px;border-radius:12px;border:1px solid #d2d2d7;margin:6px 0 12px">'
+        '<label style="font-size:12px;font-weight:600">Texto del contrato</label>'
+        '<textarea name="cuerpo" rows="18" style="width:100%;padding:12px;border-radius:12px;border:1px solid #d2d2d7;font-family:ui-monospace,monospace;font-size:13px">'
+        + _esc(cuerpo) + "</textarea>"
+        '<button type="submit" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">'
+        "Guardar plantilla</button></form>"
+        '<p style="margin-top:16px"><a href="/gerencia/contratos" style="color:#005BEA">Ver contratos generados →</a></p>'
+        "</div>"
+    )
+    return page("Plantilla contractual", body)
+
+
+@app.route("/gerencia/contratos")
+def gerencia_contratos():
+    if not requiere_gerencia() and (session.get("rol") or "") not in ("Comercial", "Ventas", "Supervisor de Ventas"):
+        return redirect("/backoffice")
+    try:
+        db.create_all()
+        rows = ContratoColegio.query.order_by(ContratoColegio.id.desc()).limit(100).all()
+    except Exception:
+        rows = []
+    cards = []
+    for c in rows:
+        cards.append(
+            '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px;margin-bottom:10px">'
+            '<div style="font-weight:700;color:#002060">' + _esc(c.nombre_colegio or "") + "</div>"
+            '<div style="font-size:12px;color:#86868b">NIT ' + _esc(c.nit or "—")
+            + " · DANE " + _esc(c.dane or "—")
+            + " · Plan " + _esc(c.plan or "")
+            + " · " + _esc(c.modalidad or "")
+            + " · " + _esc(c.created_at or "") + "</div>"
+            '<div style="font-size:12px;margin-top:6px">Rector: ' + _esc(c.rector or "—")
+            + " · Asesor: " + _esc(c.asesor or "—") + "</div>"
+            + (
+                ('<a href="' + _esc(c.pdf_path) + '" target="_blank" style="display:inline-block;margin-top:8px;'
+                 'background:#005BEA;color:#fff;padding:8px 14px;border-radius:980px;font-size:12px;text-decoration:none">Descargar PDF</a>')
+                if c.pdf_path else ""
+            )
+            + "</div>"
+        )
+    body = (
+        '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
+        '<a href="/gerencia/hq" style="color:#86868b;font-size:13px">← Gerencia</a>'
+        '<h1 style="color:#002060;font-size:22px;margin:8px 0">Contratos de colegios</h1>'
+        '<p style="color:#86868b;font-size:13px">Generados al activar instituciones desde Ventas.</p>'
+        '<p><a href="/gerencia/plantilla-contrato" style="color:#005BEA">Editar plantilla contractual</a></p>'
+        + ("".join(cards) if cards else '<p style="color:#86868b">Aún no hay contratos.</p>')
+        + "</div>"
+    )
+    return page("Contratos colegios", body)
+
+
+
+@app.route("/gerencia/contrato-plantilla", methods=["GET", "POST"])
+def gerencia_contrato_plantilla():
+    if not requiere_gerencia():
+        return redirect("/backoffice")
+    msg = err = ""
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    if request.method == "POST":
+        try:
+            row = ContratoPlantilla.query.filter_by(activo=True).order_by(ContratoPlantilla.id.desc()).first()
+            if not row:
+                row = ContratoPlantilla(activo=True)
+                db.session.add(row)
+            row.nombre = (request.form.get("nombre") or "Contrato PROCSIS").strip()[:120]
+            row.cuerpo = (request.form.get("cuerpo") or "").strip() or _CONTRATO_DEFAULT
+            row.updated_by = session.get("usuario") or ""
+            try:
+                row.updated_at = ahora().strftime("%Y-%m-%d %H:%M") if hasattr(ahora(), "strftime") else ""
+            except Exception:
+                pass
+            db.session.commit()
+            msg = "Plantilla guardada."
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = str(e)[:160]
+    try:
+        row = ContratoPlantilla.query.filter_by(activo=True).order_by(ContratoPlantilla.id.desc()).first()
+    except Exception:
+        row = None
+    cuerpo = (row.cuerpo if row else None) or _CONTRATO_DEFAULT
+    nombre = (row.nombre if row else None) or "Contrato PROCSIS"
+    body = (
+        '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
+        '<a href="/gerencia/hq" style="color:#86868b;font-size:13px">← Gerencia</a>'
+        '<h1 style="color:#002060">Editor de plantilla contractual</h1>'
+        '<p style="color:#86868b;font-size:13px">Tokens: {{NOMBRE_COLEGIO}} {{NIT_COLEGIO}} {{DANE_COLEGIO}} '
+        "{{NOMBRE_RECTOR}} {{DOC_RECTOR}} {{PLAN}} {{FECHA}} {{HORA}} {{MODALIDAD}} {{CIUDAD}} {{IP}} {{ASESOR}}</p>"
+        + ((" <div style='background:#ecfdf5;padding:10px;border-radius:10px;color:#065f46'>" + _esc(msg) + "</div>") if msg else "")
+        + ((" <div style='background:#fef2f2;padding:10px;border-radius:10px;color:#991b1b'>" + _esc(err) + "</div>") if err else "")
+        + '<form method="POST"><input name="nombre" value="' + _esc(nombre) + '" style="width:100%;padding:12px;border-radius:12px;border:1px solid #d2d2d7;margin-bottom:10px">'
+        '<textarea name="cuerpo" rows="16" style="width:100%;padding:12px;border-radius:12px;border:1px solid #d2d2d7;font-family:monospace">' + _esc(cuerpo) + "</textarea>"
+        '<button style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600">Guardar plantilla</button></form></div>'
+    )
+    return page("Plantilla contractual", body)
+
+
+@app.route("/gerencia/contratos")
+@app.route("/ventas/contratos")
+def lista_contratos_institucion():
+    if not session.get("usuario"):
+        return redirect("/backoffice")
+    try:
+        db.create_all()
+        rows = ContratoInstitucion.query.order_by(ContratoInstitucion.id.desc()).limit(200).all()
+    except Exception:
+        rows = []
+    cards = []
+    for c in rows:
+        cards.append(
+            '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px;margin-bottom:10px">'
+            '<b style="color:#002060">' + _esc(c.nombre_colegio or "") + "</b>"
+            '<div style="font-size:12px;color:#86868b">' + _esc(c.codigo_inst or "") + " · NIT " + _esc(c.nit or "")
+            + " · " + _esc(c.modalidad or "") + " · " + _esc(c.fecha_firma or "") + "</div>"
+            '<a href="/gerencia/contratos/' + str(c.id) + '" style="display:inline-block;margin-top:8px;background:#f5f5f7;color:#002060;'
+            'padding:8px 14px;border-radius:980px;font-size:12px;text-decoration:none;font-weight:600">Ver / PDF</a></div>'
+        )
+    body = (
+        '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
+        '<a href="/gerencia/hq" style="color:#86868b">← Gerencia</a> · '
+        '<a href="/gerencia/contrato-plantilla" style="color:#005BEA">Plantilla</a>'
+        '<h1 style="color:#002060">Contratos de colegios</h1>'
+        + ("".join(cards) if cards else "<p style='color:#86868b'>Aun no hay contratos.</p>")
+        + "</div>"
+    )
+    return page("Contratos", body)
+
+
+@app.route("/gerencia/contratos/<int:cid>")
+def contrato_detalle(cid):
+    if not session.get("usuario"):
+        return redirect("/backoffice")
+    try:
+        c = ContratoInstitucion.query.get(cid)
+    except Exception:
+        c = None
+    if not c:
+        return "No encontrado", 404
+    body = (
+        '<div style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
+        '<a href="/gerencia/contratos" style="color:#86868b">← Contratos</a>'
+        '<h1 style="color:#002060">Contrato #' + str(c.id) + "</h1>"
+        '<p style="font-size:13px;color:#86868b">' + _esc(c.nombre_colegio) + " · IP " + _esc(c.ip_firma) + " · " + _esc(c.fecha_firma) + "</p>"
+        '<div style="background:#fff;border-radius:16px;padding:24px;border:1px solid rgba(0,0,0,.06)">' + (c.cuerpo_html or "") + "</div>"
+        '<button onclick="window.print()" style="margin-top:16px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">Imprimir / Guardar PDF</button></div>'
+    )
+    return page("Contrato", body)
 
 
 @app.route("/gerencia/paginas-legales", methods=["GET", "POST"])
