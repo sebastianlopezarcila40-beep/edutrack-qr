@@ -8585,6 +8585,18 @@ def _seed_web_menu_defaults():
         except Exception:
             pass
     try:
+        try:
+            db.session.execute(text(
+                "UPDATE web_menu_items SET url='/ventas#planes-qr' "
+                "WHERE seccion='planes' AND etiqueta ILIKE '%Solo QR%' "
+                "AND (url='/ventas' OR url IS NULL OR url='')"
+            ))
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
         n = db.session.execute(text("SELECT COUNT(*) FROM web_menu_items")).scalar() or 0
         if int(n) > 0:
             return
@@ -8602,7 +8614,7 @@ def _seed_web_menu_defaults():
             ("soluciones_seg", "Módulo de Salida Segura", "/soluciones", 3),
             ("soluciones_seg", "Despacho de Rutas Escolares", "/soluciones", 4),
             ("planes", "Planes Institucionales Completos", "/ventas", 1),
-            ("planes", "Planes Solo QR", "/ventas", 2),
+            ("planes", "Planes Solo QR", "/ventas#planes-qr", 2),
             ("planes", "Tarifas de Lanzamiento", "/ventas", 3),
             ("planes", "Casos de Éxito", "/casos-exito", 4),
             ("ayuda", "Tutoriales para Profesores", "/ayuda", 1),
@@ -8663,6 +8675,7 @@ def _nav_public_html(active=""):
     )
     links_planes = _menu_links_html("planes") or (
         '<a class="dropdown-link" href="/ventas">Planes Institucionales Completos</a>'
+        '<a class="dropdown-link" href="/ventas#planes-qr">Planes Solo QR</a>'
         '<a class="dropdown-link" href="/casos-exito">Casos de Éxito</a>'
     )
     links_ayuda = _menu_links_html("ayuda") or (
@@ -9539,14 +9552,15 @@ def login():
 .corp-cta-card p{{margin:0 0 16px;opacity:.95;font-size:14px;line-height:1.45}}
 .corp-wa{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 18px;border-radius:999px;text-decoration:none}}
 .corp-cta-foot{{margin-top:14px;font-size:11px;opacity:.75;letter-spacing:.02em}}
-.corp-footer{{background:#0B2D57;color:#e2e8f0;padding:36px 20px 18px;margin-top:20px}}
-.corp-footer-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:24px}}
+.corp-footer{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.corp-footer-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:32px}}
 @media(max-width:800px){{.corp-footer-inner{{grid-template-columns:1fr}}}}
-.corp-footer-brand{{font-weight:800;font-size:18px;color:#fff;margin-bottom:10px}}
-.corp-footer a{{color:#93c5fd;text-decoration:none;display:block;margin:6px 0;font-size:13px}}
-.corp-footer h4{{margin:0 0 8px;color:#6ee7b7;font-size:14px}}
-.corp-footer p{{margin:4px 0;font-size:13px;color:#cbd5e1}}
-.corp-copy{{max-width:1100px;margin:20px auto 0;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);font-size:12px;color:#94a3b8;text-align:center}}
+.corp-footer-brand{{font-weight:600;font-size:15px;color:#f5f5f7;margin-bottom:12px;letter-spacing:-0.01em}}
+.corp-footer a{{color:#2997ff;text-decoration:none;display:block;margin:8px 0;font-size:13px;font-weight:500}}
+.corp-footer a:hover{{text-decoration:underline}}
+.corp-footer h4{{margin:0 0 12px;color:#f5f5f7;font-size:13px;font-weight:600;letter-spacing:-0.01em}}
+.corp-footer p{{margin:4px 0;font-size:13px;color:#a1a1a6;line-height:1.5}}
+.corp-copy{{max-width:1100px;margin:28px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6e6e73;text-align:center}}
 .login-page{{background:#f1f5f9!important}}
 .lp-content{{background:#f1f5f9}}
 </style>
@@ -9823,18 +9837,21 @@ def login():
     <div class="corp-footer-inner">
       <div>
         <div class="corp-footer-brand">EduTrack · PROCSIS</div>
+        <p style="margin:0 0 12px;line-height:1.5">Privacidad y protección de datos para instituciones educativas.</p>
         <a href="/legal">Privacidad y protección de datos</a>
         <a href="/cookies">Cookies</a>
       </div>
       <div>
         <h4>Contacto</h4>
         <p>En internet, a un clic de distancia.</p>
-        <p>{corp_email}</p>
+        <p style="margin-top:10px">{corp_email}</p>
         <p>{corp_tel}</p>
       </div>
       <div>
         <h4>Plataforma</h4>
         <p>Gestión académica multi-institucional para colegios de Colombia.</p>
+        <a href="/ventas" style="margin-top:10px">Ver planes</a>
+        <a href="/ventas#planes-qr">Planes Solo QR</a>
       </div>
     </div>
     <div class="corp-copy">© {anio} EduTrack · PROCSIS. Todos los derechos reservados.</div>
@@ -18677,7 +18694,13 @@ def portal_ventas():
         except Exception:
             fee_v = 0.0
         fee_html = _cop(fee_v) if fee_v > 0 else "Incluida / a cotizar"
-        es_qr = cod.startswith("qr") or (feats.get("linea") or "") == "qr"
+        es_qr = (
+            cod.startswith("qr")
+            or (feats.get("linea") or "") == "qr"
+            or "Solo QR" in str(feats.get("tagline") or "")
+            or str(feats.get("badge") or "").upper().startswith("QR")
+            or "SOLO QR" in str(feats.get("badge") or "").upper()
+        )
         tag_linea = (
             '<div class="pl-line">Solo QR · Acceso escolar</div>'
             if es_qr else
@@ -18766,9 +18789,24 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 .lv-cta{{background:#f5f5f7;padding:40px 16px;text-align:center}}
 .lv-cta h2{{color:#1d1d1f;margin:0 0 12px;font-weight:700}}
 .lv-cta button{{background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:500}}
-.lv-foot{{background:#f5f5f7;padding:28px 16px;font-size:13px;color:#6e6e73}}
-.lv-foot-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:20px}}
+/* Formulario captación estilo Apple */
+.form-container-apple{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background-color:#ffffff;padding:40px;border-radius:24px;box-shadow:0 4px 30px rgba(0,0,0,0.02);max-width:800px;margin:0 auto}
+.form-title-apple{font-size:24px;font-weight:700;color:#1d1d1f;letter-spacing:-0.015em;margin:0 0 8px}
+.form-subtitle-apple{font-size:14px;color:#86868b;margin:0 0 24px;line-height:1.45}
+.form-label-apple{font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:6px;display:block}
+.form-input-apple,.form-select-apple,.form-textarea-apple{width:100%;font-family:-apple-system,sans-serif;font-size:14px;background-color:#ffffff;border:1px solid #d2d2d7;border-radius:12px;padding:12px 16px;color:#1d1d1f;box-sizing:border-box;transition:border-color 0.2s ease,box-shadow 0.2s ease;margin:0}
+.form-input-apple:focus,.form-select-apple:focus,.form-textarea-apple:focus{outline:none;border-color:#005bea;box-shadow:0 0 0 4px rgba(0,91,234,0.1)}
+.btn-submit-apple-oval{font-family:-apple-system,sans-serif;font-size:14px;font-weight:600;color:#ffffff;background-color:#005bea;padding:14px 32px;border-radius:980px;border:none;cursor:pointer;display:inline-block;transition:background-color 0.2s cubic-bezier(0.25,1,0.5,1),transform 0.1s ease}
+.btn-submit-apple-oval:hover{background-color:#002060}
+.btn-submit-apple-oval:active{transform:scale(0.98)}
+@media(max-width:600px){.form-container-apple{padding:24px 18px}.form-container-apple form{grid-template-columns:1fr!important}}
+.lv-foot{{background:#1d1d1f;padding:40px 20px 24px;font-size:13px;color:#a1a1a6;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.lv-foot-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:28px}}
 @media(max-width:700px){{.lv-foot-in{{grid-template-columns:1fr}}}}
+.lv-foot a{{color:#2997ff;text-decoration:none;font-weight:500}}
+.lv-foot a:hover{{text-decoration:underline}}
+.lv-foot b{{color:#f5f5f7;font-weight:600}}
+.lv-foot .lv-foot-copy{{max-width:1080px;margin:24px auto 0;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);text-align:center;font-size:11px;color:#6e6e73}}
 .lv-wa{{position:fixed;right:16px;bottom:16px;background:#005BEA;color:#fff;padding:12px 18px;border-radius:980px;font-weight:500;text-decoration:none;box-shadow:0 8px 24px rgba(0,91,234,.25);z-index:50}}
 </style>
 <div class="lv">
@@ -18776,6 +18814,7 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
     <div class="brand">EduTrack <span>by {empresa}</span></div>
     <div>
       <a href="#planes">Planes</a>
+      <a href="#planes-qr">Solo QR</a>
       <a href="#beneficios">Beneficios</a>
       <a href="#contacto">Contacto</a>
       <a href="/pagar">Pagar factura</a>
@@ -18819,7 +18858,7 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
         <span style="background:#0B2D57;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px">Completo</span>
         <div style="color:#0f172a;font-size:14px;margin-top:8px;line-height:1.4"><b>EduTrack completo</b><br><span style="color:#64748b">Notas, boletines, QR y mas</span></div>
       </a>
-      <a href="#planes" style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:block;box-shadow:0 4px 14px rgba(15,23,42,.04)">
+      <a href="#planes-qr" style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:block;box-shadow:0 4px 14px rgba(15,23,42,.04)">
         <span style="background:#0284c7;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px">Solo QR</span>
         <div style="color:#0f172a;font-size:14px;margin-top:8px;line-height:1.4"><b>Acceso y asistencia</b><br><span style="color:#64748b">Escaneo, reportes y avisos</span></div>
       </a>
@@ -18864,35 +18903,35 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
     </div>
   </section>
 
-  <section class="lv-cta" id="contacto">
-    <h2>Recibe más información sobre EduTrack</h2>
-    <p style="color:#64748b">Deja tus datos y un asesor de {empresa} te orienta en planes e implementación.</p>
-    {"<div style='max-width:520px;margin:12px auto;background:#ecfdf5;color:#065f46;padding:12px;border-radius:10px;font-weight:700'>✓ Solicitud enviada. Un asesor te contactará pronto.</div>" if request.args.get("ok")=="1" else ""}
-    {"<div style='max-width:520px;margin:12px auto;background:#fef2f2;color:#991b1b;padding:12px;border-radius:10px'>"+(_esc(request.args.get("err") or ""))+"</div>" if request.args.get("err") else ""}
-    <form method="POST" action="/ventas/solicitud" style="max-width:560px;margin:16px auto;display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left">
+  <section class="lv-cta" id="contacto" style="background:#f5f5f7;padding:48px 16px">
+    <div class="form-container-apple">
+    <h2 class="form-title-apple">Recibe más información sobre EduTrack</h2>
+    <p class="form-subtitle-apple">Deja tus datos y un asesor de {empresa} te orienta en planes e implementación.</p>
+    {"<div style='max-width:100%;margin:0 0 16px;background:#ecfdf5;color:#065f46;padding:12px 14px;border-radius:12px;font-weight:600;font-size:14px'>✓ Solicitud enviada. Un asesor te contactará pronto.</div>" if request.args.get("ok")=="1" else ""}
+    <form method="POST" action="/ventas/solicitud" style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;text-align:left">
       <div style="grid-column:1/-1">
-        <label style="font-size:12px;font-weight:700;color:#334155">Nombre del colegio *</label>
-        <input name="colegio" required placeholder="I.E. o colegio" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+        <label class="form-label-apple">Nombre del colegio <span style="color:#86868b;font-weight:500">*</span></label>
+        <input class="form-input-apple" name="colegio" required placeholder="I.E. o colegio">
       </div>
       <div>
-        <label style="font-size:12px;font-weight:700;color:#334155">Tu nombre *</label>
-        <input name="nombre" required placeholder="Rector / contacto" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+        <label class="form-label-apple">Tu nombre <span style="color:#86868b;font-weight:500">*</span></label>
+        <input class="form-input-apple" name="nombre" required placeholder="Rector / contacto">
       </div>
       <div>
-        <label style="font-size:12px;font-weight:700;color:#334155">Celular / WhatsApp *</label>
-        <input name="telefono" required placeholder="300 000 0000" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+        <label class="form-label-apple">Celular / WhatsApp <span style="color:#86868b;font-weight:500">*</span></label>
+        <input class="form-input-apple" name="telefono" required placeholder="300 000 0000">
       </div>
       <div>
-        <label style="font-size:12px;font-weight:700;color:#334155">Correo *</label>
-        <input name="correo" type="email" required placeholder="correo@colegio.edu.co" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+        <label class="form-label-apple">Correo <span style="color:#86868b;font-weight:500">*</span></label>
+        <input class="form-input-apple" type="email" name="correo" required placeholder="correo@colegio.edu.co">
       </div>
       <div>
-        <label style="font-size:12px;font-weight:700;color:#334155">Municipio</label>
-        <input name="municipio" placeholder="Ciudad" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+        <label class="form-label-apple">Municipio</label>
+        <input class="form-input-apple" name="municipio" placeholder="Ciudad">
       </div>
       <div style="grid-column:1/-1">
-        <label style="font-size:12px;font-weight:700;color:#334155">Plan de interés</label>
-        <select name="plan_interes" style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px">
+        <label class="form-label-apple">Plan de interés</label>
+        <select class="form-select-apple" name="plan_interes">
           <option value="">Por definir</option>
           <option>EduTrack Básico</option>
           <option>EduTrack Estándar</option>
@@ -18904,29 +18943,39 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
         </select>
       </div>
       <div style="grid-column:1/-1">
-        <label style="font-size:12px;font-weight:700;color:#334155">Mensaje / qué necesitas</label>
-        <textarea name="mensaje" rows="2" placeholder="Ej: queremos demo, solo QR, multi-sede..." style="width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px"></textarea>
+        <label class="form-label-apple">Mensaje / qué necesitas</label>
+        <textarea class="form-textarea-apple" name="mensaje" rows="2" placeholder="Ej: queremos demo, solo QR, multi-sede..."></textarea>
       </div>
-      <div style="grid-column:1/-1;text-align:center">
-        <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:14px 22px;border-radius:10px;font-weight:800;cursor:pointer;font-size:15px">¡Envíame más información!</button>
+      <div style="grid-column:1/-1;text-align:center;margin-top:8px">
+        <button type="submit" class="btn-submit-apple-oval">¡Envíame más información!</button>
       </div>
     </form>
-    <p style="font-size:12px;color:#94a3b8;margin-top:12px">Al contactarnos autorizas el tratamiento de datos conforme a la política de {empresa} / EduTrack (Ley 1581 de 2012).</p>
+    <p style="font-size:11px;color:#86868b;margin-top:16px;line-height:1.45;text-align:center">Al contactarnos autorizas el tratamiento de datos conforme a la política de {empresa} / EduTrack (Ley 1581 de 2012).</p>
+    </div>
   </section>
 
   <footer class="lv-foot">
     <div class="lv-foot-in">
       <div>
-        <b style="color:#0B2D57">EduTrack</b> by {empresa}<br>
-        Planes · Básico · Estándar · Premium · Piloto<br>
-        Multi-inquilino · Colombia
+        <b>EduTrack</b> by {empresa}<br>
+        <span style="display:block;margin-top:8px;line-height:1.5;color:#a1a1a6">Planes académicos y Solo QR · Multi-inquilino · Colombia</span>
+        <span style="display:block;margin-top:6px;font-size:12px;color:#6e6e73">Básico · Estándar · Pro · Premium · QR Básico · QR Plus · QR Institucional</span>
       </div>
       <div>
-        <b>Ventas</b> {tel}<br>
-        {email}<br>
-        <a href="/login" style="color:#0B2D57">Portal colegios</a>
+        <b>Navegación</b><br>
+        <a href="#planes" style="display:block;margin-top:8px">Planes completos</a>
+        <a href="#planes-qr" style="display:block;margin-top:6px">Planes Solo QR</a>
+        <a href="#contacto" style="display:block;margin-top:6px">Contacto</a>
+        <a href="/login" style="display:block;margin-top:6px">Portal colegios</a>
+      </div>
+      <div>
+        <b>Ventas</b><br>
+        <span style="display:block;margin-top:8px">{tel}</span>
+        <span style="display:block;margin-top:4px">{email}</span>
+        <a href="{wa}" target="_blank" rel="noopener" style="display:block;margin-top:8px">WhatsApp ventas</a>
       </div>
     </div>
+    <div class="lv-foot-copy">© 2026 {empresa} · EduTrack. Todos los derechos reservados. · Ley 1581 de 2012</div>
   </footer>
   <a class="lv-wa" href="{wa}" target="_blank" rel="noopener">WhatsApp</a>
 </div>
@@ -31689,6 +31738,7 @@ def _seed_planes_comerciales():
             "vigencia": d.get("vigencia") or "",
             "nota_qr": d.get("nota_qr") or "",
             "badge": d.get("badge") or "PLAN",
+            "linea": d.get("linea") or ("qr" if str(d.get("codigo") or "").startswith("qr") else ""),
         }
         if force_this or not p.features_json:
             p.nombre = d["nombre"] or p.nombre
@@ -31733,6 +31783,24 @@ def _seed_planes_comerciales():
         p.activo = True
         if not p.max_sedes:
             p.max_sedes = 20
+        try:
+            _cod = (p.codigo or "").lower()
+            if _cod.startswith("qr") or (d.get("linea") or "") == "qr":
+                import json as _j2
+                _fx = {}
+                try:
+                    _fx = _j2.loads(p.features_json or "{}") or {}
+                except Exception:
+                    _fx = {}
+                if not isinstance(_fx, dict):
+                    _fx = {}
+                if _fx.get("linea") != "qr":
+                    _fx["linea"] = "qr"
+                    if not _fx.get("badge"):
+                        _fx["badge"] = d.get("badge") or "SOLO QR"
+                    p.features_json = _j2.dumps(_fx, ensure_ascii=False)
+        except Exception:
+            pass
     for extra in PlanComercial.query.all():
         if (extra.codigo or "").lower() not in codigos_ok:
             extra.activo = False
@@ -47864,12 +47932,14 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
 .pc-cta h2{{margin:0 0 10px;font-size:26px;color:#fff}}
 .pc-cta p{{margin:0 0 18px;opacity:.92}}
 .pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px}}
-.pc-foot{{background:#071a33;color:#94a3b8;padding:36px 20px 20px;font-size:13px}}
-.pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:24px}}
+.pc-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:32px}}
 @media(max-width:800px){{.pc-foot-in{{grid-template-columns:1fr}}}}
-.pc-foot h4{{margin:0 0 10px;color:#fff;font-size:14px}}
-.pc-foot a{{color:#93c5fd;display:block;margin:6px 0}}
-.pc-copy{{max-width:1120px;margin:20px auto 0;padding-top:14px;border-top:1px solid rgba(255,255,255,.1);text-align:center;font-size:12px}}
+.pc-foot h4{{margin:0 0 12px;color:#f5f5f7;font-size:13px;font-weight:600;letter-spacing:-0.01em}}
+.pc-foot a{{color:#2997ff;display:block;margin:8px 0;text-decoration:none;font-weight:500;font-size:13px}}
+.pc-foot a:hover{{text-decoration:underline}}
+.pc-foot p{{margin:0;line-height:1.55;color:#a1a1a6;font-size:13px}}
+.pc-copy{{max-width:1120px;margin:28px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);text-align:center;font-size:11px;color:#6e6e73}}
 </style>
 <div class="pc">
   <nav class="navbar-apple-glass">
