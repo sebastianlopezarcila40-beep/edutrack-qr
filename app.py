@@ -18274,10 +18274,16 @@ def ventas_panel():
         html = ""
         try:
             for L in LeadCRM.query.filter_by(etapa=etapa).order_by(LeadCRM.id.desc()).limit(limit).all():
+                et_label = (etapa or "CONTACTO").upper()
                 html += (
-                    f'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;'
-                    f'padding:8px 10px;margin-bottom:6px;font-size:12px">'
-                    f'<b>{L.colegio}</b><br><span style="color:#64748b">{L.rector or "—"} · {L.municipio or ""}</span></div>'
+                    f'<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:14px;'
+                    f'padding:12px;margin-bottom:8px;font-size:13px;font-family:-apple-system,sans-serif;'
+                    f'box-shadow:0 2px 8px rgba(0,0,0,.03)">'
+                    f'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
+                    f'<b style="color:#002060">{_esc(L.colegio)}</b>'
+                    f'<span style="font-size:10px;font-weight:600;background:rgba(0,91,234,.1);color:#005BEA;'
+                    f'padding:3px 8px;border-radius:980px;white-space:nowrap">{et_label}</span></div>'
+                    f'<div style="color:#86868b;margin-top:4px;font-size:12px">{_esc(L.rector or "—")} · {_esc(L.municipio or "")}</div></div>'
                 )
         except Exception:
             pass
@@ -18371,33 +18377,48 @@ def ventas_panel():
             fee = int(float(getattr(p, "fee_implementacion", 0) or 0))
             fee_txt = ((" · Impl. $ {:,.0f}".format(fee)).replace(",", ".")) if fee > 0 else ""
             nom = _esc(p.nombre or cod)
+            is_qr = ("qr" in (cod or "").lower())
             cards_activar.append(
-                '<div style="background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px;'
-                'border-top:4px solid #0B2D57">'
-                '<div style="font-weight:800;color:#0B2D57;font-size:15px">' + nom + '</div>'
-                '<div style="font-size:12px;color:#64748b;margin:4px 0">Código: <code>' + _esc(cod) + '</code></div>'
-                '<div style="font-size:14px;font-weight:700">' + precio_txt + fee_txt + '</div>'
-                '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">'
-                '<a href="/ventas/comprar?plan=' + _esc(cod) + '" style="background:#15803d;color:#fff;padding:9px 14px;'
-                'border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">Activar este plan</a>'
-                + ((' <a href="/ventas/preview-carnet-qr" style="background:#0B2D57;color:#fff;padding:9px 12px;'
-                'border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">Vista carné QR</a>')
-                if ("qr" in (cod or "").lower()) else "")
-                + '<a href="/ventas" style="background:#e2e8f0;color:#0B2D57;padding:9px 12px;border-radius:8px;'
-                'font-weight:700;font-size:12px;text-decoration:none">Ver precios</a></div></div>'
+                '<div class="plan-card" data-tipo="' + ('qr' if is_qr else 'inst') + '" '
+                'style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px 18px;'
+                'box-shadow:0 2px 10px rgba(0,0,0,.03);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">'
+                '<div style="font-weight:700;color:#002060;font-size:15px">' + nom + '</div>'
+                '<div style="font-size:12px;color:#86868b;margin:4px 0">' + _esc(cod) + '</div>'
+                '<div style="font-size:14px;font-weight:600;color:#1d1d1f;margin:8px 0 12px">' + precio_txt + fee_txt + '</div>'
+                '<a href="/ventas/comprar?plan=' + _esc(cod) + '" style="display:inline-block;background:#005BEA;color:#fff;'
+                'padding:10px 22px;border-radius:980px;font-weight:600;font-size:13px;text-decoration:none">Activar</a></div>'
             )
     except Exception as _ep:
         cards_activar = ['<p style="color:#b91c1c">Error planes: ' + _esc(str(_ep)[:100]) + '</p>']
     if not cards_activar:
         cards_activar = ['<p style="color:#b91c1c">No hay planes activos. Publíquelos en Gerencia → Planes.</p>']
     seccion_planes = (
-        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin:12px 0 16px">'
-        '<h2 style="margin:0 0 4px;font-size:14px;color:#0B2D57;font-weight:800;text-transform:uppercase">Planes · Activar colegio</h2>'
-        '<p style="margin:0 0 12px;font-size:12px;color:#64748b">Active el plan y registre la institución aquí. '
-        'Portal ventas / planes es solo catálogo de precios. <a href="/ventas/preview-carnet-qr" style="font-weight:800;color:#0B2D57">Vista previa carné plan QR →</a></p>'
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">'
+        '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:18px;margin:12px 0 16px;'
+        'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.03)">'
+        '<h2 style="margin:0 0 4px;font-size:14px;color:#002060;font-weight:700">Planes · Activar colegio</h2>'
+        '<p style="margin:0 0 12px;font-size:12px;color:#86868b">Elija el tipo de plan y active la institución en un clic.</p>'
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+        '<button type="button" class="plan-tab on" data-filter="inst" onclick="vpFilterPlans(this)" '
+        'style="border:0;cursor:pointer;padding:8px 16px;border-radius:980px;font-size:12px;font-weight:600;'
+        'background:#005BEA;color:#fff">Ver Planes Institucionales</button>'
+        '<button type="button" class="plan-tab" data-filter="qr" onclick="vpFilterPlans(this)" '
+        'style="border:0;cursor:pointer;padding:8px 16px;border-radius:980px;font-size:12px;font-weight:500;'
+        'background:#f5f5f7;color:#1d1d1f">Ver Planes Solo QR</button>'
+        '</div>'
+        '<div id="plan-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">'
         + "".join(cards_activar)
-        + '</div></div>'
+        + '</div>'
+        '<script>'
+        'function vpFilterPlans(btn){'
+        'document.querySelectorAll(".plan-tab").forEach(function(b){b.classList.remove("on");'
+        'b.style.background="#f5f5f7";b.style.color="#1d1d1f";b.style.fontWeight="500";});'
+        'btn.classList.add("on");btn.style.background="#005BEA";btn.style.color="#fff";btn.style.fontWeight="600";'
+        'var f=btn.getAttribute("data-filter");'
+        'document.querySelectorAll(".plan-card").forEach(function(c){'
+        'c.style.display=(c.getAttribute("data-tipo")===f)?"":"none";});}'
+        'document.querySelectorAll(".plan-card").forEach(function(c){'
+        'if(c.getAttribute("data-tipo")!=="inst")c.style.display="none";});'
+        '</script></div>'
     )
 
     from urllib.parse import quote
@@ -18439,7 +18460,7 @@ def ventas_panel():
   text-decoration:none;border:0;cursor:pointer;color:#fff;letter-spacing:.01em}}
 .funnel{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}}
 @media(max-width:800px){{.funnel{{grid-template-columns:1fr}}}}
-.funnel-col{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;min-height:140px}}
+.funnel-col{border-radius:20px !important;background:#f5f5f7 !important;padding:14px !important;{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;min-height:140px}}
 .funnel-col h3{{margin:0 0 10px;font-size:12px;color:#0B2D57;text-transform:uppercase;letter-spacing:.04em;font-weight:800}}
 .funnel-col .n{{font-size:18px;font-weight:800;color:#334155}}
 .kit{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:12px 0}}
@@ -18483,25 +18504,11 @@ def ventas_panel():
 
   {seccion_planes}
 
-  <div style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin:12px 0 16px">
-    <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE VENTAS / COMERCIAL · LEADS</div>
-    <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:12.5px;font-family:Segoe UI,Tahoma,sans-serif">
-        <tr style="background:#1e40af;color:#fff">
-          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">CÓDIGO LEAD</th>
-          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">COLEGIO</th>
-          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">RECTOR / REPRE</th>
-          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">TELÉFONO</th>
-          <th style="padding:8px 10px;text-align:left;border:1px solid #1e3a8a">ETAPA DE VENTA</th>
-        </tr>
-        {filas_leads}
-      </table>
-    </div>
-  </div>
+
 
   <div class="vp-actions">
-    <button type="button" onclick="document.getElementById('men-modal').classList.add('on')" style="background:#0B2D57">Validar Colegio MEN / DUE</button>
-    <a class="btn" href="/ventas/verificacion" style="background:#7c2d12;color:#fff;text-decoration:none">🕵️ Verificación de identidad · Rector</a>
+    <button type="button" onclick="document.getElementById('men-modal').classList.add('on')" style="background:#f5f5f7;color:#1d1d1f;border:0;padding:10px 18px;border-radius:980px;font-weight:500;font-size:13px;cursor:pointer">Validar Colegio MEN / DUE</button>
+    <a class="btn" href="/ventas/verificacion" style="background:#f5f5f7;color:#1d1d1f;text-decoration:none;padding:10px 18px;border-radius:980px;font-weight:500;font-size:13px">🕵️ Verificación de identidad · Rector</a>
     <form method="POST" style="display:inline;margin:0">
       <input type="hidden" name="accion" value="crear_link_demo">
       <input type="hidden" name="dias" value="15">
@@ -19257,14 +19264,36 @@ def ventas_comprar():
             "<label>Departamento</label><input name=\"departamento\" placeholder=\"Ej: Antioquia\">"
             "<label>Municipio / Ciudad</label><input name=\"ciudad\" placeholder=\"Ej: Medellín\">"
         )
-    li_in = "".join(f"<li>✅ {x}</li>" for x in incluidos)
-    li_ex = "".join(f"<li>❌ {x}</li>" for x in excluidos) if excluidos else "<li style='color:#64748b'>Ninguno relevante</li>"
+    _feat_map = {
+        "incluidos": "Incluidos en el plan", "excluidos": "No incluidos",
+        "tagline": "Propuesta de valor", "soporte": "Soporte prioritario",
+        "vigencia": "Vigencia del plan", "nota_qr": "Control de Porteria QR",
+        "badge": "Identificacion institucional", "asistencia": "Asistencia y retardos",
+        "notas": "SIEE y notas", "boletines": "Boletines PDF", "portal_padres": "Portal padres",
+        "auditoria": "Auditoria de notas", "horarios": "Horarios y carga academica",
+        "pqr": "PQR y mesa de ayuda", "multi": "Multi-sede",
+    }
+    def _feat_label(x):
+        s = str(x or "").strip()
+        low = s.lower().replace(" ", "_")
+        if low in _feat_map:
+            return _feat_map[low]
+        if s.lower() in ("incluidos", "excluidos", "tagline", "vigencia", "nota_qr", "badge", "soporte"):
+            return _feat_map.get(s.lower(), s)
+        return s
+    # Prefer commercial defaults if raw keys only
+    if incluidos and all(str(x).lower() in _feat_map or str(x).lower() in ("incluidos","excluidos","tagline","vigencia","nota_qr","badge","soporte") for x in incluidos):
+        incluidos = ["Control de Porteria QR", "Alertas de Retardo", "SIEE y Boletines PDF", "Soporte prioritario"]
+    if excluidos and all(len(str(x)) < 20 for x in excluidos):
+        excluidos = [ _feat_label(x) for x in excluidos ]
+    li_in = "".join(f"<li style='margin:4px 0'>✅ {_feat_label(x)}</li>" for x in incluidos)
+    li_ex = "".join(f"<li style='margin:4px 0'>❌ {_feat_label(x)}</li>" for x in excluidos) if excluidos else "<li style='color:#86868b'>Ninguno relevante</li>"
     body = f"""
 <style>
 .vc{{background:#f8fafc;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:24px}}
 .vc-wrap{{max-width:920px;margin:0 auto;display:grid;grid-template-columns:1.1fr .9fr;gap:16px}}
 @media(max-width:800px){{.vc-wrap{{grid-template-columns:1fr}}}}
-.vc-box{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px;box-shadow:0 12px 32px rgba(15,23,42,.06)}}
+.vc-box{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px;box-shadow:0 2px 16px rgba(0,0,0,.04)}}.vc input,.vc select{{border-radius:12px !important;border:1px solid #d2d2d7 !important}}.vc button[type=submit]{{border-radius:980px !important;background:#005BEA !important}}
 .vc-box h1{{margin:0 0 8px;color:#0B2D57;font-size:22px}}
 .vc-box h2{{margin:14px 0 8px;color:#0B2D57;font-size:15px}}
 .vc-box label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}}
@@ -19305,38 +19334,52 @@ def ventas_comprar():
       <p style="color:#64748b;font-size:13px">Complete los datos. <b>La foto/logo del colegio es obligatoria</b> antes de activar.</p>
       {"<div class='vc-err'>"+error+"</div>" if error else ""}
       {"<div class='vc-ok'>"+ok+"</div>" if ok else ""}
-      <form method="POST" enctype="multipart/form-data" id="form-activar-plan">
+      <form method="POST" enctype="multipart/form-data" id="form-activar-plan" style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
         <label><b>Plan a contratar *</b></label>
-        <select name="plan" required style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0B2D57;background:#fff"
+        <select name="plan" required style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;font-weight:600;color:#002060;background:#fff"
           onchange="if(this.value){{ window.location='/ventas/comprar?plan='+encodeURIComponent(this.value); }}">
           {opciones_plan}
         </select>
-        <p style="font-size:12px;color:#64748b;margin:6px 0 12px">Puede cambiar el plan aquí. Al elegir otro se actualiza la ficha de la izquierda.</p>
-        <label>Código institución *</label>
-        <input name="codigo" required placeholder="Ej: IE001">
-        <label>Nombre del colegio *</label>
-        <input name="nombre" required placeholder="Nombre oficial">
-        <label>Foto / logo del colegio * (JPG/PNG)</label>
-        <input type="file" name="logo_colegio" accept="image/*" required>
-        <label>NIT</label>
-        <input name="nit" placeholder="NIT">
-        <label>Código DANE</label>
-        <input name="dane" placeholder="12 dígitos">
-        <label>Rector / contacto</label>
-        <input name="rector">
-        <label>Teléfono</label>
-        <input name="telefono">
-        <label>Correo</label>
-        <input name="correo" type="email">
-        {geo_campos}
-        <label>Sede principal</label>
-        <input name="sede" placeholder="Principal">
-        <label>Periodos académicos del colegio *</label>
-        <select name="num_periodos" required>
-          <option value="3">3 periodos al año</option>
-          <option value="4">4 periodos al año</option>
-        </select>
-        <p style="font-size:12px;color:#64748b;margin:4px 0 10px">Define cuántos cortes de evaluación maneja la institución (SIEE).</p>
+        <p style="font-size:12px;color:#86868b;margin:6px 0 14px">Puede cambiar el plan aquí.</p>
+
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button type="button" id="vc-step1-btn" onclick="vcStep(1)" style="border:0;padding:8px 16px;border-radius:980px;background:#005BEA;color:#fff;font-weight:600;font-size:12px;cursor:pointer">1. Identidad</button>
+          <button type="button" id="vc-step2-btn" onclick="vcStep(2)" style="border:0;padding:8px 16px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;font-weight:500;font-size:12px;cursor:pointer">2. Contacto</button>
+        </div>
+
+        <div id="vc-step1">
+          <label>Nombre del colegio *</label>
+          <input name="nombre" required placeholder="Nombre oficial" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>Código institución *</label>
+          <input name="codigo" required placeholder="Ej: IE001" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>Código DANE</label>
+          <input name="dane" placeholder="12 dígitos" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>NIT</label>
+          <input name="nit" placeholder="NIT" style="border-radius:12px;border:1px solid #d2d2d7">
+          <button type="button" onclick="vcStep(2)" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;width:100%">Siguiente</button>
+        </div>
+
+        <div id="vc-step2" style="display:none">
+          <label>Rector / contacto</label>
+          <input name="rector" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>Teléfono</label>
+          <input name="telefono" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>Correo</label>
+          <input name="correo" type="email" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>Foto / logo del colegio * (JPG/PNG)</label>
+          <label for="logo_colegio" style="display:block;border:1.5px dashed #d2d2d7;border-radius:16px;padding:28px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:12px">
+            Arrastra o selecciona el logotipo del colegio aquí
+          </label>
+          <input type="file" name="logo_colegio" id="logo_colegio" accept="image/*" required style="display:none" onchange="var l=document.querySelector('label[for=logo_colegio]');if(this.files[0])l.textContent='✓ '+this.files[0].name">
+          {geo_campos}
+          <label>Sede principal</label>
+          <input name="sede" placeholder="Principal" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>Periodos académicos del colegio *</label>
+          <select name="num_periodos" required style="border-radius:12px;border:1px solid #d2d2d7;padding:12px;width:100%">
+            <option value="3">3 periodos al año</option>
+            <option value="4">4 periodos al año</option>
+          </select>
+          <p style="font-size:12px;color:#86868b;margin:4px 0 10px">Cortes de evaluación (SIEE).</p>
 
         <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0">
         <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Usuarios del colegio (obligatorio)</h3>
@@ -19362,7 +19405,8 @@ def ventas_comprar():
 
         <label>Asesor</label>
         <input name="asesor" value="{session.get('usuario') or ''}">
-        <button type="submit">Confirmar y activar plan {plan_nom}</button>
+        </div>
+        <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:8px">Confirmar y activar plan {plan_nom}</button>
       </form>
       <div style="margin-top:22px;padding-top:16px;border-top:1px solid #e2e8f0">
         <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57;font-weight:800">Confirmación · Planes disponibles</h3>
@@ -25004,7 +25048,7 @@ def ventas_verificacion_rector():
       <p style="font-size:12px;color:#64748b;margin:8px 0 4px">Si hay lista negra / OFAC / no es exitosa, debe elevar a Gerencia con motivo:</p>
       <textarea name="motivo_gerencia" rows="2" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px" placeholder="Ej. Coincidencia OFAC parcial; requiere visto bueno de Gerencia antes de vender"></textarea>
     </div>
-    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Verificar y registrar</button>
+    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700" style="background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Verificar y registrar</button>
   </form>
 </div>
 {r_html}
@@ -59847,7 +59891,19 @@ def paz_y_salvo(est_id=None):
 
 @app.route("/acudiente/autorizar-salida", methods=["GET", "POST"])
 def acudiente_autorizar_salida():
-    """Delegacion de salida con firma digital (IP, timestamp, hash SHA256)."""
+    """Delegacion de salida con firma digital (IP, timestamp, hash SHA256).
+<script>
+function vcStep(n){
+  var s1=document.getElementById('vc-step1'), s2=document.getElementById('vc-step2');
+  var b1=document.getElementById('vc-step1-btn'), b2=document.getElementById('vc-step2-btn');
+  if(!s1||!s2) return;
+  if(n===1){s1.style.display='';s2.style.display='none';
+    b1.style.background='#005BEA';b1.style.color='#fff';b2.style.background='#f5f5f7';b2.style.color='#1d1d1f';}
+  else {s1.style.display='none';s2.style.display='block';
+    b2.style.background='#005BEA';b2.style.color='#fff';b1.style.background='#f5f5f7';b1.style.color='#1d1d1f';}
+}
+</script>
+"""
     err = msg = ""
     eid = session.get("acu_est_id")
     e = Estudiante.query.get(eid) if eid else None
