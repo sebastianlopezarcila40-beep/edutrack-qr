@@ -47864,11 +47864,11 @@ def pagina_corporativa_procsis():
             t, d = line.split("|", 1)
         else:
             t, d = line, ""
-        cards_soft += f'<div class="pc-card"><div class="ico">✓</div><h3>{_esc(t.strip())}</h3><p>{_esc(d.strip())}</p></div>'
+        cards_soft += f'<div class="pc-card"><div class="ico" style="background:rgba(0,91,234,.06);color:#005BEA;border-radius:8px;font-size:16px">✓</div><h3>{_esc(t.strip())}</h3><p>{_esc(d.strip())}</p></div>'
     if not empresa_pts:
         empresa_pts = "Empresa colombiana de software educativo\nCumplimiento Ley 1581 de 2012\nImplementación y capacitación\nSoporte técnico continuo\nPlanes EduTrack y Solo QR\nInnovación que gestiona"
         empresa_pts = empresa_pts.replace("\\n", chr(10))
-    lis_emp = "".join(f"<li>{_esc(x.strip())}</li>" for x in (empresa_pts or "").replace("\\n", "\n").splitlines() if x.strip())
+    lis_emp = "".join(f'<div class="pc-emp-item">{_esc(x.strip())}</div>' for x in (empresa_pts or "").splitlines() if x.strip())
     btn1_t, btn2_t, btn3_t = _esc(btn1_t), _esc(btn2_t), _esc(btn3_t)
 
     # Forzar valores publicados desde Gerencia (siempre, aunque falle el try ORM)
@@ -47946,8 +47946,8 @@ def pagina_corporativa_procsis():
     globe_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0B2D57" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M12 2v20"/></svg>"""
     link_planes_nav = '<a href="/ventas">Planes</a>' if _puede_planes else ""
     link_planes_cta = (
-        f'<a href="/ventas">Ver planes</a>' if _puede_planes
-        else f'<a href="{wa_link}" target="_blank" rel="noopener">Solicitar información</a>'
+        f'<a class="pc-cta-primary" href="/ventas">Ver planes</a>' if _puede_planes
+        else f'<a class="pc-cta-primary" href="{wa_link}" target="_blank" rel="noopener">Solicitar información</a>'
     )
     link_planes_foot = '<a href="/ventas">Planes</a>' if _puede_planes else '<a href="/contacto">Contacto comercial</a>'
     body = f"""
@@ -47994,25 +47994,36 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
 .pc-btn-w{{background:#0B63CE;color:#fff}}
 .pc-btn-g{{background:#0B2D57;color:#fff}}
 .pc-btn-o{{background:#f5f5f7;color:#1d1d1f;border:1px solid rgba(0,0,0,.08)}}
-.pc-sec{{max-width:1120px;margin:0 auto;padding:48px 20px}}
-.pc-sec h2{{margin:0 0 8px;font-size:28px;color:#0B2D57;text-align:center}}
-.pc-sec .sub{{text-align:center;color:#64748b;margin:0 0 28px;font-size:15px}}
-.pc-grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
+.pc-sec{{max-width:1120px;margin:0 auto;padding:56px 20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.pc-sec h2{{margin:0 0 8px;font-size:28px;color:#002060;text-align:center;font-weight:700;letter-spacing:-.02em;padding-top:8px}}
+.pc-sec .sub{{text-align:center;color:#86868b;margin:0 0 28px;font-size:15px}}
+.pc-grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}}
 .pc-grid2{{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center}}
 @media(max-width:860px){{.pc-grid3,.pc-grid2{{grid-template-columns:1fr}}.pc-hero h1{{font-size:30px}}}}
-.pc-card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:22px 20px}}
-.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}}
-.pc-card h3{{margin:0 0 8px;font-size:17px;color:#0B2D57}}
-.pc-card p{{margin:0;font-size:14px;color:#475569;line-height:1.5}}
-.pc-band{{background:#f1f5f9;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}}
-.pc-stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center}}
+.pc-card{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px 20px;box-shadow:0 2px 12px rgba(0,0,0,.03)}}
+.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:rgba(0,91,234,.08);color:#005BEA;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;margin-bottom:12px}}
+.pc-card h3{{margin:0 0 8px;font-size:16px;color:#002060;font-weight:600;letter-spacing:-.01em}}
+.pc-card p{{margin:0;font-size:14px;color:#86868b;line-height:1.5}}
+.pc-band{{background:#f5f5f7;border-top:0;border-bottom:0}}
+.pc-stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
 @media(max-width:700px){{.pc-stats{{grid-template-columns:1fr 1fr}}}}
-.pc-stat b{{display:block;font-size:26px;color:#0B2D57}}
-.pc-stat span{{font-size:12px;color:#64748b;font-weight:600}}
-.pc-cta{{background:linear-gradient(135deg,#0B2D57,#1e3a8a);color:#fff;border-radius:20px;padding:36px 28px;text-align:center}}
-.pc-cta h2{{margin:0 0 10px;font-size:26px;color:#fff}}
-.pc-cta p{{margin:0 0 18px;opacity:.92}}
-.pc-cta a{{display:inline-block;background:#fff;color:#0B2D57;font-weight:800;padding:12px 20px;border-radius:999px;margin:4px}}
+.pc-stat b{{display:block;font-size:20px;color:#002060;font-weight:700;letter-spacing:-.02em}}
+.pc-stat span{{font-size:12px;color:#86868b;font-weight:500}}
+.pc-cta{{background:linear-gradient(145deg,#002060 0%,#0B2D57 55%,#0a3a78 100%);color:#fff;border-radius:24px;padding:36px 28px;text-align:center;box-shadow:0 12px 36px rgba(0,32,96,.2)}}
+.pc-cta h2{{margin:0 0 10px;font-size:24px;color:#fff;font-weight:700;letter-spacing:-.02em}}
+.pc-cta p{{margin:0 0 20px;opacity:.88;font-size:14px;line-height:1.5}}
+.pc-cta a{{display:inline-block;font-weight:600;padding:12px 24px;border-radius:980px;margin:4px;font-size:14px;text-decoration:none;transition:background .25s,transform .1s}}
+.pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{{background:#fff;color:#005BEA}}
+.pc-cta a:first-of-type:hover,.pc-cta a.pc-cta-primary:hover{{background:#f5f5f7}}
+.pc-cta a:not(:first-of-type),.pc-cta a.pc-cta-secondary{{background:rgba(255,255,255,.15);color:#fff;border:none}}
+.pc-cta a:not(:first-of-type):hover,.pc-cta a.pc-cta-secondary:hover{{background:rgba(255,255,255,.25)}}
+.pc-emp-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}
+@media(max-width:800px){{.pc-emp-grid{{grid-template-columns:1fr 1fr}}}}
+@media(max-width:500px){{.pc-emp-grid{{grid-template-columns:1fr}}}}
+.pc-emp-item{{background:#f5f5f7;border-radius:16px;padding:18px 16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;color:#1d1d1f;line-height:1.45;border:0}}
+.pc-soft-row{{background:#f5f5f7;border:0;border-radius:12px;padding:16px 18px;margin-bottom:10px;box-shadow:none}}
+.pc-soft-row h3{{margin:0 0 4px;color:#002060;font-size:15px;font-weight:600}}
+.pc-soft-row p{{margin:0;color:#86868b;font-size:13px}}
 .pc-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:32px}}
 @media(max-width:800px){{.pc-foot-in{{grid-template-columns:1fr}}}}
@@ -48062,11 +48073,11 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
     <h2>{nos_tit}</h2>
     <p class="sub">{nos_txt}</p>
     <div class="pc-grid3">
-      <div class="pc-card"><div class="ico">🎯</div><h3>Propósito</h3>
+      <div class="pc-card"><div class="ico">◉</div><h3>Propósito</h3>
         <p>Que cada institución tenga control académico y administrativo sin complicaciones técnicas innecesarias.</p></div>
-      <div class="pc-card"><div class="ico">🏛️</div><h3>Enfoque institucional</h3>
+      <div class="pc-card"><div class="ico">▣</div><h3>Enfoque institucional</h3>
         <p>Roles de rectoría, coordinación, secretaría y docentes, con paneles limpios y permisos claros.</p></div>
-      <div class="pc-card"><div class="ico">🇨🇴</div><h3>Hecho para Colombia</h3>
+      <div class="pc-card"><div class="ico">⬡</div><h3>Hecho para Colombia</h3>
         <p>SIEE, boletines, reportes de reprobación y lenguaje alineados al contexto escolar del país.</p></div>
     </div>
   </section>
@@ -48084,11 +48095,11 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
     <h2>Servicios</h2>
     <p class="sub">Más que una licencia: implementación, capacitación y continuidad operativa.</p>
     <div class="pc-grid3">
-      <div class="pc-card"><div class="ico">🚀</div><h3>Implementación</h3>
+      <div class="pc-card"><div class="ico">⚙</div><h3>Implementación</h3>
         <p>Alta del colegio, usuarios base, configuración de grados, materias y primeros reportes.</p></div>
-      <div class="pc-card"><div class="ico">📚</div><h3>Capacitación</h3>
+      <div class="pc-card"><div class="ico">▤</div><h3>Capacitación</h3>
         <p>Entrenamiento a secretaría, coordinación y docentes para uso diario de planillas e informes.</p></div>
-      <div class="pc-card"><div class="ico">🛠️</div><h3>Soporte continuo</h3>
+      <div class="pc-card"><div class="ico">☎</div><h3>Soporte continuo</h3>
         <p>Canales de atención, PQR y acompañamiento cuando el colegio más lo necesita.</p></div>
     </div>
   </section>
@@ -48097,22 +48108,22 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
     <p class="sub">Plataforma académica multi-institucional con reportes de coordinación y portal de estudiantes.</p>
     <div class="pc-grid2">
       <div>
-        <div class="pc-card" style="margin-bottom:12px"><h3>Gestión académica</h3>
+        <div class="pc-soft-row"><h3>Gestión académica</h3>
           <p>Notas, asistencia, boletines, horarios, matrícula y seguimiento por roles.</p></div>
-        <div class="pc-card" style="margin-bottom:12px"><h3>Coordinación</h3>
+        <div class="pc-soft-row"><h3>Coordinación</h3>
           <p>Reprobación por niveles, cuadro de honor, rendimiento por salón, docente y área.</p></div>
-        <div class="pc-card"><h3>Operación segura</h3>
+        <div class="pc-soft-row"><h3>Operación segura</h3>
           <p>Multi-inquilino, auditoría y buenas prácticas de protección de datos (Ley 1581).</p></div>
       </div>
       <div class="pc-cta">
         <h2>{cta_tit}</h2>
         <p>{cta_txt}</p>
         {link_planes_cta}
-        <a href="{wa_link}" target="_blank" rel="noopener">WhatsApp comercial</a>
+        <a class="pc-cta-secondary" href="{wa_link}" target="_blank" rel="noopener">WhatsApp comercial</a>
       </div>
     </div>
   </section>
-    <section class="pc-sec" id="caracteristicas-software" style="background:#f8fafc">
+    <section class="pc-sec" id="caracteristicas-software" style="background:#f8fafc;padding-top:56px">
     <h2>Características del software</h2>
     <p class="sub">EduTrack by PROCSIS — lo que incluye la plataforma</p>
     <div class="pc-grid3">
@@ -48122,10 +48133,8 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
   <section class="pc-sec" id="empresa-procsis">
     <h2>Características de la empresa</h2>
     <p class="sub">Por qué instituciones confían en PROCSIS</p>
-    <div class="pc-card" style="max-width:720px;margin:0 auto">
-      <ul style="margin:0;padding-left:20px;color:#334155;line-height:1.8;font-size:15px">
-        {lis_emp}
-      </ul>
+    <div class="pc-emp-grid">
+      {lis_emp}
     </div>
   </section>
   <section class="pc-sec" id="productos-procsis">
@@ -48134,27 +48143,59 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
     <div class="pc-grid3">
       {"".join(
         f'''<div class="pc-card">
-          {f'<img src="{_esc(p.imagen)}" style="width:100%;border-radius:10px;margin-bottom:10px;max-height:160px;object-fit:cover">' if p.imagen else ''}
-          <span style="display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:{'#dcfce7;color:#166534' if p.estado=='Disponible' else ('#fef3c7;color:#92400e' if p.estado=='En desarrollo' else '#dbeafe;color:#1e40af')};margin-bottom:8px">{_esc(p.estado)}</span>
+          {f'<img src="{_esc(p.imagen)}" style="width:100%;border-radius:12px;margin-bottom:10px;max-height:160px;object-fit:cover">' if p.imagen else '<div class="ico">▣</div>'}
+          <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,91,234,.08);color:#005BEA;margin-bottom:8px">{_esc(p.estado)}</span>
           <h3>{_esc(p.nombre)}</h3><p>{_esc(p.descripcion)}</p></div>'''
         for p in _productos_pub
-      ) or '<p style="color:#64748b">Próximamente más información sobre nuestros productos.</p>'}
+      ) or '''
+      <div class="pc-card">
+        <div class="ico">▣</div>
+        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,91,234,.08);color:#005BEA;margin-bottom:10px">Disponible</span>
+        <h3>EduTrack Core</h3>
+        <p>Plataforma de gestión académica integral. Módulos de notas SIEE, generación de boletines en PDF, pre-matrícula SIMAT y portal interactivo para docentes.</p>
+      </div>
+      <div class="pc-card">
+        <div class="ico">⬡</div>
+        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,91,234,.08);color:#005BEA;margin-bottom:10px">Disponible</span>
+        <h3>Portería y Asistencia QR</h3>
+        <p>Control de acceso perimetral automatizado. Registro en milisegundos, alertas de retardos (7:00 AM) y bloqueo de anti-suplantación en portería.</p>
+      </div>
+      <div class="pc-card">
+        <div class="ico">◉</div>
+        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,91,234,.08);color:#005BEA;margin-bottom:10px">Disponible</span>
+        <h3>Portal de Padres y Salida Segura</h3>
+        <p>Conectividad familiar en la nube. Firmas de autorización expresa, capturas de direcciones IP, marcas de tiempo inmutables y pasaporte de salud.</p>
+      </div>
+'''}
     </div>
   </section>
-  <section class="pc-sec" id="noticias-procsis" style="background:#f8fafc">
+<section class="pc-sec" id="noticias-procsis" style="background:#f8fafc;padding-top:56px">
     <h2>Noticias</h2>
     <p class="sub">Novedades de la empresa.</p>
     <div class="pc-grid3">
       {"".join(
         f'''<div class="pc-card">
-          {f'<img src="{_esc(n.imagen)}" style="width:100%;border-radius:10px;margin-bottom:10px;max-height:160px;object-fit:cover">' if n.imagen else ''}
-          <span style="font-size:12px;color:#94a3b8">{_esc(n.fecha)}</span>
+          {f'<img src="{_esc(n.imagen)}" style="width:100%;border-radius:12px;margin-bottom:10px;max-height:160px;object-fit:cover">' if n.imagen else '<div class="ico">◆</div>'}
+          <span style="font-size:12px;color:#86868b">{_esc(n.fecha)}</span>
           <h3>{_esc(n.titulo)}</h3><p>{_esc(n.cuerpo)[:220]}{'…' if len(n.cuerpo or '')>220 else ''}</p></div>'''
         for n in _noticias_pub
-      ) or '<p style="color:#64748b">Aún no hay noticias publicadas.</p>'}
+      ) or '''
+      <div class="pc-card">
+        <div class="ico">⚙</div>
+        <span style="font-size:12px;color:#86868b">Actualización</span>
+        <h3>Despliegue de la versión v2.6.0 en producción</h3>
+        <p>Implementamos con éxito el nuevo entorno de cifrado AES-256 para reportes de asistencia judicial y la bitácora modular de memos de talento humano.</p>
+      </div>
+      <div class="pc-card">
+        <div class="ico">◆</div>
+        <span style="font-size:12px;color:#86868b">Alianza</span>
+        <h3>Alianza piloto para la transición segura</h3>
+        <p>PROCSIS habilita el periodo de empalme a costo $0 para instituciones educativas con contratos vigentes en plataformas tradicionales.</p>
+      </div>
+'''}
     </div>
   </section>
-  <footer class="pc-foot">
+<footer class="pc-foot">
     <div class="pc-foot-in">
       <div>
         <h4>{brand_nom}</h4>
@@ -60081,7 +60122,7 @@ def gerencia_alianzas_clientes():
     rows = []
     for it in items:
         rows.append(
-            "<tr><td>%s</td><td><img src='%s' style='height:36px;object-fit:contain;filter:grayscale(100%%);opacity:.7'></td>"
+            "<tr><td>%s</td><td><img src='%s' style='height:36px;object-fit:contain;opacity:.85'></td>"
             "<td>%s</td><td><form method='POST'><input type='hidden' name='accion' value='borrar'>"
             "<input type='hidden' name='id' value='%s'><button type='submit'>Quitar</button></form></td></tr>"
             % (_esc(it.nombre), _esc(it.logo_path or ""), _esc(it.url or "—"), it.id)
@@ -60144,9 +60185,9 @@ def _html_carrusel_clientes():
             "Pronto publicaremos aquí los escudos de las instituciones aliadas. "
             "Gerencia puede cargarlos en <b>Gestionar alianzas y clientes</b>."
             "</p></section>"
-            "<style>.cli-strip{padding:48px 16px;background:#f8fafc;text-align:center}"
-            ".cli-kicker{margin:0 0 8px;font-size:14px;letter-spacing:2px;font-weight:700;color:#3b82f6;text-transform:uppercase}"
-            ".cli-title{margin:0 0 16px;font-size:1.75rem;font-weight:800;color:#0B2D57}</style>"
+            "<style>.cli-strip{padding:48px 16px;background:#f5f5f7;text-align:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}"
+            ".cli-kicker{margin:0 0 8px;font-size:12px;letter-spacing:.08em;font-weight:600;color:#86868b;text-transform:uppercase}"
+            ".cli-title{margin:0 0 16px;font-size:1.75rem;font-weight:700;color:#002060}</style>"
         )
     logos = []
     for it in items:
@@ -60158,20 +60199,19 @@ def _html_carrusel_clientes():
         )
     if not logos:
         return ""
-    track = "".join(logos * 2)
+    track = "".join(logos)
     return (
         '<section class="cli-strip"><p class="cli-kicker">PARA NOSOTROS NUESTROS CLIENTES SON PRIMERO</p>'
         '<h2 class="cli-title">Algunos de nuestros clientes</h2>'
         '<div class="cli-viewport"><div class="cli-track">' + track + "</div></div></section>"
-        "<style>.cli-strip{padding:48px 16px 56px;background:#f8fafc;text-align:center;overflow:hidden}"
-        ".cli-kicker{margin:0 0 8px;font-size:14px;letter-spacing:2px;font-weight:700;color:#3b82f6;text-transform:uppercase}"
-        ".cli-title{margin:0 0 28px;font-size:1.75rem;font-weight:800;color:#0B2D57}"
-        ".cli-viewport{overflow:hidden;max-width:1100px;margin:0 auto}"
-        ".cli-track{display:flex;gap:40px;align-items:center;width:max-content;animation:cli-scroll 32s linear infinite}"
+        "<style>.cli-strip{padding:48px 16px 56px;background:#f5f5f7;text-align:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}"
+        ".cli-kicker{margin:0 0 8px;font-size:12px;letter-spacing:.08em;font-weight:600;color:#86868b;text-transform:uppercase}"
+        ".cli-title{margin:0 0 28px;font-size:1.75rem;font-weight:700;color:#002060;letter-spacing:-.02em}"
+        ".cli-viewport{max-width:1100px;margin:0 auto;padding:0 12px}"
+        ".cli-track{display:flex;flex-wrap:wrap;gap:40px;align-items:center;justify-content:center}"
         ".cli-logo{flex:0 0 auto;width:120px;height:80px;display:flex;align-items:center;justify-content:center}"
-        ".cli-logo img{max-width:120px;max-height:72px;object-fit:contain;filter:grayscale(100%);opacity:.55;transition:.25s}"
-        ".cli-logo:hover img{filter:grayscale(0%);opacity:1}"
-        "@keyframes cli-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>"
+        ".cli-logo img{max-width:120px;max-height:72px;object-fit:contain;filter:none;opacity:.85;transition:opacity .25s ease,transform .25s ease}"
+        ".cli-logo:hover img{opacity:1;transform:scale(1.04)}</style>"
     )
 
 
