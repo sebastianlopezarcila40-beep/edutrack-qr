@@ -1,3 +1,4 @@
+
 # app.py completo con:
 # - Login conservado
 # - PIN corregido con SOPORTE_PASSWORD
@@ -1350,6 +1351,29 @@ class LoginBanner(db.Model):
     titulo = db.Column(db.String(160), default="")
     estado = db.Column(db.String(20), default="activo")  # activo | inactivo
     orden = db.Column(db.Integer, default=0)
+    creado_en = db.Column(db.String(40), default="")
+
+
+class WebMenuItem(db.Model):
+    """Enlaces del mega-menú público (Procsis, Soluciones, Planes, Ayuda) — editable desde Gerencia."""
+    __tablename__ = "web_menu_items"
+    id = db.Column(db.Integer, primary_key=True)
+    seccion = db.Column(db.String(40), default="procsis")  # procsis | soluciones_ges | soluciones_seg | planes | ayuda
+    etiqueta = db.Column(db.String(120), default="")
+    url = db.Column(db.String(255), default="#")
+    orden = db.Column(db.Integer, default=0)
+    activo = db.Column(db.Boolean, default=True)
+
+
+class CasoExito(db.Model):
+    """Casos de éxito públicos — editable desde Gerencia."""
+    __tablename__ = "casos_exito"
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(200), default="")
+    resumen = db.Column(db.Text, default="")
+    institucion = db.Column(db.String(160), default="")
+    orden = db.Column(db.Integer, default=0)
+    activo = db.Column(db.Boolean, default=True)
     creado_en = db.Column(db.String(40), default="")
 
 
@@ -8546,9 +8570,107 @@ def _html_lideres_login():
 
 
 
+def _seed_web_menu_defaults():
+    """Crea items por defecto del mega-menú si la tabla está vacía."""
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS web_menu_items ("
+            "id SERIAL PRIMARY KEY, seccion VARCHAR(40) DEFAULT 'procsis', etiqueta VARCHAR(120) DEFAULT '', "
+            "url VARCHAR(255) DEFAULT '#', orden INTEGER DEFAULT 0, activo BOOLEAN DEFAULT TRUE)"
+        ))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        n = db.session.execute(text("SELECT COUNT(*) FROM web_menu_items")).scalar() or 0
+        if int(n) > 0:
+            return
+        defaults = [
+            ("procsis", "¿Qué es Procsis?", "/procsis", 1),
+            ("procsis", "Infraestructura en la Nube", "/tecnologia", 2),
+            ("procsis", "Sello de Auditoría Digital", "/procsis", 3),
+            ("procsis", "Seguridad Jurídica y Ciberseguridad", "/politicas/ciberseguridad", 4),
+            ("soluciones_ges", "Módulo de Notas SIEE", "/soluciones#notas", 1),
+            ("soluciones_ges", "Boletines Académicos", "/soluciones#notas", 2),
+            ("soluciones_ges", "Pre-Matrícula SIMAT", "/soluciones#admisiones", 3),
+            ("soluciones_ges", "Formularios de Matrícula", "/soluciones#admisiones", 4),
+            ("soluciones_seg", "Control de Portería QR", "/soluciones#asistencia", 1),
+            ("soluciones_seg", "Alertas Rojas (7:00 AM)", "/soluciones#asistencia", 2),
+            ("soluciones_seg", "Módulo de Salida Segura", "/soluciones", 3),
+            ("soluciones_seg", "Despacho de Rutas Escolares", "/soluciones", 4),
+            ("planes", "Planes Institucionales Completos", "/ventas", 1),
+            ("planes", "Planes Solo QR", "/ventas", 2),
+            ("planes", "Tarifas de Lanzamiento", "/ventas", 3),
+            ("planes", "Casos de Éxito", "/casos-exito", 4),
+            ("ayuda", "Tutoriales para Profesores", "/ayuda", 1),
+            ("ayuda", "Portal de Consulta para Padres", "/login", 2),
+            ("ayuda", "Radicar PQR", "/pqr", 3),
+            ("ayuda", "Soporte por WhatsApp", "/whatsapp", 4),
+        ]
+        for sec, et, url, ord_ in defaults:
+            db.session.execute(text(
+                "INSERT INTO web_menu_items (seccion, etiqueta, url, orden, activo) VALUES (:s,:e,:u,:o,TRUE)"
+            ), {"s": sec, "e": et, "u": url, "o": ord_})
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _menu_links_html(seccion):
+    """Lista de <a class='dropdown-link'> desde BD."""
+    try:
+        rows = db.session.execute(text(
+            "SELECT etiqueta, url FROM web_menu_items WHERE seccion=:s AND activo=TRUE ORDER BY orden ASC, id ASC"
+        ), {"s": seccion}).fetchall()
+        if rows:
+            return "".join(
+                '<a class="dropdown-link" href="%s">%s</a>' % (_esc(r[1] or "#"), _esc(r[0] or ""))
+                for r in rows
+            )
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return ""
+
+
 def _nav_public_html(active=""):
-    """Barra Apple glass + mega-menú. Sin Backoffice público (solo URL interna). v2026-09-17b"""
-    return """
+    """Barra Apple glass + mega-menú. Sin Backoffice público (solo URL interna). v2026-09-17c"""
+    try:
+        _seed_web_menu_defaults()
+    except Exception:
+        pass
+    links_procsis = _menu_links_html("procsis") or (
+        '<a class="dropdown-link" href="/procsis">¿Qué es Procsis?</a>'
+        '<a class="dropdown-link" href="/tecnologia">Infraestructura en la Nube</a>'
+        '<a class="dropdown-link" href="/politicas/ciberseguridad">Seguridad Jurídica y Ciberseguridad</a>'
+    )
+    links_ges = _menu_links_html("soluciones_ges") or (
+        '<a class="dropdown-link" href="/soluciones#notas">Módulo de Notas SIEE</a>'
+        '<a class="dropdown-link" href="/soluciones#notas">Boletines Académicos</a>'
+        '<a class="dropdown-link" href="/soluciones#admisiones">Pre-Matrícula SIMAT</a>'
+    )
+    links_seg = _menu_links_html("soluciones_seg") or (
+        '<a class="dropdown-link" href="/soluciones#asistencia">Control de Portería QR</a>'
+        '<a class="dropdown-link" href="/soluciones#asistencia">Alertas Rojas (7:00 AM)</a>'
+    )
+    links_planes = _menu_links_html("planes") or (
+        '<a class="dropdown-link" href="/ventas">Planes Institucionales Completos</a>'
+        '<a class="dropdown-link" href="/casos-exito">Casos de Éxito</a>'
+    )
+    links_ayuda = _menu_links_html("ayuda") or (
+        '<a class="dropdown-link" href="/ayuda">Tutoriales para Profesores</a>'
+        '<a class="dropdown-link" href="/pqr">Radicar PQR</a>'
+        '<a class="dropdown-link" href="/whatsapp">Soporte por WhatsApp</a>'
+    )
+    html = """
 <style>
 /* NAV-APPLE-V2 span-not-button */
 .navbar-apple-wrap{position:sticky;top:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
@@ -8634,51 +8756,29 @@ def _nav_public_html(active=""):
   <div class="dd-panel" data-panel="procsis">
     <div class="dropdown-column">
       <h4>Explorar PROCSIS</h4>
-      <a class="dropdown-link" href="/procsis">¿Qué es Procsis?</a>
-      <a class="dropdown-link" href="/tecnologia">Infraestructura en la Nube</a>
-      <a class="dropdown-link" href="/procsis">Sello de Auditoría Digital</a>
-      <a class="dropdown-link" href="/politicas/ciberseguridad">Seguridad Jurídica y Ciberseguridad</a>
-    </div>
-    <div class="dropdown-column">
-      <h4>Más de PROCSIS</h4>
-      <a class="dropdown-link" href="/quienes-somos">Quiénes somos</a>
-      <a class="dropdown-link" href="/casos-exito">Casos de éxito</a>
-      <a class="dropdown-link" href="/politicas">Políticas y datos</a>
-      <a class="dropdown-link" href="/contacto">Contacto comercial</a>
+      __LINKS_PROCSIS__
     </div>
   </div>
   <div class="dd-panel" data-panel="soluciones">
     <div class="dropdown-column">
       <h4>Gestión Escolar</h4>
-      <a class="dropdown-link" href="/soluciones#notas">Módulo de Notas SIEE</a>
-      <a class="dropdown-link" href="/soluciones#notas">Boletines Académicos</a>
-      <a class="dropdown-link" href="/soluciones#admisiones">Pre-Matrícula SIMAT</a>
-      <a class="dropdown-link" href="/soluciones#admisiones">Formularios de Matrícula</a>
+      __LINKS_GES__
     </div>
     <div class="dropdown-column">
       <h4>Seguridad Perimetral</h4>
-      <a class="dropdown-link" href="/soluciones#asistencia">Control de Portería QR</a>
-      <a class="dropdown-link" href="/soluciones#asistencia">Alertas Rojas (7:00 AM)</a>
-      <a class="dropdown-link" href="/soluciones">Módulo de Salida Segura</a>
-      <a class="dropdown-link" href="/soluciones">Despacho de Rutas Escolares</a>
+      __LINKS_SEG__
     </div>
   </div>
   <div class="dd-panel" data-panel="planes">
     <div class="dropdown-column">
       <h4>Planes y tarifas</h4>
-      <a class="dropdown-link" href="/ventas">Planes Institucionales Completos</a>
-      <a class="dropdown-link" href="/ventas">Planes Solo QR</a>
-      <a class="dropdown-link" href="/ventas">Tarifas de Lanzamiento</a>
-      <a class="dropdown-link" href="/casos-exito">Casos de Éxito</a>
+      __LINKS_PLANES__
     </div>
   </div>
   <div class="dd-panel" data-panel="ayuda">
     <div class="dropdown-column">
       <h4>Ayuda y soporte</h4>
-      <a class="dropdown-link" href="/ayuda">Tutoriales para Profesores</a>
-      <a class="dropdown-link" href="/login">Portal de Consulta para Padres</a>
-      <a class="dropdown-link" href="/pqr">Radicar PQR</a>
-      <a class="dropdown-link" href="/whatsapp">Soporte por WhatsApp</a>
+      __LINKS_AYUDA__
     </div>
   </div>
 </div>
@@ -8707,6 +8807,14 @@ def _nav_public_html(active=""):
 })();
 </script>
 """
+    return (
+        html
+        .replace("__LINKS_PROCSIS__", links_procsis)
+        .replace("__LINKS_GES__", links_ges)
+        .replace("__LINKS_SEG__", links_seg)
+        .replace("__LINKS_PLANES__", links_planes)
+        .replace("__LINKS_AYUDA__", links_ayuda)
+    )
 
 
 
@@ -8954,25 +9062,56 @@ def pagina_trabaja_con_nosotros():
 
 @app.route("/casos-exito")
 def pagina_casos_exito():
-    body = """
+    cards = ""
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS casos_exito ("
+            "id SERIAL PRIMARY KEY, titulo VARCHAR(200) DEFAULT '', resumen TEXT DEFAULT '', "
+            "institucion VARCHAR(160) DEFAULT '', orden INTEGER DEFAULT 0, activo BOOLEAN DEFAULT TRUE, "
+            "creado_en VARCHAR(40) DEFAULT '')"
+        ))
+        db.session.commit()
+        rows = db.session.execute(text(
+            "SELECT titulo, resumen, institucion FROM casos_exito WHERE activo=TRUE ORDER BY orden ASC, id DESC"
+        )).fetchall()
+        for r in rows:
+            inst = ('<div style="font-size:12px;color:#86868b;margin-bottom:6px">' + _esc(r[2] or "") + '</div>') if r[2] else ""
+            cards += (
+                '<div class="cx-card">' + inst +
+                '<h2>' + _esc(r[0] or "") + '</h2>'
+                '<p>' + _esc(r[1] or "") + '</p></div>'
+            )
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    if not cards:
+        cards = (
+            '<div class="cx-card"><h2>Implementación ordenada</h2>'
+            '<p>De listas en Excel a planillas SIEE, boletines y usuarios por rol.</p></div>'
+            '<div class="cx-card"><h2>Multi-sede y control</h2>'
+            '<p>Sedes urbana y rural con información centralizada.</p></div>'
+        )
+    body = f"""
 <style>
-.cx{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}
-.cx-hero{background:linear-gradient(135deg,#0B2D57,#2563eb);color:#fff;padding:48px 20px}
-.cx-wrap{max-width:900px;margin:0 auto;padding:24px 16px}
-.cx-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:14px}
-.cx-card h2{margin:0 0 8px;color:#0B2D57;font-size:18px}
-.cx-card p{margin:0;color:#475569;font-size:14px;line-height:1.5}
+.cx{{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#1d1d1f}}
+.cx-hero{{background:linear-gradient(135deg,#0B2D57,#0B63CE);color:#fff;padding:48px 20px}}
+.cx-wrap{{max-width:900px;margin:0 auto;padding:24px 16px}}
+.cx-card{{background:#f5f5f7;border:0;border-radius:20px;padding:22px;margin-bottom:14px;box-shadow:0 4px 30px rgba(0,0,0,.02)}}
+.cx-card h2{{margin:0 0 8px;color:#1d1d1f;font-size:18px;font-weight:600}}
+.cx-card p{{margin:0;color:#6e6e73;font-size:14px;line-height:1.5;font-weight:400}}
 </style>
 <div class="cx">
   <section class="cx-hero"><div style="max-width:900px;margin:0 auto">
-    <h1 style="margin:0 0 10px;font-size:30px;font-weight:800">Casos de éxito</h1>
-    <p style="margin:0;opacity:.93">Instituciones que digitalizan notas, roles, boletines y control multi-sede con EduTrack.</p>
+    <h1 style="margin:0 0 10px;font-size:30px;font-weight:700;letter-spacing:-.02em">Casos de éxito</h1>
+    <p style="margin:0;opacity:.93;font-weight:400">Instituciones que digitalizan con EduTrack · PROCSIS</p>
   </div></section>
   <div class="cx-wrap">
-    <div class="cx-card"><h2>Implementación ordenada</h2><p>De listas en Excel a planillas SIEE, boletines y usuarios por rol, con capacitación a secretaría y docentes.</p></div>
-    <div class="cx-card"><h2>Multi-sede y control</h2><p>Sedes urbana y rural con información centralizada sin mezclar datos entre colegios.</p></div>
-    <div class="cx-card"><h2>¿Quieres ser el próximo caso?</h2><p>Agenda una demo y evaluamos el plan adecuado.</p>
-    <p style="margin-top:12px"><a href="/eventos-virtuales#demo" style="background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:10px 14px;border-radius:10px">Agendar demo</a></p></div>
+    {cards}
+    <div class="cx-card"><h2>¿Quieres ser el próximo caso?</h2>
+    <p>Agenda una demo y evaluamos el plan adecuado.</p>
+    <p style="margin-top:12px"><a href="/ventas" style="background:#005BEA;color:#fff;text-decoration:none;font-weight:500;padding:10px 18px;border-radius:980px;display:inline-block">Ver planes</a></p></div>
   </div>
 </div>
 """
@@ -18568,67 +18707,71 @@ def portal_ventas():
     if not cards_qr:
         cards_qr = '<p class="lead">No hay planes Solo QR publicados.</p>'
 
+    # Botón seleccionar en cada tarjeta (Apple)
+    cards_full = cards_full.replace(
+        '<div class="pl-view">Solo consulta · Sin activación en línea</div>',
+        '<a class="pl-cta" href="' + wa + '" target="_blank" rel="noopener">Seleccionar plan</a>'
+    )
+    cards_qr = cards_qr.replace(
+        '<div class="pl-view">Solo consulta · Sin activación en línea</div>',
+        '<a class="pl-cta" href="' + wa + '" target="_blank" rel="noopener">Seleccionar plan</a>'
+    )
     body = f"""
 <style>
-.lv{{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a;background:#fff;margin:0}}
+.lv{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#1d1d1f;background:#fff;margin:0}}
 .lv *{{box-sizing:border-box}}
-.lv-top{{background:#0f172a;color:#94a3b8;font-size:12px;padding:6px 16px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}}
-.lv-nav{{background:#0B2D57;color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}}
-.lv-nav .brand{{font-weight:900;font-size:20px;letter-spacing:-.02em}}
-.lv-nav .brand span{{font-weight:600;font-size:12px;opacity:.85;margin-left:6px}}
-.lv-nav a{{color:#fff;text-decoration:none;font-size:13px;font-weight:600;margin-left:14px;opacity:.9}}
-.lv-nav .tel{{background:#020617;padding:8px 14px;border-radius:10px;font-size:13px}}
-.lv-hero{{background:linear-gradient(135deg,#0B2D57 0%,#0f172a 55%,#1e3a5f 100%);color:#fff;padding:36px 18px 48px;position:relative;overflow:hidden}}
-.lv-hero-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1.2fr .8fr;gap:24px;align-items:center}}
+.lv-nav{{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+padding:12px 28px;background:rgba(255,255,255,.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+border-bottom:1px solid rgba(0,0,0,.08)}}
+.lv-nav .brand{{font-weight:600;font-size:14px;color:#1d1d1f;letter-spacing:-.01em}}
+.lv-nav .brand span{{font-weight:400;opacity:.7;margin-left:6px;font-size:12px}}
+.lv-nav a{{color:#1d1d1f;text-decoration:none;font-size:14px;font-weight:400;margin-left:18px;opacity:.85}}
+.lv-nav a:hover{{opacity:1;color:#005BEA}}
+.lv-nav .tel{{background:#005BEA;color:#fff;padding:8px 18px;border-radius:980px;font-size:13px;font-weight:500;text-decoration:none}}
+.lv-hero{{background:linear-gradient(135deg,#0B2D57 0%,#0B63CE 55%,#1e3a8a 100%);color:#fff;padding:48px 18px 56px}}
+.lv-hero-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1.2fr .8fr;gap:28px;align-items:center}}
 @media(max-width:800px){{.lv-hero-in{{grid-template-columns:1fr}}}}
-.lv-hero h1{{font-size:clamp(28px,5vw,44px);line-height:1.05;margin:0 0 12px;font-weight:900}}
-.lv-hero h1 em{{font-style:normal;color:#fbbf24}}
-.lv-hero p{{font-size:16px;opacity:.9;max-width:480px;line-height:1.5}}
-.lv-hero .price{{font-size:28px;font-weight:900;margin:16px 0;color:#fbbf24}}
-.lv-box{{background:#fff;color:#0f172a;border-radius:16px;padding:18px;box-shadow:0 20px 40px rgba(0,0,0,.25)}}
-.lv-box h3{{margin:0 0 8px;font-size:18px;color:#0B2D57}}
-.lv-box input{{width:100%;padding:11px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px}}
-.lv-box button,.lv-box a.btn{{display:block;text-align:center;background:#0B2D57;color:#fff;padding:12px;border-radius:10px;font-weight:800;text-decoration:none;border:0;width:100%;margin-top:8px;cursor:pointer}}
-.lv-section{{max-width:1080px;margin:0 auto;padding:40px 16px}}
-.lv-section h2{{text-align:center;font-size:26px;color:#0B2D57;margin:0 0 8px}}
-.lv-section .lead{{text-align:center;color:#64748b;margin:0 0 28px;font-size:15px}}
-.lv-plans{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}}
-.pl-card{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06);position:relative;display:flex;flex-direction:column}}
-.pl-badge{{position:absolute;top:12px;right:12px;background:#0B2D57;color:#fff;font-size:10px;font-weight:800;padding:4px 8px;border-radius:6px;z-index:1}}
-.pl-img{{height:90px;border-radius:10px;overflow:hidden;margin-bottom:10px;background:#0B2D57}}
-.pl-img img{{width:100%;height:90px;object-fit:cover;display:block}}
-.pl-ph{{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff}}
-.pl-ph span{{font-size:11px;opacity:.8}}
-.pl-ph b{{font-size:16px}}
-.pl-card h3{{margin:0 0 6px;font-size:18px;color:#0B2D57}}
-.pl-price{{font-size:20px;font-weight:900;margin-bottom:10px}}
-.pl-price small{{font-size:12px;font-weight:600;color:#64748b}}
-.pl-card ul{{margin:0 0 14px;padding-left:18px;color:#475569;font-size:13px;line-height:1.55;flex:1}}
-.pl-cta{{display:block;text-align:center;background:#0B2D57;color:#fff;padding:11px;border-radius:10px;font-weight:800;text-decoration:none;font-size:13px}}
-.pl-cta:hover{{filter:brightness(1.08)}}
-.lv-bar{{background:#0f172a;color:#fff;border-radius:14px;padding:18px 20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;margin:20px 0}}
-.lv-bar b{{font-size:15px}}
+.lv-hero h1{{font-size:clamp(28px,5vw,44px);line-height:1.08;margin:0 0 14px;font-weight:700;letter-spacing:-.02em;color:#fff}}
+.lv-hero h1 em{{font-style:normal;color:#fff}}
+.lv-hero p{{font-size:16px;opacity:.92;max-width:480px;line-height:1.5;font-weight:400}}
+.lv-hero .price{{font-size:22px;font-weight:600;margin:16px 0;color:#fff;opacity:.95}}
+.lv-box{{background:#fff;color:#1d1d1f;border-radius:24px;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.18)}}
+.lv-box h3{{margin:0 0 8px;font-size:18px;font-weight:600;color:#1d1d1f}}
+.lv-box a.btn{{display:block;text-align:center;padding:12px 18px;border-radius:980px;font-weight:500;text-decoration:none;border:0;width:100%;margin-top:10px;font-size:14px}}
+.lv-box a.btn-wa{{background:#005BEA;color:#fff}}
+.lv-box a.btn-reg{{background:#f5f5f7;color:#1d1d1f}}
+.lv-section{{max-width:1080px;margin:0 auto;padding:48px 16px}}
+.lv-section h2{{text-align:center;font-size:28px;color:#1d1d1f;margin:0 0 8px;font-weight:700;letter-spacing:-.02em}}
+.lv-section .lead{{text-align:center;color:#86868b;margin:0 0 28px;font-size:15px;font-weight:400}}
+.lv-plans{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}}
+.pl-card{{background:#f5f5f7;border:0;border-radius:20px;padding:22px 18px;box-shadow:0 4px 30px rgba(0,0,0,.02);position:relative;display:flex;flex-direction:column}}
+.pl-badge{{position:absolute;top:14px;right:14px;background:#005BEA;color:#fff;font-size:10px;font-weight:600;padding:4px 10px;border-radius:980px;z-index:1}}
+.pl-img{{display:none}}
+.pl-card h3{{margin:0 0 8px;font-size:20px;color:#1d1d1f;font-weight:700}}
+.pl-line{{font-size:12px;color:#86868b;margin-bottom:8px}}
+.pl-price{{font-size:18px;font-weight:600;margin-bottom:6px;color:#1d1d1f}}
+.pl-price small{{font-size:12px;font-weight:400;color:#86868b}}
+.pl-old{{font-size:12px;color:#86868b;margin-bottom:12px;text-decoration:line-through}}
+.pl-card ul{{margin:0 0 16px;padding-left:18px;color:#6e6e73;font-size:13px;line-height:1.55;flex:1;list-style:disc}}
+.pl-cta{{display:block;text-align:center;background:#005BEA;color:#fff;padding:11px 16px;border-radius:980px;font-weight:500;text-decoration:none;font-size:13px;margin-top:auto}}
+.pl-cta:hover{{background:#0047c0}}
+.lv-bar{{background:#f5f5f7;color:#1d1d1f;border-radius:20px;padding:18px 20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;margin:20px 0}}
+.lv-bar b{{font-size:15px;font-weight:600}}
 .lv-grid2{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
 @media(max-width:700px){{.lv-grid2{{grid-template-columns:1fr}}}}
-.lv-info{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px}}
-.lv-info h3{{margin:0 0 8px;color:#0B2D57;font-size:16px}}
-.lv-info p{{margin:0 0 12px;color:#475569;font-size:14px;line-height:1.5}}
-.lv-info a{{color:#0B2D57;font-weight:800;text-decoration:none}}
-.lv-cta{{background:#f1f5f9;padding:40px 16px;text-align:center}}
-.lv-cta h2{{color:#0B2D57;margin:0 0 12px}}
-.lv-cta form{{max-width:560px;margin:16px auto}}
-.lv-cta input[type=email]{{flex:1;min-width:200px;padding:12px;border:1px solid #e2e8f0;border-radius:10px}}
-.lv-cta button{{background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800}}
-.lv-foot{{background:#e2e8f0;padding:28px 16px;font-size:13px;color:#475569}}
+.lv-info{{background:#f5f5f7;border:0;border-radius:20px;padding:18px}}
+.lv-info h3{{margin:0 0 8px;color:#1d1d1f;font-size:16px;font-weight:600}}
+.lv-info p{{margin:0 0 12px;color:#6e6e73;font-size:14px;line-height:1.5}}
+.lv-info a{{color:#005BEA;font-weight:500;text-decoration:none}}
+.lv-cta{{background:#f5f5f7;padding:40px 16px;text-align:center}}
+.lv-cta h2{{color:#1d1d1f;margin:0 0 12px;font-weight:700}}
+.lv-cta button{{background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:500}}
+.lv-foot{{background:#f5f5f7;padding:28px 16px;font-size:13px;color:#6e6e73}}
 .lv-foot-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:20px}}
 @media(max-width:700px){{.lv-foot-in{{grid-template-columns:1fr}}}}
-.lv-wa{{position:fixed;right:16px;bottom:16px;background:#16a34a;color:#fff;padding:12px 16px;border-radius:999px;font-weight:800;text-decoration:none;box-shadow:0 8px 24px rgba(22,163,74,.4);z-index:50}}
+.lv-wa{{position:fixed;right:16px;bottom:16px;background:#005BEA;color:#fff;padding:12px 18px;border-radius:980px;font-weight:500;text-decoration:none;box-shadow:0 8px 24px rgba(0,91,234,.25);z-index:50}}
 </style>
 <div class="lv">
-  <div class="lv-top">
-    <span>Línea instituciones · {empresa} · EduTrack</span>
-    <span>Ventas: {tel} · {email}</span>
-  </div>
   <div class="lv-nav">
     <div class="brand">EduTrack <span>by {empresa}</span></div>
     <div>
@@ -18637,7 +18780,7 @@ def portal_ventas():
       <a href="#contacto">Contacto</a>
       <a href="/pagar">Pagar factura</a>
     </div>
-    <div class="tel">Línea ventas · {tel}</div>
+    <a class="tel" href="{wa}" target="_blank" rel="noopener">Línea ventas</a>
   </div>
 
   <section class="lv-hero">
@@ -18648,11 +18791,11 @@ def portal_ventas():
         <div class="price">Desde {_cop(lv_precio)} / mes</div>
       </div>
       <div class="lv-box">
-        {('<img src="'+_esc(lv_img)+'" alt="" style="width:100%;max-height:120px;object-fit:contain;margin-bottom:10px;border-radius:8px">') if lv_img else ""}
+        {('<img src="'+_esc(lv_img)+'" alt="" style="width:100%;max-height:120px;object-fit:contain;margin-bottom:10px;border-radius:12px">') if lv_img else ""}
         <h3>{_esc(lv_cta)}</h3>
-        <p style="font-size:13px;color:#64748b;margin:0 0 8px">{_esc(lv_cta_sub)}</p>
-        <a class="btn" href="{wa}" target="_blank" rel="noopener">Hablar por WhatsApp</a>
-        <a class="btn" href="/ventas/comprar" style="background:#15803d;margin-top:8px">Registrar colegio / comprar plan</a>
+        <p style="font-size:13px;color:#86868b;margin:0 0 8px">{_esc(lv_cta_sub)}</p>
+        <a class="btn btn-wa" href="{wa}" target="_blank" rel="noopener">Hablar por WhatsApp</a>
+        <a class="btn btn-reg" href="/ventas/comprar">Registrar colegio</a>
       </div>
     </div>
   </section>
@@ -19998,6 +20141,240 @@ def gerencia_backoffice_branding():
 </section>
 """
     return page("Banners login + Salida segura", shell(body))
+
+
+@app.route("/gerencia/web-menu", methods=["GET", "POST"])
+def gerencia_web_menu():
+    """Editor de textos del mega-menú público (Procsis, Soluciones, Planes, Ayuda)."""
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    try:
+        _seed_web_menu_defaults()
+    except Exception:
+        pass
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            if accion == "nuevo":
+                sec = (request.form.get("seccion") or "procsis")[:40]
+                et = (request.form.get("etiqueta") or "")[:120]
+                url = (request.form.get("url") or "#")[:255]
+                if not et:
+                    err = "La etiqueta es obligatoria."
+                else:
+                    db.session.execute(text(
+                        "INSERT INTO web_menu_items (seccion, etiqueta, url, orden, activo) "
+                        "VALUES (:s,:e,:u,99,TRUE)"
+                    ), {"s": sec, "e": et, "u": url})
+                    db.session.commit()
+                    msg = "Enlace agregado."
+            elif accion == "eliminar":
+                iid = int(request.form.get("id") or 0)
+                db.session.execute(text("DELETE FROM web_menu_items WHERE id=:id"), {"id": iid})
+                db.session.commit()
+                msg = "Enlace eliminado."
+            elif accion == "toggle":
+                iid = int(request.form.get("id") or 0)
+                db.session.execute(text(
+                    "UPDATE web_menu_items SET activo = NOT COALESCE(activo,TRUE) WHERE id=:id"
+                ), {"id": iid})
+                db.session.commit()
+                msg = "Estado actualizado."
+            elif accion == "editar":
+                iid = int(request.form.get("id") or 0)
+                et = (request.form.get("etiqueta") or "")[:120]
+                url = (request.form.get("url") or "#")[:255]
+                db.session.execute(text(
+                    "UPDATE web_menu_items SET etiqueta=:e, url=:u WHERE id=:id"
+                ), {"e": et, "u": url, "id": iid})
+                db.session.commit()
+                msg = "Texto actualizado."
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = "Error: %s" % str(e)[:120]
+    rows = []
+    try:
+        rows = db.session.execute(text(
+            "SELECT id, seccion, etiqueta, url, activo FROM web_menu_items ORDER BY seccion, orden, id"
+        )).fetchall()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    filas = ""
+    for r in rows:
+        on = bool(r[4])
+        filas += (
+            "<tr><td>%s</td><td><form method='POST' style='display:flex;gap:6px;flex-wrap:wrap'>"
+            "<input type='hidden' name='accion' value='editar'><input type='hidden' name='id' value='%s'>"
+            "<input name='etiqueta' value='%s' style='flex:1;min-width:120px;padding:6px'>"
+            "<input name='url' value='%s' style='flex:1;min-width:120px;padding:6px'>"
+            "<button type='submit' style='padding:6px 10px;border:0;border-radius:8px;background:#0B63CE;color:#fff;cursor:pointer'>Guardar</button>"
+            "</form></td><td>%s</td><td>"
+            "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='toggle'>"
+            "<input type='hidden' name='id' value='%s'><button type='submit' style='padding:4px 8px;border:0;border-radius:6px;"
+            "background:%s;color:#fff;cursor:pointer'>%s</button></form> "
+            "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Eliminar?')\">"
+            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
+            "<button type='submit' style='padding:4px 8px;border:1px solid #e2e8f0;background:#fff;color:#b91c1c;border-radius:6px;cursor:pointer'>X</button></form>"
+            "</td></tr>"
+            % (_esc(r[1]), r[0], _esc(r[2] or ""), _esc(r[3] or ""), "ON" if on else "OFF",
+               r[0], "#16a34a" if on else "#64748b", "ON" if on else "OFF", r[0])
+        )
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Textos del menú público</h1>
+  <p>Edita los enlaces del mega-menú (Procsis · Soluciones · Planes · Ayuda)</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver HQ</a>
+</header>
+<section class="role-panel" style="max-width:900px">
+  {"<p style='color:#16a34a;font-weight:700'>"+_esc(msg)+"</p>" if msg else ""}
+  {"<p style='color:#b91c1c'>"+_esc(err)+"</p>" if err else ""}
+  <h3 style="font-size:14px;color:#0B2D57">Agregar enlace</h3>
+  <form method="POST" style="display:grid;gap:8px;margin-bottom:20px">
+    <input type="hidden" name="accion" value="nuevo">
+    <select name="seccion" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+      <option value="procsis">Procsis</option>
+      <option value="soluciones_ges">Soluciones · Gestión escolar</option>
+      <option value="soluciones_seg">Soluciones · Seguridad perimetral</option>
+      <option value="planes">Planes</option>
+      <option value="ayuda">Ayuda</option>
+    </select>
+    <input name="etiqueta" placeholder="Texto visible" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <input name="url" placeholder="/ruta o https://..." style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:10px;font-weight:800;cursor:pointer">Agregar</button>
+  </form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:#f1f5f9;text-align:left"><th>Sección</th><th>Texto / URL</th><th>Estado</th><th></th></tr></thead>
+    <tbody>{filas or "<tr><td colspan='4'>Sin ítems</td></tr>"}</tbody>
+  </table>
+</section>
+"""
+    return page("Menú web", shell(body))
+
+
+@app.route("/gerencia/casos-exito", methods=["GET", "POST"])
+def gerencia_casos_exito():
+    """Crear y editar casos de éxito públicos."""
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS casos_exito ("
+            "id SERIAL PRIMARY KEY, titulo VARCHAR(200) DEFAULT '', resumen TEXT DEFAULT '', "
+            "institucion VARCHAR(160) DEFAULT '', orden INTEGER DEFAULT 0, activo BOOLEAN DEFAULT TRUE, "
+            "creado_en VARCHAR(40) DEFAULT '')"
+        ))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            if accion == "nuevo":
+                tit = (request.form.get("titulo") or "")[:200]
+                res = (request.form.get("resumen") or "")[:4000]
+                inst = (request.form.get("institucion") or "")[:160]
+                if not tit:
+                    err = "El título es obligatorio."
+                else:
+                    db.session.execute(text(
+                        "INSERT INTO casos_exito (titulo, resumen, institucion, orden, activo, creado_en) "
+                        "VALUES (:t,:r,:i,0,TRUE,:c)"
+                    ), {"t": tit, "r": res, "i": inst, "c": (fecha_hoy() or "")})
+                    db.session.commit()
+                    msg = "Caso de éxito publicado."
+            elif accion == "eliminar":
+                iid = int(request.form.get("id") or 0)
+                db.session.execute(text("DELETE FROM casos_exito WHERE id=:id"), {"id": iid})
+                db.session.commit()
+                msg = "Eliminado."
+            elif accion == "toggle":
+                iid = int(request.form.get("id") or 0)
+                db.session.execute(text(
+                    "UPDATE casos_exito SET activo = NOT COALESCE(activo,TRUE) WHERE id=:id"
+                ), {"id": iid})
+                db.session.commit()
+                msg = "Estado actualizado."
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = "Error: %s" % str(e)[:120]
+    rows = []
+    try:
+        rows = db.session.execute(text(
+            "SELECT id, titulo, institucion, activo FROM casos_exito ORDER BY orden, id DESC"
+        )).fetchall()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    filas = "".join(
+        "<tr><td><b>%s</b><br><span style='color:#64748b;font-size:12px'>%s</span></td><td>%s</td><td>"
+        "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='toggle'>"
+        "<input type='hidden' name='id' value='%s'><button type='submit' style='padding:4px 10px;border:0;border-radius:6px;"
+        "background:%s;color:#fff;cursor:pointer'>%s</button></form> "
+        "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Eliminar?')\">"
+        "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
+        "<button type='submit' style='padding:4px 8px;border:1px solid #e2e8f0;background:#fff;color:#b91c1c;border-radius:6px;cursor:pointer'>Eliminar</button></form>"
+        "</td></tr>"
+        % (_esc(r[1] or ""), _esc(r[2] or ""), "Activo" if r[3] else "Inactivo",
+           r[0], "#16a34a" if r[3] else "#64748b", "ON" if r[3] else "OFF", r[0])
+        for r in rows
+    )
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Casos de éxito</h1>
+  <p>Publicados en <code>/casos-exito</code> y enlazables desde el menú Planes</p>
+</div>
+<a class="btn" href="/gerencia/hq">Volver HQ</a>
+<a class="btn" href="/casos-exito" target="_blank" style="margin-left:8px">Ver página →</a>
+</header>
+<section class="role-panel" style="max-width:720px">
+  {"<p style='color:#16a34a;font-weight:700'>"+_esc(msg)+"</p>" if msg else ""}
+  {"<p style='color:#b91c1c'>"+_esc(err)+"</p>" if err else ""}
+  <form method="POST">
+    <input type="hidden" name="accion" value="nuevo">
+    <label style="font-size:12px;font-weight:700">Institución (opcional)</label>
+    <input name="institucion" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px;font-weight:700">Título</label>
+    <input name="titulo" required style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px;font-weight:700">Resumen</label>
+    <textarea name="resumen" rows="4" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
+    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Publicar caso</button>
+  </form>
+</section>
+<section class="role-panel" style="max-width:720px;margin-top:12px">
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:#f1f5f9;text-align:left"><th>Caso</th><th>Estado</th><th></th></tr></thead>
+    <tbody>{filas or "<tr><td colspan='3'>Sin casos aún</td></tr>"}</tbody>
+  </table>
+</section>
+"""
+    return page("Casos de éxito", shell(body))
 
 
 @app.route("/api/salida-segura", methods=["POST", "GET"])
@@ -21905,6 +22282,9 @@ def gerencia_hq():
           <a class="c-naranja" href="/gerencia/anuncios">Anuncios (editar)</a>
           <a class="c-naranja" href="/gerencia/actualizaciones">Actualizaciones / FAQ / Ayuda (ver)</a>
           <a class="c-naranja" href="/gerencia/login-banners" style="border:2px solid #4f46e5;font-weight:800">🖼️ Banners del Login + Salida segura</a>
+          <a class="c-naranja" href="/gerencia/web-menu" style="border:2px solid #0B63CE;font-weight:800">📝 Textos del menú público</a>
+          <a class="c-naranja" href="/gerencia/casos-exito" style="border:2px solid #005BEA;font-weight:800">🏆 Casos de éxito</a>
+          <a class="c-naranja" href="/gerencia/landing-ventas">Landing /ventas (textos hero)</a>
         </div>
 
         <div class="hq-cat gris">⚫ Seguridad e internos</div>
