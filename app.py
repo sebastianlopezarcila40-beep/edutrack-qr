@@ -18799,16 +18799,16 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 .lv-cta h2{{color:#1d1d1f;margin:0 0 12px;font-weight:700}}
 .lv-cta button{{background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:500}}
 /* Formulario captación estilo Apple */
-.form-container-apple{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background-color:#ffffff;padding:40px;border-radius:24px;box-shadow:0 4px 30px rgba(0,0,0,0.02);max-width:800px;margin:0 auto}
-.form-title-apple{font-size:24px;font-weight:700;color:#1d1d1f;letter-spacing:-0.015em;margin:0 0 8px}
-.form-subtitle-apple{font-size:14px;color:#86868b;margin:0 0 24px;line-height:1.45}
-.form-label-apple{font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:6px;display:block}
-.form-input-apple,.form-select-apple,.form-textarea-apple{width:100%;font-family:-apple-system,sans-serif;font-size:14px;background-color:#ffffff;border:1px solid #d2d2d7;border-radius:12px;padding:12px 16px;color:#1d1d1f;box-sizing:border-box;transition:border-color 0.2s ease,box-shadow 0.2s ease;margin:0}
-.form-input-apple:focus,.form-select-apple:focus,.form-textarea-apple:focus{outline:none;border-color:#005bea;box-shadow:0 0 0 4px rgba(0,91,234,0.1)}
-.btn-submit-apple-oval{font-family:-apple-system,sans-serif;font-size:14px;font-weight:600;color:#ffffff;background-color:#005bea;padding:14px 32px;border-radius:980px;border:none;cursor:pointer;display:inline-block;transition:background-color 0.2s cubic-bezier(0.25,1,0.5,1),transform 0.1s ease}
-.btn-submit-apple-oval:hover{background-color:#002060}
-.btn-submit-apple-oval:active{transform:scale(0.98)}
-@media(max-width:600px){.form-container-apple{padding:24px 18px}.form-container-apple form{grid-template-columns:1fr!important}}
+.form-container-apple{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background-color:#ffffff;padding:40px;border-radius:24px;box-shadow:0 4px 30px rgba(0,0,0,0.02);max-width:800px;margin:0 auto}}
+.form-title-apple{{font-size:24px;font-weight:700;color:#1d1d1f;letter-spacing:-0.015em;margin:0 0 8px}}
+.form-subtitle-apple{{font-size:14px;color:#86868b;margin:0 0 24px;line-height:1.45}}
+.form-label-apple{{font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:6px;display:block}}
+.form-input-apple,.form-select-apple,.form-textarea-apple{{width:100%;font-family:-apple-system,sans-serif;font-size:14px;background-color:#ffffff;border:1px solid #d2d2d7;border-radius:12px;padding:12px 16px;color:#1d1d1f;box-sizing:border-box;transition:border-color 0.2s ease,box-shadow 0.2s ease;margin:0}}
+.form-input-apple:focus,.form-select-apple:focus,.form-textarea-apple:focus{{outline:none;border-color:#005bea;box-shadow:0 0 0 4px rgba(0,91,234,0.1)}}
+.btn-submit-apple-oval{{font-family:-apple-system,sans-serif;font-size:14px;font-weight:600;color:#ffffff;background-color:#005bea;padding:14px 32px;border-radius:980px;border:none;cursor:pointer;display:inline-block;transition:background-color 0.2s cubic-bezier(0.25,1,0.5,1),transform 0.1s ease}}
+.btn-submit-apple-oval:hover{{background-color:#002060}}
+.btn-submit-apple-oval:active{{transform:scale(0.98)}}
+@media(max-width:600px){{.form-container-apple{{padding:24px 18px}}.form-container-apple form{{grid-template-columns:1fr!important}}}}
 .lv-foot{{background:#1d1d1f;padding:40px 20px 24px;font-size:13px;color:#a1a1a6;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .lv-foot-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:28px}}
 @media(max-width:700px){{.lv-foot-in{{grid-template-columns:1fr}}}}
@@ -60111,3 +60111,12 @@ def aceptar_terminos_pago():
 
 
 if __name__ == "__main__":
+    with app.app_context():
+        inicializar_bd()
+        try:
+            sincronizar_licencias()
+            aplicar_cambios_plan_pendientes()
+            _ciclo_facturacion_automatica()
+        except Exception as _e:
+            print("ciclo facturacion:", _e)
+    app.run(debug=True, host="0.0.0.0")
