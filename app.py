@@ -22256,12 +22256,12 @@ def gerencia_hq():
           <p class="hello">Bienvenido, Sr. Gerente: <span>{gerente_label}</span></p>
           <div class="meta">Acceso restringido · Gerencia / Dirección · {hoy_txt}</div>
           <div class="meta">Periodo de referencia: {m['mes'] or '—'}</div>
-          <div class="meta" id="hq-reloj-co" style="font-variant-numeric:tabular-nums;font-weight:700;color:#fbbf24;margin-top:6px;font-size:13px;letter-spacing:.02em">
+          <div class="meta" id="hq-reloj-co" style="font-variant-numeric:tabular-nums;font-weight:500;color:#fbbf24;margin-top:6px;font-size:13px;letter-spacing:.04em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
             🇨🇴 <span id="hq-reloj-txt">—:—:—</span> · Hora Colombia
           </div>
           <div style="margin-top:14px">
-            <a href="/gerencia/login-banners" style="display:inline-block;padding:12px 18px;border-radius:12px;background:linear-gradient(135deg,#4f46e5,#0B2D57);color:#fff;text-decoration:none;font-weight:800;font-size:13px;box-shadow:0 8px 20px rgba(15,23,42,.25)">
-              🖼️ Banners del Login Backoffice · Salida segura →
+            <a href="/gerencia/login-banners" style="display:inline-block;padding:12px 22px;border-radius:980px;background:#005BEA;color:#fff;text-decoration:none;font-weight:600;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;box-shadow:0 4px 16px rgba(0,91,234,.35);letter-spacing:-.01em;transition:background .2s">
+              Banners del Login · Salida segura →
             </a>
           </div>
 
@@ -22311,62 +22311,103 @@ def gerencia_hq():
       </div>
 
       <div id="hq-tab-operativo" class="hq-tab-panel active">
-        <p class="hq-note" style="margin-top:0">Operación diaria del sistema: facturación, clientes, soporte y herramientas de control.</p>
+        <p class="hq-note" style="margin-top:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#86868b">Operación diaria · Tablero Bento de control financiero, clientes y seguridad.</p>
 
-        <div class="hq-cat verde">🟢 Dinero y facturación</div>
-        <div class="grid-mod">
-          <a class="c-verde" href="/gerencia/cartera">Cuadro de mando · Cartera</a>
-          <a class="c-verde" href="/gerencia/plazos-cuotas">Reporte plazos / cuotas</a>
-          <a class="c-verde" href="/gerencia/colegios-config">Config colegios · fechas</a>
-          <a class="c-verde" href="/gerencia/facturacion">Facturación · Impl. + suscripción</a>
-          <a class="c-verde" href="/gerencia/gastos">Gastos y cashflow</a>
-          <a class="c-verde" href="/gerencia/contabilidad">Contabilidad comercial</a>
-          <a class="c-verde" href="/gerencia/reportes-pago">Reportes de pago</a>
-          <a class="c-verde" href="/gerencia/verificaciones-pendientes">Validaciones de venta</a>
-          <a class="c-verde" href="/paz-y-salvo">Generador de paz y salvo</a>
+        <style>
+        .hq-bento{{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:16px 0 8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+        @media(max-width:900px){{.hq-bento{{grid-template-columns:1fr}}}}
+        .hq-bento-card{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px 20px;box-shadow:0 2px 12px rgba(0,0,0,.03)}}
+        .hq-bento-card h3{{margin:0 0 4px;font-size:13px;font-weight:600;color:#86868b;letter-spacing:.04em;text-transform:uppercase}}
+        .hq-bento-metric{{font-size:28px;font-weight:700;color:#002060;letter-spacing:-.03em;margin:8px 0 4px;line-height:1.15}}
+        .hq-bento-sub{{font-size:13px;color:#86868b;margin:0 0 16px}}
+        .hq-pills{{display:flex;flex-wrap:wrap;gap:8px}}
+        .hq-pills a{{display:inline-block;padding:8px 14px;border-radius:980px;background:#f5f5f7;color:#005BEA;font-size:12px;font-weight:600;text-decoration:none;transition:background .15s,color .15s;border:0}}
+        .hq-pills a:hover{{background:#e8e8ed;color:#002060}}
+        .hq-pills a.hq-pill-more{{background:rgba(0,91,234,.08);color:#005BEA}}
+        </style>
+
+        <div class="hq-bento">
+          <div class="hq-bento-card">
+            <h3>Control financiero y cartera</h3>
+            <div class="hq-bento-metric">${'{:,.0f}'.format(float(m.get('cartera') or 0)).replace(',', '.')} COP</div>
+            <p class="hq-bento-sub">Deuda pendiente · MRR ${'{:,.0f}'.format(float(m.get('mrr') or 0)).replace(',', '.')} / mes</p>
+            <div class="hq-pills">
+              <a href="/gerencia/cartera">Ver Cartera</a>
+              <a href="/paz-y-salvo">Paz y Salvo</a>
+              <a href="/gerencia/gastos">Gastos Cloud</a>
+              <a href="/gerencia/facturacion">Facturar</a>
+              <a class="hq-pill-more" href="/gerencia/plazos-cuotas">Plazos</a>
+              <a class="hq-pill-more" href="/gerencia/contabilidad">Contabilidad</a>
+              <a class="hq-pill-more" href="/gerencia/reportes-pago">Reportes pago</a>
+              <a class="hq-pill-more" href="/gerencia/verificaciones-pendientes">Validaciones</a>
+              <a class="hq-pill-more" href="/gerencia/colegios-config">Config fechas</a>
+            </div>
+          </div>
+
+          <div class="hq-bento-card">
+            <h3>Clientes y CRM</h3>
+            <div class="hq-bento-metric">{m.get('activas', 0)} Colegios activos</div>
+            <p class="hq-bento-sub">{m.get('suspendidas', 0)} suspendidos · Soporte y tracción comercial</p>
+            <div class="hq-pills">
+              <a href="/gerencia/rectores">CRM Rectores</a>
+              <a href="/soporte_admin">Centro Soporte</a>
+              <a href="/calendario">Calendario</a>
+              <a href="/gerencia/pqr-limpieza">PQR</a>
+              <a class="hq-pill-more" href="/tenants">Instituciones</a>
+              <a class="hq-pill-more" href="/gerencia/contabilidad/partes">Clientes / proveedores</a>
+              <a class="hq-pill-more" href="/gerencia/fidelizacion">CSAT</a>
+            </div>
+          </div>
+
+          <div class="hq-bento-card">
+            <h3>Convivencia y seguridad</h3>
+            <div class="hq-bento-metric">07:00 AM</div>
+            <p class="hq-bento-sub">Corte de retardos · Citaciones y asistencia judicial</p>
+            <div class="hq-pills">
+              <a href="/retardos-acumulados">Registro Retardos</a>
+              <a href="/historial_novedades">Sello Asistencia Judicial</a>
+              <a class="hq-pill-more" href="/citaciones">Citaciones</a>
+            </div>
+          </div>
+
+          <div class="hq-bento-card">
+            <h3>Comunicación y web</h3>
+            <div class="hq-bento-metric">Canales</div>
+            <p class="hq-bento-sub">WhatsApp, correo, landing y contenidos públicos</p>
+            <div class="hq-pills">
+              <a href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
+              <a href="/gerencia/wati-conexion">API WATI</a>
+              <a href="/gerencia/procsis-web">Noticias / productos</a>
+              <a href="/gerencia/login-banners">Banners Login</a>
+              <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
+              <a class="hq-pill-more" href="/gerencia/correo-notificaciones">Gmail Notif.</a>
+              <a class="hq-pill-more" href="/gerencia/web-menu">Menú público</a>
+              <a class="hq-pill-more" href="/gerencia/casos-exito">Casos de éxito</a>
+              <a class="hq-pill-more" href="/gerencia/landing-ventas">Landing ventas</a>
+              <a class="hq-pill-more" href="/gerencia/anuncios">Anuncios</a>
+              <a class="hq-pill-more" href="/gerencia/actualizaciones">FAQ / Ayuda</a>
+            </div>
+          </div>
         </div>
 
-        <div class="hq-cat azul">🔵 Clientes, soporte e instituciones</div>
-        <div class="grid-mod">
-          <a class="c-azul" href="/gerencia/contabilidad/partes">Clientes y proveedores</a>
-          <a class="c-azul" href="/soporte_admin">Centro de soporte</a>
-          <a class="c-azul" href="/gerencia/pqr-limpieza">Limpieza PQR de prueba</a>
-          <a class="c-azul" href="/gerencia/fidelizacion">Fidelización CSAT</a>
-          <a class="c-azul" href="/gerencia/rectores">Rectores CRM</a>
-          <a class="c-azul" href="/tenants">Instituciones</a>
-          <a class="c-azul" href="/calendario">Calendario escolar</a>
-          <a class="c-azul" href="/retardos-acumulados">Control de retardos y convivencia</a>
-        </div>
-
-        <div class="hq-cat naranja">🟠 Comunicación y herramientas</div>
-        <div class="grid-mod">
-          <a class="c-naranja" href="/gerencia/wati-conexion">Conectar WhatsApp · API WATI</a>
-          <a class="c-naranja" href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
-          <a class="c-naranja" href="/gerencia/correo-soporte">Conectar Gmail · Soporte</a>
-          <a class="c-naranja" href="/gerencia/correo-notificaciones">Conectar Gmail · Notificaciones</a>
-          <a class="c-naranja" href="/gerencia/procsis-web">Noticias y productos web</a>
-          <a class="c-naranja" href="/gerencia/anuncios">Anuncios (editar)</a>
-          <a class="c-naranja" href="/gerencia/actualizaciones">Actualizaciones / FAQ / Ayuda (ver)</a>
-          <a class="c-naranja" href="/gerencia/login-banners" style="border:2px solid #4f46e5;font-weight:800">🖼️ Banners del Login + Salida segura</a>
-          <a class="c-naranja" href="/gerencia/web-menu" style="border:2px solid #0B63CE;font-weight:800">📝 Textos del menú público</a>
-          <a class="c-naranja" href="/gerencia/casos-exito" style="border:2px solid #005BEA;font-weight:800">🏆 Casos de éxito</a>
-          <a class="c-naranja" href="/gerencia/landing-ventas">Landing /ventas (textos hero)</a>
-        </div>
-
-        <div class="hq-cat gris">⚫ Seguridad e internos</div>
-        <div class="grid-mod">
-          <a class="c-gris" href="/gerencia/login-banners" style="border:2px solid #0B2D57;font-weight:800">Salida segura · Banners backoffice</a>
-          <a class="c-gris" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
-          <a class="c-gris" href="/gerencia/turnos">Turnos y notas</a>
-          <a class="c-gris" href="/gerencia/auditoria">Auditoría IP / ubicación</a>
-          <a class="c-gris" href="/auditoria">Auditoría</a>
-          <a class="c-gris" href="/gerencia/lideres">Líderes / equipo web</a>
-          <a class="c-gris" href="/gerencia/contabilidad/nueva">Nueva operación</a>
-          <a class="c-gris" href="/gerencia/planes">Planes · precios · paywalls</a>
+        <div class="hq-bento-card" style="margin-top:8px">
+          <h3>Seguridad e internos</h3>
+          <p class="hq-bento-sub">Auditoría, personal, planes y controles de acceso</p>
+          <div class="hq-pills">
+            <a href="/gerencia/auditoria">Auditoría IP</a>
+            <a href="/auditoria">Auditoría global</a>
+            <a href="/gerencia/planes">Planes · precios</a>
+            <a href="/gerencia/lideres">Líderes / equipo</a>
+            <a class="hq-pill-more" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
+            <a class="hq-pill-more" href="/gerencia/turnos">Turnos</a>
+            <a class="hq-pill-more" href="/gerencia/contabilidad/nueva">Nueva operación</a>
+            <a class="hq-pill-more" href="/gerencia/login-banners">Salida segura</a>
+          </div>
         </div>
       </div>
 
-      <div id="hq-tab-gerencia" class="hq-tab-panel">
+      
+<div id="hq-tab-gerencia" class="hq-tab-panel">
         <p class="hq-note" style="margin-top:0">Exclusivo dirección · Talento, legal, finanzas corporativas y configuración</p>
 
         <div class="hq-cat marron">🟤 Talento y trabajadores</div>
