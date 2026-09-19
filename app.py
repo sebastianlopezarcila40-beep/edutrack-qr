@@ -3649,7 +3649,7 @@ def _staff_module_title(path, rol=""):
     if path.startswith("/cobranza") or rol == "Cobranza":
         return "<strong>COBRANZA</strong> · Cartera"
     if "dev" in path or rol in ("Desarrollador", "Developer"):
-        return "<strong>DESARROLLO</strong> · Consola"
+        return "<strong>PROCSIS</strong> · Consola técnica"
     return "<strong>PROCSIS</strong> · Backoffice"
 
 
@@ -33137,9 +33137,14 @@ def gerencia_planes_editar(pid):
 @app.route("/gerencia/planes/nuevo", methods=["GET", "POST"])
 def gerencia_planes_nuevo():
     """Alta de un plan comercial nuevo (módulo dedicado)."""
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
+    # Desarrollador: puede crear estructura técnica del plan (módulos/rutas), no editar precios de planes activos
+    if rol_actual() in ("Desarrollador", "Developer"):
+        if not requiere_login():
+            return redirect("/dev-console-login")
+    else:
+        _g = _guard_gerencia()
+        if _g is not None:
+            return _g
     try:
         _ensure_plan_comercial_cols()
     except Exception:
@@ -62882,20 +62887,77 @@ def dev_console():
   </div>
 """
 
+    try:
+        _dev_user = (session.get("usuario") or "Desarrollador").replace("_", " ").title()
+    except Exception:
+        _dev_user = "Desarrollador"
+    try:
+        from datetime import datetime as _dt
+        import pytz
+        _now_co = _dt.now(pytz.timezone("America/Bogota")).strftime("%d/%m/%Y %H:%M:%S")
+    except Exception:
+        try:
+            _now_co = ahora().strftime("%d/%m/%Y %H:%M:%S")
+        except Exception:
+            _now_co = ""
+    try:
+        _logo_p = logo_plataforma()
+    except Exception:
+        _logo_p = "/static/img/logo-procsis.svg?v=21"
+
     body = f"""
-<header class="role-hero"><div>
-  <h1>Consola de Desarrollo</h1>
-  <p>Entorno técnico · v{_esc(ver)} · sin datos financieros ni corporativos sensibles</p>
+<style>
+.dev-apple{{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:1100px;margin:0 auto;padding:0 0 40px}}
+.dev-hero{{background:linear-gradient(135deg,#002060 0%,#005BEA 100%);border-radius:20px;padding:22px 24px;color:#fff;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center;box-shadow:0 8px 28px rgba(0,32,96,.22)}}
+.dev-hero-left{{display:flex;gap:14px;align-items:center}}
+.dev-hero-left img{{width:52px;height:52px;border-radius:12px;background:#fff;object-fit:contain;padding:4px}}
+.dev-hero h1{{margin:0;font-size:20px;font-weight:700;letter-spacing:-.02em}}
+.dev-hero .sub{{margin:4px 0 0;font-size:13px;opacity:.9}}
+.dev-hero-right{{text-align:right}}
+.dev-hero-right .hi{{font-size:16px;font-weight:700}}
+.dev-hero-right .meta{{font-size:12px;opacity:.85;margin-top:4px}}
+.dev-hero a.back{{display:inline-block;margin-top:10px;background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:8px 16px;border-radius:980px;font-size:12px;font-weight:600}}
+.dev-note{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:12px 16px;margin:14px 0;font-size:12px;color:#64748b}}
+.dev-tabs{{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 14px;padding:6px;background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,.06)}}
+.dev-tabs a{{padding:10px 14px;border-radius:12px;font-size:12px;font-weight:600;text-decoration:none;color:#64748b}}
+.dev-tabs a.on{{background:#005BEA;color:#fff}}
+.dev-panel{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.03)}}
+.dev-msg{{padding:12px 14px;border-radius:12px;margin-bottom:12px;font-weight:600;font-size:13px}}
+.dev-ok{{background:#ecfdf5;color:#065f46}}.dev-err{{background:#fef2f2;color:#991b1b}}
+</style>
+<div class="dev-apple">
+  <div class="dev-hero">
+    <div class="dev-hero-left">
+      <img src="{_esc(_logo_p)}" alt="">
+      <div>
+        <h1>PROCSIS · Consola técnica</h1>
+        <div class="sub">EduTrack · solo desarrollo · v{_esc(ver)}</div>
+      </div>
+    </div>
+    <div class="dev-hero-right">
+      <div class="hi">Bienvenido, {_esc(_dev_user)}</div>
+      <div class="meta">Rol Desarrollador · {_esc(_now_co)} · Hora Colombia</div>
+      <a class="back" href="/backoffice">← Backoffice</a>
+    </div>
+  </div>
+  <div class="dev-note">
+    Acceso técnico: infraestructura, flags, versiones, seguridad y diseño CSS.
+    <b>Sin</b> NIT/RUT, cuentas bancarias, nómina, contratos firmados, plantillas legales ni precios comerciales de planes (eso es Gerencia / Ventas).
+  </div>
+  {"<div class='dev-msg dev-ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='dev-msg dev-err'>"+_esc(err)+"</div>" if err else ""}
+  <div class="dev-tabs">
+    <a href="/dev-console?tab=sistema" class="{"on" if tab=="sistema" else ""}">Sistema y core</a>
+    <a href="/dev-console?tab=versiones" class="{"on" if tab=="versiones" else ""}">Actualizaciones</a>
+    <a href="/dev-console?tab=anuncios" class="{"on" if tab=="anuncios" else ""}">Seguridad / anuncios</a>
+    <a href="/dev-console?tab=temas" class="{"on" if tab=="temas" else ""}">Diseño / CSS</a>
+    <a href="/dev-console?tab=flags" class="{"on" if tab=="flags" else ""}">Sandbox / Flags</a>
+  </div>
+  <div class="dev-panel">{panel}</div>
 </div>
-<a class="btn" href="/backoffice">← Backoffice</a></header>
-<section class="role-panel" style="max-width:920px;margin:0 auto">
-  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-  {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-  {tabs_nav}
-  {panel}
-</section>
 """
-    return page("Consola Desarrollo", shell(body))
+    # Dev console usa layout staff (sidebar) sin shell clásico doble
+    return page("Consola Desarrollo", body)
 
 
 
