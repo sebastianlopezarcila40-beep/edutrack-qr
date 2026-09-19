@@ -2268,7 +2268,49 @@ class PlanComercial(db.Model):
     activo = db.Column(db.Boolean, default=True)
     orden = db.Column(db.Integer, default=0)
     imagen_path = db.Column(db.String(255), default="")
+    # Clasificación comercial / ventas
+    modalidad = db.Column(db.String(20), default="presencial")  # presencial | online
+    descuento_meses = db.Column(db.Integer, default=0)  # duración del % descuento
+    max_admin = db.Column(db.Integer, default=10)
+    max_docentes = db.Column(db.Integer, default=30)
+    titulo_comercial = db.Column(db.String(160), default="")
+    mensaje_whatsapp = db.Column(db.Text, default="")
+    cta_comercial = db.Column(db.String(255), default="")
 
+
+
+def _ensure_plan_comercial_cols():
+    """Columnas extra de planes comerciales (modalidad, copy ventas, límites)."""
+    try:
+        for col, typ in [
+            ("modalidad", "VARCHAR(20) DEFAULT 'presencial'"),
+            ("descuento_meses", "INTEGER DEFAULT 0"),
+            ("max_admin", "INTEGER DEFAULT 10"),
+            ("max_docentes", "INTEGER DEFAULT 30"),
+            ("titulo_comercial", "VARCHAR(160) DEFAULT ''"),
+            ("mensaje_whatsapp", "TEXT DEFAULT ''"),
+            ("cta_comercial", "VARCHAR(255) DEFAULT ''"),
+            ("descuento_pct", "REAL DEFAULT 0"),
+            ("precio_lista", "REAL DEFAULT 0"),
+            ("imagen_path", "VARCHAR(255) DEFAULT ''"),
+        ]:
+            try:
+                db.session.execute(text(
+                    "ALTER TABLE planes_comerciales ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)
+                ))
+            except Exception:
+                try:
+                    db.session.execute(text(
+                        "ALTER TABLE planes_comerciales ADD COLUMN %s %s" % (col, typ)
+                    ))
+                except Exception:
+                    pass
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 class AddonComercial(db.Model):
     """Add-ons mensuales (ej. módulo IA +30k)."""
@@ -20372,12 +20414,22 @@ def ventas_beneficios():
         planes = []
     for pl in planes:
         cod = (pl.codigo or "").lower()
-        # filtro simple modalidad
-        if modalidad == "presencial" and "online" in cod:
+        act = (request.args.get("act") or "").strip().lower()
+        is_qr = "qr" in cod
+        plan_mod = (getattr(pl, "modalidad", None) or "").lower()
+        is_online = plan_mod == "online" or "online" in cod or "hibr" in cod
+        if modalidad == "qr" and not is_qr:
             continue
-        if modalidad in ("online", "hibrida", "híbrida") and "qr" in cod and "online" not in cod and "hibr" not in cod:
-            # show all QR for online too - skip strict filter
-            pass
+        if modalidad == "inst" and is_qr:
+            continue
+        if modalidad == "presencial" and is_online:
+            continue
+        if modalidad in ("online", "hibrida", "híbrida") and not is_online and not is_qr:
+            continue
+        if act == "presencial" and is_online:
+            continue
+        if act == "online" and not is_online:
+            continue
         pleno = float(getattr(pl, "precio_lista", 0) or 0) or float(getattr(pl, "precio_mensual", 0) or 0)
         try:
             pv = _calcular_promo_valores(pleno, promo)
@@ -20412,23 +20464,64 @@ def ventas_beneficios():
                 + "{:,.0f}".format(int(pleno)).replace(",", ".")
                 + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
             )
+        # Prefer descuento del plan si está configurado
+        if float(getattr(pl, "descuento_pct", 0) or 0) > 0:
+            _pct = float(pl.descuento_pct)
+            _vd = int(float(pl.precio_mensual or 0)) or int(round(pleno * (1 - _pct / 100)))
+            _vp = int(pleno)
+            _meses = int(getattr(pl, "descuento_meses", 0) or 0)
+            precio_html = (
+                '<div style="font-size:26px;font-weight:700;color:#005BEA">$'
+                + "{:,.0f}".format(_vd).replace(",", ".")
+                + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
+                '<div style="font-size:13px;color:#86868b;text-decoration:line-through">$'
+                + "{:,.0f}".format(_vp).replace(",", ".")
+                + " COP</div>"
+                '<div style="margin-top:8px;display:inline-block;background:rgba(0,91,234,.1);color:#005BEA;padding:4px 12px;border-radius:980px;font-size:11px;font-weight:600">'
+                + "DESCUENTO " + str(_pct).rstrip("0").rstrip(".") + "%"
+                + ((" · " + str(_meses) + " meses") if _meses else "")
+                + "</div>"
+            )
+        _tit = (getattr(pl, "titulo_comercial", None) or "").strip()
+        _msg = (getattr(pl, "mensaje_whatsapp", None) or "").strip()
+        _cta = (getattr(pl, "cta_comercial", None) or "").strip()
+        copy_html = ""
+        if _tit or _msg or _cta:
+            copy_html = '<div style="margin:10px 0;padding-top:10px;border-top:1px solid #f0f0f0">'
+            if _tit:
+                copy_html += '<div style="font-weight:700;color:#002060;font-size:14px;margin-bottom:6px">' + _esc(_tit) + "</div>"
+            if _msg:
+                copy_html += '<pre style="white-space:pre-wrap;font-family:inherit;font-size:12px;color:#1d1d1f;margin:0;line-height:1.45">' + _esc(_msg) + "</pre>"
+            if _cta:
+                copy_html += '<div style="margin-top:8px;font-size:12px;font-weight:600;color:#005BEA">' + _esc(_cta) + "</div>"
+            copy_html += "</div>"
+        elif li:
+            copy_html = '<ul style="list-style:none;padding:0;margin:14px 0;flex:1">' + li + "</ul>"
+        else:
+            copy_html = "<p style='color:#86868b;font-size:13px'>Sin beneficios configurados en Gerencia</p>"
         cards.append(
             '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.04);display:flex;flex-direction:column">'
             '<div style="font-size:11px;font-weight:600;color:#86868b;text-transform:uppercase">' + _esc(pl.codigo or "") + "</div>"
             '<div style="font-size:18px;font-weight:700;color:#002060;margin:4px 0 12px">' + _esc(pl.nombre or "") + "</div>"
             + precio_html
-            + '<ul style="list-style:none;padding:0;margin:14px 0;flex:1">' + (li or "<li style='color:#86868b'>Sin beneficios configurados en Gerencia</li>") + "</ul>"
+            + copy_html
             + '<a href="/ventas/comprar?plan=' + _esc(pl.codigo or "") + '" style="display:block;text-align:center;background:#005BEA;color:#fff;'
-            'padding:12px 20px;border-radius:980px;text-decoration:none;font-weight:600;font-size:14px">Activar este plan</a></div>'
+            'padding:12px 20px;border-radius:980px;text-decoration:none;font-weight:600;font-size:14px;margin-top:auto">Activar este plan</a></div>'
         )
     tabs = (
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 20px">'
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 12px">'
         '<a href="/ventas/beneficios?mod=todos" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
-        + ("background:#005BEA;color:#fff" if modalidad == "todos" else "background:#f5f5f7;color:#1d1d1f") + '">Todos</a>'
-        '<a href="/ventas/beneficios?mod=presencial" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
-        + ("background:#005BEA;color:#fff" if modalidad == "presencial" else "background:#f5f5f7;color:#1d1d1f") + '">🏫 Presencial</a>'
-        '<a href="/ventas/beneficios?mod=online" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
-        + ("background:#005BEA;color:#fff" if modalidad == "online" else "background:#f5f5f7;color:#1d1d1f") + '">💻 Online / Híbrida</a></div>'
+        + ("background:#002060;color:#fff" if modalidad == "todos" else "background:#f5f5f7;color:#1d1d1f") + '">Todos los planes</a>'
+        '<a href="/ventas/beneficios?mod=qr" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
+        + ("background:#002060;color:#fff" if modalidad == "qr" else "background:#f5f5f7;color:#1d1d1f") + '">Módulo Planes QR</a>'
+        '<a href="/ventas/beneficios?mod=inst" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
+        + ("background:#002060;color:#fff" if modalidad == "inst" else "background:#f5f5f7;color:#1d1d1f") + '">Módulo Institucionales</a></div>'
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 20px;align-items:center">'
+        '<span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Activación</span>'
+        '<a href="/ventas/beneficios?mod=' + _esc(modalidad if modalidad in ("qr","inst","presencial","online") else "todos") + '&act=presencial" style="padding:8px 14px;border-radius:980px;text-decoration:none;font-weight:600;font-size:12px;'
+        + ("background:#005BEA;color:#fff" if (request.args.get("act") or "") == "presencial" else "background:#f5f5f7;color:#1d1d1f") + '">Presencial</a>'
+        '<a href="/ventas/beneficios?mod=' + _esc(modalidad if modalidad in ("qr","inst","presencial","online") else "todos") + '&act=online" style="padding:8px 14px;border-radius:980px;text-decoration:none;font-weight:600;font-size:12px;'
+        + ("background:#005BEA;color:#fff" if (request.args.get("act") or "") == "online" else "background:#f5f5f7;color:#1d1d1f") + '">Online</a></div>'
     )
     body = (
         '<div style="max-width:1100px;margin:0 auto;padding:20px;font-family:-apple-system,sans-serif">'
@@ -24685,7 +24778,7 @@ def gerencia_hq():
           <div class="hq-pills">
             <a href="/gerencia/auditoria">Auditoría IP</a>
             <a href="/auditoria">Auditoría global</a>
-            <a href="/gerencia/planes">Planes · precios</a>
+            <a class="hq-pill-primary" href="/gerencia/planes">Planes comerciales</a><a href="/gerencia/beneficios">Beneficios</a><a href="/gerencia/planes/nuevo">Crear plan</a>
             <a href="/gerencia/lideres">Líderes / equipo</a>
             <a class="hq-pill-more" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
             <a class="hq-pill-more" href="/gerencia/turnos">Turnos</a>
@@ -32244,227 +32337,477 @@ def modulo_retencion():
 
 @app.route("/gerencia/planes", methods=["GET", "POST"])
 def gerencia_planes():
-    """Planes en tarjetas/módulos: elige un plan y edítalo (sin scroll infinito)."""
+    """Listado de planes en tarjetas. Edición y alta van a páginas separadas."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
     try:
+        _ensure_plan_comercial_cols()
         _seed_planes_comerciales()
     except Exception:
         pass
-    msg = ""
-    edit_id = request.args.get("edit") or request.form.get("plan_id")
-    if request.method == "POST" and request.form.get("accion") == "crear":
-        cod = (request.form.get("codigo") or "").strip().lower().replace(" ", "_")[:40]
-        if not cod:
-            msg = "Código de plan obligatorio."
-        elif PlanComercial.query.filter_by(codigo=cod).first():
-            msg = "Ya existe un plan con código %s." % cod
-        else:
-            try:
-                precio_base = float(request.form.get("precio") or 0)
-                descuento_pct = float(request.form.get("descuento_pct") or 0)
-                descuento_pct = max(0, min(100, descuento_pct))
-                precio_m = round(precio_base * (1 - descuento_pct / 100.0), 2) if descuento_pct else precio_base
-                p = PlanComercial(
-                    codigo=cod,
-                    nombre=(request.form.get("nombre") or cod)[:80],
-                    precio_mensual=precio_m,
-                    precio_lista=precio_base,
-                    descuento_pct=descuento_pct,
-                    fee_implementacion=float(request.form.get("fee") or 0),
-                    max_estudiantes=int(request.form.get("max_e") or 300),
-                    max_sedes=int(request.form.get("max_s") or 1),
-                    features_json=__import__("json").dumps(
-                        [x.strip() for x in (request.form.get("features") or "").split("|") if x.strip()],
-                        ensure_ascii=False,
-                    ),
-                    activo=True,
-                    orden=int(request.form.get("orden") or 99),
-                )
-                db.session.add(p)
-                db.session.commit()
-                msg = "Plan %s creado. Facturación: mensual $%s · fee $%s." % (p.nombre, precio_m, p.fee_implementacion)
-                try:
-                    registrar_auditoria("Plan comercial creado", "%s · $%s" % (cod, precio_m))
-                except Exception:
-                    pass
-            except Exception as ex:
-                db.session.rollback()
-                msg = "Error al crear plan: %s" % ex
-    elif request.method == "POST" and request.form.get("plan_id"):
-        try:
-            pid = int(request.form.get("plan_id"))
-        except ValueError:
-            pid = 0
-        p = PlanComercial.query.get(pid)
-        if p:
-            p.nombre = (request.form.get("nombre") or p.nombre)[:80]
-            try:
-                precio_base = float(request.form.get("precio") or 0)
-                descuento_pct = float(request.form.get("descuento_pct") or 0)
-                if descuento_pct < 0:
-                    descuento_pct = 0
-                if descuento_pct > 100:
-                    descuento_pct = 100
-                # precio_lista = tarifa publicada; precio_mensual = con descuento (lo que se factura)
-                if hasattr(p, "precio_lista"):
-                    p.precio_lista = precio_base
-                p.descuento_pct = descuento_pct
-                if descuento_pct > 0:
-                    p.precio_mensual = round(precio_base * (1 - descuento_pct / 100.0), 2)
-                else:
-                    p.precio_mensual = precio_base
-                p.fee_implementacion = float(request.form.get("fee") or 0)
-                p.max_estudiantes = int(request.form.get("max_e") or 100)
-                p.max_sedes = int(request.form.get("max_s") or 20)
-            except ValueError:
-                pass
-            feats = (request.form.get("features") or "").strip()
-            p.features_json = json.dumps([x.strip() for x in feats.split("|") if x.strip()], ensure_ascii=False)
-            img = request.files.get("imagen")
-            if img and img.filename:
-                folder = os.path.join(app.root_path, "static", "uploads", "planes")
-                os.makedirs(folder, exist_ok=True)
-                fname = f"plan_{p.id}.jpg"
-                dest = os.path.join(folder, fname)
-                try:
-                    from PIL import Image
-                    from io import BytesIO
-                    raw = img.read()
-                    im = Image.open(BytesIO(raw))
-                    if im.mode in ("RGBA", "P"):
-                        im = im.convert("RGB")
-                    # miniatura ancha para tarjeta (no estira el layout)
-                    im.thumbnail((480, 160), Image.Resampling.LANCZOS)
-                    canvas = Image.new("RGB", (480, 160), (11, 45, 87))
-                    x = (480 - im.width) // 2
-                    y = (160 - im.height) // 2
-                    canvas.paste(im, (x, y))
-                    canvas.save(dest, "JPEG", quality=85)
-                except Exception:
-                    img.stream.seek(0) if hasattr(img, "stream") else None
-                    try:
-                        img.seek(0)
-                    except Exception:
-                        pass
-                    img.save(dest)
-                p.imagen_path = f"/static/uploads/planes/{fname}"
-            db.session.commit()
-            registrar_auditoria("Gerencia plan editado", f"{p.codigo}")
-            msg = f"Plan {p.nombre} guardado."
-            edit_id = None
-    planes = PlanComercial.query.order_by(PlanComercial.orden).all()
+    msg = (request.args.get("msg") or "").strip()
+    # Compat: si alguien entra con ?edit= redirigir a página de edición
+    edit_id = request.args.get("edit")
+    if edit_id:
+        return redirect("/gerencia/planes/editar/%s" % edit_id)
+    planes = PlanComercial.query.order_by(PlanComercial.orden, PlanComercial.id).all()
     addons = AddonComercial.query.filter_by(activo=True).all()
-    # Tarjetas de planes
     cards = ""
     for p in planes:
-        img_html = f'<img src="{p.imagen_path}" alt="" class="pcard-img" style="height:64px;max-height:64px;width:100%;object-fit:cover">' if getattr(p, "imagen_path", None) else '<div class="pcard-img ph">EduTrack</div>'
+        img_html = (
+            f'<img src="{_esc(p.imagen_path)}" alt="" class="pcard-img" style="height:64px;max-height:64px;width:100%;object-fit:cover">'
+            if getattr(p, "imagen_path", None)
+            else '<div class="pcard-img ph">EduTrack</div>'
+        )
+        mod = (getattr(p, "modalidad", None) or "presencial").lower()
+        mod_badge = "Online" if mod == "online" else "Presencial"
+        desc_m = int(getattr(p, "descuento_meses", 0) or 0)
+        desc_line = ""
+        if float(getattr(p, "descuento_pct", 0) or 0) > 0:
+            desc_line = (
+                '<div style="color:#16a34a;font-size:12px;font-weight:700">Desc. %s%% · antes %s'
+                % (int(getattr(p, "descuento_pct", 0) or 0), _cop(getattr(p, "precio_lista", None) or p.precio_mensual))
+            )
+            if desc_m > 0:
+                desc_line += " · %s mes(es)" % desc_m
+            desc_line += "</div>"
         cards += f"""
-        <a class="pcard" href="/gerencia/planes?edit={p.id}">
+        <div class="pcard">
           {img_html}
-          <div class="pcard-code">{p.codigo}</div>
-          <div class="pcard-name">{p.nombre}</div>
+          <div class="pcard-code">{_esc(p.codigo)} · {mod_badge}</div>
+          <div class="pcard-name">{_esc(p.nombre)}</div>
           <div class="pcard-price">{_cop(p.precio_mensual)}<span> / mes</span></div>
-          {('<div style="color:#16a34a;font-size:12px;font-weight:700">Desc. '+str(int(getattr(p,"descuento_pct",0) or 0))+'% · antes '+_cop(getattr(p,"precio_lista",None) or p.precio_mensual)+'</div>') if float(getattr(p,"descuento_pct",0) or 0)>0 else ''}
-          <div class="pcard-meta">Impl. {_cop(p.fee_implementacion)} · ≤{p.max_estudiantes} est. · {p.max_sedes} sede(s)</div>
-          <div class="pcard-btn">Editar plan</div>
-        </a>"""
-    form_html = ""
-    if edit_id:
-        try:
-            p = PlanComercial.query.get(int(edit_id))
-        except Exception:
-            p = None
-        if p:
-            try:
-                feats = "|".join(json.loads(p.features_json or "[]"))
-            except Exception:
-                feats = ""
-            form_html = f"""
-            <div class="pedit">
-              <h2>Editar: {p.nombre}</h2>
-              <form method="POST" enctype="multipart/form-data">
-                <input type="hidden" name="plan_id" value="{p.id}">
-                <label>Nombre</label>
-                <input name="nombre" value="{p.nombre}" required>
-                <div class="row2">
-                  <div>
-                    <label>Precio mensual (pesos colombianos completos, sin puntos)</label>
-                    <input name="precio" type="number" min="0" step="1" placeholder="Ej: 70000" value="{int(p.precio_mensual)}">
-                    <p style="font-size:11px;color:#64748b;margin:4px 0 0">
-                      Escriba el valor completo en pesos. Ej: para $70.000 COP escriba <b>70000</b> (no <b>70</b>).
-                      Ahora se ve como: <b>{_cop(p.precio_mensual)}</b> · Si el plan aún no tiene tarifa definida, deje en 0 (se mostrará "Consultar precio").
-                    </p>
-                  </div>
-                  <div><label>Fee implementación</label><input name="fee" type="number" min="0" step="1" placeholder="Ej: 550000" value="{int(p.fee_implementacion)}"></div>
-                </div>
-                <div class="row2">
-                  <div><label>Máx. estudiantes</label><input name="max_e" type="number" value="{p.max_estudiantes}"></div>
-                  <div><label>Máx. sedes</label><input name="max_s" type="number" value="{p.max_sedes}"></div>
-                  <div><label>Descuento %</label><input name="descuento_pct" type="number" min="0" max="100" step="0.5" value="{float(getattr(p,'descuento_pct',0) or 0)}" placeholder="Ej: 10">
-                  <p style="font-size:11px;color:#64748b;margin:4px 0 0">El precio de lista se guarda y el mensalidad se factura ya con descuento. Se refleja en Ventas.</p></div>
-                </div>
-                <label>Features (separadas por |)</label>
-                <textarea name="features" rows="3">{feats}</textarea>
-                <label>Imagen del plan</label>
-                <input type="file" name="imagen" accept="image/*">
-                <div class="actions">
-                  <button type="submit">Guardar</button>
-                  <a href="/gerencia/planes">Cancelar</a>
-                </div>
-              </form>
-            </div>"""
+          {desc_line}
+          <div class="pcard-meta">Impl. {_cop(p.fee_implementacion)} · ≤{p.max_estudiantes} est. · {p.max_sedes} sede(s)
+          · Adm {getattr(p,'max_admin',10) or 10} · Doc {getattr(p,'max_docentes',30) or 30}</div>
+          <a class="pcard-btn" href="/gerencia/planes/editar/{p.id}">Editar plan</a>
+        </div>"""
     add_html = "".join(
-        f'<div class="addon"><b>{a.nombre}</b><span>{_cop(a.precio_mensual)} / mes</span><small>{_esc(a.descripcion)}</small></div>'
+        f'<div class="addon"><b>{_esc(a.nombre)}</b><span>{_cop(a.precio_mensual)} / mes</span><small>{_esc(a.descripcion)}</small></div>'
         for a in addons
     )
     body = f"""
 <style>
 .gpages{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px 16px 40px}}
-.gpages-in{{max-width:960px;margin:0 auto}}
+.gpages-in{{max-width:1100px;margin:0 auto}}
 .gpages a.back{{color:#0B2D57;font-weight:700;text-decoration:none;font-size:13px}}
 .gpages h1{{color:#0B2D57;margin:8px 0 6px;font-size:22px}}
 .gpages .sub{{color:#64748b;font-size:13px;margin-bottom:16px}}
-.pgrid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;align-items:start}}
+.pgrid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:20px;align-items:start}}
+.pcard{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(15,23,42,.04);display:flex;flex-direction:column}}
 .pcard-img,.pcard img{{width:100%!important;height:64px!important;max-height:64px!important;object-fit:cover!important;border-radius:8px;margin-bottom:8px;background:#0B2D57;display:block}}
-.pcard-img.ph{{height:64px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px}}
-.pcard{{overflow:hidden;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px;text-decoration:none;color:#0f172a;box-shadow:0 4px 14px rgba(15,23,42,.05);display:flex;flex-direction:column;min-height:0}}
-.pcard:hover{{border-color:#0B2D57;box-shadow:0 8px 20px rgba(11,45,87,.12)}}
-.pcard-code{{font-size:11px;text-transform:uppercase;color:#64748b;font-weight:800;letter-spacing:.04em}}
+.pcard-img.ph{{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px}}
+.pcard-code{{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em;font-weight:700}}
 .pcard-name{{font-size:18px;font-weight:800;color:#0B2D57;margin:4px 0}}
-.pcard-price{{font-size:22px;font-weight:900;margin:8px 0}}
+.pcard-price{{font-size:20px;font-weight:800;color:#0f172a;margin:6px 0}}
 .pcard-price span{{font-size:12px;font-weight:600;color:#64748b}}
-.pcard-meta{{font-size:11px;color:#64748b;margin-bottom:10px}}
-.pcard-btn{{background:#0B2D57;color:#fff;text-align:center;padding:8px;border-radius:8px;font-size:12px;font-weight:700}}
-.pedit{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px}}
-.pedit h2{{margin:0 0 12px;color:#0B2D57;font-size:16px}}
-.pedit label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:8px 0 4px}}
-.pedit input,.pedit textarea{{width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box}}
-.row2{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
-.actions{{margin-top:14px;display:flex;gap:12px;align-items:center}}
-.actions button{{background:#0B2D57;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800}}
-.actions a{{color:#64748b;font-size:13px}}
+.pcard-meta{{font-size:11px;color:#64748b;margin-bottom:10px;line-height:1.4}}
+.pcard-btn{{display:block;background:#0B2D57;color:#fff;text-align:center;padding:10px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;margin-top:auto}}
 .addons{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}}
 .addon{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px}}
-.addon b{{display:block;color:#0B2D57}}
-.addon span{{color:#15803d;font-weight:800;font-size:14px}}
+.addon b{{display:block;color:#0B2D57}}.addon span{{color:#15803d;font-weight:800;font-size:14px}}
 .addon small{{display:block;color:#64748b;margin-top:4px}}
 .msg{{background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin-bottom:12px;font-weight:600}}
+.top-actions{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}}
+.top-actions a{{display:inline-block;padding:10px 16px;border-radius:980px;font-weight:700;font-size:13px;text-decoration:none}}
+.top-actions .prim{{background:#005BEA;color:#fff}}.top-actions .sec{{background:#f5f5f7;color:#0B2D57}}
 </style>
 <div class="gpages"><div class="gpages-in">
   <a class="back" href="/gerencia/hq">← Módulos HQ</a>
   <h1>Planes comerciales</h1>
-  <p class="sub">Elija un plan (tarjeta). No hay lista larga: solo edita el que necesita.</p>
-  {"<div class='msg'>"+msg+"</div>" if msg else ""}
-  {form_html}
-  <div class="pgrid">{cards}</div>
+  <p class="sub">Elija un plan y edítelo en una ventana separada. Beneficios y alta de planes tienen su propio módulo.</p>
+  {"<div class='msg'>"+_esc(msg)+"</div>" if msg else ""}
+  <div class="top-actions">
+    <a class="prim" href="/gerencia/planes/nuevo">+ Crear plan nuevo</a>
+    <a class="sec" href="/gerencia/beneficios">Ver beneficios (solo copy)</a>
+    <a class="sec" href="/ventas/beneficios" target="_blank">Portal ventas / público</a>
+  </div>
+  <div class="pgrid">{cards or "<p>Sin planes. Cree el primero.</p>"}</div>
   <h2 style="color:#0B2D57;font-size:16px">Add-ons</h2>
   <div class="addons">{add_html or "<p>Sin add-ons</p>"}</div>
 </div></div>
 """
     return page("Planes gerencia", body)
 
+
+def _plan_form_fields(p=None, crear=False):
+    """HTML de campos compartidos crear/editar plan."""
+    p = p or PlanComercial()
+    try:
+        feats = "|".join(json.loads(p.features_json or "[]")) if getattr(p, "features_json", None) else ""
+    except Exception:
+        feats = ""
+    mod = (getattr(p, "modalidad", None) or "presencial").lower()
+    precio_lista = int(float(getattr(p, "precio_lista", None) or getattr(p, "precio_mensual", 0) or 0))
+    return f"""
+                <label>Nombre</label>
+                <input name="nombre" value="{_esc(getattr(p,'nombre',None) or '')}" required placeholder="Ej: Básico">
+                {"<label>Código (único, minúsculas)</label><input name='codigo' required placeholder='ej: basico_pro' pattern='[a-z0-9_]+'>" if crear else ""}
+                <label style="margin-top:12px">Modalidad del plan</label>
+                <div style="display:flex;gap:16px;margin:8px 0 12px;font-size:14px">
+                  <label style="font-weight:600;display:flex;align-items:center;gap:6px"><input type="radio" name="modalidad" value="presencial" {"checked" if mod!="online" else ""}> Presencial</label>
+                  <label style="font-weight:600;display:flex;align-items:center;gap:6px"><input type="radio" name="modalidad" value="online" {"checked" if mod=="online" else ""}> Online / Virtual</label>
+                </div>
+                <div class="row2">
+                  <div>
+                    <label>Precio lista mensual (COP, sin puntos)</label>
+                    <input name="precio" type="number" min="0" step="1" value="{precio_lista}" placeholder="Ej: 108338">
+                    <p class="hint">Tarifa plena antes de descuento. Se factura el precio con descuento mientras dure la promo.</p>
+                  </div>
+                  <div>
+                    <label>Fee implementación</label>
+                    <input name="fee" type="number" min="0" step="1" value="{int(float(getattr(p,'fee_implementacion',0) or 0))}" placeholder="Ej: 250000">
+                  </div>
+                </div>
+                <div class="row2">
+                  <div><label>Máx. estudiantes</label><input name="max_e" type="number" value="{int(getattr(p,'max_estudiantes',750) or 750)}"></div>
+                  <div><label>Máx. sedes</label><input name="max_s" type="number" value="{int(getattr(p,'max_sedes',3) or 3)}"></div>
+                </div>
+                <div class="row2">
+                  <div><label>Máx. usuarios administrativos</label><input name="max_admin" type="number" value="{int(getattr(p,'max_admin',10) or 10)}"></div>
+                  <div><label>Máx. profesores / docentes</label><input name="max_docentes" type="number" value="{int(getattr(p,'max_docentes',30) or 30)}"></div>
+                </div>
+                <div class="row2">
+                  <div>
+                    <label>Descuento %</label>
+                    <input name="descuento_pct" type="number" min="0" max="100" step="0.5" value="{float(getattr(p,'descuento_pct',0) or 0)}">
+                  </div>
+                  <div>
+                    <label>Duración del descuento (meses)</label>
+                    <input name="descuento_meses" type="number" min="0" max="36" value="{int(getattr(p,'descuento_meses',0) or 0)}" placeholder="Ej: 4">
+                    <p class="hint">Tras esos meses el sistema pasa a tarifa plena.</p>
+                  </div>
+                </div>
+                <label>Título comercial / eslogan (ventas)</label>
+                <input name="titulo_comercial" value="{_esc(getattr(p,'titulo_comercial',None) or '')}" placeholder="✨ Un plan que lo tiene todo ✨" maxlength="160">
+                <label>Mensaje WhatsApp / cuerpo comercial (emojis permitidos)</label>
+                <textarea name="mensaje_whatsapp" rows="6" placeholder="📶 Asistencia QR&#10;⚡ Reportes en un clic&#10;📲 Aviso al acudiente">{_esc(getattr(p,'mensaje_whatsapp',None) or '')}</textarea>
+                <label>Llamado a la acción (CTA)</label>
+                <input name="cta_comercial" value="{_esc(getattr(p,'cta_comercial',None) or '')}" placeholder="¿Te gustaría tomar esta oferta exclusiva? 🤩" maxlength="255">
+                <label>Features internas (separadas por |)</label>
+                <textarea name="features" rows="2">{_esc(feats)}</textarea>
+                <p class="hint">Configuración del sistema (incluidos|excluidos|tagline…). El copy de ventas va en los campos de arriba.</p>
+                <label>Imagen del plan</label>
+                <input type="file" name="imagen" accept="image/*">
+"""
+
+
+def _aplicar_campos_plan(p, form, crear=False):
+    p.nombre = (form.get("nombre") or p.nombre or "")[:80]
+    if crear:
+        cod = (form.get("codigo") or "").strip().lower().replace(" ", "_")[:40]
+        p.codigo = cod
+    mod = (form.get("modalidad") or "presencial").strip().lower()
+    p.modalidad = "online" if mod == "online" else "presencial"
+    precio_base = float(form.get("precio") or 0)
+    descuento_pct = max(0.0, min(100.0, float(form.get("descuento_pct") or 0)))
+    p.precio_lista = precio_base
+    p.descuento_pct = descuento_pct
+    p.descuento_meses = max(0, int(form.get("descuento_meses") or 0))
+    if descuento_pct > 0:
+        p.precio_mensual = round(precio_base * (1 - descuento_pct / 100.0), 2)
+    else:
+        p.precio_mensual = precio_base
+    p.fee_implementacion = float(form.get("fee") or 0)
+    p.max_estudiantes = int(form.get("max_e") or 100)
+    p.max_sedes = int(form.get("max_s") or 1)
+    p.max_admin = int(form.get("max_admin") or 10)
+    p.max_docentes = int(form.get("max_docentes") or 30)
+    p.titulo_comercial = (form.get("titulo_comercial") or "")[:160]
+    p.mensaje_whatsapp = (form.get("mensaje_whatsapp") or "")[:8000]
+    p.cta_comercial = (form.get("cta_comercial") or "")[:255]
+    feats = (form.get("features") or "").strip()
+    p.features_json = json.dumps([x.strip() for x in feats.split("|") if x.strip()], ensure_ascii=False)
+    img = request.files.get("imagen")
+    if img and img.filename:
+        folder = os.path.join(app.root_path, "static", "uploads", "planes")
+        os.makedirs(folder, exist_ok=True)
+        fname = "plan_%s.jpg" % (p.id or p.codigo or "new")
+        dest = os.path.join(folder, fname)
+        try:
+            from PIL import Image
+            from io import BytesIO
+            raw = img.read()
+            im = Image.open(BytesIO(raw))
+            if im.mode in ("RGBA", "P"):
+                im = im.convert("RGB")
+            im.thumbnail((480, 160), Image.Resampling.LANCZOS)
+            canvas = Image.new("RGB", (480, 160), (11, 45, 87))
+            x = (480 - im.width) // 2
+            y = (160 - im.height) // 2
+            canvas.paste(im, (x, y))
+            canvas.save(dest, "JPEG", quality=85)
+            p.imagen_path = "/static/uploads/planes/%s" % fname
+        except Exception:
+            try:
+                img.stream.seek(0)
+            except Exception:
+                pass
+            try:
+                img.save(dest)
+                p.imagen_path = "/static/uploads/planes/%s" % fname
+            except Exception:
+                pass
+
+
+@app.route("/gerencia/planes/editar/<int:pid>", methods=["GET", "POST"])
+def gerencia_planes_editar(pid):
+    """Edición de un plan en página dedicada (sin listado debajo)."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    try:
+        _ensure_plan_comercial_cols()
+    except Exception:
+        pass
+    p = PlanComercial.query.get_or_404(pid)
+    err = msg = ""
+    if request.method == "POST":
+        try:
+            _aplicar_campos_plan(p, request.form, crear=False)
+            db.session.commit()
+            try:
+                registrar_auditoria("Gerencia plan editado", p.codigo or str(p.id))
+            except Exception:
+                pass
+            return redirect("/gerencia/planes?msg=" + quote("Plan %s guardado." % (p.nombre or "")))
+        except Exception as e:
+            db.session.rollback()
+            err = str(e)[:200]
+    body = f"""
+<style>
+.gpages{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px 16px 40px}}
+.gpages-in{{max-width:720px;margin:0 auto}}
+.pedit{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px}}
+.pedit h1{{margin:0 0 6px;color:#0B2D57;font-size:20px}}
+.pedit label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:10px 0 4px}}
+.pedit input,.pedit textarea{{width:100%;padding:11px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:14px}}
+.row2{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+.hint{{font-size:11px;color:#64748b;margin:4px 0 0}}
+.actions{{margin-top:18px;display:flex;gap:12px;align-items:center}}
+.actions button{{background:#0B2D57;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer}}
+.actions a{{color:#64748b;font-size:13px}}
+.msg{{padding:10px;border-radius:8px;margin-bottom:12px;font-weight:600}}
+.ok{{background:#dcfce7;color:#166534}}.err{{background:#fee2e2;color:#991b1b}}
+@media(max-width:640px){{.row2{{grid-template-columns:1fr}}}}
+</style>
+<div class="gpages"><div class="gpages-in">
+  <a href="/gerencia/planes" style="color:#0B2D57;font-weight:700;text-decoration:none;font-size:13px">← Volver a planes</a>
+  <div class="pedit" style="margin-top:12px">
+    <h1>Editar: {_esc(p.nombre)}</h1>
+    <p style="color:#64748b;font-size:13px;margin:0 0 12px">Código <b>{_esc(p.codigo)}</b> · los cambios se reflejan en ventas y portal público al instante.</p>
+    {"<div class='msg err'>"+_esc(err)+"</div>" if err else ""}
+    <form method="POST" enctype="multipart/form-data">
+      {_plan_form_fields(p, crear=False)}
+      <div class="actions">
+        <button type="submit">Guardar plan</button>
+        <a href="/gerencia/planes">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div></div>
+"""
+    return page("Editar plan", body)
+
+
+@app.route("/gerencia/planes/nuevo", methods=["GET", "POST"])
+def gerencia_planes_nuevo():
+    """Alta de un plan comercial nuevo (módulo dedicado)."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    try:
+        _ensure_plan_comercial_cols()
+    except Exception:
+        pass
+    err = ""
+    if request.method == "POST":
+        cod = (request.form.get("codigo") or "").strip().lower().replace(" ", "_")[:40]
+        if not cod:
+            err = "Código de plan obligatorio."
+        elif PlanComercial.query.filter_by(codigo=cod).first():
+            err = "Ya existe un plan con código %s." % cod
+        else:
+            try:
+                p = PlanComercial(codigo=cod, activo=True, orden=int(request.form.get("orden") or 99))
+                _aplicar_campos_plan(p, request.form, crear=True)
+                db.session.add(p)
+                db.session.commit()
+                # renombrar imagen con id real si se subió
+                try:
+                    if p.imagen_path and "plan_new" in (p.imagen_path or ""):
+                        pass
+                except Exception:
+                    pass
+                try:
+                    registrar_auditoria("Plan comercial creado", "%s · $%s" % (cod, p.precio_mensual))
+                except Exception:
+                    pass
+                return redirect("/gerencia/planes?msg=" + quote("Plan %s creado." % (p.nombre or cod)))
+            except Exception as e:
+                db.session.rollback()
+                err = str(e)[:200]
+    body = f"""
+<style>
+.gpages{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px 16px 40px}}
+.gpages-in{{max-width:720px;margin:0 auto}}
+.pedit{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px}}
+.pedit h1{{margin:0 0 6px;color:#0B2D57;font-size:20px}}
+.pedit label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:10px 0 4px}}
+.pedit input,.pedit textarea{{width:100%;padding:11px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:14px}}
+.row2{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+.hint{{font-size:11px;color:#64748b;margin:4px 0 0}}
+.actions{{margin-top:18px;display:flex;gap:12px;align-items:center}}
+.actions button{{background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer}}
+.actions a{{color:#64748b;font-size:13px}}
+.err{{background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-weight:600}}
+@media(max-width:640px){{.row2{{grid-template-columns:1fr}}}}
+</style>
+<div class="gpages"><div class="gpages-in">
+  <a href="/gerencia/planes" style="color:#0B2D57;font-weight:700;text-decoration:none;font-size:13px">← Volver a planes</a>
+  <div class="pedit" style="margin-top:12px">
+    <h1>Crear plan nuevo</h1>
+    <p style="color:#64748b;font-size:13px;margin:0 0 12px">Solo alta. Luego podrá editar precios, copy de ventas y límites.</p>
+    {"<div class='err'>"+_esc(err)+"</div>" if err else ""}
+    <form method="POST" enctype="multipart/form-data">
+      {_plan_form_fields(None, crear=True)}
+      <div class="actions">
+        <button type="submit">Crear plan</button>
+        <a href="/gerencia/planes">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div></div>
+"""
+    return page("Nuevo plan", body)
+
+
+@app.route("/gerencia/beneficios")
+def gerencia_beneficios():
+    """Solo beneficios / vista previa de planes activos (diseño tipo portal)."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    try:
+        _ensure_plan_comercial_cols()
+        _seed_planes_comerciales()
+    except Exception:
+        pass
+    promo = None
+    try:
+        promo = _promo_activa_global()
+    except Exception:
+        pass
+    planes = PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden, PlanComercial.id).all()
+    cards = []
+    for pl in planes:
+        pleno = float(getattr(pl, "precio_lista", 0) or 0) or float(getattr(pl, "precio_mensual", 0) or 0)
+        try:
+            pv = _calcular_promo_valores(pleno, promo)
+        except Exception:
+            pv = {"valor_pleno": int(pleno), "valor_descuento": int(float(pl.precio_mensual or pleno)), "porcentaje": float(getattr(pl, "descuento_pct", 0) or 0), "nombre_promo": "", "fecha_caducidad_texto": ""}
+        # Prefer plan-level discount if set
+        if float(getattr(pl, "descuento_pct", 0) or 0) > 0:
+            pct = float(pl.descuento_pct)
+            val_desc = int(float(pl.precio_mensual or 0)) or int(round(pleno * (1 - pct / 100)))
+            val_pleno = int(pleno)
+        else:
+            pct = float(pv.get("porcentaje") or 0)
+            val_desc = int(pv.get("valor_descuento") or pleno)
+            val_pleno = int(pv.get("valor_pleno") or pleno)
+        meses = int(getattr(pl, "descuento_meses", 0) or 0)
+        titulo = (getattr(pl, "titulo_comercial", None) or "").strip()
+        msg_wa = (getattr(pl, "mensaje_whatsapp", None) or "").strip()
+        cta = (getattr(pl, "cta_comercial", None) or "").strip()
+        mod = (getattr(pl, "modalidad", None) or "presencial").lower()
+        badge_promo = ""
+        if pct > 0:
+            nom = (pv.get("nombre_promo") or "DESCUENTO INSTITUCIONAL").upper()
+            badge_promo = (
+                '<div class="bp-badge">%s · %s%%'
+                % (_esc(nom[:40]), ("{:.1f}".format(pct).rstrip("0").rstrip(".")))
+            )
+            if meses > 0:
+                badge_promo += " · %s meses" % meses
+            badge_promo += "</div>"
+            if pv.get("fecha_caducidad_texto"):
+                badge_promo += '<div class="bp-until">Hasta %s</div>' % _esc(pv.get("fecha_caducidad_texto"))
+        precio_html = (
+            '<div class="bp-price">$%s <span>COP/mes</span></div>'
+            % ("{:,.0f}".format(val_desc).replace(",", "."))
+        )
+        if pct > 0 and val_pleno > val_desc:
+            precio_html += (
+                '<div class="bp-strike">$%s COP</div>'
+                % ("{:,.0f}".format(val_pleno).replace(",", "."))
+            )
+        copy_block = ""
+        if titulo or msg_wa or cta:
+            copy_block = '<div class="bp-copy">'
+            if titulo:
+                copy_block += '<div class="bp-title-c">%s</div>' % _esc(titulo)
+            if msg_wa:
+                copy_block += '<pre class="bp-msg">%s</pre>' % _esc(msg_wa)
+            if cta:
+                copy_block += '<div class="bp-cta">%s</div>' % _esc(cta)
+            copy_block += "</div>"
+        cards.append(
+            '<div class="bp-card" data-mod="%s">'
+            '<div class="bp-code">%s</div>'
+            '<div class="bp-name">%s</div>'
+            '%s%s%s'
+            '<div class="bp-meta">%s · ≤%s est. · Adm %s · Doc %s</div>'
+            '</div>'
+            % (
+                _esc(mod),
+                _esc((pl.codigo or "").upper()),
+                _esc(pl.nombre or pl.codigo),
+                precio_html,
+                badge_promo,
+                copy_block,
+                "Online" if mod == "online" else "Presencial",
+                pl.max_estudiantes or "—",
+                getattr(pl, "max_admin", None) or "—",
+                getattr(pl, "max_docentes", None) or "—",
+            )
+        )
+    body = f"""
+<style>
+.bp{{background:#f5f5f7;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px 16px 48px}}
+.bp-in{{max-width:1100px;margin:0 auto}}
+.bp h1{{color:#002060;margin:8px 0 4px;font-size:24px;font-weight:700}}
+.bp .sub{{color:#86868b;font-size:13px;margin:0 0 18px}}
+.bp-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}}
+.bp-card{{background:#fff;border-radius:18px;padding:18px 16px;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 12px rgba(0,0,0,.03)}}
+.bp-code{{font-size:11px;font-weight:700;color:#86868b;letter-spacing:.06em;text-transform:uppercase}}
+.bp-name{{font-size:18px;font-weight:700;color:#1d1d1f;margin:4px 0 8px}}
+.bp-price{{font-size:26px;font-weight:700;color:#005BEA}}
+.bp-price span{{font-size:13px;font-weight:500;color:#86868b}}
+.bp-strike{{font-size:13px;color:#86868b;text-decoration:line-through;margin-top:2px}}
+.bp-badge{{display:inline-block;margin-top:10px;background:#e8f1ff;color:#005BEA;font-size:11px;font-weight:700;padding:6px 10px;border-radius:999px}}
+.bp-until{{font-size:11px;color:#86868b;margin-top:6px}}
+.bp-copy{{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0}}
+.bp-title-c{{font-weight:700;color:#002060;font-size:14px;margin-bottom:6px}}
+.bp-msg{{white-space:pre-wrap;font-family:inherit;font-size:12px;color:#1d1d1f;margin:0;line-height:1.45}}
+.bp-cta{{margin-top:8px;font-size:12px;font-weight:600;color:#005BEA}}
+.bp-meta{{margin-top:12px;font-size:11px;color:#86868b}}
+.bp-nav{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}}
+.bp-nav a{{padding:8px 14px;border-radius:980px;background:#fff;border:1px solid #e2e8f0;text-decoration:none;color:#002060;font-size:12px;font-weight:600}}
+</style>
+<div class="bp"><div class="bp-in">
+  <a href="/gerencia/hq" style="color:#86868b;font-size:13px;text-decoration:none">← Módulos HQ</a>
+  <h1>Beneficios de planes</h1>
+  <p class="sub">Vista previa en tiempo real · solo beneficios y copy comercial (sin editar precios aquí).</p>
+  <div class="bp-nav">
+    <a href="/gerencia/planes">Editar planes</a>
+    <a href="/gerencia/planes/nuevo">Crear plan</a>
+    <a href="/ventas/beneficios" target="_blank">Ver en ventas</a>
+  </div>
+  <div class="bp-grid">{"".join(cards) or "<p>No hay planes activos.</p>"}</div>
+</div></div>
+"""
+    return page("Beneficios planes", body)
 
 
 @app.route("/soporte/verificar-pin/<token>", methods=["GET", "POST"])
