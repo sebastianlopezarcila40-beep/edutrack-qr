@@ -486,23 +486,61 @@ def es_plan_solo_qr(inst=None):
 
 
 def modulos_plan_actual(inst=None):
-    """Lista de módulos habilitados según el plan del colegio."""
+    """Lista de módulos habilitados: primero PlanComercial.features_json, luego PLANES_EDUTRACK."""
     cod = _codigo_plan_inst(inst)
-    meta = PLANES_EDUTRACK.get(cod)
-    if not meta:
-        # buscar por nombre aproximado
-        for k, v in PLANES_EDUTRACK.items():
-            if k.lower() == cod or (v.get("nombre") or "").lower() == cod:
-                meta = v
-                break
-    if meta and meta.get("modulos"):
-        return list(meta["modulos"])
-    if es_plan_solo_qr(inst):
-        return list((PLANES_EDUTRACK.get("qr_basico") or {}).get("modulos") or [
-            "asistencia_qr", "estudiantes", "reportes_basicos", "ingreso_manual", "portal_porteria", "calendario"
-        ])
-    # plan académico completo por defecto
-    return list((PLANES_EDUTRACK.get("Premium") or {}).get("modulos") or [])
+    mods = []
+    # 1) Configuración viva del plan comercial (Gerencia editar/crear)
+    try:
+        pc = None
+        try:
+            pc = PlanComercial.query.filter_by(codigo=cod).first()
+        except Exception:
+            pc = None
+        if not pc and cod:
+            try:
+                pc = PlanComercial.query.filter(PlanComercial.codigo.ilike(cod)).first()
+            except Exception:
+                pass
+        if not pc:
+            # mapear nombres comerciales
+            mapa_cod = {
+                "basico": "basico", "básico": "basico", "demo": "demo",
+                "estandar": "estandar", "estándar": "estandar",
+                "pro": "pro", "premium": "premium",
+                "institucional": "estandar",
+            }
+            c2 = mapa_cod.get(str(cod).lower())
+            if c2:
+                pc = PlanComercial.query.filter_by(codigo=c2).first()
+        if pc and getattr(pc, "features_json", None):
+            import json as _json
+            feats = _json.loads(pc.features_json or "{}")
+            if isinstance(feats, dict) and isinstance(feats.get("modulos"), list) and feats["modulos"]:
+                mods = [str(x).strip() for x in feats["modulos"] if str(x).strip()]
+    except Exception:
+        mods = []
+    # 2) Fallback diccionario técnico
+    if not mods:
+        meta = PLANES_EDUTRACK.get(cod)
+        if not meta:
+            for k, v in PLANES_EDUTRACK.items():
+                if k.lower() == (cod or "").lower() or (v.get("nombre") or "").lower() == (cod or "").lower():
+                    meta = v
+                    break
+        if meta and meta.get("modulos"):
+            mods = list(meta["modulos"])
+        elif es_plan_solo_qr(inst):
+            mods = list((PLANES_EDUTRACK.get("qr_basico") or {}).get("modulos") or [
+                "asistencia_qr", "estudiantes", "reportes_basicos", "ingreso_manual",
+                "portal_porteria", "calendario", "reportes_excel",
+            ])
+        else:
+            mods = list((PLANES_EDUTRACK.get("Basico") or {}).get("modulos") or [])
+    # 3) Siempre reportes export
+    for forced in ("reportes_basicos", "reportes_excel"):
+        if forced not in mods:
+            mods.append(forced)
+    return mods
 
 
 def plan_permite_ruta(path=None, inst=None):
@@ -591,7 +629,7 @@ SOPORTE_TELEFONO = "3105615621"
 # En Render puedes definir AUDITORIA_DELETE_HASH con un hash generado por generate_password_hash.
 
 # Multi-inquilino: cada colegio puede tener hasta 20 sedes
-MAX_SEDES_POR_COLEGIO = 20
+MAX_SEDES_POR_COLEGIO = int(os.environ.get("MAX_SEDES_POR_COLEGIO", "40"))  # por colegio; sistema 50+ colegios / 250+ sedes
 # Si no existe, se usa este código temporal de pruebas: Auditoria2026*
 AUDITORIA_DELETE_HASH = os.getenv("AUDITORIA_DELETE_HASH", generate_password_hash("Auditoria2026*"))
 HORA_INICIO_ASISTENCIA = "06:00"
@@ -5018,7 +5056,12 @@ _migracion_bd_lista = False  # candado: ejecutar migrar_columnas() una sola vez 
 _ultimo_dia_cron_facturacion = None  # candado: correr el ciclo de facturación automática una vez por día
 
 
-def inicializar_bd(): 
+def inicializar_bd():
+    try:
+        _ensure_scale_indexes()
+    except Exception as _sx:
+        print("scale idx:", _sx)
+    
     global _migracion_bd_lista
     # CRITICAL: no repetir create_all/migraciones en cada request (WORKER TIMEOUT en Railway)
     if getattr(inicializar_bd, "_done", False):
@@ -5512,7 +5555,7 @@ def max_sedes_para_institucion(iid):
     try:
         inst = Institucion.query.get(iid) if iid else None
         if inst and getattr(inst, "max_sedes", None):
-            tope = min(int(inst.max_sedes) or tope, 20)
+            tope = min(int(inst.max_sedes) or tope, int(MAX_SEDES_POR_COLEGIO))
         # plan comercial ligado
         plan_nombre = (getattr(inst, "plan", None) or getattr(inst, "plan_codigo", None) or "") if inst else ""
         if plan_nombre:
@@ -6608,10 +6651,18 @@ def plan_institucion(inst=None):
 
 
 def modulo_en_plan(clave, inst=None):
-    """¿El plan del colegio incluye este módulo?"""
-    plan = plan_institucion(inst)
-    mods = PLANES_EDUTRACK.get(plan, {}).get("modulos", [])
-    return clave in mods
+    """¿El plan del colegio incluye este módulo? (PlanComercial + diccionario)."""
+    if not clave:
+        return True
+    # export siempre
+    if clave in ("reportes_basicos", "reportes_excel"):
+        return True
+    try:
+        return clave in set(modulos_plan_actual(inst))
+    except Exception:
+        plan = plan_institucion(inst)
+        mods = PLANES_EDUTRACK.get(plan, {}).get("modulos", [])
+        return clave in mods
 
 
 def parse_fecha_iso(s):
@@ -8757,28 +8808,266 @@ def requiere_login(): return "usuario" in session
 
 @app.before_request
 def _guard_plan_qr_rutas():
-    """Si el colegio tiene plan Solo QR, bloquea módulos académicos no incluidos."""
+    """Bloquea rutas según módulos del plan (QR y académico). Backoffice PROCSIS no se limita."""
     try:
         if not session.get("usuario"):
             return None
-        path = (request.path or "")
-        if path.startswith(("/static", "/api/", "/logout", "/login", "/anuncio")):
+        path = (request.path or "").split("?")[0]
+        if path.startswith(("/static", "/api/", "/logout", "/login", "/anuncio", "/gerencia", "/ventas", "/soporte", "/cobranza", "/backoffice", "/dev-console")):
             return None
-        rol = (session.get("rol") or "")
-        if rol in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador") and session.get("soporte"):
-            return None  # backoffice PROCSIS no se limita
-        if not es_plan_solo_qr():
+        rol = rol_actual()
+        if rol in _ROLES_GLOBAL or session.get("soporte"):
             return None
-        if plan_permite_ruta(path):
+        if rol not in _ROLES_COLEGIO and rol not in ("Docente",):
             return None
-        return page("Plan Solo QR", mensaje_plan_qr_limitado())
+        # Solo QR: regla estricta existente
+        if es_plan_solo_qr():
+            if plan_permite_ruta(path):
+                return None
+            return page("Plan Solo QR", mensaje_plan_qr_limitado())
+        # Académico: bloquear solo rutas que exigen módulo explícito ausente
+        mods = set(modulos_plan_actual())
+        for pref, mod in _RUTA_MODULO_PLAN.items():
+            if path == pref or path.startswith(pref + "/"):
+                if mod in ("reportes_basicos", "reportes_excel"):
+                    return None
+                if mod in mods:
+                    return None
+                # módulo no contratado
+                return page(
+                    "Módulo no incluido",
+                    "<div class='msg danger' style='max-width:640px;margin:24px auto;padding:18px;border-radius:12px'>"
+                    "<b>Función no incluida en su plan</b><br>El módulo <code>%s</code> no está activo para este colegio. "
+                    "Contacte a comercial PROCSIS o revise el plan en Gerencia."
+                    "<br><br><a href='/dashboard'>← Volver</a> · <a href='/mi_licencia'>Mi licencia</a></div>"
+                    % _esc(mod),
+                )
+        return None
     except Exception as ex:
-        print("guard qr:", ex)
+        print("guard plan:", ex)
         return None
 
 
 
-def rol_actual(): return session.get("rol", "")
+
+@app.before_request
+def _aislamiento_roles_tenant():
+    """Aísla roles de colegio: Coordinación no opera como Secretaría/Rectoría; tenant obligatorio."""
+    try:
+        if not session.get("usuario"):
+            return None
+        path = (request.path or "").split("?")[0]
+        if path.startswith(("/static", "/logout", "/login", "/familia", "/acudiente", "/portal", "/pqr", "/matricula")):
+            return None
+        # Anti-escalada: nadie puede cambiar rol por query/form
+        if request.args.get("rol") or (request.method == "POST" and request.form.get("rol") and path not in ("/login", "/gerencia-login")):
+            # Forzar el rol de sesión; no aceptar override
+            pass
+        # Congelar rol de login
+        if session.get("rol_fijo") and session.get("rol") and session.get("rol") != session.get("rol_fijo"):
+            session["rol"] = session["rol_fijo"]
+        r = rol_actual()
+        if r in _ROLES_COLEGIO or r == "Docente":
+            iid = session.get("institucion_id")
+            if not iid:
+                try:
+                    institucion_id_actual()
+                except Exception:
+                    pass
+                iid = session.get("institucion_id")
+            if not iid and r != "Soporte":
+                session.clear()
+                return redirect("/login")
+            # Prefijos exclusivos por rol
+            if path.startswith("/coordinacion/"):
+                if r != "Coordinación":
+                    return acceso_denegado("Exclusivo de Coordinación. Su rol (%s) no puede entrar aquí." % r)
+            if path.startswith("/secretaria/"):
+                if r not in ("Secretaría", "Rectoría", "Soporte", "Administrador"):
+                    return acceso_denegado("Exclusivo de Secretaría/Rectoría.")
+            if path.startswith("/docente") or path.startswith("/notas/planilla"):
+                if r == "Coordinación" and path.startswith("/notas/planilla"):
+                    return acceso_denegado("La planilla la edita solo el Docente. Coordinación ve notas en modo consulta.")
+            # Coordinación NO puede retirar matrícula ni cambiar periodo
+            if r == "Coordinación":
+                if "retirar-estudiante" in path or path.startswith("/estudiantes/retirar"):
+                    return acceso_denegado("El retiro formal de matrícula es de Secretaría/Rectoría.")
+                if path in ("/periodo", "/cierres-periodo") or path.startswith("/periodo"):
+                    return acceso_denegado("Cambio de periodo es de Secretaría.")
+                if path.startswith("/salidas/consulta"):
+                    pass  # puede ver consulta
+                # Autorizar salidas solo en su bandeja
+            if path == "/coordinacion/salidas" and r != "Coordinación":
+                return acceso_denegado("Solo Coordinación autoriza salidas.")
+        return None
+    except Exception as _ae:
+        print("aislamiento:", _ae)
+        return None
+
+
+
+
+@app.before_request
+def _fijar_rol_sesion():
+    """Una vez logueado, el rol no se cambia en la sesión (anti-escalada)."""
+    try:
+        if not session.get("usuario"):
+            return None
+        r = (session.get("rol") or "").strip()
+        if not r:
+            return None
+        if not session.get("rol_fijo"):
+            session["rol_fijo"] = r
+            session.permanent = True
+        elif session.get("rol_fijo") != r and r not in ("Soporte", "Superadmin", "Gerente"):
+            # Impersonación soporte puede cambiar; colegio no
+            if not session.get("soporte") and not session.get("impersonate"):
+                session["rol"] = session["rol_fijo"]
+    except Exception:
+        pass
+    return None
+
+def rol_actual():
+    """Rol de sesión normalizado (sin alias que crucen permisos)."""
+    r = (session.get("rol") or "").strip()
+    # Alias legados → rol canónico (no ampliar poderes)
+    aliases = {
+        "Coordinacion": "Coordinación",
+        "coordinacion": "Coordinación",
+        "Secretaria": "Secretaría",
+        "secretaria": "Secretaría",
+        "Rectoria": "Rectoría",
+        "rectoria": "Rectoría",
+        "Admin": "Administrador",
+    }
+    return aliases.get(r, r)
+
+
+# --- Aislamiento de roles y tenant (colegio) ---
+_ROLES_COLEGIO = frozenset({
+    "Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador",
+})
+_ROLES_GLOBAL = frozenset({
+    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Desarrollador", "Developer",
+})
+# Quién puede EJECUTAR (no solo ver) cada capacidad crítica
+_CAPACIDAD_ROLES = {
+    "autorizar_salida": frozenset({"Coordinación"}),  # solo Coordinación del colegio
+    "ver_salidas": frozenset({"Coordinación", "Rectoría", "Secretaría", "Docente"}),
+    "retiro_estudiante": frozenset({"Secretaría", "Rectoría"}),
+    "editar_notas": frozenset({"Docente"}),
+    "matricula": frozenset({"Secretaría"}),
+    "convivencia_registrar": frozenset({"Coordinación"}),
+    "ingreso_manual": frozenset({"Coordinación"}),
+}
+
+
+def es_rol_colegio():
+    return rol_actual() in _ROLES_COLEGIO
+
+
+def es_rol_global_procsis():
+    return rol_actual() in _ROLES_GLOBAL
+
+
+def tiene_capacidad(cap):
+    """True si el rol actual puede ejecutar la capacidad (sin mezclar roles)."""
+    allowed = _CAPACIDAD_ROLES.get(cap)
+    if not allowed:
+        return False
+    r = rol_actual()
+    if r in allowed:
+        return True
+    # Soporte PROCSIS solo si explícitamente en sesión de soporte y sin suplantar rol colegio
+    if r == "Soporte" and session.get("soporte") and cap in ("ver_salidas",):
+        return True
+    return False
+
+
+def require_roles(*roles, msg=None):
+    """Exige uno de los roles exactos. Bloquea el resto (incluido Admin colegio si no está en la lista)."""
+    if not requiere_login():
+        return redirect("/login")
+    r = rol_actual()
+    allowed = set(roles)
+    if r not in allowed:
+        return acceso_denegado(
+            msg or ("Esta función es exclusiva de: %s. Su rol (%s) no puede ejecutarla." % (
+                ", ".join(sorted(allowed)), r or "sin rol"
+            ))
+        )
+    # Roles de colegio deben tener tenant
+    if r in _ROLES_COLEGIO and not institucion_id_actual():
+        return acceso_denegado("Sesión sin colegio asignado. Cierre sesión e ingrese de nuevo.")
+    return None
+
+
+def require_capacidad(cap, msg=None):
+    if not requiere_login():
+        return redirect("/login")
+    if not tiene_capacidad(cap):
+        return acceso_denegado(
+            msg or ("Su rol (%s) no tiene permiso para: %s." % (rol_actual() or "—", cap))
+        )
+    if es_rol_colegio() and not institucion_id_actual():
+        return acceso_denegado("Sesión sin colegio. Vuelva a iniciar sesión.")
+    return None
+
+
+
+def _ensure_scale_indexes():
+    """Índices para 50+ colegios y 250+ sedes (consultas por tenant)."""
+    if getattr(_ensure_scale_indexes, "_ok", False):
+        return
+    stmts = [
+        "CREATE INDEX IF NOT EXISTS ix_est_institucion ON estudiantes (institucion_id)",
+        "CREATE INDEX IF NOT EXISTS ix_est_inst_grado ON estudiantes (institucion_id, grado)",
+        "CREATE INDEX IF NOT EXISTS ix_ingreso_est_fecha ON ingresos_porteria (estudiante_id, fecha)",
+        "CREATE INDEX IF NOT EXISTS ix_auth_salida_inst_est ON autorizaciones_salida (institucion_id, estado, fecha)",
+        "CREATE INDEX IF NOT EXISTS ix_usuarios_inst ON usuarios (institucion_id)",
+        "CREATE INDEX IF NOT EXISTS ix_sedes_inst ON sedes_institucion (institucion_id)",
+        "CREATE INDEX IF NOT EXISTS ix_novedades_est_fecha ON novedades (estudiante_id, fecha)",
+        "CREATE INDEX IF NOT EXISTS ix_ingreso_inst_fecha ON ingresos_porteria (institucion_id, fecha)",
+        "CREATE INDEX IF NOT EXISTS ix_usuarios_usuario ON usuarios (usuario)",
+        "CREATE INDEX IF NOT EXISTS ix_inst_estado ON instituciones (estado)",
+        "CREATE INDEX IF NOT EXISTS ix_inst_plan ON instituciones (plan)",
+        "CREATE INDEX IF NOT EXISTS ix_planes_codigo ON planes_comerciales (codigo)",
+        "CREATE INDEX IF NOT EXISTS ix_asist_clase_est_fecha ON asistencias_clase (estudiante_id, fecha)",
+        "CREATE INDEX IF NOT EXISTS ix_notas_est_per ON notas_registro (estudiante_id, periodo)",
+    ]
+    try:
+        for s in stmts:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text(s))
+            except Exception:
+                pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        _ensure_scale_indexes._ok = True
+    except Exception as ex:
+        print("scale indexes:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+def q_tenant(model, iid=None):
+    """Query filtrada por institución. Obligatoria para roles de colegio."""
+    q = model.query
+    iid = iid if iid is not None else institucion_id_actual()
+    if iid is not None and hasattr(model, "institucion_id"):
+        return q.filter(model.institucion_id == iid)
+    if es_rol_colegio():
+        # sin tenant → vacío (nunca datos de otros colegios)
+        return q.filter(False)
+    if es_rol_global_procsis() and iid is None:
+        return q
+    return q.filter(False)
+
+
 def es_admin_tecnico(): return rol_actual() in ["Administrador", "Soporte"]
 def puede_admin(): return rol_actual() in ["Administrador", "Soporte"]
 def puede_estudiantes(): return rol_actual() in ["Secretaría", "Administrador", "Soporte"]
@@ -63183,18 +63472,22 @@ function vcStep(n){{
 
 @app.route("/coordinacion/salidas", methods=["GET", "POST"])
 def coordinacion_salidas():
-    """Bandeja: Coordinación autoriza o rechaza salidas del acudiente."""
-    if not requiere_login():
-        return redirect("/login")
-    if rol_actual() not in ("Coordinación", "Soporte", "Administrador"):
-        return acceso_denegado("Solo Coordinación puede autorizar salidas.")
+    """Bandeja: SOLO Coordinación autoriza o rechaza. Otros roles no entran aquí."""
+    _deny = require_roles("Coordinación", msg="Solo Coordinación puede autorizar o rechazar salidas. Rectoría y Secretaría consultan en /salidas/consulta.")
+    if _deny is not None:
+        return _deny
     try:
         _ensure_autorizacion_salida_cols()
     except Exception:
         pass
     iid = institucion_id_actual()
+    if not iid:
+        return acceso_denegado("Coordinación debe estar vinculada a un colegio.")
     msg = err = ""
     if request.method == "POST":
+        # Doble aislamiento: si el rol cambió en la misma sesión, bloquear
+        if rol_actual() != "Coordinación":
+            return acceso_denegado("Acción solo para Coordinación.")
         try:
             aid = int(request.form.get("auth_id") or 0)
         except Exception:
@@ -63205,8 +63498,8 @@ def coordinacion_salidas():
         row = AutorizacionSalida.query.get(aid) if aid else None
         if not row:
             err = "Solicitud no encontrada."
-        elif iid and row.institucion_id and int(row.institucion_id) != int(iid) and rol_actual() != "Soporte":
-            err = "No puede gestionar salidas de otro colegio."
+        elif not row.institucion_id or int(row.institucion_id) != int(iid):
+            err = "Solicitud de otro colegio. Aislamiento multi-tenant: no permitido."
         elif (row.estado or "").upper() not in ("PENDIENTE",):
             err = "Esta solicitud ya fue gestionada (%s)." % (row.estado or "")
         elif decision == "SI":
@@ -63278,14 +63571,7 @@ def coordinacion_salidas():
         else:
             err = "Indique Autorizar (SI) o No autorizar (NO)."
 
-    q = AutorizacionSalida.query
-    if iid is not None:
-        q = q.filter(
-            db.or_(
-                AutorizacionSalida.institucion_id == iid,
-                AutorizacionSalida.institucion_id.is_(None),
-            )
-        )
+    q = AutorizacionSalida.query.filter(AutorizacionSalida.institucion_id == iid)
     pendientes = (
         q.filter(AutorizacionSalida.estado == "PENDIENTE")
         .order_by(AutorizacionSalida.id.desc())
@@ -63373,11 +63659,13 @@ table.st th,table.st td{{border-bottom:1px solid #e2e8f0;padding:8px;text-align:
 
 @app.route("/salidas/consulta")
 def salidas_consulta():
-    """Rectoría y Secretaría: solo ver (no autorizar)."""
+    """Rectoría y Secretaría: solo ver (no autorizar). Coordinación también puede consultar."""
     if not requiere_login():
         return redirect("/login")
-    if rol_actual() not in ("Rectoría", "Secretaría", "Soporte", "Administrador", "Coordinación"):
-        return acceso_denegado()
+    if rol_actual() not in ("Rectoría", "Secretaría", "Coordinación", "Soporte"):
+        return acceso_denegado("No tiene acceso a consulta de salidas.")
+    if request.method == "POST":
+        return acceso_denegado("En consulta no se autorizan salidas. Use Coordinación → Salidas a autorizar.")
     try:
         _ensure_autorizacion_salida_cols()
     except Exception:
