@@ -2280,32 +2280,47 @@ class PlanComercial(db.Model):
 
 
 def _ensure_plan_comercial_cols():
-    """Columnas extra de planes comerciales (modalidad, copy ventas, límites)."""
+    """Columnas extra de planes comerciales. Usa conexión autocommit para no envenenar la sesión."""
+    if getattr(_ensure_plan_comercial_cols, "_ok", False):
+        return
+    cols = [
+        ("modalidad", "VARCHAR(20) DEFAULT 'presencial'"),
+        ("descuento_meses", "INTEGER DEFAULT 0"),
+        ("max_admin", "INTEGER DEFAULT 10"),
+        ("max_docentes", "INTEGER DEFAULT 30"),
+        ("titulo_comercial", "VARCHAR(160) DEFAULT ''"),
+        ("mensaje_whatsapp", "TEXT DEFAULT ''"),
+        ("cta_comercial", "VARCHAR(255) DEFAULT ''"),
+        ("descuento_pct", "REAL DEFAULT 0"),
+        ("precio_lista", "REAL DEFAULT 0"),
+        ("imagen_path", "VARCHAR(255) DEFAULT ''"),
+    ]
     try:
-        for col, typ in [
-            ("modalidad", "VARCHAR(20) DEFAULT 'presencial'"),
-            ("descuento_meses", "INTEGER DEFAULT 0"),
-            ("max_admin", "INTEGER DEFAULT 10"),
-            ("max_docentes", "INTEGER DEFAULT 30"),
-            ("titulo_comercial", "VARCHAR(160) DEFAULT ''"),
-            ("mensaje_whatsapp", "TEXT DEFAULT ''"),
-            ("cta_comercial", "VARCHAR(255) DEFAULT ''"),
-            ("descuento_pct", "REAL DEFAULT 0"),
-            ("precio_lista", "REAL DEFAULT 0"),
-            ("imagen_path", "VARCHAR(255) DEFAULT ''"),
-        ]:
+        # Limpiar sesión por si un ALTER anterior abortó la transacción
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        # DDL en transacciones independientes (PostgreSQL: un fallo no tumba el resto)
+        for col, typ in cols:
             try:
-                db.session.execute(text(
-                    "ALTER TABLE planes_comerciales ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)
-                ))
+                with db.engine.begin() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE planes_comerciales ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)
+                    ))
             except Exception:
                 try:
-                    db.session.execute(text(
-                        "ALTER TABLE planes_comerciales ADD COLUMN %s %s" % (col, typ)
-                    ))
+                    with db.engine.begin() as conn:
+                        conn.execute(text(
+                            "ALTER TABLE planes_comerciales ADD COLUMN %s %s" % (col, typ)
+                        ))
                 except Exception:
                     pass
-        db.session.commit()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        _ensure_plan_comercial_cols._ok = True
     except Exception:
         try:
             db.session.rollback()
@@ -24432,17 +24447,48 @@ def gerencia_paginas_legales():
 def gerencia_hq():
     """PROCSIS HQ — indicadores financieros, crecimiento, producto y control del dueño."""
     try:
-        _migrate_facturas_cobro_columns()
+        db.session.rollback()
     except Exception:
         pass
+    try:
+        _migrate_facturas_cobro_columns()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        _ensure_plan_comercial_cols()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     _g = _guard_gerencia()
     if _g is not None:
         return _g
     try:
         _seed_planes_comerciales()
     except Exception:
-        pass
-    m = _gerencia_metricas()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        m = _gerencia_metricas()
+    except Exception as _e_m:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        m = {
+            "activas": 0, "suspendidas": 0, "mrr": 0, "arr": 0, "cartera": 0, "cobrado": 0,
+            "gastos": 0, "neto": 0, "margen": 0, "churn": 0, "cac": 0, "ltv": 0, "arpu": 0,
+            "altas_mes": 0, "embudo": {"cotizacion": 0, "seguimiento": 0, "renovacion": 0, "cierres": 0},
+            "dau": 0, "mau": 0, "pqr_abiertas": 0, "pqr_cerradas": 0, "sla_horas": 24,
+            "srv": "verde", "srv_label": "OK",
+        }
+        print("gerencia_hq metricas:", _e_m)
     e = m["embudo"]
     srv_color = {"verde": "#16a34a", "amarillo": "#ca8a04", "rojo": "#dc2626"}.get(m["srv"], "#64748b")
 
@@ -33558,15 +33604,43 @@ _calcular_almacenamiento_global.last_breakdown = {}
 def _gerencia_metricas():
     """KPIs completos de Gerencia: financiero, crecimiento, producto/soporte."""
     try:
-        _migrate_facturas_cobro_columns()
+        db.session.rollback()
     except Exception:
         pass
+    try:
+        _ensure_plan_comercial_cols()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        _migrate_facturas_cobro_columns()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     mes = ahora().strftime("%Y-%m") if hasattr(ahora(), "strftime") else ""
-    activas = Institucion.query.filter(Institucion.estado == "ACTIVA").count()
-    suspendidas = Institucion.query.filter(Institucion.estado == "SUSPENDIDA").count()
+    try:
+        activas = Institucion.query.filter(Institucion.estado == "ACTIVA").count()
+        suspendidas = Institucion.query.filter(Institucion.estado == "SUSPENDIDA").count()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        activas, suspendidas = 0, 0
     total_inst = max(activas + suspendidas, 1)
 
-    planes = {p.nombre.lower(): float(p.precio_mensual or 0) for p in PlanComercial.query.filter_by(activo=True).all()}
+    try:
+        planes = {p.nombre.lower(): float(p.precio_mensual or 0) for p in PlanComercial.query.filter_by(activo=True).all()}
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        planes = {}
     if not planes:
         planes = {
             "demo": 0, "piloto": 0,
@@ -33576,14 +33650,27 @@ def _gerencia_metricas():
             "premium": 499000,
         }
     mrr = 0.0
-    for inst in Institucion.query.filter_by(estado="ACTIVA").all():
-        pn = (inst.plan or "basico").lower().replace("á", "a")
-        mrr += float(planes.get(pn, planes.get((inst.plan or "").lower(), 249000)) or 0)
+    try:
+        for inst in Institucion.query.filter_by(estado="ACTIVA").all():
+            pn = (inst.plan or "basico").lower().replace("á", "a")
+            mrr += float(planes.get(pn, planes.get((inst.plan or "").lower(), 249000)) or 0)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     arr = mrr * 12
 
-    pend = FacturaCobro.query.filter(FacturaCobro.estado.in_(["PENDIENTE", "VENCIDA"])).all()
-    cartera = sum(float(f.valor or 0) for f in pend)
-    cobrado = sum(float(f.valor or 0) for f in FacturaCobro.query.filter(FacturaCobro.estado.in_(["PAGADA", "PAGADO"])).all())
+    try:
+        pend = FacturaCobro.query.filter(FacturaCobro.estado.in_(["PENDIENTE", "VENCIDA"])).all()
+        cartera = sum(float(f.valor or 0) for f in pend)
+        cobrado = sum(float(f.valor or 0) for f in FacturaCobro.query.filter(FacturaCobro.estado.in_(["PAGADA", "PAGADO"])).all())
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        cartera = cobrado = 0.0
 
     gastos_q = GastoOperativo.query
     if mes:
@@ -34379,6 +34466,13 @@ def _plan_label_estudiantes(max_e):
 
 
 def _seed_planes_comerciales():
+    try:
+        _ensure_plan_comercial_cols()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     """Sincroniza los 5 planes oficiales (precios, sedes 12, módulos). Editar en Gerencia sobrescribe y el portal lee BD."""
     try:
         from sqlalchemy import text, inspect
