@@ -49,7 +49,14 @@ _promo_cron_last = {"day": ""}
 
 @app.before_request
 def _auto_promo_cron_diario():
-    """Aplica caducidad de promociones una vez al dia (sin cron externo)."""
+    """Migra columnas promo si faltan y aplica caducidad una vez al dia."""
+    try:
+        # Critico: sin esto SELECT * FROM instituciones falla en Railway
+        if not getattr(app, "_promo_cols_ready", False):
+            _ensure_inst_promo_columns()
+            app._promo_cols_ready = True
+    except Exception:
+        pass
     try:
         from datetime import datetime as _dt
         day = _dt.utcnow().strftime("%Y-%m-%d")
@@ -4086,6 +4093,25 @@ def migrar_columnas():
             archivo_docx VARCHAR(255) DEFAULT ''
         )""",
         # Robustez PostgreSQL: columnas completas de citaciones usadas por PDF/Word y panel convivencia.
+        
+        """CREATE TABLE IF NOT EXISTS promociones_activas (
+            id SERIAL PRIMARY KEY,
+            nombre_promo VARCHAR(100) NOT NULL DEFAULT '',
+            porcentaje_descuento DOUBLE PRECISION DEFAULT 0,
+            duracion_valor INTEGER DEFAULT 1,
+            duracion_unidad VARCHAR(20) DEFAULT 'MESES',
+            estado VARCHAR(20) DEFAULT 'ACTIVO',
+            fecha_creacion VARCHAR(40) DEFAULT '',
+            created_by VARCHAR(80) DEFAULT ''
+        )""",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS promo_id INTEGER DEFAULT 0",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS valor_mensual_con_descuento INTEGER DEFAULT 0",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS valor_mensual_pleno INTEGER DEFAULT 0",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS fecha_activacion_tarifa VARCHAR(40) DEFAULT ''",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS fecha_caducidad_descuento VARCHAR(40) DEFAULT ''",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS flag_tarifa_plena_aplicada BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS nombre_promo_aplicada VARCHAR(100) DEFAULT ''",
+
         "ALTER TABLE citaciones ADD COLUMN IF NOT EXISTS fecha_creacion VARCHAR(20) DEFAULT ''",
         "ALTER TABLE citaciones ADD COLUMN IF NOT EXISTS hora_creacion VARCHAR(20) DEFAULT ''",
         "ALTER TABLE citaciones ADD COLUMN IF NOT EXISTS fecha_citacion VARCHAR(20) DEFAULT ''",
@@ -4781,6 +4807,11 @@ _ultimo_dia_cron_facturacion = None  # candado: correr el ciclo de facturación 
 def inicializar_bd(): 
     global _migracion_bd_lista
     db.create_all()
+    # Columnas promo ANTES de cualquier SELECT a instituciones
+    try:
+        _ensure_inst_promo_columns()
+    except Exception as _ep:
+        print("ensure promo cols:", _ep)
     # Migrar columnas ANTES de cualquier query ORM (purga demo, etc.)
     if not _migracion_bd_lista:
         try:
@@ -4800,6 +4831,13 @@ def inicializar_bd():
                 ("configuracion", "horario_grados", "TEXT DEFAULT ''"),
                 ("usuarios", "activo", "BOOLEAN DEFAULT TRUE"),
                 ("usuarios", "nombre_completo", "VARCHAR(160) DEFAULT ''"),
+                ("instituciones", "promo_id", "INTEGER DEFAULT 0"),
+                ("instituciones", "valor_mensual_con_descuento", "INTEGER DEFAULT 0"),
+                ("instituciones", "valor_mensual_pleno", "INTEGER DEFAULT 0"),
+                ("instituciones", "fecha_activacion_tarifa", "VARCHAR(40) DEFAULT ''"),
+                ("instituciones", "fecha_caducidad_descuento", "VARCHAR(40) DEFAULT ''"),
+                ("instituciones", "flag_tarifa_plena_aplicada", "BOOLEAN DEFAULT FALSE"),
+                ("instituciones", "nombre_promo_aplicada", "VARCHAR(100) DEFAULT ''"),
             ]
             for table, col, typedef in patches:
                 try:
@@ -9839,26 +9877,51 @@ def _aplicar_promo_caducadas():
 
 
 def _ensure_inst_promo_columns():
-    """Columnas de promo en instituciones (Railway)."""
+    """Columnas de promo en instituciones (Railway). Idempotente."""
     cols = [
-        ("promo_id", "INTEGER"),
-        ("valor_mensual_con_descuento", "INTEGER"),
-        ("valor_mensual_pleno", "INTEGER"),
-        ("fecha_activacion_tarifa", "VARCHAR(40)"),
-        ("fecha_caducidad_descuento", "VARCHAR(40)"),
+        ("promo_id", "INTEGER DEFAULT 0"),
+        ("valor_mensual_con_descuento", "INTEGER DEFAULT 0"),
+        ("valor_mensual_pleno", "INTEGER DEFAULT 0"),
+        ("fecha_activacion_tarifa", "VARCHAR(40) DEFAULT ''"),
+        ("fecha_caducidad_descuento", "VARCHAR(40) DEFAULT ''"),
         ("flag_tarifa_plena_aplicada", "BOOLEAN DEFAULT FALSE"),
-        ("nombre_promo_aplicada", "VARCHAR(100)"),
+        ("nombre_promo_aplicada", "VARCHAR(100) DEFAULT ''"),
     ]
     try:
-        for col, typ in cols:
+        with db.engine.begin() as conn:
+            dialect = (db.engine.dialect.name or "").lower()
+            for col, typ in cols:
+                try:
+                    if dialect == "sqlite":
+                        rows = conn.execute(db.text("PRAGMA table_info(instituciones)")).fetchall()
+                        names = {r[1] for r in rows}
+                        if col not in names:
+                            conn.execute(db.text("ALTER TABLE instituciones ADD COLUMN %s %s" % (col, typ)))
+                    else:
+                        conn.execute(db.text(
+                            "ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)
+                        ))
+                except Exception:
+                    pass
+            # Tabla maestra de promociones
             try:
-                db.session.execute(text("ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+                conn.execute(db.text(
+                    """CREATE TABLE IF NOT EXISTS promociones_activas (
+                        id SERIAL PRIMARY KEY,
+                        nombre_promo VARCHAR(100) NOT NULL DEFAULT '',
+                        porcentaje_descuento DOUBLE PRECISION DEFAULT 0,
+                        duracion_valor INTEGER DEFAULT 1,
+                        duracion_unidad VARCHAR(20) DEFAULT 'MESES',
+                        estado VARCHAR(20) DEFAULT 'ACTIVO',
+                        fecha_creacion VARCHAR(40) DEFAULT '',
+                        created_by VARCHAR(80) DEFAULT ''
+                    )"""
+                ))
             except Exception:
                 pass
-        db.session.commit()
-    except Exception:
+    except Exception as ex:
         try:
-            db.session.rollback()
+            print("ensure_inst_promo_columns:", ex)
         except Exception:
             pass
 
