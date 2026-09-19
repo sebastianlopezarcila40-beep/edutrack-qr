@@ -3583,12 +3583,33 @@ def _staff_nav_items(path, rol=""):
     elif path.startswith("/cobranza") or rol == "Cobranza":
         items = [("/cobranza", "Dashboard"), ("/cobranza/contabilidad", "Contabilidad"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
     else:
-        items = [("/gerencia/hq", "Dashboard"), ("/gerencia/plantilla-contrato", "Plantilla contrato"), ("/gerencia/contratos", "Contratos"), ("/gerencia/legal/consentimientos", "Consentimientos"), ("/gerencia/finanzas/promociones", "Promociones"), ("/gerencia/paginas-legales", "Paginas legales"), ("/backoffice/hub", "Tablero maestro"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
+        items = [
+            ("/gerencia/hq", "Dashboard"),
+            ("/gerencia/planes", "Planes activos"),
+            ("/gerencia/beneficios", "Beneficios"),
+            ("/gerencia/planes/nuevo", "Crear plan"),
+            ("/gerencia/plantilla-contrato", "Plantilla contrato"),
+            ("/gerencia/contratos", "Contratos"),
+            ("/gerencia/legal/consentimientos", "Consentimientos"),
+            ("/gerencia/finanzas/promociones", "Promociones"),
+            ("/gerencia/paginas-legales", "Paginas legales"),
+            ("/backoffice/hub", "Tablero maestro"),
+            ("/cerrar-turno", "Cerrar turno"),
+            ("/logout", "Salir"),
+        ]
     html = []
     for href, lab in items:
-        active = " is-active" if (path == href or path.startswith(href.rstrip("/") + "/")) else ""
         if href == "/logout":
             active = ""
+        elif href == "/gerencia/planes":
+            # solo listado, no /editar ni /nuevo
+            active = " is-active" if path == "/gerencia/planes" else ""
+        elif href == "/gerencia/beneficios":
+            active = " is-active" if path.startswith("/gerencia/beneficios") else ""
+        elif href == "/gerencia/planes/nuevo":
+            active = " is-active" if path.startswith("/gerencia/planes/nuevo") else ""
+        else:
+            active = " is-active" if (path == href or path.startswith(href.rstrip("/") + "/")) else ""
         html.append('<a class="nav-item-apple' + active + '" href="' + href + '">' + lab + "</a>")
     return "".join(html)
 
@@ -32729,9 +32750,10 @@ def gerencia_planes_nuevo():
     return page("Nuevo plan", body)
 
 
-@app.route("/gerencia/beneficios")
-def gerencia_beneficios():
-    """Solo beneficios / vista previa de planes activos (diseño tipo portal)."""
+@app.route("/gerencia/beneficios", methods=["GET", "POST"])
+@app.route("/gerencia/beneficios/<int:pid>", methods=["GET", "POST"])
+def gerencia_beneficios(pid=None):
+    """Editar solo beneficios / copy comercial de cada plan (diseño vista previa)."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
@@ -32739,13 +32761,121 @@ def gerencia_beneficios():
         _ensure_plan_comercial_cols()
         _seed_planes_comerciales()
     except Exception:
-        pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            plan_id = int(request.form.get("plan_id") or pid or 0)
+        except Exception:
+            plan_id = 0
+        p = PlanComercial.query.get(plan_id) if plan_id else None
+        if not p:
+            err = "Plan no encontrado."
+        else:
+            try:
+                p.titulo_comercial = (request.form.get("titulo_comercial") or "")[:160]
+                p.mensaje_whatsapp = (request.form.get("mensaje_whatsapp") or "")[:8000]
+                p.cta_comercial = (request.form.get("cta_comercial") or "")[:255]
+                # descuento comercial ligado a beneficios
+                try:
+                    dp = float(request.form.get("descuento_pct") or getattr(p, "descuento_pct", 0) or 0)
+                    p.descuento_pct = max(0.0, min(100.0, dp))
+                except Exception:
+                    pass
+                try:
+                    p.descuento_meses = max(0, int(request.form.get("descuento_meses") or 0))
+                except Exception:
+                    pass
+                # recalcular mensual si hay lista
+                try:
+                    base = float(getattr(p, "precio_lista", 0) or 0) or float(p.precio_mensual or 0)
+                    if float(p.descuento_pct or 0) > 0 and base > 0:
+                        p.precio_mensual = round(base * (1 - float(p.descuento_pct) / 100.0), 2)
+                        if not getattr(p, "precio_lista", None):
+                            p.precio_lista = base
+                except Exception:
+                    pass
+                db.session.commit()
+                try:
+                    registrar_auditoria("Beneficios plan", (p.codigo or str(p.id)))
+                except Exception:
+                    pass
+                msg = "Beneficios de «%s» guardados. Se reflejan en ventas y portal al instante." % (p.nombre or p.codigo)
+                pid = None  # volver al listado
+            except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = str(e)[:180]
+
     promo = None
     try:
         promo = _promo_activa_global()
     except Exception:
         pass
     planes = PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden, PlanComercial.id).all()
+
+    # Modo edición de un plan
+    if pid:
+        p = PlanComercial.query.get_or_404(pid)
+        body = f"""
+<style>
+.bp{{background:#f5f5f7;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px 16px 48px}}
+.bp-in{{max-width:640px;margin:0 auto}}
+.bp h1{{color:#002060;margin:8px 0 4px;font-size:22px;font-weight:700}}
+.bp .sub{{color:#86868b;font-size:13px;margin:0 0 16px}}
+.bp-form{{background:#fff;border-radius:18px;padding:22px;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 12px rgba(0,0,0,.03)}}
+.bp-form label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:12px 0 4px}}
+.bp-form input,.bp-form textarea{{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:12px;box-sizing:border-box;font-size:14px}}
+.bp-form textarea{{min-height:140px;line-height:1.45}}
+.row2{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+.hint{{font-size:11px;color:#86868b;margin:4px 0 0}}
+.actions{{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}}
+.actions button{{background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:700;cursor:pointer}}
+.actions a{{padding:12px 18px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;text-decoration:none;font-weight:600;font-size:13px}}
+.msg{{padding:12px;border-radius:12px;margin-bottom:12px;font-weight:600;font-size:13px}}
+.ok{{background:#ecfdf5;color:#065f46}}.err{{background:#fef2f2;color:#991b1b}}
+@media(max-width:600px){{.row2{{grid-template-columns:1fr}}}}
+</style>
+<div class="bp"><div class="bp-in">
+  <a href="/gerencia/beneficios" style="color:#86868b;font-size:13px;text-decoration:none">← Beneficios</a>
+  <h1>Editar beneficios · {_esc(p.nombre or p.codigo)}</h1>
+  <p class="sub">Solo copy comercial y descuento temporal. Precios base y límites se editan en Planes activos.</p>
+  {"<div class='msg err'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST" class="bp-form">
+    <input type="hidden" name="plan_id" value="{p.id}">
+    <label>Título comercial / eslogan</label>
+    <input name="titulo_comercial" value="{_esc(getattr(p,'titulo_comercial',None) or '')}" placeholder="✨ Un plan que lo tiene todo ✨" maxlength="160">
+    <label>Mensaje WhatsApp (beneficios con emojis)</label>
+    <textarea name="mensaje_whatsapp" placeholder="📶 Asistencia QR&#10;⚡ Reportes en un clic&#10;📲 Aviso al acudiente">{_esc(getattr(p,'mensaje_whatsapp',None) or '')}</textarea>
+    <p class="hint">Así lo copiarán los asesores a WhatsApp.</p>
+    <label>Llamado a la acción (CTA)</label>
+    <input name="cta_comercial" value="{_esc(getattr(p,'cta_comercial',None) or '')}" placeholder="¿Te gustaría tomar esta oferta exclusiva? 🤩" maxlength="255">
+    <div class="row2">
+      <div>
+        <label>Descuento %</label>
+        <input name="descuento_pct" type="number" min="0" max="100" step="0.5" value="{float(getattr(p,'descuento_pct',0) or 0)}">
+      </div>
+      <div>
+        <label>Duración del descuento (meses)</label>
+        <input name="descuento_meses" type="number" min="0" max="36" value="{int(getattr(p,'descuento_meses',0) or 0)}">
+      </div>
+    </div>
+    <div class="actions">
+      <button type="submit">Guardar beneficios</button>
+      <a href="/gerencia/beneficios">Cancelar</a>
+      <a href="/gerencia/planes/editar/{p.id}">Editar plan completo →</a>
+    </div>
+  </form>
+</div></div>
+"""
+        return page("Editar beneficios", body)
+
+    # Listado tipo vista previa + botón editar beneficios
     cards = []
     for pl in planes:
         pleno = float(getattr(pl, "precio_lista", 0) or 0) or float(getattr(pl, "precio_mensual", 0) or 0)
@@ -32753,7 +32883,6 @@ def gerencia_beneficios():
             pv = _calcular_promo_valores(pleno, promo)
         except Exception:
             pv = {"valor_pleno": int(pleno), "valor_descuento": int(float(pl.precio_mensual or pleno)), "porcentaje": float(getattr(pl, "descuento_pct", 0) or 0), "nombre_promo": "", "fecha_caducidad_texto": ""}
-        # Prefer plan-level discount if set
         if float(getattr(pl, "descuento_pct", 0) or 0) > 0:
             pct = float(pl.descuento_pct)
             val_desc = int(float(pl.precio_mensual or 0)) or int(round(pleno * (1 - pct / 100)))
@@ -32766,19 +32895,18 @@ def gerencia_beneficios():
         titulo = (getattr(pl, "titulo_comercial", None) or "").strip()
         msg_wa = (getattr(pl, "mensaje_whatsapp", None) or "").strip()
         cta = (getattr(pl, "cta_comercial", None) or "").strip()
-        mod = (getattr(pl, "modalidad", None) or "presencial").lower()
-        badge_promo = ""
+        badge = ""
         if pct > 0:
             nom = (pv.get("nombre_promo") or "DESCUENTO INSTITUCIONAL").upper()
-            badge_promo = (
+            badge = (
                 '<div class="bp-badge">%s · %s%%'
                 % (_esc(nom[:40]), ("{:.1f}".format(pct).rstrip("0").rstrip(".")))
             )
             if meses > 0:
-                badge_promo += " · %s meses" % meses
-            badge_promo += "</div>"
+                badge += " · %s MESES" % meses
+            badge += "</div>"
             if pv.get("fecha_caducidad_texto"):
-                badge_promo += '<div class="bp-until">Hasta %s</div>' % _esc(pv.get("fecha_caducidad_texto"))
+                badge += '<div class="bp-until">Hasta %s</div>' % _esc(pv.get("fecha_caducidad_texto"))
         precio_html = (
             '<div class="bp-price">$%s <span>COP/mes</span></div>'
             % ("{:,.0f}".format(val_desc).replace(",", "."))
@@ -32798,26 +32926,25 @@ def gerencia_beneficios():
             if cta:
                 copy_block += '<div class="bp-cta">%s</div>' % _esc(cta)
             copy_block += "</div>"
+        else:
+            copy_block = '<p class="bp-empty">Sin beneficios configurados · pulse Editar</p>'
         cards.append(
-            '<div class="bp-card" data-mod="%s">'
+            '<div class="bp-card">'
             '<div class="bp-code">%s</div>'
             '<div class="bp-name">%s</div>'
             '%s%s%s'
-            '<div class="bp-meta">%s · ≤%s est. · Adm %s · Doc %s</div>'
+            '<a class="bp-btn" href="/gerencia/beneficios/%s">Editar beneficios</a>'
             '</div>'
             % (
-                _esc(mod),
                 _esc((pl.codigo or "").upper()),
                 _esc(pl.nombre or pl.codigo),
                 precio_html,
-                badge_promo,
+                badge,
                 copy_block,
-                "Online" if mod == "online" else "Presencial",
-                pl.max_estudiantes or "—",
-                getattr(pl, "max_admin", None) or "—",
-                getattr(pl, "max_docentes", None) or "—",
+                pl.id,
             )
         )
+
     body = f"""
 <style>
 .bp{{background:#f5f5f7;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px 16px 48px}}
@@ -32825,7 +32952,7 @@ def gerencia_beneficios():
 .bp h1{{color:#002060;margin:8px 0 4px;font-size:24px;font-weight:700}}
 .bp .sub{{color:#86868b;font-size:13px;margin:0 0 18px}}
 .bp-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}}
-.bp-card{{background:#fff;border-radius:18px;padding:18px 16px;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 12px rgba(0,0,0,.03)}}
+.bp-card{{background:#fff;border-radius:18px;padding:18px 16px;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 12px rgba(0,0,0,.03);display:flex;flex-direction:column}}
 .bp-code{{font-size:11px;font-weight:700;color:#86868b;letter-spacing:.06em;text-transform:uppercase}}
 .bp-name{{font-size:18px;font-weight:700;color:#1d1d1f;margin:4px 0 8px}}
 .bp-price{{font-size:26px;font-weight:700;color:#005BEA}}
@@ -32833,23 +32960,20 @@ def gerencia_beneficios():
 .bp-strike{{font-size:13px;color:#86868b;text-decoration:line-through;margin-top:2px}}
 .bp-badge{{display:inline-block;margin-top:10px;background:#e8f1ff;color:#005BEA;font-size:11px;font-weight:700;padding:6px 10px;border-radius:999px}}
 .bp-until{{font-size:11px;color:#86868b;margin-top:6px}}
-.bp-copy{{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0}}
+.bp-copy{{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;flex:1}}
 .bp-title-c{{font-weight:700;color:#002060;font-size:14px;margin-bottom:6px}}
 .bp-msg{{white-space:pre-wrap;font-family:inherit;font-size:12px;color:#1d1d1f;margin:0;line-height:1.45}}
 .bp-cta{{margin-top:8px;font-size:12px;font-weight:600;color:#005BEA}}
-.bp-meta{{margin-top:12px;font-size:11px;color:#86868b}}
-.bp-nav{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}}
-.bp-nav a{{padding:8px 14px;border-radius:980px;background:#fff;border:1px solid #e2e8f0;text-decoration:none;color:#002060;font-size:12px;font-weight:600}}
+.bp-empty{{font-size:12px;color:#94a3b8;margin:12px 0;flex:1}}
+.bp-btn{{display:block;text-align:center;margin-top:14px;padding:10px 14px;border-radius:980px;background:#005BEA;color:#fff;text-decoration:none;font-weight:600;font-size:13px}}
+.msg{{padding:12px;border-radius:12px;margin-bottom:14px;font-weight:600;font-size:13px}}
+.ok{{background:#ecfdf5;color:#065f46}}.err{{background:#fef2f2;color:#991b1b}}
 </style>
 <div class="bp"><div class="bp-in">
-  <a href="/gerencia/hq" style="color:#86868b;font-size:13px;text-decoration:none">← Módulos HQ</a>
-  <h1>Beneficios de planes</h1>
-  <p class="sub">Vista previa en tiempo real · solo beneficios y copy comercial (sin editar precios aquí).</p>
-  <div class="bp-nav">
-    <a href="/gerencia/planes">Editar planes</a>
-    <a href="/gerencia/planes/nuevo">Crear plan</a>
-    <a href="/ventas/beneficios" target="_blank">Ver en ventas</a>
-  </div>
+  <h1>Vista previa en planes (datos reales)</h1>
+  <p class="sub">Si cambia el % o el copy en Gerencia, estos valores se recalculan al instante. Pulse <b>Editar beneficios</b> en cada tarjeta.</p>
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg err'>"+_esc(err)+"</div>" if err else ""}
   <div class="bp-grid">{"".join(cards) or "<p>No hay planes activos.</p>"}</div>
 </div></div>
 """
