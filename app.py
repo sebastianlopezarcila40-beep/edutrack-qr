@@ -3654,15 +3654,59 @@ def _staff_module_title(path, rol=""):
 
 
 def _staff_nav_items(path, rol=""):
+    """Menú lateral por ROL (no por URL). Login único: /backoffice."""
     path = path or ""
     rol = (rol or "").strip()
-    if path.startswith("/ventas") or rol in ("Comercial", "Ventas", "Supervisor de Ventas"):
-        items = [("/ventas/panel", "Dashboard"), ("/ventas/verificacion", "Verificacion"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
-    elif path.startswith("/soporte") or rol == "Soporte":
-        items = [("/soporte", "Dashboard"), ("/soporte/turnos", "Turnos"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
-    elif path.startswith("/cobranza") or rol == "Cobranza":
-        items = [("/cobranza", "Dashboard"), ("/cobranza/contabilidad", "Contabilidad"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
-    else:
+    # Prioridad absoluta por rol de sesión
+    if rol in ("Desarrollador", "Developer"):
+        items = [
+            ("/dev-console", "Consola técnica"),
+            ("/dev-console?tab=sistema", "Sistema y core"),
+            ("/dev-console?tab=flags", "Sandbox / Flags"),
+            ("/dev-console?tab=versiones", "Actualizaciones"),
+            ("/dev-console?tab=anuncios", "Seguridad"),
+            ("/dev-console?tab=temas", "Diseño / CSS"),
+            ("/gerencia/planes/nuevo", "Crear plan (técnico)"),
+            ("/backoffice/hub", "Tablero maestro"),
+            ("/logout", "Salir"),
+        ]
+    elif rol in ("Comercial", "Ventas", "Supervisor de Ventas"):
+        items = [
+            ("/ventas/panel", "Dashboard"),
+            ("/ventas/verificacion", "Verificación"),
+            ("/ventas/beneficios", "Beneficios / planes"),
+            ("/logout", "Salir"),
+        ]
+    elif rol == "Soporte":
+        items = [
+            ("/soporte_admin", "Panel principal"),
+            ("/soporte/impersonar", "Suplantar usuario"),
+            ("/soporte/reset-clave", "Resetear claves"),
+            ("/soporte/periodos-colegio", "Periodos colegio"),
+            ("/usuarios", "Usuarios"),
+            ("/tenants", "Instituciones"),
+            ("/nueva_institucion", "Nueva institución"),
+            ("/soporte/logs-errores", "Logs de errores"),
+            ("/soporte/prorroga", "Prórroga 24h"),
+            ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
+            ("/servidores", "Servidores"),
+            ("/auditoria", "Auditoría"),
+            ("/soporte/auditoria-colegio", "Auditoría colegio / ofertas"),
+            ("/soporte/licencias", "Licencias y cobros"),
+            ("/soporte/cancelaciones", "Cancelaciones"),
+            ("/soporte/pqr", "Centro PQR"),
+            ("/soporte/pqr/crear", "Radicar PQR"),
+            ("/modo_prueba", "Modo prueba"),
+            ("/logout", "Salir"),
+        ]
+    elif rol == "Cobranza":
+        items = [
+            ("/cobranza", "Dashboard"),
+            ("/cobranza/contabilidad", "Contabilidad"),
+            ("/cobranza/panel", "Cartera"),
+            ("/logout", "Salir"),
+        ]
+    elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/planes", "Planes activos"),
@@ -3672,20 +3716,33 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/contratos", "Contratos"),
             ("/gerencia/legal/consentimientos", "Consentimientos"),
             ("/gerencia/finanzas/promociones", "Promociones"),
-            ("/gerencia/paginas-legales", "Paginas legales"),
+            ("/gerencia/paginas-legales", "Páginas legales"),
+            ("/gerencia/turnos", "Turnos del equipo"),
             ("/backoffice/hub", "Tablero maestro"),
-            ("/cerrar-turno", "Cerrar turno"),
             ("/logout", "Salir"),
         ]
+    else:
+        # Fallback mínimo
+        items = [("/backoffice", "Backoffice"), ("/logout", "Salir")]
+
     html = []
+    try:
+        full = (request.full_path or path or "").split("#")[0]
+    except Exception:
+        full = path
     for href, lab in items:
         if href == "/logout":
             active = ""
+        elif href.startswith("/dev-console"):
+            if "?" in href:
+                tab = href.split("tab=")[-1]
+                active = " is-active" if ("tab=" + tab) in full or (
+                    tab == "sistema" and path.startswith("/dev-console") and "tab=" not in full
+                ) else ""
+            else:
+                active = " is-active" if path.startswith("/dev-console") and "tab=" not in full else ""
         elif href == "/gerencia/planes":
-            # solo listado, no /editar ni /nuevo
             active = " is-active" if path == "/gerencia/planes" else ""
-        elif href == "/gerencia/beneficios":
-            active = " is-active" if path.startswith("/gerencia/beneficios") else ""
         elif href == "/gerencia/planes/nuevo":
             active = " is-active" if path.startswith("/gerencia/planes/nuevo") else ""
         else:
@@ -5431,9 +5488,9 @@ def before():
         if ultimo and ahora_ts - float(ultimo) > TIEMPO_MAX_INACTIVIDAD:
             rol_expirado = session.get("rol")
             session.clear()
-            destino = {"Soporte": "/soporte-login", "Comercial": "/ventas-login",
-                       "Gerente": "/gerencia-login", "Administrador": "/gerencia-login",
-                       "Superadmin": "/gerencia-login"}.get(rol_expirado, "/login")
+            destino = {"Soporte": "/backoffice", "Comercial": "/backoffice",
+                       "Gerente": "/backoffice", "Administrador": "/backoffice",
+                       "Superadmin": "/backoffice"}.get(rol_expirado, "/login")
             return redirect(destino)
         session["ultimo_movimiento"] = ahora_ts
         if session.get("password_temporal") and request.path not in ["/cambiar_password", "/logout", "/docente-login"] and not request.path.startswith("/static") and not request.path.startswith("/docente"):
@@ -9346,6 +9403,61 @@ def security_headers(resp):
     return resp
 
 
+
+
+@app.before_request
+def _turnos_solo_asignados():
+    """Ventas/Soporte/Cobranza no gestionan turnos: solo Gerencia asigna. Cerrar turno solo si hay turno abierto propio."""
+    try:
+        path = (request.path or "")
+        if path not in ("/abrir-turno", "/cerrar-turno") and not path.startswith("/soporte/turnos") and not path.startswith("/cobranza/turnos") and not path.startswith("/ventas/turnos"):
+            return None
+        if not session.get("usuario"):
+            return None
+        r = rol_actual()
+        if r in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return None  # gerencia gestiona
+        if path.startswith("/gerencia/turnos"):
+            return None
+        # Empleados: solo pueden cerrar SU turno si existe uno abierto
+        if path == "/cerrar-turno":
+            try:
+                uid = session.get("uid") or session.get("usuario_id")
+                abierto = None
+                if uid:
+                    abierto = TurnoLaboral.query.filter_by(usuario_id=uid, estado="ABIERTO").first()
+                if not abierto and session.get("usuario"):
+                    abierto = TurnoLaboral.query.filter(
+                        TurnoLaboral.usuario == session.get("usuario"),
+                        TurnoLaboral.estado == "ABIERTO",
+                    ).first()
+                if abierto:
+                    return None
+            except Exception:
+                pass
+            return acceso_denegado(
+                "No tiene un turno abierto asignado. Los turnos los define Gerencia (quién, día y horario)."
+            )
+        return acceso_denegado(
+            "La gestión de turnos es exclusiva de Gerencia. Usted solo opera en el horario que le asignen."
+        )
+    except Exception:
+        return None
+
+@app.before_request
+def _login_unico_backoffice():
+    """Un solo login staff: /backoffice. Las rutas *-login redirigen ahí."""
+    try:
+        path = (request.path or "").rstrip("/")
+        if path in (
+            "/gerencia-login", "/ventas-login", "/soporte-login",
+            "/cobranza-login", "/dev-console-login",
+        ):
+            return redirect("/backoffice")
+    except Exception:
+        pass
+    return None
+
 @app.before_request
 def session_idle_timeout():
     """Cierra sesión tras 15 min de inactividad (colegios + backoffice). Actividad renueva el contador."""
@@ -9373,9 +9485,9 @@ def session_idle_timeout():
         rol_exp = session.get("rol") or ""
         session.clear()
         destino = {
-            "Soporte": "/soporte-login", "Comercial": "/ventas-login", "Ventas": "/ventas-login",
-            "Gerente": "/gerencia-login", "Administrador": "/gerencia-login",
-            "Superadmin": "/gerencia-login", "Cobranza": "/cobranza-login",
+            "Soporte": "/backoffice", "Comercial": "/backoffice", "Ventas": "/ventas-login",
+            "Gerente": "/backoffice", "Administrador": "/backoffice",
+            "Superadmin": "/backoffice", "Cobranza": "/backoffice",
         }.get(rol_exp, "/login")
         if path.startswith("/soporte"):
             destino = "/soporte-login"
@@ -19511,14 +19623,14 @@ def _home_portal(rol=None):
 def _login_portal(rol=None):
     r = (rol or rol_actual() or "").strip()
     return {
-        "Comercial": "/ventas-login",
-        "Soporte": "/soporte-login",
-        "Gerente": "/gerencia-login",
-        "Administrador": "/gerencia-login",
-        "Superadmin": "/gerencia-login",
-        "Cobranza": "/cobranza-login",
-        "Desarrollador": "/dev-console-login",
-        "Developer": "/dev-console-login",
+        "Comercial": "/backoffice",
+        "Soporte": "/backoffice",
+        "Gerente": "/backoffice",
+        "Administrador": "/backoffice",
+        "Superadmin": "/backoffice",
+        "Cobranza": "/backoffice",
+        "Desarrollador": "/backoffice",
+        "Developer": "/backoffice",
     }.get(r, "/backoffice")
 
 
@@ -19576,16 +19688,16 @@ def _aislar_paneles_internos():
     home = _home_portal(rol)
 
     def _login_del_portal(p):
-        """Si p pertenece a otro portal interno, da el login de ESE portal (para poder
-        cambiar de rol abriendo otra pestaña) en vez de rebotar siempre al portal actual."""
+        """Login único staff: siempre /backoffice."""
+        return "/backoffice"
         if p.startswith("/gerencia"):
-            return "/gerencia-login"
+            return "/backoffice"
         if p.startswith("/soporte_admin") or p.startswith("/soporte"):
-            return "/soporte-login"
+            return "/backoffice"
         if p.startswith("/ventas"):
-            return "/ventas-login"
+            return "/backoffice"
         if p.startswith("/cobranza"):
-            return "/cobranza-login"
+            return "/backoffice"
         if p.startswith("/dev-console"):
             return "/dev-console-login"
         return home
@@ -19657,19 +19769,17 @@ def _aislar_paneles_internos():
             return redirect("/cobranza/panel")
 
     elif rol in ("Desarrollador", "Developer"):
-        # Solo consola de desarrollo; nunca login de colegios ni otros paneles
         ok_dev = (
             path.startswith("/dev-console")
             or path == "/backoffice"
+            or path.startswith("/backoffice/")
             or path.startswith("/logout")
             or path.startswith("/mi-perfil")
             or path.startswith("/cambiar_password")
+            or path.startswith("/gerencia/planes/nuevo")
+            or path.startswith("/static")
         )
         if not ok_dev:
-            if path.startswith("/gerencia") or path.startswith("/soporte") or path.startswith("/ventas") or path.startswith("/cobranza"):
-                return redirect("/dev-console-login")
-            if path in ("/login", "/dashboard") or path.startswith("/familia"):
-                return redirect("/dev-console")
             return redirect("/dev-console")
 
     elif rol in ("Gerente", "Superadmin", "Administrador"):
@@ -48760,31 +48870,26 @@ def cerrar_turno_laboral():
 @app.route("/ventas/turnos", methods=["GET", "POST"])
 @app.route("/interno/turnos", methods=["GET", "POST"])
 def modulo_turnos():
-    """Módulo de turnos: notas con fecha/hora automática, filtro por estado y reasignación."""
-    if not requiere_login() or (
-        rol_actual() not in ROLES_INTERNOS
-        and rol_actual() not in ("Soporte", "Comercial", "Cobranza")
-    ):
-        return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
+    """Turnos: Gerencia define quién, día y horario. Otros roles no gestionan turnos desde el menú."""
+    if not requiere_login():
+        return redirect("/backoffice")
     rol = rol_actual()
     path = request.path or ""
-    # Área según portal
-    if path.startswith("/cobranza") or rol == "Cobranza":
-        area = "Cobranza"
-        if rol not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
-            return redirect(_home_portal(rol))
-    elif path.startswith("/ventas") or rol == "Comercial":
-        area = "Ventas"
-        if rol not in ("Comercial", "Gerente", "Superadmin", "Administrador"):
-            return redirect(_home_portal(rol))
-    elif path.startswith("/soporte") or rol == "Soporte":
-        area = "Soporte"
-        if rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
-            return redirect(_home_portal(rol))
+    # Solo Gerencia administra turnos del equipo
+    if path.startswith(("/cobranza/turnos", "/soporte/turnos", "/ventas/turnos")):
+        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado(
+                "Los turnos los asigna Gerencia. No hay módulo de turnos en Ventas, Soporte ni Cobranza."
+            )
+        return redirect("/gerencia/turnos")
+    if path.startswith("/gerencia/turnos") or path.startswith("/interno/turnos"):
+        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado("Solo Gerencia puede crear y asignar turnos del equipo.")
+        area = "Gerencia"
     else:
         area = "Gerencia"
-        if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte", "Comercial"):
-            return redirect(_home_portal(rol))
+        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return redirect("/backoffice")
 
     try:
         db.create_all()
