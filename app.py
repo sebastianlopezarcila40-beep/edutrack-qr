@@ -87,7 +87,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=2),
+    PERMANENT_SESSION_LIFETIME=timedelta(minutes=20),  # se renueva con cada request activo
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB (fotos biometría comprimidas)
     # Capacidad: colegios grandes (1.500–5.000 estudiantes)
     EDUTRACK_MAX_ESTUDIANTES=int(os.environ.get("EDUTRACK_MAX_ESTUDIANTES", "5000")),
@@ -3610,20 +3610,13 @@ _STAFF_TAB_JS = (
     "(function(){"
     "var K='procsis_staff_tab';"
     "var path=location.pathname||'';"
-    "if(path.indexOf('/logout')>=0)return;"
+    "if(path.indexOf('/logout')>=0){try{sessionStorage.removeItem(K);}catch(e){}return;}"
     "var isLogin=/\\/(login|gerencia-login|ventas-login|soporte-login|cobranza-login)(\\/|$)/.test(path)"
     "||path==='/backoffice'||path==='/backoffice/login'||path==='/edutrack-backoffice';"
     "if(isLogin||path==='/' )return;"
     "var staff=/\\/(backoffice\\/hub|gerencia|ventas|soporte|cobranza|dev-console|cerrar-turno)/.test(path);"
     "if(!staff)return;"
-    "function justIn(){return document.cookie.indexOf('procsis_just_logged_in=1')>=0;}"
-    "if(sessionStorage.getItem(K)!=='1'){"
-    "  if(justIn()){sessionStorage.setItem(K,'1');}"
-    "  else{sessionStorage.clear();location.replace('/logout');return;}"
-    "}"
-    "sessionStorage.setItem(K,'1');"
-    "window.addEventListener('pagehide',function(){try{sessionStorage.removeItem(K);sessionStorage.clear();}catch(e){}});"
-    "window.addEventListener('beforeunload',function(){try{sessionStorage.removeItem(K);sessionStorage.clear();}catch(e){}});"
+    "try{sessionStorage.setItem(K,'1');}catch(e){}"
     "})();"
     "</script>"
 )
@@ -5424,7 +5417,7 @@ def before():
     if requiere_login():
         ultimo = session.get("ultimo_movimiento")
         ahora_ts = ahora().timestamp()
-        TIEMPO_MAX_INACTIVIDAD = 7200  # 2 horas — antes eran 10 min, cerraba la sesión demasiado rápido
+        TIEMPO_MAX_INACTIVIDAD = 15 * 60  # 15 minutos de inactividad (colegios y backoffice)
         if ultimo and ahora_ts - float(ultimo) > TIEMPO_MAX_INACTIVIDAD:
             rol_expirado = session.get("rol")
             session.clear()
@@ -9356,27 +9349,45 @@ def security_headers(resp):
 
 @app.before_request
 def session_idle_timeout():
-    """Cierra sesión tras 45 min de inactividad (seguridad)."""
+    """Cierra sesión tras 15 min de inactividad (colegios + backoffice). Actividad renueva el contador."""
     from flask import request as _req
-    # rutas públicas
     path = (_req.path or "")
-    if path.startswith("/biometria") or path.startswith("/api/biometria") or path.startswith("/api/webhooks") or path.startswith("/api/health") or path.startswith("/gerencia") or path.startswith("/ventas") or path.startswith("/pagar") or path.startswith("/static") or path in ("/login", "/soporte-login", "/cobranza-login", "/pqr", "/ayuda", "/centro-ayuda", "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales", "/procsis", "/empresa", "/portafolio", "/tecnologia"):
+    # Solo rutas 100% públicas (sin sesión)
+    if path.startswith(("/static", "/api/health", "/api/webhooks", "/biometria", "/api/biometria")):
         return
-    if path.startswith("/colegio/") or path.startswith("/pqr") or path.startswith("/matricula") or path.startswith("/politicas") or path.startswith("/trabaja") or path.startswith("/casos") or path.startswith("/historias"):
+    if path in (
+        "/login", "/soporte-login", "/cobranza-login", "/ventas-login", "/gerencia-login",
+        "/docente-login", "/familia-login", "/logout", "/pqr", "/ayuda", "/centro-ayuda",
+        "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales",
+        "/procsis", "/empresa", "/portafolio", "/tecnologia",
+    ):
         return
-    if "usuario" not in session and "soporte" not in path:
+    if path.startswith(("/colegio/", "/matricula", "/politicas", "/trabaja", "/casos", "/historias", "/pagar")):
         return
-    if "usuario" in session or session.get("rol") == "Soporte":
-        import time
-        now = time.time()
-        last = session.get("_last_active")
-        if last and now - float(last) > 45 * 60:
-            session.clear()
-            if path.startswith("/soporte"):
-                return redirect("/soporte-login")
-            return redirect("/login")
-        session["_last_active"] = now
-        session.permanent = False
+    if "usuario" not in session and not session.get("soporte"):
+        return
+    import time
+    now = time.time()
+    last = session.get("_last_active") or session.get("ultimo_movimiento")
+    LIMITE = 15 * 60  # 15 minutos
+    if last and now - float(last) > LIMITE:
+        rol_exp = session.get("rol") or ""
+        session.clear()
+        destino = {
+            "Soporte": "/soporte-login", "Comercial": "/ventas-login", "Ventas": "/ventas-login",
+            "Gerente": "/gerencia-login", "Administrador": "/gerencia-login",
+            "Superadmin": "/gerencia-login", "Cobranza": "/cobranza-login",
+        }.get(rol_exp, "/login")
+        if path.startswith("/soporte"):
+            destino = "/soporte-login"
+        elif path.startswith("/gerencia"):
+            destino = "/gerencia-login"
+        elif path.startswith("/ventas"):
+            destino = "/ventas-login"
+        return redirect(destino)
+    session["_last_active"] = now
+    session["ultimo_movimiento"] = now
+    session.permanent = True
 
 
 
@@ -32855,10 +32866,9 @@ def _plan_form_fields(p=None, crear=False):
     mod = (getattr(p, "modalidad", None) or "presencial").lower()
     precio_lista = int(float(getattr(p, "precio_lista", None) or getattr(p, "precio_mensual", 0) or 0))
     # checkboxes de módulos
-    boxes = []
     catalog = [
         ("reportes_basicos", "Reportes en pantalla"),
-        ("reportes_excel", "Exportar Excel / PDF / Word (incluido en todos)"),
+        ("reportes_excel", "Exportar Excel / PDF / Word"),
         ("estudiantes", "Estudiantes y grupos"),
         ("portal_docente", "Portal docente"),
         ("notas_basico", "Notas / SIEE básico"),
@@ -32883,18 +32893,25 @@ def _plan_form_fields(p=None, crear=False):
         ("auditoria", "Auditoría de notas"),
         ("contacto", "PQR padres + PQR a PROCSIS"),
     ]
+    boxes = []
+    activos_chips = []
     for key, lab in catalog:
         forced = key in ("reportes_basicos", "reportes_excel")
-        chk = "checked" if (key in mods_on or forced) else ""
+        on = key in mods_on or forced
+        chk = "checked" if on else ""
         dis = "disabled" if forced else ""
         boxes.append(
-            '<label style="display:flex;align-items:center;gap:8px;font-weight:500;font-size:13px;margin:4px 0">'
-            '<input type="checkbox" name="modulos" value="%s" %s %s> %s</label>'
-            % (key, chk, dis, lab)
+            '<label class="mod-item%s">'
+            '<input type="checkbox" name="modulos" value="%s" %s %s onchange="planModsPreview()">'
+            '<span>%s</span></label>'
+            % (" is-on" if on else "", key, chk, dis, lab)
         )
         if forced:
             boxes.append('<input type="hidden" name="modulos" value="%s">' % key)
+        if on:
+            activos_chips.append('<span class="mod-chip">%s</span>' % lab)
     boxes_html = "".join(boxes)
+    chips_html = "".join(activos_chips) or '<span class="mod-chip mute">Ninguna función extra (solo reportes base)</span>'
     return f"""
                 <label>Nombre</label>
                 <input name="nombre" value="{_esc(getattr(p,'nombre',None) or '')}" required placeholder="Ej: Básico">
@@ -32932,11 +32949,42 @@ def _plan_form_fields(p=None, crear=False):
                   <div><label>Descuento %</label><input name="descuento_pct" type="number" min="0" max="100" step="0.5" value="{float(getattr(p,'descuento_pct',0) or 0)}"></div>
                   <div><label>Duración descuento (meses)</label><input name="descuento_meses" type="number" min="0" max="36" value="{int(getattr(p,'descuento_meses',0) or 0)}"></div>
                 </div>
-                <label style="margin-top:14px">Funciones de este plan</label>
-                <p class="hint">Marque lo que incluye. Excel/PDF/Word de reportes van en todos los planes.</p>
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;max-height:280px;overflow:auto;margin:8px 0 12px">
-                  {boxes_html}
+                <label style="margin-top:18px;font-size:14px;color:#0B2D57">Funciones de este plan</label>
+                <p class="hint">Active o desactive módulos. Excel/PDF/Word siempre incluidos. La vista previa abajo muestra lo que queda activo.</p>
+                <div class="mod-grid">{boxes_html}</div>
+                <div class="mod-preview">
+                  <div class="mod-preview-title">Funciones activas en este plan</div>
+                  <div id="mod-chips" class="mod-chips">{chips_html}</div>
                 </div>
+                <style>
+                .mod-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0;max-height:320px;overflow:auto;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px}}
+                .mod-item{{display:flex;align-items:flex-start;gap:10px;font-size:13px;font-weight:500;color:#1e293b;margin:0;padding:10px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;cursor:pointer;line-height:1.35}}
+                .mod-item input{{margin-top:2px;flex-shrink:0;width:16px;height:16px}}
+                .mod-item span{{flex:1;text-align:left}}
+                .mod-item.is-on{{border-color:#93c5fd;background:#eff6ff}}
+                .mod-preview{{margin:14px 0 8px;padding:14px;background:#0B2D57;border-radius:12px;color:#fff}}
+                .mod-preview-title{{font-size:12px;font-weight:700;opacity:.85;margin-bottom:10px;letter-spacing:.02em}}
+                .mod-chips{{display:flex;flex-wrap:wrap;gap:6px}}
+                .mod-chip{{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600}}
+                .mod-chip.mute{{opacity:.7;font-weight:500}}
+                @media(max-width:640px){{.mod-grid{{grid-template-columns:1fr}}}}
+                </style>
+                <script>
+                function planModsPreview(){{
+                  var box=document.getElementById('mod-chips');
+                  if(!box)return;
+                  var labs=[];
+                  document.querySelectorAll('.mod-item').forEach(function(lab){{
+                    var inp=lab.querySelector('input[type=checkbox]');
+                    if(inp && (inp.checked||inp.disabled)){{
+                      lab.classList.add('is-on');
+                      var t=(lab.querySelector('span')||{{}}).textContent||'';
+                      if(t)labs.push('<span class="mod-chip">'+t+'</span>');
+                    }}else{{lab.classList.remove('is-on');}}
+                  }});
+                  box.innerHTML=labs.length?labs.join(''):'<span class="mod-chip mute">Ninguna función extra</span>';
+                }}
+                </script>
                 <label>Título comercial / eslogan</label>
                 <input name="titulo_comercial" value="{_esc(getattr(p,'titulo_comercial',None) or '')}" placeholder="✨ Un plan que lo tiene todo ✨" maxlength="160">
                 <label>Mensaje WhatsApp (beneficios)</label>
