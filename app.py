@@ -4094,63 +4094,73 @@ def menu_items_por_rol():
         ]
 
     items.append(("/logout", "Cerrar sesión"))
-    # Plan Solo QR: menú reducido a funciones de acceso escolar
+    # Filtrar menú según módulos del plan del colegio (100% alineado con checks del plan)
     try:
-        if es_plan_solo_qr():
+        rol = rol_actual() or ""
+        if rol not in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador", "Desarrollador", "Developer", "Cobranza"):
             mods = set(modulos_plan_actual())
-            permitidas = {
-                "/dashboard", "/logout", "/mi_licencia", "/contacto", "/calendario",
-                "/portal", "/ingreso_manual", "/docente-movil", "/carnes", "/reportes",
-                "/registrar_estudiante", "/buscar_estudiantes", "/estudiantes_grupo",
-                "/estudiantes", "/importar_estudiantes", "/alertas", "/sedes",
-                "/reportes_padres", "/enlaces-publicos",
+            if "notas_completo" in mods:
+                mods.update({"notas_basico", "portal_docente"})
+            if "notas_basico" in mods:
+                mods.add("portal_docente")
+            if "portal_porteria" in mods:
+                mods.add("asistencia_qr")
+            if "asistencia_qr" in mods:
+                mods.add("ingreso_manual")
+            always_menu = {
+                "/dashboard", "/logout", "/mi_licencia", "/contacto", "/pqr",
+                "/enlaces-publicos", "/cambiar_password", "/perfil",
             }
-            # map módulos → rutas extra
-            if "asistencia_qr" in mods or "portal_porteria" in mods:
-                permitidas.update({"/portal", "/docente-movil", "/ingreso_manual", "/notas/faltas"})
-            if "estudiantes" in mods:
-                permitidas.update({"/registrar_estudiante", "/buscar_estudiantes", "/estudiantes_grupo", "/estudiantes"})
-            if "carnes" in mods:
-                permitidas.add("/carnes")
-            if "reportes_basicos" in mods or "reportes_excel" in mods:
-                permitidas.add("/reportes")
-            if "calendario" in mods:
-                permitidas.add("/calendario")
-            if "multi_sede" in mods:
-                permitidas.add("/sedes")
-            if "historial_padres" in mods or "reportes_padres" in mods:
-                permitidas.add("/reportes_padres")
-            if "alertas_impuntualidad" in mods:
-                permitidas.add("/alertas")
-            if "import_excel" in mods:
-                permitidas.add("/importar_estudiantes")
-            # Docente en plan QR: solo asistencia / inicio
-            if (rol_actual() or "") == "Docente":
-                items = [
-                    ("/dashboard", "Inicio"),
-                    ("/docente-movil", "Asistencia QR"),
-                    ("/notas/faltas", "Faltas / asistencia"),
-                    ("/calendario", "Calendario"),
-                    ("/contacto", "Contacto"),
-                    ("/logout", "Cerrar sesión"),
-                ]
-                return items
+            # Solo QR: menú más estricto
+            if es_plan_solo_qr():
+                if rol == "Docente":
+                    items = [
+                        ("/dashboard", "Inicio"),
+                        ("/docente-movil", "Asistencia QR"),
+                        ("/notas/faltas", "Faltas / asistencia"),
+                        ("/calendario", "Calendario"),
+                        ("/contacto", "Contacto"),
+                        ("/logout", "Cerrar sesión"),
+                    ]
+                    return items
             filtered = []
             for href, label in items:
                 base = href.split("?")[0]
-                if base in permitidas or any(base.startswith(p + "/") for p in permitidas):
-                    # bloquear notas / eduaura / convivencia explícitamente
-                    if base.startswith(("/notas/planilla", "/notas/ficha", "/eduaura", "/radar", "/boletines", "/siee", "/panel_convivencia", "/citaciones", "/horarios")):
-                        if "notas_basico" not in mods and "portal_docente" not in mods:
-                            continue
+                if base in always_menu:
+                    filtered.append((href, label))
+                    continue
+                # Resolver módulo requerido
+                req = None
+                try:
+                    req = _MENU_RUTA_MODULO.get(base)
+                    if not req:
+                        for pref, mod in sorted(_MENU_RUTA_MODULO.items(), key=lambda x: -len(x[0])):
+                            if base == pref or base.startswith(pref + "/"):
+                                req = mod
+                                break
+                except Exception:
+                    req = None
+                if req is None:
+                    # sin mapeo: permitir (periodos, licencia, etc.)
+                    filtered.append((href, label))
+                    continue
+                if req in ("reportes_basicos", "reportes_excel"):
+                    if "reportes_basicos" in mods or "reportes_excel" in mods:
+                        filtered.append((href, label))
+                    continue
+                if req in mods:
+                    filtered.append((href, label))
+                    continue
+                # planilla: si solo tiene notas_basico, aún mostrar notas ver
+                if req == "notas_completo" and "notas_basico" in mods and base == "/notas":
                     filtered.append((href, label))
             if not any(h == "/dashboard" for h, _ in filtered):
                 filtered.insert(0, ("/dashboard", "Inicio"))
             if not any(h == "/logout" for h, _ in filtered):
                 filtered.append(("/logout", "Cerrar sesión"))
             return filtered
-    except Exception as _ex_qr:
-        print("menu qr filter:", _ex_qr)
+    except Exception as _ex_plan:
+        print("menu plan filter:", _ex_plan)
     return items
 
 
@@ -8813,28 +8823,17 @@ def _guard_plan_qr_rutas():
             return None
         if rol not in _ROLES_COLEGIO and rol not in ("Docente",):
             return None
-        # Solo QR: regla estricta existente
-        if es_plan_solo_qr():
-            if plan_permite_ruta(path):
-                return None
-            return page("Plan Solo QR", mensaje_plan_qr_limitado())
-        # Académico: bloquear solo rutas que exigen módulo explícito ausente
-        mods = set(modulos_plan_actual())
-        for pref, mod in _RUTA_MODULO_PLAN.items():
-            if path == pref or path.startswith(pref + "/"):
-                if mod in ("reportes_basicos", "reportes_excel"):
-                    return None
-                if mod in mods:
-                    return None
-                # módulo no contratado
-                return page(
-                    "Módulo no incluido",
-                    "<div class='msg danger' style='max-width:640px;margin:24px auto;padding:18px;border-radius:12px'>"
-                    "<b>Función no incluida en su plan</b><br>El módulo <code>%s</code> no está activo para este colegio. "
-                    "Contacte a comercial PROCSIS o revise el plan en Gerencia."
-                    "<br><br><a href='/dashboard'>← Volver</a> · <a href='/mi_licencia'>Mi licencia</a></div>"
-                    % _esc(mod),
-                )
+        if not plan_permite_ruta(path):
+            if es_plan_solo_qr():
+                return page("Plan Solo QR", mensaje_plan_qr_limitado())
+            return page(
+                "Módulo no incluido",
+                "<div class='msg danger' style='max-width:640px;margin:24px auto;padding:18px;border-radius:12px'>"
+                "<b>Función no incluida en su plan</b><br>"
+                "Esta pantalla no está activa para el plan contratado por el colegio. "
+                "Contacte a comercial PROCSIS o revise el plan en Gerencia."
+                "<br><br><a href='/dashboard'>← Volver</a> · <a href='/mi_licencia'>Mi licencia</a></div>",
+            )
         return None
     except Exception as ex:
         print("guard plan:", ex)
