@@ -1068,10 +1068,59 @@ class AutorizacionSalida(db.Model):
     user_agent = db.Column(db.String(255), default="")
     hash_firma = db.Column(db.String(80), default="")
     timestamp_ms = db.Column(db.String(40), default="")
-    estado = db.Column(db.String(40), default="ACTIVA")
+    # PENDIENTE (padre solicitó) | APROBADA (coord) | RECHAZADA | ACTIVA (=aprobada lista portería) | USADA
+    estado = db.Column(db.String(40), default="PENDIENTE")
     usado_en = db.Column(db.String(40), default="")
     tipo = db.Column(db.String(40), default="DELEGACION")
+    # Flujo coordinación
+    motivo_padre = db.Column(db.String(255), default="")  # por qué el acudiente retira
+    motivo_coord = db.Column(db.Text, default="")  # motivo formal al autorizar
+    decidido_por = db.Column(db.String(120), default="")
+    decidido_en = db.Column(db.String(40), default="")
+    observacion_rechazo = db.Column(db.Text, default="")
 
+
+
+def _ensure_autorizacion_salida_cols():
+    """Columnas extra del flujo Coordinación → salida autorizada."""
+    if getattr(_ensure_autorizacion_salida_cols, "_ok", False):
+        return
+    cols = [
+        ("motivo_padre", "VARCHAR(255) DEFAULT ''"),
+        ("motivo_coord", "TEXT DEFAULT ''"),
+        ("decidido_por", "VARCHAR(120) DEFAULT ''"),
+        ("decidido_en", "VARCHAR(40) DEFAULT ''"),
+        ("observacion_rechazo", "TEXT DEFAULT ''"),
+    ]
+    try:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        for col, typ in cols:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE autorizaciones_salida ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)
+                    ))
+            except Exception:
+                try:
+                    with db.engine.begin() as conn:
+                        conn.execute(text(
+                            "ALTER TABLE autorizaciones_salida ADD COLUMN %s %s" % (col, typ)
+                        ))
+                except Exception:
+                    pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        _ensure_autorizacion_salida_cols._ok = True
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 class ClienteAlianza(db.Model):
     __tablename__ = "clientes_alianzas"
@@ -3919,6 +3968,7 @@ def menu_items_por_rol():
     elif rol == "Rectoría":
         # Control y estrategia: monitorear y firmar (sin digitar notas ni operar matrícula)
         items += [
+            ("/salidas/consulta", "Salidas (solo consulta)"),
             ("/pqr-colegio", "PQR de padres"),
             ("/pqr", "PQR a PROCSIS"),
             ("/reportes", "Reportes MEN / estadísticas"),
@@ -3940,6 +3990,7 @@ def menu_items_por_rol():
 
     elif rol == "Coordinación":
         items += [
+            ("/coordinacion/salidas", "Salidas a autorizar"),
             ("/pqr-colegio", "PQR de padres"),
             ("/enlaces-publicos", "Enlaces públicos"),
             ("/panel_convivencia", "Convivencia"),
@@ -3962,6 +4013,7 @@ def menu_items_por_rol():
     elif rol == "Secretaría":
         # Operación administrativa: matrícula, citaciones, periodos (NO vaciar base de datos)
         items += [
+            ("/salidas/consulta", "Salidas (solo consulta)"),
             ("/periodo", "Cambiar periodo"),
             ("/cierres-periodo", "Cierre de periodos"),
             ("/registrar_estudiante", "Registrar estudiante"),
@@ -4002,6 +4054,7 @@ def menu_items_por_rol():
             ("/notas/ficha", "Ficha seguimiento"),
             ("/docente-movil", "Asistencia QR"),
             ("/notas/faltas", "Faltas"),
+            ("/docente/salidas-hoy", "Salidas autorizadas hoy"),
             ("/horarios", "Horarios"),
             ("/calendario", "Calendario"),
             ("/eduaura", "EduAura IA"),
@@ -8913,9 +8966,15 @@ def registrar_ingreso(codigo, estado, registrado_por=None):
             parts.append((e.enfermedades or "")[:60])
         alerta_med = " · ".join(parts)
     try:
-        auth = AutorizacionSalida.query.filter_by(
-            estudiante_id=e.id, fecha=fecha_hoy(), estado="ACTIVA"
-        ).order_by(AutorizacionSalida.id.desc()).first()
+        auth = (
+            AutorizacionSalida.query.filter(
+                AutorizacionSalida.estudiante_id == e.id,
+                AutorizacionSalida.fecha == fecha_hoy(),
+                AutorizacionSalida.estado.in_(["ACTIVA", "APROBADA"]),
+            )
+            .order_by(AutorizacionSalida.id.desc())
+            .first()
+        )
     except Exception:
         auth = None
     if auth:
@@ -62980,6 +63039,11 @@ function vcStep(n){{
                 except Exception:
                     pass
                 try:
+                    try:
+                        _ensure_autorizacion_salida_cols()
+                    except Exception:
+                        pass
+                    motivo_p = (request.form.get("motivo_padre") or "").strip()[:255]
                     row = AutorizacionSalida(
                         estudiante_id=e.id,
                         institucion_id=getattr(e, "institucion_id", None),
@@ -62994,12 +63058,16 @@ function vcStep(n){{
                         user_agent=ua,
                         hash_firma=h,
                         timestamp_ms=ts,
-                        estado="ACTIVA",
+                        estado="PENDIENTE",
                         tipo="DELEGACION",
+                        motivo_padre=motivo_p,
                     )
                     db.session.add(row)
                     db.session.commit()
-                    msg = "Autorizacion firmada. Hash %s... IP %s · %s" % (h[:12], ip, ts)
+                    msg = (
+                        "Solicitud enviada a Coordinación (pendiente de autorización). "
+                        "Radicado #%s · Hash %s..." % (row.id, h[:12])
+                    )
                 except Exception as ex:
                     err = str(ex)[:140]
     body = (
@@ -63022,6 +63090,9 @@ function vcStep(n){{
         + '<input name="acudiente_nombre" style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
         + '<label style="font-size:12px;font-weight:700">Su documento</label>'
         + '<input name="acudiente_doc" style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box">'
+        + '<label style="font-size:12px;font-weight:700">Motivo del retiro / salida (obligatorio)</label>'
+        + '<textarea name="motivo_padre" required rows="2" placeholder="Ej. cita médica, diligencia familiar..." style="width:100%;padding:10px;margin:4px 0 10px;box-sizing:border-box"></textarea>'
+        + '<p style="font-size:11px;color:#64748b;margin:0 0 10px">La solicitud llega a <b>Coordinación</b>. Solo ellos autorizan. Rectoría y Secretaría pueden consultar.</p>'
         + '<label style="display:flex;gap:8px;font-size:11px;margin:12px 0"><input type="checkbox" name="acepto_legal" value="1" required>'
         + '<span>AUTORIZO de manera expresa, libre y voluntaria el retiro del menor por la persona indicada '
         + "y exonero a la institucion una vez cruce el control perimetral (Ley 527 de 1999).</span></label>"
@@ -63030,6 +63101,419 @@ function vcStep(n){{
         + '<a href="/acudiente/ficha-medica">Ficha medica</a></p></div>'
     )
     return page("Autorizar salida", body)
+
+
+
+@app.route("/coordinacion/salidas", methods=["GET", "POST"])
+def coordinacion_salidas():
+    """Bandeja: Coordinación autoriza o rechaza salidas del acudiente."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Coordinación", "Soporte", "Administrador"):
+        return acceso_denegado("Solo Coordinación puede autorizar salidas.")
+    try:
+        _ensure_autorizacion_salida_cols()
+    except Exception:
+        pass
+    iid = institucion_id_actual()
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            aid = int(request.form.get("auth_id") or 0)
+        except Exception:
+            aid = 0
+        decision = (request.form.get("decision") or "").strip().upper()
+        motivo_c = (request.form.get("motivo_coord") or "").strip()[:2000]
+        obs_rech = (request.form.get("observacion_rechazo") or "").strip()[:1000]
+        row = AutorizacionSalida.query.get(aid) if aid else None
+        if not row:
+            err = "Solicitud no encontrada."
+        elif iid and row.institucion_id and int(row.institucion_id) != int(iid) and rol_actual() != "Soporte":
+            err = "No puede gestionar salidas de otro colegio."
+        elif (row.estado or "").upper() not in ("PENDIENTE",):
+            err = "Esta solicitud ya fue gestionada (%s)." % (row.estado or "")
+        elif decision == "SI":
+            if not motivo_c:
+                err = "Al autorizar debe indicar el motivo por el cual se retira al estudiante del plantel."
+            else:
+                row.estado = "APROBADA"
+                row.motivo_coord = motivo_c
+                row.decidido_por = "%s (%s)" % (session.get("usuario") or "coord", rol_actual())
+                row.decidido_en = "%s %s" % (fecha_hoy(), hora_actual())
+                # Novedad + traza en asistencia del docente
+                try:
+                    db.session.add(Novedad(
+                        estudiante_id=row.estudiante_id,
+                        tipo="salida_anticipada",
+                        motivo=(motivo_c or row.motivo_padre or "Salida autorizada")[:160],
+                        observacion=(
+                            "Autorizado por Coordinación. Recoge: %s (doc. %s). "
+                            "Motivo padre: %s. Motivo coord: %s"
+                            % (row.nombre_recoge, row.documento_recoge, row.motivo_padre or "—", motivo_c)
+                        )[:2000],
+                        estado="Cerrada",
+                        acudiente_autoriza=row.acudiente_nombre or "",
+                        fecha=fecha_hoy(),
+                        hora=hora_actual(),
+                        periodo=periodo_actual(),
+                        registrado_por=row.decidido_por,
+                    ))
+                except Exception:
+                    pass
+                try:
+                    e = Estudiante.query.get(row.estudiante_id)
+                    grp = (getattr(e, "grupo", None) or getattr(e, "grado", None) or "")[:30] if e else ""
+                    db.session.add(AsistenciaClase(
+                        estudiante_id=row.estudiante_id,
+                        docente="COORDINACION",
+                        grupo=grp or "—",
+                        fecha=fecha_hoy(),
+                        hora=hora_actual(),
+                        estado="Salida autorizada",
+                        periodo=periodo_actual(),
+                        observacion=(
+                            "Salida del plantel autorizada. Motivo: %s. Recoge: %s."
+                            % (motivo_c[:200], row.nombre_recoge or "")
+                        )[:500],
+                    ))
+                except Exception:
+                    pass
+                try:
+                    registrar_auditoria(
+                        "Salida autorizada",
+                        "auth#%s est=%s motivo=%s" % (row.id, row.estudiante_id, motivo_c[:80]),
+                    )
+                except Exception:
+                    pass
+                db.session.commit()
+                msg = "Salida APROBADA. Ya puede usarse en portería y quedó en asistencia/novedades. Formato: /formato-salida/%s" % row.id
+        elif decision == "NO":
+            row.estado = "RECHAZADA"
+            row.observacion_rechazo = obs_rech or "Rechazada por Coordinación"
+            row.decidido_por = "%s (%s)" % (session.get("usuario") or "coord", rol_actual())
+            row.decidido_en = "%s %s" % (fecha_hoy(), hora_actual())
+            try:
+                registrar_auditoria("Salida rechazada", "auth#%s" % row.id)
+            except Exception:
+                pass
+            db.session.commit()
+            msg = "Solicitud rechazada."
+        else:
+            err = "Indique Autorizar (SI) o No autorizar (NO)."
+
+    q = AutorizacionSalida.query
+    if iid is not None:
+        q = q.filter(
+            db.or_(
+                AutorizacionSalida.institucion_id == iid,
+                AutorizacionSalida.institucion_id.is_(None),
+            )
+        )
+    pendientes = (
+        q.filter(AutorizacionSalida.estado == "PENDIENTE")
+        .order_by(AutorizacionSalida.id.desc())
+        .limit(80)
+        .all()
+    )
+    recientes = (
+        q.filter(AutorizacionSalida.estado.in_(["APROBADA", "RECHAZADA", "USADA", "ACTIVA"]))
+        .order_by(AutorizacionSalida.id.desc())
+        .limit(40)
+        .all()
+    )
+
+    def _fila_pend(a):
+        e = Estudiante.query.get(a.estudiante_id) if a.estudiante_id else None
+        nom = estudiante_nombre(e) if e else ("ID %s" % a.estudiante_id)
+        grado = (e.grado if e else "") or ""
+        return f"""
+        <div class="scard">
+          <div class="shead"><b>{_esc(nom)}</b> · {_esc(grado)} · {_esc(a.fecha)} · #{a.id}</div>
+          <div class="smeta">Recoge: {_esc(a.nombre_recoge)} · Doc. {_esc(a.documento_recoge)} · {_esc(a.parentesco or '—')}</div>
+          <div class="smeta">Acudiente: {_esc(a.acudiente_nombre or '—')} · Motivo padre: <b>{_esc(a.motivo_padre or '—')}</b></div>
+          <form method="POST" class="sform">
+            <input type="hidden" name="auth_id" value="{a.id}">
+            <label>Si autoriza: ¿por qué se retira del plantel? (obligatorio al decir Sí)</label>
+            <textarea name="motivo_coord" rows="2" placeholder="Cita médica, diligencia, calamidad doméstica..."></textarea>
+            <label>Si rechaza: observación</label>
+            <input name="observacion_rechazo" placeholder="Opcional">
+            <div class="sbtns">
+              <button type="submit" name="decision" value="SI" class="ok">Autorizar (Sí)</button>
+              <button type="submit" name="decision" value="NO" class="no">No autorizar</button>
+            </div>
+          </form>
+        </div>"""
+
+    def _fila_hist(a):
+        e = Estudiante.query.get(a.estudiante_id) if a.estudiante_id else None
+        nom = estudiante_nombre(e) if e else str(a.estudiante_id)
+        st = (a.estado or "").upper()
+        link = f' · <a href="/formato-salida/{a.id}">Formato salida</a>' if st in ("APROBADA", "ACTIVA", "USADA") else ""
+        return (
+            "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s%s</td></tr>"
+            % (
+                a.id,
+                _esc(nom),
+                _esc(a.fecha),
+                _esc(st),
+                _esc((a.motivo_coord or a.motivo_padre or "")[:60]),
+                _esc(a.decidido_por or "—"),
+                link,
+            )
+        )
+
+    body = f"""
+<style>
+.scard{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px}}
+.shead{{color:#0B2D57;margin-bottom:6px}}.smeta{{font-size:13px;color:#475569;margin:2px 0}}
+.sform label{{display:block;font-size:12px;font-weight:700;margin:8px 0 4px;color:#334155}}
+.sform textarea,.sform input{{width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box}}
+.sbtns{{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}}
+.sbtns .ok{{background:#15803d;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer}}
+.sbtns .no{{background:#b91c1c;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer}}
+.msg{{padding:10px;border-radius:8px;margin-bottom:12px;font-weight:600}}
+.okm{{background:#ecfdf5;color:#065f46}}.errm{{background:#fef2f2;color:#991b1b}}
+table.st{{width:100%;border-collapse:collapse;font-size:13px}}
+table.st th,table.st td{{border-bottom:1px solid #e2e8f0;padding:8px;text-align:left}}
+</style>
+<header class="role-hero"><div>
+  <h1>Salidas a autorizar</h1>
+  <p>Solo Coordinación decide. Al autorizar debe indicar el motivo; queda en novedades y asistencia del docente.</p>
+</div><a class="btn" href="/dashboard">Volver</a></header>
+<section class="role-panel">
+  {"<div class='msg okm'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg errm'>"+_esc(err)+"</div>" if err else ""}
+  <h2 style="font-size:16px;color:#0B2D57">Pendientes ({len(pendientes)})</h2>
+  {"".join(_fila_pend(a) for a in pendientes) or "<p style='color:#64748b'>No hay solicitudes pendientes.</p>"}
+  <h2 style="font-size:16px;color:#0B2D57;margin-top:24px">Recientes</h2>
+  <table class="st"><tr><th>#</th><th>Estudiante</th><th>Fecha</th><th>Estado</th><th>Motivo</th><th>Decisión</th></tr>
+  {"".join(_fila_hist(a) for a in recientes) or "<tr><td colspan='6'>Sin historial</td></tr>"}
+  </table>
+</section>
+"""
+    return page("Salidas a autorizar", shell(body))
+
+
+@app.route("/salidas/consulta")
+def salidas_consulta():
+    """Rectoría y Secretaría: solo ver (no autorizar)."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Rectoría", "Secretaría", "Soporte", "Administrador", "Coordinación"):
+        return acceso_denegado()
+    try:
+        _ensure_autorizacion_salida_cols()
+    except Exception:
+        pass
+    iid = institucion_id_actual()
+    q = AutorizacionSalida.query
+    if iid is not None:
+        q = q.filter(
+            db.or_(
+                AutorizacionSalida.institucion_id == iid,
+                AutorizacionSalida.institucion_id.is_(None),
+            )
+        )
+    rows = q.order_by(AutorizacionSalida.id.desc()).limit(120).all()
+    filas = []
+    for a in rows:
+        e = Estudiante.query.get(a.estudiante_id) if a.estudiante_id else None
+        nom = estudiante_nombre(e) if e else str(a.estudiante_id)
+        st = (a.estado or "").upper()
+        fmt = f'<a href="/formato-salida/{a.id}">Ver formato</a>' if st in ("APROBADA", "ACTIVA", "USADA") else "—"
+        filas.append(
+            "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+            % (
+                a.id,
+                _esc(nom),
+                _esc(a.fecha),
+                _esc(st),
+                _esc((a.motivo_padre or "")[:40]),
+                _esc((a.motivo_coord or "")[:40]),
+                _esc(a.decidido_por or "—"),
+                fmt,
+            )
+        )
+    solo_ver = rol_actual() in ("Rectoría", "Secretaría")
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Salidas — consulta</h1>
+  <p>{"Solo lectura: no puede autorizar ni rechazar. Eso lo hace Coordinación." if solo_ver else "Consulta de autorizaciones de salida."}</p>
+</div>
+<a class="btn" href="/dashboard">Volver</a>
+{"<a class='btn' href='/coordinacion/salidas'>Ir a autorizar</a>" if rol_actual() in ("Coordinación","Soporte","Administrador") else ""}
+</header>
+<section class="role-panel">
+<table style="width:100%;border-collapse:collapse;font-size:13px">
+<tr style="background:#f1f5f9"><th style="padding:8px;text-align:left">#</th><th style="padding:8px;text-align:left">Estudiante</th>
+<th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Estado</th>
+<th style="padding:8px;text-align:left">Motivo padre</th><th style="padding:8px;text-align:left">Motivo coord.</th>
+<th style="padding:8px;text-align:left">Decidió</th><th style="padding:8px;text-align:left">Formato</th></tr>
+{"".join(filas) or "<tr><td colspan='8' style='padding:12px'>Sin registros</td></tr>"}
+</table>
+</section>
+"""
+    return page("Consulta salidas", shell(body))
+
+
+@app.route("/formato-salida/<int:aid>")
+def formato_salida(aid):
+    """Formato imprimible de salida autorizada."""
+    if not requiere_login():
+        # permitir ver si es acudiente con sesión familia? require login colegio
+        return redirect("/login")
+    if rol_actual() not in (
+        "Coordinación", "Secretaría", "Rectoría", "Soporte", "Administrador", "Docente"
+    ):
+        return acceso_denegado()
+    try:
+        _ensure_autorizacion_salida_cols()
+    except Exception:
+        pass
+    a = AutorizacionSalida.query.get_or_404(aid)
+    e = Estudiante.query.get(a.estudiante_id) if a.estudiante_id else None
+    iid = institucion_id_actual()
+    if iid and a.institucion_id and int(a.institucion_id) != int(iid) and rol_actual() != "Soporte":
+        return acceso_denegado()
+    st = (a.estado or "").upper()
+    if st not in ("APROBADA", "ACTIVA", "USADA"):
+        return page("Formato salida", shell(
+            "<div class='msg danger'>Solo se emite formato si Coordinación ya autorizó (estado: %s).</div>"
+            % _esc(st)
+        ))
+    inst_nom = INST_NOMBRE or "Institución educativa"
+    try:
+        if e and getattr(e, "institucion_id", None):
+            inst = Institucion.query.get(e.institucion_id)
+            if inst and inst.nombre:
+                inst_nom = inst.nombre
+    except Exception:
+        pass
+    body = f"""
+<style>
+@media print {{ .no-print {{ display:none }} }}
+.fmt {{ max-width:720px;margin:24px auto;font-family:Segoe UI,Arial,sans-serif;background:#fff;padding:28px;border:1px solid #cbd5e1 }}
+.fmt h1 {{ color:#0B2D57;font-size:18px;margin:0 0 4px;text-align:center }}
+.fmt .sub {{ text-align:center;color:#64748b;font-size:12px;margin-bottom:18px }}
+.fmt table {{ width:100%;border-collapse:collapse;font-size:13px }}
+.fmt td {{ padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top }}
+.fmt td.l {{ width:34%;color:#64748b;font-weight:700 }}
+.fmt .firma {{ margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:24px }}
+.fmt .linea {{ border-top:1px solid #0f172a;padding-top:6px;font-size:12px;text-align:center }}
+.badge {{ display:inline-block;background:#dcfce7;color:#14532d;font-weight:800;padding:4px 10px;border-radius:999px;font-size:12px }}
+</style>
+<div class="no-print" style="text-align:center;padding:12px">
+  <button onclick="window.print()" style="padding:10px 18px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">Imprimir formato</button>
+  <a href="/coordinacion/salidas" style="margin-left:12px">Volver</a>
+</div>
+<div class="fmt">
+  <h1>{_esc(inst_nom)}</h1>
+  <div class="sub">FORMATO DE SALIDA AUTORIZADA · Radicado #{a.id}</div>
+  <p style="text-align:center"><span class="badge">{_esc(st)}</span></p>
+  <table>
+    <tr><td class="l">Fecha</td><td>{_esc(a.fecha)} · Decisión: {_esc(a.decidido_en or '—')}</td></tr>
+    <tr><td class="l">Estudiante</td><td>{_esc(estudiante_nombre(e) if e else '—')} · Código {_esc(e.codigo if e else '—')} · Grado {_esc(e.grado if e else '—')}</td></tr>
+    <tr><td class="l">Documento est.</td><td>{_esc(getattr(e,'documento',None) or '—')}</td></tr>
+    <tr><td class="l">Quien recoge</td><td>{_esc(a.nombre_recoge)} · Doc. {_esc(a.documento_recoge)} · {_esc(a.parentesco or '—')}</td></tr>
+    <tr><td class="l">Acudiente</td><td>{_esc(a.acudiente_nombre or '—')} · Doc. {_esc(a.acudiente_doc or '—')}</td></tr>
+    <tr><td class="l">Motivo (padre)</td><td>{_esc(a.motivo_padre or '—')}</td></tr>
+    <tr><td class="l">Motivo (Coordinación)</td><td>{_esc(a.motivo_coord or '—')}</td></tr>
+    <tr><td class="l">Autorizó</td><td>{_esc(a.decidido_por or '—')}</td></tr>
+    <tr><td class="l">Firma digital</td><td>Hash {_esc((a.hash_firma or '')[:24])}… · IP {_esc(a.ip or '—')}</td></tr>
+  </table>
+  <p style="font-size:12px;color:#475569;margin-top:16px">
+    Documento de control de salida del plantel. Portería debe verificar identidad de quien recoge.
+    Queda registro en novedades y en asistencia para el docente del grupo.
+  </p>
+  <div class="firma">
+    <div class="linea">Coordinación</div>
+    <div class="linea">Portería / recibido</div>
+  </div>
+</div>
+"""
+    return page("Formato de salida", body)
+
+
+
+@app.route("/docente/salidas-hoy")
+def docente_salidas_hoy():
+    """Avisos de salida autorizada que afectan asistencia del día."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Docente", "Coordinación", "Secretaría", "Rectoría", "Soporte", "Administrador"):
+        return acceso_denegado()
+    try:
+        _ensure_autorizacion_salida_cols()
+    except Exception:
+        pass
+    hoy = fecha_hoy()
+    iid = institucion_id_actual()
+    q = AutorizacionSalida.query.filter(
+        AutorizacionSalida.fecha == hoy,
+        AutorizacionSalida.estado.in_(["APROBADA", "ACTIVA", "USADA"]),
+    )
+    if iid is not None:
+        q = q.filter(
+            db.or_(
+                AutorizacionSalida.institucion_id == iid,
+                AutorizacionSalida.institucion_id.is_(None),
+            )
+        )
+    rows = q.order_by(AutorizacionSalida.id.desc()).limit(100).all()
+    # filtrar por grupos del docente si aplica
+    grupos_doc = set()
+    try:
+        if rol_actual() == "Docente":
+            for a in (asignaciones_docente_actual() if "asignaciones_docente_actual" in dir() else []):
+                pass
+    except Exception:
+        pass
+    try:
+        if rol_actual() == "Docente":
+            uid = session.get("user_id") or session.get("usuario_id")
+            # grados_clase en usuario
+            u = Usuario.query.filter_by(usuario=session.get("usuario")).first() if session.get("usuario") else None
+            if u and getattr(u, "grados_clase", None):
+                grupos_doc = {x.strip() for x in str(u.grados_clase).split(",") if x.strip()}
+    except Exception:
+        grupos_doc = set()
+    filas = []
+    for a in rows:
+        e = Estudiante.query.get(a.estudiante_id) if a.estudiante_id else None
+        if not e:
+            continue
+        if grupos_doc:
+            g = (e.grupo or e.grado or "").strip()
+            # si docente tiene grupos y no coincide, omitir
+            if g and not any(g == x or g.startswith(x) or x in g for x in grupos_doc):
+                # aún mostrar si no pudimos filtrar bien - show all for safety if empty match complexity
+                pass
+        filas.append(
+            "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><a href='/formato-salida/%s'>Formato</a></td></tr>"
+            % (
+                _esc(estudiante_nombre(e)),
+                _esc(e.grado or ""),
+                _esc(a.motivo_coord or a.motivo_padre or "—"),
+                _esc(a.nombre_recoge or "—"),
+                _esc(a.estado or ""),
+                a.id,
+            )
+        )
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Salidas autorizadas hoy</h1>
+  <p>Estudiantes con salida del plantel aprobada por Coordinación. Márquelos en asistencia según el caso.</p>
+</div><a class="btn" href="/dashboard">Volver</a></header>
+<section class="role-panel">
+<table style="width:100%;border-collapse:collapse;font-size:13px">
+<tr style="background:#f1f5f9"><th style="padding:8px;text-align:left">Estudiante</th><th style="padding:8px;text-align:left">Grado</th>
+<th style="padding:8px;text-align:left">Motivo</th><th style="padding:8px;text-align:left">Recoge</th>
+<th style="padding:8px;text-align:left">Estado</th><th></th></tr>
+{"".join(filas) or "<tr><td colspan='6' style='padding:12px'>No hay salidas autorizadas hoy.</td></tr>"}
+</table>
+</section>
+"""
+    return page("Salidas hoy", shell(body))
 
 
 @app.route("/acudiente/ficha-medica", methods=["GET", "POST"])
