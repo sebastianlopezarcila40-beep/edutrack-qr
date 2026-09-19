@@ -1418,6 +1418,11 @@ class Plataforma(db.Model):
     login_color_fondo = db.Column(db.String(20), default="#f8fafc")
     login_titulo = db.Column(db.String(160), default="")
     login_subtitulo = db.Column(db.Text, default="")
+    # Pie legal del login de colegios (estilo Apple, editable desde Gerencia)
+    login_pie_p1 = db.Column(db.Text, default="")
+    login_pie_p2 = db.Column(db.Text, default="")
+    login_pie_extra = db.Column(db.Text, default="")
+    sitio_oficial_url = db.Column(db.String(255), default="/procsis")
     login_logo_path = db.Column(db.String(255), default="")
     login_mostrar_marca = db.Column(db.Boolean, default=True)
     anuncio_activo = db.Column(db.Boolean, default=False)
@@ -3717,6 +3722,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/legal/consentimientos", "Consentimientos"),
             ("/gerencia/finanzas/promociones", "Promociones"),
             ("/gerencia/paginas-legales", "Páginas legales"),
+            ("/gerencia/pie-login", "Pie login colegios"),
             ("/gerencia/turnos", "Turnos del equipo"),
             ("/backoffice/hub", "Tablero maestro"),
             ("/logout", "Salir"),
@@ -11069,6 +11075,137 @@ def pol_habeas():
     return _legal_page_shell(titulo, cuerpo, "habeas")
 
 
+
+def _ensure_login_pie_cols():
+    if getattr(_ensure_login_pie_cols, "_ok", False):
+        return
+    cols = [
+        ("login_pie_p1", "TEXT DEFAULT ''"),
+        ("login_pie_p2", "TEXT DEFAULT ''"),
+        ("login_pie_extra", "TEXT DEFAULT ''"),
+        ("sitio_oficial_url", "VARCHAR(255) DEFAULT '/procsis'"),
+    ]
+    try:
+        for col, typ in cols:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+            except Exception:
+                try:
+                    with db.engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE plataforma ADD COLUMN %s %s" % (col, typ)))
+                except Exception:
+                    pass
+        _ensure_login_pie_cols._ok = True
+    except Exception:
+        pass
+
+def _login_pie_defaults():
+    p1 = (
+        "1. Según los datos del estudio de rendimiento técnico de PROCSIS realizado en el año en curso "
+        "sobre la optimización de procesos y control de asistencia digital. Para obtener más información "
+        "y revisar los reportes de calidad, visita {url}."
+    )
+    p2 = (
+        "2. Consulta {url} para obtener más información sobre las funcionalidades del ecosistema en la nube "
+        "y los requisitos mínimos del sistema para la institución. Algunas funcionalidades requieren conexión "
+        "a internet estable. El acceso al portal familiar o notificaciones por WhatsApp (API WATI) está sujeto "
+        "a la activación y límites técnicos establecidos en el plan contratado. Algunas herramientas pueden no "
+        "estar disponibles para todas las sedes o zonas regionales sin cobertura."
+    )
+    extra = (
+        "La implementación inicial requiere un pago único de configuración. Sujeto a términos de contrato y "
+        "acuerdos de confidencialidad estipulados. Las funcionalidades y módulos del software están sujetos "
+        "a actualizaciones y mejoras continuas. Algunas aplicaciones internas podrían variar su disponibilidad "
+        "según el idioma o las políticas locales de la secretaría de educación."
+    )
+    return p1, p2, extra
+
+def _html_login_pie_colegios():
+    """Bloque pie estilo Apple debajo del login de instituciones."""
+    try:
+        _ensure_login_pie_cols()
+    except Exception:
+        pass
+    try:
+        p = plataforma()
+    except Exception:
+        p = None
+    url = "/procsis"
+    try:
+        url = (getattr(p, "sitio_oficial_url", None) or getattr(p, "web", None) or "/procsis").strip() or "/procsis"
+    except Exception:
+        pass
+    if url and not url.startswith("http") and not url.startswith("/"):
+        url = "https://" + url
+    label = "procsis.com"
+    if "://" in url:
+        label = url.split("://", 1)[-1].rstrip("/")
+    elif url.startswith("/"):
+        label = "procsis.com"
+    p1_def, p2_def, extra_def = _login_pie_defaults()
+    p1 = (getattr(p, "login_pie_p1", None) or "").strip() or p1_def
+    p2 = (getattr(p, "login_pie_p2", None) or "").strip() or p2_def
+    extra = (getattr(p, "login_pie_extra", None) or "").strip() or extra_def
+    link = '<a href="%s" style="color:#0066cc;text-decoration:underline">%s</a>' % (_esc(url), _esc(label))
+    def _fill(txt):
+        t = (txt or "").replace("{url}", "§URL§")
+        t = _esc(t).replace("§URL§", link)
+        # también reemplazar menciones literales a procsis.com
+        t = t.replace(_esc("procsis.com"), link)
+        return t
+    return f"""
+<style>
+.login-apple-foot{{max-width:980px;margin:0 auto;padding:28px 20px 40px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}}
+.login-apple-foot .laf-notes{{font-size:12px;line-height:1.55;color:#6e6e73;margin:0 0 10px}}
+.login-apple-foot .laf-notes a{{color:#0066cc;text-decoration:underline}}
+.login-apple-foot .laf-rule{{border:0;border-top:1px solid #d2d2d7;margin:22px 0 20px}}
+.login-apple-foot .laf-cols{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 24px;font-size:12px}}
+.login-apple-foot .laf-cols h4{{margin:0 0 10px;font-size:12px;font-weight:600;color:#1d1d1f}}
+.login-apple-foot .laf-cols a,.login-apple-foot .laf-cols span{{display:block;color:#424245;text-decoration:none;margin:0 0 8px;line-height:1.35}}
+.login-apple-foot .laf-cols a:hover{{text-decoration:underline;color:#0066cc}}
+.login-apple-foot .laf-copy{{margin-top:22px;font-size:11px;color:#86868b}}
+@media(max-width:800px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr 1fr}}}}
+@media(max-width:480px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr}}}}
+</style>
+<div class="login-apple-foot">
+  <p class="laf-notes">{_fill(p1)}</p>
+  <p class="laf-notes">{_fill(p2)}</p>
+  <p class="laf-notes">{_fill(extra)}</p>
+  <hr class="laf-rule">
+  <div class="laf-cols">
+    <div>
+      <h4>Producto</h4>
+      <a href="/ventas">Planes EduTrack</a>
+      <a href="/tecnologia">Tecnología</a>
+      <a href="/ayuda">Centro de ayuda</a>
+      <a href="/pqr">Radicar PQR</a>
+    </div>
+    <div>
+      <h4>Acceso</h4>
+      <a href="/login">Portal instituciones</a>
+      <a href="/familia-login">Portal familiar</a>
+      <a href="/backoffice">Backoffice PROCSIS</a>
+    </div>
+    <div>
+      <h4>Empresa</h4>
+      <a href="{_esc(url)}">Sitio oficial PROCSIS</a>
+      <a href="/contacto">Contacto</a>
+      <a href="/quienes-somos">Quiénes somos</a>
+    </div>
+    <div>
+      <h4>Legal</h4>
+      <a href="/legal">Privacidad</a>
+      <a href="/cookies">Cookies</a>
+      <a href="/tratamiento-datos">Tratamiento de datos</a>
+      <a href="/politica-pqr">Política PQR</a>
+    </div>
+  </div>
+  <div class="laf-copy">© EduTrack · PROCSIS. Contenido del pie editable desde Gerencia.</div>
+</div>
+"""
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = ""
@@ -11689,14 +11826,15 @@ def login():
     {lideres_section}
   </div>
 
+  {_html_login_pie_colegios()}
+
   <footer class="lp-footer">
     <b>{APP_NAME}</b> © 2026 · {SLOGAN}<br>
-    Desarrollado por <b>{DESARROLLADOR}</b> · Versión {nov["version"]}<br>
-    Contenido del login administrado desde el panel de Soporte
+    Desarrollado por <b>{DESARROLLADOR}</b> · Versión {nov["version"]}
   </footer>
 </div>
 
-<footer class="corp-footer">
+<footer class="corp-footer" style="display:none">
     <div class="corp-footer-inner">
       <div>
         <div class="corp-footer-brand">EduTrack · PROCSIS</div>
@@ -24771,6 +24909,87 @@ def contrato_detalle(cid):
 
 
 @app.route("/gerencia/paginas-legales", methods=["GET", "POST"])
+
+@app.route("/gerencia/pie-login", methods=["GET", "POST"])
+def gerencia_pie_login():
+    """Editar textos del pie legal del login de colegios (estilo Apple)."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    try:
+        _ensure_login_pie_cols()
+    except Exception:
+        pass
+    msg = err = ""
+    p = plataforma()
+    p1_def, p2_def, extra_def = _login_pie_defaults()
+    if request.method == "POST":
+        try:
+            p.login_pie_p1 = (request.form.get("login_pie_p1") or "")[:8000]
+            p.login_pie_p2 = (request.form.get("login_pie_p2") or "")[:8000]
+            p.login_pie_extra = (request.form.get("login_pie_extra") or "")[:4000]
+            url = (request.form.get("sitio_oficial_url") or "/procsis").strip()[:255]
+            p.sitio_oficial_url = url or "/procsis"
+            if request.form.get("usar_default") == "1":
+                p.login_pie_p1 = ""
+                p.login_pie_p2 = ""
+                p.login_pie_extra = ""
+            db.session.commit()
+            msg = "Pie del login actualizado. Visible de inmediato en /login."
+            try:
+                registrar_auditoria("Gerencia pie login", session.get("usuario") or "")
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = str(e)[:160]
+    p1 = (getattr(p, "login_pie_p1", None) or "") or p1_def
+    p2 = (getattr(p, "login_pie_p2", None) or "") or p2_def
+    extra = (getattr(p, "login_pie_extra", None) or "") or extra_def
+    url = (getattr(p, "sitio_oficial_url", None) or "/procsis")
+    body = f"""
+<style>
+.pie-ed{{max-width:720px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}}
+.pie-ed h1{{font-size:22px;color:#002060;margin:0 0 6px}}
+.pie-ed .sub{{color:#86868b;font-size:13px;margin:0 0 18px}}
+.pie-ed label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:12px 0 4px}}
+.pie-ed textarea,.pie-ed input{{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:12px;box-sizing:border-box;font-size:14px;font-family:inherit}}
+.pie-ed textarea{{min-height:100px;line-height:1.45}}
+.pie-ed .hint{{font-size:11px;color:#94a3b8;margin:4px 0 0}}
+.pie-ed button{{margin-top:16px;background:#005BEA;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:700;cursor:pointer}}
+.pie-ed .msg{{padding:12px;border-radius:12px;margin-bottom:12px;font-weight:600;font-size:13px}}
+.ok{{background:#ecfdf5;color:#065f46}}.err{{background:#fef2f2;color:#991b1b}}
+.preview{{margin-top:24px;padding:16px;background:#f5f5f7;border-radius:16px}}
+</style>
+<div class="pie-ed">
+  <a href="/gerencia/hq" style="font-size:13px;color:#005BEA;font-weight:600;text-decoration:none">← HQ</a>
+  <h1>Pie del login (colegios)</h1>
+  <p class="sub">Textos legales estilo Apple bajo el portal de acceso. Use <code>{{url}}</code> donde deba ir el enlace al sitio oficial.</p>
+  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+  {"<div class='msg err'>"+_esc(err)+"</div>" if err else ""}
+  <form method="POST">
+    <label>URL sitio oficial PROCSIS</label>
+    <input name="sitio_oficial_url" value="{_esc(url)}" placeholder="/procsis o https://...">
+    <p class="hint">Recomendado: /procsis (página oficial en esta misma plataforma) o su dominio público.</p>
+    <label>Párrafo 1</label>
+    <textarea name="login_pie_p1">{_esc(p1)}</textarea>
+    <label>Párrafo 2</label>
+    <textarea name="login_pie_p2">{_esc(p2)}</textarea>
+    <label>Nota adicional</label>
+    <textarea name="login_pie_extra" style="min-height:60px">{_esc(extra)}</textarea>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:500"><input type="checkbox" name="usar_default" value="1"> Restaurar textos por defecto al guardar</label>
+    <button type="submit">Guardar pie del login</button>
+    <a href="/login" target="_blank" style="margin-left:12px;font-size:13px">Ver login →</a>
+  </form>
+  <div class="preview"><b style="font-size:12px;color:#64748b">Vista previa</b>{_html_login_pie_colegios()}</div>
+</div>
+"""
+    return page("Pie login colegios", body)
+
+
 def gerencia_paginas_legales():
     """CMS: un modulo por texto legal."""
     if not requiere_gerencia():
