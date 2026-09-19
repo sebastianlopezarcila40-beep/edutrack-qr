@@ -20651,7 +20651,7 @@ def ventas_comprar():
       <p style="color:#64748b;font-size:13px">Complete los datos. <b>La foto/logo del colegio es obligatoria</b> antes de activar.</p>
       {"<div class='vc-err'>"+error+"</div>" if error else ""}
       {"<div class='vc-ok'>"+ok+"</div>" if ok else ""}
-      <form method="POST" enctype="multipart/form-data" id="form-activar-plan" style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+      <form method="POST" enctype="multipart/form-data" id="form-activar-plan" novalidate style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" onsubmit="return vcSubmitGuard(this)">
         <label><b>Plan a contratar *</b></label>
         <select name="plan" required style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;font-weight:600;color:#002060;background:#fff"
           onchange="if(this.value){{ window.location='/ventas/comprar?plan='+encodeURIComponent(this.value); }}">
@@ -20673,12 +20673,13 @@ def ventas_comprar():
           <input name="dane" placeholder="12 dígitos" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>NIT</label>
           <input name="nit" placeholder="NIT" style="border-radius:12px;border:1px solid #d2d2d7">
-          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 6px;color:#1d1d1f">Logo oficial del colegio *</label><label for="logo_colegio" id="logo-drop-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #d2d2d7;border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:12px"><span style="font-size:22px">📷</span><span>Sube el logotipo oficial de la institucion (.PNG transparente)</span></label><button type="button" id="btn-vc-siguiente" onclick="vcStep(2)" disabled style="margin-top:4px;background:#d2d2d7;color:#86868b;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:not-allowed;width:100%">Siguiente</button><script>(function(){{function enableSig(){{var f=document.getElementById("logo_colegio");var b=document.getElementById("btn-vc-siguiente");var l=document.getElementById("logo-drop-label");if(!f||!b)return;if(f.files&&f.files[0]){{b.disabled=false;b.style.background="#005BEA";b.style.color="#fff";b.style.cursor="pointer";if(l)l.innerHTML="<span style=\"color:#15803d\">✓ "+f.files[0].name+"</span>";}}else{{b.disabled=true;b.style.background="#d2d2d7";b.style.color="#86868b";b.style.cursor="not-allowed";}}}}document.addEventListener("change",function(e){{if(e.target&&e.target.id==="logo_colegio")enableSig();}});setTimeout(function(){{var f=document.getElementById("logo_colegio");if(f){{f.required=true;var box=document.getElementById("vc-step1");if(box&&f.parentElement&&f.parentElement.id!=="vc-step1"){{box.insertBefore(f,document.getElementById("btn-vc-siguiente"));f.style.display="none";}}}}enableSig();}},300);}})();</script>
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 6px;color:#1d1d1f">Logo oficial del colegio *</label><label for="logo_colegio" id="logo-drop-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #d2d2d7;border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:12px"><span style="font-size:22px">📷</span><span>Sube el logotipo oficial de la institucion (.PNG transparente)</span></label><button type="button" id="btn-vc-siguiente" onclick="vcStep(2)" style="margin-top:4px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;width:100%">Siguiente</button><script>(function(){{function enableSig(){{var f=document.getElementById("logo_colegio");var b=document.getElementById("btn-vc-siguiente");var l=document.getElementById("logo-drop-label");if(!f||!b)return;if(f.files&&f.files[0]){{b.disabled=false;b.style.background="#005BEA";b.style.color="#fff";b.style.cursor="pointer";if(l)l.innerHTML="<span style=\"color:#15803d\">✓ "+f.files[0].name+"</span>";}}else{{b.disabled=true;b.style.background="#d2d2d7";b.style.color="#86868b";b.style.cursor="not-allowed";}}}}document.addEventListener("change",function(e){{if(e.target&&e.target.id==="logo_colegio")enableSig();}});setTimeout(function(){{var f=document.getElementById("logo_colegio");if(f){{f.required=true;var box=document.getElementById("vc-step1");if(box&&f.parentElement&&f.parentElement.id!=="vc-step1"){{box.insertBefore(f,document.getElementById("btn-vc-siguiente"));f.style.display="none";}}}}enableSig();}},300);}})();</script>
         </div>
 
         <div id="vc-step2" style="display:none">
-          <label>Rector / contacto</label>
-          <input name="rector" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>Rector / representante legal *</label>
+          <input name="rector" id="campo-rector" placeholder="Nombre completo del rector" style="border-radius:12px;border:1px solid #d2d2d7">
+          <input type="hidden" name="rector_nombre" id="campo-rector-nombre" value="">
           <label>Teléfono</label>
           <input name="telefono" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>Correo</label>
@@ -20687,12 +20688,12 @@ def ventas_comprar():
           <label for="logo_colegio" style="display:block;border:1.5px dashed #d2d2d7;border-radius:16px;padding:28px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:12px">
             Arrastra o selecciona el logotipo del colegio aquí
           </label>
-          <input type="file" name="logo_colegio" id="logo_colegio" accept="image/*" style="display:none" onchange="var l=document.querySelector('label[for=logo_colegio]');if(this.files[0])l.textContent='✓ '+this.files[0].name">
+          <input type="file" name="logo_colegio" id="logo_colegio" accept="image/*" style="width:100%;padding:10px;margin:8px 0 12px;border:1px solid #d2d2d7;border-radius:12px;box-sizing:border-box">
           {geo_campos}
           <label>Sede principal</label>
           <input name="sede" placeholder="Principal" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>Periodos académicos del colegio *</label>
-          <select name="num_periodos" required style="border-radius:12px;border:1px solid #d2d2d7;padding:12px;width:100%">
+          <select name="num_periodos" style="border-radius:12px;border:1px solid #d2d2d7;padding:12px;width:100%">
             <option value="3">3 periodos al año</option>
             <option value="4">4 periodos al año</option>
           </select>
@@ -20739,7 +20740,7 @@ def ventas_comprar():
           <div id="consent-preview" style="display:none;background:#fff;border:1px solid #e5e5ea;border-radius:12px;padding:14px;font-size:13px;line-height:1.55;max-height:240px;overflow:auto;margin-bottom:12px"></div>
           <button type="button" id="btn-descarga-consent" onclick="vcDescargaConsent()" style="display:none;width:100%;margin-bottom:12px;background:#005BEA;color:#fff;border:0;padding:14px 20px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Descargar consentimiento fusionado (PDF)</button>
           <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">
-            <input type="checkbox" name="firma_acepta" value="1" required style="margin-top:3px">
+            <input type="checkbox" name="firma_acepta" id="firma_acepta" value="1" style="margin-top:3px">
             <span>El rector acepta y firma digitalmente el consentimiento (hora legal Colombia + IP).</span>
           </label>
         </div>
@@ -20786,6 +20787,43 @@ def ventas_comprar():
         }}
         setTimeout(function() {{ vcCanal("presencial"); }}, 200);
         </script>
+
+<script>
+function vcSubmitGuard(form) {{
+  try {{
+    var nombre = (form.querySelector('[name="nombre"]') || {{}}).value || "";
+    var codigo = (form.querySelector('[name="codigo"]') || {{}}).value || "";
+    var rectorEl = form.querySelector('[name="rector"]');
+    var rector = rectorEl ? (rectorEl.value || "") : "";
+    var rectorN = form.querySelector('[name="rector_nombre"]');
+    if (rectorN) rectorN.value = rector;
+    var firma = form.querySelector('[name="firma_acepta"]');
+    if (!String(nombre).trim() || !String(codigo).trim()) {{
+      alert("Complete nombre y codigo del colegio en el Paso 1 (Identidad).");
+      try {{ vcStep(1); }} catch (e1) {{}}
+      return false;
+    }}
+    if (!String(rector).trim()) {{
+      alert("Indique el nombre del rector en el Paso 2 (Contacto).");
+      try {{ vcStep(2); }} catch (e2) {{}}
+      return false;
+    }}
+    if (!firma || !firma.checked) {{
+      alert("Marque la casilla de aceptacion y firma del consentimiento.");
+      return false;
+    }}
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn) {{
+      btn.disabled = true;
+      btn.textContent = "Activando... no cierre esta ventana";
+      btn.style.opacity = "0.75";
+    }}
+    return true;
+  }} catch (err) {{
+    return true;
+  }}
+}}
+</script>
 <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:12px">Confirmar y activar plan {plan_nom}</button>
       </form>
       <div style="margin-top:22px;padding-top:16px;border-top:1px solid #e2e8f0">
