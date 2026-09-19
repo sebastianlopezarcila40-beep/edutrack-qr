@@ -20347,6 +20347,103 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 
 
 @app.route("/ventas/comprar", methods=["GET", "POST"])
+
+@app.route("/ventas/beneficios")
+@app.route("/ventas/catalogo")
+def ventas_beneficios():
+    """Catalogo comercial de planes con beneficios y precios (asesores)."""
+    if session.get("rol") not in ("Comercial", "Ventas", "Supervisor de Ventas", "Gerencia", "Administrador", "Gerente", "Superadmin"):
+        if not session.get("usuario"):
+            return redirect("/backoffice")
+        return redirect("/ventas")
+    try:
+        _seed_planes_comerciales()
+    except Exception:
+        pass
+    modalidad = (request.args.get("mod") or "todos").strip().lower()
+    promo = None
+    try:
+        promo = _promo_activa_global()
+    except Exception:
+        promo = None
+    cards = []
+    try:
+        planes = PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden.asc(), PlanComercial.id.asc()).all()
+    except Exception:
+        planes = []
+    for pl in planes:
+        cod = (pl.codigo or "").lower()
+        # filtro simple modalidad
+        if modalidad == "presencial" and "online" in cod:
+            continue
+        if modalidad in ("online", "hibrida", "híbrida") and "qr" in cod and "online" not in cod and "hibr" not in cod:
+            # show all QR for online too - skip strict filter
+            pass
+        pleno = float(getattr(pl, "precio_lista", 0) or 0) or float(getattr(pl, "precio_mensual", 0) or 0)
+        try:
+            pv = _calcular_promo_valores(pleno, promo)
+        except Exception:
+            pv = {"valor_pleno": int(pleno), "valor_descuento": int(pleno), "porcentaje": 0, "nombre_promo": "", "tiempo_promo": "", "fecha_caducidad_texto": "", "promo_id": 0}
+        feats = []
+        try:
+            import json as _json
+            raw = pl.features_json or "[]"
+            feats = _json.loads(raw) if isinstance(raw, str) else (raw or [])
+            if isinstance(feats, dict):
+                feats = feats.get("incluidos") or feats.get("features") or []
+        except Exception:
+            feats = []
+        if not isinstance(feats, list):
+            feats = []
+        li = "".join('<li style="margin:4px 0;font-size:13px;color:#1d1d1f">✓ %s</li>' % _esc(str(x)) for x in feats[:12])
+        if pv.get("promo_id") and float(pv.get("porcentaje") or 0) > 0:
+            precio_html = (
+                '<div style="font-size:26px;font-weight:700;color:#005BEA">$'
+                + "{:,.0f}".format(pv["valor_descuento"]).replace(",", ".")
+                + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
+                '<div style="font-size:13px;color:#86868b;text-decoration:line-through">$'
+                + "{:,.0f}".format(pv["valor_pleno"]).replace(",", ".")
+                + " COP</div>"
+                '<div style="margin-top:8px;display:inline-block;background:rgba(0,91,234,.1);color:#005BEA;padding:4px 12px;border-radius:980px;font-size:11px;font-weight:600">'
+                + _esc(pv.get("nombre_promo") or "Promo") + " · " + str(pv.get("porcentaje") or 0) + "%</div>"
+            )
+        else:
+            precio_html = (
+                '<div style="font-size:26px;font-weight:700;color:#002060">$'
+                + "{:,.0f}".format(int(pleno)).replace(",", ".")
+                + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
+            )
+        cards.append(
+            '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.04);display:flex;flex-direction:column">'
+            '<div style="font-size:11px;font-weight:600;color:#86868b;text-transform:uppercase">' + _esc(pl.codigo or "") + "</div>"
+            '<div style="font-size:18px;font-weight:700;color:#002060;margin:4px 0 12px">' + _esc(pl.nombre or "") + "</div>"
+            + precio_html
+            + '<ul style="list-style:none;padding:0;margin:14px 0;flex:1">' + (li or "<li style='color:#86868b'>Sin beneficios configurados en Gerencia</li>") + "</ul>"
+            + '<a href="/ventas/comprar?plan=' + _esc(pl.codigo or "") + '" style="display:block;text-align:center;background:#005BEA;color:#fff;'
+            'padding:12px 20px;border-radius:980px;text-decoration:none;font-weight:600;font-size:14px">Activar este plan</a></div>'
+        )
+    tabs = (
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 20px">'
+        '<a href="/ventas/beneficios?mod=todos" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
+        + ("background:#005BEA;color:#fff" if modalidad == "todos" else "background:#f5f5f7;color:#1d1d1f") + '">Todos</a>'
+        '<a href="/ventas/beneficios?mod=presencial" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
+        + ("background:#005BEA;color:#fff" if modalidad == "presencial" else "background:#f5f5f7;color:#1d1d1f") + '">🏫 Presencial</a>'
+        '<a href="/ventas/beneficios?mod=online" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
+        + ("background:#005BEA;color:#fff" if modalidad == "online" else "background:#f5f5f7;color:#1d1d1f") + '">💻 Online / Híbrida</a></div>'
+    )
+    body = (
+        '<div style="max-width:1100px;margin:0 auto;padding:20px;font-family:-apple-system,sans-serif">'
+        '<a href="/ventas" style="color:#86868b;font-size:13px">&larr; Ventas</a>'
+        '<h1 style="color:#002060;margin:8px 0 4px">Beneficios de planes</h1>'
+        '<p style="color:#86868b;font-size:13px;margin:0">Catálogo comercial para asesores. Precios con promoción activa de Gerencia.</p>'
+        + tabs
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">'
+        + ("".join(cards) if cards else '<p style="color:#86868b">No hay planes activos. Configúrelos en Gerencia → Planes.</p>')
+        + "</div></div>"
+    )
+    return page("Ventas · Beneficios", body)
+
+
 def ventas_comprar():
     _promo_banner = ""
     """Ficha completa del plan + alta de institución (exige logo del colegio)."""
@@ -20817,7 +20914,7 @@ def ventas_comprar():
           <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 6px;color:#1d1d1f">Logo oficial del colegio *</label><label for="logo_colegio" id="logo-drop-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #d2d2d7;border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:8px"><span style="font-size:22px">📷</span><span id="logo-drop-text">Sube el logotipo oficial de la institucion (.PNG / JPG)</span></label><input type="file" name="logo_colegio" id="logo_colegio" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,.png,.jpg,.jpeg,.webp" style="width:100%;padding:10px;margin:0 0 12px;border:1px solid #d2d2d7;border-radius:12px;box-sizing:border-box;background:#fff"><p id="logo-file-name" style="font-size:12px;color:#15803d;margin:-4px 0 12px;display:none"></p><button type="button" id="btn-vc-siguiente" onclick="vcStep(2)" style="margin-top:4px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;width:100%">Siguiente</button><script>(function(){{function enableSig(){{var f=document.getElementById("logo_colegio");var b=document.getElementById("btn-vc-siguiente");var l=document.getElementById("logo-drop-label");if(!f||!b)return;if(f.files&&f.files[0]){{b.disabled=false;b.style.background="#005BEA";b.style.color="#fff";b.style.cursor="pointer";if(l)l.innerHTML="<span style=\"color:#15803d\">✓ "+f.files[0].name+"</span>";}}else{{b.disabled=true;b.style.background="#d2d2d7";b.style.color="#86868b";b.style.cursor="not-allowed";}}}}document.addEventListener("change",function(e){{if(e.target&&e.target.id==="logo_colegio")enableSig();}});setTimeout(function(){{var f=document.getElementById("logo_colegio");if(f){{f.required=true;var box=document.getElementById("vc-step1");if(box&&f.parentElement&&f.parentElement.id!=="vc-step1"){{box.insertBefore(f,document.getElementById("btn-vc-siguiente"));f.style.display="none";}}}}enableSig();}},300);}})();</script>
         </div>
 
-        <div id="vc-step2" style="display:none">
+        <div id="vc-step2" style="display:block;margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
           <div style="background:rgba(0,91,234,.06);border-radius:16px;padding:14px 16px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:#005BEA;text-transform:uppercase;letter-spacing:.04em">Paso 2 · Identidad del rector</div>
             <div style="font-size:13px;color:#1d1d1f;margin-top:4px">Datos del representante legal de la institucion (obligatorio para el contrato).</div>
@@ -20949,6 +21046,25 @@ def ventas_comprar():
     }}
   }});
 }})();
+</script>
+
+<script>
+function vcStep(n) {{
+  var s1 = document.getElementById("vc-step1");
+  var s2 = document.getElementById("vc-step2");
+  if (s1) s1.style.display = "block";
+  if (s2) s2.style.display = "block";
+  try {{
+    var el = document.getElementById(n === 2 ? "vc-step2" : "vc-step1");
+    if (el) el.scrollIntoView({{ behavior: "smooth", block: "start" }});
+  }} catch (e) {{}}
+}}
+document.addEventListener("DOMContentLoaded", function() {{
+  var s1 = document.getElementById("vc-step1");
+  var s2 = document.getElementById("vc-step2");
+  if (s1) s1.style.display = "block";
+  if (s2) s2.style.display = "block";
+}});
 </script>
 <script>
 function vcSubmitGuard(form) {{
@@ -62257,15 +62373,15 @@ def paz_y_salvo(est_id=None):
 def acudiente_autorizar_salida():
     """Delegacion de salida con firma digital (IP, timestamp, hash SHA256).
 <script>
-function vcStep(n){
+function vcStep(n){{
   var s1=document.getElementById('vc-step1'), s2=document.getElementById('vc-step2');
-  var b1=document.getElementById('vc-step1-btn'), b2=document.getElementById('vc-step2-btn');
-  if(!s1||!s2) return;
-  if(n===1){s1.style.display='';s2.style.display='none';
-    b1.style.background='#005BEA';b1.style.color='#fff';b2.style.background='#f5f5f7';b2.style.color='#1d1d1f';}
-  else {s1.style.display='none';s2.style.display='block';
-    b2.style.background='#005BEA';b2.style.color='#fff';b1.style.background='#f5f5f7';b1.style.color='#1d1d1f';}
-}
+  if(s1) s1.style.display='block';
+  if(s2) s2.style.display='block';
+  try {{
+    var el = document.getElementById(n===2 ? 'vc-step2' : 'vc-step1');
+    if(el) el.scrollIntoView({{behavior:'smooth', block:'start'}});
+  }} catch(e) {{}}
+}}
 </script>
 """
     err = msg = ""
