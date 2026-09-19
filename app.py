@@ -19811,30 +19811,14 @@ def ventas_panel():
     seccion_planes = (
         '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:18px;margin:12px 0 16px;'
         'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.03)">'
-        '<h2 style="margin:0 0 4px;font-size:14px;color:#002060;font-weight:700">Planes · Activar colegio</h2>'
-        '<p style="margin:0 0 12px;font-size:12px;color:#86868b">Elija el tipo de plan y active la institución en un clic.</p>'
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
-        '<button type="button" class="plan-tab on" data-filter="inst" onclick="vpFilterPlans(this)" '
-        'style="border:0;cursor:pointer;padding:8px 16px;border-radius:980px;font-size:12px;font-weight:600;'
-        'background:#005BEA;color:#fff">Ver Planes Institucionales</button>'
-        '<button type="button" class="plan-tab" data-filter="qr" onclick="vpFilterPlans(this)" '
-        'style="border:0;cursor:pointer;padding:8px 16px;border-radius:980px;font-size:12px;font-weight:500;'
-        'background:#f5f5f7;color:#1d1d1f">Ver Planes Solo QR</button>'
-        '</div>'
+        '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">'
+        '<div><h2 style="margin:0 0 4px;font-size:14px;color:#002060;font-weight:700">Planes · Activar colegio</h2>'
+        '<p style="margin:0;font-size:12px;color:#86868b">Elija un plan y active la institución en un clic.</p></div>'
+        '<a href="/ventas/beneficios" style="display:inline-block;background:#005BEA;color:#fff;padding:10px 18px;'
+        'border-radius:980px;font-weight:600;font-size:13px;text-decoration:none">Ver planes disponibles</a></div>'
         '<div id="plan-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">'
         + "".join(cards_activar)
-        + '</div>'
-        '<script>'
-        'function vpFilterPlans(btn){'
-        'document.querySelectorAll(".plan-tab").forEach(function(b){b.classList.remove("on");'
-        'b.style.background="#f5f5f7";b.style.color="#1d1d1f";b.style.fontWeight="500";});'
-        'btn.classList.add("on");btn.style.background="#005BEA";btn.style.color="#fff";btn.style.fontWeight="600";'
-        'var f=btn.getAttribute("data-filter");'
-        'document.querySelectorAll(".plan-card").forEach(function(c){'
-        'c.style.display=(c.getAttribute("data-tipo")===f)?"":"none";});}'
-        'document.querySelectorAll(".plan-card").forEach(function(c){'
-        'if(c.getAttribute("data-tipo")!=="inst")c.style.display="none";});'
-        '</script></div>'
+        + '</div></div>'
     )
 
     from urllib.parse import quote
@@ -20423,8 +20407,6 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 
 
 
-@app.route("/ventas/comprar", methods=["GET", "POST"])
-
 @app.route("/ventas/beneficios")
 @app.route("/ventas/catalogo")
 def ventas_beneficios():
@@ -20572,6 +20554,7 @@ def ventas_beneficios():
     return page("Ventas · Beneficios", body)
 
 
+@app.route("/ventas/comprar", methods=["GET", "POST"])
 def ventas_comprar():
     _promo_banner = ""
     """Ficha completa del plan + alta de institución (exige logo del colegio)."""
