@@ -11347,9 +11347,9 @@ def login():
 .sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);font-size:20px;line-height:34px;cursor:pointer;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:background .25s ease,color .25s ease}}
 .sinai-nav:hover{{background:rgba(255,255,255,.22);color:#fff}}
 .sinai-prev{{left:12px}}.sinai-next{{right:12px}}
-.sinai-dots{{position:absolute;bottom:16px;left:0;right:0;z-index:3;display:flex;justify-content:center;gap:6px}}
-.sinai-dot{{width:6px;height:6px;border-radius:50%;border:0;background:rgba(255,255,255,.35);cursor:pointer;padding:0;transition:background .3s ease,transform .3s ease}}
-.sinai-dot.is-on{{background:#005BEA;transform:scale(1.35)}}
+.sinai-dots{{position:absolute;bottom:18px;left:0;right:0;z-index:3;display:flex;justify-content:center;align-items:center;gap:7px}}
+.sinai-dot{{width:7px;height:7px;border-radius:980px;border:0;background:rgba(0,0,0,.22);cursor:pointer;padding:0;transition:width .35s cubic-bezier(.25,.1,.25,1),background .35s ease,opacity .35s ease;opacity:.55}}
+.sinai-dot.is-on{{width:22px;height:7px;border-radius:980px;background:#1d1d1f;opacity:1;transform:none}}
 .sinai-access h1{{margin:0 0 6px;color:#1d1d1f;font-size:26px;font-weight:700;letter-spacing:-.02em}}
 .sinai-sub{{margin:0 0 16px;color:#86868b;font-size:14px;line-height:1.45}}
 .sinai-card{{background:#fff;border-radius:16px;padding:26px 24px;box-shadow:0 4px 24px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.06)}}
@@ -22191,9 +22191,9 @@ transition:opacity .6s cubic-bezier(0.25,1,0.5,1);background:#0B2D57}}
 text-shadow:0 2px 16px rgba(0,0,0,.35)}}
 .bo-slide-copy p{{margin:0;font-size:15px;font-weight:400;opacity:.92;line-height:1.45;
 text-shadow:0 1px 10px rgba(0,0,0,.3)}}
-.bo-dots{{position:absolute;bottom:18px;left:0;right:0;z-index:3;display:flex;justify-content:center;gap:8px}}
-.bo-dot{{width:8px;height:8px;border-radius:50%;border:0;padding:0;background:rgba(255,255,255,.4);cursor:pointer}}
-.bo-dot.on{{background:#fff;transform:scale(1.15)}}
+.bo-dots{{position:absolute;bottom:18px;left:0;right:0;z-index:3;display:flex;justify-content:center;align-items:center;gap:7px}}
+.bo-dot{{width:7px;height:7px;border-radius:980px;border:0;padding:0;background:rgba(255,255,255,.45);cursor:pointer;transition:width .35s cubic-bezier(.25,.1,.25,1),background .35s ease,opacity .35s ease;opacity:.7}}
+.bo-dot.on{{width:22px;height:7px;border-radius:980px;background:#fff;opacity:1;transform:none}}
 @media(max-width:900px){{
 .bo-right{{display:none}}
 .bo-left{{flex:1;max-width:100%;padding:32px 24px}}
