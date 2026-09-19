@@ -43,6 +43,22 @@ from modules.tenants import (
 )
 
 app = Flask(__name__)
+
+_promo_cron_last = {"day": ""}
+
+
+@app.before_request
+def _auto_promo_cron_diario():
+    """Aplica caducidad de promociones una vez al dia (sin cron externo)."""
+    try:
+        from datetime import datetime as _dt
+        day = _dt.utcnow().strftime("%Y-%m-%d")
+        if _promo_cron_last.get("day") != day:
+            _promo_cron_last["day"] = day
+            _aplicar_promo_caducadas()
+    except Exception:
+        pass
+
 _DEFAULT_SECRET = "edutrack_secret_2026_CHANGE_IN_PROD"
 app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET_KEY") or _DEFAULT_SECRET
 if app.secret_key == _DEFAULT_SECRET:
@@ -1102,6 +1118,14 @@ class Institucion(db.Model):
     logo = db.Column(db.Text, default="/static/img/logo-edutrack.png")
     estado = db.Column(db.String(30), default="ACTIVA")  # ACTIVA, SUSPENDIDA, MANTENIMIENTO, CANCELACION_PENDIENTE, ARCHIVADA
     plan = db.Column(db.String(40), default="Basico")  # Basico | Institucional | Premium
+
+    promo_id = db.Column(db.Integer, default=0)
+    valor_mensual_con_descuento = db.Column(db.Integer, default=0)
+    valor_mensual_pleno = db.Column(db.Integer, default=0)
+    fecha_activacion_tarifa = db.Column(db.String(40), default="")
+    fecha_caducidad_descuento = db.Column(db.String(40), default="")
+    flag_tarifa_plena_aplicada = db.Column(db.Boolean, default=False)
+    nombre_promo_aplicada = db.Column(db.String(100), default="")
     fecha_creacion = db.Column(db.String(20), default="")
     notas = db.Column(db.Text, default="")
     # Licencia / facturación comercial
@@ -1449,6 +1473,19 @@ class ContratoColegio(db.Model):
     asesor = db.Column(db.String(80), default="")
     estado = db.Column(db.String(30), default="ACTIVO")
     created_at = db.Column(db.String(30), default="")
+
+
+class PromocionActiva(db.Model):
+    """Reglas comerciales de descuento (editables solo en Gerencia)."""
+    __tablename__ = "promociones_activas"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre_promo = db.Column(db.String(100), nullable=False, default="")
+    porcentaje_descuento = db.Column(db.Float, default=0.0)
+    duracion_valor = db.Column(db.Integer, default=1)
+    duracion_unidad = db.Column(db.String(20), default="MESES")  # DIAS | MESES | ANOS
+    estado = db.Column(db.String(20), default="ACTIVO")
+    fecha_creacion = db.Column(db.String(40), default="")
+    created_by = db.Column(db.String(80), default="")
 
 
 class PlantillaConsentimiento(db.Model):
@@ -3399,7 +3436,7 @@ def _staff_nav_items(path, rol=""):
     elif path.startswith("/cobranza") or rol == "Cobranza":
         items = [("/cobranza", "Dashboard"), ("/cobranza/contabilidad", "Contabilidad"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
     else:
-        items = [("/gerencia/hq", "Dashboard"), ("/gerencia/plantilla-contrato", "Plantilla contrato"), ("/gerencia/contratos", "Contratos"), ("/gerencia/legal/consentimientos", "Consentimientos"), ("/gerencia/paginas-legales", "Paginas legales"), ("/backoffice/hub", "Tablero maestro"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
+        items = [("/gerencia/hq", "Dashboard"), ("/gerencia/plantilla-contrato", "Plantilla contrato"), ("/gerencia/contratos", "Contratos"), ("/gerencia/legal/consentimientos", "Consentimientos"), ("/gerencia/finanzas/promociones", "Promociones"), ("/gerencia/paginas-legales", "Paginas legales"), ("/backoffice/hub", "Tablero maestro"), ("/cerrar-turno", "Cerrar turno"), ("/logout", "Salir")]
     html = []
     for href, lab in items:
         active = " is-active" if (path == href or path.startswith(href.rstrip("/") + "/")) else ""
@@ -9669,6 +9706,161 @@ def _get_consentimiento(canal_tipo):
         return "Consentimiento canal online", _CONSENT_ONLINE_DEFAULT
     return "Consentimiento canal presencial", _CONSENT_PRESENCIAL_DEFAULT
 
+
+
+
+def _promo_activa_global():
+    """Primera promocion ACTIVA (regla comercial vigente desde Gerencia)."""
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        return (
+            PromocionActiva.query.filter_by(estado="ACTIVO")
+            .order_by(PromocionActiva.id.desc())
+            .first()
+        )
+    except Exception:
+        return None
+
+
+def _calcular_promo_valores(valor_pleno, promo=None):
+    """Retorna dict con descuento, valor neto, fechas y textos para contrato."""
+    from datetime import datetime, timedelta
+    try:
+        from dateutil.relativedelta import relativedelta
+        has_rd = True
+    except Exception:
+        has_rd = False
+    valor_pleno = float(valor_pleno or 0)
+    out = {
+        "promo_id": 0,
+        "nombre_promo": "",
+        "porcentaje": 0.0,
+        "duracion_valor": 0,
+        "duracion_unidad": "",
+        "valor_pleno": int(round(valor_pleno)),
+        "valor_descuento": int(round(valor_pleno)),
+        "ahorro": 0,
+        "fecha_activacion": "",
+        "fecha_caducidad": "",
+        "fecha_caducidad_texto": "",
+        "tiempo_promo": "",
+    }
+    if not promo or float(getattr(promo, "porcentaje_descuento", 0) or 0) <= 0:
+        return out
+    pct = float(promo.porcentaje_descuento or 0)
+    if pct > 1:
+        pct = pct / 100.0  # aceptar 15 o 0.15
+    descuento = valor_pleno * pct
+    neto = max(0, valor_pleno - descuento)
+    unidad = (promo.duracion_unidad or "MESES").upper()
+    if unidad in ("AÑOS", "ANOS", "YEAR", "YEARS"):
+        unidad = "ANOS"
+    elif unidad in ("DIA", "DIAS", "DAY", "DAYS"):
+        unidad = "DIAS"
+    else:
+        unidad = "MESES"
+    valor = int(promo.duracion_valor or 1)
+    try:
+        ahora_dt = ahora() if callable(ahora) else datetime.utcnow()
+        if not hasattr(ahora_dt, "year"):
+            ahora_dt = datetime.utcnow()
+    except Exception:
+        ahora_dt = datetime.utcnow()
+    cad = ahora_dt
+    try:
+        if unidad == "DIAS":
+            cad = ahora_dt + timedelta(days=valor)
+        elif unidad == "ANOS":
+            if has_rd:
+                cad = ahora_dt + relativedelta(years=valor)
+            else:
+                cad = ahora_dt.replace(year=ahora_dt.year + valor)
+        else:
+            if has_rd:
+                cad = ahora_dt + relativedelta(months=valor)
+            else:
+                cad = ahora_dt + timedelta(days=30 * valor)
+    except Exception:
+        cad = ahora_dt + timedelta(days=30 * max(valor, 1))
+    meses_es = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"]
+    try:
+        fecha_txt = "%d de %s de %d" % (cad.day, meses_es[cad.month - 1], cad.year)
+    except Exception:
+        fecha_txt = cad.strftime("%Y-%m-%d") if hasattr(cad, "strftime") else str(cad)
+    out.update({
+        "promo_id": int(getattr(promo, "id", 0) or 0),
+        "nombre_promo": (promo.nombre_promo or "")[:100],
+        "porcentaje": round(pct * 100, 2),
+        "duracion_valor": valor,
+        "duracion_unidad": unidad,
+        "valor_pleno": int(round(valor_pleno)),
+        "valor_descuento": int(round(neto)),
+        "ahorro": int(round(descuento)),
+        "fecha_activacion": ahora_dt.strftime("%Y-%m-%d %H:%M:%S") if hasattr(ahora_dt, "strftime") else "",
+        "fecha_caducidad": cad.strftime("%Y-%m-%d %H:%M:%S") if hasattr(cad, "strftime") else "",
+        "fecha_caducidad_texto": fecha_txt,
+        "tiempo_promo": "%s %s" % (valor, unidad.lower()),
+    })
+    return out
+
+
+def _aplicar_promo_caducadas():
+    """Marca instituciones cuya promo ya vencio (tarifa plena)."""
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        from datetime import datetime
+        ahora_s = ahora().strftime("%Y-%m-%d %H:%M:%S") if hasattr(ahora(), "strftime") else datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        rows = Institucion.query.filter(
+            Institucion.fecha_caducidad_descuento != None,  # noqa: E711
+            Institucion.fecha_caducidad_descuento != "",
+            Institucion.flag_tarifa_plena_aplicada != True,  # noqa: E712
+        ).all()
+        n = 0
+        for inst in rows:
+            cad = (getattr(inst, "fecha_caducidad_descuento", None) or "").strip()
+            if cad and cad[:19] <= ahora_s[:19]:
+                inst.flag_tarifa_plena_aplicada = True
+                n += 1
+        if n:
+            db.session.commit()
+        return n
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return 0
+
+
+def _ensure_inst_promo_columns():
+    """Columnas de promo en instituciones (Railway)."""
+    cols = [
+        ("promo_id", "INTEGER"),
+        ("valor_mensual_con_descuento", "INTEGER"),
+        ("valor_mensual_pleno", "INTEGER"),
+        ("fecha_activacion_tarifa", "VARCHAR(40)"),
+        ("fecha_caducidad_descuento", "VARCHAR(40)"),
+        ("flag_tarifa_plena_aplicada", "BOOLEAN DEFAULT FALSE"),
+        ("nombre_promo_aplicada", "VARCHAR(100)"),
+    ]
+    try:
+        for col, typ in cols:
+            try:
+                db.session.execute(text("ALTER TABLE instituciones ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+            except Exception:
+                pass
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def _datos_proveedor():
@@ -20179,6 +20371,39 @@ def ventas_comprar():
                     )
                     n_fact = len(_r.get("facturas_creadas") or [])
                     creds_txt = (" · Usuarios: " + " / ".join(creds_creadas) + f" · clave temporal: <code>{temp_pass}</code>") if creds_creadas else ""
+
+                    try:
+                        _ensure_inst_promo_columns()
+                        _promo = _promo_activa_global()
+                        _precio_plan = 0.0
+                        try:
+                            _pc = PlanComercial.query.filter(
+                                (PlanComercial.codigo == (plan or "")) | (PlanComercial.nombre == (plan_nom or ""))
+                            ).first()
+                            if not _pc and plan:
+                                _pc = PlanComercial.query.filter(PlanComercial.codigo.ilike("%" + str(plan) + "%")).first()
+                            if _pc:
+                                _precio_plan = float(getattr(_pc, "precio_lista", 0) or 0) or float(getattr(_pc, "precio_mensual", 0) or 0)
+                        except Exception:
+                            _precio_plan = 0.0
+                        _pv = _calcular_promo_valores(_precio_plan, _promo)
+                        try:
+                            inst.promo_id = _pv.get("promo_id") or 0
+                            inst.valor_mensual_pleno = _pv.get("valor_pleno") or 0
+                            inst.valor_mensual_con_descuento = _pv.get("valor_descuento") or 0
+                            inst.fecha_activacion_tarifa = _pv.get("fecha_activacion") or ""
+                            inst.fecha_caducidad_descuento = _pv.get("fecha_caducidad") or ""
+                            inst.flag_tarifa_plena_aplicada = False if _pv.get("promo_id") else True
+                            inst.nombre_promo_aplicada = _pv.get("nombre_promo") or ""
+                            db.session.add(inst)
+                            db.session.commit()
+                        except Exception:
+                            try:
+                                db.session.rollback()
+                            except Exception:
+                                pass
+                    except Exception:
+                        _pv = {"promo_id": 0, "valor_pleno": 0, "valor_descuento": 0, "tiempo_promo": "", "fecha_caducidad_texto": "", "nombre_promo": "", "porcentaje": 0}
                     try:
                         _ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
                         _fecha = ahora().strftime("%Y-%m-%d") if hasattr(ahora(), "strftime") else ""
@@ -20187,7 +20412,7 @@ def ventas_comprar():
                             "NOMBRE_COLEGIO": nombre, "NIT_COLEGIO": nit, "DANE_COLEGIO": dane,
                             "NOMBRE_RECTOR": rector_nombre, "DOC_RECTOR": (request.form.get("rector_doc") or "").strip(),
                             "PLAN": plan_nom, "FECHA": _fecha, "HORA": _hora, "MODALIDAD": modalidad,
-                            "CIUDAD": ciudad or "Colombia", "IP": _ip, "ASESOR": asesor, "CODIGO": codigo,
+                            "CIUDAD": ciudad or "Colombia", "IP": _ip, "ASESOR": asesor, "CODIGO": codigo,"PLAN_NOMBRE": plan_nom,"VALOR_MENSUAL_DESCUENTO": ("$" + "{:,.0f}".format(int((_pv or {}).get("valor_descuento") or 0)).replace(",", ".") + " COP"),"VALOR_MENSUAL_PLENO": ("$" + "{:,.0f}".format(int((_pv or {}).get("valor_pleno") or 0)).replace(",", ".") + " COP"),"TIEMPO_PROMO": ((_pv or {}).get("tiempo_promo") or "—"),"FECHA_FIN_DESCUENTO": ((_pv or {}).get("fecha_caducidad_texto") or "—"),"NOMBRE_PROMO": ((_pv or {}).get("nombre_promo") or "Sin promocion"),"PORCENTAJE_PROMO": (str((_pv or {}).get("porcentaje") or 0) + "%"),
                         }
                         db.session.add(ContratoInstitucion(
                             institucion_id=getattr(inst, "id", 0) or 0, codigo_inst=codigo[:40],
@@ -23104,6 +23329,156 @@ def gerencia_contratos():
 
 
 
+
+@app.route("/gerencia/finanzas/promociones", methods=["GET", "POST"])
+def gerencia_finanzas_promociones():
+    """Billing & Promo Engine — reglas de descuento y caducidades."""
+    if not requiere_gerencia():
+        return redirect("/backoffice")
+    msg = err = ""
+    try:
+        db.create_all()
+        _ensure_inst_promo_columns()
+        _aplicar_promo_caducadas()
+    except Exception:
+        pass
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "crear").strip()
+        if accion == "crear":
+            try:
+                nombre = (request.form.get("nombre_promo") or "").strip()[:100]
+                pct = float((request.form.get("porcentaje_descuento") or "0").replace(",", ".") or 0)
+                dur = int(request.form.get("duracion_valor") or 1)
+                unidad = (request.form.get("duracion_unidad") or "MESES").strip().upper()
+                if unidad not in ("DIAS", "MESES", "ANOS"):
+                    unidad = "MESES"
+                if not nombre:
+                    err = "Indique el nombre de la promocion."
+                elif pct <= 0:
+                    err = "El porcentaje debe ser mayor a 0."
+                else:
+                    # Desactivar otras si se pide exclusividad
+                    if (request.form.get("unica_activa") or "") == "1":
+                        for r in PromocionActiva.query.filter_by(estado="ACTIVO").all():
+                            r.estado = "INACTIVO"
+                    row = PromocionActiva(
+                        nombre_promo=nombre,
+                        porcentaje_descuento=pct,
+                        duracion_valor=max(1, dur),
+                        duracion_unidad=unidad,
+                        estado="ACTIVO",
+                        fecha_creacion=ahora().strftime("%Y-%m-%d %H:%M") if hasattr(ahora(), "strftime") else "",
+                        created_by=session.get("usuario") or "",
+                    )
+                    db.session.add(row)
+                    db.session.commit()
+                    msg = "Promocion activada: %s (%s%% por %s %s)." % (nombre, pct, dur, unidad.lower())
+            except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = str(e)[:160]
+        elif accion == "desactivar":
+            try:
+                pid = int(request.form.get("promo_id") or 0)
+                row = PromocionActiva.query.get(pid)
+                if row:
+                    row.estado = "INACTIVO"
+                    db.session.commit()
+                    msg = "Promocion desactivada."
+            except Exception as e:
+                err = str(e)[:120]
+    try:
+        promos = PromocionActiva.query.order_by(PromocionActiva.id.desc()).limit(50).all()
+    except Exception:
+        promos = []
+    try:
+        colegios = Institucion.query.filter(
+            Institucion.promo_id != None,  # noqa
+            Institucion.promo_id != 0,
+        ).order_by(Institucion.id.desc()).limit(100).all()
+    except Exception:
+        colegios = []
+    promo_rows = []
+    for p in promos:
+        badge = "#15803d" if (p.estado or "") == "ACTIVO" else "#86868b"
+        promo_rows.append(
+            '<tr><td style="padding:10px 8px">' + _esc(p.nombre_promo) + "</td>"
+            '<td style="padding:10px 8px">' + str(p.porcentaje_descuento) + "%</td>"
+            '<td style="padding:10px 8px">' + str(p.duracion_valor) + " " + _esc((p.duracion_unidad or "").lower()) + "</td>"
+            '<td style="padding:10px 8px;color:' + badge + ';font-weight:600">' + _esc(p.estado or "") + "</td>"
+            '<td style="padding:10px 8px;font-size:12px;color:#86868b">' + _esc(p.fecha_creacion or "") + "</td>"
+            '<td style="padding:10px 8px">'
+            + ('<form method="POST" style="display:inline"><input type="hidden" name="accion" value="desactivar">'
+               '<input type="hidden" name="promo_id" value="' + str(p.id) + '">'
+               '<button style="border:0;background:#f5f5f7;border-radius:980px;padding:6px 12px;font-size:12px;cursor:pointer">Desactivar</button></form>'
+               if (p.estado or "") == "ACTIVO" else "—")
+            + "</td></tr>"
+        )
+    col_rows = []
+    for c in colegios:
+        plena = "Si" if getattr(c, "flag_tarifa_plena_aplicada", False) else "No"
+        col_rows.append(
+            '<tr><td style="padding:10px 8px">' + _esc(c.nombre or "") + "</td>"
+            '<td style="padding:10px 8px">' + _esc(getattr(c, "nombre_promo_aplicada", None) or "") + "</td>"
+            '<td style="padding:10px 8px">$' + str(getattr(c, "valor_mensual_con_descuento", 0) or 0) + "</td>"
+            '<td style="padding:10px 8px">$' + str(getattr(c, "valor_mensual_pleno", 0) or 0) + "</td>"
+            '<td style="padding:10px 8px;font-size:12px">' + _esc(getattr(c, "fecha_activacion_tarifa", None) or "") + "</td>"
+            '<td style="padding:10px 8px;font-size:12px">' + _esc(getattr(c, "fecha_caducidad_descuento", None) or "") + "</td>"
+            '<td style="padding:10px 8px">' + plena + "</td></tr>"
+        )
+    body = (
+        '<div style="max-width:1000px;margin:0 auto;padding:24px 16px 48px;font-family:-apple-system,sans-serif">'
+        '<a href="/gerencia/hq" style="color:#86868b;font-size:13px;text-decoration:none">&larr; Gerencia HQ</a>'
+        '<h1 style="margin:8px 0 4px;color:#002060;font-size:24px">Billing &amp; Promo Engine</h1>'
+        '<p style="margin:0 0 16px;color:#86868b;font-size:13px">Reglas de descuento · caducidad automatica a tarifa plena</p>'
+        + ((" <div style='background:#ecfdf5;padding:12px;border-radius:12px;color:#065f46;margin-bottom:14px'>" + _esc(msg) + "</div>") if msg else "")
+        + ((" <div style='background:#fef2f2;padding:12px;border-radius:12px;color:#991b1b;margin-bottom:14px'>" + _esc(err) + "</div>") if err else "")
+        + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02);margin-bottom:18px">'
+        + '<h2 style="margin:0 0 12px;font-size:15px;color:#002060">Activar nueva regla comercial</h2>'
+        + '<form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+        + '<input type="hidden" name="accion" value="crear">'
+        + '<div style="grid-column:1/-1"><label style="font-size:12px;font-weight:600">Nombre de la promocion</label>'
+        + '<input name="nombre_promo" required placeholder="Ej: Descuento Lanzamiento 15%" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;box-sizing:border-box;margin-top:4px"></div>'
+        + '<div><label style="font-size:12px;font-weight:600">Porcentaje descuento</label>'
+        + '<input name="porcentaje_descuento" type="number" step="0.01" min="0.01" max="100" required placeholder="15" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;box-sizing:border-box;margin-top:4px"></div>'
+        + '<div><label style="font-size:12px;font-weight:600">Duracion</label><div style="display:flex;gap:8px;margin-top:4px">'
+        + '<input name="duracion_valor" type="number" min="1" value="12" required style="flex:1;padding:12px;border:1px solid #d2d2d7;border-radius:12px">'
+        + '<select name="duracion_unidad" style="flex:1;padding:12px;border:1px solid #d2d2d7;border-radius:12px">'
+        + '<option value="DIAS">Dias</option><option value="MESES" selected>Meses</option><option value="ANOS">Anos</option></select></div></div>'
+        + '<div style="grid-column:1/-1"><label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer">'
+        + '<input type="checkbox" name="unica_activa" value="1" checked> Desactivar otras promociones al activar esta</label></div>'
+        + '<div style="grid-column:1/-1"><button type="submit" style="background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">'
+        + "Activar nueva regla comercial</button></div></form></div>"
+        + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);margin-bottom:18px">'
+        + '<h2 style="margin:0 0 12px;font-size:15px;color:#002060">Reglas registradas</h2>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:#86868b;font-size:11px;text-transform:uppercase">'
+        + "<th style='padding:8px'>Nombre</th><th>Descuento</th><th>Duracion</th><th>Estado</th><th>Creada</th><th></th></tr></thead><tbody>"
+        + ("".join(promo_rows) if promo_rows else "<tr><td colspan='6' style='padding:12px;color:#86868b'>Sin promociones aun.</td></tr>")
+        + "</tbody></table></div>"
+        + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03)">'
+        + '<h2 style="margin:0 0 12px;font-size:15px;color:#002060">Colegios con promocion / caducidad</h2>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:#86868b;font-size:11px;text-transform:uppercase">'
+        + "<th style='padding:8px'>Colegio</th><th>Promo</th><th>Valor promo</th><th>Tarifa plena</th><th>Activacion</th><th>Caducidad</th><th>Plena?</th></tr></thead><tbody>"
+        + ("".join(col_rows) if col_rows else "<tr><td colspan='7' style='padding:12px;color:#86868b'>Ningun colegio con promo aplicada.</td></tr>")
+        + "</tbody></table></div></div>"
+    )
+    return page("Promociones · Gerencia", body)
+
+
+@app.route("/gerencia/finanzas/promociones/cron")
+def gerencia_promo_cron():
+    """Endpoint para cron Railway (diario): aplica tarifa plena a promos vencidas."""
+    key = (request.args.get("key") or request.headers.get("X-Cron-Key") or "").strip()
+    secret = (os.environ.get("CRON_SECRET") or os.environ.get("PROCSIS_CRON_KEY") or "").strip()
+    if secret and key != secret:
+        if not requiere_gerencia():
+            return jsonify({"ok": False, "error": "No autorizado"}), 401
+    n = _aplicar_promo_caducadas()
+    return jsonify({"ok": True, "actualizados": n})
+
+
 @app.route("/gerencia/legal/consentimientos", methods=["GET", "POST"])
 def gerencia_legal_consentimientos():
     """Gestor de consentimientos: plantillas presencial y online (solo Gerencia)."""
@@ -23209,6 +23584,26 @@ def ventas_api_consentimiento_preview():
         "ASESOR": session.get("usuario") or "",
         "CODIGO": data.get("codigo") or "",
     }
+    try:
+        _promo = _promo_activa_global()
+        _precio = 0.0
+        try:
+            _pc = PlanComercial.query.filter(PlanComercial.codigo == (data.get("plan") or "")).first()
+            if _pc:
+                _precio = float(getattr(_pc, "precio_lista", 0) or getattr(_pc, "precio_mensual", 0) or 0)
+        except Exception:
+            pass
+        _pv = _calcular_promo_valores(_precio, _promo)
+        tokens["PLAN_NOMBRE"] = data.get("plan") or ""
+        tokens["VALOR_MENSUAL_DESCUENTO"] = "$" + "{:,.0f}".format(_pv["valor_descuento"]).replace(",", ".") + " COP"
+        tokens["VALOR_MENSUAL_PLENO"] = "$" + "{:,.0f}".format(_pv["valor_pleno"]).replace(",", ".") + " COP"
+        tokens["TIEMPO_PROMO"] = _pv["tiempo_promo"] or "—"
+        tokens["FECHA_FIN_DESCUENTO"] = _pv["fecha_caducidad_texto"] or "—"
+        tokens["NOMBRE_PROMO"] = _pv["nombre_promo"] or "Sin promocion"
+        tokens["PORCENTAJE_PROMO"] = str(_pv["porcentaje"]) + "%"
+    except Exception:
+        pass
+
     html = _fusion_consentimiento(canal, tokens)
     titulo, _ = _get_consentimiento(canal)
     prov = _datos_proveedor()
