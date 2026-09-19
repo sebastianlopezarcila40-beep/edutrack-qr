@@ -1133,6 +1133,7 @@ class Institucion(db.Model):
     fecha_caducidad_descuento = db.Column(db.String(40), default="")
     flag_tarifa_plena_aplicada = db.Column(db.Boolean, default=False)
     nombre_promo_aplicada = db.Column(db.String(100), default="")
+    porcentaje_promo_aplicada = db.Column(db.Float, default=0.0)
     fecha_creacion = db.Column(db.String(20), default="")
     notas = db.Column(db.Text, default="")
     # Licencia / facturación comercial
@@ -4838,6 +4839,7 @@ def inicializar_bd():
                 ("instituciones", "fecha_caducidad_descuento", "VARCHAR(40) DEFAULT ''"),
                 ("instituciones", "flag_tarifa_plena_aplicada", "BOOLEAN DEFAULT FALSE"),
                 ("instituciones", "nombre_promo_aplicada", "VARCHAR(100) DEFAULT ''"),
+                ("instituciones", "porcentaje_promo_aplicada", "DOUBLE PRECISION DEFAULT 0"),
             ]
             for table, col, typedef in patches:
                 try:
@@ -9747,6 +9749,59 @@ def _get_consentimiento(canal_tipo):
 
 
 
+
+def _promo_preview_cards():
+    """Tarjetas HTML con precios de planes + promo activa (datos reales Postgres)."""
+    try:
+        _ensure_inst_promo_columns()
+    except Exception:
+        pass
+    promo = _promo_activa_global()
+    cards = []
+    try:
+        planes = PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.id.asc()).all()
+    except Exception:
+        planes = []
+    if not planes:
+        return '<p style="color:#86868b;font-size:13px;grid-column:1/-1">No hay planes comerciales activos.</p>'
+    for pl in planes:
+        pleno = float(getattr(pl, "precio_lista", 0) or 0) or float(getattr(pl, "precio_mensual", 0) or 0)
+        pv = _calcular_promo_valores(pleno, promo)
+        if promo and pv.get("promo_id"):
+            precio_html = (
+                '<div style="font-size:22px;font-weight:700;color:#1d1d1f">$'
+                + "{:,.0f}".format(pv["valor_descuento"]).replace(",", ".")
+                + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
+                + '<div style="font-size:12px;color:#86868b;text-decoration:line-through;margin-top:2px">$'
+                + "{:,.0f}".format(pv["valor_pleno"]).replace(",", ".")
+                + " COP</div>"
+                + '<div style="margin-top:8px;display:inline-block;background:rgba(0,91,234,.1);color:#005BEA;'
+                'padding:4px 10px;border-radius:980px;font-size:11px;font-weight:600">'
+                + _esc(pv.get("nombre_promo") or "Promo") + " · " + str(pv.get("porcentaje") or 0) + "%</div>"
+                + '<div style="font-size:11px;color:#86868b;margin-top:6px">Hasta ' + _esc(pv.get("fecha_caducidad_texto") or "") + "</div>"
+            )
+        else:
+            precio_html = (
+                '<div style="font-size:22px;font-weight:700;color:#1d1d1f">$'
+                + "{:,.0f}".format(int(pleno)).replace(",", ".")
+                + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
+                + '<div style="font-size:12px;color:#86868b;margin-top:6px">Sin promocion activa</div>'
+            )
+        cards.append(
+            '<div style="border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px;background:#fafafa">'
+            '<div style="font-size:11px;font-weight:600;color:#86868b;text-transform:uppercase">'
+            + _esc(pl.codigo or "") + "</div>"
+            '<div style="font-size:15px;font-weight:700;color:#002060;margin:4px 0 10px">' + _esc(pl.nombre or "") + "</div>"
+            + precio_html + "</div>"
+        )
+    if not promo:
+        cards.insert(0, (
+            '<p style="grid-column:1/-1;color:#b45309;font-size:13px;background:#fffbeb;padding:10px 12px;border-radius:12px">'
+            "No hay promocion ACTIVA. Cree una arriba para que Ventas aplique descuento al activar.</p>"
+        ))
+    return "".join(cards)
+
+
 def _promo_activa_global():
     """Primera promocion ACTIVA (regla comercial vigente desde Gerencia)."""
     try:
@@ -9886,6 +9941,7 @@ def _ensure_inst_promo_columns():
         ("fecha_caducidad_descuento", "VARCHAR(40) DEFAULT ''"),
         ("flag_tarifa_plena_aplicada", "BOOLEAN DEFAULT FALSE"),
         ("nombre_promo_aplicada", "VARCHAR(100) DEFAULT ''"),
+        ("porcentaje_promo_aplicada", "DOUBLE PRECISION DEFAULT 0"),
     ]
     try:
         with db.engine.begin() as conn:
@@ -20440,33 +20496,47 @@ def ventas_comprar():
                         _promo = _promo_activa_global()
                         _precio_plan = 0.0
                         try:
-                            _pc = PlanComercial.query.filter(
-                                (PlanComercial.codigo == (plan or "")) | (PlanComercial.nombre == (plan_nom or ""))
-                            ).first()
-                            if not _pc and plan:
-                                _pc = PlanComercial.query.filter(PlanComercial.codigo.ilike("%" + str(plan) + "%")).first()
-                            if _pc:
-                                _precio_plan = float(getattr(_pc, "precio_lista", 0) or 0) or float(getattr(_pc, "precio_mensual", 0) or 0)
+                            _precio_plan = float(precio or 0)
                         except Exception:
                             _precio_plan = 0.0
+                        try:
+                            _pc2 = None
+                            try:
+                                _pc2 = pc
+                            except NameError:
+                                _pc2 = None
+                            if _pc2 is None:
+                                _pc2 = PlanComercial.query.filter(
+                                    (PlanComercial.codigo == (plan or "")) | (PlanComercial.nombre == (plan_nom or ""))
+                                ).first()
+                            if _pc2:
+                                _lista = float(getattr(_pc2, "precio_lista", 0) or 0)
+                                _mens = float(getattr(_pc2, "precio_mensual", 0) or 0)
+                                _precio_plan = max(_lista, _mens, _precio_plan)
+                        except Exception:
+                            pass
                         _pv = _calcular_promo_valores(_precio_plan, _promo)
                         try:
-                            inst.promo_id = _pv.get("promo_id") or 0
-                            inst.valor_mensual_pleno = _pv.get("valor_pleno") or 0
-                            inst.valor_mensual_con_descuento = _pv.get("valor_descuento") or 0
-                            inst.fecha_activacion_tarifa = _pv.get("fecha_activacion") or ""
-                            inst.fecha_caducidad_descuento = _pv.get("fecha_caducidad") or ""
+                            inst.promo_id = int(_pv.get("promo_id") or 0)
+                            inst.valor_mensual_pleno = int(_pv.get("valor_pleno") or 0)
+                            inst.valor_mensual_con_descuento = int(_pv.get("valor_descuento") or 0)
+                            inst.fecha_activacion_tarifa = (_pv.get("fecha_activacion") or "")[:40]
+                            inst.fecha_caducidad_descuento = (_pv.get("fecha_caducidad") or "")[:40]
                             inst.flag_tarifa_plena_aplicada = False if _pv.get("promo_id") else True
-                            inst.nombre_promo_aplicada = _pv.get("nombre_promo") or ""
+                            inst.nombre_promo_aplicada = (_pv.get("nombre_promo") or "")[:100]
+                            if hasattr(inst, "porcentaje_promo_aplicada"):
+                                inst.porcentaje_promo_aplicada = float(_pv.get("porcentaje") or 0)
                             db.session.add(inst)
                             db.session.commit()
-                        except Exception:
+                        except Exception as _ex_promo_save:
                             try:
                                 db.session.rollback()
                             except Exception:
                                 pass
-                    except Exception:
+                            print("promo save:", _ex_promo_save)
+                    except Exception as _ex_promo:
                         _pv = {"promo_id": 0, "valor_pleno": 0, "valor_descuento": 0, "tiempo_promo": "", "fecha_caducidad_texto": "", "nombre_promo": "", "porcentaje": 0}
+                        print("promo calc:", _ex_promo)
                     try:
                         _ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
                         _fecha = ahora().strftime("%Y-%m-%d") if hasattr(ahora(), "strftime") else ""
@@ -23514,6 +23584,12 @@ def gerencia_finanzas_promociones():
         + '<input type="checkbox" name="unica_activa" value="1" checked> Desactivar otras promociones al activar esta</label></div>'
         + '<div style="grid-column:1/-1"><button type="submit" style="background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">'
         + "Activar nueva regla comercial</button></div></form></div>"
+        + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);margin-bottom:18px">'
+        + '<h2 style="margin:0 0 8px;font-size:15px;color:#002060">Vista previa en planes (datos reales)</h2>'
+        + '<p style="margin:0 0 14px;font-size:12px;color:#86868b">Si cambia el % en Gerencia, estos valores se recalculan al instante.</p>'
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">'
+        + _promo_preview_cards()
+        + '</div></div>'
         + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);margin-bottom:18px">'
         + '<h2 style="margin:0 0 12px;font-size:15px;color:#002060">Reglas registradas</h2>'
         + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:#86868b;font-size:11px;text-transform:uppercase">'
@@ -34223,6 +34299,119 @@ def soporte_bloqueo_seguridad():
 
 
 @app.route("/soporte_admin")
+
+@app.route("/soporte/colegio")
+@app.route("/soporte/colegio/<int:iid>")
+def soporte_colegio_auditoria(iid=None):
+    """Auditoria contractual y promo para Soporte."""
+    rol = session.get("rol") or ""
+    if rol not in ("Soporte", "Administrador", "Gerencia", "Comercial", "Ventas", "Supervisor de Ventas"):
+        if not session.get("usuario"):
+            return redirect("/backoffice")
+        return redirect("/soporte_admin")
+    try:
+        _ensure_inst_promo_columns()
+    except Exception:
+        pass
+    q = (request.args.get("q") or "").strip()
+    inst = None
+    if iid:
+        try:
+            inst = Institucion.query.get(iid)
+        except Exception:
+            inst = None
+    if not inst and q:
+        try:
+            like = "%" + q + "%"
+            inst = Institucion.query.filter(
+                (Institucion.nombre.ilike(like)) | (Institucion.codigo.ilike(like)) | (Institucion.nit.ilike(like))
+            ).first()
+        except Exception:
+            inst = None
+    search_html = (
+        '<form method="GET" action="/soporte/colegio" style="display:flex;gap:10px;margin:16px 0;flex-wrap:wrap">'
+        '<input name="q" value="' + _esc(q) + '" placeholder="Buscar colegio, codigo o NIT" '
+        'style="flex:1;min-width:200px;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px">'
+        '<button type="submit" style="background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:600;cursor:pointer">Buscar</button></form>'
+    )
+    card = ""
+    if inst:
+        estado = (inst.estado or "").upper()
+        ok = estado in ("ACTIVA", "ACTIVO", "VALIDADO")
+        badge = "OK" if ok else estado or "—"
+        pleno = int(getattr(inst, "valor_mensual_pleno", 0) or 0)
+        neto = int(getattr(inst, "valor_mensual_con_descuento", 0) or 0)
+        pct = float(getattr(inst, "porcentaje_promo_aplicada", 0) or 0)
+        if pct <= 0 and pleno and neto and pleno > neto:
+            pct = round((1 - float(neto) / float(pleno)) * 100, 2)
+        nombre_promo = (getattr(inst, "nombre_promo_aplicada", None) or "").strip()
+        cad = (getattr(inst, "fecha_caducidad_descuento", None) or "").strip()
+        flag_plena = bool(getattr(inst, "flag_tarifa_plena_aplicada", False))
+        meses_txt = "—"
+        try:
+            from datetime import datetime
+            if cad and not flag_plena:
+                if len(cad) >= 19:
+                    cad_dt = datetime.strptime(cad[:19], "%Y-%m-%d %H:%M:%S")
+                else:
+                    cad_dt = datetime.strptime(cad[:10], "%Y-%m-%d")
+                now = ahora() if hasattr(ahora(), "year") else datetime.utcnow()
+                days = (cad_dt - now).days
+                if days < 0:
+                    meses_txt = "Vencida (aplicar tarifa plena)"
+                else:
+                    meses_txt = "Expira en ~%d dias (%s)" % (days, cad[:10])
+        except Exception:
+            meses_txt = cad or "—"
+        logo = (inst.logo or "")[:500]
+        logo_html = ""
+        if logo.startswith("data:image") or logo.startswith("http") or logo.startswith("/"):
+            logo_html = '<img src="' + _esc(logo) + '" alt="logo" style="width:56px;height:56px;object-fit:contain;border-radius:12px;background:#f5f5f7">'
+        if nombre_promo and not flag_plena and neto:
+            promo_html = (
+                '<div style="margin-top:14px;padding:12px 14px;background:rgba(0,91,234,.06);border-radius:12px">'
+                '<div style="font-size:13px;font-weight:600;color:#005BEA">Promocion activa: ' + _esc(nombre_promo)
+                + " (" + str(pct) + "%)</div>"
+                '<div style="font-size:13px;color:#1d1d1f;margin-top:4px">Paga <b>$'
+                + "{:,.0f}".format(neto).replace(",", ".")
+                + " COP</b> en lugar de $"
+                + "{:,.0f}".format(pleno).replace(",", ".")
+                + " COP</div>"
+                '<div style="font-size:12px;color:#86868b;margin-top:6px">Beneficio comercial: ' + _esc(meses_txt)
+                + ". Al vencer se aplica tarifa plena automaticamente.</div></div>"
+            )
+        else:
+            promo_html = (
+                '<div style="margin-top:14px;padding:12px 14px;background:#f5f5f7;border-radius:12px;font-size:13px;color:#1d1d1f">'
+                "Sin promocion activa · Tarifa "
+                + ("plena" if flag_plena or not nombre_promo else "vigente")
+                + ((": $" + "{:,.0f}".format(pleno or neto).replace(",", ".") + " COP") if (pleno or neto) else "")
+                + "</div>"
+            )
+        card = (
+            '<div style="background:#fff;border-radius:20px;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.03);'
+            'border:1px solid rgba(0,0,0,.02);max-width:560px">'
+            '<div style="display:flex;gap:14px;align-items:center">' + logo_html
+            + '<div><div style="font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase">Estado de identidad</div>'
+            '<div style="font-size:18px;font-weight:700;color:#002060">' + _esc(inst.nombre or "")
+            + (" — VALIDADO" if ok else " — " + _esc(badge)) + "</div>"
+            '<div style="font-size:12px;color:#86868b;margin-top:4px">NIT ' + _esc(inst.nit or "—")
+            + " · DANE " + _esc(inst.dane or "—") + " · Codigo " + _esc(inst.codigo or "—")
+            + " · Plan " + _esc(inst.plan or "—") + "</div></div></div>"
+            + promo_html + "</div>"
+        )
+    elif q:
+        card = '<p style="color:#b91c1c">No se encontro colegio con ese criterio.</p>'
+    body = (
+        '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
+        '<a href="/soporte_admin" style="color:#86868b;font-size:13px">&larr; Soporte</a>'
+        '<h1 style="color:#002060;margin:8px 0">Auditoria de colegio / ofertas</h1>'
+        '<p style="color:#86868b;font-size:13px;margin:0">Identidad, descuento activo y caducidad a tarifa plena.</p>'
+        + search_html + card + "</div>"
+    )
+    return page("Soporte · Colegio", body)
+
+
 def soporte_admin():
     _g = _guard_soporte()
     if _g is not None:
