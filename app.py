@@ -6288,12 +6288,30 @@ def _comprimir_imagen_bytes(raw, max_side=200, max_kb=50):
 
 def guardar_logo_institucional(file_storage, institucion_id=None):
     """Guarda logo comprimido como data URI (TEXT en BD). Sobrevive redeploy en Railway."""
-    if not file_storage or not getattr(file_storage, "filename", ""):
+    if not file_storage:
         return None
-    nombre = file_storage.filename or ""
-    ext = os.path.splitext(nombre)[1].lower()
-    if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif"]:
-        return None
+    nombre = (getattr(file_storage, "filename", None) or "").strip()
+    # Algunos navegadores envian filename vacio; aceptar por content_type
+    ctype = (getattr(file_storage, "content_type", None) or "").lower()
+    ext = os.path.splitext(nombre)[1].lower() if nombre else ""
+    if not ext:
+        if "png" in ctype:
+            ext = ".png"
+        elif "jpeg" in ctype or "jpg" in ctype:
+            ext = ".jpg"
+        elif "webp" in ctype:
+            ext = ".webp"
+        elif "gif" in ctype:
+            ext = ".gif"
+        elif nombre:
+            ext = ".png"
+        else:
+            # Ultimo recurso: leer magic bytes despues
+            ext = ".png"
+    if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif", ""]:
+        # no rechazar por extension rara si hay bytes
+        if not nombre and not ctype:
+            return None
     try:
         if hasattr(file_storage, "seek"):
             try:
@@ -6306,6 +6324,11 @@ def guardar_logo_institucional(file_storage, institucion_id=None):
         return None
     if not raw:
         return None
+    # Detectar por magic bytes
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        ext = ".png"
+    elif raw[:2] == b"\xff\xd8":
+        ext = ".jpg"
     # Comprimir a max ~80 KB para no saturar VARCHAR antiguos ni la BD
     try:
         from PIL import Image
@@ -20677,7 +20700,7 @@ def ventas_comprar():
           <input name="dane" placeholder="12 dígitos" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>NIT</label>
           <input name="nit" placeholder="NIT" style="border-radius:12px;border:1px solid #d2d2d7">
-          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 6px;color:#1d1d1f">Logo oficial del colegio *</label><label for="logo_colegio" id="logo-drop-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #d2d2d7;border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:12px"><span style="font-size:22px">📷</span><span>Sube el logotipo oficial de la institucion (.PNG transparente)</span></label><button type="button" id="btn-vc-siguiente" onclick="vcStep(2)" style="margin-top:4px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;width:100%">Siguiente</button><script>(function(){{function enableSig(){{var f=document.getElementById("logo_colegio");var b=document.getElementById("btn-vc-siguiente");var l=document.getElementById("logo-drop-label");if(!f||!b)return;if(f.files&&f.files[0]){{b.disabled=false;b.style.background="#005BEA";b.style.color="#fff";b.style.cursor="pointer";if(l)l.innerHTML="<span style=\"color:#15803d\">✓ "+f.files[0].name+"</span>";}}else{{b.disabled=true;b.style.background="#d2d2d7";b.style.color="#86868b";b.style.cursor="not-allowed";}}}}document.addEventListener("change",function(e){{if(e.target&&e.target.id==="logo_colegio")enableSig();}});setTimeout(function(){{var f=document.getElementById("logo_colegio");if(f){{f.required=true;var box=document.getElementById("vc-step1");if(box&&f.parentElement&&f.parentElement.id!=="vc-step1"){{box.insertBefore(f,document.getElementById("btn-vc-siguiente"));f.style.display="none";}}}}enableSig();}},300);}})();</script>
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 6px;color:#1d1d1f">Logo oficial del colegio *</label><label for="logo_colegio" id="logo-drop-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #d2d2d7;border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:8px"><span style="font-size:22px">📷</span><span id="logo-drop-text">Sube el logotipo oficial de la institucion (.PNG / JPG)</span></label><input type="file" name="logo_colegio" id="logo_colegio" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,.png,.jpg,.jpeg,.webp" style="width:100%;padding:10px;margin:0 0 12px;border:1px solid #d2d2d7;border-radius:12px;box-sizing:border-box;background:#fff"><p id="logo-file-name" style="font-size:12px;color:#15803d;margin:-4px 0 12px;display:none"></p><button type="button" id="btn-vc-siguiente" onclick="vcStep(2)" style="margin-top:4px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;width:100%">Siguiente</button><script>(function(){{function enableSig(){{var f=document.getElementById("logo_colegio");var b=document.getElementById("btn-vc-siguiente");var l=document.getElementById("logo-drop-label");if(!f||!b)return;if(f.files&&f.files[0]){{b.disabled=false;b.style.background="#005BEA";b.style.color="#fff";b.style.cursor="pointer";if(l)l.innerHTML="<span style=\"color:#15803d\">✓ "+f.files[0].name+"</span>";}}else{{b.disabled=true;b.style.background="#d2d2d7";b.style.color="#86868b";b.style.cursor="not-allowed";}}}}document.addEventListener("change",function(e){{if(e.target&&e.target.id==="logo_colegio")enableSig();}});setTimeout(function(){{var f=document.getElementById("logo_colegio");if(f){{f.required=true;var box=document.getElementById("vc-step1");if(box&&f.parentElement&&f.parentElement.id!=="vc-step1"){{box.insertBefore(f,document.getElementById("btn-vc-siguiente"));f.style.display="none";}}}}enableSig();}},300);}})();</script>
         </div>
 
         <div id="vc-step2" style="display:none">
@@ -20688,11 +20711,7 @@ def ventas_comprar():
           <input name="telefono" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>Correo</label>
           <input name="correo" type="email" style="border-radius:12px;border:1px solid #d2d2d7">
-          <label>Foto / logo del colegio * (JPG/PNG)</label>
-          <label for="logo_colegio" style="display:block;border:1.5px dashed #d2d2d7;border-radius:16px;padding:28px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:12px">
-            Arrastra o selecciona el logotipo del colegio aquí
-          </label>
-          <input type="file" name="logo_colegio" id="logo_colegio" accept="image/*" style="width:100%;padding:10px;margin:8px 0 12px;border:1px solid #d2d2d7;border-radius:12px;box-sizing:border-box">
+          <p style="font-size:12px;color:#86868b;margin:8px 0 12px">Logo: se captura en el Paso 1 (Identidad). Si no lo subio, vuelva atras.</p>
           {geo_campos}
           <label>Sede principal</label>
           <input name="sede" placeholder="Principal" style="border-radius:12px;border:1px solid #d2d2d7">
@@ -20793,6 +20812,25 @@ def ventas_comprar():
         </script>
 
 <script>
+
+<script>
+(function(){{
+  var inp = document.getElementById("logo_colegio");
+  if (!inp) return;
+  inp.addEventListener("change", function(){{
+    var p = document.getElementById("logo-file-name");
+    var t = document.getElementById("logo-drop-text");
+    var lab = document.getElementById("logo-drop-label");
+    if (this.files && this.files[0]) {{
+      var n = this.files[0].name;
+      if (p) {{ p.style.display = "block"; p.textContent = "✓ Archivo listo: " + n; }}
+      if (t) t.textContent = "✓ " + n;
+      if (lab) {{ lab.style.borderColor = "#005BEA"; lab.style.background = "rgba(0,91,234,.06)"; }}
+    }}
+  }});
+}})();
+</script>
+
 function vcSubmitGuard(form) {{
   try {{
     var nombre = (form.querySelector('[name="nombre"]') || {{}}).value || "";
@@ -20815,6 +20853,13 @@ function vcSubmitGuard(form) {{
     if (!firma || !firma.checked) {{
       alert("Marque la casilla de aceptacion y firma del consentimiento.");
       return false;
+    }}
+    var logoInp = form.querySelector('[name="logo_colegio"]');
+    if (logoInp && (!logoInp.files || !logoInp.files.length)) {{
+      if (!confirm("No selecciono logo del colegio. ¿Continuar sin logo?")) {{
+        try {{ vcStep(1); }} catch (e3) {{}}
+        return false;
+      }}
     }}
     var btn = form.querySelector('button[type="submit"]');
     if (btn) {{
