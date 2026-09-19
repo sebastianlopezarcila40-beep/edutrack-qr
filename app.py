@@ -2938,6 +2938,80 @@ class ConciliacionBancaria(db.Model):
     creado_por = db.Column(db.String(80), default="")
 
 
+
+def _ensure_cont_evidencia_cols():
+    if getattr(_ensure_cont_evidencia_cols, "_ok", False):
+        return
+    cols = [
+        ("evidencia_nombre", "VARCHAR(200) DEFAULT ''"),
+        ("evidencia_mime", "VARCHAR(120) DEFAULT ''"),
+        ("evidencia_archivo", "TEXT"),
+    ]
+    try:
+        with db.engine.begin() as conn:
+            dialect = (db.engine.dialect.name or "").lower()
+            for col, typ in cols:
+                try:
+                    if dialect == "sqlite":
+                        rows = conn.execute(db.text("PRAGMA table_info(cont_operaciones)")).fetchall()
+                        names = {r[1] for r in rows}
+                        if col not in names:
+                            conn.execute(db.text("ALTER TABLE cont_operaciones ADD COLUMN %s %s" % (col, typ)))
+                    else:
+                        conn.execute(db.text(
+                            "ALTER TABLE cont_operaciones ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)
+                        ))
+                except Exception:
+                    pass
+        _ensure_cont_evidencia_cols._ok = True
+    except Exception as ex:
+        try:
+            print("ensure cont evidencia:", ex)
+        except Exception:
+            pass
+
+
+def _guardar_evidencia_contable(file_storage, max_mb=6):
+    """PDF, Excel, Word o imagen como data URI. Retorna (nombre, mime, data_uri)."""
+    if not file_storage:
+        return None, None, None
+    nombre = (getattr(file_storage, "filename", None) or "").strip()
+    if not nombre:
+        return None, None, None
+    ext = os.path.splitext(nombre)[1].lower()
+    allowed = {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xls": "application/vnd.ms-excel",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".csv": "text/csv",
+    }
+    if ext not in allowed:
+        return None, None, None
+    try:
+        if hasattr(file_storage, "seek"):
+            try:
+                file_storage.seek(0)
+            except Exception:
+                pass
+        raw = file_storage.read()
+    except Exception as e:
+        print("evidencia read:", e)
+        return None, None, None
+    if not raw or len(raw) > max_mb * 1024 * 1024:
+        return None, None, None
+    import base64
+    mime = allowed[ext]
+    b64 = base64.b64encode(raw).decode("ascii")
+    return nombre[:200], mime, "data:%s;base64,%s" % (mime, b64)
+
+
 class ContOperacion(db.Model):
     """Operación económica respaldada: compra, venta, pago, cobro, servicio, entrega, etc."""
     __tablename__ = "cont_operaciones"
@@ -2965,7 +3039,10 @@ class ContOperacion(db.Model):
     registrado_por = db.Column(db.String(80), default="")
     institucion_id = db.Column(db.Integer, nullable=True, index=True)
     institucion_nombre = db.Column(db.String(200), default="")
-    evidencia = db.Column(db.Text, default="")  # nota / data URI soporte
+    evidencia = db.Column(db.Text, default="")  # nota de comprobación
+    evidencia_nombre = db.Column(db.String(200), default="")
+    evidencia_mime = db.Column(db.String(120), default="")
+    evidencia_archivo = db.Column(db.Text, default="")  # data URI
     ip = db.Column(db.String(80), default="")
     creado_en = db.Column(db.String(30), default="")
 
@@ -52436,6 +52513,15 @@ def contabilidad_nueva():
                 ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80],
                 creado_en="%s %s" % (fecha, hora),
             )
+            try:
+                _ensure_cont_evidencia_cols()
+                _en, _em, _ea = _guardar_evidencia_contable(request.files.get("evidencia_archivo"))
+                if _ea:
+                    op.evidencia_nombre = _en or ""
+                    op.evidencia_mime = _em or ""
+                    op.evidencia_archivo = _ea
+            except Exception as _ev_ex:
+                print("evidencia upload:", _ev_ex)
             pid = request.form.get("parte_id", type=int)
             if pid:
                 op.parte_id = pid
@@ -52463,7 +52549,7 @@ def contabilidad_nueva():
     hoy = fecha_hoy() if "fecha_hoy" in dir() else ""
     body = f"""
     {"<div style='background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:10px'>"+_esc(err)+"</div>" if err else ""}
-    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px;max-width:720px">
+    <form method="POST" enctype="multipart/form-data" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px;max-width:720px">
       <label style="font-weight:700;font-size:12px">Tipo de operación *</label>
       <select name="tipo" required style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">{opts_tipo}</select>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -52502,6 +52588,9 @@ def contabilidad_nueva():
       <input name="institucion_nombre" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
       <label style="font-weight:700;font-size:12px">Evidencia / nota de comprobación</label>
       <textarea name="evidencia" rows="2" placeholder="Dejar evidencia de que la operación ocurrió" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
+      <label style="font-weight:700;font-size:12px">Adjuntar comprobante / factura (PDF, Excel, Word o foto)</label>
+      <input type="file" name="evidencia_archivo" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.docx,.doc,.csv" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc">
+      <p style="font-size:11px;color:#64748b;margin:-4px 0 12px">Máx. 6 MB. Factura del proveedor, extracto bancario o foto del comprobante.</p>
       <button type="submit" style="background:#15803d;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Registrar operación</button>
     </form>
     """
@@ -52516,6 +52605,20 @@ def contabilidad_editar(oid):
     if g is not None:
         return g
     op = ContOperacion.query.get_or_404(oid)
+    try:
+        _ensure_cont_evidencia_cols()
+    except Exception:
+        pass
+    _ev_actual = ""
+    try:
+        if getattr(op, "evidencia_archivo", None) and str(op.evidencia_archivo or "").startswith("data:"):
+            _ev_actual = (
+                '<p style="font-size:13px;background:#f0fdf4;padding:10px 12px;border-radius:8px;margin-bottom:10px">'
+                "Comprobante actual: <b>" + _esc(getattr(op, "evidencia_nombre", None) or "archivo") + "</b> · "
+                '<a href="/gerencia/contabilidad/op/' + str(op.id) + '/evidencia" target="_blank">Ver / descargar</a></p>'
+            )
+    except Exception:
+        _ev_actual = ""
     if (op.estado or "").upper() == "ANULADO":
         return redirect("/gerencia/contabilidad/op/%s" % oid)
     err = ""
@@ -52537,6 +52640,15 @@ def contabilidad_editar(oid):
             op.solicitado_por = (request.form.get("solicitado_por") or "").strip()[:120]
             op.institucion_nombre = (request.form.get("institucion_nombre") or "").strip()[:200]
             op.evidencia = (request.form.get("evidencia") or "").strip()[:2000]
+            try:
+                _ensure_cont_evidencia_cols()
+                _en, _em, _ea = _guardar_evidencia_contable(request.files.get("evidencia_archivo"))
+                if _ea:
+                    op.evidencia_nombre = _en or ""
+                    op.evidencia_mime = _em or ""
+                    op.evidencia_archivo = _ea
+            except Exception as _ev_ex:
+                print("evidencia edit:", _ev_ex)
             if float(op.valor_pagado or 0) >= float(op.valor_total or 0) > 0:
                 op.estado = "PAGADO"
             elif float(op.valor_pagado or 0) > 0:
@@ -52558,7 +52670,7 @@ def contabilidad_editar(oid):
     )
     body = f"""
     {"<div style='color:#991b1b'>"+_esc(err)+"</div>" if err else ""}
-    <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px;max-width:720px">
+    <form method="POST" enctype="multipart/form-data" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px;max-width:720px">
       <p style="font-size:13px;color:#64748b">Corrige sin borrar. Código <b>{_esc(op.codigo)}</b> se conserva (auditoría).</p>
       <label style="font-weight:700;font-size:12px">Tipo</label>
       <select name="tipo" style="width:100%;padding:10px;margin-bottom:8px">{opts}</select>
@@ -52589,6 +52701,10 @@ def contabilidad_editar(oid):
       <input name="institucion_nombre" value="{_esc(op.institucion_nombre)}" style="width:100%;padding:10px;margin-bottom:8px">
       <label style="font-weight:700;font-size:12px">Evidencia</label>
       <textarea name="evidencia" rows="3" style="width:100%;padding:10px;margin-bottom:12px">{_esc(op.evidencia)}</textarea>
+      <label style="font-weight:700;font-size:12px;display:block;margin-top:8px">Adjuntar / reemplazar comprobante (PDF, Excel, Word, foto)</label>
+      <input type="file" name="evidencia_archivo" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.docx,.doc,.csv" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1">
+      <p style="font-size:11px;color:#64748b;margin:0 0 12px">Máx. 6 MB. Si ya hay archivo, el nuevo lo reemplaza.</p>
+
       <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar corrección</button>
       <a href="/gerencia/contabilidad/op/{op.id}" style="margin-left:10px">Cancelar</a>
     </form>
@@ -52597,11 +52713,67 @@ def contabilidad_editar(oid):
 
 
 @app.route("/gerencia/contabilidad/op/<int:oid>")
+
+@app.route("/gerencia/contabilidad/op/<int:oid>/evidencia")
+def contabilidad_evidencia_archivo(oid):
+    """Sirve el archivo adjunto (PDF, Excel, Word, imagen) de la operacion."""
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    try:
+        _ensure_cont_evidencia_cols()
+    except Exception:
+        pass
+    op = ContOperacion.query.get_or_404(oid)
+    data = getattr(op, "evidencia_archivo", None) or ""
+    if not data.startswith("data:"):
+        return "Sin archivo de evidencia adjunto.", 404
+    try:
+        import base64
+        header, b64 = data.split(",", 1)
+        mime = "application/octet-stream"
+        if header.startswith("data:") and ";base64" in header:
+            mime = header[5:].split(";")[0] or mime
+        raw = base64.b64decode(b64)
+        nombre = (getattr(op, "evidencia_nombre", None) or "comprobante").replace('"', "")
+        from flask import Response
+        resp = Response(raw, mimetype=mime)
+        resp.headers["Content-Disposition"] = "inline; filename=\"%s\"" % nombre
+        return resp
+    except Exception as e:
+        return "Error al leer evidencia: %s" % e, 500
+
+
 def contabilidad_detalle(oid):
     g = _guard_contabilidad()
     if g is not None:
         return g
     op = ContOperacion.query.get_or_404(oid)
+    try:
+        _ensure_cont_evidencia_cols()
+    except Exception:
+        pass
+    _adj = ""
+    try:
+        if getattr(op, "evidencia_archivo", None) and str(op.evidencia_archivo or "").startswith("data:"):
+            _nom = _esc(getattr(op, "evidencia_nombre", None) or "comprobante")
+            _adj = (
+                '<div style="margin-top:12px;padding:14px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0">'
+                '<div style="font-size:12px;font-weight:700;color:#0B2D57;margin-bottom:8px">Archivo de evidencia / comprobante</div>'
+                '<div style="font-size:13px;margin-bottom:10px">' + _nom + '</div>'
+                '<a href="/gerencia/contabilidad/op/' + str(op.id) + '/evidencia" target="_blank" '
+                'style="display:inline-block;background:#005BEA;color:#fff;padding:10px 18px;border-radius:980px;'
+                'text-decoration:none;font-weight:600;font-size:13px;margin-right:8px">Ver / descargar comprobante</a>'
+            )
+            mime = (getattr(op, "evidencia_mime", None) or "")
+            if mime.startswith("image/"):
+                _adj += (
+                    '<div style="margin-top:12px"><img src="' + str(op.evidencia_archivo)[:200000] + '" '
+                    'alt="comprobante" style="max-width:100%;max-height:320px;border-radius:8px;border:1px solid #e2e8f0"></div>'
+                )
+            _adj += "</div>"
+    except Exception:
+        _adj = ""
     def _cop(v):
         try:
             return "$ {:,.0f}".format(float(v or 0)).replace(",", ".")
@@ -52626,8 +52798,9 @@ def contabilidad_detalle(oid):
         <tr><td style="padding:6px 0;color:#64748b">Solicitó</td><td>{_esc(op.solicitado_por)}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Registró</td><td>{_esc(op.registrado_por)} · IP {_esc(op.ip)}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Institución</td><td>{_esc(op.institucion_nombre)}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Evidencia</td><td>{_esc(op.evidencia)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Evidencia (nota)</td><td>{_esc(op.evidencia)}</td></tr>
       </table>
+      {_adj}
       <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
         <a href="/gerencia/contabilidad/op/{op.id}/pdf" style="background:#b91c1c;color:#fff;padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none">⬇ PDF documento interno</a>
         <a href="/gerencia/contabilidad/op/{op.id}/editar" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none">✎ Corregir / editar</a>
