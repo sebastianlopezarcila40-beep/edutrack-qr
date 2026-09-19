@@ -4816,22 +4816,27 @@ def inicializar_bd():
     # CRITICAL: no repetir create_all/migraciones en cada request (WORKER TIMEOUT en Railway)
     if getattr(inicializar_bd, "_done", False):
         return
-    try:
-        db.create_all()
-    except Exception as _ca:
-        print("create_all:", _ca)
-    # Columnas promo ANTES de cualquier SELECT a instituciones
+    # Marcar YA para que si el worker se reinicia a mitad, el siguiente request no reintente el bloque pesado
+    inicializar_bd._done = True
+    # Solo lo minimo para que el login responda en <2s
     try:
         _ensure_inst_promo_columns()
     except Exception as _ep:
         print("ensure promo cols:", _ep)
-    # Migrar columnas ANTES de cualquier query ORM (purga demo, etc.)
-    if not _migracion_bd_lista:
+    # create_all + migraciones pesadas: SOLO si se fuerza con env (evita timeout)
+    if (os.environ.get("RUN_DB_MIGRATE") or "").strip() in ("1", "true", "TRUE", "yes"):
         try:
-            migrar_columnas()
-            _migracion_bd_lista = True
-        except Exception as _mc:
-            print("migrar_columnas:", _mc)
+            db.create_all()
+        except Exception as _ca:
+            print("create_all:", _ca)
+        if not _migracion_bd_lista:
+            try:
+                migrar_columnas()
+                _migracion_bd_lista = True
+            except Exception as _mc:
+                print("migrar_columnas:", _mc)
+    if (os.environ.get("RUN_DB_MIGRATE") or "").strip() not in ("1", "true", "TRUE", "yes"):
+        return  # resto de migraciones/indices/purga solo con RUN_DB_MIGRATE=1
     # Garantizar columnas nuevas (periodos y otras) — Postgres + SQLite
     try:
         with db.engine.begin() as conn:
@@ -5155,33 +5160,17 @@ def ruta_publica():
 
 @app.before_request
 def before():
+    # PERFORMANCE: no correr migraciones ni cron de facturacion en cada request.
+    # Eso causaba WORKER TIMEOUT / SIGKILL en Railway (bucle infinito de reinicios).
     try:
-        inicializar_bd()
+        if not getattr(inicializar_bd, "_done", False):
+            inicializar_bd()
     except Exception as _init_err:
-        # No tumbar el request (login) por fallos de migración/BD — pero SÍ hay que
-        # limpiar la transacción abortada, o cualquier query normal de esta misma
-        # petición (ej. el propio /login) también fallará con "current transaction
-        # is aborted, commands ignored until end of transaction block".
         print("inicializar_bd error:", _init_err)
         try:
             db.session.rollback()
         except Exception:
             pass
-    # Facturación automática "en vivo": corre sola una vez al día (con el primer request
-    # que llegue ese día), sin depender de que alguien entre manualmente a /gerencia/facturacion/cron.
-    global _ultimo_dia_cron_facturacion
-    hoy_str = fecha_hoy()
-    if _ultimo_dia_cron_facturacion != hoy_str and not request.path.startswith("/static"):
-        _ultimo_dia_cron_facturacion = hoy_str
-        try:
-            _r_cron = _ciclo_facturacion_automatica()
-            print(f"Cron facturación automático ({hoy_str}): {_r_cron}")
-        except Exception as _cron_err:
-            print("cron facturacion auto:", _cron_err)
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
     if requiere_login():
         ultimo = session.get("ultimo_movimiento")
         ahora_ts = ahora().timestamp()
@@ -9944,7 +9933,9 @@ def _aplicar_promo_caducadas():
 
 
 def _ensure_inst_promo_columns():
-    """Columnas de promo en instituciones (Railway). Idempotente."""
+    """Columnas de promo en instituciones (Railway). Idempotente y rapido."""
+    if getattr(_ensure_inst_promo_columns, "_ok", False):
+        return
     cols = [
         ("promo_id", "INTEGER DEFAULT 0"),
         ("valor_mensual_con_descuento", "INTEGER DEFAULT 0"),
@@ -9987,6 +9978,7 @@ def _ensure_inst_promo_columns():
                 ))
             except Exception:
                 pass
+        _ensure_inst_promo_columns._ok = True
     except Exception as ex:
         try:
             print("ensure_inst_promo_columns:", ex)
