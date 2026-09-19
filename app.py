@@ -2940,8 +2940,7 @@ class ConciliacionBancaria(db.Model):
 
 
 def _ensure_cont_evidencia_cols():
-    if getattr(_ensure_cont_evidencia_cols, "_ok", False):
-        return
+    # Siempre intenta IF NOT EXISTS (barato en Postgres); evita crash si el worker arranco sin migrar
     cols = [
         ("evidencia_nombre", "VARCHAR(200) DEFAULT ''"),
         ("evidencia_mime", "VARCHAR(120) DEFAULT ''"),
@@ -52327,6 +52326,10 @@ def _guard_contabilidad():
     rol = rol_actual()
     if rol not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
         return acceso_denegado("Solo Gerencia o Cobranza acceden a contabilidad comercial.")
+    try:
+        _ensure_cont_evidencia_cols()
+    except Exception:
+        pass
     return None
 
 
@@ -52365,6 +52368,10 @@ def contabilidad_comercial():
         db.create_all()
     except Exception:
         pass
+    try:
+        _ensure_cont_evidencia_cols()
+    except Exception as _ec:
+        print("cont evidencia cols:", _ec)
     msg = err = ""
     filtro = (request.args.get("tipo") or "").strip().upper()
     if request.method == "POST" and request.form.get("accion") == "anular":
@@ -52583,6 +52590,10 @@ def contabilidad_nueva():
         return g
     try:
         db.create_all()
+    except Exception:
+        pass
+    try:
+        _ensure_cont_evidencia_cols()
     except Exception:
         pass
     err = ""
