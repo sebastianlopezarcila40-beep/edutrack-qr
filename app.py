@@ -20271,6 +20271,7 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 
 @app.route("/ventas/comprar", methods=["GET", "POST"])
 def ventas_comprar():
+    _promo_banner = ""
     """Ficha completa del plan + alta de institución (exige logo del colegio)."""
     try:
         _seed_planes_comerciales()
@@ -20297,6 +20298,41 @@ def ventas_comprar():
     if not precio:
         precio = float(meta.get("precio") or 0)
     fee = float(pc.fee_implementacion if pc else meta.get("fee") or 0)
+
+    # Banner descuento activo para el plan
+    _promo_banner = ""
+    try:
+        _pr = _promo_activa_global()
+        _pvb = _calcular_promo_valores(float(precio or 0), _pr)
+        if _pr and _pvb.get("promo_id") and float(_pvb.get("porcentaje") or 0) > 0:
+            _promo_banner = (
+                '<div style="background:rgba(0,91,234,.08);border:1px solid rgba(0,91,234,.2);border-radius:16px;'
+                'padding:14px 16px;margin:0 0 16px;font-family:-apple-system,sans-serif">'
+                '<div style="font-size:12px;font-weight:600;color:#005BEA;text-transform:uppercase;letter-spacing:.04em">'
+                "Promocion activa en este plan</div>"
+                '<div style="font-size:20px;font-weight:700;color:#1d1d1f;margin-top:4px">$'
+                + "{:,.0f}".format(_pvb["valor_descuento"]).replace(",", ".")
+                + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
+                '<div style="font-size:12px;color:#86868b;text-decoration:line-through">$'
+                + "{:,.0f}".format(_pvb["valor_pleno"]).replace(",", ".")
+                + " COP</div>"
+                '<div style="font-size:13px;color:#002060;margin-top:6px">'
+                + _esc(_pvb.get("nombre_promo") or "Descuento")
+                + " · " + str(_pvb.get("porcentaje") or 0) + "% · "
+                + _esc(_pvb.get("tiempo_promo") or "")
+                + (" · hasta " + _esc(_pvb.get("fecha_caducidad_texto") or "") if _pvb.get("fecha_caducidad_texto") else "")
+                + "</div></div>"
+            )
+        else:
+            _promo_banner = (
+                '<div style="background:#f5f5f7;border-radius:12px;padding:10px 14px;margin:0 0 16px;font-size:12px;color:#86868b">'
+                "Sin promocion activa · Precio pleno $"
+                + "{:,.0f}".format(int(float(precio or 0))).replace(",", ".")
+                + " COP/mes</div>"
+            )
+    except Exception:
+        _promo_banner = ""
+
     max_e = int(pc.max_estudiantes if pc else meta.get("max_e") or 0)
     max_s = int(pc.max_sedes if pc else meta.get("max_s") or 12)
     # Selector habilitado: todos los planes activos
@@ -20679,6 +20715,7 @@ def ventas_comprar():
       {"<div class='vc-err'>"+error+"</div>" if error else ""}
       {"<div class='vc-ok'>"+ok+"</div>" if ok else ""}
       <form method="POST" enctype="multipart/form-data" id="form-activar-plan" novalidate style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" onsubmit="return vcSubmitGuard(this)">
+        {_promo_banner}
         <label><b>Plan a contratar *</b></label>
         <select name="plan" required style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;font-weight:600;color:#002060;background:#fff"
           onchange="if(this.value){{ window.location='/ventas/comprar?plan='+encodeURIComponent(this.value); }}">
@@ -20691,7 +20728,7 @@ def ventas_comprar():
           <button type="button" id="vc-step2-btn" onclick="vcStep(2)" style="border:0;padding:8px 16px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;font-weight:500;font-size:12px;cursor:pointer">2. Contacto</button>
         </div>
 
-        <div id="vc-step1">
+        <div id="vc-step1"><div style="background:#f5f5f7;border-radius:16px;padding:14px 16px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#002060;text-transform:uppercase;letter-spacing:.04em">Paso 1 · Datos del colegio</div><div style="font-size:13px;color:#86868b;margin-top:4px">Nombre, codigo, NIT, DANE y logo oficial de la institucion.</div></div>
           <label>Nombre del colegio *</label>
           <input name="nombre" required placeholder="Nombre oficial" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>Código institución *</label>
@@ -20704,13 +20741,19 @@ def ventas_comprar():
         </div>
 
         <div id="vc-step2" style="display:none">
-          <label>Rector / representante legal *</label>
-          <input name="rector" id="campo-rector" placeholder="Nombre completo del rector" style="border-radius:12px;border:1px solid #d2d2d7">
+          <div style="background:rgba(0,91,234,.06);border-radius:16px;padding:14px 16px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:#005BEA;text-transform:uppercase;letter-spacing:.04em">Paso 2 · Identidad del rector</div>
+            <div style="font-size:13px;color:#1d1d1f;margin-top:4px">Datos del representante legal de la institucion (obligatorio para el contrato).</div>
+          </div>
+          <label>Nombre completo del rector / representante legal *</label>
+          <input name="rector" id="campo-rector" required placeholder="Ej: Maria Perez Lopez" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
           <input type="hidden" name="rector_nombre" id="campo-rector-nombre" value="">
-          <label>Teléfono</label>
-          <input name="telefono" style="border-radius:12px;border:1px solid #d2d2d7">
-          <label>Correo</label>
-          <input name="correo" type="email" style="border-radius:12px;border:1px solid #d2d2d7">
+          <label>Cedula del rector</label>
+          <input name="rector_cedula" placeholder="Numero de documento" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
+          <label>Telefono de contacto</label>
+          <input name="telefono" placeholder="Celular" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
+          <label>Correo institucional</label>
+          <input name="correo" type="email" placeholder="rector@colegio.edu.co" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
           <p style="font-size:12px;color:#86868b;margin:8px 0 12px">Logo: se captura en el Paso 1 (Identidad). Si no lo subio, vuelva atras.</p>
           {geo_campos}
           <label>Sede principal</label>
@@ -20830,7 +20873,7 @@ def ventas_comprar():
   }});
 }})();
 </script>
-
+<script>
 function vcSubmitGuard(form) {{
   try {{
     var nombre = (form.querySelector('[name="nombre"]') || {{}}).value || "";
