@@ -328,7 +328,7 @@ PLANES_EDUTRACK = {
         "nombre": "Básico (Normal)",
         "descripcion": "Asistencia QR, estudiantes, reportes esenciales y portal docente. Sin carné digital.",
         "modulos": [
-            "asistencia_qr", "estudiantes", "portal_docente", "reportes_basicos",
+            "asistencia_qr", "estudiantes", "portal_docente", "reportes_basicos", "reportes_excel",
             "ingreso_manual", "contacto",
         ],
     },
@@ -336,7 +336,7 @@ PLANES_EDUTRACK = {
         "nombre": "Institucional",
         "descripcion": "Todo lo Básico + reportes padres, novedades, citaciones, horarios y exportes.",
         "modulos": [
-            "asistencia_qr", "estudiantes", "portal_docente", "reportes_basicos",
+            "asistencia_qr", "estudiantes", "portal_docente", "reportes_basicos", "reportes_excel",
             "carnes", "ingreso_manual", "contacto",
             "reportes_padres", "novedades", "citaciones", "horarios", "import_excel",
             "auditoria", "notas_basico",
@@ -346,7 +346,7 @@ PLANES_EDUTRACK = {
         "nombre": "Premium",
         "descripcion": "Todo lo Institucional + EduAura IA, SIEE completo, boletines, elecciones y más.",
         "modulos": [
-            "asistencia_qr", "estudiantes", "portal_docente", "reportes_basicos",
+            "asistencia_qr", "estudiantes", "portal_docente", "reportes_basicos", "reportes_excel",
             "carnes", "ingreso_manual", "contacto",
             "reportes_padres", "novedades", "citaciones", "horarios", "import_excel",
             "auditoria", "notas_basico",
@@ -359,7 +359,7 @@ PLANES_EDUTRACK = {
         "descripcion": "Solo escaneo QR de ingreso, reportes del día y panel portería. Sin notas ni planilla.",
         "linea": "qr",
         "modulos": [
-            "asistencia_qr", "estudiantes", "reportes_basicos", "ingreso_manual",
+            "asistencia_qr", "estudiantes", "reportes_basicos", "reportes_excel", "ingreso_manual",
             "portal_porteria", "calendario",
         ],
     },
@@ -518,10 +518,10 @@ def plan_permite_ruta(path=None, inst=None):
     for pref, mod in _RUTA_MODULO_PLAN.items():
         if path == pref or path.startswith(pref + "/"):
             # módulos QR: asistencia_qr cubre faltas; reportes sin excel si no tiene
-            if mod == "reportes_excel" and "reportes_excel" not in mods and "reportes_basicos" in mods:
-                if path.rstrip("/").endswith("excel"):
-                    return False
-                return True
+            if mod in ("reportes_excel", "reportes_basicos"):
+                # Excel / PDF / Word de reportes: disponibles en todos los planes con reportes
+                if "reportes_excel" in mods or "reportes_basicos" in mods:
+                    return True
             if mod in mods:
                 return True
             # excepciones: faltas con asistencia_qr
@@ -32541,32 +32541,94 @@ def gerencia_planes():
 
 
 def _plan_form_fields(p=None, crear=False):
-    """HTML de campos compartidos crear/editar plan."""
+    """HTML de campos compartidos crear/editar plan (familia + funciones)."""
     p = p or PlanComercial()
+    feats_raw = getattr(p, "features_json", None) or ""
+    feats_dict = {}
+    feats_pipe = ""
     try:
-        feats = "|".join(json.loads(p.features_json or "[]")) if getattr(p, "features_json", None) else ""
+        parsed = json.loads(feats_raw) if feats_raw else None
+        if isinstance(parsed, dict):
+            feats_dict = parsed
+            feats_pipe = "|".join(parsed.get("incluidos") or []) if isinstance(parsed.get("incluidos"), list) else ""
+        elif isinstance(parsed, list):
+            feats_pipe = "|".join(str(x) for x in parsed)
+            feats_dict = {"incluidos": parsed}
     except Exception:
-        feats = ""
+        feats_pipe = ""
+    mods_on = set(feats_dict.get("modulos") or [])
+    # Reportes export siempre activos por política comercial
+    mods_on.add("reportes_basicos")
+    mods_on.add("reportes_excel")
+    linea = (feats_dict.get("linea") or ("qr" if str(getattr(p, "codigo", "") or "").startswith("qr") else "institucional")).lower()
+    if linea not in ("qr", "institucional"):
+        linea = "institucional"
     mod = (getattr(p, "modalidad", None) or "presencial").lower()
     precio_lista = int(float(getattr(p, "precio_lista", None) or getattr(p, "precio_mensual", 0) or 0))
+    # checkboxes de módulos
+    boxes = []
+    catalog = [
+        ("reportes_basicos", "Reportes en pantalla"),
+        ("reportes_excel", "Exportar Excel / PDF / Word (incluido en todos)"),
+        ("estudiantes", "Estudiantes y grupos"),
+        ("portal_docente", "Portal docente"),
+        ("notas_basico", "Notas / SIEE básico"),
+        ("notas_completo", "Planilla notas tipo Excel"),
+        ("boletines_pdf", "Boletines PDF"),
+        ("siee", "SIEE completo"),
+        ("import_excel", "Import Excel + SIMAT"),
+        ("novedades", "Convivencia / novedades"),
+        ("citaciones", "Citaciones"),
+        ("horarios", "Horarios"),
+        ("reportes_padres", "Reportes a padres"),
+        ("carnes", "Carnés digitales"),
+        ("asistencia_qr", "Asistencia QR"),
+        ("portal_porteria", "Portal portería / QR ingreso"),
+        ("ingreso_manual", "Ingreso manual"),
+        ("aviso_ingreso_whatsapp", "WhatsApp aviso ingreso"),
+        ("calendario", "Calendario escolar"),
+        ("multi_sede", "Multi-sede"),
+        ("historial_padres", "Portal familiar asistencia viva"),
+        ("alertas_impuntualidad", "Alertas de impuntualidad"),
+        ("eduaura", "EduAura IA"),
+        ("auditoria", "Auditoría de notas"),
+        ("contacto", "PQR padres + PQR a PROCSIS"),
+    ]
+    for key, lab in catalog:
+        forced = key in ("reportes_basicos", "reportes_excel")
+        chk = "checked" if (key in mods_on or forced) else ""
+        dis = "disabled" if forced else ""
+        boxes.append(
+            '<label style="display:flex;align-items:center;gap:8px;font-weight:500;font-size:13px;margin:4px 0">'
+            '<input type="checkbox" name="modulos" value="%s" %s %s> %s</label>'
+            % (key, chk, dis, lab)
+        )
+        if forced:
+            boxes.append('<input type="hidden" name="modulos" value="%s">' % key)
+    boxes_html = "".join(boxes)
     return f"""
                 <label>Nombre</label>
                 <input name="nombre" value="{_esc(getattr(p,'nombre',None) or '')}" required placeholder="Ej: Básico">
                 {"<label>Código (único, minúsculas)</label><input name='codigo' required placeholder='ej: basico_pro' pattern='[a-z0-9_]+'>" if crear else ""}
-                <label style="margin-top:12px">Modalidad del plan</label>
+                <label style="margin-top:12px">Familia del plan</label>
+                <div style="display:flex;gap:16px;margin:8px 0 12px;font-size:14px;flex-wrap:wrap">
+                  <label style="font-weight:600;display:flex;align-items:center;gap:6px"><input type="radio" name="linea_plan" value="institucional" {"checked" if linea!="qr" else ""}> Institucional / Académico</label>
+                  <label style="font-weight:600;display:flex;align-items:center;gap:6px"><input type="radio" name="linea_plan" value="qr" {"checked" if linea=="qr" else ""}> Solo QR (acceso / seguridad)</label>
+                </div>
+                <p class="hint">Define si el colegio ve módulos académicos o solo portería/asistencia.</p>
+                <label style="margin-top:12px">Modalidad</label>
                 <div style="display:flex;gap:16px;margin:8px 0 12px;font-size:14px">
                   <label style="font-weight:600;display:flex;align-items:center;gap:6px"><input type="radio" name="modalidad" value="presencial" {"checked" if mod!="online" else ""}> Presencial</label>
                   <label style="font-weight:600;display:flex;align-items:center;gap:6px"><input type="radio" name="modalidad" value="online" {"checked" if mod=="online" else ""}> Online / Virtual</label>
                 </div>
                 <div class="row2">
                   <div>
-                    <label>Precio lista mensual (COP, sin puntos)</label>
-                    <input name="precio" type="number" min="0" step="1" value="{precio_lista}" placeholder="Ej: 108338">
-                    <p class="hint">Tarifa plena antes de descuento. Se factura el precio con descuento mientras dure la promo.</p>
+                    <label>Precio lista mensual (COP)</label>
+                    <input name="precio" type="number" min="0" step="1" value="{precio_lista}">
                   </div>
                   <div>
                     <label>Fee implementación</label>
-                    <input name="fee" type="number" min="0" step="1" value="{int(float(getattr(p,'fee_implementacion',0) or 0))}" placeholder="Ej: 250000">
+                    <input name="fee" type="number" min="0" step="1" value="{int(float(getattr(p,'fee_implementacion',0) or 0))}">
                   </div>
                 </div>
                 <div class="row2">
@@ -32578,25 +32640,23 @@ def _plan_form_fields(p=None, crear=False):
                   <div><label>Máx. profesores / docentes</label><input name="max_docentes" type="number" value="{int(getattr(p,'max_docentes',30) or 30)}"></div>
                 </div>
                 <div class="row2">
-                  <div>
-                    <label>Descuento %</label>
-                    <input name="descuento_pct" type="number" min="0" max="100" step="0.5" value="{float(getattr(p,'descuento_pct',0) or 0)}">
-                  </div>
-                  <div>
-                    <label>Duración del descuento (meses)</label>
-                    <input name="descuento_meses" type="number" min="0" max="36" value="{int(getattr(p,'descuento_meses',0) or 0)}" placeholder="Ej: 4">
-                    <p class="hint">Tras esos meses el sistema pasa a tarifa plena.</p>
-                  </div>
+                  <div><label>Descuento %</label><input name="descuento_pct" type="number" min="0" max="100" step="0.5" value="{float(getattr(p,'descuento_pct',0) or 0)}"></div>
+                  <div><label>Duración descuento (meses)</label><input name="descuento_meses" type="number" min="0" max="36" value="{int(getattr(p,'descuento_meses',0) or 0)}"></div>
                 </div>
-                <label>Título comercial / eslogan (ventas)</label>
+                <label style="margin-top:14px">Funciones de este plan</label>
+                <p class="hint">Marque lo que incluye. Excel/PDF/Word de reportes van en todos los planes.</p>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;max-height:280px;overflow:auto;margin:8px 0 12px">
+                  {boxes_html}
+                </div>
+                <label>Título comercial / eslogan</label>
                 <input name="titulo_comercial" value="{_esc(getattr(p,'titulo_comercial',None) or '')}" placeholder="✨ Un plan que lo tiene todo ✨" maxlength="160">
-                <label>Mensaje WhatsApp / cuerpo comercial (emojis permitidos)</label>
-                <textarea name="mensaje_whatsapp" rows="6" placeholder="📶 Asistencia QR&#10;⚡ Reportes en un clic&#10;📲 Aviso al acudiente">{_esc(getattr(p,'mensaje_whatsapp',None) or '')}</textarea>
-                <label>Llamado a la acción (CTA)</label>
-                <input name="cta_comercial" value="{_esc(getattr(p,'cta_comercial',None) or '')}" placeholder="¿Te gustaría tomar esta oferta exclusiva? 🤩" maxlength="255">
-                <label>Features internas (separadas por |)</label>
-                <textarea name="features" rows="2">{_esc(feats)}</textarea>
-                <p class="hint">Configuración del sistema (incluidos|excluidos|tagline…). El copy de ventas va en los campos de arriba.</p>
+                <label>Mensaje WhatsApp (beneficios)</label>
+                <textarea name="mensaje_whatsapp" rows="4">{_esc(getattr(p,'mensaje_whatsapp',None) or '')}</textarea>
+                <label>CTA comercial</label>
+                <input name="cta_comercial" value="{_esc(getattr(p,'cta_comercial',None) or '')}" maxlength="255">
+                <label>Features texto (opcional, separados por |)</label>
+                <input name="features" value="{_esc(feats_pipe)}" placeholder="tagline|nota interna…">
+                <p class="hint">Complemento libre; las funciones reales son los checks de arriba.</p>
                 <label>Imagen del plan</label>
                 <input type="file" name="imagen" accept="image/*">
 """
@@ -32626,8 +32686,25 @@ def _aplicar_campos_plan(p, form, crear=False):
     p.titulo_comercial = (form.get("titulo_comercial") or "")[:160]
     p.mensaje_whatsapp = (form.get("mensaje_whatsapp") or "")[:8000]
     p.cta_comercial = (form.get("cta_comercial") or "")[:255]
-    feats = (form.get("features") or "").strip()
-    p.features_json = json.dumps([x.strip() for x in feats.split("|") if x.strip()], ensure_ascii=False)
+    feats_txt = (form.get("features") or "").strip()
+    incluidos_txt = [x.strip() for x in feats_txt.split("|") if x.strip()]
+    linea = (form.get("linea_plan") or "institucional").strip().lower()
+    if linea not in ("qr", "institucional"):
+        linea = "institucional"
+    modulos = form.getlist("modulos") if hasattr(form, "getlist") else []
+    if not isinstance(modulos, list):
+        modulos = [modulos] if modulos else []
+    modulos = [str(m).strip() for m in modulos if str(m).strip()]
+    # Política: export Excel/PDF/Word en todos los planes
+    for forced in ("reportes_basicos", "reportes_excel"):
+        if forced not in modulos:
+            modulos.append(forced)
+    p.features_json = json.dumps({
+        "linea": linea,
+        "modulos": modulos,
+        "incluidos": incluidos_txt,
+        "tagline": incluidos_txt[0] if incluidos_txt else "",
+    }, ensure_ascii=False)
     img = request.files.get("imagen")
     if img and img.filename:
         folder = os.path.join(app.root_path, "static", "uploads", "planes")
