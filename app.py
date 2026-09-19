@@ -49,20 +49,26 @@ _promo_cron_last = {"day": ""}
 
 @app.before_request
 def _auto_promo_cron_diario():
-    """Migra columnas promo si faltan y aplica caducidad una vez al dia."""
+    """Caducidad promo: max 1 vez al dia, nunca bloquea el request."""
     try:
-        # Critico: sin esto SELECT * FROM instituciones falla en Railway
-        if not getattr(app, "_promo_cols_ready", False):
-            _ensure_inst_promo_columns()
+        if getattr(app, "_promo_cols_ready", False):
+            pass
+        else:
+            # Solo una vez por worker; fallos no reintentan en bucle
             app._promo_cols_ready = True
-    except Exception:
-        pass
-    try:
+            try:
+                _ensure_inst_promo_columns()
+            except Exception:
+                pass
         from datetime import datetime as _dt
         day = _dt.utcnow().strftime("%Y-%m-%d")
-        if _promo_cron_last.get("day") != day:
-            _promo_cron_last["day"] = day
+        if _promo_cron_last.get("day") == day:
+            return
+        _promo_cron_last["day"] = day
+        try:
             _aplicar_promo_caducadas()
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -4807,7 +4813,13 @@ _ultimo_dia_cron_facturacion = None  # candado: correr el ciclo de facturación 
 
 def inicializar_bd(): 
     global _migracion_bd_lista
-    db.create_all()
+    # CRITICAL: no repetir create_all/migraciones en cada request (WORKER TIMEOUT en Railway)
+    if getattr(inicializar_bd, "_done", False):
+        return
+    try:
+        db.create_all()
+    except Exception as _ca:
+        print("create_all:", _ca)
     # Columnas promo ANTES de cualquier SELECT a instituciones
     try:
         _ensure_inst_promo_columns()
@@ -4856,6 +4868,9 @@ def inicializar_bd():
                     print(f"patch {table}.{col}:", _c)
     except Exception as _e:
         print("ensure schema patches:", _e)
+
+    # Marcar listo temprano para no re-ejecutar en el siguiente request
+    inicializar_bd._done = True
 
     try:
         _migrate_facturas_cobro_columns()
@@ -9901,28 +9916,25 @@ def _calcular_promo_valores(valor_pleno, promo=None):
 
 
 def _aplicar_promo_caducadas():
-    """Marca instituciones cuya promo ya vencio (tarifa plena)."""
-    try:
-        db.create_all()
-    except Exception:
-        pass
+    """Marca instituciones cuya promo ya vencio (tarifa plena). SQL rapido, sin create_all."""
     try:
         from datetime import datetime
         ahora_s = ahora().strftime("%Y-%m-%d %H:%M:%S") if hasattr(ahora(), "strftime") else datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        rows = Institucion.query.filter(
-            Institucion.fecha_caducidad_descuento != None,  # noqa: E711
-            Institucion.fecha_caducidad_descuento != "",
-            Institucion.flag_tarifa_plena_aplicada != True,  # noqa: E712
-        ).all()
-        n = 0
-        for inst in rows:
-            cad = (getattr(inst, "fecha_caducidad_descuento", None) or "").strip()
-            if cad and cad[:19] <= ahora_s[:19]:
-                inst.flag_tarifa_plena_aplicada = True
-                n += 1
-        if n:
-            db.session.commit()
-        return n
+        # Un solo UPDATE; no carga ORM (evita OOM/timeout)
+        r = db.session.execute(
+            text(
+                "UPDATE instituciones SET flag_tarifa_plena_aplicada = TRUE "
+                "WHERE COALESCE(fecha_caducidad_descuento, '') <> '' "
+                "AND fecha_caducidad_descuento <= :ahora "
+                "AND COALESCE(flag_tarifa_plena_aplicada, FALSE) = FALSE"
+            ),
+            {"ahora": ahora_s[:19]},
+        )
+        db.session.commit()
+        try:
+            return int(r.rowcount or 0)
+        except Exception:
+            return 0
     except Exception:
         try:
             db.session.rollback()
