@@ -3666,12 +3666,12 @@ def _staff_nav_items(path, rol=""):
     if rol in ("Desarrollador", "Developer"):
         items = [
             ("/dev-console", "Consola técnica"),
+            ("/desarrollo/tickets", "Tickets de ingeniería"),
             ("/dev-console?tab=sistema", "Sistema y core"),
             ("/dev-console?tab=flags", "Sandbox / Flags"),
             ("/dev-console?tab=versiones", "Actualizaciones"),
             ("/dev-console?tab=anuncios", "Seguridad"),
             ("/dev-console?tab=temas", "Diseño / CSS"),
-            ("/gerencia/planes/nuevo", "Crear plan (técnico)"),
             ("/backoffice/hub", "Tablero maestro"),
             ("/logout", "Salir"),
         ]
@@ -3683,7 +3683,6 @@ def _staff_nav_items(path, rol=""):
             ("/logout", "Salir"),
         ]
     elif rol == "Soporte":
-        # Solo operativo. PROHIBIDO: nueva institución, licencias, cancelaciones, ofertas, modo prueba
         items = [
             ("/soporte_admin", "Panel principal"),
             ("/soporte/impersonar", "Suplantar usuario"),
@@ -3698,7 +3697,8 @@ def _staff_nav_items(path, rol=""):
             ("/auditoria", "Auditoría"),
             ("/soporte/pqr", "Centro PQR"),
             ("/soporte/pqr/crear", "Radicar PQR"),
-            ("/soporte/pqr/consulta", "Consulta validada"),
+            ("/soporte/ticket-dev", "Escalar a Desarrollo"),
+            ("/soporte/mis-tickets-dev", "Mis tickets a Dev"),
             ("/support", "Support"),
             ("/support/editor", "Redactar Support"),
             ("/contacto", "Vista contacto público"),
@@ -3714,6 +3714,7 @@ def _staff_nav_items(path, rol=""):
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/hq", "Dashboard"),
+            ("/gerencia/calidad-dev", "Calidad · tickets Dev"),
             ("/gerencia/planes", "Planes activos"),
             ("/gerencia/beneficios", "Beneficios"),
             ("/gerencia/planes/nuevo", "Crear plan"),
@@ -6450,7 +6451,7 @@ def logo_plataforma():
 
 
 def shell_soporte(content):
-    """Panel Soporte operativo: logo + scroll. Sin crear colegios, licencias, cancelaciones ni modo prueba."""
+    """Panel Soporte operativo + escalamiento a Desarrollo. Sin crear colegios ni facturación."""
     p = plataforma()
     try:
         logo = logo_plataforma()
@@ -6465,14 +6466,16 @@ def shell_soporte(content):
         ("/soporte/logs-errores", "Logs de errores"),
         ("/servidores", "Servidores"),
         ("/soporte/prorroga", "Prórroga 24h"),
-        ("/tenants", "Instituciones (solo consulta)"),
-        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
+        ("/tenants", "Instituciones (consulta)"),
+        ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
         ("/auditoria", "Auditoría"),
         ("/soporte/pqr", "Centro PQR"),
         ("/soporte/pqr/crear", "Radicar PQR interna"),
         ("/soporte/pqr/consulta", "Consulta validada"),
+        ("/soporte/ticket-dev", "Escalar a Desarrollo"),
+        ("/soporte/mis-tickets-dev", "Mis tickets a Dev"),
         ("/support", "Support"),
-        ("/support/editor", "Redactar en Support"),
+        ("/support/editor", "Redactar Support"),
         ("/contacto", "Vista contacto público"),
     ]
     enlaces = "".join(
@@ -6480,21 +6483,20 @@ def shell_soporte(content):
         'border-radius:8px;font-size:13px;font-weight:600;background:rgba(255,255,255,.08)">%s</a>' % (u, n)
         for u, n in menu
     )
-    empresa = (getattr(p, "empresa", None) or "Procsis")
+    empresa = getattr(p, "empresa", None) or "Procsis"
     return f"""
 <style>
-.sop-layout{{display:flex!important;flex-direction:row!important;min-height:100vh;width:100%;background:#eef2f7}}
-.sop-side{{width:250px!important;min-width:250px!important;max-width:250px!important;height:100vh!important;max-height:100vh!important;
-position:sticky!important;top:0!important;overflow-y:scroll!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;
+.sop-layout{{display:flex!important;min-height:100vh;width:100%;background:#eef2f7}}
+.sop-side{{width:250px!important;min-width:250px;max-width:250px;height:100vh;max-height:100vh;position:sticky;top:0;
+overflow-y:scroll!important;overflow-x:hidden;-webkit-overflow-scrolling:touch;
 background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%)!important;color:#fff;padding:16px 12px 40px;box-sizing:border-box}}
 .sop-side img.sop-logo{{width:88px;height:88px;object-fit:contain;background:#fff;border-radius:16px;padding:8px;display:block;margin:0 auto 10px}}
-.sop-side a:hover{{background:rgba(37,99,235,.55)!important;color:#fff!important}}
 .sop-main{{flex:1;min-width:0;overflow:auto}}
 </style>
 <div class="sop-layout">
   <aside class="sop-side">
     <img class="sop-logo" src="{logo}" alt="{_esc(empresa)}">
-    <h2 style="font-size:16px;letter-spacing:.4px;text-align:center;margin:0 0 4px">{_esc(empresa).upper()}</h2>
+    <h2 style="font-size:16px;text-align:center;margin:0 0 4px">{_esc(empresa).upper()}</h2>
     <p style="font-size:12px;color:#bfdbfe;text-align:center;margin:0 0 8px">Centro de operaciones · {nombre_producto()}</p>
     <div style="text-align:center;margin-bottom:12px">
       <span style="display:inline-block;background:#facc15;color:#0B2D57;font-weight:800;font-size:11px;padding:5px 12px;border-radius:8px">SOPORTE TÉCNICO</span>
@@ -16665,7 +16667,7 @@ def historial_estudiante_novedades(id):
 
 @app.route("/contacto")
 def contacto():
-    """Contacto público — diseño Apple (tipografía limpia, cards suaves)."""
+    """Contacto público con marca Procsis (no del colegio)."""
     p = plataforma()
     logo = logo_plataforma()
     empresa = p.empresa or DESARROLLADOR
@@ -16675,62 +16677,47 @@ def contacto():
     tel_c = p.telefono_cartera or CARTERA_TELEFONO
     mail_c = p.email_cartera or CARTERA_EMAIL
     body = f"""
-<style>
-.ct{{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Helvetica,Arial,sans-serif;background:#f5f5f7;min-height:100vh;color:#1d1d1f;padding:40px 16px 64px}}
-.ct-in{{max-width:920px;margin:0 auto}}
-.ct-hero{{text-align:center;margin-bottom:36px}}
-.ct-hero img{{width:72px;height:72px;object-fit:contain;background:#fff;border-radius:18px;padding:8px;box-shadow:0 4px 20px rgba(0,0,0,.06)}}
-.ct-hero h1{{font-size:40px;font-weight:600;letter-spacing:-.02em;margin:16px 0 8px}}
-.ct-hero p{{font-size:19px;color:#6e6e73;margin:0;line-height:1.4}}
-.ct-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}}
-@media(max-width:800px){{.ct-grid{{grid-template-columns:1fr}}.ct-hero h1{{font-size:32px}}}}
-.ct-card{{background:#fff;border-radius:18px;padding:28px 22px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.04)}}
-.ct-card .ico{{width:48px;height:48px;margin:0 auto 14px;border-radius:50%;background:#f5f5f7;display:flex;align-items:center;justify-content:center;font-size:20px}}
-.ct-card h3{{font-size:17px;font-weight:600;margin:0 0 8px;letter-spacing:-.01em}}
-.ct-card p{{font-size:14px;color:#6e6e73;margin:4px 0;line-height:1.4}}
-.ct-card a{{color:#06c;text-decoration:none}}
-.ct-card a:hover{{text-decoration:underline}}
-.ct-foot{{text-align:center;margin-top:8px}}
-.ct-foot a{{display:inline-block;margin:6px 8px;padding:12px 22px;border-radius:980px;font-size:14px;font-weight:500;text-decoration:none}}
-.ct-foot .pri{{background:#1d1d1f;color:#fff}}
-.ct-foot .sec{{background:#fff;color:#1d1d1f;border:1px solid #d2d2d7}}
-.ct-copy{{text-align:center;margin-top:28px;font-size:12px;color:#86868b}}
-</style>
-<div class="ct"><div class="ct-in">
-  <div class="ct-hero">
-    <img src="{logo}" alt="{_esc(empresa)}">
-    <h1>Contacto</h1>
-    <p>{_esc(p.slogan or SLOGAN)} · {_esc(empresa)}</p>
-  </div>
-  <div class="ct-grid">
-    <div class="ct-card">
-      <div class="ico">☎</div>
+<div style="max-width:1100px;margin:24px auto;padding:0 16px">
+  <section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:24px;padding:28px;display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:20px">
+    <img src="{logo}" alt="{empresa}" style="width:88px;height:88px;object-fit:contain;background:#fff;border-radius:20px;padding:10px">
+    <div>
+      <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;opacity:.85">Soporte oficial</div>
+      <h1 style="margin:6px 0;font-size:28px">{empresa}</h1>
+      <p style="margin:0;opacity:.92">{p.slogan or SLOGAN}</p>
+      <p style="margin:8px 0 0;font-size:13px;opacity:.8">Plataforma {APP_NAME} · Acompañamiento técnico multi-institucional</p>
+    </div>
+  </section>
+  <section class="role-grid">
+    <div class="role-panel" style="text-align:center">
+      <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:24px">☎</div>
       <h3>Desarrollador principal</h3>
-      <p><b>{_esc(dev)}</b><br>Soporte técnico {APP_NAME}</p>
-      <p><a href="tel:{_esc(tel_s)}">{_esc(tel_s)}</a></p>
-      <p><a href="mailto:{_esc(mail_s)}">{_esc(mail_s)}</a></p>
+      <p><b>{dev}</b><br>Soporte técnico {APP_NAME}</p>
+      <p>📞 <a href="tel:{tel_s}">{tel_s}</a></p>
+      <p>✉️ <a href="mailto:{mail_s}">{mail_s}</a></p>
     </div>
-    <div class="ct-card">
-      <div class="ico">✉</div>
+    <div class="role-panel" style="text-align:center">
+      <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:24px">✉</div>
       <h3>Soporte tecnológico</h3>
-      <p>Plataforma {APP_NAME}<br>{_esc(empresa)}</p>
-      <p><a href="mailto:{_esc(mail_s)}">{_esc(mail_s)}</a></p>
+      <p>Plataforma {APP_NAME}<br>{empresa}</p>
+      <p>✉️ <a href="mailto:{mail_s}">{mail_s}</a></p>
+      {(f'<p>Web: <a href="{p.web}" target="_blank">{p.web}</a></p>' if (p.web or '').strip() else '')}
     </div>
-    <div class="ct-card">
-      <div class="ico">💼</div>
+    <div class="role-panel" style="text-align:center">
+      <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:24px">💼</div>
       <h3>Cartera y facturación</h3>
-      <p><a href="tel:{_esc(tel_c)}">{_esc(tel_c)}</a></p>
-      <p><a href="mailto:{_esc(mail_c)}">{_esc(mail_c)}</a></p>
+      <p>📞 <a href="tel:{tel_c}">{tel_c}</a></p>
+      <p>✉️ <a href="mailto:{mail_c}">{mail_c}</a></p>
     </div>
-  </div>
-  <div class="ct-foot">
-    <a class="pri" href="/login">Volver al login</a>
-    <a class="sec" href="/atencion-directivos">Atención al directivo · PQR</a>
-    <a class="sec" href="/support">Support</a>
-  </div>
-  <div class="ct-copy">© 2026 {_esc(empresa)} · {APP_NAME}</div>
-</div></div>
+  </section>
+  <section style="margin-top:18px;background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;border-radius:22px;padding:28px;text-align:center">
+    <h2 style="margin:0">{APP_NAME}</h2>
+    <p style="margin:8px 0 0;opacity:.95">{p.slogan or SLOGAN}</p>
+    <p style="margin:12px 0 0;font-size:13px;opacity:.8">Desarrollado por <b>{empresa}</b></p>
+  </section>
+  <p style="text-align:center;margin-top:16px"><a class="btn" href="/login">Volver al login</a> <a class="btn" href="/atencion-directivos" style="background:#334155">Atención al directivo · PQR</a></p>
+</div>
 """
+    # Página pública: sin sidebar institucional
     return page("Contacto", body)
 
 
@@ -17132,11 +17119,7 @@ def soporte():
 @app.route("/modo_prueba", methods=["GET", "POST"])
 def modo_prueba():
     if not requiere_login(): return redirect("/login")
-    # Soporte NO tiene modo prueba (riesgo comercial / datos)
-    if rol_actual() == "Soporte":
-        return acceso_denegado("Modo prueba está reservado a Gerencia / Administrador. Soporte no puede activarlo.")
-    if rol_actual() not in ["Administrador", "Gerente", "Superadmin"]:
-        return acceso_denegado("Solo Gerencia/Admin puede limpiar datos de prueba.")
+    if rol_actual() not in ["Soporte", "Administrador"]: return acceso_denegado("Solo Soporte/Admin puede limpiar datos de prueba.")
     mensaje = ""
     if request.method == "POST":
         codigo = request.form.get("codigo", "")
@@ -36286,7 +36269,7 @@ def soporte_admin():
     <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff;font-weight:800">👥 Usuarios · eliminar</a>
     <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;color:#fff">🚨 Logs</a>
     <a class="btn" href="/soporte/prorroga" style="background:#1e3a5f;color:#fff;border:1px solid #fff3">📅 Prórroga 24h</a>
-    <a class="btn" href="/support" style="background:#005BEA;color:#fff">Support</a>
+    <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
     <a class="btn" href="/soporte/pqr" style="background:#1e40af;color:#fff">Tickets</a>
     <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488;color:#fff">💙 CSAT</a>
     <a class="btn btn-red" href="/logout">Salir</a>
@@ -36311,13 +36294,14 @@ def soporte_admin():
     <h2 style="margin:0">Colegios</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff">Usuarios · estado / eliminar</a>
+      <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
     </div>
   </div>
-  <p class="mini-text">Soporte solo consulta colegios (no crea instituciones). En cada colegio: <b>Usuarios</b> abre la lista de ese tenant.</p>
+  <p class="mini-text">En cada colegio: <b>Usuarios</b> abre la lista de ese tenant. En <b>Usuarios · estado / eliminar</b> ves ACTIVO/INACTIVO de toda la plataforma y puedes borrar inactivos.</p>
   <div class="table-card" style="overflow-x:auto">
   <table>
     <tr><th></th><th>Código / nombre</th><th>Estado</th><th>Plan</th><th>Usuarios</th><th>Acciones</th></tr>
-    {filas if filas else '<tr><td colspan="6">Sin instituciones registradas.</td></tr>'}
+    {filas if filas else '<tr><td colspan="6">Sin instituciones. Crea una con Nueva institución.</td></tr>'}
   </table>
   </div>
 </section>
@@ -37161,19 +37145,11 @@ def tenants():
 </div>
 """
     else:
-        # Soporte: solo consulta — sin botón Nueva institución
-        btn_nueva = ""
-        if rol_actual() != "Soporte":
-            btn_nueva = "<a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>"
-        aviso_sop = ""
-        if rol_actual() == "Soporte":
-            aviso_sop = "<p class='mini-text' style='color:#9a3412;background:#fff7ed;padding:10px;border-radius:8px;border:1px solid #fed7aa'>Soporte solo consulta instituciones. Crear o activar colegios es exclusivo de Gerencia / Ventas.</p>"
         body = f"""
 <header class='role-hero'>
   <div><h1>Instituciones (tenants)</h1><p>Cada colegio es independiente: logo, login, usuarios y datos propios. Un colegio <b>no ve</b> la información del otro.</p></div>
-  {btn_nueva}
+  <a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>
 </header>
-{aviso_sop}
 {aviso_nuevo}
 <div class='table-card'>
   <table>
@@ -37181,7 +37157,7 @@ def tenants():
       <th>ID</th><th>Logo</th><th>Código</th><th>Nombre</th><th>Sede</th><th>Estado</th>
       <th>Plan</th><th>Users / Est.</th><th>Creada</th><th>Acciones</th>
     </tr>
-    {filas if filas else '<tr><td colspan="10">No hay instituciones.</td></tr>'}
+    {filas if filas else '<tr><td colspan="10">No hay instituciones. Crea la primera.</td></tr>'}
   </table>
 </div>
 """
@@ -37192,11 +37168,6 @@ def tenants():
 def nueva_institucion():
     if rol_actual() == "Cobranza":
         return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
-    if rol_actual() == "Soporte":
-        return acceso_denegado(
-            "Soporte no puede crear ni activar instituciones. "
-            "Solo consulta la lista. El alta de colegios es exclusiva de Gerencia / Ventas tras contrato firmado."
-        )
     if not requiere_soporte_global():
         return redirect("/login")
     mensaje = ""
@@ -38773,12 +38744,6 @@ def exportar_cuenta():
 
 @app.route("/soporte/licencias", methods=["GET", "POST"])
 def soporte_licencias():
-    # Licencias y cobros: NO para técnicos de Soporte
-    if rol_actual() == "Soporte":
-        return acceso_denegado(
-            "Licencias y cobros es exclusivo de Gerencia / Cobranza. "
-            "Soporte no factura ni modifica tarifas."
-        )
     _g = _guard_soporte()
     if _g is not None:
         return _g
@@ -38865,17 +38830,13 @@ def soporte_licencias():
 @app.route("/soporte/cancelaciones", methods=["GET", "POST"])
 @app.route("/gerencia/cancelaciones", methods=["GET", "POST"])
 def soporte_cancelaciones():
-    """Cancelación de servicio: solo Gerencia (validación comercial/legal)."""
+    """Módulo cancelación de servicio: Soporte y Gerencia. Cuenta regresiva + corte facturación."""
     rol = (rol_actual() or "").strip()
-    if rol == "Soporte":
-        return acceso_denegado(
-            "Las cancelaciones de contrato las gestiona Gerencia. "
-            "Soporte no puede dar de baja instituciones."
-        )
-    if not requiere_login() or rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+    if not requiere_login() or rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
         if session.get("soporte"):
-            return acceso_denegado("Cancelaciones reservadas a Gerencia.")
-        return redirect("/gerencia-login")
+            pass
+        else:
+            return redirect("/soporte-login" if "soporte" in (request.path or "") else "/gerencia-login")
     try:
         _procesar_cuenta_regresiva_cancelaciones()
     except Exception:
@@ -64641,7 +64602,32 @@ def aceptar_terminos_pago():
     return redirect(request.form.get("next") or request.referrer or "/pagar")
 
 
-# ── PROCSIS Support (estilo support.apple.com) ───────────────────────────────
+# ── Tickets Soporte → Desarrollo + Support mínimo ────────────────────────────
+
+class TicketDev(db.Model):
+    """Reporte técnico escalado de Soporte a Desarrollo."""
+    __tablename__ = "tickets_dev"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), unique=True, index=True)  # DEV-2026-0001
+    institucion_id = db.Column(db.Integer, index=True)
+    colegio_nombre = db.Column(db.String(200), default="")
+    plan_activo = db.Column(db.String(80), default="")
+    modulo_afectado = db.Column(db.String(160), default="")
+    descripcion = db.Column(db.Text, default="")
+    logs_consola = db.Column(db.Text, default="")
+    evidencia_path = db.Column(db.Text, default="")  # captura/video
+    verificado_suplantacion = db.Column(db.Boolean, default=False)
+    # RADICADO | EN_VALIDACION | RESUELTO
+    estado = db.Column(db.String(30), default="RADICADO", index=True)
+    prioridad = db.Column(db.String(20), default="MEDIA")  # ALTA Premium, MEDIA, BAJA
+    radicado_por = db.Column(db.String(120), default="")
+    asignado_a = db.Column(db.String(120), default="")
+    nota_desarrollo = db.Column(db.Text, default="")  # qué se reparó
+    creado_en = db.Column(db.String(30), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+    resuelto_en = db.Column(db.String(30), default="")
+    aviso_soporte = db.Column(db.Boolean, default=False)
+
 
 class ArticuloAyuda(db.Model):
     __tablename__ = "articulos_ayuda"
@@ -64662,23 +64648,7 @@ class ArticuloAyuda(db.Model):
     publicado_en = db.Column(db.String(30), default="")
 
 
-class DisenoCarnet(db.Model):
-    __tablename__ = "disenos_carnet"
-    id = db.Column(db.Integer, primary_key=True)
-    nombre = db.Column(db.String(120), default="")
-    tipo = db.Column(db.String(40), default="estudiante")
-    color_primario = db.Column(db.String(20), default="#0B2D57")
-    color_acento = db.Column(db.String(20), default="#facc15")
-    logo_path = db.Column(db.Text, default="")
-    texto_frente = db.Column(db.Text, default="")
-    texto_reverso = db.Column(db.Text, default="")
-    css_extra = db.Column(db.Text, default="")
-    activo = db.Column(db.Boolean, default=True)
-    creado_en = db.Column(db.String(30), default="")
-    creado_por = db.Column(db.String(120), default="")
-
-
-def _ensure_support_tables():
+def _ensure_ticket_dev_tables():
     try:
         db.create_all()
     except Exception:
@@ -64688,308 +64658,502 @@ def _ensure_support_tables():
             pass
 
 
-def _slugify_ayuda(titulo):
-    import re as _re
-    s = (titulo or "").strip().lower()
-    s = _re.sub(r"[^\w\s-]", "", s, flags=_re.UNICODE)
-    s = _re.sub(r"[\s_]+", "-", s).strip("-")[:140]
-    return s or ("articulo-" + secrets.token_hex(4))
+def _ticket_dev_codigo():
+    try:
+        n = TicketDev.query.count() + 1
+    except Exception:
+        n = 1
+    return "DEV-%s-%04d" % ((fecha_hoy() or "2026")[:4], n)
 
 
-_APPLE_SUPPORT_CSS = """
-<style>
-.as{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Helvetica,Arial,sans-serif;background:#fff;color:#1d1d1f;min-height:100vh;margin:0}
-.as-nav{border-bottom:1px solid #d2d2d7;background:rgba(255,255,255,.8);backdrop-filter:saturate(180%) blur(20px);position:sticky;top:0;z-index:50}
-.as-nav-in{max-width:980px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.as-nav a{color:#06c;text-decoration:none;font-size:12px}
-.as-nav .as-brand{color:#1d1d1f;font-weight:600;font-size:17px;letter-spacing:-.02em;text-decoration:none}
-.as-hero{max-width:692px;margin:0 auto;padding:56px 22px 24px;text-align:center}
-.as-hero h1{font-size:40px;line-height:1.1;font-weight:600;letter-spacing:-.015em;margin:0 0 12px}
-.as-hero p{font-size:19px;line-height:1.42;color:#6e6e73;margin:0 0 28px}
-.as-search{max-width:680px;margin:0 auto;position:relative}
-.as-search input{width:100%;box-sizing:border-box;padding:14px 18px 14px 44px;border:1px solid #d2d2d7;border-radius:12px;font-size:17px;background:#f5f5f7}
-.as-search input:focus{outline:none;border-color:#06c;background:#fff;box-shadow:0 0 0 4px rgba(0,102,204,.12)}
-.as-search .ico{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#86868b}
-.as-topics{max-width:980px;margin:36px auto 0;padding:0 22px 48px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-@media(max-width:800px){.as-topics{grid-template-columns:1fr}.as-hero h1{font-size:32px}}
-.as-topic h3{font-size:21px;font-weight:600;margin:0 0 8px}.as-topic p{font-size:14px;color:#6e6e73;margin:0}
-.as-topic a.more{color:#06c;font-size:14px;text-decoration:none;display:inline-block;margin-top:8px}
-.as-list{max-width:692px;margin:0 auto;padding:8px 22px 64px}
-.as-list a{display:block;padding:16px 0;border-bottom:1px solid #d2d2d7;text-decoration:none;color:#1d1d1f}
-.as-list a:hover{color:#06c}.as-list .cat{font-size:12px;color:#6e6e73;margin-bottom:4px}
-.as-list h2{font-size:21px;font-weight:600;margin:0}
-.as-art{max-width:692px;margin:0 auto;padding:40px 22px 80px}
-.as-art h1{font-size:40px;font-weight:600;letter-spacing:-.015em;line-height:1.1;margin:0 0 12px}
-.as-art .lead{font-size:19px;line-height:1.42;color:#6e6e73;margin:0 0 28px}
-.as-art .body{font-size:17px;line-height:1.47;white-space:pre-wrap}
-.as-banner{background:#f5f5f7;border-radius:18px;padding:20px 22px;margin:28px 0;font-size:15px}
-.as-banner a{color:#06c;font-weight:500}
-.as-foot{border-top:1px solid #d2d2d7;padding:24px 22px;text-align:center;font-size:12px;color:#6e6e73}
-.as-foot a{color:#06c;text-decoration:none}
-</style>
-"""
+_MODULOS_DEV = [
+    "/notas/planilla", "/notas", "/portal", "/familia", "/asistencia",
+    "/qr", "/porteria", "/api/wati", "API WATI", "/login", "/reportes",
+    "/simat", "/carnes", "/coordinacion", "/otro",
+]
 
 
+def _prioridad_por_plan(plan):
+    p = (plan or "").lower()
+    if "premium" in p or "plus" in p:
+        return "ALTA"
+    if "institucional" in p:
+        return "MEDIA"
+    return "MEDIA"
+
+
+@app.route("/soporte/ticket-dev", methods=["GET", "POST"])
+def soporte_ticket_dev_nuevo():
+    """Soporte radica falla de sistema hacia Desarrollo."""
+    if not requiere_login() or rol_actual() != "Soporte":
+        return redirect("/soporte-login")
+    _ensure_ticket_dev_tables()
+    msg = err = ""
+    try:
+        colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    except Exception:
+        colegios = []
+    if request.method == "POST":
+        iid = request.form.get("institucion_id")
+        inst = Institucion.query.get(int(iid)) if iid and str(iid).isdigit() else None
+        modulo = (request.form.get("modulo_afectado") or "").strip()[:160]
+        desc = (request.form.get("descripcion") or "").strip()
+        logs = (request.form.get("logs_consola") or "").strip()
+        verif = request.form.get("verificado_suplantacion") == "1"
+        if not inst:
+            err = "Seleccione el colegio."
+        elif not modulo or not desc:
+            err = "Módulo afectado y descripción técnica son obligatorios."
+        else:
+            evidencia = ""
+            f = request.files.get("evidencia")
+            if f and f.filename:
+                try:
+                    folder = os.path.join(app.root_path, "static", "uploads", "tickets_dev")
+                    os.makedirs(folder, exist_ok=True)
+                    ext = (os.path.splitext(f.filename)[1] or ".png").lower()[:8]
+                    if ext not in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".pdf"):
+                        ext = ".png"
+                    fname = "tdev_%s_%s%s" % (secrets.token_hex(6), (fecha_hoy() or "").replace("-", ""), ext)
+                    path = os.path.join(folder, fname)
+                    f.save(path)
+                    evidencia = "/static/uploads/tickets_dev/" + fname
+                except Exception as ex:
+                    err = "No se pudo guardar evidencia: " + str(ex)[:80]
+            if not err:
+                plan = (getattr(inst, "plan", None) or "Basico")
+                ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
+                t = TicketDev(
+                    codigo=_ticket_dev_codigo(),
+                    institucion_id=inst.id,
+                    colegio_nombre=(inst.nombre or inst.codigo or "")[:200],
+                    plan_activo=plan[:80],
+                    modulo_afectado=modulo,
+                    descripcion=desc,
+                    logs_consola=logs,
+                    evidencia_path=evidencia,
+                    verificado_suplantacion=verif,
+                    estado="RADICADO",
+                    prioridad=_prioridad_por_plan(plan),
+                    radicado_por=session.get("usuario") or "Soporte",
+                    creado_en=ahora_s,
+                    actualizado_en=ahora_s,
+                )
+                db.session.add(t)
+                db.session.commit()
+                try:
+                    registrar_auditoria(
+                        "Ticket Dev radicado",
+                        "%s · %s · módulo %s" % (t.codigo, t.colegio_nombre, t.modulo_afectado),
+                    )
+                except Exception:
+                    pass
+                msg = "Ticket %s radicado. Desarrollo ya puede verlo en su bandeja." % t.codigo
+    opts = "".join(
+        '<option value="%s">%s — plan %s</option>' % (
+            i.id, _esc(i.nombre or i.codigo), _esc(i.plan or "Basico")
+        ) for i in colegios
+    )
+    mod_opts = "".join('<option value="%s">%s</option>' % (_esc(m), _esc(m)) for m in _MODULOS_DEV)
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Escalar a Desarrollo</h1>
+  <p>Use este formulario solo si la falla es del sistema (no error de uso del colegio).</p>
+</div>
+<a class="btn" href="/soporte/mis-tickets-dev">Mis tickets</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+<section class="role-panel" style="max-width:720px">
+<form method="POST" enctype="multipart/form-data" style="display:grid;gap:12px">
+  <label><b>Colegio</b></label>
+  <select name="institucion_id" required><option value="">— Seleccionar —</option>{opts}</select>
+  <p class="mini-text">El plan activo se toma automáticamente del colegio (prioridad para Desarrollo).</p>
+  <label><b>Módulo afectado</b></label>
+  <select name="modulo_afectado" required><option value="">— Ruta / módulo —</option>{mod_opts}</select>
+  <label><b>Descripción técnica</b> (qué hace el sistema frente al error)</label>
+  <textarea name="descripcion" rows="5" required placeholder="Ej: Al guardar planilla del periodo 2 responde 500 y no persiste la nota."></textarea>
+  <label><b>Logs del servidor / consola</b></label>
+  <textarea name="logs_consola" rows="4" placeholder="Pegue el Error 500 o traceback de Logs de errores"></textarea>
+  <label><b>Captura o video</b> (pantallazo del Rector)</label>
+  <input type="file" name="evidencia" accept="image/*,video/*,.pdf">
+  <label style="display:flex;gap:10px;align-items:center">
+    <input type="checkbox" name="verificado_suplantacion" value="1">
+    Error verificado mediante <b>suplantación de usuario</b>
+  </label>
+  <button class="btn" type="submit" style="background:#b91c1c;color:#fff;font-weight:800">Radicar a Desarrollo</button>
+</form>
+</section>"""
+    return page("Escalar a Desarrollo", shell_soporte(content))
+
+
+@app.route("/soporte/mis-tickets-dev")
+def soporte_mis_tickets_dev():
+    if not requiere_login() or rol_actual() != "Soporte":
+        return redirect("/soporte-login")
+    _ensure_ticket_dev_tables()
+    user = session.get("usuario") or ""
+    try:
+        tickets = TicketDev.query.filter_by(radicado_por=user).order_by(TicketDev.id.desc()).limit(80).all()
+    except Exception:
+        tickets = TicketDev.query.order_by(TicketDev.id.desc()).limit(80).all()
+    def badge(e):
+        e = (e or "").upper()
+        if e == "RADICADO":
+            return '<span style="background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">🔴 Radicado</span>'
+        if e == "EN_VALIDACION":
+            return '<span style="background:#fef9c3;color:#854d0e;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">🟡 En validación</span>'
+        if e == "RESUELTO":
+            return '<span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">🟢 Resuelto</span>'
+        return _esc(e)
+    filas = "".join(
+        "<tr><td><a href='/soporte/ticket-dev/%s'>%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (t.id, _esc(t.codigo), _esc(t.colegio_nombre), _esc(t.modulo_afectado), badge(t.estado),
+           _esc(t.prioridad), _esc(t.creado_en or ""))
+        for t in tickets
+    ) or "<tr><td colspan='6'>Sin tickets radicados aún.</td></tr>"
+    avisos = [t for t in tickets if t.estado == "RESUELTO" and t.aviso_soporte]
+    alertas = "".join(
+        '<div class="msg ok">✅ El error en <b>%s</b> (%s) fue solucionado. Ya puedes avisar al Rector. '
+        '<a href="/soporte/ticket-dev/%s">Ver detalle</a></div>'
+        % (_esc(t.colegio_nombre), _esc(t.codigo), t.id) for t in avisos
+    )
+    content = f"""
+<header class="role-hero"><div><h1>Mis tickets a Desarrollo</h1>
+<p>Estado en tiempo real. Cuando pase a 🟢 Resuelto, avise al colegio.</p></div>
+<a class="btn" href="/soporte/ticket-dev">+ Nuevo</a></header>
+{alertas}
+<section class="role-panel">
+<table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Módulo</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr>
+{filas}
+</table>
+</section>"""
+    return page("Mis tickets Dev", shell_soporte(content))
+
+
+@app.route("/soporte/ticket-dev/<int:tid>")
+def soporte_ticket_dev_detalle(tid):
+    if not requiere_login() or rol_actual() not in ("Soporte", "Desarrollador", "Developer", "Gerente", "Superadmin", "Administrador", "Gerencia"):
+        return redirect("/login")
+    _ensure_ticket_dev_tables()
+    t = TicketDev.query.get(tid)
+    if not t:
+        return acceso_denegado("Ticket no encontrado.")
+    msg_estado = ""
+    if t.estado == "EN_VALIDACION":
+        msg_estado = '<div class="msg" style="background:#fef9c3;border:1px solid #fde047">El equipo de ingeniería está trabajando en la solución.</div>'
+    elif t.estado == "RESUELTO":
+        msg_estado = '<div class="msg ok">Resuelto en producción. %s</div>' % _esc(t.nota_desarrollo or "")
+    ev = ('<p><a href="%s" target="_blank">Ver evidencia</a></p>' % _esc(t.evidencia_path)) if t.evidencia_path else ""
+    content = f"""
+<header class="role-hero"><div><h1>{_esc(t.codigo)}</h1>
+<p>{_esc(t.colegio_nombre)} · Plan {_esc(t.plan_activo)} · Prioridad {_esc(t.prioridad)}</p></div>
+<a class="btn" href="/soporte/mis-tickets-dev">Volver</a></header>
+{msg_estado}
+<section class="role-panel">
+<p><b>Estado:</b> {_esc(t.estado)} · <b>Módulo:</b> {_esc(t.modulo_afectado)}</p>
+<p><b>Radicado por:</b> {_esc(t.radicado_por)} · {_esc(t.creado_en)}</p>
+<p><b>Suplantación verificada:</b> {"Sí" if t.verificado_suplantacion else "No"}</p>
+<h3>Descripción técnica</h3>
+<pre style="white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:8px">{_esc(t.descripcion)}</pre>
+<h3>Logs</h3>
+<pre style="white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-size:12px">{_esc(t.logs_consola or "—")}</pre>
+{ev}
+{"<h3>Nota de Desarrollo</h3><p>"+_esc(t.nota_desarrollo)+"</p>" if t.nota_desarrollo else ""}
+</section>"""
+    if rol_actual() == "Soporte":
+        return page(t.codigo, shell_soporte(content))
+    return page(t.codigo, shell(content))
+
+
+@app.route("/desarrollo/tickets")
+def desarrollo_tickets():
+    """Bandeja de ingeniería: tickets de Soporte."""
+    if not requiere_login() or rol_actual() not in ("Desarrollador", "Developer", "Superadmin"):
+        return redirect("/dev-console-login")
+    _ensure_ticket_dev_tables()
+    filtro = (request.args.get("estado") or "").strip().upper()
+    try:
+        q = TicketDev.query
+        if filtro in ("RADICADO", "EN_VALIDACION", "RESUELTO"):
+            q = q.filter_by(estado=filtro)
+        tickets = q.order_by(TicketDev.id.desc()).limit(100).all()
+    except Exception:
+        tickets = []
+    n_rad = TicketDev.query.filter_by(estado="RADICADO").count() if tickets is not None else 0
+    try:
+        n_rad = TicketDev.query.filter_by(estado="RADICADO").count()
+        n_val = TicketDev.query.filter_by(estado="EN_VALIDACION").count()
+        n_res = TicketDev.query.filter_by(estado="RESUELTO").count()
+    except Exception:
+        n_rad = n_val = n_res = 0
+
+    def badge(e):
+        e = (e or "").upper()
+        if e == "RADICADO":
+            return "🔴 Radicado"
+        if e == "EN_VALIDACION":
+            return "🟡 En validación"
+        if e == "RESUELTO":
+            return "🟢 Resuelto"
+        return e
+
+    filas = "".join(
+        "<tr style='%s'><td><a href='/desarrollo/tickets/%s'><b>%s</b></a></td><td>%s</td><td>%s</td>"
+        "<td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (
+            "background:#fef2f2" if t.estado == "RADICADO" else "",
+            t.id, _esc(t.codigo), _esc(t.colegio_nombre), _esc(t.plan_activo),
+            _esc(t.modulo_afectado), badge(t.estado), _esc(t.prioridad), _esc(t.creado_en or ""),
+        )
+        for t in tickets
+    ) or "<tr><td colspan='7'>Sin tickets.</td></tr>"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Tickets de ingeniería</h1>
+  <p>Fallas de sistema escaladas por Soporte. Priorice planes Premium / QR Plus.</p>
+</div></header>
+<section class="role-grid">
+  <div class="role-panel"><h2>{n_rad}</h2><p>🔴 Radicados</p></div>
+  <div class="role-panel"><h2>{n_val}</h2><p>🟡 En validación</p></div>
+  <div class="role-panel"><h2>{n_res}</h2><p>🟢 Resueltos</p></div>
+</section>
+<p style="margin:12px 0">
+  <a class="btn" href="/desarrollo/tickets">Todos</a>
+  <a class="btn" href="/desarrollo/tickets?estado=RADICADO">Radicados</a>
+  <a class="btn" href="/desarrollo/tickets?estado=EN_VALIDACION">En validación</a>
+  <a class="btn" href="/desarrollo/tickets?estado=RESUELTO">Resueltos</a>
+</p>
+<section class="role-panel">
+<table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Plan</th><th>Módulo</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr>
+{filas}
+</table>
+</section>"""
+    return page("Tickets Dev", shell(content))
+
+
+@app.route("/desarrollo/tickets/<int:tid>", methods=["GET", "POST"])
+def desarrollo_ticket_detalle(tid):
+    if not requiere_login() or rol_actual() not in ("Desarrollador", "Developer", "Superadmin"):
+        return redirect("/dev-console-login")
+    _ensure_ticket_dev_tables()
+    t = TicketDev.query.get(tid)
+    if not t:
+        return acceso_denegado("Ticket no encontrado.")
+    msg = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        nota = (request.form.get("nota_desarrollo") or "").strip()
+        ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
+        user = session.get("usuario") or "Desarrollo"
+        if accion == "validacion":
+            t.estado = "EN_VALIDACION"
+            t.asignado_a = user
+            t.actualizado_en = ahora_s
+            if nota:
+                t.nota_desarrollo = nota
+            db.session.commit()
+            msg = "Estado: En validación / corrección."
+        elif accion == "resolver":
+            t.estado = "RESUELTO"
+            t.asignado_a = user
+            t.nota_desarrollo = nota or t.nota_desarrollo or "Fix desplegado en producción."
+            t.resuelto_en = ahora_s
+            t.actualizado_en = ahora_s
+            t.aviso_soporte = True
+            db.session.commit()
+            # Auditoría en historial del colegio
+            try:
+                registrar_auditoria(
+                    "Ticket Dev resuelto",
+                    "%s · colegio %s · módulo %s · fix: %s"
+                    % (t.codigo, t.colegio_nombre, t.modulo_afectado, (t.nota_desarrollo or "")[:200]),
+                )
+            except Exception:
+                pass
+            msg = "Marcado RESUELTO. Soporte recibió aviso automático."
+        elif accion == "guardar_nota":
+            t.nota_desarrollo = nota
+            t.actualizado_en = ahora_s
+            db.session.commit()
+            msg = "Nota guardada."
+    ev = ('<p><a href="%s" target="_blank">Ver evidencia</a></p>' % _esc(t.evidencia_path)) if t.evidencia_path else ""
+    content = f"""
+<header class="role-hero"><div><h1>{_esc(t.codigo)}</h1>
+<p>{_esc(t.colegio_nombre)} · {_esc(t.plan_activo)} · Prioridad <b>{_esc(t.prioridad)}</b></p></div>
+<a class="btn" href="/desarrollo/tickets">Bandeja</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel">
+<p><b>Estado:</b> {_esc(t.estado)} · <b>Módulo:</b> {_esc(t.modulo_afectado)}</p>
+<p><b>Radicado por Soporte:</b> {_esc(t.radicado_por)} · {_esc(t.creado_en)}</p>
+<p><b>Suplantación:</b> {"Verificada" if t.verificado_suplantacion else "No marcada"}</p>
+<h3>Descripción</h3>
+<pre style="white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:8px">{_esc(t.descripcion)}</pre>
+<h3>Logs</h3>
+<pre style="white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-size:12px">{_esc(t.logs_consola or "—")}</pre>
+{ev}
+</section>
+<section class="role-panel" style="max-width:640px">
+<form method="POST" style="display:grid;gap:10px">
+<label><b>Nota de ingeniería</b> (archivo/función reparada)</label>
+<textarea name="nota_desarrollo" rows="3" placeholder="Ej: Corregido null en planilla_guardar línea 420">{_esc(t.nota_desarrollo or "")}</textarea>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+  <button class="btn" name="accion" value="validacion" type="submit" style="background:#ca8a04;color:#fff">🟡 En validación</button>
+  <button class="btn" name="accion" value="resolver" type="submit" style="background:#15803d;color:#fff">🟢 Resuelto en producción</button>
+  <button class="btn" name="accion" value="guardar_nota" type="submit">Guardar nota</button>
+</div>
+</form>
+</section>"""
+    return page(t.codigo, shell(content))
+
+
+@app.route("/gerencia/calidad-dev")
+def gerencia_calidad_dev():
+    """Tablero de control de calidad: estadísticas de tickets Dev."""
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_ticket_dev_tables()
+    try:
+        total = TicketDev.query.count()
+        n_rad = TicketDev.query.filter_by(estado="RADICADO").count()
+        n_val = TicketDev.query.filter_by(estado="EN_VALIDACION").count()
+        n_res = TicketDev.query.filter_by(estado="RESUELTO").count()
+        alta = TicketDev.query.filter_by(prioridad="ALTA").filter(TicketDev.estado != "RESUELTO").count()
+        recientes = TicketDev.query.order_by(TicketDev.id.desc()).limit(15).all()
+    except Exception:
+        total = n_rad = n_val = n_res = alta = 0
+        recientes = []
+    filas = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (_esc(t.codigo), _esc(t.colegio_nombre), _esc(t.modulo_afectado),
+           _esc(t.estado), _esc(t.prioridad), _esc(t.creado_en or ""))
+        for t in recientes
+    ) or "<tr><td colspan='6'>Sin datos</td></tr>"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Calidad · Tickets Desarrollo</h1>
+  <p>Supervisión en tiempo real. Gerencia no atiende el ticket; ve métricas y cuellos de botella.</p>
+</div>
+<a class="btn" href="/gerencia/hq">HQ</a></header>
+<section class="role-grid">
+  <div class="role-panel"><h2>{total}</h2><p>Total reportes</p></div>
+  <div class="role-panel"><h2 style="color:#b91c1c">{n_rad}</h2><p>🔴 Radicados (cola)</p></div>
+  <div class="role-panel"><h2 style="color:#a16207">{n_val}</h2><p>🟡 En validación</p></div>
+  <div class="role-panel"><h2 style="color:#15803d">{n_res}</h2><p>🟢 Resueltos</p></div>
+  <div class="role-panel"><h2>{alta}</h2><p>Prioridad ALTA abiertos</p></div>
+</section>
+<section class="role-panel" style="margin-top:14px">
+<h2>Últimos tickets</h2>
+<table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Módulo</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr>
+{filas}
+</table>
+</section>"""
+    return page("Calidad Dev", shell(content))
+
+
+# Support público mínimo (si no estaba desplegado)
 @app.route("/support")
 @app.route("/support/")
 def support_home():
-    _ensure_support_tables()
+    _ensure_ticket_dev_tables()
     q = (request.args.get("q") or "").strip()
     try:
         query = ArticuloAyuda.query.filter_by(estado="PUBLICADO")
         if q:
             like = "%" + q + "%"
-            query = query.filter(db.or_(
-                ArticuloAyuda.titulo.ilike(like),
-                ArticuloAyuda.resumen.ilike(like),
-                ArticuloAyuda.cuerpo.ilike(like),
-            ))
-        arts = query.order_by(ArticuloAyuda.id.desc()).limit(40).all()
+            query = query.filter(db.or_(ArticuloAyuda.titulo.ilike(like), ArticuloAyuda.cuerpo.ilike(like)))
+        arts = query.order_by(ArticuloAyuda.id.desc()).limit(30).all()
     except Exception:
         arts = []
     items = "".join(
-        '<a href="/support/a/%s"><div class="cat">%s</div><h2>%s</h2></a>'
-        % (_esc(a.slug or a.id), _esc(a.categoria or "Support"), _esc(a.titulo))
+        '<a href="/support/a/%s" style="display:block;padding:14px 0;border-bottom:1px solid #d2d2d7;color:#1d1d1f;text-decoration:none"><b>%s</b><br><span style="color:#6e6e73;font-size:14px">%s</span></a>'
+        % (_esc(a.slug or a.id), _esc(a.titulo), _esc(a.categoria or ""))
         for a in arts
-    ) or '<p style="color:#6e6e73;text-align:center;padding:32px 0">Aún no hay artículos publicados. Soporte puede redactarlos en /support/editor.</p>'
+    ) or '<p style="color:#6e6e73">Aún no hay artículos. Soporte puede redactar en /support/editor.</p>'
     body = f"""
-{_APPLE_SUPPORT_CSS}
+<style>
+.as{{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;max-width:692px;margin:0 auto;padding:48px 22px}}
+.as h1{{font-size:40px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px}}
+.as p.lead{{font-size:19px;color:#6e6e73;margin:0 0 28px}}
+.as input{{width:100%;padding:14px;border:1px solid #d2d2d7;border-radius:12px;font-size:17px;background:#f5f5f7;box-sizing:border-box}}
+</style>
 <div class="as">
-  <div class="as-nav"><div class="as-nav-in">
-    <a class="as-brand" href="/support">PROCSIS Support</a>
-    <div><a href="/support">Support</a> · <a href="/login">Acceso</a> · <a href="/procsis">PROCSIS</a> · <a href="/pqr">PQR</a></div>
-  </div></div>
-  <div class="as-hero">
-    <h1>Support</h1>
-    <p>Respuestas sobre EduTrack, asistencia, notas y el portal familiar.</p>
-    <form class="as-search" method="GET" action="/support">
-      <span class="ico">⌕</span>
-      <input name="q" value="{_esc(q)}" placeholder="Buscar en Support">
-    </form>
-  </div>
-  <div class="as-topics">
-    <div class="as-topic"><h3>Asistencia y QR</h3><p>Ingresos, retardos y portería.</p><a class="more" href="/support?q=asistencia">Ver ›</a></div>
-    <div class="as-topic"><h3>Notas y planilla</h3><p>Calificaciones y reportes.</p><a class="more" href="/support?q=notas">Ver ›</a></div>
-    <div class="as-topic"><h3>Cuentas y acceso</h3><p>Claves y portal familiar.</p><a class="more" href="/support?q=clave">Ver ›</a></div>
-  </div>
-  <div class="as-list">{items}</div>
-  <div class="as-foot">Copyright © 2026 PROCSIS · <a href="/support">support.procsis.com</a></div>
+  <h1>Support</h1>
+  <p class="lead">Guías y respuestas sobre EduTrack.</p>
+  <form method="GET" action="/support" style="margin-bottom:28px"><input name="q" value="{_esc(q)}" placeholder="Buscar en Support"></form>
+  {items}
+  <p style="margin-top:32px;font-size:12px;color:#86868b">© 2026 PROCSIS · support.procsis.com</p>
 </div>"""
     return page("PROCSIS Support", body)
 
 
 @app.route("/support/a/<slug>")
 def support_articulo(slug):
-    _ensure_support_tables()
+    _ensure_ticket_dev_tables()
     a = ArticuloAyuda.query.filter_by(slug=slug).first()
-    if not a or ((a.estado or "") != "PUBLICADO" and rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia")):
-        return page("Support", f"{_APPLE_SUPPORT_CSS}<div class='as'><div class='as-art'><h1>Artículo no disponible</h1><p class='lead'><a href='/support'>Volver a Support</a></p></div></div>")
-    banner = f'<div class="as-banner">{a.banner_upgrade}</div>' if (a.banner_upgrade or "").strip() else ""
+    if not a or (a.estado != "PUBLICADO" and rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia")):
+        return page("Support", "<div style='padding:40px;text-align:center'><h1>No disponible</h1><a href='/support'>Volver</a></div>")
     body = f"""
-{_APPLE_SUPPORT_CSS}
-<div class="as">
-  <div class="as-nav"><div class="as-nav-in">
-    <a class="as-brand" href="/support">PROCSIS Support</a>
-    <a href="/support">‹ Support</a>
-  </div></div>
-  <article class="as-art">
-    <h1>{_esc(a.titulo)}</h1>
-    <p class="lead">{_esc(a.resumen or a.categoria or '')}</p>
-    {banner}
-    <div class="body">{_esc(a.cuerpo or '')}</div>
-  </article>
-  <div class="as-foot">Copyright © 2026 PROCSIS · <a href="/support">support.procsis.com</a></div>
+<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:692px;margin:0 auto;padding:40px 22px">
+  <a href="/support" style="color:#06c;text-decoration:none">‹ Support</a>
+  <h1 style="font-size:36px;font-weight:600;margin:16px 0 12px">{_esc(a.titulo)}</h1>
+  <p style="color:#6e6e73;font-size:18px">{_esc(a.resumen or "")}</p>
+  <div style="font-size:17px;line-height:1.5;white-space:pre-wrap;margin-top:24px">{_esc(a.cuerpo or "")}</div>
 </div>"""
     return page(a.titulo or "Support", body)
 
 
 @app.route("/support/editor", methods=["GET", "POST"])
 def support_editor():
-    if not requiere_login():
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
         return redirect("/soporte-login")
-    rol = rol_actual() or ""
-    if rol not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
-        return acceso_denegado("Solo Soporte (redacción) y Gerencia (publicación).")
-    _ensure_support_tables()
-    es_g = rol in ("Gerente", "Superadmin", "Administrador", "Gerencia")
+    _ensure_ticket_dev_tables()
+    es_g = rol_actual() in ("Gerente", "Superadmin", "Administrador", "Gerencia")
     msg = ""
-    edit_id = request.args.get("id") or request.form.get("id")
-    art = ArticuloAyuda.query.get(int(edit_id)) if edit_id and str(edit_id).isdigit() else None
     if request.method == "POST":
-        accion = (request.form.get("accion") or "guardar").strip()
         titulo = (request.form.get("titulo") or "").strip()[:255]
-        resumen = (request.form.get("resumen") or "").strip()[:500]
         cuerpo = (request.form.get("cuerpo") or "").strip()
-        categoria = (request.form.get("categoria") or "General").strip()[:80]
-        sensible = request.form.get("sensible") == "1"
-        banner = (request.form.get("banner_upgrade") or "").strip() if es_g else (art.banner_upgrade if art else "")
-        ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
-        user = session.get("usuario") or rol
-        if accion == "guardar" and titulo:
-            if not art:
-                art = ArticuloAyuda(slug=_slugify_ayuda(titulo), titulo=titulo, estado="BORRADOR", creado_por=user, creado_en=ahora_s)
-                base, n = art.slug, 1
-                while ArticuloAyuda.query.filter_by(slug=art.slug).first():
-                    art.slug = "%s-%s" % (base, n)
-                    n += 1
-                db.session.add(art)
-            art.titulo, art.resumen, art.cuerpo, art.categoria, art.sensible = titulo, resumen, cuerpo, categoria, sensible
-            if es_g:
-                art.banner_upgrade = banner
-            art.actualizado_por, art.actualizado_en = user, ahora_s
-            if art.estado == "PUBLICADO" and not es_g and sensible:
-                art.estado = "BORRADOR"
+        categoria = (request.form.get("categoria") or "General")[:80]
+        accion = request.form.get("accion") or "guardar"
+        if titulo and cuerpo:
+            import re as _re
+            slug = _re.sub(r"[\s_]+", "-", _re.sub(r"[^\w\s-]", "", titulo.lower())).strip("-")[:140]
+            art = ArticuloAyuda(slug=slug or secrets.token_hex(4), titulo=titulo, cuerpo=cuerpo,
+                                categoria=categoria, estado="BORRADOR",
+                                creado_por=session.get("usuario") or "", creado_en=fecha_hoy() or "")
+            base, n = art.slug, 1
+            while ArticuloAyuda.query.filter_by(slug=art.slug).first():
+                art.slug = "%s-%s" % (base, n)
+                n += 1
+            if accion == "publicar" and es_g:
+                art.estado = "PUBLICADO"
+                art.publicado_por = session.get("usuario") or ""
+                art.publicado_en = fecha_hoy() or ""
+            db.session.add(art)
             db.session.commit()
-            msg = "Guardado."
-        elif accion == "publicar" and es_g and art:
-            art.estado, art.publicado_por, art.publicado_en = "PUBLICADO", user, ahora_s
-            if banner is not None:
-                art.banner_upgrade = banner
-            db.session.commit()
-            msg = "Publicado."
-        elif accion == "despublicar" and es_g and art:
-            art.estado = "BORRADOR"
-            db.session.commit()
-            msg = "Borrador."
-    try:
-        lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(60).all()
-    except Exception:
-        lista = []
-    filas = "".join(
-        "<tr><td>%s</td><td>%s</td><td>%s</td><td><a href='/support/editor?id=%s'>Editar</a></td></tr>"
-        % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria), a.id) for a in lista
-    ) or "<tr><td colspan='4'>Sin artículos</td></tr>"
-    fv = {
-        "id": art.id if art else "", "titulo": art.titulo if art else "", "resumen": art.resumen if art else "",
-        "cuerpo": art.cuerpo if art else "", "categoria": art.categoria if art else "General",
-        "sensible": bool(art.sensible) if art else False, "banner": art.banner_upgrade if art else "",
-    }
-    gbtn = ('<button name="accion" value="publicar" type="submit" class="btn">Publicar</button>'
-            '<button name="accion" value="despublicar" type="submit" class="btn">Borrador</button>') if es_g and art else ""
-    ban = f'<label>Banner comercial (Gerencia)</label><textarea name="banner_upgrade" rows="2">{_esc(fv["banner"])}</textarea>' if es_g else ""
+            msg = "Guardado (%s)." % art.estado
+    lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(40).all()
+    filas = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria)) for a in lista) or "<tr><td colspan='3'>—</td></tr>"
+    pub = '<button name="accion" value="publicar" type="submit" class="btn">Publicar</button>' if es_g else ""
     content = f"""
-<header class="role-hero"><div><h1>Support · Editor</h1>
-<p>Soporte redacta · Gerencia publica · <a href="/support">/support</a></p></div></header>
+<header class="role-hero"><div><h1>Support · Editor</h1></div><a class="btn" href="/support">Ver público</a></header>
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel">
-<form method="POST" style="display:grid;gap:10px;max-width:720px">
-<input type="hidden" name="id" value="{fv['id']}">
-<label>Título</label><input name="titulo" required value="{_esc(fv['titulo'])}">
-<label>Categoría</label><input name="categoria" value="{_esc(fv['categoria'])}">
-<label>Resumen</label><input name="resumen" value="{_esc(fv['resumen'])}">
-<label>Contenido</label><textarea name="cuerpo" rows="12" required>{_esc(fv['cuerpo'])}</textarea>
-<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="sensible" value="1" {"checked" if fv['sensible'] else ""}> Sensible (revisión Gerencia)</label>
-{ban}
-<div style="display:flex;gap:8px;flex-wrap:wrap">
-<button name="accion" value="guardar" type="submit" class="btn">Guardar</button>{gbtn}
-<a class="btn" href="/support/editor">Nuevo</a></div>
+<section class="role-panel" style="max-width:640px">
+<form method="POST" style="display:grid;gap:10px">
+<label>Título</label><input name="titulo" required>
+<label>Categoría</label><input name="categoria" value="General">
+<label>Contenido</label><textarea name="cuerpo" rows="10" required></textarea>
+<div style="display:flex;gap:8px"><button name="accion" value="guardar" type="submit" class="btn">Guardar borrador</button>{pub}</div>
 </form></section>
-<section class="role-panel"><table class="table" style="width:100%"><tr><th>Título</th><th>Estado</th><th>Cat.</th><th></th></tr>{filas}</table></section>"""
+<section class="role-panel"><table class="table" style="width:100%"><tr><th>Título</th><th>Estado</th><th>Cat.</th></tr>{filas}</table></section>"""
     return page("Editor Support", shell(content))
-
-
-@app.route("/gerencia/support-moderar")
-def gerencia_support_moderar():
-    try:
-        g = _guard_gerencia()
-        if g:
-            return g
-    except Exception:
-        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return acceso_denegado()
-    return redirect("/support/editor")
-
-
-@app.route("/gerencia/diseno-carnes", methods=["GET", "POST"])
-def gerencia_diseno_carnes():
-    try:
-        g = _guard_gerencia()
-        if g:
-            return g
-    except Exception:
-        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return acceso_denegado()
-    _ensure_support_tables()
-    msg = ""
-    if request.method == "POST":
-        try:
-            db.session.add(DisenoCarnet(
-                nombre=(request.form.get("nombre") or "Plantilla")[:120], tipo="estudiante",
-                color_primario=(request.form.get("color_primario") or "#0B2D57")[:20],
-                color_acento=(request.form.get("color_acento") or "#facc15")[:20],
-                texto_frente=(request.form.get("texto_frente") or "")[:2000],
-                texto_reverso=(request.form.get("texto_reverso") or "")[:2000],
-                activo=True, creado_en=fecha_hoy(), creado_por=session.get("usuario") or "Gerencia",
-            ))
-            db.session.commit()
-            msg = "Diseño guardado."
-        except Exception as ex:
-            msg = str(ex)[:100]
-    try:
-        items = DisenoCarnet.query.filter_by(tipo="estudiante").order_by(DisenoCarnet.id.desc()).limit(20).all()
-    except Exception:
-        items = []
-    rows = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(i.nombre), _esc(i.color_primario), _esc(i.color_acento)) for i in items) or "<tr><td colspan='3'>—</td></tr>"
-    content = f"""
-<header class="role-hero"><div><h1>Diseño de carnés</h1></div><a class="btn" href="/gerencia/hq">HQ</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel" style="max-width:520px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Nombre</label><input name="nombre" value="Plantilla institucional" required>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-<div><label>Primario</label><input type="color" name="color_primario" value="#0B2D57"></div>
-<div><label>Acento</label><input type="color" name="color_acento" value="#facc15"></div></div>
-<label>Texto frente</label><textarea name="texto_frente" rows="2"></textarea>
-<label>Texto reverso</label><textarea name="texto_reverso" rows="2"></textarea>
-<button class="btn" type="submit">Guardar</button></form></section>
-<section class="role-panel"><table class="table" style="width:100%"><tr><th>Nombre</th><th>Primario</th><th>Acento</th></tr>{rows}</table></section>"""
-    return page("Diseño carnés", shell(content))
-
-
-@app.route("/gerencia/carnes-corporativos", methods=["GET", "POST"])
-def gerencia_carnes_corporativos():
-    try:
-        g = _guard_gerencia()
-        if g:
-            return g
-    except Exception:
-        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return acceso_denegado()
-    _ensure_support_tables()
-    msg = ""
-    if request.method == "POST":
-        try:
-            db.session.add(DisenoCarnet(
-                nombre=(request.form.get("nombre") or "PROCSIS Staff")[:120], tipo="corporativo",
-                color_primario=(request.form.get("color_primario") or "#0B2D57")[:20],
-                color_acento=(request.form.get("color_acento") or "#F2C12E")[:20],
-                texto_frente=(request.form.get("texto_frente") or "")[:2000],
-                texto_reverso=(request.form.get("texto_reverso") or "")[:2000],
-                activo=True, creado_en=fecha_hoy(), creado_por=session.get("usuario") or "Gerencia",
-            ))
-            db.session.commit()
-            msg = "Plantilla corporativa guardada."
-        except Exception as ex:
-            msg = str(ex)[:100]
-    try:
-        items = DisenoCarnet.query.filter_by(tipo="corporativo").order_by(DisenoCarnet.id.desc()).limit(20).all()
-    except Exception:
-        items = []
-    rows = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(i.nombre), _esc(i.color_primario), _esc(i.color_acento)) for i in items) or "<tr><td colspan='3'>—</td></tr>"
-    content = f"""
-<header class="role-hero"><div><h1>Carnés corporativos</h1></div><a class="btn" href="/gerencia/hq">HQ</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel" style="max-width:520px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Nombre</label><input name="nombre" value="PROCSIS Staff" required>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-<div><label>Primario</label><input type="color" name="color_primario" value="#0B2D57"></div>
-<div><label>Acento</label><input type="color" name="color_acento" value="#F2C12E"></div></div>
-<label>Texto frente</label><textarea name="texto_frente" rows="2">Personal PROCSIS</textarea>
-<label>Texto reverso</label><textarea name="texto_reverso" rows="2">Propiedad de PROCSIS</textarea>
-<button class="btn" type="submit">Guardar</button></form></section>
-<section class="role-panel"><table class="table" style="width:100%"><tr><th>Nombre</th><th>Primario</th><th>Acento</th></tr>{rows}</table></section>"""
-    return page("Carnés corporativos", shell(content))
 
 
 if __name__ == "__main__":
