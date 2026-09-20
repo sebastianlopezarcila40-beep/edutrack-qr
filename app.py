@@ -3572,15 +3572,12 @@ _APPLE_SHELL_CSS = (
     "html,body{font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"Segoe UI\",sans-serif!important;"
     "background:#f5f5f7!important;margin:0;padding:0;overflow-x:hidden}"
     ".app-layout-enterprise{display:flex;width:100%;min-height:100vh}"
-    ".sidebar-apple-glass{width:260px;height:100vh!important;max-height:100vh!important;min-height:0!important;"
-    "background:rgba(0,32,96,.92);"
+    ".sidebar-apple-glass{width:260px;min-height:100vh;background:rgba(0,32,96,.92);"
     "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);"
-    "border-right:1px solid rgba(255,255,255,.1);padding:20px 14px 40px;box-sizing:border-box;"
-    "position:fixed;left:0;top:0;bottom:0;z-index:9999;color:#f5f5f7;"
-    "overflow-y:scroll!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;"
-    "display:block!important}"
-    ".sidebar-apple-glass nav{display:block;padding-bottom:28px}"
-    ".brand-container-apple{display:flex;align-items:center;gap:10px;padding-bottom:16px;"
+    "border-right:1px solid rgba(255,255,255,.1);padding:24px 16px;box-sizing:border-box;"
+    "position:fixed;left:0;top:0;z-index:9999;color:#f5f5f7;overflow-y:auto;"
+    "display:flex;flex-direction:column}"
+    ".brand-container-apple{display:flex;align-items:center;gap:10px;padding-bottom:20px;"
     "border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px}"
     ".brand-text-apple{color:#fff;font-weight:700;font-size:16px;letter-spacing:-.02em}"
     ".menu-category-title{font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;"
@@ -3589,7 +3586,7 @@ _APPLE_SHELL_CSS = (
     "padding:10px 14px;border-radius:12px;margin:2px 0;font-weight:400;transition:all .2s ease}"
     ".nav-item-apple:hover{background:rgba(255,255,255,.08);color:#fff}"
     ".nav-item-apple.is-active{background:#005BEA;color:#fff;font-weight:500}"
-    ".sidebar-footer-legal{font-size:11px;color:rgba(255,255,255,.35);padding:16px 8px 32px;display:block}"
+    ".sidebar-footer-legal{font-size:11px;color:rgba(255,255,255,.35);padding:16px 8px 0;margin-top:auto}"
     ".main-content-container{margin-left:260px;width:calc(100% - 260px);min-height:100vh;"
     "display:flex;flex-direction:column;background:#f5f5f7}"
     ".navbar-top-apple{height:60px;background:rgba(255,255,255,.72);"
@@ -3692,21 +3689,19 @@ def _staff_nav_items(path, rol=""):
             ("/soporte/reset-clave", "Resetear claves"),
             ("/soporte/periodos-colegio", "Periodos colegio"),
             ("/usuarios", "Usuarios"),
-            ("/tenants", "Instituciones (consulta)"),
+            ("/tenants", "Instituciones"),
+            ("/nueva_institucion", "Nueva institución"),
             ("/soporte/logs-errores", "Logs de errores"),
-            ("/servidores", "Servidores"),
             ("/soporte/prorroga", "Prórroga 24h"),
             ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
+            ("/servidores", "Servidores"),
             ("/auditoria", "Auditoría"),
+            ("/soporte/auditoria-colegio", "Auditoría colegio / ofertas"),
+            ("/soporte/licencias", "Licencias y cobros"),
+            ("/soporte/cancelaciones", "Cancelaciones"),
             ("/soporte/pqr", "Centro PQR"),
             ("/soporte/pqr/crear", "Radicar PQR"),
-            ("/soporte/pqr/consulta", "Consulta validada"),
-            ("/soporte/ticket-dev", "Escalar a Desarrollo"),
-            ("/soporte/mis-tickets-dev", "Mis tickets a Dev"),
-            ("/soporte/retracto", "Radicar retracto"),
-            ("/support", "Support"),
-            ("/support/editor", "Redactar Support"),
-            ("/contacto", "Vista contacto público"),
+            ("/modo_prueba", "Modo prueba"),
             ("/logout", "Salir"),
         ]
     elif rol == "Cobranza":
@@ -3723,6 +3718,8 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/retractos/config", "Leyes y cláusulas"),
             ("/gerencia/retractos/reembolsos", "Procesar reembolsos"),
             ("/gerencia/firmas-corporativas", "Firmas corporativas"),
+            ("/gerencia/support", "Support · aprobar artículos"),
+            ("/support", "Ver Support público"),
             ("/gerencia/planes", "Planes activos"),
             ("/gerencia/beneficios", "Beneficios"),
             ("/gerencia/planes/nuevo", "Crear plan"),
@@ -11110,13 +11107,14 @@ def _ensure_login_pie_cols():
         pass
 
 def _login_pie_defaults():
+    # 1 = sitio principal | 2 = Support (dominios distintos)
     p1 = (
         "1. Según los datos del estudio de rendimiento técnico de PROCSIS realizado en el año en curso "
         "sobre la optimización de procesos y control de asistencia digital. Para obtener más información "
-        "y revisar los reportes de calidad, visita {url}."
+        "y revisar los reportes de calidad, visita procsis.com."
     )
     p2 = (
-        "2. Consulta {url} para obtener más información sobre las funcionalidades del ecosistema en la nube "
+        "2. Consulta support.procsis.com para obtener más información sobre las funcionalidades del ecosistema en la nube "
         "y los requisitos mínimos del sistema para la institución. Algunas funcionalidades requieren conexión "
         "a internet estable. El acceso al portal familiar o notificaciones por WhatsApp (API WATI) está sujeto "
         "a la activación y límites técnicos establecidos en el plan contratado. Algunas herramientas pueden no "
@@ -11131,7 +11129,7 @@ def _login_pie_defaults():
     return p1, p2, extra
 
 def _html_login_pie_colegios():
-    """Bloque pie estilo Apple debajo del login de instituciones."""
+    """Pie login: textos legales + footer oscuro corporativo. Punto 1=procsis.com · Punto 2=support.procsis.com."""
     try:
         _ensure_login_pie_cols()
     except Exception:
@@ -11140,78 +11138,74 @@ def _html_login_pie_colegios():
         p = plataforma()
     except Exception:
         p = None
-    url = "/procsis"
-    try:
-        url = (getattr(p, "sitio_oficial_url", None) or getattr(p, "web", None) or "/procsis").strip() or "/procsis"
-    except Exception:
-        pass
-    if url and not url.startswith("http") and not url.startswith("/"):
-        url = "https://" + url
-    label = "procsis.com"
-    if "://" in url:
-        label = url.split("://", 1)[-1].rstrip("/")
-    elif url.startswith("/"):
-        label = "procsis.com"
     p1_def, p2_def, extra_def = _login_pie_defaults()
-    p1 = (getattr(p, "login_pie_p1", None) or "").strip() or p1_def
-    p2 = (getattr(p, "login_pie_p2", None) or "").strip() or p2_def
+    # Ignorar textos viejos de BD que ponen el mismo dominio en ambos puntos
+    p1 = p1_def
+    p2 = p2_def
     extra = (getattr(p, "login_pie_extra", None) or "").strip() or extra_def
-    link = '<a href="%s" style="color:#0066cc;text-decoration:underline">%s</a>' % (_esc(url), _esc(label))
-    def _fill(txt):
-        t = (txt or "").replace("{url}", "§URL§")
-        t = _esc(t).replace("§URL§", link)
-        # también reemplazar menciones literales a procsis.com
-        t = t.replace(_esc("procsis.com"), link)
+    link_main = '<a href="/procsis" style="color:#2997ff;text-decoration:underline">procsis.com</a>'
+    link_sup = '<a href="/support" style="color:#2997ff;text-decoration:underline">support.procsis.com</a>'
+    def _fill_p1(txt):
+        t = _esc(txt or "")
+        for bad in ("support.support.procsis.com", "support.procsis.com"):
+            t = t.replace(_esc(bad), link_main)
+        t = t.replace(_esc("procsis.com"), link_main)
         return t
+    def _fill_p2(txt):
+        t = _esc(txt or "")
+        t = t.replace(_esc("support.support.procsis.com"), link_sup)
+        t = t.replace(_esc("support.procsis.com"), link_sup)
+        # no convertir el procsis.com suelto del punto 2 si quedara
+        return t
+    try:
+        corp_email = (getattr(p, "email_empresa", None) or getattr(p, "email_soporte", None) or "procsis.edu@gmail.com") if p else "procsis.edu@gmail.com"
+        corp_tel = (getattr(p, "telefono_empresa", None) or getattr(p, "telefono_soporte", None) or "3246868183") if p else "3246868183"
+    except Exception:
+        corp_email, corp_tel = "procsis.edu@gmail.com", "3246868183"
     return f"""
 <style>
-.login-apple-foot{{max-width:980px;margin:0 auto;padding:28px 20px 40px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}}
+.login-apple-foot{{max-width:1100px;margin:0 auto;padding:28px 20px 8px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
 .login-apple-foot .laf-notes{{font-size:12px;line-height:1.55;color:#6e6e73;margin:0 0 10px}}
 .login-apple-foot .laf-notes a{{color:#0066cc;text-decoration:underline}}
-.login-apple-foot .laf-rule{{border:0;border-top:1px solid #d2d2d7;margin:22px 0 20px}}
-.login-apple-foot .laf-cols{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 24px;font-size:12px}}
-.login-apple-foot .laf-cols h4{{margin:0 0 10px;font-size:12px;font-weight:600;color:#1d1d1f}}
-.login-apple-foot .laf-cols a,.login-apple-foot .laf-cols span{{display:block;color:#424245;text-decoration:none;margin:0 0 8px;line-height:1.35}}
-.login-apple-foot .laf-cols a:hover{{text-decoration:underline;color:#0066cc}}
-.login-apple-foot .laf-copy{{margin-top:22px;font-size:11px;color:#86868b}}
-@media(max-width:800px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr 1fr}}}}
-@media(max-width:480px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr}}}}
+.login-corp-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:12px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
+.login-corp-foot .lcf-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:32px}}
+@media(max-width:800px){{.login-corp-foot .lcf-inner{{grid-template-columns:1fr}}}}
+.login-corp-foot .lcf-brand{{font-weight:600;font-size:15px;color:#f5f5f7;margin-bottom:12px}}
+.login-corp-foot a{{color:#2997ff;text-decoration:none;display:block;margin:8px 0;font-size:13px;font-weight:500}}
+.login-corp-foot a:hover{{text-decoration:underline}}
+.login-corp-foot h4{{margin:0 0 12px;color:#f5f5f7;font-size:13px;font-weight:600}}
+.login-corp-foot p{{margin:4px 0;font-size:13px;color:#a1a1a6;line-height:1.5}}
+.login-corp-foot .lcf-copy{{max-width:1100px;margin:28px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6e6e73;text-align:center}}
 </style>
 <div class="login-apple-foot">
-  <p class="laf-notes">{_fill(p1)}</p>
-  <p class="laf-notes">{_fill(p2)}</p>
-  <p class="laf-notes">{_fill(extra)}</p>
-  <hr class="laf-rule">
-  <div class="laf-cols">
+  <p class="laf-notes">{_fill_p1(p1)}</p>
+  <p class="laf-notes">{_fill_p2(p2)}</p>
+  <p class="laf-notes">{_esc(extra)}</p>
+</div>
+<footer class="login-corp-foot">
+  <div class="lcf-inner">
     <div>
-      <h4>Producto</h4>
-      <a href="/ventas">Planes EduTrack</a>
-      <a href="/tecnologia">Tecnología</a>
-      <a href="/ayuda">Centro de ayuda</a>
-      <a href="/pqr">Radicar PQR</a>
+      <div class="lcf-brand">PROCSIS</div>
+      <p>Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.</p>
     </div>
     <div>
-      <h4>Acceso</h4>
-      <a href="/login">Portal instituciones</a>
-      <a href="/familia-login">Portal familiar</a>
-      <a href="/backoffice">Backoffice PROCSIS</a>
+      <h4>Navegación</h4>
+      <a href="/">Inicio</a>
+      <a href="/procsis">Portafolio</a>
+      <a href="/ventas">Planes</a>
+      <a href="/login">Acceso instituciones</a>
+      <a href="/support">Support</a>
     </div>
     <div>
-      <h4>Empresa</h4>
-      <a href="{_esc(url)}">Sitio oficial PROCSIS</a>
-      <a href="/contacto">Contacto</a>
-      <a href="/quienes-somos">Quiénes somos</a>
-    </div>
-    <div>
-      <h4>Legal</h4>
-      <a href="/legal">Privacidad</a>
-      <a href="/cookies">Cookies</a>
-      <a href="/tratamiento-datos">Tratamiento de datos</a>
-      <a href="/politica-pqr">Política PQR</a>
+      <h4>Contacto</h4>
+      <p>{_esc(corp_email)}</p>
+      <p>{_esc(corp_tel)}</p>
+      <a href="/contacto">Formulario de contacto</a>
+      <a href="/legal">Privacidad y datos</a>
     </div>
   </div>
-  <div class="laf-copy">© EduTrack · PROCSIS. Contenido del pie editable desde Gerencia.</div>
-</div>
+  <div class="lcf-copy">© 2026 PROCSIS · Soluciones digitales. Todos los derechos reservados.</div>
+</footer>
 """
 
 
@@ -35979,17 +35973,14 @@ def soporte_bloqueo_seguridad():
     return page("Bloqueo y Seguridad", shell_soporte(content))
 
 
+@app.route("/soporte_admin")
+
 @app.route("/soporte/colegio")
 @app.route("/soporte/colegio/<int:iid>")
-@app.route("/soporte/auditoria-colegio")
 def soporte_colegio_auditoria(iid=None):
-    """Auditoria contractual / ofertas — comercial (NO técnicos Soporte)."""
-    rol = session.get("rol") or rol_actual() or ""
-    if rol == "Soporte":
-        return acceso_denegado(
-            "Auditoría de colegio / ofertas es comercial. Use el Panel principal y Auditoría general de acciones."
-        )
-    if rol not in ("Administrador", "Gerencia", "Gerente", "Comercial", "Ventas", "Supervisor de Ventas", "Superadmin"):
+    """Auditoria contractual y promo para Soporte."""
+    rol = session.get("rol") or ""
+    if rol not in ("Soporte", "Administrador", "Gerencia", "Comercial", "Ventas", "Supervisor de Ventas"):
         if not session.get("usuario"):
             return redirect("/backoffice")
         return redirect("/soporte_admin")
@@ -36096,7 +36087,6 @@ def soporte_colegio_auditoria(iid=None):
     return page("Soporte · Colegio", body)
 
 
-@app.route("/soporte_admin")
 def soporte_admin():
     _g = _guard_soporte()
     if _g is not None:
@@ -36250,28 +36240,33 @@ def soporte_admin():
             <a href='/soporte/usuarios/{i.id}'>Usuarios</a>
           </td>
         </tr>"""
-    _user_nom = session.get("usuario") or session.get("nombre") or "Técnico"
-    _logo_p = logo_plataforma()
     content = f"""
-<section style="position:relative;overflow:hidden;background:linear-gradient(135deg,#0B1220 0%,#1e3a5f 55%,#0B2D57 100%);color:#fff;border-radius:24px;padding:28px 26px;margin-bottom:16px">
-  <img src="{_logo_p}" alt="" style="position:absolute;right:-20px;top:50%;transform:translateY(-50%);width:180px;height:180px;object-fit:contain;opacity:.12;pointer-events:none">
-  <div style="position:relative;display:flex;gap:18px;align-items:center;flex-wrap:wrap">
-    <img src="{_logo_p}" style="width:72px;height:72px;object-fit:contain;background:#fff;border-radius:18px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.25)" alt="logo">
-    <div style="flex:1;min-width:200px">
-      <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.8">Mesa técnica · {(p.empresa or 'PROCSIS')}</div>
-      <h1 style="margin:6px 0 4px;font-size:26px;font-weight:700;letter-spacing:-.02em">Bienvenido, {_esc(_user_nom)}</h1>
-      <p style="margin:0;opacity:.9;font-size:14px">{_esc(p.slogan or SLOGAN)}</p>
-      <p style="margin:8px 0 0;font-size:13px;opacity:.75">Producto <b>{getattr(p,'nombre_producto',None) or 'EduTrack'}</b> · Sesión de soporte operativa</p>
+<section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:22px;padding:22px 24px;margin-bottom:14px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
+  <div style="display:flex;gap:16px;align-items:center">
+    <img src="{logo_plataforma()}" style="width:64px;height:64px;object-fit:contain;background:#fff;border-radius:16px;padding:6px" alt="Procsis">
+    <div>
+      <div style="font-size:12px;opacity:.85;letter-spacing:1px;text-transform:uppercase">Centro de operaciones · soporte técnico</div>
+      <h1 style="margin:4px 0;font-size:24px">{p.empresa or 'Procsis'}</h1>
+      <p style="margin:0;opacity:.9">{p.slogan or SLOGAN}</p>
+      <p style="margin:6px 0 0;font-size:13px;opacity:.8">Producto: <b>{getattr(p,'nombre_producto',None) or 'EduTrack'}</b> · Operador: <b>{session.get('usuario')}</b></p>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <a class="btn" href="/soporte/impersonar" style="background:#0f766e;color:#fff">Suplantar</a>
-      <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">Reset clave</a>
-      <a class="btn" href="/soporte/pqr" style="background:#1e40af;color:#fff">Tickets PQR</a>
-      <a class="btn" href="/soporte/ticket-dev" style="background:#7c2d12;color:#fff">Escalar a Dev</a>
-    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn" href="/soporte/impersonar" style="background:#0f766e;color:#fff">🎭 Suplantar</a>
+    <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">🔑 Reset clave</a>
+    <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;color:#fff">📅 Periodos 3/4</a>
+    <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff;font-weight:800">👥 Usuarios · eliminar</a>
+    <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;color:#fff">🚨 Logs</a>
+    <a class="btn" href="/soporte/prorroga" style="background:#1e3a5f;color:#fff;border:1px solid #fff3">📅 Prórroga 24h</a>
+    <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
+    <a class="btn" href="/soporte/pqr" style="background:#1e40af;color:#fff">Tickets</a>
+    <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488;color:#fff">💙 CSAT</a>
+    <a class="btn btn-red" href="/logout">Salir</a>
   </div>
 </section>
 {('<div style="background:#fef3c7;border:1px solid #f59e0b;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-weight:700">Modo suplantar activo · <a href="/soporte/dejar-impersonar">Volver a mi sesión de soporte</a></div>' if session.get('impersonating') else '')}
+
+{_html_modulos_rol(session.get("rol") or "Soporte")}
 
 <section class="role-grid" style="margin-top:14px">
   <div class="role-panel"><h2>{total}</h2><p>Colegios en plataforma</p></div>
@@ -36285,18 +36280,17 @@ def soporte_admin():
 
 <section class="role-panel" style="margin-top:12px">
   <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
-    <h2 style="margin:0">Colegios (consulta)</h2>
+    <h2 style="margin:0">Colegios</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <a class="btn" href="/tenants">Ver instituciones</a>
       <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff">Usuarios · estado / eliminar</a>
+      <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
     </div>
   </div>
-  <p class="mini-text">Soporte no crea instituciones. Use la lista para asistencia operativa.</p>
+  <p class="mini-text">En cada colegio: <b>Usuarios</b> abre la lista de ese tenant. En <b>Usuarios · estado / eliminar</b> ves ACTIVO/INACTIVO de toda la plataforma y puedes borrar inactivos.</p>
   <div class="table-card" style="overflow-x:auto">
   <table>
     <tr><th></th><th>Código / nombre</th><th>Estado</th><th>Plan</th><th>Usuarios</th><th>Acciones</th></tr>
-    {filas if filas else '<tr><td colspan="6">Sin instituciones registradas.</td></tr>'}
-
+    {filas if filas else '<tr><td colspan="6">Sin instituciones. Crea una con Nueva institución.</td></tr>'}
   </table>
   </div>
 </section>
@@ -37140,19 +37134,11 @@ def tenants():
 </div>
 """
     else:
-        es_sop = rol_actual() == "Soporte"
-        btn_nueva = "" if es_sop else "<a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>"
-        aviso_sop = (
-            "<p style='background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:10px 14px;border-radius:10px;margin-bottom:12px'>"
-            "Modo consulta: Soporte solo busca y revisa colegios. No puede crear ni activar instituciones.</p>"
-            if es_sop else ""
-        )
         body = f"""
 <header class='role-hero'>
-  <div><h1>Instituciones (tenants)</h1><p>Cada colegio es independiente: logo, login, usuarios y datos propios.</p></div>
-  {btn_nueva}
+  <div><h1>Instituciones (tenants)</h1><p>Cada colegio es independiente: logo, login, usuarios y datos propios. Un colegio <b>no ve</b> la información del otro.</p></div>
+  <a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>
 </header>
-{aviso_sop}
 {aviso_nuevo}
 <div class='table-card'>
   <table>
@@ -37160,7 +37146,7 @@ def tenants():
       <th>ID</th><th>Logo</th><th>Código</th><th>Nombre</th><th>Sede</th><th>Estado</th>
       <th>Plan</th><th>Users / Est.</th><th>Creada</th><th>Acciones</th>
     </tr>
-    {filas if filas else '<tr><td colspan="10">No hay instituciones.</td></tr>'}
+    {filas if filas else '<tr><td colspan="10">No hay instituciones. Crea la primera.</td></tr>'}
   </table>
 </div>
 """
@@ -37171,13 +37157,8 @@ def tenants():
 def nueva_institucion():
     if rol_actual() == "Cobranza":
         return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
-    if rol_actual() == "Soporte":
-        return acceso_denegado(
-            "Soporte no puede crear ni activar instituciones. Solo consulta. El alta es de Gerencia/Ventas."
-        )
     if not requiere_soporte_global():
         return redirect("/login")
-
     mensaje = ""
     if request.method == "POST":
         codigo = (request.form.get("codigo") or "").strip().upper()
@@ -64610,7 +64591,7 @@ def aceptar_terminos_pago():
     return redirect(request.form.get("next") or request.referrer or "/pagar")
 
 
-# ── Módulos: Support · Tickets Dev · Retractos · Firmas corporativas ─────────
+# ── Support · Firmas · Retractos (PDF corporativo tipo factura) ──────────────
 
 def _ensure_corp_firma_cols():
     try:
@@ -64634,29 +64615,6 @@ def _ensure_corp_firma_cols():
         pass
 
 
-class TicketDev(db.Model):
-    __tablename__ = "tickets_dev"
-    id = db.Column(db.Integer, primary_key=True)
-    codigo = db.Column(db.String(40), unique=True, index=True)
-    institucion_id = db.Column(db.Integer, index=True)
-    colegio_nombre = db.Column(db.String(200), default="")
-    plan_activo = db.Column(db.String(80), default="")
-    modulo_afectado = db.Column(db.String(160), default="")
-    descripcion = db.Column(db.Text, default="")
-    logs_consola = db.Column(db.Text, default="")
-    evidencia_path = db.Column(db.Text, default="")
-    verificado_suplantacion = db.Column(db.Boolean, default=False)
-    estado = db.Column(db.String(30), default="RADICADO", index=True)
-    prioridad = db.Column(db.String(20), default="MEDIA")
-    radicado_por = db.Column(db.String(120), default="")
-    asignado_a = db.Column(db.String(120), default="")
-    nota_desarrollo = db.Column(db.Text, default="")
-    creado_en = db.Column(db.String(30), default="")
-    actualizado_en = db.Column(db.String(30), default="")
-    resuelto_en = db.Column(db.String(30), default="")
-    aviso_soporte = db.Column(db.Boolean, default=False)
-
-
 class ArticuloAyuda(db.Model):
     __tablename__ = "articulos_ayuda"
     id = db.Column(db.Integer, primary_key=True)
@@ -64665,7 +64623,7 @@ class ArticuloAyuda(db.Model):
     resumen = db.Column(db.String(500), default="")
     cuerpo = db.Column(db.Text, default="")
     categoria = db.Column(db.String(80), default="General")
-    estado = db.Column(db.String(20), default="BORRADOR")
+    estado = db.Column(db.String(20), default="BORRADOR", index=True)  # BORRADOR | PUBLICADO
     creado_por = db.Column(db.String(120), default="")
     creado_en = db.Column(db.String(30), default="")
     publicado_por = db.Column(db.String(120), default="")
@@ -64708,7 +64666,6 @@ class CasoRetracto(db.Model):
     resuelto_por = db.Column(db.String(120), default="")
     creado_en = db.Column(db.String(30), default="")
     resuelto_en = db.Column(db.String(30), default="")
-    historial_soporte_resumen = db.Column(db.Text, default="")
     notas_gerencia = db.Column(db.Text, default="")
     retencion_hasta = db.Column(db.String(20), default="")
     acta_pdf_path = db.Column(db.Text, default="")
@@ -64730,14 +64687,203 @@ def _corp_firmas():
     _ensure_corp_firma_cols()
     p = plataforma()
     return {
-        "rep_nombre": getattr(p, "nombre_rep_legal", None) or getattr(p, "desarrollador", None) or "Representante legal",
-        "rep_cargo": getattr(p, "cargo_rep_legal", None) or "Representante legal provisional",
-        "rep_firma": getattr(p, "firma_rep_legal_path", None) or "",
-        "ger_nombre": getattr(p, "nombre_gerente_general", None) or "Gerente general",
-        "ger_firma": getattr(p, "firma_gerente_path", None) or "",
-        "empresa": getattr(p, "empresa", None) or "PROCSIS",
+        "rep_nombre": (getattr(p, "nombre_rep_legal", None) or "").strip() or "Representante legal",
+        "rep_cargo": (getattr(p, "cargo_rep_legal", None) or "").strip() or "Representante legal provisional",
+        "rep_firma": (getattr(p, "firma_rep_legal_path", None) or "").strip(),
+        "ger_nombre": (getattr(p, "nombre_gerente_general", None) or "").strip() or "Gerente general",
+        "ger_firma": (getattr(p, "firma_gerente_path", None) or "").strip(),
+        "empresa": (getattr(p, "empresa", None) or "PROCSIS").strip(),
         "logo": logo_plataforma(),
+        "nit": (getattr(p, "nit", None) or getattr(p, "nit_empresa", None) or "").strip(),
+        "email": (getattr(p, "email_empresa", None) or getattr(p, "email_soporte", None) or "").strip(),
+        "tel": (getattr(p, "telefono_empresa", None) or getattr(p, "telefono_soporte", None) or "").strip(),
     }
+
+
+def _abs_static_path(url_path):
+    """Convierte /static/... a ruta de disco para reportlab."""
+    if not url_path:
+        return ""
+    u = (url_path or "").strip()
+    if u.startswith("http"):
+        return ""
+    if u.startswith("/static/"):
+        return os.path.join(app.root_path, u.lstrip("/").replace("/", os.sep))
+    if os.path.isfile(u):
+        return u
+    cand = os.path.join(app.root_path, "static", u.replace("/static/", "").lstrip("/"))
+    return cand if os.path.isfile(cand) else ""
+
+
+@app.route("/support")
+@app.route("/support/")
+def support_home():
+    """Support tipo Apple: listado libre, SIN barra de búsqueda."""
+    _ensure_mod_tables()
+    try:
+        arts = ArticuloAyuda.query.filter_by(estado="PUBLICADO").order_by(ArticuloAyuda.id.desc()).limit(60).all()
+    except Exception:
+        arts = []
+    # Agrupar por categoría
+    cats = {}
+    for a in arts:
+        cats.setdefault(a.categoria or "General", []).append(a)
+    bloques = []
+    for cat, lista in cats.items():
+        lis = "".join(
+            '<li style="margin:0 0 12px;list-style:none"><a href="/support/a/%s" style="color:#06c;text-decoration:none;font-size:17px;font-weight:400">%s</a></li>'
+            % (_esc(a.slug or a.id), _esc(a.titulo))
+            for a in lista
+        )
+        bloques.append(
+            '<section style="margin:0 0 36px"><h2 style="font-size:24px;font-weight:600;color:#1d1d1f;margin:0 0 16px">%s</h2><ul style="margin:0;padding:0">%s</ul></section>'
+            % (_esc(cat), lis)
+        )
+    body_inner = "".join(bloques) if bloques else (
+        '<p style="color:#6e6e73;font-size:17px">Próximamente guías y artículos. El contenido lo publica Gerencia tras revisión de Soporte.</p>'
+    )
+    body = f"""
+<div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;background:#fff;min-height:100vh">
+  <div style="max-width:980px;margin:0 auto;padding:56px 22px 80px">
+    <p style="margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#86868b;font-weight:600">PROCSIS</p>
+    <h1 style="font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1d1d1f;margin:0 0 12px">Support</h1>
+    <p style="font-size:21px;color:#6e6e73;margin:0 0 48px;line-height:1.35">Recursos sobre EduTrack, asistencia digital y portal familiar.</p>
+    {body_inner}
+    <p style="margin-top:56px;font-size:12px;color:#86868b">© 2026 PROCSIS · support.procsis.com</p>
+  </div>
+</div>"""
+    return page("PROCSIS Support", body)
+
+
+@app.route("/support/a/<slug>")
+def support_articulo(slug):
+    _ensure_mod_tables()
+    a = ArticuloAyuda.query.filter_by(slug=slug).first()
+    if not a or (a.estado != "PUBLICADO" and rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia")):
+        return page("Support", "<div style='padding:48px;text-align:center;font-family:-apple-system,sans-serif'><h1>No disponible</h1><a href='/support'>Volver a Support</a></div>")
+    body = f"""
+<div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;max-width:692px;margin:0 auto;padding:48px 22px 80px">
+  <a href="/support" style="color:#06c;text-decoration:none;font-size:14px">‹ Support</a>
+  <h1 style="font-size:40px;font-weight:600;letter-spacing:-.02em;margin:20px 0 24px;color:#1d1d1f">{_esc(a.titulo)}</h1>
+  <div style="font-size:17px;line-height:1.55;color:#1d1d1f;white-space:pre-wrap">{_esc(a.cuerpo or "")}</div>
+</div>"""
+    return page(a.titulo or "Support", body)
+
+
+@app.route("/support/editor", methods=["GET", "POST"])
+def support_editor():
+    """Soporte redacta; solo guarda BORRADOR. Publica Gerencia."""
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
+        return redirect("/soporte-login")
+    _ensure_mod_tables()
+    msg = ""
+    if request.method == "POST":
+        titulo = (request.form.get("titulo") or "").strip()[:255]
+        cuerpo = (request.form.get("cuerpo") or "").strip()
+        cat = (request.form.get("categoria") or "General")[:80]
+        if titulo and cuerpo:
+            import re as _re
+            slug = _re.sub(r"[\s_]+", "-", _re.sub(r"[^\w\s-]", "", titulo.lower())).strip("-")[:140] or secrets.token_hex(4)
+            art = ArticuloAyuda(
+                slug=slug, titulo=titulo, cuerpo=cuerpo, categoria=cat, estado="BORRADOR",
+                creado_por=session.get("usuario") or "", creado_en=fecha_hoy() or "",
+            )
+            n, base = 1, art.slug
+            while ArticuloAyuda.query.filter_by(slug=art.slug).first():
+                art.slug = "%s-%s" % (base, n)
+                n += 1
+            db.session.add(art)
+            db.session.commit()
+            msg = "Borrador guardado. Gerencia debe autorizar la publicación."
+    lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(25).all()
+    filas = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria), _esc(a.creado_por or ""))
+        for a in lista
+    ) or "<tr><td colspan='4'>—</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Redactar Support</h1>
+<p>Soporte escribe el artículo. <b>No se publica</b> hasta que Gerencia lo autorice.</p></div>
+<a class="btn" href="/support">Ver Support</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel" style="max-width:640px">
+<form method="POST" style="display:grid;gap:10px">
+<label>Título</label><input name="titulo" required>
+<label>Categoría</label><input name="categoria" value="General">
+<label>Contenido</label><textarea name="cuerpo" rows="12" required></textarea>
+<button class="btn" type="submit">Guardar borrador</button>
+</form></section>
+<section class="role-panel"><table class="table" style="width:100%">
+<tr><th>Título</th><th>Estado</th><th>Categoría</th><th>Autor</th></tr>{filas}</table></section>"""
+    return page("Redactar Support", shell(content))
+
+
+@app.route("/gerencia/support", methods=["GET", "POST"])
+def gerencia_support_aprobar():
+    """Gerencia autoriza la salida pública de artículos Support."""
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_mod_tables()
+    msg = ""
+    if request.method == "POST":
+        aid = request.form.get("id")
+        acc = request.form.get("accion")
+        art = ArticuloAyuda.query.get(int(aid)) if aid and str(aid).isdigit() else None
+        if art and acc == "publicar":
+            art.estado = "PUBLICADO"
+            art.publicado_por = session.get("usuario") or "Gerencia"
+            art.publicado_en = fecha_hoy() or ""
+            db.session.commit()
+            msg = "Artículo publicado en Support."
+        elif art and acc == "ocultar":
+            art.estado = "BORRADOR"
+            db.session.commit()
+            msg = "Artículo retirado (borrador)."
+        elif art and acc == "eliminar":
+            db.session.delete(art)
+            db.session.commit()
+            msg = "Eliminado."
+    arts = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(80).all()
+    filas = "".join(
+        """<tr>
+        <td><b>%s</b><br><span class="mini-text">%s · %s</span></td>
+        <td>%s</td>
+        <td>
+          <form method="POST" style="display:flex;gap:6px;flex-wrap:wrap">
+            <input type="hidden" name="id" value="%s">
+            %s
+            <button name="accion" value="ocultar" class="btn" type="submit">Ocultar</button>
+            <button name="accion" value="eliminar" class="btn" type="submit" style="background:#b91c1c;color:#fff"
+              onclick="return confirm('¿Eliminar?')">Eliminar</button>
+          </form>
+        </td></tr>"""
+        % (
+            _esc(a.titulo), _esc(a.creado_por or ""), _esc(a.creado_en or ""),
+            _esc(a.estado), a.id,
+            ('<button name="accion" value="publicar" class="btn" type="submit" style="background:#15803d;color:#fff">Autorizar / Publicar</button>'
+             if a.estado != "PUBLICADO" else '<span style="color:#15803d;font-weight:700">En vivo</span>'),
+        )
+        for a in arts
+    ) or "<tr><td colspan='3'>Sin artículos. Soporte redacta en /support/editor</td></tr>"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Support · Autorizar artículos</h1>
+  <p>Solo Gerencia da el visto bueno final. Hasta entonces el artículo no sale al público.</p>
+</div>
+<a class="btn" href="/support" target="_blank">Ver Support público</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel">
+<table class="table" style="width:100%">
+<tr><th>Artículo</th><th>Estado</th><th>Acciones</th></tr>
+{filas}
+</table>
+</section>"""
+    return page("Support Gerencia", shell(content))
 
 
 @app.route("/gerencia/firmas-corporativas", methods=["GET", "POST"])
@@ -64761,24 +64907,28 @@ def gerencia_firmas_corporativas():
             os.makedirs(folder, exist_ok=True)
             for field, attr in (("firma_rep_legal", "firma_rep_legal_path"), ("firma_gerente", "firma_gerente_path")):
                 f = request.files.get(field)
-                if f and f.filename:
-                    ext = (os.path.splitext(f.filename)[1] or ".png").lower()[:8]
-                    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+                if f and getattr(f, "filename", None):
+                    ext = (os.path.splitext(f.filename)[1] or ".png").lower()
+                    if ext not in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
                         ext = ".png"
-                    fname = "%s_%s%s" % (field, secrets.token_hex(4), ext)
-                    f.save(os.path.join(folder, fname))
+                    fname = "%s_%s%s" % (field, secrets.token_hex(5), ext)
+                    path_disk = os.path.join(folder, fname)
+                    f.save(path_disk)
                     setattr(p, attr, "/static/uploads/firmas_corp/" + fname)
             db.session.commit()
-            msg = "Firmas corporativas actualizadas. Se usarán en actas y documentos."
+            msg = "Firmas guardadas. Aparecerán en actas PDF y documentos corporativos."
         except Exception as ex:
-            msg = "Error: " + str(ex)[:100]
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            msg = "Error al guardar: " + str(ex)[:120]
     f = _corp_firmas()
     content = f"""
 <header class="role-hero"><div>
   <h1>Firmas corporativas</h1>
-  <p>Representante legal provisional y Gerente general — documentos internos y externos.</p>
-</div>
-<a class="btn" href="/gerencia/hq">HQ</a></header>
+  <p>Imágenes de firma del representante legal y gerente general (PNG/JPG con fondo transparente recomendado).</p>
+</div></header>
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
 <section class="role-panel" style="max-width:640px">
 <form method="POST" enctype="multipart/form-data" style="display:grid;gap:12px">
@@ -64786,286 +64936,142 @@ def gerencia_firmas_corporativas():
 <input name="nombre_rep_legal" value="{_esc(f['rep_nombre'])}">
 <label>Cargo</label>
 <input name="cargo_rep_legal" value="{_esc(f['rep_cargo'])}">
-<label>Imagen firma representante legal</label>
+<label>Foto / imagen de la firma (rep. legal)</label>
 <input type="file" name="firma_rep_legal" accept="image/*">
-{"<img src='"+_esc(f['rep_firma'])+"' style='max-height:80px;background:#fff;padding:8px;border-radius:8px'>" if f['rep_firma'] else ""}
+{"<div style='background:#f8fafc;padding:12px;border-radius:10px'><img src='"+_esc(f['rep_firma'])+"' style='max-height:90px;max-width:240px'></div>" if f['rep_firma'] else "<p class='mini-text'>Sin firma cargada</p>"}
 <label>Nombre gerente general</label>
 <input name="nombre_gerente_general" value="{_esc(f['ger_nombre'])}">
-<label>Imagen firma gerente general</label>
+<label>Foto / imagen de la firma (gerente)</label>
 <input type="file" name="firma_gerente" accept="image/*">
-{"<img src='"+_esc(f['ger_firma'])+"' style='max-height:80px;background:#fff;padding:8px;border-radius:8px'>" if f['ger_firma'] else ""}
+{"<div style='background:#f8fafc;padding:12px;border-radius:10px'><img src='"+_esc(f['ger_firma'])+"' style='max-height:90px;max-width:240px'></div>" if f['ger_firma'] else "<p class='mini-text'>Sin firma cargada</p>"}
 <button class="btn" type="submit">Guardar firmas</button>
 </form>
+<p class="mini-text" style="margin-top:12px">Prueba: <a href="/gerencia/retractos/config/pdf" target="_blank">Descargar PDF de políticas</a> (debe mostrar logo y firmas).</p>
 </section>"""
     return page("Firmas corporativas", shell(content))
 
 
-@app.route("/support")
-@app.route("/support/")
-def support_home():
-    _ensure_mod_tables()
-    q = (request.args.get("q") or "").strip()
-    try:
-        query = ArticuloAyuda.query.filter_by(estado="PUBLICADO")
-        if q:
-            like = "%" + q + "%"
-            query = query.filter(db.or_(ArticuloAyuda.titulo.ilike(like), ArticuloAyuda.cuerpo.ilike(like)))
-        arts = query.order_by(ArticuloAyuda.id.desc()).limit(40).all()
-    except Exception:
-        arts = []
-    items = "".join(
-        '<a href="/support/a/%s" style="display:block;padding:14px 0;border-bottom:1px solid #d2d2d7;color:#1d1d1f;text-decoration:none"><b style="font-size:19px">%s</b><br><span style="color:#6e6e73;font-size:14px">%s</span></a>'
-        % (_esc(a.slug or a.id), _esc(a.titulo), _esc(a.categoria or ""))
-        for a in arts
-    ) or '<p style="color:#6e6e73">Aún no hay artículos. Redacte en /support/editor</p>'
-    body = f"""
-<div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;max-width:692px;margin:0 auto;padding:48px 22px;min-height:80vh">
-  <h1 style="font-size:40px;font-weight:600;letter-spacing:-.02em;margin:0 0 10px">Support</h1>
-  <p style="font-size:19px;color:#6e6e73;margin:0 0 24px">Guías sobre EduTrack, asistencia y portal familiar.</p>
-  <form method="GET" action="/support"><input name="q" value="{_esc(q)}" placeholder="Buscar en Support"
-    style="width:100%;padding:14px;border:1px solid #d2d2d7;border-radius:12px;font-size:17px;background:#f5f5f7;box-sizing:border-box"></form>
-  <div style="margin-top:28px">{items}</div>
-  <p style="margin-top:40px;font-size:12px;color:#86868b">© 2026 PROCSIS · support.procsis.com</p>
-</div>"""
-    return page("PROCSIS Support", body)
+def _pdf_doc_corporativo_retracto(cfg):
+    """PDF estilo factura de gastos: logo, encabezado, cuerpo, firmas imagen (sin puntos negros)."""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import cm
+    import io as _io
+    import re as _re
+    firmas = _corp_firmas()
+    buf = _io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    w, h = letter
+    # Encabezado corporativo
+    logo_path = _abs_static_path(firmas["logo"])
+    if logo_path and os.path.isfile(logo_path):
+        try:
+            c.drawImage(logo_path, 1.8 * cm, h - 2.6 * cm, width=2.2 * cm, height=2.2 * cm, preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
+    c.setFillColorRGB(0.0, 0.125, 0.376)  # #002060
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(4.3 * cm, h - 1.5 * cm, firmas["empresa"])
+    c.setFillColorRGB(0.3, 0.3, 0.35)
+    c.setFont("Helvetica", 9)
+    c.drawString(4.3 * cm, h - 2.0 * cm, "Política de Retracto y Terminación de Servicio")
+    if firmas.get("nit"):
+        c.drawString(4.3 * cm, h - 2.4 * cm, "NIT " + firmas["nit"])
+    c.setStrokeColorRGB(0.0, 0.125, 0.376)
+    c.setLineWidth(1.5)
+    c.line(1.8 * cm, h - 3.0 * cm, w - 1.8 * cm, h - 3.0 * cm)
+    y = h - 3.6 * cm
+    c.setFillColorRGB(0.1, 0.1, 0.12)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(1.8 * cm, y, "DOCUMENTO INTERNO · MARCO JURÍDICO")
+    y -= 0.7 * cm
+    c.setFont("Helvetica", 9)
 
+    def strip_html(t):
+        t = _re.sub(r"<br\s*/?>", "\n", t or "", flags=_re.I)
+        t = _re.sub(r"</p>", "\n", t, flags=_re.I)
+        t = _re.sub(r"<[^>]+>", "", t)
+        return t.replace("&nbsp;", " ").strip()
 
-@app.route("/support/a/<slug>")
-def support_articulo(slug):
-    _ensure_mod_tables()
-    a = ArticuloAyuda.query.filter_by(slug=slug).first()
-    if not a or (a.estado != "PUBLICADO" and rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia")):
-        return page("Support", "<div style='padding:40px;text-align:center'><h1>No disponible</h1><a href='/support'>Volver</a></div>")
-    body = f"""
-<div style="font-family:-apple-system,sans-serif;max-width:692px;margin:0 auto;padding:40px 22px">
-  <a href="/support" style="color:#06c;text-decoration:none">‹ Support</a>
-  <h1 style="font-size:36px;font-weight:600;margin:16px 0">{_esc(a.titulo)}</h1>
-  <div style="font-size:17px;line-height:1.5;white-space:pre-wrap">{_esc(a.cuerpo or "")}</div>
-</div>"""
-    return page(a.titulo or "Support", body)
+    def write_block(title, text):
+        nonlocal y
+        if y < 5 * cm:
+            c.showPage()
+            y = h - 2 * cm
+        c.setFont("Helvetica-Bold", 10)
+        c.setFillColorRGB(0.0, 0.125, 0.376)
+        c.drawString(1.8 * cm, y, title)
+        y -= 0.45 * cm
+        c.setFont("Helvetica", 9)
+        c.setFillColorRGB(0.15, 0.15, 0.18)
+        for para in (text or "—").split("\n"):
+            para = para.strip()
+            if not para:
+                y -= 0.25 * cm
+                continue
+            while para:
+                chunk = para[:95]
+                c.drawString(1.8 * cm, y, chunk)
+                para = para[95:]
+                y -= 0.38 * cm
+                if y < 5 * cm:
+                    c.showPage()
+                    y = h - 2 * cm
+                    c.setFont("Helvetica", 9)
+        y -= 0.35 * cm
 
+    write_block("1. Derecho de retracto (Ley 1480 de 2011 — Art. 47)", strip_html(cfg.articulo_47_texto if cfg else ""))
+    write_block("2. Política de reembolso del fee de implementación", strip_html(cfg.politica_reembolso_implementacion if cfg else ""))
+    write_block(
+        "3. Parámetros operativos",
+        "Días hábiles de retracto: %s\nPenalidad cancelación anticipada: %s %%\nRetención de datos (Ley 1581): %s días"
+        % (
+            int(cfg.dias_habiles_retracto or 5) if cfg else 5,
+            float(cfg.penalidad_cancelacion_pct or 0) if cfg else 0,
+            int(cfg.dias_retencion_datos or 30) if cfg else 30,
+        ),
+    )
+    if cfg and cfg.clausulas_extra:
+        write_block("4. Cláusulas adicionales", strip_html(cfg.clausulas_extra))
 
-@app.route("/support/editor", methods=["GET", "POST"])
-def support_editor():
-    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
-        return redirect("/soporte-login")
-    _ensure_mod_tables()
-    es_g = rol_actual() in ("Gerente", "Superadmin", "Administrador", "Gerencia")
-    msg = ""
-    if request.method == "POST":
-        titulo = (request.form.get("titulo") or "").strip()[:255]
-        cuerpo = (request.form.get("cuerpo") or "").strip()
-        cat = (request.form.get("categoria") or "General")[:80]
-        if titulo and cuerpo:
-            import re as _re
-            slug = _re.sub(r"[\s_]+", "-", _re.sub(r"[^\w\s-]", "", titulo.lower())).strip("-")[:140] or secrets.token_hex(4)
-            art = ArticuloAyuda(slug=slug, titulo=titulo, cuerpo=cuerpo, categoria=cat, estado="BORRADOR",
-                                creado_por=session.get("usuario") or "", creado_en=fecha_hoy() or "")
-            n = 1
-            base = art.slug
-            while ArticuloAyuda.query.filter_by(slug=art.slug).first():
-                art.slug = "%s-%s" % (base, n)
-                n += 1
-            if request.form.get("accion") == "publicar" and es_g:
-                art.estado = "PUBLICADO"
-                art.publicado_por = session.get("usuario") or ""
-                art.publicado_en = fecha_hoy() or ""
-            db.session.add(art)
-            db.session.commit()
-            msg = "Guardado (%s)." % art.estado
-    lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(30).all()
-    filas = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria)) for a in lista) or "<tr><td colspan='3'>—</td></tr>"
-    pub = '<button name="accion" value="publicar" type="submit" class="btn">Publicar</button>' if es_g else ""
-    content = f"""
-<header class="role-hero"><div><h1>Support · Editor</h1></div><a class="btn" href="/support">Ver público</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel" style="max-width:640px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Título</label><input name="titulo" required>
-<label>Categoría</label><input name="categoria" value="General">
-<label>Contenido</label><textarea name="cuerpo" rows="10" required></textarea>
-<div style="display:flex;gap:8px"><button name="accion" value="guardar" type="submit" class="btn">Guardar</button>{pub}</div>
-</form></section>
-<section class="role-panel"><table class="table" style="width:100%"><tr><th>Título</th><th>Estado</th><th>Cat.</th></tr>{filas}</table></section>"""
-    return page("Editor Support", shell(content))
-
-
-@app.route("/soporte/ticket-dev", methods=["GET", "POST"])
-def soporte_ticket_dev_nuevo():
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
-    _ensure_mod_tables()
-    msg = err = ""
-    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
-    if request.method == "POST":
-        iid = request.form.get("institucion_id")
-        inst = Institucion.query.get(int(iid)) if iid and str(iid).isdigit() else None
-        modulo = (request.form.get("modulo_afectado") or "").strip()[:160]
-        desc = (request.form.get("descripcion") or "").strip()
-        if not inst or not modulo or not desc:
-            err = "Colegio, módulo y descripción son obligatorios."
-        else:
+    # Bloque firmas (estilo factura) — sin puntos negros
+    y = min(y, 4.8 * cm)
+    c.setStrokeColorRGB(0.85, 0.85, 0.88)
+    c.setLineWidth(0.5)
+    c.line(1.8 * cm, y + 0.4 * cm, w - 1.8 * cm, y + 0.4 * cm)
+    y -= 0.15 * cm
+    col1, col2 = 2.2 * cm, 11.2 * cm
+    for path, x in ((firmas["rep_firma"], col1), (firmas["ger_firma"], col2)):
+        abs_p = _abs_static_path(path)
+        if abs_p and os.path.isfile(abs_p):
             try:
-                n = TicketDev.query.count() + 1
-            except Exception:
-                n = 1
-            t = TicketDev(
-                codigo="DEV-%s-%04d" % ((fecha_hoy() or "2026")[:4], n),
-                institucion_id=inst.id, colegio_nombre=(inst.nombre or "")[:200],
-                plan_activo=(inst.plan or "Basico")[:80], modulo_afectado=modulo,
-                descripcion=desc, logs_consola=(request.form.get("logs_consola") or ""),
-                verificado_suplantacion=request.form.get("verificado_suplantacion") == "1",
-                estado="RADICADO",
-                prioridad="ALTA" if "premium" in (inst.plan or "").lower() else "MEDIA",
-                radicado_por=session.get("usuario") or "Soporte",
-                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
-            )
-            db.session.add(t)
-            db.session.commit()
-            msg = "Ticket %s radicado a Desarrollo." % t.codigo
-    opts = "".join('<option value="%s">%s</option>' % (i.id, _esc(i.nombre or i.codigo)) for i in colegios)
-    content = f"""
-<header class="role-hero"><div><h1>Escalar a Desarrollo</h1></div>
-<a class="btn" href="/soporte/mis-tickets-dev">Mis tickets</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-<section class="role-panel" style="max-width:640px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Colegio</label><select name="institucion_id" required><option value="">—</option>{opts}</select>
-<label>Módulo</label><input name="modulo_afectado" required placeholder="/notas/planilla">
-<label>Descripción técnica</label><textarea name="descripcion" rows="4" required></textarea>
-<label>Logs</label><textarea name="logs_consola" rows="3"></textarea>
-<label style="display:flex;gap:8px"><input type="checkbox" name="verificado_suplantacion" value="1"> Verificado por suplantación</label>
-<button class="btn" type="submit" style="background:#b91c1c;color:#fff">Radicar</button>
-</form></section>"""
-    return page("Escalar a Dev", shell(content))
-
-
-@app.route("/soporte/mis-tickets-dev")
-def soporte_mis_tickets_dev():
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
-    _ensure_mod_tables()
-    tickets = TicketDev.query.order_by(TicketDev.id.desc()).limit(50).all()
-    filas = "".join(
-        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-        % (_esc(t.codigo), _esc(t.colegio_nombre), _esc(t.modulo_afectado), _esc(t.estado), _esc(t.creado_en or ""))
-        for t in tickets
-    ) or "<tr><td colspan='5'>—</td></tr>"
-    content = f"""
-<header class="role-hero"><div><h1>Mis tickets a Dev</h1></div>
-<a class="btn" href="/soporte/ticket-dev">+ Nuevo</a></header>
-<section class="role-panel"><table class="table" style="width:100%">
-<tr><th>Código</th><th>Colegio</th><th>Módulo</th><th>Estado</th><th>Fecha</th></tr>{filas}</table></section>"""
-    return page("Mis tickets Dev", shell(content))
-
-
-@app.route("/desarrollo/tickets")
-def desarrollo_tickets():
-    if not requiere_login() or rol_actual() not in ("Desarrollador", "Developer", "Superadmin"):
-        return redirect("/dev-console-login")
-    _ensure_mod_tables()
-    tickets = TicketDev.query.order_by(TicketDev.id.desc()).limit(80).all()
-    filas = "".join(
-        "<tr><td><a href='/desarrollo/tickets/%s'>%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-        % (t.id, _esc(t.codigo), _esc(t.colegio_nombre), _esc(t.modulo_afectado), _esc(t.estado), _esc(t.prioridad))
-        for t in tickets
-    ) or "<tr><td colspan='5'>—</td></tr>"
-    content = f"""
-<header class="role-hero"><div><h1>Tickets de ingeniería</h1></div></header>
-<section class="role-panel"><table class="table" style="width:100%">
-<tr><th>Código</th><th>Colegio</th><th>Módulo</th><th>Estado</th><th>Prioridad</th></tr>{filas}</table></section>"""
-    return page("Tickets Dev", shell(content))
-
-
-@app.route("/desarrollo/tickets/<int:tid>", methods=["GET", "POST"])
-def desarrollo_ticket_detalle(tid):
-    if not requiere_login() or rol_actual() not in ("Desarrollador", "Developer", "Superadmin"):
-        return redirect("/dev-console-login")
-    _ensure_mod_tables()
-    t = TicketDev.query.get(tid)
-    if not t:
-        return acceso_denegado("No encontrado")
-    msg = ""
-    if request.method == "POST":
-        acc = request.form.get("accion")
-        t.nota_desarrollo = (request.form.get("nota") or t.nota_desarrollo or "")[:2000]
-        if acc == "validacion":
-            t.estado = "EN_VALIDACION"
-        elif acc == "resolver":
-            t.estado = "RESUELTO"
-            t.aviso_soporte = True
-            t.resuelto_en = fecha_hoy() or ""
-            try:
-                registrar_auditoria("Ticket Dev resuelto", "%s · %s" % (t.codigo, t.nota_desarrollo[:120]))
+                c.drawImage(abs_p, x, y - 0.2 * cm, width=4.5 * cm, height=1.6 * cm, preserveAspectRatio=True, mask="auto")
             except Exception:
                 pass
-        db.session.commit()
-        msg = "Actualizado."
-    content = f"""
-<header class="role-hero"><div><h1>{_esc(t.codigo)}</h1><p>{_esc(t.colegio_nombre)}</p></div>
-<a class="btn" href="/desarrollo/tickets">Bandeja</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel">
-<pre style="white-space:pre-wrap">{_esc(t.descripcion)}</pre>
-<pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-size:12px">{_esc(t.logs_consola or "—")}</pre>
-<form method="POST" style="display:grid;gap:10px;max-width:520px;margin-top:12px">
-<textarea name="nota" rows="3" placeholder="Qué se reparó">{_esc(t.nota_desarrollo or "")}</textarea>
-<div style="display:flex;gap:8px">
-<button name="accion" value="validacion" class="btn" type="submit">En validación</button>
-<button name="accion" value="resolver" class="btn" type="submit" style="background:#15803d;color:#fff">Resuelto</button>
-</div></form></section>"""
-    return page(t.codigo, shell(content))
-
-
-@app.route("/soporte/retracto", methods=["GET", "POST"])
-def soporte_radicar_retracto():
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
-    _ensure_mod_tables()
-    msg = err = ""
-    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
-    if request.method == "POST":
-        iid = request.form.get("institucion_id")
-        inst = Institucion.query.get(int(iid)) if iid and str(iid).isdigit() else None
-        motivo = (request.form.get("motivo") or "").strip()
-        if not inst or not motivo:
-            err = "Colegio y motivo obligatorios."
-        else:
-            try:
-                n = CasoRetracto.query.count() + 1
-            except Exception:
-                n = 1
-            c = CasoRetracto(
-                codigo="RET-%s-%04d" % ((fecha_hoy() or "2026")[:4], n),
-                institucion_id=inst.id, colegio_nombre=(inst.nombre or "")[:220],
-                plan_contratado=(inst.plan or "")[:80],
-                fecha_firma_contrato=(getattr(inst, "fecha_inicio_licencia", None) or "")[:10],
-                motivo=motivo, motivo_detalle=(request.form.get("detalle") or ""),
-                estado="PENDIENTE", radicado_por=session.get("usuario") or "Soporte",
-                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
-            )
-            db.session.add(c)
-            db.session.commit()
-            msg = "Caso %s enviado a Gerencia." % c.codigo
-    opts = "".join('<option value="%s">%s</option>' % (i.id, _esc(i.nombre or i.codigo)) for i in colegios)
-    content = f"""
-<header class="role-hero"><div><h1>Radicar retracto a Gerencia</h1>
-<p>Soporte no procesa bajas. Solo radica el caso.</p></div></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-<section class="role-panel" style="max-width:560px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Colegio</label><select name="institucion_id" required><option value="">—</option>{opts}</select>
-<label>Motivo</label>
-<select name="motivo" required>
-<option value="tecnico">Limitaciones técnicas</option>
-<option value="presupuesto">Presupuesto</option>
-<option value="competencia">Migración a competencia</option>
-<option value="cierre">Cierre institución</option>
-</select>
-<label>Detalle</label><textarea name="detalle" rows="3"></textarea>
-<button class="btn" type="submit" style="background:#b91c1c;color:#fff">Enviar a Gerencia</button>
-</form></section>"""
-    return page("Radicar retracto", shell(content))
+    y -= 1.9 * cm
+    c.setStrokeColorRGB(0.2, 0.2, 0.25)
+    c.setLineWidth(0.8)
+    c.line(col1, y, col1 + 5.5 * cm, y)
+    c.line(col2, y, col2 + 5.5 * cm, y)
+    y -= 0.4 * cm
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColorRGB(0.1, 0.1, 0.12)
+    c.drawString(col1, y, firmas["rep_nombre"][:40])
+    c.drawString(col2, y, firmas["ger_nombre"][:40])
+    y -= 0.35 * cm
+    c.setFont("Helvetica", 8)
+    c.setFillColorRGB(0.4, 0.4, 0.45)
+    c.drawString(col1, y, firmas["rep_cargo"][:40])
+    c.drawString(col2, y, "Gerente general")
+    # Pie documento
+    c.setFont("Helvetica", 7)
+    c.setFillColorRGB(0.5, 0.5, 0.55)
+    c.drawString(1.8 * cm, 1.2 * cm, "%s · Documento generado automáticamente · Confidencial" % firmas["empresa"])
+    if firmas.get("email") or firmas.get("tel"):
+        c.drawString(1.8 * cm, 0.85 * cm, " ".join(filter(None, [firmas.get("email"), firmas.get("tel")])))
+    c.save()
+    buf.seek(0)
+    return buf
 
 
 @app.route("/gerencia/retractos")
@@ -65080,18 +65086,19 @@ def gerencia_retractos_lista():
     _ensure_mod_tables()
     casos = CasoRetracto.query.order_by(CasoRetracto.id.desc()).limit(60).all()
     filas = "".join(
-        "<tr><td><a href='/gerencia/retractos/%s'>%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-        % (c.id, _esc(c.codigo), _esc(c.colegio_nombre), _esc(c.estado), _esc(c.motivo), _esc(c.creado_en or ""))
+        "<tr><td><a href='/gerencia/retractos/%s'>%s</a></td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (c.id, _esc(c.codigo), _esc(c.colegio_nombre), _esc(c.estado), _esc(c.creado_en or ""))
         for c in casos
-    ) or "<tr><td colspan='5'>Sin casos</td></tr>"
+    ) or "<tr><td colspan='4'>Sin casos</td></tr>"
     content = f"""
 <header class="role-hero"><div><h1>Retractos y bajas</h1></div>
-<div style="display:flex;gap:8px">
+<div style="display:flex;gap:8px;flex-wrap:wrap">
 <a class="btn" href="/gerencia/retractos/config">Leyes y cláusulas</a>
+<a class="btn" href="/gerencia/retractos/config/pdf" target="_blank">PDF políticas</a>
 <a class="btn" href="/gerencia/retractos/reembolsos">Reembolsos</a>
 </div></header>
 <section class="role-panel"><table class="table" style="width:100%">
-<tr><th>Código</th><th>Colegio</th><th>Estado</th><th>Motivo</th><th>Fecha</th></tr>{filas}</table></section>"""
+<tr><th>Código</th><th>Colegio</th><th>Estado</th><th>Fecha</th></tr>{filas}</table></section>"""
     return page("Retractos", shell(content))
 
 
@@ -65122,36 +65129,31 @@ def gerencia_retracto_caso(cid):
             if inst:
                 inst.estado = "SUSPENDIDA"
             db.session.commit()
-            msg = "Aprobado y colegio suspendido."
+            msg = "Aprobado."
         elif acc == "congelar":
             caso.estado = "CONGELADO"
             caso.resuelto_por, caso.resuelto_en = user, ahora
-            inst = Institucion.query.get(caso.institucion_id) if caso.institucion_id else None
-            if inst:
-                inst.estado = "SUSPENDIDA"
             db.session.commit()
-            msg = "Cuenta congelada."
+            msg = "Congelado."
         elif acc == "rechazar":
             caso.estado = "RECHAZADO_PENALIDAD"
             caso.resuelto_por, caso.resuelto_en = user, ahora
             db.session.commit()
-            msg = "Rechazado con penalidad."
+            msg = "Rechazado."
         else:
             db.session.commit()
             msg = "Guardado."
     content = f"""
-<header class="role-hero"><div><h1>{_esc(caso.codigo)}</h1><p>{_esc(caso.colegio_nombre)} · {_esc(caso.estado)}</p></div>
+<header class="role-hero"><div><h1>{_esc(caso.codigo)}</h1><p>{_esc(caso.colegio_nombre)}</p></div>
 <a class="btn" href="/gerencia/retractos">Bandeja</a></header>
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
 <section class="role-panel">
-<p><b>Plan:</b> {_esc(caso.plan_contratado)} · <b>Motivo:</b> {_esc(caso.motivo)}</p>
-<p>{_esc(caso.motivo_detalle)}</p>
 <form method="POST" style="display:grid;gap:10px;max-width:480px">
-<label>Monto reembolso</label><input type="number" name="monto_reembolso" value="{caso.monto_reembolso or 0}">
+<label>Reembolso</label><input type="number" name="monto_reembolso" value="{caso.monto_reembolso or 0}">
 <label>Notas</label><textarea name="notas" rows="3">{_esc(caso.notas_gerencia or "")}</textarea>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
 <button name="accion" value="guardar" class="btn" type="submit">Guardar</button>
-<button name="accion" value="aprobar" class="btn" type="submit" style="background:#15803d;color:#fff">Aprobar devolución</button>
+<button name="accion" value="aprobar" class="btn" type="submit" style="background:#15803d;color:#fff">Aprobar</button>
 <button name="accion" value="congelar" class="btn" type="submit" style="background:#ca8a04;color:#fff">Congelar</button>
 <button name="accion" value="rechazar" class="btn" type="submit" style="background:#b91c1c;color:#fff">Rechazar</button>
 </div></form></section>"""
@@ -65171,9 +65173,9 @@ def gerencia_retractos_config():
     cfg = ConfigRetracto.query.first()
     if not cfg:
         cfg = ConfigRetracto(
-            articulo_47_texto="Artículo 47 — Derecho de retracto (Ley 1480). El consumidor podrá retractarse dentro de los cinco (5) días hábiles siguientes a la celebración del contrato a distancia.",
+            articulo_47_texto="Artículo 47 — Derecho de retracto (Ley 1480). En contratos a distancia el consumidor podrá retractarse dentro de los cinco (5) días hábiles siguientes a la celebración del contrato.",
             dias_habiles_retracto=5,
-            politica_reembolso_implementacion="El fee de implementación no se reembolsa si ya hubo capacitación o migración SIMAT.",
+            politica_reembolso_implementacion="El fee de implementación no se reembolsa si ya se ejecutó capacitación docente o migración de datos SIMAT.",
             penalidad_cancelacion_pct=20.0,
             dias_retencion_datos=30,
         )
@@ -65196,53 +65198,40 @@ def gerencia_retractos_config():
         msg = "Guardado."
     firmas = _corp_firmas()
     content = f"""
-<header class="role-hero"><div><h1>Leyes y cláusulas de retracto</h1>
-<p>Editor corporativo · negrita · PDF con firmas</p></div>
-<div style="display:flex;gap:8px">
-<a class="btn" href="/gerencia/retractos/config/pdf" target="_blank">Descargar PDF</a>
-<a class="btn" href="/gerencia/retractos">Bandeja</a>
-</div></header>
+<header class="role-hero"><div><h1>Leyes y cláusulas</h1>
+<p>Editor con negrita · PDF corporativo tipo factura (logo + firmas reales)</p></div>
+<a class="btn" href="/gerencia/retractos/config/pdf" target="_blank">Descargar PDF</a></header>
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
 <style>
-.ed-toolbar button{{border:1px solid #d2d2d7;background:#fff;border-radius:8px;padding:6px 12px;margin-right:6px;cursor:pointer;font-weight:600}}
-.ed-area{{min-height:120px;border:1px solid #d2d2d7;border-radius:12px;padding:14px;background:#fff;font-size:15px;line-height:1.5}}
-.ed-area:focus{{outline:2px solid #005BEA}}
+.ed-toolbar button{{border:1px solid #d2d2d7;background:#fff;border-radius:8px;padding:6px 12px;margin-right:6px;cursor:pointer;font-weight:700}}
+.ed-area{{min-height:110px;border:1px solid #d2d2d7;border-radius:12px;padding:14px;background:#fff}}
 </style>
 <section class="role-panel" style="max-width:720px">
-<form method="POST" id="form-cfg" style="display:grid;gap:14px">
-<label><b>Art. 47 Ley 1480 — use negrita en la barra</b></label>
-<div class="ed-toolbar">
-  <button type="button" onclick="document.execCommand('bold')">B Negrita</button>
-  <button type="button" onclick="document.execCommand('italic')">I Cursiva</button>
-</div>
+<form method="POST" style="display:grid;gap:12px">
+<label><b>Art. 47 Ley 1480</b></label>
+<div class="ed-toolbar"><button type="button" onclick="document.execCommand('bold')">B Negrita</button></div>
 <div class="ed-area" id="ed47" contenteditable="true">{cfg.articulo_47_texto or ""}</div>
 <input type="hidden" name="articulo_47_texto" id="hid47">
-<label>Días hábiles retracto</label>
-<input type="number" name="dias_habiles" value="{int(cfg.dias_habiles_retracto or 5)}">
+<label>Días hábiles</label><input type="number" name="dias_habiles" value="{int(cfg.dias_habiles_retracto or 5)}">
 <label>Política reembolso implementación</label>
-<div class="ed-toolbar">
-  <button type="button" onclick="document.execCommand('bold')">B Negrita</button>
-</div>
+<div class="ed-toolbar"><button type="button" onclick="document.execCommand('bold')">B Negrita</button></div>
 <div class="ed-area" id="edpol" contenteditable="true">{cfg.politica_reembolso_implementacion or ""}</div>
 <input type="hidden" name="politica_reembolso" id="hidpol">
-<label>Penalidad % cancelación anticipada</label>
-<input type="number" step="0.1" name="penalidad" value="{float(cfg.penalidad_cancelacion_pct or 0)}">
-<label>Días retención datos (Ley 1581)</label>
-<input type="number" name="retencion" value="{int(cfg.dias_retencion_datos or 30)}">
-<label>Cláusulas extra</label>
-<textarea name="clausulas_extra" rows="3">{_esc(cfg.clausulas_extra or "")}</textarea>
+<label>Penalidad %</label><input type="number" step="0.1" name="penalidad" value="{float(cfg.penalidad_cancelacion_pct or 0)}">
+<label>Días retención datos</label><input type="number" name="retencion" value="{int(cfg.dias_retencion_datos or 30)}">
+<label>Cláusulas extra</label><textarea name="clausulas_extra" rows="3">{_esc(cfg.clausulas_extra or "")}</textarea>
 <button class="btn" type="submit" onclick="document.getElementById('hid47').value=document.getElementById('ed47').innerHTML;document.getElementById('hidpol').value=document.getElementById('edpol').innerHTML;">Guardar</button>
 </form>
-<div style="margin-top:28px;padding-top:20px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+<div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;border-top:1px solid #e5e7eb;padding-top:16px">
   <div style="text-align:center">
-    {"<img src='"+_esc(firmas['rep_firma'])+"' style='max-height:64px'>" if firmas['rep_firma'] else "<div style='height:48px;border-bottom:1px solid #111;margin:0 24px'></div>"}
-    <p style="margin:8px 0 0;font-weight:700">{_esc(firmas['rep_nombre'])}</p>
-    <p style="margin:0;font-size:12px;color:#64748b">{_esc(firmas['rep_cargo'])}</p>
+    {"<img src='"+_esc(firmas['rep_firma'])+"' style='max-height:70px'>" if firmas['rep_firma'] else "<p class='mini-text'>Cargue firma en Firmas corporativas</p>"}
+    <p style="font-weight:700;margin:6px 0 0">{_esc(firmas['rep_nombre'])}</p>
+    <p class="mini-text">{_esc(firmas['rep_cargo'])}</p>
   </div>
   <div style="text-align:center">
-    {"<img src='"+_esc(firmas['ger_firma'])+"' style='max-height:64px'>" if firmas['ger_firma'] else "<div style='height:48px;border-bottom:1px solid #111;margin:0 24px'></div>"}
-    <p style="margin:8px 0 0;font-weight:700">{_esc(firmas['ger_nombre'])}</p>
-    <p style="margin:0;font-size:12px;color:#64748b">Gerente general</p>
+    {"<img src='"+_esc(firmas['ger_firma'])+"' style='max-height:70px'>" if firmas['ger_firma'] else "<p class='mini-text'>Cargue firma en Firmas corporativas</p>"}
+    <p style="font-weight:700;margin:6px 0 0">{_esc(firmas['ger_nombre'])}</p>
+    <p class="mini-text">Gerente general</p>
   </div>
 </div>
 </section>"""
@@ -65260,52 +65249,11 @@ def gerencia_retractos_config_pdf():
             return acceso_denegado()
     _ensure_mod_tables()
     cfg = ConfigRetracto.query.first()
-    firmas = _corp_firmas()
     try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.units import cm
-        import io as _io
-        import re as _re
-        buf = _io.BytesIO()
-        c = canvas.Canvas(buf, pagesize=letter)
-        w, h = letter
-        y = h - 2 * cm
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(2 * cm, y, "%s — Políticas de Retracto y Bajas" % firmas["empresa"])
-        y -= 1 * cm
-        c.setFont("Helvetica", 10)
-        def strip_html(t):
-            return _re.sub(r"<[^>]+>", "", t or "")
-        for title, text in (
-            ("Art. 47 Ley 1480", strip_html(cfg.articulo_47_texto if cfg else "")),
-            ("Política reembolso implementación", strip_html(cfg.politica_reembolso_implementacion if cfg else "")),
-            ("Cláusulas extra", strip_html(cfg.clausulas_extra if cfg else "")),
-        ):
-            c.setFont("Helvetica-Bold", 11)
-            c.drawString(2 * cm, y, title)
-            y -= 0.5 * cm
-            c.setFont("Helvetica", 9)
-            for line in (text or "—").split("\n"):
-                for i in range(0, max(len(line), 1), 90):
-                    c.drawString(2 * cm, y, line[i:i + 90])
-                    y -= 0.4 * cm
-                    if y < 4 * cm:
-                        c.showPage()
-                        y = h - 2 * cm
-            y -= 0.3 * cm
-        y = min(y, 5 * cm)
-        c.setFont("Helvetica", 9)
-        c.drawString(2 * cm, y, firmas["rep_nombre"])
-        c.drawString(11 * cm, y, firmas["ger_nombre"])
-        y -= 0.35 * cm
-        c.drawString(2 * cm, y, firmas["rep_cargo"])
-        c.drawString(11 * cm, y, "Gerente general")
-        c.save()
-        buf.seek(0)
+        buf = _pdf_doc_corporativo_retracto(cfg)
         return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="politica_retracto_procsis.pdf")
     except Exception as ex:
-        return acceso_denegado("No se pudo generar PDF: " + str(ex)[:80])
+        return acceso_denegado("PDF no generado: " + str(ex)[:100])
 
 
 @app.route("/gerencia/retractos/reembolsos", methods=["GET", "POST"])
@@ -65331,18 +65279,67 @@ def gerencia_retractos_reembolsos():
         "<tr><td>%s</td><td>%s</td><td>$%.0f</td><td>%s</td>"
         "<td><form method='POST' style='display:flex;gap:6px'>"
         "<input type='hidden' name='caso_id' value='%s'>"
-        "<input name='comprobante' placeholder='Transferencia' value='%s'>"
+        "<input name='comprobante' value='%s' placeholder='Nº transferencia'>"
         "<label><input type='checkbox' name='terminado' value='1'> OK</label>"
         "<button class='btn' type='submit'>Guardar</button></form></td></tr>"
         % (_esc(c.codigo), _esc(c.colegio_nombre), c.monto_reembolso or 0, _esc(c.estado), c.id, _esc(c.comprobante_devolucion or ""))
         for c in casos
     ) or "<tr><td colspan='5'>—</td></tr>"
     content = f"""
-<header class="role-hero"><div><h1>Procesar reembolsos</h1></div>
+<header class="role-hero"><div><h1>Reembolsos</h1></div>
 <a class="btn" href="/gerencia/retractos">Bandeja</a></header>
 <section class="role-panel"><table class="table" style="width:100%">
-<tr><th>Código</th><th>Colegio</th><th>Reembolso</th><th>Estado</th><th>Comprobante</th></tr>{filas}</table></section>"""
+<tr><th>Código</th><th>Colegio</th><th>Monto</th><th>Estado</th><th>Comprobante</th></tr>{filas}</table></section>"""
     return page("Reembolsos", shell(content))
+
+
+@app.route("/soporte/retracto", methods=["GET", "POST"])
+def soporte_radicar_retracto():
+    if not requiere_login() or rol_actual() != "Soporte":
+        return redirect("/soporte-login")
+    _ensure_mod_tables()
+    msg = err = ""
+    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    if request.method == "POST":
+        iid = request.form.get("institucion_id")
+        inst = Institucion.query.get(int(iid)) if iid and str(iid).isdigit() else None
+        motivo = (request.form.get("motivo") or "").strip()
+        if not inst or not motivo:
+            err = "Colegio y motivo obligatorios."
+        else:
+            try:
+                n = CasoRetracto.query.count() + 1
+            except Exception:
+                n = 1
+            c = CasoRetracto(
+                codigo="RET-%s-%04d" % ((fecha_hoy() or "2026")[:4], n),
+                institucion_id=inst.id, colegio_nombre=(inst.nombre or "")[:220],
+                plan_contratado=(inst.plan or "")[:80], motivo=motivo,
+                motivo_detalle=(request.form.get("detalle") or ""),
+                estado="PENDIENTE", radicado_por=session.get("usuario") or "Soporte",
+                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+            )
+            db.session.add(c)
+            db.session.commit()
+            msg = "Caso %s enviado a Gerencia." % c.codigo
+    opts = "".join('<option value="%s">%s</option>' % (i.id, _esc(i.nombre or i.codigo)) for i in colegios)
+    content = f"""
+<header class="role-hero"><div><h1>Radicar retracto</h1><p>Solo Gerencia aprueba bajas.</p></div></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+<section class="role-panel" style="max-width:520px">
+<form method="POST" style="display:grid;gap:10px">
+<label>Colegio</label><select name="institucion_id" required><option value="">—</option>{opts}</select>
+<label>Motivo</label>
+<select name="motivo" required>
+<option value="tecnico">Limitaciones técnicas</option>
+<option value="presupuesto">Presupuesto</option>
+<option value="competencia">Competencia</option>
+<option value="cierre">Cierre institución</option>
+</select>
+<label>Detalle</label><textarea name="detalle" rows="3"></textarea>
+<button class="btn" type="submit" style="background:#b91c1c;color:#fff">Enviar a Gerencia</button>
+</form></section>"""
+    return page("Radicar retracto", shell(content))
 
 
 if __name__ == "__main__":
