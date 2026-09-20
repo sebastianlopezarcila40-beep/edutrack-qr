@@ -3714,6 +3714,9 @@ def _staff_nav_items(path, rol=""):
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/hq", "Dashboard"),
+            ("/gerencia/retractos", "Retractos y bajas"),
+            ("/gerencia/retractos/config", "Leyes y cláusulas"),
+            ("/gerencia/retractos/reembolsos", "Procesar reembolsos"),
             ("/gerencia/planes", "Planes activos"),
             ("/gerencia/beneficios", "Beneficios"),
             ("/gerencia/planes/nuevo", "Crear plan"),
@@ -6472,13 +6475,14 @@ def shell_soporte(content):
         ("/soporte/pqr", "Centro PQR"),
         ("/soporte/pqr/crear", "Radicar PQR interna"),
         ("/soporte/pqr/consulta", "Consulta validada"),
+        ("/soporte/retracto", "Radicar retracto (a Gerencia)"),
         ("/pqr", "Portal PQR"),
         ("/contacto", "Vista contacto público"),
     ]
     enlaces = "".join(f'<a href="{u}">{n}</a>' for u, n in menu)
     return f"""
 <div class="role-layout">
-  <aside class="role-sidebar" style="background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%)">
+  <aside class="role-sidebar" style="background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%);height:100vh;max-height:100vh;overflow-y:auto;position:sticky;top:0">
     <img src="{logo}" alt="Procsis" style="background:#fff;border-radius:14px;padding:8px">
     <h2 style="font-size:15px;letter-spacing:.5px">{(p.empresa or 'Procsis').upper()}</h2>
     <p class="welcome-msg">Centro de operaciones · {nombre_producto()} · {nombre_empresa()}</p>
@@ -11101,14 +11105,13 @@ def _ensure_login_pie_cols():
         pass
 
 def _login_pie_defaults():
-    # 1 = sitio principal | 2 = Support
     p1 = (
         "1. Según los datos del estudio de rendimiento técnico de PROCSIS realizado en el año en curso "
         "sobre la optimización de procesos y control de asistencia digital. Para obtener más información "
-        "y revisar los reportes de calidad, visita procsis.com."
+        "y revisar los reportes de calidad, visita {url}."
     )
     p2 = (
-        "2. Consulta support.procsis.com para obtener más información sobre las funcionalidades del ecosistema en la nube "
+        "2. Consulta {url} para obtener más información sobre las funcionalidades del ecosistema en la nube "
         "y los requisitos mínimos del sistema para la institución. Algunas funcionalidades requieren conexión "
         "a internet estable. El acceso al portal familiar o notificaciones por WhatsApp (API WATI) está sujeto "
         "a la activación y límites técnicos establecidos en el plan contratado. Algunas herramientas pueden no "
@@ -11123,7 +11126,7 @@ def _login_pie_defaults():
     return p1, p2, extra
 
 def _html_login_pie_colegios():
-    """Pie login: textos legales + footer OSCURO corporativo PROCSIS (no columnas Producto/Acceso/Legal)."""
+    """Bloque pie estilo Apple debajo del login de instituciones."""
     try:
         _ensure_login_pie_cols()
     except Exception:
@@ -11132,78 +11135,79 @@ def _html_login_pie_colegios():
         p = plataforma()
     except Exception:
         p = None
+    url = "/procsis"
+    try:
+        url = (getattr(p, "sitio_oficial_url", None) or getattr(p, "web", None) or "/procsis").strip() or "/procsis"
+    except Exception:
+        pass
+    if url and not url.startswith("http") and not url.startswith("/"):
+        url = "https://" + url
+    label = "procsis.com"
+    if "://" in url:
+        label = url.split("://", 1)[-1].rstrip("/")
+    elif url.startswith("/"):
+        label = "procsis.com"
     p1_def, p2_def, extra_def = _login_pie_defaults()
-    # Preferir defaults correctos si la BD tiene texto viejo roto
     p1 = (getattr(p, "login_pie_p1", None) or "").strip() or p1_def
     p2 = (getattr(p, "login_pie_p2", None) or "").strip() or p2_def
     extra = (getattr(p, "login_pie_extra", None) or "").strip() or extra_def
-    for bad in ("support.support.procsis.com", "support.support."):
-        p1 = p1.replace(bad, "procsis.com")
-        p2 = p2.replace(bad, "support.procsis.com")
-    link_main = '<a href="/procsis" style="color:#2997ff;text-decoration:underline">procsis.com</a>'
-    link_sup = '<a href="/support" style="color:#2997ff;text-decoration:underline">support.procsis.com</a>'
-    def _fill_p1(txt):
-        t = _esc(txt or "")
-        t = t.replace(_esc("support.support.procsis.com"), link_main)
-        t = t.replace(_esc("procsis.com"), link_main)
+    link = '<a href="%s" style="color:#0066cc;text-decoration:underline">%s</a>' % (_esc(url), _esc(label))
+    def _fill(txt):
+        t = (txt or "").replace("{url}", "§URL§")
+        t = _esc(t).replace("§URL§", link)
+        # también reemplazar menciones literales a procsis.com
+        t = t.replace(_esc("procsis.com"), link)
         return t
-    def _fill_p2(txt):
-        t = _esc(txt or "")
-        t = t.replace(_esc("support.support.procsis.com"), link_sup)
-        t = t.replace(_esc("support.procsis.com"), link_sup)
-        return t
-    try:
-        corp_email = (getattr(p, "email_empresa", None) or getattr(p, "email_soporte", None) or "procsis.edu@gmail.com") if p else "procsis.edu@gmail.com"
-        corp_tel = (getattr(p, "telefono_empresa", None) or getattr(p, "telefono_soporte", None) or "3246868183") if p else "3246868183"
-    except Exception:
-        corp_email, corp_tel = "procsis.edu@gmail.com", "3246868183"
     return f"""
 <style>
-.login-apple-foot{{max-width:1100px;margin:0 auto;padding:28px 20px 8px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
+.login-apple-foot{{max-width:980px;margin:0 auto;padding:28px 20px 40px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}}
 .login-apple-foot .laf-notes{{font-size:12px;line-height:1.55;color:#6e6e73;margin:0 0 10px}}
 .login-apple-foot .laf-notes a{{color:#0066cc;text-decoration:underline}}
-.login-corp-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:12px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
-.login-corp-foot .lcf-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:32px}}
-@media(max-width:800px){{.login-corp-foot .lcf-inner{{grid-template-columns:1fr}}}}
-.login-corp-foot .lcf-brand{{font-weight:600;font-size:15px;color:#f5f5f7;margin-bottom:12px}}
-.login-corp-foot a{{color:#2997ff;text-decoration:none;display:block;margin:8px 0;font-size:13px;font-weight:500}}
-.login-corp-foot a:hover{{text-decoration:underline}}
-.login-corp-foot h4{{margin:0 0 12px;color:#f5f5f7;font-size:13px;font-weight:600}}
-.login-corp-foot p{{margin:4px 0;font-size:13px;color:#a1a1a6;line-height:1.5}}
-.login-corp-foot .lcf-copy{{max-width:1100px;margin:28px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6e6e73;text-align:center}}
+.login-apple-foot .laf-rule{{border:0;border-top:1px solid #d2d2d7;margin:22px 0 20px}}
+.login-apple-foot .laf-cols{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 24px;font-size:12px}}
+.login-apple-foot .laf-cols h4{{margin:0 0 10px;font-size:12px;font-weight:600;color:#1d1d1f}}
+.login-apple-foot .laf-cols a,.login-apple-foot .laf-cols span{{display:block;color:#424245;text-decoration:none;margin:0 0 8px;line-height:1.35}}
+.login-apple-foot .laf-cols a:hover{{text-decoration:underline;color:#0066cc}}
+.login-apple-foot .laf-copy{{margin-top:22px;font-size:11px;color:#86868b}}
+@media(max-width:800px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr 1fr}}}}
+@media(max-width:480px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr}}}}
 </style>
 <div class="login-apple-foot">
-  <p class="laf-notes">{_fill_p1(p1)}</p>
-  <p class="laf-notes">{_fill_p2(p2)}</p>
-  <p class="laf-notes">{_esc(extra)}</p>
-</div>
-<footer class="login-corp-foot">
-  <div class="lcf-inner">
+  <p class="laf-notes">{_fill(p1)}</p>
+  <p class="laf-notes">{_fill(p2)}</p>
+  <p class="laf-notes">{_fill(extra)}</p>
+  <hr class="laf-rule">
+  <div class="laf-cols">
     <div>
-      <div class="lcf-brand">PROCSIS</div>
-      <p>Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.</p>
+      <h4>Producto</h4>
+      <a href="/ventas">Planes EduTrack</a>
+      <a href="/tecnologia">Tecnología</a>
+      <a href="/ayuda">Centro de ayuda</a>
+      <a href="/pqr">Radicar PQR</a>
     </div>
     <div>
-      <h4>Navegación</h4>
-      <a href="/">Inicio</a>
-      <a href="/procsis">Portafolio</a>
-      <a href="/procsis">PROCSIS</a>
-      <a href="/ventas">Planes</a>
-      <a href="/login">Acceso instituciones</a>
-      <a href="/support">Support</a>
+      <h4>Acceso</h4>
+      <a href="/login">Portal instituciones</a>
+      <a href="/familia-login">Portal familiar</a>
+      <a href="/backoffice">Backoffice PROCSIS</a>
     </div>
     <div>
-      <h4>Contacto</h4>
-      <p>{_esc(corp_email)}</p>
-      <p>{_esc(corp_tel)}</p>
-      <a href="/contacto">Formulario de contacto</a>
-      <a href="/legal">Privacidad y datos</a>
+      <h4>Empresa</h4>
+      <a href="{_esc(url)}">Sitio oficial PROCSIS</a>
+      <a href="/contacto">Contacto</a>
+      <a href="/quienes-somos">Quiénes somos</a>
+    </div>
+    <div>
+      <h4>Legal</h4>
+      <a href="/legal">Privacidad</a>
+      <a href="/cookies">Cookies</a>
+      <a href="/tratamiento-datos">Tratamiento de datos</a>
+      <a href="/politica-pqr">Política PQR</a>
     </div>
   </div>
-  <div class="lcf-copy">© 2026 PROCSIS · Soluciones digitales. Todos los derechos reservados.</div>
-</footer>
+  <div class="laf-copy">© EduTrack · PROCSIS. Contenido del pie editable desde Gerencia.</div>
+</div>
 """
-
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -64588,6 +64592,664 @@ def aceptar_terminos_pago():
     return redirect(request.form.get("next") or request.referrer or "/pagar")
 
 
+# ── Gestión de Retractos y Bajas (Gerencia) + radicación Soporte ─────────────
+
+class ConfigRetracto(db.Model):
+    """Submódulo 1: leyes y cláusulas (una fila de configuración global)."""
+    __tablename__ = "config_retracto"
+    id = db.Column(db.Integer, primary_key=True)
+    articulo_47_texto = db.Column(db.Text, default="")
+    dias_habiles_retracto = db.Column(db.Integer, default=5)
+    politica_reembolso_implementacion = db.Column(db.Text, default="")
+    reembolsa_implementacion_si_no_iniciada = db.Column(db.Boolean, default=True)
+    penalidad_cancelacion_pct = db.Column(db.Float, default=0.0)
+    dias_retencion_datos = db.Column(db.Integer, default=30)
+    clausulas_extra = db.Column(db.Text, default="")
+    actualizado_en = db.Column(db.String(30), default="")
+    actualizado_por = db.Column(db.String(120), default="")
+
+
+class CasoRetracto(db.Model):
+    """Caso de retracto / baja gestionado por Gerencia."""
+    __tablename__ = "casos_retracto"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), unique=True, index=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    colegio_nombre = db.Column(db.String(220), default="")
+    rector_nombre = db.Column(db.String(160), default="")
+    plan_contratado = db.Column(db.String(80), default="")
+    fecha_firma_contrato = db.Column(db.String(20), default="")
+    monto_implementacion = db.Column(db.Float, default=0.0)
+    saldo_cartera = db.Column(db.Float, default=0.0)
+    monto_pagado_mensualidad = db.Column(db.Float, default=0.0)
+    motivo = db.Column(db.String(80), default="")  # tecnico|presupuesto|competencia|cierre
+    motivo_detalle = db.Column(db.Text, default="")
+    # PENDIENTE | RETRACTO_LEY | APROBADO_DEVOLUCION | CONGELADO | RECHAZADO_PENALIDAD | TERMINADO
+    estado = db.Column(db.String(40), default="PENDIENTE", index=True)
+    dias_transcurridos = db.Column(db.Integer, default=0)
+    aplica_retracto_ley = db.Column(db.Boolean, default=False)
+    monto_reembolso = db.Column(db.Float, default=0.0)
+    monto_penalidad = db.Column(db.Float, default=0.0)
+    comprobante_devolucion = db.Column(db.Text, default="")
+    radicado_por = db.Column(db.String(120), default="")
+    resuelto_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="")
+    resuelto_en = db.Column(db.String(30), default="")
+    notas_gerencia = db.Column(db.Text, default="")
+    historial_soporte_resumen = db.Column(db.Text, default="")
+    acta_pdf_path = db.Column(db.Text, default="")
+    retencion_hasta = db.Column(db.String(20), default="")
+
+
+def _ensure_retracto_tables():
+    try:
+        db.create_all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _config_retracto():
+    _ensure_retracto_tables()
+    cfg = ConfigRetracto.query.first()
+    if not cfg:
+        cfg = ConfigRetracto(
+            articulo_47_texto=(
+                "Artículo 47 — Derecho de retracto (Ley 1480 de 2011). En los contratos "
+                "celebrados a distancia (comercio electrónico), el consumidor tendrá derecho "
+                "a retractarse dentro de los cinco (5) días hábiles siguientes a la celebración "
+                "del contrato, sin indiciación de motivo y sin penalidad alguna, salvo excepciones legales."
+            ),
+            dias_habiles_retracto=5,
+            politica_reembolso_implementacion=(
+                "El fee de implementación no se reembolsa si ya se ejecutó capacitación docente "
+                "o migración de datos SIMAT. Solo se reembolsa la mensualidad no causada."
+            ),
+            reembolsa_implementacion_si_no_iniciada=True,
+            penalidad_cancelacion_pct=20.0,
+            dias_retencion_datos=30,
+        )
+        db.session.add(cfg)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    return cfg
+
+
+def _dias_habiles_entre(fecha_ini, fecha_fin=None):
+    """Cuenta días hábiles (lun-vie) entre dos fechas YYYY-MM-DD."""
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        a = _dt.strptime((fecha_ini or "")[:10], "%Y-%m-%d").date()
+    except Exception:
+        return 999
+    try:
+        b = _dt.strptime((fecha_fin or fecha_hoy())[:10], "%Y-%m-%d").date() if fecha_fin else _dt.now().date()
+    except Exception:
+        b = _dt.now().date()
+    if b < a:
+        return 0
+    n, cur = 0, a
+    while cur < b:
+        cur += _td(days=1)
+        if cur.weekday() < 5:
+            n += 1
+    return n
+
+
+def _saldo_cartera_inst(inst_id):
+    try:
+        from sqlalchemy import text as _sql_text
+        r = db.session.execute(
+            _sql_text(
+                "SELECT COALESCE(SUM(saldo),0) FROM facturas_cobro WHERE institucion_id=:i AND estado IN ('PENDIENTE','VENCIDA','PARCIAL')"
+            ),
+            {"i": inst_id},
+        ).scalar()
+        return float(r or 0)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return 0.0
+
+
+def _historial_soporte_inst(inst_id, limite=8):
+    """Resume tickets Dev / PQR ligados al colegio."""
+    lineas = []
+    try:
+        if "TicketDev" in globals() or True:
+            try:
+                from sqlalchemy import text as _sql_text
+                rows = db.session.execute(
+                    _sql_text(
+                        "SELECT codigo, estado, modulo_afectado, creado_en FROM tickets_dev "
+                        "WHERE institucion_id=:i ORDER BY id DESC LIMIT :n"
+                    ),
+                    {"i": inst_id, "n": limite},
+                ).fetchall()
+                for r in rows:
+                    lineas.append("Dev %s [%s] %s · %s" % (r[0], r[1], r[2] or "", r[3] or ""))
+            except Exception:
+                pass
+        try:
+            from sqlalchemy import text as _sql_text
+            rows = db.session.execute(
+                _sql_text(
+                    "SELECT radicado, estado, fecha FROM tickets_pqr WHERE institucion_id=:i ORDER BY id DESC LIMIT :n"
+                ),
+                {"i": inst_id, "n": limite},
+            ).fetchall()
+            for r in rows:
+                lineas.append("PQR %s [%s] %s" % (r[0], r[1], r[2] or ""))
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return "\n".join(lineas) if lineas else "Sin historial técnico vinculado."
+
+
+def _calcular_reembolso(cfg, aplica_ley, monto_impl, monto_mens, implementacion_iniciada=False):
+    if aplica_ley:
+        reemb_impl = float(monto_impl or 0) if (cfg.reembolsa_implementacion_si_no_iniciada and not implementacion_iniciada) else 0.0
+        return float(monto_mens or 0) + reemb_impl, 0.0
+    # Cancelación posterior: prorrata simplificada = no reembolso mens + penalidad
+    pen = float(monto_mens or 0) * (float(cfg.penalidad_cancelacion_pct or 0) / 100.0)
+    return 0.0, pen
+
+
+def _desactivar_colegio_retracto(inst, retencion_dias=30):
+    """Apaga acceso / feature flags y marca retención de datos."""
+    from datetime import datetime as _dt, timedelta as _td
+    inst.estado = "SUSPENDIDA"
+    try:
+        inst.motivo_cancelacion = "Retracto / baja aprobada por Gerencia"
+        inst.fecha_solicitud_cancelacion = fecha_hoy() or ""
+    except Exception:
+        pass
+    # Feature flags del tenant
+    try:
+        flags = FeatureFlag.query.filter_by(institucion_id=inst.id).all()
+        for f in flags:
+            f.activo = False
+    except Exception:
+        pass
+    hasta = (_dt.now() + _td(days=int(retencion_dias or 30))).strftime("%Y-%m-%d")
+    return hasta
+
+
+def _generar_acta_retracto_pdf(caso):
+    """PDF simple de acta de retracto."""
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
+        folder = os.path.join(app.root_path, "static", "uploads", "retractos")
+        os.makedirs(folder, exist_ok=True)
+        fname = "acta_%s.pdf" % (caso.codigo or caso.id)
+        path = os.path.join(folder, fname)
+        c = canvas.Canvas(path, pagesize=letter)
+        w, h = letter
+        y = h - 2 * cm
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(2 * cm, y, "ACTA DE RETRACTO / TERMINACIÓN DE SERVICIO")
+        y -= 1.2 * cm
+        c.setFont("Helvetica", 10)
+        for line in [
+            "Código: %s" % (caso.codigo or ""),
+            "Institución: %s" % (caso.colegio_nombre or ""),
+            "Plan: %s" % (caso.plan_contratado or ""),
+            "Fecha firma contrato: %s" % (caso.fecha_firma_contrato or ""),
+            "Estado: %s" % (caso.estado or ""),
+            "Monto reembolso: $ %s" % (caso.monto_reembolso or 0),
+            "Penalidad: $ %s" % (caso.monto_penalidad or 0),
+            "Retención de datos hasta: %s" % (caso.retencion_hasta or ""),
+            "Resuelto por: %s · %s" % (caso.resuelto_por or "", caso.resuelto_en or ""),
+            "",
+            "Las partes acuerdan la terminación del servicio y el tratamiento de datos",
+            "conforme a la Ley 1581 de 2012 (Habeas Data) y políticas PROCSIS.",
+        ]:
+            c.drawString(2 * cm, y, line[:95])
+            y -= 0.55 * cm
+        c.showPage()
+        c.save()
+        return "/static/uploads/retractos/" + fname
+    except Exception:
+        return ""
+
+
+@app.route("/soporte/retracto", methods=["GET", "POST"])
+def soporte_radicar_retracto():
+    """Soporte solo radica; no procesa. Llega a bandeja de Gerencia."""
+    if not requiere_login() or rol_actual() != "Soporte":
+        return redirect("/soporte-login")
+    _ensure_retracto_tables()
+    msg = err = ""
+    try:
+        colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    except Exception:
+        colegios = []
+    if request.method == "POST":
+        iid = request.form.get("institucion_id")
+        inst = Institucion.query.get(int(iid)) if iid and str(iid).isdigit() else None
+        motivo = (request.form.get("motivo") or "").strip()
+        detalle = (request.form.get("motivo_detalle") or "").strip()
+        if not inst:
+            err = "Seleccione el colegio."
+        elif not motivo:
+            err = "Seleccione el motivo."
+        else:
+            cfg = _config_retracto()
+            firma = (getattr(inst, "fecha_inicio_licencia", None) or getattr(inst, "creado_en", None) or "")[:10]
+            dias = _dias_habiles_entre(firma)
+            aplica = dias <= int(cfg.dias_habiles_retracto or 5)
+            saldo = _saldo_cartera_inst(inst.id)
+            hist = _historial_soporte_inst(inst.id)
+            ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
+            try:
+                n = CasoRetracto.query.count() + 1
+            except Exception:
+                n = 1
+            codigo = "RET-%s-%04d" % ((fecha_hoy() or "2026")[:4], n)
+            caso = CasoRetracto(
+                codigo=codigo,
+                institucion_id=inst.id,
+                colegio_nombre=(inst.nombre or inst.codigo or "")[:220],
+                plan_contratado=(inst.plan or "Basico")[:80],
+                fecha_firma_contrato=firma,
+                saldo_cartera=saldo,
+                motivo=motivo[:80],
+                motivo_detalle=detalle,
+                estado="RETRACTO_LEY" if aplica else "PENDIENTE",
+                dias_transcurridos=dias,
+                aplica_retracto_ley=aplica,
+                radicado_por=session.get("usuario") or "Soporte",
+                creado_en=ahora_s,
+                historial_soporte_resumen=hist,
+            )
+            db.session.add(caso)
+            db.session.commit()
+            try:
+                registrar_auditoria("Retracto radicado", "%s · %s · %s" % (codigo, caso.colegio_nombre, motivo))
+            except Exception:
+                pass
+            msg = "Caso %s enviado a Gerencia.%s" % (
+                codigo,
+                " Marcado como Retracto de Ley (≤ %s días hábiles)." % cfg.dias_habiles_retracto if aplica else "",
+            )
+    motivos = [
+        ("tecnico", "Limitaciones técnicas del software"),
+        ("presupuesto", "Problemas de presupuesto del colegio"),
+        ("competencia", "Migración a otra plataforma (Competencia)"),
+        ("cierre", "Cierre o intervención de la institución"),
+    ]
+    opts = "".join('<option value="%s">%s</option>' % (i.id, _esc(i.nombre or i.codigo)) for i in colegios)
+    mot = "".join('<option value="%s">%s</option>' % (k, v) for k, v in motivos)
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Radicar retracto / baja</h1>
+  <p>Soporte no procesa cancelaciones. Este caso llega como prioritario a Gerencia.</p>
+</div></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+<section class="role-panel" style="max-width:640px">
+<form method="POST" style="display:grid;gap:12px">
+<label>Colegio</label>
+<select name="institucion_id" required><option value="">— Seleccionar —</option>{opts}</select>
+<label>Motivo</label>
+<select name="motivo" required><option value="">— Motivo —</option>{mot}</select>
+<label>Detalle / lo que dijo el Rector</label>
+<textarea name="motivo_detalle" rows="4"></textarea>
+<button class="btn" type="submit" style="background:#b91c1c;color:#fff;font-weight:800">Enviar a Gerencia</button>
+</form>
+</section>"""
+    return page("Radicar retracto", shell_soporte(content) if rol_actual() == "Soporte" else shell(content))
+
+
+@app.route("/gerencia/retractos")
+def gerencia_retractos_lista():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_retracto_tables()
+    casos = CasoRetracto.query.order_by(CasoRetracto.id.desc()).limit(80).all()
+    abiertos = sum(1 for c in casos if c.estado in ("PENDIENTE", "RETRACTO_LEY", "CONGELADO"))
+    filas = "".join(
+        "<tr style='%s'><td><a href='/gerencia/retractos/%s'><b>%s</b></a></td><td>%s</td><td>%s</td>"
+        "<td>%s</td><td>%s días</td><td>%s</td><td>%s</td></tr>"
+        % (
+            "background:#fef2f2" if c.estado in ("PENDIENTE", "RETRACTO_LEY") else "",
+            c.id, _esc(c.codigo), _esc(c.colegio_nombre), _esc(c.plan_contratado),
+            _esc(c.estado), c.dias_transcurridos or 0,
+            "Ley 1480" if c.aplica_retracto_ley else "—",
+            _esc(c.creado_en or ""),
+        )
+        for c in casos
+    ) or "<tr><td colspan='7'>Sin casos. Soporte puede radicar desde /soporte/retracto</td></tr>"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Gestión de Retractos y Bajas</h1>
+  <p>Control absoluto de cancelaciones, reembolsos, penalidades y retención.</p>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+  <a class="btn" href="/gerencia/retractos/config">Leyes y cláusulas</a>
+  <a class="btn" href="/gerencia/retractos/reembolsos">Reembolsos</a>
+</div></header>
+<section class="role-grid">
+  <div class="role-panel"><h2>{abiertos}</h2><p>Casos abiertos / críticos</p></div>
+  <div class="role-panel"><h2>{len(casos)}</h2><p>Total en bandeja (últimos)</p></div>
+</section>
+<section class="role-panel" style="margin-top:12px">
+<table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Plan</th><th>Estado</th><th>Días</th><th>Ley</th><th>Fecha</th></tr>
+{filas}
+</table>
+</section>"""
+    return page("Retractos", shell(content))
+
+
+@app.route("/gerencia/retractos/<int:cid>", methods=["GET", "POST"])
+def gerencia_retracto_caso(cid):
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_retracto_tables()
+    caso = CasoRetracto.query.get(cid)
+    if not caso:
+        return acceso_denegado("Caso no encontrado.")
+    cfg = _config_retracto()
+    inst = Institucion.query.get(caso.institucion_id) if caso.institucion_id else None
+    msg = ""
+    # Actualizar financieros al abrir
+    if inst:
+        caso.plan_contratado = (inst.plan or caso.plan_contratado or "")[:80]
+        if not caso.fecha_firma_contrato:
+            caso.fecha_firma_contrato = (getattr(inst, "fecha_inicio_licencia", None) or "")[:10]
+        caso.saldo_cartera = _saldo_cartera_inst(inst.id)
+        caso.dias_transcurridos = _dias_habiles_entre(caso.fecha_firma_contrato)
+        caso.aplica_retracto_ley = caso.dias_transcurridos <= int(cfg.dias_habiles_retracto or 5)
+        if not caso.historial_soporte_resumen or caso.historial_soporte_resumen == "Sin historial técnico vinculado.":
+            caso.historial_soporte_resumen = _historial_soporte_inst(inst.id)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        caso.monto_implementacion = float(request.form.get("monto_implementacion") or caso.monto_implementacion or 0)
+        caso.monto_pagado_mensualidad = float(request.form.get("monto_pagado_mensualidad") or caso.monto_pagado_mensualidad or 0)
+        caso.rector_nombre = (request.form.get("rector_nombre") or caso.rector_nombre or "")[:160]
+        caso.notas_gerencia = (request.form.get("notas_gerencia") or "")[:2000]
+        impl_iniciada = request.form.get("implementacion_iniciada") == "1"
+        ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
+        user = session.get("usuario") or "Gerencia"
+
+        if accion == "guardar":
+            reemb, pen = _calcular_reembolso(
+                cfg, caso.aplica_retracto_ley, caso.monto_implementacion,
+                caso.monto_pagado_mensualidad, impl_iniciada,
+            )
+            caso.monto_reembolso, caso.monto_penalidad = reemb, pen
+            db.session.commit()
+            msg = "Datos guardados. Reembolso calc: $%.0f · Penalidad: $%.0f" % (reemb, pen)
+
+        elif accion == "aprobar_devolucion":
+            reemb, pen = _calcular_reembolso(
+                cfg, caso.aplica_retracto_ley, caso.monto_implementacion,
+                caso.monto_pagado_mensualidad, impl_iniciada,
+            )
+            caso.monto_reembolso, caso.monto_penalidad = reemb, pen
+            caso.estado = "APROBADO_DEVOLUCION"
+            caso.resuelto_por = user
+            caso.resuelto_en = ahora_s
+            if inst:
+                caso.retencion_hasta = _desactivar_colegio_retracto(inst, cfg.dias_retencion_datos)
+            caso.acta_pdf_path = _generar_acta_retracto_pdf(caso) or ""
+            db.session.commit()
+            try:
+                registrar_auditoria(
+                    "Retracto aprobado con devolución",
+                    "%s · %s · reembolso $%.0f · retención hasta %s"
+                    % (caso.codigo, caso.colegio_nombre, caso.monto_reembolso, caso.retencion_hasta),
+                )
+            except Exception:
+                pass
+            msg = "Aprobado. Feature flags apagados, acta generada, retención %s días." % cfg.dias_retencion_datos
+
+        elif accion == "congelar":
+            caso.estado = "CONGELADO"
+            caso.resuelto_por = user
+            caso.resuelto_en = ahora_s
+            if inst:
+                inst.estado = "SUSPENDIDA"
+            db.session.commit()
+            try:
+                registrar_auditoria("Cuenta congelada (retracto)", "%s · %s" % (caso.codigo, caso.colegio_nombre))
+            except Exception:
+                pass
+            msg = "Cuenta congelada. Negocie renovación o downgrade."
+
+        elif accion == "rechazar_penalidad":
+            reemb, pen = _calcular_reembolso(
+                cfg, False, caso.monto_implementacion, caso.monto_pagado_mensualidad, True
+            )
+            caso.monto_reembolso = 0
+            caso.monto_penalidad = pen if pen else float(caso.monto_pagado_mensualidad or 0) * (float(cfg.penalidad_cancelacion_pct or 0) / 100)
+            caso.estado = "RECHAZADO_PENALIDAD"
+            caso.resuelto_por = user
+            caso.resuelto_en = ahora_s
+            db.session.commit()
+            try:
+                registrar_auditoria(
+                    "Retracto rechazado / penalidad",
+                    "%s · penalidad $%.0f" % (caso.codigo, caso.monto_penalidad),
+                )
+            except Exception:
+                pass
+            msg = "Rechazado fuera de plazos. Penalidad calculada: $%.0f" % caso.monto_penalidad
+
+    ley_badge = (
+        '<span style="background:#dcfce7;color:#166534;padding:4px 12px;border-radius:999px;font-weight:700;font-size:13px">'
+        "Retracto de Ley obligatorio (≤ %s días hábiles)</span>" % cfg.dias_habiles_retracto
+        if caso.aplica_retracto_ley
+        else '<span style="background:#fef3c7;color:#92400e;padding:4px 12px;border-radius:999px;font-weight:700;font-size:13px">'
+        "Fuera de ventana de retracto legal</span>"
+    )
+    acta = ('<p><a class="btn" href="%s" target="_blank">Descargar acta PDF</a></p>' % _esc(caso.acta_pdf_path)) if caso.acta_pdf_path else ""
+    content = f"""
+<header class="role-hero"><div>
+  <h1>{_esc(caso.codigo)}</h1>
+  <p>{_esc(caso.colegio_nombre)} · {_esc(caso.estado)}</p>
+  {ley_badge}
+</div>
+<a class="btn" href="/gerencia/retractos">Bandeja</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+
+<form method="POST">
+<section class="role-panel">
+<h2>📊 A · Datos financieros (automáticos + edición)</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:720px">
+  <div><label>Institución</label><input value="{_esc(caso.colegio_nombre)}" readonly></div>
+  <div><label>Rector / contacto</label><input name="rector_nombre" value="{_esc(caso.rector_nombre)}"></div>
+  <div><label>Plan contratado</label><input value="{_esc(caso.plan_contratado)}" readonly></div>
+  <div><label>Fecha firma / activación</label><input value="{_esc(caso.fecha_firma_contrato)}" readonly></div>
+  <div><label>Días hábiles transcurridos</label><input value="{caso.dias_transcurridos}" readonly></div>
+  <div><label>Saldo cartera</label><input value="$ {caso.saldo_cartera:,.0f}" readonly></div>
+  <div><label>Monto implementación pagado</label><input name="monto_implementacion" type="number" step="0.01" value="{caso.monto_implementacion or 0}"></div>
+  <div><label>Monto mensualidad pagada</label><input name="monto_pagado_mensualidad" type="number" step="0.01" value="{caso.monto_pagado_mensualidad or 0}"></div>
+</div>
+<label style="display:flex;gap:8px;align-items:center;margin-top:10px">
+  <input type="checkbox" name="implementacion_iniciada" value="1"> Capacitación / migración SIMAT ya iniciada (no reembolsa fee)
+</label>
+<p class="mini-text">Reembolso estimado: <b>$ {caso.monto_reembolso:,.0f}</b> · Penalidad: <b>$ {caso.monto_penalidad:,.0f}</b></p>
+</section>
+
+<section class="role-panel">
+<h2>📝 B · Justificación de la baja</h2>
+<p><b>Motivo:</b> {_esc(caso.motivo)} — {_esc(caso.motivo_detalle)}</p>
+<p><b>Radicado por Soporte:</b> {_esc(caso.radicado_por)} · {_esc(caso.creado_en)}</p>
+<h3>Historial Soporte / Dev enlazado</h3>
+<pre style="white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:8px;font-size:13px">{_esc(caso.historial_soporte_resumen or "—")}</pre>
+<label>Notas Gerencia</label>
+<textarea name="notas_gerencia" rows="3">{_esc(caso.notas_gerencia or "")}</textarea>
+</section>
+
+<section class="role-panel">
+<h2>⚙️ C · Acciones de cierre (solo Gerencia)</h2>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+  <button name="accion" value="guardar" type="submit" class="btn">Recalcular / Guardar</button>
+  <button name="accion" value="aprobar_devolucion" type="submit" class="btn"
+    style="background:#15803d;color:#fff;font-weight:800"
+    onclick="return confirm('¿Aprobar retracto con devolución? Se desactivarán accesos del colegio.');">
+    🟢 Aprobar retracto con devolución
+  </button>
+  <button name="accion" value="congelar" type="submit" class="btn"
+    style="background:#ca8a04;color:#fff;font-weight:800">
+    🟡 Congelar cuenta
+  </button>
+  <button name="accion" value="rechazar_penalidad" type="submit" class="btn"
+    style="background:#b91c1c;color:#fff;font-weight:800"
+    onclick="return confirm('¿Rechazar y aplicar penalidad contractual?');">
+    🔴 Rechazar / Aplicar penalidad
+  </button>
+</div>
+{acta}
+{"<p class='mini-text'>Retención de datos hasta: <b>"+_esc(caso.retencion_hasta)+"</b> (Ley 1581)</p>" if caso.retencion_hasta else ""}
+</section>
+</form>"""
+    return page(caso.codigo, shell(content))
+
+
+@app.route("/gerencia/retractos/config", methods=["GET", "POST"])
+def gerencia_retractos_config():
+    """Submódulo 1: Repositorio de leyes y cláusulas."""
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    cfg = _config_retracto()
+    msg = ""
+    if request.method == "POST":
+        cfg.articulo_47_texto = (request.form.get("articulo_47_texto") or "")[:8000]
+        cfg.dias_habiles_retracto = int(request.form.get("dias_habiles_retracto") or 5)
+        cfg.politica_reembolso_implementacion = (request.form.get("politica_reembolso_implementacion") or "")[:4000]
+        cfg.reembolsa_implementacion_si_no_iniciada = request.form.get("reembolsa_implementacion_si_no_iniciada") == "1"
+        cfg.penalidad_cancelacion_pct = float(request.form.get("penalidad_cancelacion_pct") or 0)
+        cfg.dias_retencion_datos = int(request.form.get("dias_retencion_datos") or 30)
+        cfg.clausulas_extra = (request.form.get("clausulas_extra") or "")[:4000]
+        cfg.actualizado_en = (fecha_hoy() or "") + " " + (hora_actual() or "")
+        cfg.actualizado_por = session.get("usuario") or "Gerencia"
+        db.session.commit()
+        msg = "Configuración legal guardada."
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Leyes y cláusulas de retracto</h1>
+  <p>Marco jurídico que alimenta contratos y el cálculo automático.</p>
+</div>
+<a class="btn" href="/gerencia/retractos">Bandeja retractos</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel" style="max-width:720px">
+<form method="POST" style="display:grid;gap:12px">
+<label><b>Art. 47 — Derecho de retracto (Ley 1480)</b></label>
+<textarea name="articulo_47_texto" rows="5">{_esc(cfg.articulo_47_texto or "")}</textarea>
+<label>Días hábiles de retracto (comercio electrónico)</label>
+<input type="number" name="dias_habiles_retracto" value="{int(cfg.dias_habiles_retracto or 5)}" min="1" max="30">
+<label><b>Política de reembolso del fee de implementación (B2B)</b></label>
+<textarea name="politica_reembolso_implementacion" rows="4">{_esc(cfg.politica_reembolso_implementacion or "")}</textarea>
+<label style="display:flex;gap:8px;align-items:center">
+  <input type="checkbox" name="reembolsa_implementacion_si_no_iniciada" value="1" {"checked" if cfg.reembolsa_implementacion_si_no_iniciada else ""}>
+  Reembolsar implementación solo si no se ha iniciado capacitación / SIMAT
+</label>
+<label>Penalidad por cancelación anticipada (% sobre mensualidad)</label>
+<input type="number" step="0.1" name="penalidad_cancelacion_pct" value="{float(cfg.penalidad_cancelacion_pct or 0)}">
+<label>Días de retención de datos post-retracto (Ley 1581)</label>
+<input type="number" name="dias_retencion_datos" value="{int(cfg.dias_retencion_datos or 30)}" min="1" max="365">
+<label>Cláusulas adicionales</label>
+<textarea name="clausulas_extra" rows="3">{_esc(cfg.clausulas_extra or "")}</textarea>
+<button class="btn" type="submit">Guardar configuración</button>
+</form>
+<p class="mini-text">Última actualización: {_esc(cfg.actualizado_en or "—")} · {_esc(cfg.actualizado_por or "")}</p>
+</section>"""
+    return page("Config retracto", shell(content))
+
+
+@app.route("/gerencia/retractos/reembolsos", methods=["GET", "POST"])
+def gerencia_retractos_reembolsos():
+    """Submódulo 2: operación de reembolso y soporte de devolución."""
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_retracto_tables()
+    msg = ""
+    if request.method == "POST":
+        cid = request.form.get("caso_id")
+        caso = CasoRetracto.query.get(int(cid)) if cid and str(cid).isdigit() else None
+        if caso:
+            caso.comprobante_devolucion = (request.form.get("comprobante_devolucion") or "")[:500]
+            if request.form.get("marcar_terminado") == "1":
+                caso.estado = "TERMINADO"
+                caso.resuelto_en = (fecha_hoy() or "") + " " + (hora_actual() or "")
+            db.session.commit()
+            msg = "Caso %s actualizado." % caso.codigo
+    pendientes = CasoRetracto.query.filter(
+        CasoRetracto.estado.in_(["APROBADO_DEVOLUCION", "RETRACTO_LEY", "PENDIENTE"])
+    ).order_by(CasoRetracto.id.desc()).limit(40).all()
+    filas = "".join(
+        """<tr>
+        <td><a href="/gerencia/retractos/%s">%s</a></td>
+        <td>%s</td><td>$ %s</td><td>%s</td>
+        <td>
+          <form method="POST" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <input type="hidden" name="caso_id" value="%s">
+            <input name="comprobante_devolucion" placeholder="Nº transferencia / URL" value="%s" style="min-width:160px">
+            <label style="font-size:12px"><input type="checkbox" name="marcar_terminado" value="1"> Terminado</label>
+            <button class="btn" type="submit" style="padding:6px 12px">Guardar</button>
+          </form>
+        </td>
+        </tr>"""
+        % (
+            c.id, _esc(c.codigo), _esc(c.colegio_nombre),
+            ("%.0f" % (c.monto_reembolso or 0)), _esc(c.estado),
+            c.id, _esc(c.comprobante_devolucion or ""),
+        )
+        for c in pendientes
+    ) or "<tr><td colspan='5'>No hay casos con reembolso pendiente</td></tr>"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Procesamiento de reembolsos</h1>
+  <p>Validador de días · cálculo · comprobante de devolución · contrato terminado.</p>
+</div>
+<a class="btn" href="/gerencia/retractos">Bandeja</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel">
+<table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Reembolso</th><th>Estado</th><th>Comprobante</th></tr>
+{filas}
+</table>
+</section>"""
+    return page("Reembolsos retracto", shell(content))
+
+
 if __name__ == "__main__":
     with app.app_context():
         inicializar_bd()
@@ -64598,3 +65260,4 @@ if __name__ == "__main__":
         except Exception as _e:
             print("ciclo facturacion:", _e)
     app.run(debug=True, host="0.0.0.0")
+
