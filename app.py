@@ -3575,12 +3575,12 @@ _APPLE_SHELL_CSS = (
     ".sidebar-apple-glass{width:260px;height:100vh!important;max-height:100vh!important;min-height:0!important;"
     "background:rgba(0,32,96,.92);"
     "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);"
-    "border-right:1px solid rgba(255,255,255,.1);padding:24px 16px 32px;box-sizing:border-box;"
-    "position:fixed;left:0;top:0;z-index:9999;color:#f5f5f7;"
+    "border-right:1px solid rgba(255,255,255,.1);padding:20px 14px 40px;box-sizing:border-box;"
+    "position:fixed;left:0;top:0;bottom:0;z-index:9999;color:#f5f5f7;"
     "overflow-y:scroll!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;"
     "display:block!important}"
-    ".sidebar-apple-glass nav{display:block;padding-bottom:24px}"
-    ".brand-container-apple{display:flex;align-items:center;gap:10px;padding-bottom:20px;"
+    ".sidebar-apple-glass nav{display:block;padding-bottom:28px}"
+    ".brand-container-apple{display:flex;align-items:center;gap:10px;padding-bottom:16px;"
     "border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px}"
     ".brand-text-apple{color:#fff;font-weight:700;font-size:16px;letter-spacing:-.02em}"
     ".menu-category-title{font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;"
@@ -3589,7 +3589,7 @@ _APPLE_SHELL_CSS = (
     "padding:10px 14px;border-radius:12px;margin:2px 0;font-weight:400;transition:all .2s ease}"
     ".nav-item-apple:hover{background:rgba(255,255,255,.08);color:#fff}"
     ".nav-item-apple.is-active{background:#005BEA;color:#fff;font-weight:500}"
-    ".sidebar-footer-legal{font-size:11px;color:rgba(255,255,255,.35);padding:16px 8px 24px}"
+    ".sidebar-footer-legal{font-size:11px;color:rgba(255,255,255,.35);padding:16px 8px 32px;display:block}"
     ".main-content-container{margin-left:260px;width:calc(100% - 260px);min-height:100vh;"
     "display:flex;flex-direction:column;background:#f5f5f7}"
     ".navbar-top-apple{height:60px;background:rgba(255,255,255,.72);"
@@ -3686,7 +3686,6 @@ def _staff_nav_items(path, rol=""):
             ("/logout", "Salir"),
         ]
     elif rol == "Soporte":
-        # SOLO operativo. PROHIBIDO: nueva institución, licencias, cancelaciones, ofertas, modo prueba
         items = [
             ("/soporte_admin", "Panel principal"),
             ("/soporte/impersonar", "Suplantar usuario"),
@@ -3720,6 +3719,10 @@ def _staff_nav_items(path, rol=""):
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/hq", "Dashboard"),
+            ("/gerencia/retractos", "Retractos y bajas"),
+            ("/gerencia/retractos/config", "Leyes y cláusulas"),
+            ("/gerencia/retractos/reembolsos", "Procesar reembolsos"),
+            ("/gerencia/firmas-corporativas", "Firmas corporativas"),
             ("/gerencia/planes", "Planes activos"),
             ("/gerencia/beneficios", "Beneficios"),
             ("/gerencia/planes/nuevo", "Crear plan"),
@@ -17111,10 +17114,7 @@ def soporte():
 @app.route("/modo_prueba", methods=["GET", "POST"])
 def modo_prueba():
     if not requiere_login(): return redirect("/login")
-    if rol_actual() == "Soporte":
-        return acceso_denegado("Modo prueba está reservado a Gerencia / Administrador. Soporte no puede usarlo.")
-    if rol_actual() not in ["Administrador", "Gerente", "Superadmin"]:
-        return acceso_denegado("Solo Gerencia/Admin puede limpiar datos de prueba.")
+    if rol_actual() not in ["Soporte", "Administrador"]: return acceso_denegado("Solo Soporte/Admin puede limpiar datos de prueba.")
     mensaje = ""
     if request.method == "POST":
         codigo = request.form.get("codigo", "")
@@ -35979,18 +35979,15 @@ def soporte_bloqueo_seguridad():
     return page("Bloqueo y Seguridad", shell_soporte(content))
 
 
-@app.route("/soporte_admin")
-
 @app.route("/soporte/colegio")
 @app.route("/soporte/colegio/<int:iid>")
 @app.route("/soporte/auditoria-colegio")
 def soporte_colegio_auditoria(iid=None):
-    """Auditoria contractual y promo — NO para técnicos Soporte (riesgo comercial)."""
+    """Auditoria contractual / ofertas — comercial (NO técnicos Soporte)."""
     rol = session.get("rol") or rol_actual() or ""
     if rol == "Soporte":
         return acceso_denegado(
-            "Auditoría de colegio / ofertas es comercial. Soporte no puede ver ni alterar precios o promociones. "
-            "Use Auditoría general de acciones."
+            "Auditoría de colegio / ofertas es comercial. Use el Panel principal y Auditoría general de acciones."
         )
     if rol not in ("Administrador", "Gerencia", "Gerente", "Comercial", "Ventas", "Supervisor de Ventas", "Superadmin"):
         if not session.get("usuario"):
@@ -36099,6 +36096,7 @@ def soporte_colegio_auditoria(iid=None):
     return page("Soporte · Colegio", body)
 
 
+@app.route("/soporte_admin")
 def soporte_admin():
     _g = _guard_soporte()
     if _g is not None:
@@ -36252,33 +36250,28 @@ def soporte_admin():
             <a href='/soporte/usuarios/{i.id}'>Usuarios</a>
           </td>
         </tr>"""
+    _user_nom = session.get("usuario") or session.get("nombre") or "Técnico"
+    _logo_p = logo_plataforma()
     content = f"""
-<section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:22px;padding:22px 24px;margin-bottom:14px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
-  <div style="display:flex;gap:16px;align-items:center">
-    <img src="{logo_plataforma()}" style="width:64px;height:64px;object-fit:contain;background:#fff;border-radius:16px;padding:6px" alt="Procsis">
-    <div>
-      <div style="font-size:12px;opacity:.85;letter-spacing:1px;text-transform:uppercase">Centro de operaciones · soporte técnico</div>
-      <h1 style="margin:4px 0;font-size:24px">{p.empresa or 'Procsis'}</h1>
-      <p style="margin:0;opacity:.9">{p.slogan or SLOGAN}</p>
-      <p style="margin:6px 0 0;font-size:13px;opacity:.8">Producto: <b>{getattr(p,'nombre_producto',None) or 'EduTrack'}</b> · Operador: <b>{session.get('usuario')}</b></p>
+<section style="position:relative;overflow:hidden;background:linear-gradient(135deg,#0B1220 0%,#1e3a5f 55%,#0B2D57 100%);color:#fff;border-radius:24px;padding:28px 26px;margin-bottom:16px">
+  <img src="{_logo_p}" alt="" style="position:absolute;right:-20px;top:50%;transform:translateY(-50%);width:180px;height:180px;object-fit:contain;opacity:.12;pointer-events:none">
+  <div style="position:relative;display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+    <img src="{_logo_p}" style="width:72px;height:72px;object-fit:contain;background:#fff;border-radius:18px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.25)" alt="logo">
+    <div style="flex:1;min-width:200px">
+      <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.8">Mesa técnica · {(p.empresa or 'PROCSIS')}</div>
+      <h1 style="margin:6px 0 4px;font-size:26px;font-weight:700;letter-spacing:-.02em">Bienvenido, {_esc(_user_nom)}</h1>
+      <p style="margin:0;opacity:.9;font-size:14px">{_esc(p.slogan or SLOGAN)}</p>
+      <p style="margin:8px 0 0;font-size:13px;opacity:.75">Producto <b>{getattr(p,'nombre_producto',None) or 'EduTrack'}</b> · Sesión de soporte operativa</p>
     </div>
-  </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <a class="btn" href="/soporte/impersonar" style="background:#0f766e;color:#fff">🎭 Suplantar</a>
-    <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">🔑 Reset clave</a>
-    <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;color:#fff">📅 Periodos 3/4</a>
-    <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff;font-weight:800">👥 Usuarios · eliminar</a>
-    <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;color:#fff">🚨 Logs</a>
-    <a class="btn" href="/soporte/prorroga" style="background:#1e3a5f;color:#fff;border:1px solid #fff3">📅 Prórroga 24h</a>
-    <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
-    <a class="btn" href="/soporte/pqr" style="background:#1e40af;color:#fff">Tickets</a>
-    <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488;color:#fff">💙 CSAT</a>
-    <a class="btn btn-red" href="/logout">Salir</a>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn" href="/soporte/impersonar" style="background:#0f766e;color:#fff">Suplantar</a>
+      <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">Reset clave</a>
+      <a class="btn" href="/soporte/pqr" style="background:#1e40af;color:#fff">Tickets PQR</a>
+      <a class="btn" href="/soporte/ticket-dev" style="background:#7c2d12;color:#fff">Escalar a Dev</a>
+    </div>
   </div>
 </section>
 {('<div style="background:#fef3c7;border:1px solid #f59e0b;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-weight:700">Modo suplantar activo · <a href="/soporte/dejar-impersonar">Volver a mi sesión de soporte</a></div>' if session.get('impersonating') else '')}
-
-{_html_modulos_rol(session.get("rol") or "Soporte")}
 
 <section class="role-grid" style="margin-top:14px">
   <div class="role-panel"><h2>{total}</h2><p>Colegios en plataforma</p></div>
@@ -36292,17 +36285,18 @@ def soporte_admin():
 
 <section class="role-panel" style="margin-top:12px">
   <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
-    <h2 style="margin:0">Colegios</h2>
+    <h2 style="margin:0">Colegios (consulta)</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn" href="/tenants">Ver instituciones</a>
       <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff">Usuarios · estado / eliminar</a>
-      <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
     </div>
   </div>
-  <p class="mini-text">En cada colegio: <b>Usuarios</b> abre la lista de ese tenant. En <b>Usuarios · estado / eliminar</b> ves ACTIVO/INACTIVO de toda la plataforma y puedes borrar inactivos.</p>
+  <p class="mini-text">Soporte no crea instituciones. Use la lista para asistencia operativa.</p>
   <div class="table-card" style="overflow-x:auto">
   <table>
     <tr><th></th><th>Código / nombre</th><th>Estado</th><th>Plan</th><th>Usuarios</th><th>Acciones</th></tr>
-    {filas if filas else '<tr><td colspan="6">Sin instituciones. Crea una con Nueva institución.</td></tr>'}
+    {filas if filas else '<tr><td colspan="6">Sin instituciones registradas.</td></tr>'}
+
   </table>
   </div>
 </section>
@@ -37146,11 +37140,19 @@ def tenants():
 </div>
 """
     else:
+        es_sop = rol_actual() == "Soporte"
+        btn_nueva = "" if es_sop else "<a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>"
+        aviso_sop = (
+            "<p style='background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:10px 14px;border-radius:10px;margin-bottom:12px'>"
+            "Modo consulta: Soporte solo busca y revisa colegios. No puede crear ni activar instituciones.</p>"
+            if es_sop else ""
+        )
         body = f"""
 <header class='role-hero'>
-  <div><h1>Instituciones (tenants)</h1><p>Cada colegio es independiente: logo, login, usuarios y datos propios. Un colegio <b>no ve</b> la información del otro.</p></div>
-  <a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>
+  <div><h1>Instituciones (tenants)</h1><p>Cada colegio es independiente: logo, login, usuarios y datos propios.</p></div>
+  {btn_nueva}
 </header>
+{aviso_sop}
 {aviso_nuevo}
 <div class='table-card'>
   <table>
@@ -37158,7 +37160,7 @@ def tenants():
       <th>ID</th><th>Logo</th><th>Código</th><th>Nombre</th><th>Sede</th><th>Estado</th>
       <th>Plan</th><th>Users / Est.</th><th>Creada</th><th>Acciones</th>
     </tr>
-    {filas if filas else '<tr><td colspan="10">No hay instituciones. Crea la primera.</td></tr>'}
+    {filas if filas else '<tr><td colspan="10">No hay instituciones.</td></tr>'}
   </table>
 </div>
 """
@@ -37171,11 +37173,11 @@ def nueva_institucion():
         return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
     if rol_actual() == "Soporte":
         return acceso_denegado(
-            "Soporte no puede crear ni activar instituciones. "
-            "Solo consulta la lista. El alta es exclusiva de Gerencia / Ventas tras contrato firmado."
+            "Soporte no puede crear ni activar instituciones. Solo consulta. El alta es de Gerencia/Ventas."
         )
     if not requiere_soporte_global():
         return redirect("/login")
+
     mensaje = ""
     if request.method == "POST":
         codigo = (request.form.get("codigo") or "").strip().upper()
@@ -38750,15 +38752,10 @@ def exportar_cuenta():
 
 @app.route("/soporte/licencias", methods=["GET", "POST"])
 def soporte_licencias():
-    if rol_actual() == "Soporte":
-        return acceso_denegado(
-            "Licencias y cobros es exclusivo de Gerencia / Cobranza. Soporte no factura ni modifica tarifas."
-        )
     _g = _guard_soporte()
     if _g is not None:
         return _g
     sincronizar_licencias()
-
     mensaje = ""
     if request.method == "POST":
         iid = request.form.get("institucion_id")
@@ -38841,17 +38838,13 @@ def soporte_licencias():
 @app.route("/soporte/cancelaciones", methods=["GET", "POST"])
 @app.route("/gerencia/cancelaciones", methods=["GET", "POST"])
 def soporte_cancelaciones():
-    """Cancelaciones: solo Gerencia (validación comercial/legal)."""
+    """Módulo cancelación de servicio: Soporte y Gerencia. Cuenta regresiva + corte facturación."""
     rol = (rol_actual() or "").strip()
-    if rol == "Soporte":
-        return acceso_denegado(
-            "Las cancelaciones de contrato las gestiona Gerencia. Soporte no puede dar de baja instituciones."
-        )
-    if not requiere_login() or rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+    if not requiere_login() or rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
         if session.get("soporte"):
-            return acceso_denegado("Cancelaciones reservadas a Gerencia.")
-        return redirect("/gerencia-login")
-
+            pass
+        else:
+            return redirect("/soporte-login" if "soporte" in (request.path or "") else "/gerencia-login")
     try:
         _procesar_cuenta_regresiva_cancelaciones()
     except Exception:
@@ -64617,6 +64610,741 @@ def aceptar_terminos_pago():
     return redirect(request.form.get("next") or request.referrer or "/pagar")
 
 
+# ── Módulos: Support · Tickets Dev · Retractos · Firmas corporativas ─────────
+
+def _ensure_corp_firma_cols():
+    try:
+        from sqlalchemy import text as _t
+        for col, typ in (
+            ("firma_rep_legal_path", "TEXT"),
+            ("firma_gerente_path", "TEXT"),
+            ("nombre_rep_legal", "VARCHAR(160)"),
+            ("nombre_gerente_general", "VARCHAR(160)"),
+            ("cargo_rep_legal", "VARCHAR(120)"),
+        ):
+            try:
+                db.session.execute(_t("ALTER TABLE plataforma ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+class TicketDev(db.Model):
+    __tablename__ = "tickets_dev"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), unique=True, index=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    colegio_nombre = db.Column(db.String(200), default="")
+    plan_activo = db.Column(db.String(80), default="")
+    modulo_afectado = db.Column(db.String(160), default="")
+    descripcion = db.Column(db.Text, default="")
+    logs_consola = db.Column(db.Text, default="")
+    evidencia_path = db.Column(db.Text, default="")
+    verificado_suplantacion = db.Column(db.Boolean, default=False)
+    estado = db.Column(db.String(30), default="RADICADO", index=True)
+    prioridad = db.Column(db.String(20), default="MEDIA")
+    radicado_por = db.Column(db.String(120), default="")
+    asignado_a = db.Column(db.String(120), default="")
+    nota_desarrollo = db.Column(db.Text, default="")
+    creado_en = db.Column(db.String(30), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+    resuelto_en = db.Column(db.String(30), default="")
+    aviso_soporte = db.Column(db.Boolean, default=False)
+
+
+class ArticuloAyuda(db.Model):
+    __tablename__ = "articulos_ayuda"
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(160), unique=True, index=True)
+    titulo = db.Column(db.String(255), nullable=False)
+    resumen = db.Column(db.String(500), default="")
+    cuerpo = db.Column(db.Text, default="")
+    categoria = db.Column(db.String(80), default="General")
+    estado = db.Column(db.String(20), default="BORRADOR")
+    creado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="")
+    publicado_por = db.Column(db.String(120), default="")
+    publicado_en = db.Column(db.String(30), default="")
+
+
+class ConfigRetracto(db.Model):
+    __tablename__ = "config_retracto"
+    id = db.Column(db.Integer, primary_key=True)
+    articulo_47_texto = db.Column(db.Text, default="")
+    dias_habiles_retracto = db.Column(db.Integer, default=5)
+    politica_reembolso_implementacion = db.Column(db.Text, default="")
+    reembolsa_implementacion_si_no_iniciada = db.Column(db.Boolean, default=True)
+    penalidad_cancelacion_pct = db.Column(db.Float, default=20.0)
+    dias_retencion_datos = db.Column(db.Integer, default=30)
+    clausulas_extra = db.Column(db.Text, default="")
+    actualizado_en = db.Column(db.String(30), default="")
+    actualizado_por = db.Column(db.String(120), default="")
+
+
+class CasoRetracto(db.Model):
+    __tablename__ = "casos_retracto"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), unique=True, index=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    colegio_nombre = db.Column(db.String(220), default="")
+    plan_contratado = db.Column(db.String(80), default="")
+    fecha_firma_contrato = db.Column(db.String(20), default="")
+    monto_implementacion = db.Column(db.Float, default=0.0)
+    saldo_cartera = db.Column(db.Float, default=0.0)
+    monto_pagado_mensualidad = db.Column(db.Float, default=0.0)
+    motivo = db.Column(db.String(80), default="")
+    motivo_detalle = db.Column(db.Text, default="")
+    estado = db.Column(db.String(40), default="PENDIENTE", index=True)
+    dias_transcurridos = db.Column(db.Integer, default=0)
+    aplica_retracto_ley = db.Column(db.Boolean, default=False)
+    monto_reembolso = db.Column(db.Float, default=0.0)
+    monto_penalidad = db.Column(db.Float, default=0.0)
+    radicado_por = db.Column(db.String(120), default="")
+    resuelto_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="")
+    resuelto_en = db.Column(db.String(30), default="")
+    historial_soporte_resumen = db.Column(db.Text, default="")
+    notas_gerencia = db.Column(db.Text, default="")
+    retencion_hasta = db.Column(db.String(20), default="")
+    acta_pdf_path = db.Column(db.Text, default="")
+    comprobante_devolucion = db.Column(db.Text, default="")
+
+
+def _ensure_mod_tables():
+    try:
+        db.create_all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    _ensure_corp_firma_cols()
+
+
+def _corp_firmas():
+    _ensure_corp_firma_cols()
+    p = plataforma()
+    return {
+        "rep_nombre": getattr(p, "nombre_rep_legal", None) or getattr(p, "desarrollador", None) or "Representante legal",
+        "rep_cargo": getattr(p, "cargo_rep_legal", None) or "Representante legal provisional",
+        "rep_firma": getattr(p, "firma_rep_legal_path", None) or "",
+        "ger_nombre": getattr(p, "nombre_gerente_general", None) or "Gerente general",
+        "ger_firma": getattr(p, "firma_gerente_path", None) or "",
+        "empresa": getattr(p, "empresa", None) or "PROCSIS",
+        "logo": logo_plataforma(),
+    }
+
+
+@app.route("/gerencia/firmas-corporativas", methods=["GET", "POST"])
+def gerencia_firmas_corporativas():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_mod_tables()
+    p = plataforma()
+    msg = ""
+    if request.method == "POST":
+        try:
+            p.nombre_rep_legal = (request.form.get("nombre_rep_legal") or "")[:160]
+            p.cargo_rep_legal = (request.form.get("cargo_rep_legal") or "")[:120]
+            p.nombre_gerente_general = (request.form.get("nombre_gerente_general") or "")[:160]
+            folder = os.path.join(app.root_path, "static", "uploads", "firmas_corp")
+            os.makedirs(folder, exist_ok=True)
+            for field, attr in (("firma_rep_legal", "firma_rep_legal_path"), ("firma_gerente", "firma_gerente_path")):
+                f = request.files.get(field)
+                if f and f.filename:
+                    ext = (os.path.splitext(f.filename)[1] or ".png").lower()[:8]
+                    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+                        ext = ".png"
+                    fname = "%s_%s%s" % (field, secrets.token_hex(4), ext)
+                    f.save(os.path.join(folder, fname))
+                    setattr(p, attr, "/static/uploads/firmas_corp/" + fname)
+            db.session.commit()
+            msg = "Firmas corporativas actualizadas. Se usarán en actas y documentos."
+        except Exception as ex:
+            msg = "Error: " + str(ex)[:100]
+    f = _corp_firmas()
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Firmas corporativas</h1>
+  <p>Representante legal provisional y Gerente general — documentos internos y externos.</p>
+</div>
+<a class="btn" href="/gerencia/hq">HQ</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel" style="max-width:640px">
+<form method="POST" enctype="multipart/form-data" style="display:grid;gap:12px">
+<label>Nombre representante legal</label>
+<input name="nombre_rep_legal" value="{_esc(f['rep_nombre'])}">
+<label>Cargo</label>
+<input name="cargo_rep_legal" value="{_esc(f['rep_cargo'])}">
+<label>Imagen firma representante legal</label>
+<input type="file" name="firma_rep_legal" accept="image/*">
+{"<img src='"+_esc(f['rep_firma'])+"' style='max-height:80px;background:#fff;padding:8px;border-radius:8px'>" if f['rep_firma'] else ""}
+<label>Nombre gerente general</label>
+<input name="nombre_gerente_general" value="{_esc(f['ger_nombre'])}">
+<label>Imagen firma gerente general</label>
+<input type="file" name="firma_gerente" accept="image/*">
+{"<img src='"+_esc(f['ger_firma'])+"' style='max-height:80px;background:#fff;padding:8px;border-radius:8px'>" if f['ger_firma'] else ""}
+<button class="btn" type="submit">Guardar firmas</button>
+</form>
+</section>"""
+    return page("Firmas corporativas", shell(content))
+
+
+@app.route("/support")
+@app.route("/support/")
+def support_home():
+    _ensure_mod_tables()
+    q = (request.args.get("q") or "").strip()
+    try:
+        query = ArticuloAyuda.query.filter_by(estado="PUBLICADO")
+        if q:
+            like = "%" + q + "%"
+            query = query.filter(db.or_(ArticuloAyuda.titulo.ilike(like), ArticuloAyuda.cuerpo.ilike(like)))
+        arts = query.order_by(ArticuloAyuda.id.desc()).limit(40).all()
+    except Exception:
+        arts = []
+    items = "".join(
+        '<a href="/support/a/%s" style="display:block;padding:14px 0;border-bottom:1px solid #d2d2d7;color:#1d1d1f;text-decoration:none"><b style="font-size:19px">%s</b><br><span style="color:#6e6e73;font-size:14px">%s</span></a>'
+        % (_esc(a.slug or a.id), _esc(a.titulo), _esc(a.categoria or ""))
+        for a in arts
+    ) or '<p style="color:#6e6e73">Aún no hay artículos. Redacte en /support/editor</p>'
+    body = f"""
+<div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;max-width:692px;margin:0 auto;padding:48px 22px;min-height:80vh">
+  <h1 style="font-size:40px;font-weight:600;letter-spacing:-.02em;margin:0 0 10px">Support</h1>
+  <p style="font-size:19px;color:#6e6e73;margin:0 0 24px">Guías sobre EduTrack, asistencia y portal familiar.</p>
+  <form method="GET" action="/support"><input name="q" value="{_esc(q)}" placeholder="Buscar en Support"
+    style="width:100%;padding:14px;border:1px solid #d2d2d7;border-radius:12px;font-size:17px;background:#f5f5f7;box-sizing:border-box"></form>
+  <div style="margin-top:28px">{items}</div>
+  <p style="margin-top:40px;font-size:12px;color:#86868b">© 2026 PROCSIS · support.procsis.com</p>
+</div>"""
+    return page("PROCSIS Support", body)
+
+
+@app.route("/support/a/<slug>")
+def support_articulo(slug):
+    _ensure_mod_tables()
+    a = ArticuloAyuda.query.filter_by(slug=slug).first()
+    if not a or (a.estado != "PUBLICADO" and rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia")):
+        return page("Support", "<div style='padding:40px;text-align:center'><h1>No disponible</h1><a href='/support'>Volver</a></div>")
+    body = f"""
+<div style="font-family:-apple-system,sans-serif;max-width:692px;margin:0 auto;padding:40px 22px">
+  <a href="/support" style="color:#06c;text-decoration:none">‹ Support</a>
+  <h1 style="font-size:36px;font-weight:600;margin:16px 0">{_esc(a.titulo)}</h1>
+  <div style="font-size:17px;line-height:1.5;white-space:pre-wrap">{_esc(a.cuerpo or "")}</div>
+</div>"""
+    return page(a.titulo or "Support", body)
+
+
+@app.route("/support/editor", methods=["GET", "POST"])
+def support_editor():
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
+        return redirect("/soporte-login")
+    _ensure_mod_tables()
+    es_g = rol_actual() in ("Gerente", "Superadmin", "Administrador", "Gerencia")
+    msg = ""
+    if request.method == "POST":
+        titulo = (request.form.get("titulo") or "").strip()[:255]
+        cuerpo = (request.form.get("cuerpo") or "").strip()
+        cat = (request.form.get("categoria") or "General")[:80]
+        if titulo and cuerpo:
+            import re as _re
+            slug = _re.sub(r"[\s_]+", "-", _re.sub(r"[^\w\s-]", "", titulo.lower())).strip("-")[:140] or secrets.token_hex(4)
+            art = ArticuloAyuda(slug=slug, titulo=titulo, cuerpo=cuerpo, categoria=cat, estado="BORRADOR",
+                                creado_por=session.get("usuario") or "", creado_en=fecha_hoy() or "")
+            n = 1
+            base = art.slug
+            while ArticuloAyuda.query.filter_by(slug=art.slug).first():
+                art.slug = "%s-%s" % (base, n)
+                n += 1
+            if request.form.get("accion") == "publicar" and es_g:
+                art.estado = "PUBLICADO"
+                art.publicado_por = session.get("usuario") or ""
+                art.publicado_en = fecha_hoy() or ""
+            db.session.add(art)
+            db.session.commit()
+            msg = "Guardado (%s)." % art.estado
+    lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(30).all()
+    filas = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria)) for a in lista) or "<tr><td colspan='3'>—</td></tr>"
+    pub = '<button name="accion" value="publicar" type="submit" class="btn">Publicar</button>' if es_g else ""
+    content = f"""
+<header class="role-hero"><div><h1>Support · Editor</h1></div><a class="btn" href="/support">Ver público</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel" style="max-width:640px">
+<form method="POST" style="display:grid;gap:10px">
+<label>Título</label><input name="titulo" required>
+<label>Categoría</label><input name="categoria" value="General">
+<label>Contenido</label><textarea name="cuerpo" rows="10" required></textarea>
+<div style="display:flex;gap:8px"><button name="accion" value="guardar" type="submit" class="btn">Guardar</button>{pub}</div>
+</form></section>
+<section class="role-panel"><table class="table" style="width:100%"><tr><th>Título</th><th>Estado</th><th>Cat.</th></tr>{filas}</table></section>"""
+    return page("Editor Support", shell(content))
+
+
+@app.route("/soporte/ticket-dev", methods=["GET", "POST"])
+def soporte_ticket_dev_nuevo():
+    if not requiere_login() or rol_actual() != "Soporte":
+        return redirect("/soporte-login")
+    _ensure_mod_tables()
+    msg = err = ""
+    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    if request.method == "POST":
+        iid = request.form.get("institucion_id")
+        inst = Institucion.query.get(int(iid)) if iid and str(iid).isdigit() else None
+        modulo = (request.form.get("modulo_afectado") or "").strip()[:160]
+        desc = (request.form.get("descripcion") or "").strip()
+        if not inst or not modulo or not desc:
+            err = "Colegio, módulo y descripción son obligatorios."
+        else:
+            try:
+                n = TicketDev.query.count() + 1
+            except Exception:
+                n = 1
+            t = TicketDev(
+                codigo="DEV-%s-%04d" % ((fecha_hoy() or "2026")[:4], n),
+                institucion_id=inst.id, colegio_nombre=(inst.nombre or "")[:200],
+                plan_activo=(inst.plan or "Basico")[:80], modulo_afectado=modulo,
+                descripcion=desc, logs_consola=(request.form.get("logs_consola") or ""),
+                verificado_suplantacion=request.form.get("verificado_suplantacion") == "1",
+                estado="RADICADO",
+                prioridad="ALTA" if "premium" in (inst.plan or "").lower() else "MEDIA",
+                radicado_por=session.get("usuario") or "Soporte",
+                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+            )
+            db.session.add(t)
+            db.session.commit()
+            msg = "Ticket %s radicado a Desarrollo." % t.codigo
+    opts = "".join('<option value="%s">%s</option>' % (i.id, _esc(i.nombre or i.codigo)) for i in colegios)
+    content = f"""
+<header class="role-hero"><div><h1>Escalar a Desarrollo</h1></div>
+<a class="btn" href="/soporte/mis-tickets-dev">Mis tickets</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+<section class="role-panel" style="max-width:640px">
+<form method="POST" style="display:grid;gap:10px">
+<label>Colegio</label><select name="institucion_id" required><option value="">—</option>{opts}</select>
+<label>Módulo</label><input name="modulo_afectado" required placeholder="/notas/planilla">
+<label>Descripción técnica</label><textarea name="descripcion" rows="4" required></textarea>
+<label>Logs</label><textarea name="logs_consola" rows="3"></textarea>
+<label style="display:flex;gap:8px"><input type="checkbox" name="verificado_suplantacion" value="1"> Verificado por suplantación</label>
+<button class="btn" type="submit" style="background:#b91c1c;color:#fff">Radicar</button>
+</form></section>"""
+    return page("Escalar a Dev", shell(content))
+
+
+@app.route("/soporte/mis-tickets-dev")
+def soporte_mis_tickets_dev():
+    if not requiere_login() or rol_actual() != "Soporte":
+        return redirect("/soporte-login")
+    _ensure_mod_tables()
+    tickets = TicketDev.query.order_by(TicketDev.id.desc()).limit(50).all()
+    filas = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (_esc(t.codigo), _esc(t.colegio_nombre), _esc(t.modulo_afectado), _esc(t.estado), _esc(t.creado_en or ""))
+        for t in tickets
+    ) or "<tr><td colspan='5'>—</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Mis tickets a Dev</h1></div>
+<a class="btn" href="/soporte/ticket-dev">+ Nuevo</a></header>
+<section class="role-panel"><table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Módulo</th><th>Estado</th><th>Fecha</th></tr>{filas}</table></section>"""
+    return page("Mis tickets Dev", shell(content))
+
+
+@app.route("/desarrollo/tickets")
+def desarrollo_tickets():
+    if not requiere_login() or rol_actual() not in ("Desarrollador", "Developer", "Superadmin"):
+        return redirect("/dev-console-login")
+    _ensure_mod_tables()
+    tickets = TicketDev.query.order_by(TicketDev.id.desc()).limit(80).all()
+    filas = "".join(
+        "<tr><td><a href='/desarrollo/tickets/%s'>%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (t.id, _esc(t.codigo), _esc(t.colegio_nombre), _esc(t.modulo_afectado), _esc(t.estado), _esc(t.prioridad))
+        for t in tickets
+    ) or "<tr><td colspan='5'>—</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Tickets de ingeniería</h1></div></header>
+<section class="role-panel"><table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Módulo</th><th>Estado</th><th>Prioridad</th></tr>{filas}</table></section>"""
+    return page("Tickets Dev", shell(content))
+
+
+@app.route("/desarrollo/tickets/<int:tid>", methods=["GET", "POST"])
+def desarrollo_ticket_detalle(tid):
+    if not requiere_login() or rol_actual() not in ("Desarrollador", "Developer", "Superadmin"):
+        return redirect("/dev-console-login")
+    _ensure_mod_tables()
+    t = TicketDev.query.get(tid)
+    if not t:
+        return acceso_denegado("No encontrado")
+    msg = ""
+    if request.method == "POST":
+        acc = request.form.get("accion")
+        t.nota_desarrollo = (request.form.get("nota") or t.nota_desarrollo or "")[:2000]
+        if acc == "validacion":
+            t.estado = "EN_VALIDACION"
+        elif acc == "resolver":
+            t.estado = "RESUELTO"
+            t.aviso_soporte = True
+            t.resuelto_en = fecha_hoy() or ""
+            try:
+                registrar_auditoria("Ticket Dev resuelto", "%s · %s" % (t.codigo, t.nota_desarrollo[:120]))
+            except Exception:
+                pass
+        db.session.commit()
+        msg = "Actualizado."
+    content = f"""
+<header class="role-hero"><div><h1>{_esc(t.codigo)}</h1><p>{_esc(t.colegio_nombre)}</p></div>
+<a class="btn" href="/desarrollo/tickets">Bandeja</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel">
+<pre style="white-space:pre-wrap">{_esc(t.descripcion)}</pre>
+<pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-size:12px">{_esc(t.logs_consola or "—")}</pre>
+<form method="POST" style="display:grid;gap:10px;max-width:520px;margin-top:12px">
+<textarea name="nota" rows="3" placeholder="Qué se reparó">{_esc(t.nota_desarrollo or "")}</textarea>
+<div style="display:flex;gap:8px">
+<button name="accion" value="validacion" class="btn" type="submit">En validación</button>
+<button name="accion" value="resolver" class="btn" type="submit" style="background:#15803d;color:#fff">Resuelto</button>
+</div></form></section>"""
+    return page(t.codigo, shell(content))
+
+
+@app.route("/soporte/retracto", methods=["GET", "POST"])
+def soporte_radicar_retracto():
+    if not requiere_login() or rol_actual() != "Soporte":
+        return redirect("/soporte-login")
+    _ensure_mod_tables()
+    msg = err = ""
+    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    if request.method == "POST":
+        iid = request.form.get("institucion_id")
+        inst = Institucion.query.get(int(iid)) if iid and str(iid).isdigit() else None
+        motivo = (request.form.get("motivo") or "").strip()
+        if not inst or not motivo:
+            err = "Colegio y motivo obligatorios."
+        else:
+            try:
+                n = CasoRetracto.query.count() + 1
+            except Exception:
+                n = 1
+            c = CasoRetracto(
+                codigo="RET-%s-%04d" % ((fecha_hoy() or "2026")[:4], n),
+                institucion_id=inst.id, colegio_nombre=(inst.nombre or "")[:220],
+                plan_contratado=(inst.plan or "")[:80],
+                fecha_firma_contrato=(getattr(inst, "fecha_inicio_licencia", None) or "")[:10],
+                motivo=motivo, motivo_detalle=(request.form.get("detalle") or ""),
+                estado="PENDIENTE", radicado_por=session.get("usuario") or "Soporte",
+                creado_en=(fecha_hoy() or "") + " " + (hora_actual() or ""),
+            )
+            db.session.add(c)
+            db.session.commit()
+            msg = "Caso %s enviado a Gerencia." % c.codigo
+    opts = "".join('<option value="%s">%s</option>' % (i.id, _esc(i.nombre or i.codigo)) for i in colegios)
+    content = f"""
+<header class="role-hero"><div><h1>Radicar retracto a Gerencia</h1>
+<p>Soporte no procesa bajas. Solo radica el caso.</p></div></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
+<section class="role-panel" style="max-width:560px">
+<form method="POST" style="display:grid;gap:10px">
+<label>Colegio</label><select name="institucion_id" required><option value="">—</option>{opts}</select>
+<label>Motivo</label>
+<select name="motivo" required>
+<option value="tecnico">Limitaciones técnicas</option>
+<option value="presupuesto">Presupuesto</option>
+<option value="competencia">Migración a competencia</option>
+<option value="cierre">Cierre institución</option>
+</select>
+<label>Detalle</label><textarea name="detalle" rows="3"></textarea>
+<button class="btn" type="submit" style="background:#b91c1c;color:#fff">Enviar a Gerencia</button>
+</form></section>"""
+    return page("Radicar retracto", shell(content))
+
+
+@app.route("/gerencia/retractos")
+def gerencia_retractos_lista():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_mod_tables()
+    casos = CasoRetracto.query.order_by(CasoRetracto.id.desc()).limit(60).all()
+    filas = "".join(
+        "<tr><td><a href='/gerencia/retractos/%s'>%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (c.id, _esc(c.codigo), _esc(c.colegio_nombre), _esc(c.estado), _esc(c.motivo), _esc(c.creado_en or ""))
+        for c in casos
+    ) or "<tr><td colspan='5'>Sin casos</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Retractos y bajas</h1></div>
+<div style="display:flex;gap:8px">
+<a class="btn" href="/gerencia/retractos/config">Leyes y cláusulas</a>
+<a class="btn" href="/gerencia/retractos/reembolsos">Reembolsos</a>
+</div></header>
+<section class="role-panel"><table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Estado</th><th>Motivo</th><th>Fecha</th></tr>{filas}</table></section>"""
+    return page("Retractos", shell(content))
+
+
+@app.route("/gerencia/retractos/<int:cid>", methods=["GET", "POST"])
+def gerencia_retracto_caso(cid):
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_mod_tables()
+    caso = CasoRetracto.query.get(cid)
+    if not caso:
+        return acceso_denegado("No encontrado")
+    msg = ""
+    if request.method == "POST":
+        acc = request.form.get("accion")
+        caso.notas_gerencia = (request.form.get("notas") or "")[:2000]
+        caso.monto_reembolso = float(request.form.get("monto_reembolso") or 0)
+        user = session.get("usuario") or "Gerencia"
+        ahora = (fecha_hoy() or "") + " " + (hora_actual() or "")
+        if acc == "aprobar":
+            caso.estado = "APROBADO_DEVOLUCION"
+            caso.resuelto_por, caso.resuelto_en = user, ahora
+            inst = Institucion.query.get(caso.institucion_id) if caso.institucion_id else None
+            if inst:
+                inst.estado = "SUSPENDIDA"
+            db.session.commit()
+            msg = "Aprobado y colegio suspendido."
+        elif acc == "congelar":
+            caso.estado = "CONGELADO"
+            caso.resuelto_por, caso.resuelto_en = user, ahora
+            inst = Institucion.query.get(caso.institucion_id) if caso.institucion_id else None
+            if inst:
+                inst.estado = "SUSPENDIDA"
+            db.session.commit()
+            msg = "Cuenta congelada."
+        elif acc == "rechazar":
+            caso.estado = "RECHAZADO_PENALIDAD"
+            caso.resuelto_por, caso.resuelto_en = user, ahora
+            db.session.commit()
+            msg = "Rechazado con penalidad."
+        else:
+            db.session.commit()
+            msg = "Guardado."
+    content = f"""
+<header class="role-hero"><div><h1>{_esc(caso.codigo)}</h1><p>{_esc(caso.colegio_nombre)} · {_esc(caso.estado)}</p></div>
+<a class="btn" href="/gerencia/retractos">Bandeja</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel">
+<p><b>Plan:</b> {_esc(caso.plan_contratado)} · <b>Motivo:</b> {_esc(caso.motivo)}</p>
+<p>{_esc(caso.motivo_detalle)}</p>
+<form method="POST" style="display:grid;gap:10px;max-width:480px">
+<label>Monto reembolso</label><input type="number" name="monto_reembolso" value="{caso.monto_reembolso or 0}">
+<label>Notas</label><textarea name="notas" rows="3">{_esc(caso.notas_gerencia or "")}</textarea>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button name="accion" value="guardar" class="btn" type="submit">Guardar</button>
+<button name="accion" value="aprobar" class="btn" type="submit" style="background:#15803d;color:#fff">Aprobar devolución</button>
+<button name="accion" value="congelar" class="btn" type="submit" style="background:#ca8a04;color:#fff">Congelar</button>
+<button name="accion" value="rechazar" class="btn" type="submit" style="background:#b91c1c;color:#fff">Rechazar</button>
+</div></form></section>"""
+    return page(caso.codigo, shell(content))
+
+
+@app.route("/gerencia/retractos/config", methods=["GET", "POST"])
+def gerencia_retractos_config():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_mod_tables()
+    cfg = ConfigRetracto.query.first()
+    if not cfg:
+        cfg = ConfigRetracto(
+            articulo_47_texto="Artículo 47 — Derecho de retracto (Ley 1480). El consumidor podrá retractarse dentro de los cinco (5) días hábiles siguientes a la celebración del contrato a distancia.",
+            dias_habiles_retracto=5,
+            politica_reembolso_implementacion="El fee de implementación no se reembolsa si ya hubo capacitación o migración SIMAT.",
+            penalidad_cancelacion_pct=20.0,
+            dias_retencion_datos=30,
+        )
+        db.session.add(cfg)
+        db.session.commit()
+    msg = ""
+    if request.method == "POST":
+        cfg.articulo_47_texto = request.form.get("articulo_47_texto") or cfg.articulo_47_texto
+        cfg.politica_reembolso_implementacion = request.form.get("politica_reembolso") or cfg.politica_reembolso_implementacion
+        cfg.clausulas_extra = request.form.get("clausulas_extra") or ""
+        try:
+            cfg.dias_habiles_retracto = int(request.form.get("dias_habiles") or 5)
+            cfg.penalidad_cancelacion_pct = float(request.form.get("penalidad") or 20)
+            cfg.dias_retencion_datos = int(request.form.get("retencion") or 30)
+        except Exception:
+            pass
+        cfg.actualizado_en = fecha_hoy() or ""
+        cfg.actualizado_por = session.get("usuario") or "Gerencia"
+        db.session.commit()
+        msg = "Guardado."
+    firmas = _corp_firmas()
+    content = f"""
+<header class="role-hero"><div><h1>Leyes y cláusulas de retracto</h1>
+<p>Editor corporativo · negrita · PDF con firmas</p></div>
+<div style="display:flex;gap:8px">
+<a class="btn" href="/gerencia/retractos/config/pdf" target="_blank">Descargar PDF</a>
+<a class="btn" href="/gerencia/retractos">Bandeja</a>
+</div></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<style>
+.ed-toolbar button{{border:1px solid #d2d2d7;background:#fff;border-radius:8px;padding:6px 12px;margin-right:6px;cursor:pointer;font-weight:600}}
+.ed-area{{min-height:120px;border:1px solid #d2d2d7;border-radius:12px;padding:14px;background:#fff;font-size:15px;line-height:1.5}}
+.ed-area:focus{{outline:2px solid #005BEA}}
+</style>
+<section class="role-panel" style="max-width:720px">
+<form method="POST" id="form-cfg" style="display:grid;gap:14px">
+<label><b>Art. 47 Ley 1480 — use negrita en la barra</b></label>
+<div class="ed-toolbar">
+  <button type="button" onclick="document.execCommand('bold')">B Negrita</button>
+  <button type="button" onclick="document.execCommand('italic')">I Cursiva</button>
+</div>
+<div class="ed-area" id="ed47" contenteditable="true">{cfg.articulo_47_texto or ""}</div>
+<input type="hidden" name="articulo_47_texto" id="hid47">
+<label>Días hábiles retracto</label>
+<input type="number" name="dias_habiles" value="{int(cfg.dias_habiles_retracto or 5)}">
+<label>Política reembolso implementación</label>
+<div class="ed-toolbar">
+  <button type="button" onclick="document.execCommand('bold')">B Negrita</button>
+</div>
+<div class="ed-area" id="edpol" contenteditable="true">{cfg.politica_reembolso_implementacion or ""}</div>
+<input type="hidden" name="politica_reembolso" id="hidpol">
+<label>Penalidad % cancelación anticipada</label>
+<input type="number" step="0.1" name="penalidad" value="{float(cfg.penalidad_cancelacion_pct or 0)}">
+<label>Días retención datos (Ley 1581)</label>
+<input type="number" name="retencion" value="{int(cfg.dias_retencion_datos or 30)}">
+<label>Cláusulas extra</label>
+<textarea name="clausulas_extra" rows="3">{_esc(cfg.clausulas_extra or "")}</textarea>
+<button class="btn" type="submit" onclick="document.getElementById('hid47').value=document.getElementById('ed47').innerHTML;document.getElementById('hidpol').value=document.getElementById('edpol').innerHTML;">Guardar</button>
+</form>
+<div style="margin-top:28px;padding-top:20px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+  <div style="text-align:center">
+    {"<img src='"+_esc(firmas['rep_firma'])+"' style='max-height:64px'>" if firmas['rep_firma'] else "<div style='height:48px;border-bottom:1px solid #111;margin:0 24px'></div>"}
+    <p style="margin:8px 0 0;font-weight:700">{_esc(firmas['rep_nombre'])}</p>
+    <p style="margin:0;font-size:12px;color:#64748b">{_esc(firmas['rep_cargo'])}</p>
+  </div>
+  <div style="text-align:center">
+    {"<img src='"+_esc(firmas['ger_firma'])+"' style='max-height:64px'>" if firmas['ger_firma'] else "<div style='height:48px;border-bottom:1px solid #111;margin:0 24px'></div>"}
+    <p style="margin:8px 0 0;font-weight:700">{_esc(firmas['ger_nombre'])}</p>
+    <p style="margin:0;font-size:12px;color:#64748b">Gerente general</p>
+  </div>
+</div>
+</section>"""
+    return page("Config retracto", shell(content))
+
+
+@app.route("/gerencia/retractos/config/pdf")
+def gerencia_retractos_config_pdf():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_mod_tables()
+    cfg = ConfigRetracto.query.first()
+    firmas = _corp_firmas()
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
+        import io as _io
+        import re as _re
+        buf = _io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=letter)
+        w, h = letter
+        y = h - 2 * cm
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(2 * cm, y, "%s — Políticas de Retracto y Bajas" % firmas["empresa"])
+        y -= 1 * cm
+        c.setFont("Helvetica", 10)
+        def strip_html(t):
+            return _re.sub(r"<[^>]+>", "", t or "")
+        for title, text in (
+            ("Art. 47 Ley 1480", strip_html(cfg.articulo_47_texto if cfg else "")),
+            ("Política reembolso implementación", strip_html(cfg.politica_reembolso_implementacion if cfg else "")),
+            ("Cláusulas extra", strip_html(cfg.clausulas_extra if cfg else "")),
+        ):
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(2 * cm, y, title)
+            y -= 0.5 * cm
+            c.setFont("Helvetica", 9)
+            for line in (text or "—").split("\n"):
+                for i in range(0, max(len(line), 1), 90):
+                    c.drawString(2 * cm, y, line[i:i + 90])
+                    y -= 0.4 * cm
+                    if y < 4 * cm:
+                        c.showPage()
+                        y = h - 2 * cm
+            y -= 0.3 * cm
+        y = min(y, 5 * cm)
+        c.setFont("Helvetica", 9)
+        c.drawString(2 * cm, y, firmas["rep_nombre"])
+        c.drawString(11 * cm, y, firmas["ger_nombre"])
+        y -= 0.35 * cm
+        c.drawString(2 * cm, y, firmas["rep_cargo"])
+        c.drawString(11 * cm, y, "Gerente general")
+        c.save()
+        buf.seek(0)
+        return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="politica_retracto_procsis.pdf")
+    except Exception as ex:
+        return acceso_denegado("No se pudo generar PDF: " + str(ex)[:80])
+
+
+@app.route("/gerencia/retractos/reembolsos", methods=["GET", "POST"])
+def gerencia_retractos_reembolsos():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_mod_tables()
+    if request.method == "POST":
+        cid = request.form.get("caso_id")
+        caso = CasoRetracto.query.get(int(cid)) if cid and str(cid).isdigit() else None
+        if caso:
+            caso.comprobante_devolucion = (request.form.get("comprobante") or "")[:500]
+            if request.form.get("terminado") == "1":
+                caso.estado = "TERMINADO"
+            db.session.commit()
+    casos = CasoRetracto.query.filter(CasoRetracto.estado.in_(["APROBADO_DEVOLUCION", "PENDIENTE"])).limit(40).all()
+    filas = "".join(
+        "<tr><td>%s</td><td>%s</td><td>$%.0f</td><td>%s</td>"
+        "<td><form method='POST' style='display:flex;gap:6px'>"
+        "<input type='hidden' name='caso_id' value='%s'>"
+        "<input name='comprobante' placeholder='Transferencia' value='%s'>"
+        "<label><input type='checkbox' name='terminado' value='1'> OK</label>"
+        "<button class='btn' type='submit'>Guardar</button></form></td></tr>"
+        % (_esc(c.codigo), _esc(c.colegio_nombre), c.monto_reembolso or 0, _esc(c.estado), c.id, _esc(c.comprobante_devolucion or ""))
+        for c in casos
+    ) or "<tr><td colspan='5'>—</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Procesar reembolsos</h1></div>
+<a class="btn" href="/gerencia/retractos">Bandeja</a></header>
+<section class="role-panel"><table class="table" style="width:100%">
+<tr><th>Código</th><th>Colegio</th><th>Reembolso</th><th>Estado</th><th>Comprobante</th></tr>{filas}</table></section>"""
+    return page("Reembolsos", shell(content))
+
+
 if __name__ == "__main__":
     with app.app_context():
         inicializar_bd()
@@ -64627,3 +65355,4 @@ if __name__ == "__main__":
         except Exception as _e:
             print("ciclo facturacion:", _e)
     app.run(debug=True, host="0.0.0.0")
+
