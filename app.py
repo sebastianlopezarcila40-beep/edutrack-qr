@@ -3572,23 +3572,21 @@ _APPLE_SHELL_CSS = (
     "html,body{font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"Segoe UI\",sans-serif!important;"
     "background:#f5f5f7!important;margin:0;padding:0;overflow-x:hidden}"
     ".app-layout-enterprise{display:flex;width:100%;min-height:100vh}"
-    ".sidebar-apple-glass{width:260px;height:100vh;max-height:100vh;min-height:0;background:rgba(0,32,96,.92);"
+    ".sidebar-apple-glass{width:260px;min-height:100vh;background:rgba(0,32,96,.92);"
     "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);"
     "border-right:1px solid rgba(255,255,255,.1);padding:24px 16px;box-sizing:border-box;"
-    "position:fixed;left:0;top:0;z-index:9999;color:#f5f5f7;"
-    "overflow-y:auto!important;overflow-x:hidden;-webkit-overflow-scrolling:touch;"
+    "position:fixed;left:0;top:0;z-index:9999;color:#f5f5f7;overflow-y:auto;"
     "display:flex;flex-direction:column}"
-    ".sidebar-apple-glass nav{flex:1 1 auto;overflow:visible;padding-bottom:12px}"
     ".brand-container-apple{display:flex;align-items:center;gap:10px;padding-bottom:20px;"
-    "border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px;flex-shrink:0}"
+    "border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px}"
     ".brand-text-apple{color:#fff;font-weight:700;font-size:16px;letter-spacing:-.02em}"
     ".menu-category-title{font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;"
-    "letter-spacing:.05em;margin:12px 0 8px;padding-left:8px;flex-shrink:0}"
+    "letter-spacing:.05em;margin:12px 0 8px;padding-left:8px}"
     ".nav-item-apple{display:block;font-size:13px;color:rgba(255,255,255,.85);text-decoration:none;"
     "padding:10px 14px;border-radius:12px;margin:2px 0;font-weight:400;transition:all .2s ease}"
     ".nav-item-apple:hover{background:rgba(255,255,255,.08);color:#fff}"
     ".nav-item-apple.is-active{background:#005BEA;color:#fff;font-weight:500}"
-    ".sidebar-footer-legal{font-size:11px;color:rgba(255,255,255,.35);padding:16px 8px 24px;flex-shrink:0}"
+    ".sidebar-footer-legal{font-size:11px;color:rgba(255,255,255,.35);padding:16px 8px 0;margin-top:auto}"
     ".main-content-container{margin-left:260px;width:calc(100% - 260px);min-height:100vh;"
     "display:flex;flex-direction:column;background:#f5f5f7}"
     ".navbar-top-apple{height:60px;background:rgba(255,255,255,.72);"
@@ -3692,6 +3690,7 @@ def _staff_nav_items(path, rol=""):
             ("/soporte/periodos-colegio", "Periodos colegio"),
             ("/usuarios", "Usuarios"),
             ("/tenants", "Instituciones"),
+            ("/nueva_institucion", "Nueva institución"),
             ("/soporte/logs-errores", "Logs de errores"),
             ("/soporte/prorroga", "Prórroga 24h"),
             ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
@@ -3702,8 +3701,6 @@ def _staff_nav_items(path, rol=""):
             ("/soporte/cancelaciones", "Cancelaciones"),
             ("/soporte/pqr", "Centro PQR"),
             ("/soporte/pqr/crear", "Radicar PQR"),
-            ("/support", "Support"),
-            ("/support/editor", "Redactar Support"),
             ("/modo_prueba", "Modo prueba"),
             ("/logout", "Salir"),
         ]
@@ -3726,9 +3723,6 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/finanzas/promociones", "Promociones"),
             ("/gerencia/paginas-legales", "Páginas legales"),
             ("/gerencia/pie-login", "Pie login colegios"),
-            ("/gerencia/diseno-carnes", "Diseño de carnés"),
-            ("/gerencia/carnes-corporativos", "Carnés corporativos"),
-            ("/gerencia/support-moderar", "Support (moderar)"),
             ("/gerencia/turnos", "Turnos del equipo"),
             ("/backoffice/hub", "Tablero maestro"),
             ("/logout", "Salir"),
@@ -3842,14 +3836,25 @@ def _wrap_staff_layout(title, body, path):
         "}).catch(function(){ping.textContent='☁️ API: Offline';ping.className='nav-api-ping bad';});}"
         "})();</script>"
     )
+    # Logo empresa arriba (Gerencia / staff HQ)
+    try:
+        _logo_staff = logo_plataforma()
+    except Exception:
+        _logo_staff = "/static/img/logo-procsis.svg"
+    _brand_html = (
+        '<div class="brand-container-apple" style="flex-direction:column;align-items:flex-start;gap:10px">'
+        '<img src="' + _esc(_logo_staff) + '" alt="PROCSIS" style="width:48px;height:48px;object-fit:contain;background:#fff;border-radius:12px;padding:4px">'
+        '<span class="brand-text-apple">PROCSIS</span></div>'
+    )
     return (
         '<div class="app-layout-enterprise">'
         '<aside class="sidebar-apple-glass">'
-        '<div class="brand-container-apple"><span class="brand-text-apple">PROCSIS</span></div>'
-        '<div class="menu-category-title">Navegacion</div>'
+        + _brand_html
+        + '<div class="menu-category-title">Navegacion</div>'
         '<nav>' + nav + "</nav>"
         '<div class="sidebar-footer-legal">v2.6.0 · Ley 1581</div>'
         "</aside>"
+
         '<div class="main-content-container">'
         '<header class="navbar-top-apple">'
         '<div class="navbar-left">'
@@ -3876,7 +3881,18 @@ def page(title, body):
     except Exception:
         path = ""
     try:
-        if _is_staff_path(path) and session.get("usuario"):
+        rol_pg = (rol_actual() or session.get("rol") or "").strip()
+    except Exception:
+        rol_pg = ""
+    try:
+        # Soporte usa SIEMPRE su panel propio (logo + menú con scroll), no el layout HQ de Gerencia
+        if rol_pg == "Soporte":
+            if "sop-side" not in (body or "") and "shell_soporte" not in (body or "") and 'class="sop-layout"' not in (body or "") and "role-sidebar" not in (body or ""):
+                try:
+                    body = shell_soporte(body)
+                except Exception:
+                    pass
+        elif _is_staff_path(path) and session.get("usuario"):
             body = _wrap_staff_layout(title, body, path)
     except Exception:
         pass
@@ -6456,9 +6472,12 @@ def logo_plataforma():
 
 
 def shell_soporte(content):
-    """Layout Soporte: barra lateral con SCROLL obligatorio. Sin crear instituciones."""
+    """Panel Soporte: LOGO empresa arriba + menú completo con SCROLL (no layout Gerencia)."""
     p = plataforma()
-    logo = logo_plataforma()
+    try:
+        logo = logo_plataforma()
+    except Exception:
+        logo = "/static/img/logo-procsis.svg"
     menu = [
         ("/soporte_admin", "Panel principal"),
         ("/soporte/impersonar", "Suplantar usuario"),
@@ -6468,9 +6487,10 @@ def shell_soporte(content):
         ("/soporte/logs-errores", "Logs de errores"),
         ("/soporte/prorroga", "Prórroga 24h"),
         ("/tenants", "Instituciones"),
-        ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
+        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
         ("/servidores", "Servidores"),
         ("/auditoria", "Auditoría"),
+        ("/soporte/auditoria-colegio", "Auditoría colegio / ofertas"),
         ("/modo_prueba", "Modo prueba"),
         ("/soporte/licencias", "Licencias y cobros"),
         ("/soporte/cancelaciones", "Cancelaciones"),
@@ -6478,32 +6498,42 @@ def shell_soporte(content):
         ("/soporte/pqr/crear", "Radicar PQR interna"),
         ("/soporte/pqr/consulta", "Consulta validada"),
         ("/pqr", "Portal PQR"),
-        ("/support", "Support PROCSIS"),
+        ("/support", "Support"),
         ("/support/editor", "Redactar en Support"),
         ("/contacto", "Vista contacto público"),
     ]
-    enlaces = "".join(f'<a href="{u}" style="display:block;color:#fff;text-decoration:none;padding:11px 12px;border-radius:8px;margin:3px 0;background:rgba(255,255,255,.1);font-size:13px">{n}</a>' for u, n in menu)
+    enlaces = "".join(
+        '<a href="%s" style="display:block;color:#e0f2fe;text-decoration:none;padding:10px 12px;margin:2px 0;'
+        'border-radius:8px;font-size:13px;font-weight:600;background:rgba(255,255,255,.08)">%s</a>' % (u, n)
+        for u, n in menu
+    )
+    empresa = (getattr(p, "empresa", None) or "Procsis")
     return f"""
 <style>
-.sop-layout{{display:flex!important;flex-direction:row!important;min-height:100vh;align-items:stretch}}
-.sop-side{{width:240px!important;min-width:240px!important;max-width:240px!important;height:100vh!important;max-height:100vh!important;
+.sop-layout{{display:flex!important;flex-direction:row!important;min-height:100vh;width:100%;align-items:stretch;background:#eef2f7}}
+.sop-side{{width:250px!important;min-width:250px!important;max-width:250px!important;height:100vh!important;max-height:100vh!important;
 position:sticky!important;top:0!important;overflow-y:scroll!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;
-background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%);color:#fff;padding:16px 12px 32px;box-sizing:border-box}}
-.sop-main{{flex:1;min-width:0;overflow:auto}}
+background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%)!important;color:#fff;padding:16px 12px 40px;box-sizing:border-box}}
+.sop-side img.sop-logo{{width:88px;height:88px;object-fit:contain;background:#fff;border-radius:16px;padding:8px;display:block;margin:0 auto 10px}}
+.sop-side a:hover{{background:rgba(37,99,235,.55)!important;color:#fff!important}}
+.sop-main{{flex:1;min-width:0;overflow:auto;padding:0}}
 </style>
 <div class="sop-layout">
   <aside class="sop-side">
-    <img src="{logo}" alt="Procsis" style="background:#fff;border-radius:14px;padding:8px;max-width:100%">
-    <h2 style="font-size:15px;letter-spacing:.5px">{(p.empresa or 'Procsis').upper()}</h2>
-    <p class="welcome-msg">Centro de operaciones · {nombre_producto()}</p>
-    <span class="role-tag">Soporte técnico</span>
-    <br><br>
+    <img class="sop-logo" src="{logo}" alt="{_esc(empresa)}">
+    <h2 style="font-size:16px;letter-spacing:.4px;text-align:center;margin:0 0 4px">{_esc(empresa).upper()}</h2>
+    <p style="font-size:12px;color:#bfdbfe;text-align:center;margin:0 0 8px">Centro de operaciones · {nombre_producto()} · {_esc(empresa)}</p>
+    <div style="text-align:center;margin-bottom:12px">
+      <span style="display:inline-block;background:#facc15;color:#0B2D57;font-weight:800;font-size:11px;padding:5px 12px;border-radius:8px;letter-spacing:.04em">SOPORTE TÉCNICO</span>
+    </div>
     {enlaces}
-    <a href="/logout" style="display:block;background:#b91c1c;color:#fff;border-radius:8px;padding:11px 12px;margin-top:10px;text-decoration:none;text-align:center">Salir</a>
-    <div class="brand-box" style="margin-top:16px"><h3>{p.empresa or 'Procsis'}</h3><p>{p.slogan or SLOGAN}</p></div>
+    <a href="/logout" style="display:block;background:#b91c1c;color:#fff;border-radius:8px;padding:11px 12px;margin-top:12px;text-decoration:none;text-align:center;font-weight:700">Salir</a>
+    <div style="margin-top:18px;padding:12px;background:rgba(255,255,255,.08);border-radius:10px;font-size:12px">
+      <b>{_esc(empresa)}</b><br>{_esc(getattr(p,'slogan',None) or SLOGAN)}
+    </div>
   </aside>
-  <main class="sop-main role-main">{content}
-  <div class="footer"><strong>{p.empresa or DESARROLLADOR}</strong> · {getattr(p,"nombre_producto",None) or APP_NAME}</div>
+  <main class="sop-main">{content}
+  <div style="text-align:center;padding:16px;color:#64748b;font-size:12px"><strong>{_esc(empresa)}</strong> · {nombre_producto()}</div>
   </main>
 </div>
 """
@@ -11115,14 +11145,13 @@ def _ensure_login_pie_cols():
         pass
 
 def _login_pie_defaults():
-    # Punto 1 → sitio principal procsis.com | Punto 2 → support.procsis.com
     p1 = (
         "1. Según los datos del estudio de rendimiento técnico de PROCSIS realizado en el año en curso "
         "sobre la optimización de procesos y control de asistencia digital. Para obtener más información "
-        "y revisar los reportes de calidad, visita procsis.com."
+        "y revisar los reportes de calidad, visita {url}."
     )
     p2 = (
-        "2. Consulta support.procsis.com para obtener más información sobre las funcionalidades del ecosistema en la nube "
+        "2. Consulta {url} para obtener más información sobre las funcionalidades del ecosistema en la nube "
         "y los requisitos mínimos del sistema para la institución. Algunas funcionalidades requieren conexión "
         "a internet estable. El acceso al portal familiar o notificaciones por WhatsApp (API WATI) está sujeto "
         "a la activación y límites técnicos establecidos en el plan contratado. Algunas herramientas pueden no "
@@ -11137,7 +11166,7 @@ def _login_pie_defaults():
     return p1, p2, extra
 
 def _html_login_pie_colegios():
-    """Pie login: notas (1=procsis.com, 2=support.procsis.com) + footer oscuro corporativo."""
+    """Bloque pie estilo Apple debajo del login de instituciones."""
     try:
         _ensure_login_pie_cols()
     except Exception:
@@ -11146,82 +11175,78 @@ def _html_login_pie_colegios():
         p = plataforma()
     except Exception:
         p = None
-    # Siempre textos por defecto (evita BD vieja con support.support…)
+    url = "/procsis"
+    try:
+        url = (getattr(p, "sitio_oficial_url", None) or getattr(p, "web", None) or "/procsis").strip() or "/procsis"
+    except Exception:
+        pass
+    if url and not url.startswith("http") and not url.startswith("/"):
+        url = "https://" + url
+    label = "procsis.com"
+    if "://" in url:
+        label = url.split("://", 1)[-1].rstrip("/")
+    elif url.startswith("/"):
+        label = "procsis.com"
     p1_def, p2_def, extra_def = _login_pie_defaults()
-    # Si hay texto en BD, usarlo pero limpiar dobles support.support
     p1 = (getattr(p, "login_pie_p1", None) or "").strip() or p1_def
     p2 = (getattr(p, "login_pie_p2", None) or "").strip() or p2_def
     extra = (getattr(p, "login_pie_extra", None) or "").strip() or extra_def
-    for bad in ("support.support.procsis.com", "support.support.", "https://support.support"):
-        p1 = p1.replace(bad, "procsis.com")
-        p2 = p2.replace(bad, "support.procsis.com")
-        extra = extra.replace(bad, "support.procsis.com")
-    # Enlaces
-    link_main = '<a href="/procsis" style="color:#2997ff;text-decoration:underline">procsis.com</a>'
-    link_sup = '<a href="/support" style="color:#2997ff;text-decoration:underline">support.procsis.com</a>'
-    def _fill_p1(txt):
-        t = _esc(txt or "")
-        t = t.replace(_esc("support.support.procsis.com"), link_main)
-        t = t.replace(_esc("procsis.com"), link_main)
+    link = '<a href="%s" style="color:#0066cc;text-decoration:underline">%s</a>' % (_esc(url), _esc(label))
+    def _fill(txt):
+        t = (txt or "").replace("{url}", "§URL§")
+        t = _esc(t).replace("§URL§", link)
+        # también reemplazar menciones literales a procsis.com
+        t = t.replace(_esc("procsis.com"), link)
         return t
-    def _fill_p2(txt):
-        t = _esc(txt or "")
-        t = t.replace(_esc("support.support.procsis.com"), link_sup)
-        t = t.replace(_esc("support.procsis.com"), link_sup)
-        # no convertir procsis.com suelto en p2 si ya hay support.
-        return t
-    def _fill_ex(txt):
-        return _esc(txt or "")
-    try:
-        corp_email = (getattr(p, "email_empresa", None) or getattr(p, "email_soporte", None) or "procsis.edu@gmail.com") if p else "procsis.edu@gmail.com"
-        corp_tel = (getattr(p, "telefono_empresa", None) or getattr(p, "telefono_soporte", None) or "3246868183") if p else "3246868183"
-    except Exception:
-        corp_email, corp_tel = "procsis.edu@gmail.com", "3246868183"
     return f"""
 <style>
-.login-apple-foot{{max-width:1100px;margin:0 auto;padding:28px 20px 8px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
+.login-apple-foot{{max-width:980px;margin:0 auto;padding:28px 20px 40px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}}
 .login-apple-foot .laf-notes{{font-size:12px;line-height:1.55;color:#6e6e73;margin:0 0 10px}}
 .login-apple-foot .laf-notes a{{color:#0066cc;text-decoration:underline}}
-.login-corp-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:12px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
-.login-corp-foot .lcf-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:32px}}
-@media(max-width:800px){{.login-corp-foot .lcf-inner{{grid-template-columns:1fr}}}}
-.login-corp-foot .lcf-brand{{font-weight:600;font-size:15px;color:#f5f5f7;margin-bottom:12px}}
-.login-corp-foot a{{color:#2997ff;text-decoration:none;display:block;margin:8px 0;font-size:13px;font-weight:500}}
-.login-corp-foot a:hover{{text-decoration:underline}}
-.login-corp-foot h4{{margin:0 0 12px;color:#f5f5f7;font-size:13px;font-weight:600}}
-.login-corp-foot p{{margin:4px 0;font-size:13px;color:#a1a1a6;line-height:1.5}}
-.login-corp-foot .lcf-copy{{max-width:1100px;margin:28px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6e6e73;text-align:center}}
+.login-apple-foot .laf-rule{{border:0;border-top:1px solid #d2d2d7;margin:22px 0 20px}}
+.login-apple-foot .laf-cols{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 24px;font-size:12px}}
+.login-apple-foot .laf-cols h4{{margin:0 0 10px;font-size:12px;font-weight:600;color:#1d1d1f}}
+.login-apple-foot .laf-cols a,.login-apple-foot .laf-cols span{{display:block;color:#424245;text-decoration:none;margin:0 0 8px;line-height:1.35}}
+.login-apple-foot .laf-cols a:hover{{text-decoration:underline;color:#0066cc}}
+.login-apple-foot .laf-copy{{margin-top:22px;font-size:11px;color:#86868b}}
+@media(max-width:800px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr 1fr}}}}
+@media(max-width:480px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr}}}}
 </style>
 <div class="login-apple-foot">
-  <p class="laf-notes">{_fill_p1(p1)}</p>
-  <p class="laf-notes">{_fill_p2(p2)}</p>
-  <p class="laf-notes">{_fill_ex(extra)}</p>
-</div>
-<footer class="login-corp-foot">
-  <div class="lcf-inner">
+  <p class="laf-notes">{_fill(p1)}</p>
+  <p class="laf-notes">{_fill(p2)}</p>
+  <p class="laf-notes">{_fill(extra)}</p>
+  <hr class="laf-rule">
+  <div class="laf-cols">
     <div>
-      <div class="lcf-brand">PROCSIS</div>
-      <p>Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.</p>
+      <h4>Producto</h4>
+      <a href="/ventas">Planes EduTrack</a>
+      <a href="/tecnologia">Tecnología</a>
+      <a href="/ayuda">Centro de ayuda</a>
+      <a href="/pqr">Radicar PQR</a>
     </div>
     <div>
-      <h4>Navegación</h4>
-      <a href="/">Inicio</a>
-      <a href="/procsis">Portafolio</a>
-      <a href="/procsis">PROCSIS</a>
-      <a href="/ventas">Planes</a>
-      <a href="/login">Acceso instituciones</a>
-      <a href="/support">Support</a>
+      <h4>Acceso</h4>
+      <a href="/login">Portal instituciones</a>
+      <a href="/familia-login">Portal familiar</a>
+      <a href="/backoffice">Backoffice PROCSIS</a>
     </div>
     <div>
-      <h4>Contacto</h4>
-      <p>{_esc(corp_email)}</p>
-      <p>{_esc(corp_tel)}</p>
-      <a href="/contacto">Formulario de contacto</a>
-      <a href="/legal">Privacidad y datos</a>
+      <h4>Empresa</h4>
+      <a href="{_esc(url)}">Sitio oficial PROCSIS</a>
+      <a href="/contacto">Contacto</a>
+      <a href="/quienes-somos">Quiénes somos</a>
+    </div>
+    <div>
+      <h4>Legal</h4>
+      <a href="/legal">Privacidad</a>
+      <a href="/cookies">Cookies</a>
+      <a href="/tratamiento-datos">Tratamiento de datos</a>
+      <a href="/politica-pqr">Política PQR</a>
     </div>
   </div>
-  <div class="lcf-copy">© 2026 PROCSIS · Soluciones digitales. Todos los derechos reservados.</div>
-</footer>
+  <div class="laf-copy">© EduTrack · PROCSIS. Contenido del pie editable desde Gerencia.</div>
+</div>
 """
 
 
@@ -64607,368 +64632,6 @@ def aceptar_terminos_pago():
     return redirect(request.form.get("next") or request.referrer or "/pagar")
 
 
-# ── PROCSIS Support (estilo support.apple.com) ───────────────────────────────
-
-class ArticuloAyuda(db.Model):
-    __tablename__ = "articulos_ayuda"
-    id = db.Column(db.Integer, primary_key=True)
-    slug = db.Column(db.String(160), unique=True, index=True)
-    titulo = db.Column(db.String(255), nullable=False)
-    resumen = db.Column(db.String(500), default="")
-    cuerpo = db.Column(db.Text, default="")
-    categoria = db.Column(db.String(80), default="General")
-    estado = db.Column(db.String(20), default="BORRADOR")
-    sensible = db.Column(db.Boolean, default=False)
-    banner_upgrade = db.Column(db.Text, default="")
-    creado_por = db.Column(db.String(120), default="")
-    actualizado_por = db.Column(db.String(120), default="")
-    publicado_por = db.Column(db.String(120), default="")
-    creado_en = db.Column(db.String(30), default="")
-    actualizado_en = db.Column(db.String(30), default="")
-    publicado_en = db.Column(db.String(30), default="")
-
-
-class DisenoCarnet(db.Model):
-    __tablename__ = "disenos_carnet"
-    id = db.Column(db.Integer, primary_key=True)
-    nombre = db.Column(db.String(120), default="")
-    tipo = db.Column(db.String(40), default="estudiante")
-    color_primario = db.Column(db.String(20), default="#0B2D57")
-    color_acento = db.Column(db.String(20), default="#facc15")
-    logo_path = db.Column(db.Text, default="")
-    texto_frente = db.Column(db.Text, default="")
-    texto_reverso = db.Column(db.Text, default="")
-    css_extra = db.Column(db.Text, default="")
-    activo = db.Column(db.Boolean, default=True)
-    creado_en = db.Column(db.String(30), default="")
-    creado_por = db.Column(db.String(120), default="")
-
-
-def _ensure_support_tables():
-    try:
-        db.create_all()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-
-
-def _slugify_ayuda(titulo):
-    import re as _re
-    s = (titulo or "").strip().lower()
-    s = _re.sub(r"[^\w\s-]", "", s, flags=_re.UNICODE)
-    s = _re.sub(r"[\s_]+", "-", s).strip("-")[:140]
-    return s or ("articulo-" + secrets.token_hex(4))
-
-
-_APPLE_SUPPORT_CSS = """
-<style>
-.as{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Helvetica,Arial,sans-serif;background:#fff;color:#1d1d1f;min-height:100vh;margin:0}
-.as-nav{border-bottom:1px solid #d2d2d7;background:rgba(255,255,255,.8);backdrop-filter:saturate(180%) blur(20px);position:sticky;top:0;z-index:50}
-.as-nav-in{max-width:980px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.as-nav a{color:#06c;text-decoration:none;font-size:12px;font-weight:400}
-.as-nav .as-brand{color:#1d1d1f;font-weight:600;font-size:17px;letter-spacing:-.02em;text-decoration:none}
-.as-hero{max-width:692px;margin:0 auto;padding:56px 22px 24px;text-align:center}
-.as-hero h1{font-size:40px;line-height:1.1;font-weight:600;letter-spacing:-.015em;margin:0 0 12px;color:#1d1d1f}
-.as-hero p{font-size:19px;line-height:1.42;color:#6e6e73;margin:0 0 28px;font-weight:400}
-.as-search{max-width:680px;margin:0 auto 8px;position:relative}
-.as-search input{width:100%;box-sizing:border-box;padding:14px 18px 14px 44px;border:1px solid #d2d2d7;border-radius:12px;font-size:17px;background:#f5f5f7;color:#1d1d1f}
-.as-search input:focus{outline:none;border-color:#06c;background:#fff;box-shadow:0 0 0 4px rgba(0,102,204,.12)}
-.as-search .ico{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#86868b;font-size:16px}
-.as-topics{max-width:980px;margin:36px auto 0;padding:0 22px 48px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-@media(max-width:800px){.as-topics{grid-template-columns:1fr}.as-hero h1{font-size:32px}}
-.as-topic{text-align:left;text-decoration:none;color:inherit;padding:8px 4px}
-.as-topic h3{font-size:21px;font-weight:600;letter-spacing:.011em;margin:0 0 8px;color:#1d1d1f}
-.as-topic p{font-size:14px;line-height:1.43;color:#6e6e73;margin:0}
-.as-topic a.more{color:#06c;font-size:14px;text-decoration:none;display:inline-block;margin-top:8px}
-.as-list{max-width:692px;margin:0 auto;padding:8px 22px 64px}
-.as-list a{display:block;padding:16px 0;border-bottom:1px solid #d2d2d7;text-decoration:none;color:#1d1d1f}
-.as-list a:hover{color:#06c}
-.as-list .cat{font-size:12px;color:#6e6e73;margin-bottom:4px}
-.as-list h2{font-size:21px;font-weight:600;margin:0;letter-spacing:.011em}
-.as-art{max-width:692px;margin:0 auto;padding:40px 22px 80px}
-.as-art h1{font-size:40px;font-weight:600;letter-spacing:-.015em;line-height:1.1;margin:0 0 12px}
-.as-art .lead{font-size:19px;line-height:1.42;color:#6e6e73;margin:0 0 28px}
-.as-art .body{font-size:17px;line-height:1.47;color:#1d1d1f;white-space:pre-wrap}
-.as-art h2{font-size:28px;font-weight:600;margin:36px 0 12px;letter-spacing:.007em}
-.as-banner{background:#f5f5f7;border-radius:18px;padding:20px 22px;margin:28px 0;font-size:15px;line-height:1.4}
-.as-banner a{color:#06c;font-weight:500}
-.as-foot{border-top:1px solid #d2d2d7;padding:24px 22px;text-align:center;font-size:12px;color:#6e6e73}
-.as-foot a{color:#06c;text-decoration:none}
-</style>
-"""
-
-
-@app.route("/support")
-@app.route("/support/")
-def support_home():
-    """Support PROCSIS — diseño tipo support.apple.com."""
-    _ensure_support_tables()
-    q = (request.args.get("q") or "").strip()
-    try:
-        query = ArticuloAyuda.query.filter_by(estado="PUBLICADO")
-        if q:
-            like = "%" + q + "%"
-            query = query.filter(db.or_(
-                ArticuloAyuda.titulo.ilike(like),
-                ArticuloAyuda.resumen.ilike(like),
-                ArticuloAyuda.cuerpo.ilike(like),
-            ))
-        arts = query.order_by(ArticuloAyuda.id.desc()).limit(40).all()
-    except Exception:
-        arts = []
-    items = "".join(
-        '<a href="/support/a/%s"><div class="cat">%s</div><h2>%s</h2></a>'
-        % (_esc(a.slug or a.id), _esc(a.categoria or "Support"), _esc(a.titulo))
-        for a in arts
-    ) or '<p style="color:#6e6e73;text-align:center;padding:32px 0">Aún no hay artículos publicados.</p>'
-    body = f"""
-{_APPLE_SUPPORT_CSS}
-<div class="as">
-  <div class="as-nav"><div class="as-nav-in">
-    <a class="as-brand" href="/support">PROCSIS Support</a>
-    <div>
-      <a href="/support">Support</a> &nbsp;·&nbsp;
-      <a href="/login">Acceso instituciones</a> &nbsp;·&nbsp;
-      <a href="/procsis">PROCSIS</a> &nbsp;·&nbsp;
-      <a href="/pqr">PQR</a>
-    </div>
-  </div></div>
-  <div class="as-hero">
-    <h1>Support</h1>
-    <p>Encuentra respuestas sobre EduTrack, asistencia, notas y el portal familiar.</p>
-    <form class="as-search" method="GET" action="/support">
-      <span class="ico">⌕</span>
-      <input name="q" value="{_esc(q)}" placeholder="Buscar en Support" aria-label="Buscar">
-    </form>
-  </div>
-  <div class="as-topics">
-    <div class="as-topic"><h3>Asistencia y QR</h3><p>Ingresos, retardos y portería.</p><a class="more" href="/support?q=asistencia">Ver artículos ›</a></div>
-    <div class="as-topic"><h3>Notas y planilla</h3><p>Calificaciones, periodos y reportes.</p><a class="more" href="/support?q=notas">Ver artículos ›</a></div>
-    <div class="as-topic"><h3>Cuentas y acceso</h3><p>Claves, roles y portal familiar.</p><a class="more" href="/support?q=clave">Ver artículos ›</a></div>
-  </div>
-  <div class="as-list">{items}</div>
-  <div class="as-foot">Copyright © 2026 PROCSIS. <a href="/support">support.procsis.com</a></div>
-</div>"""
-    return page("PROCSIS Support", body)
-
-
-@app.route("/support/a/<slug>")
-def support_articulo(slug):
-    _ensure_support_tables()
-    a = ArticuloAyuda.query.filter_by(slug=slug).first()
-    if not a or ((a.estado or "") != "PUBLICADO" and rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia")):
-        return page("Support", f"{_APPLE_SUPPORT_CSS}<div class='as'><div class='as-art'><h1>Artículo no disponible</h1><p class='lead'><a href='/support'>Volver a Support</a></p></div></div>")
-    banner = f'<div class="as-banner">{a.banner_upgrade}</div>' if (a.banner_upgrade or "").strip() else ""
-    body = f"""
-{_APPLE_SUPPORT_CSS}
-<div class="as">
-  <div class="as-nav"><div class="as-nav-in">
-    <a class="as-brand" href="/support">PROCSIS Support</a>
-    <a href="/support">‹ Support</a>
-  </div></div>
-  <article class="as-art">
-    <h1>{_esc(a.titulo)}</h1>
-    <p class="lead">{_esc(a.resumen or a.categoria or '')}</p>
-    {banner}
-    <div class="body">{_esc(a.cuerpo or '')}</div>
-  </article>
-  <div class="as-foot">Copyright © 2026 PROCSIS. <a href="/support">support.procsis.com</a></div>
-</div>"""
-    return page(a.titulo or "Support", body)
-
-
-@app.route("/support/editor", methods=["GET", "POST"])
-def support_editor():
-    if not requiere_login():
-        return redirect("/soporte-login")
-    rol = rol_actual() or ""
-    if rol not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
-        return acceso_denegado("Solo Soporte (redacción) y Gerencia (publicación).")
-    _ensure_support_tables()
-    es_g = rol in ("Gerente", "Superadmin", "Administrador", "Gerencia")
-    msg = err = ""
-    edit_id = request.args.get("id") or request.form.get("id")
-    art = ArticuloAyuda.query.get(int(edit_id)) if edit_id and str(edit_id).isdigit() else None
-    if request.method == "POST":
-        accion = (request.form.get("accion") or "guardar").strip()
-        titulo = (request.form.get("titulo") or "").strip()[:255]
-        resumen = (request.form.get("resumen") or "").strip()[:500]
-        cuerpo = (request.form.get("cuerpo") or "").strip()
-        categoria = (request.form.get("categoria") or "General").strip()[:80]
-        sensible = request.form.get("sensible") == "1"
-        banner = (request.form.get("banner_upgrade") or "").strip() if es_g else (art.banner_upgrade if art else "")
-        ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
-        user = session.get("usuario") or rol
-        if accion == "guardar" and titulo:
-            if not art:
-                art = ArticuloAyuda(slug=_slugify_ayuda(titulo), titulo=titulo, estado="BORRADOR", creado_por=user, creado_en=ahora_s)
-                base, n = art.slug, 1
-                while ArticuloAyuda.query.filter_by(slug=art.slug).first():
-                    art.slug = "%s-%s" % (base, n)
-                    n += 1
-                db.session.add(art)
-            art.titulo, art.resumen, art.cuerpo, art.categoria, art.sensible = titulo, resumen, cuerpo, categoria, sensible
-            if es_g:
-                art.banner_upgrade = banner
-            art.actualizado_por, art.actualizado_en = user, ahora_s
-            if art.estado == "PUBLICADO" and not es_g and sensible:
-                art.estado = "BORRADOR"
-            db.session.commit()
-            msg = "Guardado."
-        elif accion == "publicar" and es_g and art:
-            art.estado, art.publicado_por, art.publicado_en = "PUBLICADO", user, ahora_s
-            if banner is not None:
-                art.banner_upgrade = banner
-            db.session.commit()
-            msg = "Publicado en Support."
-        elif accion == "despublicar" and es_g and art:
-            art.estado = "BORRADOR"
-            db.session.commit()
-            msg = "Borrador."
-    try:
-        lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(60).all()
-    except Exception:
-        lista = []
-    filas = "".join(
-        "<tr><td>%s</td><td>%s</td><td>%s</td><td><a href='/support/editor?id=%s'>Editar</a></td></tr>"
-        % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria), a.id) for a in lista
-    ) or "<tr><td colspan='4'>Sin artículos</td></tr>"
-    fv = {
-        "id": art.id if art else "", "titulo": art.titulo if art else "", "resumen": art.resumen if art else "",
-        "cuerpo": art.cuerpo if art else "", "categoria": art.categoria if art else "General",
-        "sensible": bool(art.sensible) if art else False, "banner": art.banner_upgrade if art else "",
-    }
-    gbtn = ""
-    if es_g and art:
-        gbtn = '<button name="accion" value="publicar" type="submit" class="btn">Publicar</button><button name="accion" value="despublicar" type="submit" class="btn">Borrador</button>'
-    ban = f'<label>Banner comercial (Gerencia)</label><textarea name="banner_upgrade" rows="2">{_esc(fv["banner"])}</textarea>' if es_g else ""
-    content = f"""
-<header class="role-hero"><div><h1>Support · Editor</h1>
-<p>Soporte redacta · Gerencia publica. Público: <a href="/support">/support</a></p></div></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel">
-<form method="POST" style="display:grid;gap:10px;max-width:720px">
-<input type="hidden" name="id" value="{fv['id']}">
-<label>Título</label><input name="titulo" required value="{_esc(fv['titulo'])}">
-<label>Categoría</label><input name="categoria" value="{_esc(fv['categoria'])}">
-<label>Resumen / lead</label><input name="resumen" value="{_esc(fv['resumen'])}">
-<label>Contenido</label><textarea name="cuerpo" rows="12" required>{_esc(fv['cuerpo'])}</textarea>
-<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="sensible" value="1" {"checked" if fv['sensible'] else ""}> Sensible (revisión Gerencia)</label>
-{ban}
-<div style="display:flex;gap:8px;flex-wrap:wrap">
-<button name="accion" value="guardar" type="submit" class="btn">Guardar</button>{gbtn}
-<a class="btn" href="/support/editor">Nuevo</a></div>
-</form></section>
-<section class="role-panel"><table class="table" style="width:100%"><tr><th>Título</th><th>Estado</th><th>Cat.</th><th></th></tr>{filas}</table></section>"""
-    return page("Editor Support", shell(content))
-
-
-@app.route("/gerencia/support-moderar")
-def gerencia_support_moderar():
-    try:
-        g = _guard_gerencia()
-        if g:
-            return g
-    except Exception:
-        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return acceso_denegado()
-    return redirect("/support/editor")
-
-
-@app.route("/gerencia/diseno-carnes", methods=["GET", "POST"])
-def gerencia_diseno_carnes():
-    try:
-        g = _guard_gerencia()
-        if g:
-            return g
-    except Exception:
-        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return acceso_denegado()
-    _ensure_support_tables()
-    msg = ""
-    if request.method == "POST":
-        try:
-            db.session.add(DisenoCarnet(
-                nombre=(request.form.get("nombre") or "Plantilla")[:120], tipo="estudiante",
-                color_primario=(request.form.get("color_primario") or "#0B2D57")[:20],
-                color_acento=(request.form.get("color_acento") or "#facc15")[:20],
-                texto_frente=(request.form.get("texto_frente") or "")[:2000],
-                texto_reverso=(request.form.get("texto_reverso") or "")[:2000],
-                activo=True, creado_en=fecha_hoy(), creado_por=session.get("usuario") or "Gerencia",
-            ))
-            db.session.commit()
-            msg = "Diseño guardado."
-        except Exception as ex:
-            msg = str(ex)[:100]
-    try:
-        items = DisenoCarnet.query.filter_by(tipo="estudiante").order_by(DisenoCarnet.id.desc()).limit(20).all()
-    except Exception:
-        items = []
-    rows = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(i.nombre), _esc(i.color_primario), _esc(i.color_acento)) for i in items) or "<tr><td colspan='3'>Sin plantillas</td></tr>"
-    content = f"""
-<header class="role-hero"><div><h1>Diseño de carnés</h1></div><a class="btn" href="/gerencia/hq">HQ</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel" style="max-width:520px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Nombre</label><input name="nombre" value="Plantilla institucional" required>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-<div><label>Primario</label><input type="color" name="color_primario" value="#0B2D57"></div>
-<div><label>Acento</label><input type="color" name="color_acento" value="#facc15"></div></div>
-<label>Texto frente</label><textarea name="texto_frente" rows="2"></textarea>
-<label>Texto reverso</label><textarea name="texto_reverso" rows="2"></textarea>
-<button class="btn" type="submit">Guardar</button></form></section>
-<section class="role-panel"><table class="table" style="width:100%"><tr><th>Nombre</th><th>Primario</th><th>Acento</th></tr>{rows}</table></section>"""
-    return page("Diseño carnés", shell(content))
-
-
-@app.route("/gerencia/carnes-corporativos", methods=["GET", "POST"])
-def gerencia_carnes_corporativos():
-    try:
-        g = _guard_gerencia()
-        if g:
-            return g
-    except Exception:
-        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return acceso_denegado()
-    _ensure_support_tables()
-    msg = ""
-    if request.method == "POST":
-        try:
-            db.session.add(DisenoCarnet(
-                nombre=(request.form.get("nombre") or "PROCSIS Staff")[:120], tipo="corporativo",
-                color_primario=(request.form.get("color_primario") or "#0B2D57")[:20],
-                color_acento=(request.form.get("color_acento") or "#F2C12E")[:20],
-                texto_frente=(request.form.get("texto_frente") or "")[:2000],
-                texto_reverso=(request.form.get("texto_reverso") or "")[:2000],
-                activo=True, creado_en=fecha_hoy(), creado_por=session.get("usuario") or "Gerencia",
-            ))
-            db.session.commit()
-            msg = "Plantilla corporativa guardada."
-        except Exception as ex:
-            msg = str(ex)[:100]
-    try:
-        items = DisenoCarnet.query.filter_by(tipo="corporativo").order_by(DisenoCarnet.id.desc()).limit(20).all()
-    except Exception:
-        items = []
-    rows = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(i.nombre), _esc(i.color_primario), _esc(i.color_acento)) for i in items) or "<tr><td colspan='3'>—</td></tr>"
-    content = f"""
-<header class="role-hero"><div><h1>Carnés corporativos</h1></div><a class="btn" href="/gerencia/hq">HQ</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel" style="max-width:520px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Nombre</label><input name="nombre" value="PROCSIS Staff" required>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-<div><label>Primario</label><input type="color" name="color_primario" value="#0B2D57"></div>
-<div><label>Acento</label><input type="color" name="color_acento" value="#F2C12E"></div></div>
-<label>Texto frente</label><textarea name="texto_frente" rows="2">Personal PROCSIS</textarea>
-<label>Texto reverso</label><textarea name="texto_reverso" rows="2">Propiedad de PROCSIS</textarea>
-<button class="btn" type="submit">Guardar</button></form></section>
-<section class="role-panel"><table class="table" style="width:100%"><tr><th>Nombre</th><th>Primario</th><th>Acento</th></tr>{rows}</table></section>"""
-    return page("Carnés corporativos", shell(content))
-
-
 if __name__ == "__main__":
     with app.app_context():
         inicializar_bd()
@@ -64979,4 +64642,3 @@ if __name__ == "__main__":
         except Exception as _e:
             print("ciclo facturacion:", _e)
     app.run(debug=True, host="0.0.0.0")
-
