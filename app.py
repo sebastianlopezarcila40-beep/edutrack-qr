@@ -3683,6 +3683,7 @@ def _staff_nav_items(path, rol=""):
             ("/logout", "Salir"),
         ]
     elif rol == "Soporte":
+        # Solo operativo. PROHIBIDO: nueva institución, licencias, cancelaciones, ofertas, modo prueba
         items = [
             ("/soporte_admin", "Panel principal"),
             ("/soporte/impersonar", "Suplantar usuario"),
@@ -3690,18 +3691,17 @@ def _staff_nav_items(path, rol=""):
             ("/soporte/periodos-colegio", "Periodos colegio"),
             ("/usuarios", "Usuarios"),
             ("/tenants", "Instituciones"),
-            ("/nueva_institucion", "Nueva institución"),
             ("/soporte/logs-errores", "Logs de errores"),
             ("/soporte/prorroga", "Prórroga 24h"),
             ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
             ("/servidores", "Servidores"),
             ("/auditoria", "Auditoría"),
-            ("/soporte/auditoria-colegio", "Auditoría colegio / ofertas"),
-            ("/soporte/licencias", "Licencias y cobros"),
-            ("/soporte/cancelaciones", "Cancelaciones"),
             ("/soporte/pqr", "Centro PQR"),
             ("/soporte/pqr/crear", "Radicar PQR"),
-            ("/modo_prueba", "Modo prueba"),
+            ("/soporte/pqr/consulta", "Consulta validada"),
+            ("/support", "Support"),
+            ("/support/editor", "Redactar Support"),
+            ("/contacto", "Vista contacto público"),
             ("/logout", "Salir"),
         ]
     elif rol == "Cobranza":
@@ -3836,25 +3836,14 @@ def _wrap_staff_layout(title, body, path):
         "}).catch(function(){ping.textContent='☁️ API: Offline';ping.className='nav-api-ping bad';});}"
         "})();</script>"
     )
-    # Logo empresa arriba (Gerencia / staff HQ)
-    try:
-        _logo_staff = logo_plataforma()
-    except Exception:
-        _logo_staff = "/static/img/logo-procsis.svg"
-    _brand_html = (
-        '<div class="brand-container-apple" style="flex-direction:column;align-items:flex-start;gap:10px">'
-        '<img src="' + _esc(_logo_staff) + '" alt="PROCSIS" style="width:48px;height:48px;object-fit:contain;background:#fff;border-radius:12px;padding:4px">'
-        '<span class="brand-text-apple">PROCSIS</span></div>'
-    )
     return (
         '<div class="app-layout-enterprise">'
         '<aside class="sidebar-apple-glass">'
-        + _brand_html
-        + '<div class="menu-category-title">Navegacion</div>'
+        '<div class="brand-container-apple"><span class="brand-text-apple">PROCSIS</span></div>'
+        '<div class="menu-category-title">Navegacion</div>'
         '<nav>' + nav + "</nav>"
         '<div class="sidebar-footer-legal">v2.6.0 · Ley 1581</div>'
         "</aside>"
-
         '<div class="main-content-container">'
         '<header class="navbar-top-apple">'
         '<div class="navbar-left">'
@@ -3881,18 +3870,7 @@ def page(title, body):
     except Exception:
         path = ""
     try:
-        rol_pg = (rol_actual() or session.get("rol") or "").strip()
-    except Exception:
-        rol_pg = ""
-    try:
-        # Soporte usa SIEMPRE su panel propio (logo + menú con scroll), no el layout HQ de Gerencia
-        if rol_pg == "Soporte":
-            if "sop-side" not in (body or "") and "shell_soporte" not in (body or "") and 'class="sop-layout"' not in (body or "") and "role-sidebar" not in (body or ""):
-                try:
-                    body = shell_soporte(body)
-                except Exception:
-                    pass
-        elif _is_staff_path(path) and session.get("usuario"):
+        if _is_staff_path(path) and session.get("usuario"):
             body = _wrap_staff_layout(title, body, path)
     except Exception:
         pass
@@ -6472,7 +6450,7 @@ def logo_plataforma():
 
 
 def shell_soporte(content):
-    """Panel Soporte: LOGO empresa arriba + menú completo con SCROLL (no layout Gerencia)."""
+    """Panel Soporte operativo: logo + scroll. Sin crear colegios, licencias, cancelaciones ni modo prueba."""
     p = plataforma()
     try:
         logo = logo_plataforma()
@@ -6485,19 +6463,14 @@ def shell_soporte(content):
         ("/soporte/periodos-colegio", "Periodos por colegio (3/4)"),
         ("/usuarios", "Usuarios · activo / eliminar"),
         ("/soporte/logs-errores", "Logs de errores"),
-        ("/soporte/prorroga", "Prórroga 24h"),
-        ("/tenants", "Instituciones"),
-        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
         ("/servidores", "Servidores"),
+        ("/soporte/prorroga", "Prórroga 24h"),
+        ("/tenants", "Instituciones (solo consulta)"),
+        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
         ("/auditoria", "Auditoría"),
-        ("/soporte/auditoria-colegio", "Auditoría colegio / ofertas"),
-        ("/modo_prueba", "Modo prueba"),
-        ("/soporte/licencias", "Licencias y cobros"),
-        ("/soporte/cancelaciones", "Cancelaciones"),
         ("/soporte/pqr", "Centro PQR"),
         ("/soporte/pqr/crear", "Radicar PQR interna"),
         ("/soporte/pqr/consulta", "Consulta validada"),
-        ("/pqr", "Portal PQR"),
         ("/support", "Support"),
         ("/support/editor", "Redactar en Support"),
         ("/contacto", "Vista contacto público"),
@@ -6510,31 +6483,26 @@ def shell_soporte(content):
     empresa = (getattr(p, "empresa", None) or "Procsis")
     return f"""
 <style>
-.sop-layout{{display:flex!important;flex-direction:row!important;min-height:100vh;width:100%;align-items:stretch;background:#eef2f7}}
+.sop-layout{{display:flex!important;flex-direction:row!important;min-height:100vh;width:100%;background:#eef2f7}}
 .sop-side{{width:250px!important;min-width:250px!important;max-width:250px!important;height:100vh!important;max-height:100vh!important;
 position:sticky!important;top:0!important;overflow-y:scroll!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;
 background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%)!important;color:#fff;padding:16px 12px 40px;box-sizing:border-box}}
 .sop-side img.sop-logo{{width:88px;height:88px;object-fit:contain;background:#fff;border-radius:16px;padding:8px;display:block;margin:0 auto 10px}}
 .sop-side a:hover{{background:rgba(37,99,235,.55)!important;color:#fff!important}}
-.sop-main{{flex:1;min-width:0;overflow:auto;padding:0}}
+.sop-main{{flex:1;min-width:0;overflow:auto}}
 </style>
 <div class="sop-layout">
   <aside class="sop-side">
     <img class="sop-logo" src="{logo}" alt="{_esc(empresa)}">
     <h2 style="font-size:16px;letter-spacing:.4px;text-align:center;margin:0 0 4px">{_esc(empresa).upper()}</h2>
-    <p style="font-size:12px;color:#bfdbfe;text-align:center;margin:0 0 8px">Centro de operaciones · {nombre_producto()} · {_esc(empresa)}</p>
+    <p style="font-size:12px;color:#bfdbfe;text-align:center;margin:0 0 8px">Centro de operaciones · {nombre_producto()}</p>
     <div style="text-align:center;margin-bottom:12px">
-      <span style="display:inline-block;background:#facc15;color:#0B2D57;font-weight:800;font-size:11px;padding:5px 12px;border-radius:8px;letter-spacing:.04em">SOPORTE TÉCNICO</span>
+      <span style="display:inline-block;background:#facc15;color:#0B2D57;font-weight:800;font-size:11px;padding:5px 12px;border-radius:8px">SOPORTE TÉCNICO</span>
     </div>
     {enlaces}
     <a href="/logout" style="display:block;background:#b91c1c;color:#fff;border-radius:8px;padding:11px 12px;margin-top:12px;text-decoration:none;text-align:center;font-weight:700">Salir</a>
-    <div style="margin-top:18px;padding:12px;background:rgba(255,255,255,.08);border-radius:10px;font-size:12px">
-      <b>{_esc(empresa)}</b><br>{_esc(getattr(p,'slogan',None) or SLOGAN)}
-    </div>
   </aside>
-  <main class="sop-main">{content}
-  <div style="text-align:center;padding:16px;color:#64748b;font-size:12px"><strong>{_esc(empresa)}</strong> · {nombre_producto()}</div>
-  </main>
+  <main class="sop-main">{content}</main>
 </div>
 """
 
@@ -16697,7 +16665,7 @@ def historial_estudiante_novedades(id):
 
 @app.route("/contacto")
 def contacto():
-    """Contacto público con marca Procsis (no del colegio)."""
+    """Contacto público — diseño Apple (tipografía limpia, cards suaves)."""
     p = plataforma()
     logo = logo_plataforma()
     empresa = p.empresa or DESARROLLADOR
@@ -16707,47 +16675,62 @@ def contacto():
     tel_c = p.telefono_cartera or CARTERA_TELEFONO
     mail_c = p.email_cartera or CARTERA_EMAIL
     body = f"""
-<div style="max-width:1100px;margin:24px auto;padding:0 16px">
-  <section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:24px;padding:28px;display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:20px">
-    <img src="{logo}" alt="{empresa}" style="width:88px;height:88px;object-fit:contain;background:#fff;border-radius:20px;padding:10px">
-    <div>
-      <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;opacity:.85">Soporte oficial</div>
-      <h1 style="margin:6px 0;font-size:28px">{empresa}</h1>
-      <p style="margin:0;opacity:.92">{p.slogan or SLOGAN}</p>
-      <p style="margin:8px 0 0;font-size:13px;opacity:.8">Plataforma {APP_NAME} · Acompañamiento técnico multi-institucional</p>
-    </div>
-  </section>
-  <section class="role-grid">
-    <div class="role-panel" style="text-align:center">
-      <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:24px">☎</div>
+<style>
+.ct{{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Helvetica,Arial,sans-serif;background:#f5f5f7;min-height:100vh;color:#1d1d1f;padding:40px 16px 64px}}
+.ct-in{{max-width:920px;margin:0 auto}}
+.ct-hero{{text-align:center;margin-bottom:36px}}
+.ct-hero img{{width:72px;height:72px;object-fit:contain;background:#fff;border-radius:18px;padding:8px;box-shadow:0 4px 20px rgba(0,0,0,.06)}}
+.ct-hero h1{{font-size:40px;font-weight:600;letter-spacing:-.02em;margin:16px 0 8px}}
+.ct-hero p{{font-size:19px;color:#6e6e73;margin:0;line-height:1.4}}
+.ct-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}}
+@media(max-width:800px){{.ct-grid{{grid-template-columns:1fr}}.ct-hero h1{{font-size:32px}}}}
+.ct-card{{background:#fff;border-radius:18px;padding:28px 22px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.04)}}
+.ct-card .ico{{width:48px;height:48px;margin:0 auto 14px;border-radius:50%;background:#f5f5f7;display:flex;align-items:center;justify-content:center;font-size:20px}}
+.ct-card h3{{font-size:17px;font-weight:600;margin:0 0 8px;letter-spacing:-.01em}}
+.ct-card p{{font-size:14px;color:#6e6e73;margin:4px 0;line-height:1.4}}
+.ct-card a{{color:#06c;text-decoration:none}}
+.ct-card a:hover{{text-decoration:underline}}
+.ct-foot{{text-align:center;margin-top:8px}}
+.ct-foot a{{display:inline-block;margin:6px 8px;padding:12px 22px;border-radius:980px;font-size:14px;font-weight:500;text-decoration:none}}
+.ct-foot .pri{{background:#1d1d1f;color:#fff}}
+.ct-foot .sec{{background:#fff;color:#1d1d1f;border:1px solid #d2d2d7}}
+.ct-copy{{text-align:center;margin-top:28px;font-size:12px;color:#86868b}}
+</style>
+<div class="ct"><div class="ct-in">
+  <div class="ct-hero">
+    <img src="{logo}" alt="{_esc(empresa)}">
+    <h1>Contacto</h1>
+    <p>{_esc(p.slogan or SLOGAN)} · {_esc(empresa)}</p>
+  </div>
+  <div class="ct-grid">
+    <div class="ct-card">
+      <div class="ico">☎</div>
       <h3>Desarrollador principal</h3>
-      <p><b>{dev}</b><br>Soporte técnico {APP_NAME}</p>
-      <p>📞 <a href="tel:{tel_s}">{tel_s}</a></p>
-      <p>✉️ <a href="mailto:{mail_s}">{mail_s}</a></p>
+      <p><b>{_esc(dev)}</b><br>Soporte técnico {APP_NAME}</p>
+      <p><a href="tel:{_esc(tel_s)}">{_esc(tel_s)}</a></p>
+      <p><a href="mailto:{_esc(mail_s)}">{_esc(mail_s)}</a></p>
     </div>
-    <div class="role-panel" style="text-align:center">
-      <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:24px">✉</div>
+    <div class="ct-card">
+      <div class="ico">✉</div>
       <h3>Soporte tecnológico</h3>
-      <p>Plataforma {APP_NAME}<br>{empresa}</p>
-      <p>✉️ <a href="mailto:{mail_s}">{mail_s}</a></p>
-      {(f'<p>Web: <a href="{p.web}" target="_blank">{p.web}</a></p>' if (p.web or '').strip() else '')}
+      <p>Plataforma {APP_NAME}<br>{_esc(empresa)}</p>
+      <p><a href="mailto:{_esc(mail_s)}">{_esc(mail_s)}</a></p>
     </div>
-    <div class="role-panel" style="text-align:center">
-      <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:24px">💼</div>
+    <div class="ct-card">
+      <div class="ico">💼</div>
       <h3>Cartera y facturación</h3>
-      <p>📞 <a href="tel:{tel_c}">{tel_c}</a></p>
-      <p>✉️ <a href="mailto:{mail_c}">{mail_c}</a></p>
+      <p><a href="tel:{_esc(tel_c)}">{_esc(tel_c)}</a></p>
+      <p><a href="mailto:{_esc(mail_c)}">{_esc(mail_c)}</a></p>
     </div>
-  </section>
-  <section style="margin-top:18px;background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;border-radius:22px;padding:28px;text-align:center">
-    <h2 style="margin:0">{APP_NAME}</h2>
-    <p style="margin:8px 0 0;opacity:.95">{p.slogan or SLOGAN}</p>
-    <p style="margin:12px 0 0;font-size:13px;opacity:.8">Desarrollado por <b>{empresa}</b></p>
-  </section>
-  <p style="text-align:center;margin-top:16px"><a class="btn" href="/login">Volver al login</a> <a class="btn" href="/atencion-directivos" style="background:#334155">Atención al directivo · PQR</a></p>
-</div>
+  </div>
+  <div class="ct-foot">
+    <a class="pri" href="/login">Volver al login</a>
+    <a class="sec" href="/atencion-directivos">Atención al directivo · PQR</a>
+    <a class="sec" href="/support">Support</a>
+  </div>
+  <div class="ct-copy">© 2026 {_esc(empresa)} · {APP_NAME}</div>
+</div></div>
 """
-    # Página pública: sin sidebar institucional
     return page("Contacto", body)
 
 
@@ -17149,7 +17132,11 @@ def soporte():
 @app.route("/modo_prueba", methods=["GET", "POST"])
 def modo_prueba():
     if not requiere_login(): return redirect("/login")
-    if rol_actual() not in ["Soporte", "Administrador"]: return acceso_denegado("Solo Soporte/Admin puede limpiar datos de prueba.")
+    # Soporte NO tiene modo prueba (riesgo comercial / datos)
+    if rol_actual() == "Soporte":
+        return acceso_denegado("Modo prueba está reservado a Gerencia / Administrador. Soporte no puede activarlo.")
+    if rol_actual() not in ["Administrador", "Gerente", "Superadmin"]:
+        return acceso_denegado("Solo Gerencia/Admin puede limpiar datos de prueba.")
     mensaje = ""
     if request.method == "POST":
         codigo = request.form.get("codigo", "")
@@ -36299,7 +36286,7 @@ def soporte_admin():
     <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff;font-weight:800">👥 Usuarios · eliminar</a>
     <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;color:#fff">🚨 Logs</a>
     <a class="btn" href="/soporte/prorroga" style="background:#1e3a5f;color:#fff;border:1px solid #fff3">📅 Prórroga 24h</a>
-    <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
+    <a class="btn" href="/support" style="background:#005BEA;color:#fff">Support</a>
     <a class="btn" href="/soporte/pqr" style="background:#1e40af;color:#fff">Tickets</a>
     <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488;color:#fff">💙 CSAT</a>
     <a class="btn btn-red" href="/logout">Salir</a>
@@ -36324,14 +36311,13 @@ def soporte_admin():
     <h2 style="margin:0">Colegios</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff">Usuarios · estado / eliminar</a>
-      <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
     </div>
   </div>
-  <p class="mini-text">En cada colegio: <b>Usuarios</b> abre la lista de ese tenant. En <b>Usuarios · estado / eliminar</b> ves ACTIVO/INACTIVO de toda la plataforma y puedes borrar inactivos.</p>
+  <p class="mini-text">Soporte solo consulta colegios (no crea instituciones). En cada colegio: <b>Usuarios</b> abre la lista de ese tenant.</p>
   <div class="table-card" style="overflow-x:auto">
   <table>
     <tr><th></th><th>Código / nombre</th><th>Estado</th><th>Plan</th><th>Usuarios</th><th>Acciones</th></tr>
-    {filas if filas else '<tr><td colspan="6">Sin instituciones. Crea una con Nueva institución.</td></tr>'}
+    {filas if filas else '<tr><td colspan="6">Sin instituciones registradas.</td></tr>'}
   </table>
   </div>
 </section>
@@ -37175,11 +37161,19 @@ def tenants():
 </div>
 """
     else:
+        # Soporte: solo consulta — sin botón Nueva institución
+        btn_nueva = ""
+        if rol_actual() != "Soporte":
+            btn_nueva = "<a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>"
+        aviso_sop = ""
+        if rol_actual() == "Soporte":
+            aviso_sop = "<p class='mini-text' style='color:#9a3412;background:#fff7ed;padding:10px;border-radius:8px;border:1px solid #fed7aa'>Soporte solo consulta instituciones. Crear o activar colegios es exclusivo de Gerencia / Ventas.</p>"
         body = f"""
 <header class='role-hero'>
   <div><h1>Instituciones (tenants)</h1><p>Cada colegio es independiente: logo, login, usuarios y datos propios. Un colegio <b>no ve</b> la información del otro.</p></div>
-  <a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>
+  {btn_nueva}
 </header>
+{aviso_sop}
 {aviso_nuevo}
 <div class='table-card'>
   <table>
@@ -37187,7 +37181,7 @@ def tenants():
       <th>ID</th><th>Logo</th><th>Código</th><th>Nombre</th><th>Sede</th><th>Estado</th>
       <th>Plan</th><th>Users / Est.</th><th>Creada</th><th>Acciones</th>
     </tr>
-    {filas if filas else '<tr><td colspan="10">No hay instituciones. Crea la primera.</td></tr>'}
+    {filas if filas else '<tr><td colspan="10">No hay instituciones.</td></tr>'}
   </table>
 </div>
 """
@@ -37198,6 +37192,11 @@ def tenants():
 def nueva_institucion():
     if rol_actual() == "Cobranza":
         return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
+    if rol_actual() == "Soporte":
+        return acceso_denegado(
+            "Soporte no puede crear ni activar instituciones. "
+            "Solo consulta la lista. El alta de colegios es exclusiva de Gerencia / Ventas tras contrato firmado."
+        )
     if not requiere_soporte_global():
         return redirect("/login")
     mensaje = ""
@@ -38774,6 +38773,12 @@ def exportar_cuenta():
 
 @app.route("/soporte/licencias", methods=["GET", "POST"])
 def soporte_licencias():
+    # Licencias y cobros: NO para técnicos de Soporte
+    if rol_actual() == "Soporte":
+        return acceso_denegado(
+            "Licencias y cobros es exclusivo de Gerencia / Cobranza. "
+            "Soporte no factura ni modifica tarifas."
+        )
     _g = _guard_soporte()
     if _g is not None:
         return _g
@@ -38860,13 +38865,17 @@ def soporte_licencias():
 @app.route("/soporte/cancelaciones", methods=["GET", "POST"])
 @app.route("/gerencia/cancelaciones", methods=["GET", "POST"])
 def soporte_cancelaciones():
-    """Módulo cancelación de servicio: Soporte y Gerencia. Cuenta regresiva + corte facturación."""
+    """Cancelación de servicio: solo Gerencia (validación comercial/legal)."""
     rol = (rol_actual() or "").strip()
-    if not requiere_login() or rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+    if rol == "Soporte":
+        return acceso_denegado(
+            "Las cancelaciones de contrato las gestiona Gerencia. "
+            "Soporte no puede dar de baja instituciones."
+        )
+    if not requiere_login() or rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         if session.get("soporte"):
-            pass
-        else:
-            return redirect("/soporte-login" if "soporte" in (request.path or "") else "/gerencia-login")
+            return acceso_denegado("Cancelaciones reservadas a Gerencia.")
+        return redirect("/gerencia-login")
     try:
         _procesar_cuenta_regresiva_cancelaciones()
     except Exception:
@@ -64632,6 +64641,357 @@ def aceptar_terminos_pago():
     return redirect(request.form.get("next") or request.referrer or "/pagar")
 
 
+# ── PROCSIS Support (estilo support.apple.com) ───────────────────────────────
+
+class ArticuloAyuda(db.Model):
+    __tablename__ = "articulos_ayuda"
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(160), unique=True, index=True)
+    titulo = db.Column(db.String(255), nullable=False)
+    resumen = db.Column(db.String(500), default="")
+    cuerpo = db.Column(db.Text, default="")
+    categoria = db.Column(db.String(80), default="General")
+    estado = db.Column(db.String(20), default="BORRADOR")
+    sensible = db.Column(db.Boolean, default=False)
+    banner_upgrade = db.Column(db.Text, default="")
+    creado_por = db.Column(db.String(120), default="")
+    actualizado_por = db.Column(db.String(120), default="")
+    publicado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+    publicado_en = db.Column(db.String(30), default="")
+
+
+class DisenoCarnet(db.Model):
+    __tablename__ = "disenos_carnet"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), default="")
+    tipo = db.Column(db.String(40), default="estudiante")
+    color_primario = db.Column(db.String(20), default="#0B2D57")
+    color_acento = db.Column(db.String(20), default="#facc15")
+    logo_path = db.Column(db.Text, default="")
+    texto_frente = db.Column(db.Text, default="")
+    texto_reverso = db.Column(db.Text, default="")
+    css_extra = db.Column(db.Text, default="")
+    activo = db.Column(db.Boolean, default=True)
+    creado_en = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(120), default="")
+
+
+def _ensure_support_tables():
+    try:
+        db.create_all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _slugify_ayuda(titulo):
+    import re as _re
+    s = (titulo or "").strip().lower()
+    s = _re.sub(r"[^\w\s-]", "", s, flags=_re.UNICODE)
+    s = _re.sub(r"[\s_]+", "-", s).strip("-")[:140]
+    return s or ("articulo-" + secrets.token_hex(4))
+
+
+_APPLE_SUPPORT_CSS = """
+<style>
+.as{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Helvetica,Arial,sans-serif;background:#fff;color:#1d1d1f;min-height:100vh;margin:0}
+.as-nav{border-bottom:1px solid #d2d2d7;background:rgba(255,255,255,.8);backdrop-filter:saturate(180%) blur(20px);position:sticky;top:0;z-index:50}
+.as-nav-in{max-width:980px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.as-nav a{color:#06c;text-decoration:none;font-size:12px}
+.as-nav .as-brand{color:#1d1d1f;font-weight:600;font-size:17px;letter-spacing:-.02em;text-decoration:none}
+.as-hero{max-width:692px;margin:0 auto;padding:56px 22px 24px;text-align:center}
+.as-hero h1{font-size:40px;line-height:1.1;font-weight:600;letter-spacing:-.015em;margin:0 0 12px}
+.as-hero p{font-size:19px;line-height:1.42;color:#6e6e73;margin:0 0 28px}
+.as-search{max-width:680px;margin:0 auto;position:relative}
+.as-search input{width:100%;box-sizing:border-box;padding:14px 18px 14px 44px;border:1px solid #d2d2d7;border-radius:12px;font-size:17px;background:#f5f5f7}
+.as-search input:focus{outline:none;border-color:#06c;background:#fff;box-shadow:0 0 0 4px rgba(0,102,204,.12)}
+.as-search .ico{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#86868b}
+.as-topics{max-width:980px;margin:36px auto 0;padding:0 22px 48px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+@media(max-width:800px){.as-topics{grid-template-columns:1fr}.as-hero h1{font-size:32px}}
+.as-topic h3{font-size:21px;font-weight:600;margin:0 0 8px}.as-topic p{font-size:14px;color:#6e6e73;margin:0}
+.as-topic a.more{color:#06c;font-size:14px;text-decoration:none;display:inline-block;margin-top:8px}
+.as-list{max-width:692px;margin:0 auto;padding:8px 22px 64px}
+.as-list a{display:block;padding:16px 0;border-bottom:1px solid #d2d2d7;text-decoration:none;color:#1d1d1f}
+.as-list a:hover{color:#06c}.as-list .cat{font-size:12px;color:#6e6e73;margin-bottom:4px}
+.as-list h2{font-size:21px;font-weight:600;margin:0}
+.as-art{max-width:692px;margin:0 auto;padding:40px 22px 80px}
+.as-art h1{font-size:40px;font-weight:600;letter-spacing:-.015em;line-height:1.1;margin:0 0 12px}
+.as-art .lead{font-size:19px;line-height:1.42;color:#6e6e73;margin:0 0 28px}
+.as-art .body{font-size:17px;line-height:1.47;white-space:pre-wrap}
+.as-banner{background:#f5f5f7;border-radius:18px;padding:20px 22px;margin:28px 0;font-size:15px}
+.as-banner a{color:#06c;font-weight:500}
+.as-foot{border-top:1px solid #d2d2d7;padding:24px 22px;text-align:center;font-size:12px;color:#6e6e73}
+.as-foot a{color:#06c;text-decoration:none}
+</style>
+"""
+
+
+@app.route("/support")
+@app.route("/support/")
+def support_home():
+    _ensure_support_tables()
+    q = (request.args.get("q") or "").strip()
+    try:
+        query = ArticuloAyuda.query.filter_by(estado="PUBLICADO")
+        if q:
+            like = "%" + q + "%"
+            query = query.filter(db.or_(
+                ArticuloAyuda.titulo.ilike(like),
+                ArticuloAyuda.resumen.ilike(like),
+                ArticuloAyuda.cuerpo.ilike(like),
+            ))
+        arts = query.order_by(ArticuloAyuda.id.desc()).limit(40).all()
+    except Exception:
+        arts = []
+    items = "".join(
+        '<a href="/support/a/%s"><div class="cat">%s</div><h2>%s</h2></a>'
+        % (_esc(a.slug or a.id), _esc(a.categoria or "Support"), _esc(a.titulo))
+        for a in arts
+    ) or '<p style="color:#6e6e73;text-align:center;padding:32px 0">Aún no hay artículos publicados. Soporte puede redactarlos en /support/editor.</p>'
+    body = f"""
+{_APPLE_SUPPORT_CSS}
+<div class="as">
+  <div class="as-nav"><div class="as-nav-in">
+    <a class="as-brand" href="/support">PROCSIS Support</a>
+    <div><a href="/support">Support</a> · <a href="/login">Acceso</a> · <a href="/procsis">PROCSIS</a> · <a href="/pqr">PQR</a></div>
+  </div></div>
+  <div class="as-hero">
+    <h1>Support</h1>
+    <p>Respuestas sobre EduTrack, asistencia, notas y el portal familiar.</p>
+    <form class="as-search" method="GET" action="/support">
+      <span class="ico">⌕</span>
+      <input name="q" value="{_esc(q)}" placeholder="Buscar en Support">
+    </form>
+  </div>
+  <div class="as-topics">
+    <div class="as-topic"><h3>Asistencia y QR</h3><p>Ingresos, retardos y portería.</p><a class="more" href="/support?q=asistencia">Ver ›</a></div>
+    <div class="as-topic"><h3>Notas y planilla</h3><p>Calificaciones y reportes.</p><a class="more" href="/support?q=notas">Ver ›</a></div>
+    <div class="as-topic"><h3>Cuentas y acceso</h3><p>Claves y portal familiar.</p><a class="more" href="/support?q=clave">Ver ›</a></div>
+  </div>
+  <div class="as-list">{items}</div>
+  <div class="as-foot">Copyright © 2026 PROCSIS · <a href="/support">support.procsis.com</a></div>
+</div>"""
+    return page("PROCSIS Support", body)
+
+
+@app.route("/support/a/<slug>")
+def support_articulo(slug):
+    _ensure_support_tables()
+    a = ArticuloAyuda.query.filter_by(slug=slug).first()
+    if not a or ((a.estado or "") != "PUBLICADO" and rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia")):
+        return page("Support", f"{_APPLE_SUPPORT_CSS}<div class='as'><div class='as-art'><h1>Artículo no disponible</h1><p class='lead'><a href='/support'>Volver a Support</a></p></div></div>")
+    banner = f'<div class="as-banner">{a.banner_upgrade}</div>' if (a.banner_upgrade or "").strip() else ""
+    body = f"""
+{_APPLE_SUPPORT_CSS}
+<div class="as">
+  <div class="as-nav"><div class="as-nav-in">
+    <a class="as-brand" href="/support">PROCSIS Support</a>
+    <a href="/support">‹ Support</a>
+  </div></div>
+  <article class="as-art">
+    <h1>{_esc(a.titulo)}</h1>
+    <p class="lead">{_esc(a.resumen or a.categoria or '')}</p>
+    {banner}
+    <div class="body">{_esc(a.cuerpo or '')}</div>
+  </article>
+  <div class="as-foot">Copyright © 2026 PROCSIS · <a href="/support">support.procsis.com</a></div>
+</div>"""
+    return page(a.titulo or "Support", body)
+
+
+@app.route("/support/editor", methods=["GET", "POST"])
+def support_editor():
+    if not requiere_login():
+        return redirect("/soporte-login")
+    rol = rol_actual() or ""
+    if rol not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
+        return acceso_denegado("Solo Soporte (redacción) y Gerencia (publicación).")
+    _ensure_support_tables()
+    es_g = rol in ("Gerente", "Superadmin", "Administrador", "Gerencia")
+    msg = ""
+    edit_id = request.args.get("id") or request.form.get("id")
+    art = ArticuloAyuda.query.get(int(edit_id)) if edit_id and str(edit_id).isdigit() else None
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "guardar").strip()
+        titulo = (request.form.get("titulo") or "").strip()[:255]
+        resumen = (request.form.get("resumen") or "").strip()[:500]
+        cuerpo = (request.form.get("cuerpo") or "").strip()
+        categoria = (request.form.get("categoria") or "General").strip()[:80]
+        sensible = request.form.get("sensible") == "1"
+        banner = (request.form.get("banner_upgrade") or "").strip() if es_g else (art.banner_upgrade if art else "")
+        ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
+        user = session.get("usuario") or rol
+        if accion == "guardar" and titulo:
+            if not art:
+                art = ArticuloAyuda(slug=_slugify_ayuda(titulo), titulo=titulo, estado="BORRADOR", creado_por=user, creado_en=ahora_s)
+                base, n = art.slug, 1
+                while ArticuloAyuda.query.filter_by(slug=art.slug).first():
+                    art.slug = "%s-%s" % (base, n)
+                    n += 1
+                db.session.add(art)
+            art.titulo, art.resumen, art.cuerpo, art.categoria, art.sensible = titulo, resumen, cuerpo, categoria, sensible
+            if es_g:
+                art.banner_upgrade = banner
+            art.actualizado_por, art.actualizado_en = user, ahora_s
+            if art.estado == "PUBLICADO" and not es_g and sensible:
+                art.estado = "BORRADOR"
+            db.session.commit()
+            msg = "Guardado."
+        elif accion == "publicar" and es_g and art:
+            art.estado, art.publicado_por, art.publicado_en = "PUBLICADO", user, ahora_s
+            if banner is not None:
+                art.banner_upgrade = banner
+            db.session.commit()
+            msg = "Publicado."
+        elif accion == "despublicar" and es_g and art:
+            art.estado = "BORRADOR"
+            db.session.commit()
+            msg = "Borrador."
+    try:
+        lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(60).all()
+    except Exception:
+        lista = []
+    filas = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td><a href='/support/editor?id=%s'>Editar</a></td></tr>"
+        % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria), a.id) for a in lista
+    ) or "<tr><td colspan='4'>Sin artículos</td></tr>"
+    fv = {
+        "id": art.id if art else "", "titulo": art.titulo if art else "", "resumen": art.resumen if art else "",
+        "cuerpo": art.cuerpo if art else "", "categoria": art.categoria if art else "General",
+        "sensible": bool(art.sensible) if art else False, "banner": art.banner_upgrade if art else "",
+    }
+    gbtn = ('<button name="accion" value="publicar" type="submit" class="btn">Publicar</button>'
+            '<button name="accion" value="despublicar" type="submit" class="btn">Borrador</button>') if es_g and art else ""
+    ban = f'<label>Banner comercial (Gerencia)</label><textarea name="banner_upgrade" rows="2">{_esc(fv["banner"])}</textarea>' if es_g else ""
+    content = f"""
+<header class="role-hero"><div><h1>Support · Editor</h1>
+<p>Soporte redacta · Gerencia publica · <a href="/support">/support</a></p></div></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel">
+<form method="POST" style="display:grid;gap:10px;max-width:720px">
+<input type="hidden" name="id" value="{fv['id']}">
+<label>Título</label><input name="titulo" required value="{_esc(fv['titulo'])}">
+<label>Categoría</label><input name="categoria" value="{_esc(fv['categoria'])}">
+<label>Resumen</label><input name="resumen" value="{_esc(fv['resumen'])}">
+<label>Contenido</label><textarea name="cuerpo" rows="12" required>{_esc(fv['cuerpo'])}</textarea>
+<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="sensible" value="1" {"checked" if fv['sensible'] else ""}> Sensible (revisión Gerencia)</label>
+{ban}
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button name="accion" value="guardar" type="submit" class="btn">Guardar</button>{gbtn}
+<a class="btn" href="/support/editor">Nuevo</a></div>
+</form></section>
+<section class="role-panel"><table class="table" style="width:100%"><tr><th>Título</th><th>Estado</th><th>Cat.</th><th></th></tr>{filas}</table></section>"""
+    return page("Editor Support", shell(content))
+
+
+@app.route("/gerencia/support-moderar")
+def gerencia_support_moderar():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    return redirect("/support/editor")
+
+
+@app.route("/gerencia/diseno-carnes", methods=["GET", "POST"])
+def gerencia_diseno_carnes():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_support_tables()
+    msg = ""
+    if request.method == "POST":
+        try:
+            db.session.add(DisenoCarnet(
+                nombre=(request.form.get("nombre") or "Plantilla")[:120], tipo="estudiante",
+                color_primario=(request.form.get("color_primario") or "#0B2D57")[:20],
+                color_acento=(request.form.get("color_acento") or "#facc15")[:20],
+                texto_frente=(request.form.get("texto_frente") or "")[:2000],
+                texto_reverso=(request.form.get("texto_reverso") or "")[:2000],
+                activo=True, creado_en=fecha_hoy(), creado_por=session.get("usuario") or "Gerencia",
+            ))
+            db.session.commit()
+            msg = "Diseño guardado."
+        except Exception as ex:
+            msg = str(ex)[:100]
+    try:
+        items = DisenoCarnet.query.filter_by(tipo="estudiante").order_by(DisenoCarnet.id.desc()).limit(20).all()
+    except Exception:
+        items = []
+    rows = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(i.nombre), _esc(i.color_primario), _esc(i.color_acento)) for i in items) or "<tr><td colspan='3'>—</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Diseño de carnés</h1></div><a class="btn" href="/gerencia/hq">HQ</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel" style="max-width:520px">
+<form method="POST" style="display:grid;gap:10px">
+<label>Nombre</label><input name="nombre" value="Plantilla institucional" required>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div><label>Primario</label><input type="color" name="color_primario" value="#0B2D57"></div>
+<div><label>Acento</label><input type="color" name="color_acento" value="#facc15"></div></div>
+<label>Texto frente</label><textarea name="texto_frente" rows="2"></textarea>
+<label>Texto reverso</label><textarea name="texto_reverso" rows="2"></textarea>
+<button class="btn" type="submit">Guardar</button></form></section>
+<section class="role-panel"><table class="table" style="width:100%"><tr><th>Nombre</th><th>Primario</th><th>Acento</th></tr>{rows}</table></section>"""
+    return page("Diseño carnés", shell(content))
+
+
+@app.route("/gerencia/carnes-corporativos", methods=["GET", "POST"])
+def gerencia_carnes_corporativos():
+    try:
+        g = _guard_gerencia()
+        if g:
+            return g
+    except Exception:
+        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+            return acceso_denegado()
+    _ensure_support_tables()
+    msg = ""
+    if request.method == "POST":
+        try:
+            db.session.add(DisenoCarnet(
+                nombre=(request.form.get("nombre") or "PROCSIS Staff")[:120], tipo="corporativo",
+                color_primario=(request.form.get("color_primario") or "#0B2D57")[:20],
+                color_acento=(request.form.get("color_acento") or "#F2C12E")[:20],
+                texto_frente=(request.form.get("texto_frente") or "")[:2000],
+                texto_reverso=(request.form.get("texto_reverso") or "")[:2000],
+                activo=True, creado_en=fecha_hoy(), creado_por=session.get("usuario") or "Gerencia",
+            ))
+            db.session.commit()
+            msg = "Plantilla corporativa guardada."
+        except Exception as ex:
+            msg = str(ex)[:100]
+    try:
+        items = DisenoCarnet.query.filter_by(tipo="corporativo").order_by(DisenoCarnet.id.desc()).limit(20).all()
+    except Exception:
+        items = []
+    rows = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(i.nombre), _esc(i.color_primario), _esc(i.color_acento)) for i in items) or "<tr><td colspan='3'>—</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Carnés corporativos</h1></div><a class="btn" href="/gerencia/hq">HQ</a></header>
+{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
+<section class="role-panel" style="max-width:520px">
+<form method="POST" style="display:grid;gap:10px">
+<label>Nombre</label><input name="nombre" value="PROCSIS Staff" required>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div><label>Primario</label><input type="color" name="color_primario" value="#0B2D57"></div>
+<div><label>Acento</label><input type="color" name="color_acento" value="#F2C12E"></div></div>
+<label>Texto frente</label><textarea name="texto_frente" rows="2">Personal PROCSIS</textarea>
+<label>Texto reverso</label><textarea name="texto_reverso" rows="2">Propiedad de PROCSIS</textarea>
+<button class="btn" type="submit">Guardar</button></form></section>
+<section class="role-panel"><table class="table" style="width:100%"><tr><th>Nombre</th><th>Primario</th><th>Acento</th></tr>{rows}</table></section>"""
+    return page("Carnés corporativos", shell(content))
+
+
 if __name__ == "__main__":
     with app.app_context():
         inicializar_bd()
@@ -64642,3 +65002,4 @@ if __name__ == "__main__":
         except Exception as _e:
             print("ciclo facturacion:", _e)
     app.run(debug=True, host="0.0.0.0")
+
