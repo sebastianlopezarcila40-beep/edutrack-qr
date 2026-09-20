@@ -736,7 +736,7 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 .role-icons a.out:hover .ic{background:#334155}
 .role-welcome{background:#f8fafc;padding:10px 20px;border-bottom:1px solid #e2e8f0;font-size:12.5px;color:#475569;text-align:center;font-weight:500}
 .role-welcome b{color:#0B2D57}
-.role-main{flex:1;padding:18px 20px 32px;overflow:auto;max-width:1280px;width:100%;margin:0 auto;margin-left:240px;box-sizing:border-box}
+.role-main{flex:1;padding:18px 20px 32px;overflow:auto;max-width:1280px;width:100%;margin:0 auto;box-sizing:border-box}
 .role-sidebar{display:block;width:240px;position:fixed;left:0;top:0;height:100vh;max-height:100vh;overflow-y:auto!important;overflow-x:hidden;padding:18px;box-sizing:border-box;z-index:50}
 .role-hero{background:linear-gradient(135deg,#ffffff,#eff6ff);border-radius:28px;padding:26px;box-shadow:var(--s);display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:20px;border:1px solid #dbeafe}
 .role-hero h1{margin:0;color:#0f172a;font-size:32px}.role-hero p{margin:8px 0 0;color:#475569}.role-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}.role-card{background:white;border-radius:24px;padding:20px;box-shadow:var(--s);border-left:6px solid #2563eb}.role-card.green{border-left-color:#16a34a}.role-card.yellow{border-left-color:#f59e0b}.role-card.red{border-left-color:#dc2626}.role-card.purple{border-left-color:#7c3aed}.role-card h3{margin:0;font-size:30px;color:#0f172a}.role-card p{margin:6px 0 0;color:#475569;font-weight:700}.role-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.role-panel{background:white;border-radius:24px;padding:22px;box-shadow:var(--s);border-top:5px solid #2563eb}.role-panel h2{margin-top:0;color:#0f172a}.role-panel ul{padding-left:20px;line-height:1.8}.role-muted{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:18px;padding:14px;color:#475569}.blocked-box{max-width:620px;margin:80px auto;background:white;border-radius:28px;padding:32px;box-shadow:var(--s);text-align:center;border-top:6px solid #dc2626}.small-action{font-size:12px;padding:8px 10px;border-radius:10px}.top-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.audit-row td{text-align:left}.security-note{background:#ecfdf5;border:1px solid #bbf7d0;color:#14532d;border-radius:16px;padding:14px;margin:12px 0;font-weight:800}.welcome-msg{font-size:13px;color:#dbeafe;line-height:1.45;margin:10px 0 14px}.notice-box{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:18px;padding:14px;margin:0 0 18px;font-weight:800}.filter-bar{background:white;border-radius:20px;padding:16px;box-shadow:var(--s);margin-bottom:16px}.print-card{background:white;border-radius:18px;padding:18px;box-shadow:var(--s);margin:12px 0;border-left:5px solid #2563eb}.parent-report-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.parent-report-head img{width:70px;height:70px;object-fit:contain}.mini-text{font-size:12px;color:#64748b}
@@ -3607,6 +3607,13 @@ _APPLE_SHELL_CSS = (
     "border:0;border-radius:980px;padding:10px 20px;font-size:13px;font-weight:500;text-decoration:none;cursor:pointer}"
     "@media(max-width:900px){.sidebar-apple-glass{position:relative;width:100%;min-height:auto}"
     ".main-content-container{margin-left:0;width:100%}.app-layout-enterprise{flex-direction:column}}"
+    "/* Layout staff (Soporte/Gerencia/Ventas/Cobranza/Dev): UNA sola barra lateral (la principal) y contenido a pantalla completa */"
+    ".main-content-container{min-width:0;max-width:100%}"
+    ".bento-workspace-apple{min-width:0;width:100%;max-width:100%}"
+    ".bento-workspace-apple .role-layout{display:block!important;min-height:0!important;background:transparent!important}"
+    ".bento-workspace-apple .role-sidebar,.bento-workspace-apple .role-topbar,.bento-workspace-apple .role-icons,.bento-workspace-apple .role-welcome{display:none!important}"
+    ".bento-workspace-apple .role-main{max-width:none!important;width:100%!important;margin:0!important;padding:0!important;overflow:visible!important}"
+    ".bento-workspace-apple .table-card{overflow-x:auto!important}"
     "</style>"
 )
 
@@ -3881,7 +3888,13 @@ def page(title, body):
     except Exception:
         path = ""
     try:
-        if _is_staff_path(path) and session.get("usuario"):
+        _forzar_staff = False
+        try:
+            from flask import g as _g_flask
+            _forzar_staff = bool(getattr(_g_flask, "_staff_wrap", False))
+        except Exception:
+            _forzar_staff = False
+        if (_is_staff_path(path) or _forzar_staff) and session.get("usuario"):
             body = _wrap_staff_layout(title, body, path)
     except Exception:
         pass
@@ -6461,43 +6474,20 @@ def logo_plataforma():
 
 
 def shell_soporte(content):
-    """Layout exclusivo Soporte: marca Procsis, menú lateral unificado con el panel."""
+    """Layout Soporte SIN barra lateral propia.
+
+    El menú lateral (el principal), la barra superior y el ancho completo los pone
+    page() -> _wrap_staff_layout(). Antes esta función dibujaba una segunda barra fija
+    (.role-sidebar) que duplicaba a la principal y empujaba el contenido 240px a la derecha.
+    """
     p = plataforma()
-    logo = logo_plataforma()
-    menu = [
-        ("/soporte_admin", "Panel principal"),
-        ("/soporte/impersonar", "Suplantar usuario"),
-        ("/soporte/reset-clave", "Resetear contraseñas"),
-        ("/soporte/periodos-colegio", "Periodos por colegio (3/4)"),
-        ("/usuarios", "Usuarios · activo / eliminar"),
-        ("/tenants", "Instituciones (consulta)"),
-        ("/soporte/logs-errores", "Logs de errores"),
-        ("/servidores", "Servidores"),
-        ("/soporte/prorroga", "Prórroga 24h"),
-        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
-        ("/soporte/pqr", "Centro PQR"),
-        ("/soporte/pqr/crear", "Radicar PQR interna"),
-        ("/soporte/pqr/consulta", "Consulta validada"),
-        ("/support", "Support"),
-        ("/support/editor", "Redactar en Support"),
-        ("/contacto", "Vista contacto público"),
-        ("/auditoria", "Auditoría"),
-        ("/planes/buscar", "Buscar planes"),
-        ("/soporte/planes-vendidos", "Planes activos / vendidos"),
-    ]
-    enlaces = "".join(f'<a href="{u}">{n}</a>' for u, n in menu)
+    try:
+        from flask import g as _g_flask
+        _g_flask._staff_wrap = True  # page() envuelve esta página con el layout principal
+    except Exception:
+        pass
     return f"""
 <div class="role-layout">
-  <aside class="role-sidebar" style="background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%)">
-    <img src="{logo}" alt="Procsis" style="background:#fff;border-radius:14px;padding:8px">
-    <h2 style="font-size:15px;letter-spacing:.5px">{(p.empresa or 'Procsis').upper()}</h2>
-    <p class="welcome-msg">Centro de operaciones · {nombre_producto()} · {nombre_empresa()}</p>
-    <span class="role-tag">Soporte técnico</span>
-    <br><br>
-    {enlaces}
-    <a href="/logout" style="background:#b91c1c;color:#fff;border-radius:8px">Salir</a>
-    <div class="brand-box"><h3>{p.empresa or 'Procsis'}</h3><p>{p.slogan or SLOGAN}</p></div>
-  </aside>
   <main class="role-main">{content}
   <div class="footer"><strong>{p.empresa or DESARROLLADOR}</strong> · {getattr(p,"nombre_producto",None) or APP_NAME}<br>{p.slogan or SLOGAN}</div>
   </main>
@@ -36260,6 +36250,10 @@ def soporte_admin():
             <a href='/soporte/usuarios/{i.id}'>Usuarios</a>
           </td>
         </tr>"""
+    # Soporte no crea colegios (lo hace Gerencia): el botón solo se muestra a quien sí puede.
+    _puede_crear_inst = rol_actual() in ("Gerente", "Superadmin", "Administrador")
+    _btn_nueva_inst = '<a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>' if _puede_crear_inst else ""
+    _vacio_colegios = "Sin instituciones. Crea una con Nueva institución." if _puede_crear_inst else "Sin instituciones registradas."
     content = f"""
 <section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:22px;padding:22px 24px;margin-bottom:14px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
   <div style="display:flex;gap:16px;align-items:center">
@@ -36278,7 +36272,7 @@ def soporte_admin():
     <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff;font-weight:800">👥 Usuarios · eliminar</a>
     <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;color:#fff">🚨 Logs</a>
     <a class="btn" href="/soporte/prorroga" style="background:#1e3a5f;color:#fff;border:1px solid #fff3">📅 Prórroga 24h</a>
-    <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
+    {_btn_nueva_inst}
     <a class="btn" href="/soporte/pqr" style="background:#1e40af;color:#fff">Tickets</a>
     <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488;color:#fff">💙 CSAT</a>
     <a class="btn btn-red" href="/logout">Salir</a>
@@ -36303,14 +36297,14 @@ def soporte_admin():
     <h2 style="margin:0">Colegios</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff">Usuarios · estado / eliminar</a>
-      <a class="btn btn-green" href="/nueva_institucion">Nueva institución</a>
+      {_btn_nueva_inst}
     </div>
   </div>
   <p class="mini-text">En cada colegio: <b>Usuarios</b> abre la lista de ese tenant. En <b>Usuarios · estado / eliminar</b> ves ACTIVO/INACTIVO de toda la plataforma y puedes borrar inactivos.</p>
   <div class="table-card" style="overflow-x:auto">
   <table>
     <tr><th></th><th>Código / nombre</th><th>Estado</th><th>Plan</th><th>Usuarios</th><th>Acciones</th></tr>
-    {filas if filas else '<tr><td colspan="6">Sin instituciones. Crea una con Nueva institución.</td></tr>'}
+    {filas if filas else '<tr><td colspan="6">' + _vacio_colegios + '</td></tr>'}
   </table>
   </div>
 </section>
@@ -37154,10 +37148,21 @@ def tenants():
 </div>
 """
     else:
+        # Solo Gerencia/Superadmin/Administrador pueden crear colegios. Soporte (y Comercial) solo consultan.
+        if rol in ("Gerente", "Superadmin", "Administrador"):
+            _titulo_inst = "Instituciones (tenants)"
+            _sub_inst = "Cada colegio es independiente: logo, login, usuarios y datos propios. Un colegio <b>no ve</b> la información del otro."
+            _accion_inst = "<a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>"
+            _vacio_inst = "No hay instituciones. Crea la primera."
+        else:
+            _titulo_inst = "Instituciones · Consulta"
+            _sub_inst = "Consulta de los colegios registrados en la plataforma. El alta de nuevos colegios la realiza únicamente Gerencia."
+            _accion_inst = "<a class='btn' href='/soporte_admin'>← Panel soporte</a>" if rol == "Soporte" else ""
+            _vacio_inst = "No hay instituciones registradas."
         body = f"""
 <header class='role-hero'>
-  <div><h1>Instituciones (tenants)</h1><p>Cada colegio es independiente: logo, login, usuarios y datos propios. Un colegio <b>no ve</b> la información del otro.</p></div>
-  <a class='btn btn-green' href='/nueva_institucion'>➕ Nueva institución</a>
+  <div><h1>{_titulo_inst}</h1><p>{_sub_inst}</p></div>
+  {_accion_inst}
 </header>
 {aviso_nuevo}
 <div class='table-card'>
@@ -37166,7 +37171,7 @@ def tenants():
       <th>ID</th><th>Logo</th><th>Código</th><th>Nombre</th><th>Sede</th><th>Estado</th>
       <th>Plan</th><th>Users / Est.</th><th>Creada</th><th>Acciones</th>
     </tr>
-    {filas if filas else '<tr><td colspan="10">No hay instituciones. Crea la primera.</td></tr>'}
+    {filas if filas else '<tr><td colspan="10">' + _vacio_inst + '</td></tr>'}
   </table>
 </div>
 """
