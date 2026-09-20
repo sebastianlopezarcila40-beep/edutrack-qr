@@ -736,8 +736,8 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 .role-icons a.out:hover .ic{background:#334155}
 .role-welcome{background:#f8fafc;padding:10px 20px;border-bottom:1px solid #e2e8f0;font-size:12.5px;color:#475569;text-align:center;font-weight:500}
 .role-welcome b{color:#0B2D57}
-.role-main{flex:1;padding:18px 20px 32px;overflow:auto;max-width:1280px;width:100%;margin:0 auto;box-sizing:border-box}
-.role-sidebar{display:none}
+.role-main{flex:1;padding:18px 20px 32px;overflow:auto;max-width:1280px;width:100%;margin:0 auto;margin-left:240px;box-sizing:border-box}
+.role-sidebar{display:block;width:240px;position:fixed;left:0;top:0;height:100vh;max-height:100vh;overflow-y:auto!important;overflow-x:hidden;padding:18px;box-sizing:border-box;z-index:50}
 .role-hero{background:linear-gradient(135deg,#ffffff,#eff6ff);border-radius:28px;padding:26px;box-shadow:var(--s);display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:20px;border:1px solid #dbeafe}
 .role-hero h1{margin:0;color:#0f172a;font-size:32px}.role-hero p{margin:8px 0 0;color:#475569}.role-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}.role-card{background:white;border-radius:24px;padding:20px;box-shadow:var(--s);border-left:6px solid #2563eb}.role-card.green{border-left-color:#16a34a}.role-card.yellow{border-left-color:#f59e0b}.role-card.red{border-left-color:#dc2626}.role-card.purple{border-left-color:#7c3aed}.role-card h3{margin:0;font-size:30px;color:#0f172a}.role-card p{margin:6px 0 0;color:#475569;font-weight:700}.role-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.role-panel{background:white;border-radius:24px;padding:22px;box-shadow:var(--s);border-top:5px solid #2563eb}.role-panel h2{margin-top:0;color:#0f172a}.role-panel ul{padding-left:20px;line-height:1.8}.role-muted{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:18px;padding:14px;color:#475569}.blocked-box{max-width:620px;margin:80px auto;background:white;border-radius:28px;padding:32px;box-shadow:var(--s);text-align:center;border-top:6px solid #dc2626}.small-action{font-size:12px;padding:8px 10px;border-radius:10px}.top-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.audit-row td{text-align:left}.security-note{background:#ecfdf5;border:1px solid #bbf7d0;color:#14532d;border-radius:16px;padding:14px;margin:12px 0;font-weight:800}.welcome-msg{font-size:13px;color:#dbeafe;line-height:1.45;margin:10px 0 14px}.notice-box{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:18px;padding:14px;margin:0 0 18px;font-weight:800}.filter-bar{background:white;border-radius:20px;padding:16px;box-shadow:var(--s);margin-bottom:16px}.print-card{background:white;border-radius:18px;padding:18px;box-shadow:var(--s);margin:12px 0;border-left:5px solid #2563eb}.parent-report-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.parent-report-head img{width:70px;height:70px;object-fit:contain}.mini-text{font-size:12px;color:#64748b}
 @media(max-width:1100px){.role-icons a{width:72px}.role-icons a .ic{width:46px;height:46px;font-size:18px}.role-hero,.role-grid{grid-template-columns:1fr;display:block}.role-cards{grid-template-columns:1fr 1fr}.top-actions{justify-content:flex-start}.role-main{padding:12px}}
@@ -3575,8 +3575,8 @@ _APPLE_SHELL_CSS = (
     ".sidebar-apple-glass{width:260px;min-height:100vh;background:rgba(0,32,96,.92);"
     "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);"
     "border-right:1px solid rgba(255,255,255,.1);padding:24px 16px;box-sizing:border-box;"
-    "position:fixed;left:0;top:0;z-index:9999;color:#f5f5f7;overflow-y:auto;"
-    "display:flex;flex-direction:column}"
+    "position:fixed;left:0;top:0;height:100vh;max-height:100vh;z-index:9999;color:#f5f5f7;overflow-y:auto!important;overflow-x:hidden;"
+    "display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}"
     ".brand-container-apple{display:flex;align-items:center;gap:10px;padding-bottom:20px;"
     "border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px}"
     ".brand-text-apple{color:#fff;font-weight:700;font-size:16px;letter-spacing:-.02em}"
@@ -3680,6 +3680,8 @@ def _staff_nav_items(path, rol=""):
             ("/ventas/panel", "Dashboard"),
             ("/ventas/verificacion", "Verificación"),
             ("/ventas/beneficios", "Beneficios / planes"),
+            ("/ventas/planes-vendidos", "Planes vendidos"),
+            ("/planes/buscar", "Buscar planes"),
             ("/logout", "Salir"),
         ]
     elif rol == "Soporte":
@@ -3688,20 +3690,21 @@ def _staff_nav_items(path, rol=""):
             ("/soporte/impersonar", "Suplantar usuario"),
             ("/soporte/reset-clave", "Resetear claves"),
             ("/soporte/periodos-colegio", "Periodos colegio"),
-            ("/usuarios", "Usuarios"),
-            ("/tenants", "Instituciones"),
-            ("/nueva_institucion", "Nueva institución"),
+            ("/usuarios", "Usuarios · activo / eliminar"),
+            ("/tenants", "Instituciones (consulta)"),
             ("/soporte/logs-errores", "Logs de errores"),
-            ("/soporte/prorroga", "Prórroga 24h"),
-            ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
             ("/servidores", "Servidores"),
-            ("/auditoria", "Auditoría"),
-            ("/soporte/auditoria-colegio", "Auditoría colegio / ofertas"),
-            ("/soporte/licencias", "Licencias y cobros"),
-            ("/soporte/cancelaciones", "Cancelaciones"),
+            ("/soporte/prorroga", "Prórroga 24h"),
+            ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
             ("/soporte/pqr", "Centro PQR"),
-            ("/soporte/pqr/crear", "Radicar PQR"),
-            ("/modo_prueba", "Modo prueba"),
+            ("/soporte/pqr/crear", "Radicar PQR interna"),
+            ("/soporte/pqr/consulta", "Consulta validada"),
+            ("/support", "Support"),
+            ("/support/editor", "Redactar en Support"),
+            ("/contacto", "Vista contacto público"),
+            ("/auditoria", "Auditoría"),
+            ("/planes/buscar", "Buscar planes"),
+            ("/soporte/planes-vendidos", "Planes activos / vendidos"),
             ("/logout", "Salir"),
         ]
     elif rol == "Cobranza":
@@ -3723,6 +3726,8 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/planes", "Planes activos"),
             ("/gerencia/beneficios", "Beneficios"),
             ("/gerencia/planes/nuevo", "Crear plan"),
+            ("/gerencia/planes-vendidos", "Planes vendidos"),
+            ("/planes/buscar", "Buscar planes"),
             ("/gerencia/plantilla-contrato", "Plantilla contrato"),
             ("/gerencia/contratos", "Contratos"),
             ("/gerencia/legal/consentimientos", "Consentimientos"),
@@ -6463,23 +6468,22 @@ def shell_soporte(content):
         ("/soporte_admin", "Panel principal"),
         ("/soporte/impersonar", "Suplantar usuario"),
         ("/soporte/reset-clave", "Resetear contraseñas"),
-            ("/soporte/periodos-colegio", "Periodos por colegio (3/4)"),
+        ("/soporte/periodos-colegio", "Periodos por colegio (3/4)"),
         ("/usuarios", "Usuarios · activo / eliminar"),
+        ("/tenants", "Instituciones (consulta)"),
         ("/soporte/logs-errores", "Logs de errores"),
-        ("/soporte/prorroga", "Prórroga 24h"),
-        ("/tenants", "Instituciones"),
-        ("/nueva_institucion", "Nueva institución"),
-        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
         ("/servidores", "Servidores"),
-        ("/auditoria", "Auditoría"),
-        ("/modo_prueba", "Modo prueba"),
-        ("/soporte/licencias", "Licencias y cobros"),
-        ("/soporte/cancelaciones", "Cancelaciones"),
+        ("/soporte/prorroga", "Prórroga 24h"),
+        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
         ("/soporte/pqr", "Centro PQR"),
         ("/soporte/pqr/crear", "Radicar PQR interna"),
         ("/soporte/pqr/consulta", "Consulta validada"),
-        ("/pqr", "Portal PQR"),
+        ("/support", "Support"),
+        ("/support/editor", "Redactar en Support"),
         ("/contacto", "Vista contacto público"),
+        ("/auditoria", "Auditoría"),
+        ("/planes/buscar", "Buscar planes"),
+        ("/soporte/planes-vendidos", "Planes activos / vendidos"),
     ]
     enlaces = "".join(f'<a href="{u}">{n}</a>' for u, n in menu)
     return f"""
@@ -9843,6 +9847,7 @@ def _nav_public_html(active=""):
     <span class="link-apple" role="button" tabindex="0" data-dd="soluciones">Soluciones</span>
     <span class="link-apple" role="button" tabindex="0" data-dd="planes">Planes</span>
     <span class="link-apple" role="button" tabindex="0" data-dd="ayuda">Ayuda</span>
+    <a class="link-apple" href="/support" style="text-decoration:none">Support</a>
   </div>
   <div class="nav-button-right">
     <a href="/login" class="btn-apple-oval">Ingresar Colegio</a>
@@ -20403,12 +20408,15 @@ def ventas_panel():
             fee_txt = ((" · Impl. $ {:,.0f}".format(fee)).replace(",", ".")) if fee > 0 else ""
             nom = _esc(p.nombre or cod)
             is_qr = ("qr" in (cod or "").lower())
+            _imga = (getattr(p, "imagen_path", None) or "").strip()
+            _imga_h = ('<img src="' + _esc(_imga) + '" style="width:100%;max-height:100px;object-fit:cover;border-radius:12px;margin-bottom:10px">') if _imga else ""
             cards_activar.append(
                 '<div class="plan-card" data-tipo="' + ('qr' if is_qr else 'inst') + '" '
                 'style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px 18px;'
                 'box-shadow:0 2px 10px rgba(0,0,0,.03);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">'
-                '<div style="font-weight:700;color:#002060;font-size:15px">' + nom + '</div>'
-                '<div style="font-size:12px;color:#86868b;margin:4px 0">' + _esc(cod) + '</div>'
+                + _imga_h
+                + '<div style="font-weight:700;color:#002060;font-size:15px">' + nom + '</div>'
+                '<div style="font-size:12px;color:#86868b;margin:4px 0">Código: ' + _esc(cod) + '</div>'
                 '<div style="font-size:14px;font-weight:600;color:#1d1d1f;margin:8px 0 12px">' + precio_txt + fee_txt + '</div>'
                 '<a href="/ventas/comprar?plan=' + _esc(cod) + '" style="display:inline-block;background:#005BEA;color:#fff;'
                 'padding:10px 22px;border-radius:980px;font-weight:600;font-size:13px;text-decoration:none">Activar</a></div>'
@@ -21056,7 +21064,9 @@ def ventas_beneficios():
         if act == "presencial" and is_online:
             continue
         if act == "online" and not is_online:
-            continue
+            nom_l = (pl.nombre or "").lower()
+            if "online" not in nom_l and "virtual" not in nom_l and "híbrid" not in nom_l and "hibrid" not in nom_l:
+                continue
         pleno = float(getattr(pl, "precio_lista", 0) or 0) or float(getattr(pl, "precio_mensual", 0) or 0)
         try:
             pv = _calcular_promo_valores(pleno, promo)
@@ -21126,9 +21136,12 @@ def ventas_beneficios():
             copy_html = '<ul style="list-style:none;padding:0;margin:14px 0;flex:1">' + li + "</ul>"
         else:
             copy_html = "<p style='color:#86868b;font-size:13px'>Sin beneficios configurados en Gerencia</p>"
+        _img = (getattr(pl, "imagen_path", None) or "").strip()
+        _img_html = ('<img src="' + _esc(_img) + '" alt="" style="width:100%;max-height:140px;object-fit:cover;border-radius:14px;margin-bottom:12px">') if _img else ""
         cards.append(
             '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.04);display:flex;flex-direction:column">'
-            '<div style="font-size:11px;font-weight:600;color:#86868b;text-transform:uppercase">' + _esc(pl.codigo or "") + "</div>"
+            + _img_html
+            + '<div style="font-size:11px;font-weight:600;color:#86868b;text-transform:uppercase">Código: ' + _esc(pl.codigo or "") + "</div>"
             '<div style="font-size:18px;font-weight:700;color:#002060;margin:4px 0 12px">' + _esc(pl.nombre or "") + "</div>"
             + precio_html
             + copy_html
@@ -35548,7 +35561,6 @@ def _modulos_por_rol(rol):
         ("Logs de errores", "/soporte/logs-errores", "#b91c1c"),
         ("Prórroga 24h", "/soporte/prorroga", "#7c2d12"),
         ("Instituciones (ver)", "/tenants", "#1d4ed8"),
-        ("Nueva institución", "/nueva_institucion", "#15803d"),
         ("Bloqueo y Seguridad", "/soporte/info-institucional", "#dc2626"),
         ("Centro PQR / tickets", "/soporte/pqr", "#1d4ed8"),
         ("📅 Calendario escolar", "/calendario", "#0B2D57"),
@@ -35559,11 +35571,17 @@ def _modulos_por_rol(rol):
         ("Aperturas de notas", "/soporte/aperturas-notas", "#b45309"),
         ("Actualizaciones / FAQ / Ayuda", "/soporte/actualizaciones", "#1d4ed8"),
         ("Servidores", "/servidores", "#1d4ed8"),
-        ("Modo prueba", "/modo_prueba", "#64748b"),
         ("Planilla accesos Excel", "/soporte/planilla-accesos", "#0f766e"),
         ("Seguridad empleados", "/soporte/seguridad-empleados", "#7c2d12"),
         ("👥 Turnos", "/soporte/turnos", "#0B2D57"),
         ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
+        ("Support", "/support", "#005BEA"),
+        ("Redactar en Support", "/support/editor", "#005BEA"),
+        ("Vista contacto público", "/contacto", "#0f766e"),
+        ("Buscar planes", "/planes/buscar", "#1d4ed8"),
+        ("Planes activos / vendidos", "/soporte/planes-vendidos", "#1d4ed8"),
+        ("Auditoría", "/auditoria", "#64748b"),
+        ("Periodos por colegio (3/4)", "/soporte/periodos-colegio", "#0B2D57"),
     ]
     ventas = [
         ("📅 Calendario escolar", "/calendario", "#0B2D57"),
@@ -35978,9 +35996,11 @@ def soporte_bloqueo_seguridad():
 @app.route("/soporte/colegio")
 @app.route("/soporte/colegio/<int:iid>")
 def soporte_colegio_auditoria(iid=None):
-    """Auditoria contractual y promo para Soporte."""
-    rol = session.get("rol") or ""
-    if rol not in ("Soporte", "Administrador", "Gerencia", "Comercial", "Ventas", "Supervisor de Ventas"):
+    """Auditoria contractual y promo: solo Gerencia/Ventas. Soporte ve bienvenida."""
+    rol = session.get("rol") or rol_actual() or ""
+    if rol == "Soporte":
+        return redirect("/soporte/auditoria-colegio")
+    if rol not in ("Administrador", "Gerencia", "Gerente", "Comercial", "Ventas", "Supervisor de Ventas", "Superadmin"):
         if not session.get("usuario"):
             return redirect("/backoffice")
         return redirect("/soporte_admin")
@@ -37157,6 +37177,11 @@ def tenants():
 def nueva_institucion():
     if rol_actual() == "Cobranza":
         return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
+    if rol_actual() == "Soporte":
+        return acceso_denegado(
+            "Soporte técnico no puede crear instituciones nuevas. "
+            "El alta de un colegio solo la realiza Gerencia tras firma del contrato comercial."
+        )
     if not requiere_soporte_global():
         return redirect("/login")
     mensaje = ""
@@ -38733,6 +38758,8 @@ def exportar_cuenta():
 
 @app.route("/soporte/licencias", methods=["GET", "POST"])
 def soporte_licencias():
+    if (session.get("rol") or (rol_actual() if "rol_actual" in dir() else "") or "") == "Soporte":
+        return acceso_denegado("Licencias y cobros es exclusivo de Gerencia / Cobranza.")
     _g = _guard_soporte()
     if _g is not None:
         return _g
@@ -38819,6 +38846,8 @@ def soporte_licencias():
 @app.route("/soporte/cancelaciones", methods=["GET", "POST"])
 @app.route("/gerencia/cancelaciones", methods=["GET", "POST"])
 def soporte_cancelaciones():
+    if (session.get("rol") or (rol_actual() if "rol_actual" in dir() else "") or "") == "Soporte":
+        return acceso_denegado("Cancelaciones son exclusivas de Gerencia.")
     """Módulo cancelación de servicio: Soporte y Gerencia. Cuenta regresiva + corte facturación."""
     rol = (rol_actual() or "").strip()
     if not requiere_login() or rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
@@ -64718,26 +64747,30 @@ def _abs_static_path(url_path):
 @app.route("/support")
 @app.route("/support/")
 def support_home():
-    """Support tipo Apple: listado libre, SIN barra de búsqueda."""
+    """Support tipo Apple: contenido INLINE (el artículo se lee aquí, sin otro link)."""
     _ensure_mod_tables()
     try:
         arts = ArticuloAyuda.query.filter_by(estado="PUBLICADO").order_by(ArticuloAyuda.id.desc()).limit(60).all()
     except Exception:
         arts = []
-    # Agrupar por categoría
     cats = {}
     for a in arts:
         cats.setdefault(a.categoria or "General", []).append(a)
     bloques = []
     for cat, lista in cats.items():
-        lis = "".join(
-            '<li style="margin:0 0 12px;list-style:none"><a href="/support/a/%s" style="color:#06c;text-decoration:none;font-size:17px;font-weight:400">%s</a></li>'
-            % (_esc(a.slug or a.id), _esc(a.titulo))
-            for a in lista
-        )
+        arts_html = []
+        for a in lista:
+            cuerpo = (a.cuerpo or "").strip() or (a.resumen or "").strip() or "Contenido en preparación."
+            arts_html.append(
+                '<article style="margin:0 0 36px;padding-bottom:28px;border-bottom:1px solid #e8e8ed">'
+                '<h3 style="font-size:22px;font-weight:600;color:#1d1d1f;margin:0 0 12px;letter-spacing:-.02em">%s</h3>'
+                '<div style="font-size:17px;line-height:1.55;color:#1d1d1f;white-space:pre-wrap">%s</div>'
+                '</article>' % (_esc(a.titulo or "Artículo"), _esc(cuerpo))
+            )
         bloques.append(
-            '<section style="margin:0 0 36px"><h2 style="font-size:24px;font-weight:600;color:#1d1d1f;margin:0 0 16px">%s</h2><ul style="margin:0;padding:0">%s</ul></section>'
-            % (_esc(cat), lis)
+            '<section style="margin:0 0 40px">'
+            '<h2 style="font-size:24px;font-weight:600;color:#1d1d1f;margin:0 0 20px">%s</h2>%s</section>'
+            % (_esc(cat), "".join(arts_html))
         )
     body_inner = "".join(bloques) if bloques else (
         '<p style="color:#6e6e73;font-size:17px">Próximamente guías y artículos. El contenido lo publica Gerencia tras revisión de Soporte.</p>'
@@ -65340,6 +65373,190 @@ def soporte_radicar_retracto():
 <button class="btn" type="submit" style="background:#b91c1c;color:#fff">Enviar a Gerencia</button>
 </form></section>"""
     return page("Radicar retracto", shell(content))
+
+
+
+
+@app.route("/soporte/auditoria-colegio", methods=["GET", "POST"])
+def soporte_auditoria_colegio_bloqueada():
+    """Auditoría colegio/ofertas: exclusivo Gerencia. Soporte ve bienvenida PROCSIS."""
+    if not requiere_login():
+        return redirect("/soporte-login")
+    rol = rol_actual()
+    if rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+        return redirect("/gerencia/hq")
+    if rol != "Soporte":
+        return acceso_denegado()
+    nombre = (session.get("nombre_completo") or session.get("usuario") or "colaborador").strip()
+    nom_l = nombre.lower()
+    if any(x in nom_l for x in (
+        "maria", "maría", "ana", "laura", "carmen", "sofia", "sofía", "lucia", "lucía",
+        "paola", "andrea", "diana", "sandra", "jenny", "jennifer", "carolina", "valentina",
+        "camila", "isabella", "señora", "sra", "alejandra", "patricia", "monica", "mónica",
+    )):
+        saludo = "Bienvenida, señora"
+    else:
+        saludo = "Bienvenido, señor"
+    try:
+        logo = logo_plataforma()
+    except Exception:
+        logo = "/static/img/logo-procsis.svg"
+    body = f"""
+<div style="min-height:70vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f7">
+  <div style="text-align:center;max-width:520px">
+    <img src="{_esc(logo)}" alt="PROCSIS" style="width:180px;height:180px;object-fit:contain;background:#fff;
+      border-radius:32px;padding:18px;box-shadow:0 16px 48px rgba(0,32,96,.12);margin-bottom:28px"
+      onerror="this.style.display='none'">
+    <h1 style="font-size:28px;font-weight:700;color:#002060;margin:0 0 10px;letter-spacing:-.02em">
+      {saludo} {_esc(nombre)}
+    </h1>
+    <p style="font-size:16px;color:#6e6e73;line-height:1.5;margin:0 0 18px">
+      Este módulo (<b>Auditoría de colegio / ofertas</b>) es exclusivo de Gerencia comercial.
+      Como Soporte técnico puede consultar instituciones, usuarios y tickets, pero no alterar
+      propuestas, precios ni altas comerciales.
+    </p>
+    <a href="/soporte_admin" style="display:inline-block;background:#005BEA;color:#fff;padding:12px 24px;
+      border-radius:980px;font-weight:600;text-decoration:none">Ir al panel principal</a>
+  </div>
+</div>
+"""
+    return page("Bienvenida Soporte", shell(body))
+
+
+@app.route("/planes/buscar")
+def planes_buscar():
+    """Buscar planes por nombre o código — Gerencia, Ventas y Soporte."""
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in (
+        "Soporte", "Gerente", "Gerencia", "Superadmin", "Administrador",
+        "Comercial", "Ventas", "Supervisor de Ventas",
+    ):
+        return acceso_denegado()
+    q = (request.args.get("q") or "").strip()
+    rows = []
+    try:
+        try:
+            _ensure_plan_comercial_cols()
+        except Exception:
+            pass
+        qry = PlanComercial.query
+        if q:
+            like = "%" + q + "%"
+            qry = qry.filter(db.or_(
+                PlanComercial.codigo.ilike(like),
+                PlanComercial.nombre.ilike(like),
+                PlanComercial.titulo_comercial.ilike(like),
+            ))
+        planes = qry.order_by(PlanComercial.orden.asc(), PlanComercial.id.asc()).limit(80).all()
+        for p in planes:
+            img = (getattr(p, "imagen_path", None) or "").strip()
+            img_html = ('<img src="%s" style="width:48px;height:48px;object-fit:cover;border-radius:10px">' % _esc(img)) if img else "—"
+            rows.append(
+                "<tr><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+                    img_html, _esc(p.codigo or ""), _esc(p.nombre or ""),
+                    _esc(getattr(p, "modalidad", None) or "—"),
+                    "Activo" if p.activo else "Inactivo",
+                    ("$ {:,.0f}".format(float(p.precio_mensual or 0))).replace(",", "."),
+                )
+            )
+    except Exception as ex:
+        rows = ["<tr><td colspan='6'>Error: %s</td></tr>" % _esc(str(ex)[:120])]
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Buscar planes</h1>
+  <p>Por nombre o código único del plan.</p>
+</div></header>
+<section class="role-panel">
+  <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+    <input name="q" value="{_esc(q)}" placeholder="Nombre o código del plan"
+      style="flex:1;min-width:200px;padding:12px;border-radius:12px;border:1px solid #e2e8f0">
+    <button type="submit" class="btn">Buscar</button>
+  </form>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#f1f5f9;text-align:left">
+      <th style="padding:8px">Foto</th><th style="padding:8px">Código</th><th style="padding:8px">Nombre</th>
+      <th style="padding:8px">Modalidad</th><th style="padding:8px">Estado</th><th style="padding:8px">Precio</th>
+    </tr>
+    {"".join(rows) or "<tr><td colspan='6' style='padding:12px'>Sin resultados</td></tr>"}
+  </table>
+</section>
+"""
+    return page("Buscar planes", shell(body))
+
+
+@app.route("/gerencia/planes-vendidos")
+@app.route("/ventas/planes-vendidos")
+@app.route("/soporte/planes-vendidos")
+def planes_vendidos_panel():
+    """Panel de planes activos en catálogo y planes vendidos (colegios)."""
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in (
+        "Soporte", "Gerente", "Gerencia", "Superadmin", "Administrador",
+        "Comercial", "Ventas", "Supervisor de Ventas",
+    ):
+        return acceso_denegado()
+    try:
+        _ensure_plan_comercial_cols()
+    except Exception:
+        pass
+    activos = []
+    try:
+        for p in PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden).all():
+            img = (getattr(p, "imagen_path", None) or "").strip()
+            img_h = ('<img src="%s" style="height:40px;border-radius:8px;object-fit:cover">' % _esc(img)) if img else "—"
+            activos.append(
+                "<tr><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+                    img_h, _esc(p.codigo or ""), _esc(p.nombre or ""),
+                    _esc(getattr(p, "modalidad", None) or "—"),
+                    ("$ {:,.0f}".format(float(p.precio_mensual or 0))).replace(",", "."),
+                )
+            )
+    except Exception:
+        activos = []
+    vendidos = []
+    try:
+        for inst in Institucion.query.order_by(Institucion.nombre).limit(500).all():
+            plan = (inst.plan or "").strip()
+            if not plan:
+                continue
+            vendidos.append(
+                "<tr><td>%s</td><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td></tr>" % (
+                    _esc(inst.codigo or ""), _esc(inst.nombre or ""), _esc(plan),
+                    _esc(inst.estado or ""), _esc(getattr(inst, "fecha_inicio_licencia", None) or "—"),
+                )
+            )
+    except Exception:
+        vendidos = []
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Planes activos y vendidos</h1>
+  <p>Catálogo publicado + instituciones con plan asignado.</p>
+</div>
+<a class="btn" href="/planes/buscar">Buscar plan</a>
+</header>
+<section class="role-panel" style="margin-bottom:18px">
+  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Planes activos en catálogo</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#f1f5f9;text-align:left"><th style="padding:8px">Foto</th><th style="padding:8px">Código</th>
+    <th style="padding:8px">Nombre</th><th style="padding:8px">Modalidad</th><th style="padding:8px">Precio</th></tr>
+    {"".join(activos) or "<tr><td colspan='5'>Sin planes activos</td></tr>"}
+  </table>
+</section>
+<section class="role-panel">
+  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Planes vendidos (colegios)</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#f1f5f9;text-align:left"><th style="padding:8px">Código colegio</th><th style="padding:8px">Institución</th>
+    <th style="padding:8px">Plan</th><th style="padding:8px">Estado</th><th style="padding:8px">Inicio licencia</th></tr>
+    {"".join(vendidos) or "<tr><td colspan='5'>Sin ventas registradas</td></tr>"}
+  </table>
+</section>
+"""
+    return page("Planes activos y vendidos", shell(body))
 
 
 if __name__ == "__main__":
