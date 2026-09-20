@@ -3666,12 +3666,12 @@ def _staff_nav_items(path, rol=""):
     if rol in ("Desarrollador", "Developer"):
         items = [
             ("/dev-console", "Consola técnica"),
-            ("/desarrollo/tickets", "Tickets de ingeniería"),
             ("/dev-console?tab=sistema", "Sistema y core"),
             ("/dev-console?tab=flags", "Sandbox / Flags"),
             ("/dev-console?tab=versiones", "Actualizaciones"),
             ("/dev-console?tab=anuncios", "Seguridad"),
             ("/dev-console?tab=temas", "Diseño / CSS"),
+            ("/gerencia/planes/nuevo", "Crear plan (técnico)"),
             ("/backoffice/hub", "Tablero maestro"),
             ("/logout", "Salir"),
         ]
@@ -3690,18 +3690,18 @@ def _staff_nav_items(path, rol=""):
             ("/soporte/periodos-colegio", "Periodos colegio"),
             ("/usuarios", "Usuarios"),
             ("/tenants", "Instituciones"),
+            ("/nueva_institucion", "Nueva institución"),
             ("/soporte/logs-errores", "Logs de errores"),
             ("/soporte/prorroga", "Prórroga 24h"),
             ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
             ("/servidores", "Servidores"),
             ("/auditoria", "Auditoría"),
+            ("/soporte/auditoria-colegio", "Auditoría colegio / ofertas"),
+            ("/soporte/licencias", "Licencias y cobros"),
+            ("/soporte/cancelaciones", "Cancelaciones"),
             ("/soporte/pqr", "Centro PQR"),
             ("/soporte/pqr/crear", "Radicar PQR"),
-            ("/soporte/ticket-dev", "Escalar a Desarrollo"),
-            ("/soporte/mis-tickets-dev", "Mis tickets a Dev"),
-            ("/support", "Support"),
-            ("/support/editor", "Redactar Support"),
-            ("/contacto", "Vista contacto público"),
+            ("/modo_prueba", "Modo prueba"),
             ("/logout", "Salir"),
         ]
     elif rol == "Cobranza":
@@ -3714,7 +3714,6 @@ def _staff_nav_items(path, rol=""):
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/hq", "Dashboard"),
-            ("/gerencia/calidad-dev", "Calidad · tickets Dev"),
             ("/gerencia/planes", "Planes activos"),
             ("/gerencia/beneficios", "Beneficios"),
             ("/gerencia/planes/nuevo", "Crear plan"),
@@ -6451,60 +6450,47 @@ def logo_plataforma():
 
 
 def shell_soporte(content):
-    """Panel Soporte operativo + escalamiento a Desarrollo. Sin crear colegios ni facturación."""
+    """Layout exclusivo Soporte: marca Procsis, menú lateral unificado con el panel."""
     p = plataforma()
-    try:
-        logo = logo_plataforma()
-    except Exception:
-        logo = "/static/img/logo-procsis.svg"
+    logo = logo_plataforma()
     menu = [
         ("/soporte_admin", "Panel principal"),
         ("/soporte/impersonar", "Suplantar usuario"),
         ("/soporte/reset-clave", "Resetear contraseñas"),
-        ("/soporte/periodos-colegio", "Periodos por colegio (3/4)"),
+            ("/soporte/periodos-colegio", "Periodos por colegio (3/4)"),
         ("/usuarios", "Usuarios · activo / eliminar"),
         ("/soporte/logs-errores", "Logs de errores"),
-        ("/servidores", "Servidores"),
         ("/soporte/prorroga", "Prórroga 24h"),
-        ("/tenants", "Instituciones (consulta)"),
-        ("/soporte/actualizaciones", "Actualizaciones / FAQ"),
+        ("/tenants", "Instituciones"),
+        ("/nueva_institucion", "Nueva institución"),
+        ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
+        ("/servidores", "Servidores"),
         ("/auditoria", "Auditoría"),
+        ("/modo_prueba", "Modo prueba"),
+        ("/soporte/licencias", "Licencias y cobros"),
+        ("/soporte/cancelaciones", "Cancelaciones"),
         ("/soporte/pqr", "Centro PQR"),
         ("/soporte/pqr/crear", "Radicar PQR interna"),
         ("/soporte/pqr/consulta", "Consulta validada"),
-        ("/soporte/ticket-dev", "Escalar a Desarrollo"),
-        ("/soporte/mis-tickets-dev", "Mis tickets a Dev"),
-        ("/support", "Support"),
-        ("/support/editor", "Redactar Support"),
+        ("/pqr", "Portal PQR"),
         ("/contacto", "Vista contacto público"),
     ]
-    enlaces = "".join(
-        '<a href="%s" style="display:block;color:#e0f2fe;text-decoration:none;padding:10px 12px;margin:2px 0;'
-        'border-radius:8px;font-size:13px;font-weight:600;background:rgba(255,255,255,.08)">%s</a>' % (u, n)
-        for u, n in menu
-    )
-    empresa = getattr(p, "empresa", None) or "Procsis"
+    enlaces = "".join(f'<a href="{u}">{n}</a>' for u, n in menu)
     return f"""
-<style>
-.sop-layout{{display:flex!important;min-height:100vh;width:100%;background:#eef2f7}}
-.sop-side{{width:250px!important;min-width:250px;max-width:250px;height:100vh;max-height:100vh;position:sticky;top:0;
-overflow-y:scroll!important;overflow-x:hidden;-webkit-overflow-scrolling:touch;
-background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%)!important;color:#fff;padding:16px 12px 40px;box-sizing:border-box}}
-.sop-side img.sop-logo{{width:88px;height:88px;object-fit:contain;background:#fff;border-radius:16px;padding:8px;display:block;margin:0 auto 10px}}
-.sop-main{{flex:1;min-width:0;overflow:auto}}
-</style>
-<div class="sop-layout">
-  <aside class="sop-side">
-    <img class="sop-logo" src="{logo}" alt="{_esc(empresa)}">
-    <h2 style="font-size:16px;text-align:center;margin:0 0 4px">{_esc(empresa).upper()}</h2>
-    <p style="font-size:12px;color:#bfdbfe;text-align:center;margin:0 0 8px">Centro de operaciones · {nombre_producto()}</p>
-    <div style="text-align:center;margin-bottom:12px">
-      <span style="display:inline-block;background:#facc15;color:#0B2D57;font-weight:800;font-size:11px;padding:5px 12px;border-radius:8px">SOPORTE TÉCNICO</span>
-    </div>
+<div class="role-layout">
+  <aside class="role-sidebar" style="background:linear-gradient(180deg,#0B1220 0%,#1e3a5f 100%)">
+    <img src="{logo}" alt="Procsis" style="background:#fff;border-radius:14px;padding:8px">
+    <h2 style="font-size:15px;letter-spacing:.5px">{(p.empresa or 'Procsis').upper()}</h2>
+    <p class="welcome-msg">Centro de operaciones · {nombre_producto()} · {nombre_empresa()}</p>
+    <span class="role-tag">Soporte técnico</span>
+    <br><br>
     {enlaces}
-    <a href="/logout" style="display:block;background:#b91c1c;color:#fff;border-radius:8px;padding:11px 12px;margin-top:12px;text-decoration:none;text-align:center;font-weight:700">Salir</a>
+    <a href="/logout" style="background:#b91c1c;color:#fff;border-radius:8px">Salir</a>
+    <div class="brand-box"><h3>{p.empresa or 'Procsis'}</h3><p>{p.slogan or SLOGAN}</p></div>
   </aside>
-  <main class="sop-main">{content}</main>
+  <main class="role-main">{content}
+  <div class="footer"><strong>{p.empresa or DESARROLLADOR}</strong> · {getattr(p,"nombre_producto",None) or APP_NAME}<br>{p.slogan or SLOGAN}</div>
+  </main>
 </div>
 """
 
@@ -11115,13 +11101,14 @@ def _ensure_login_pie_cols():
         pass
 
 def _login_pie_defaults():
+    # 1 = sitio principal | 2 = Support
     p1 = (
         "1. Según los datos del estudio de rendimiento técnico de PROCSIS realizado en el año en curso "
         "sobre la optimización de procesos y control de asistencia digital. Para obtener más información "
-        "y revisar los reportes de calidad, visita {url}."
+        "y revisar los reportes de calidad, visita procsis.com."
     )
     p2 = (
-        "2. Consulta {url} para obtener más información sobre las funcionalidades del ecosistema en la nube "
+        "2. Consulta support.procsis.com para obtener más información sobre las funcionalidades del ecosistema en la nube "
         "y los requisitos mínimos del sistema para la institución. Algunas funcionalidades requieren conexión "
         "a internet estable. El acceso al portal familiar o notificaciones por WhatsApp (API WATI) está sujeto "
         "a la activación y límites técnicos establecidos en el plan contratado. Algunas herramientas pueden no "
@@ -11136,7 +11123,7 @@ def _login_pie_defaults():
     return p1, p2, extra
 
 def _html_login_pie_colegios():
-    """Bloque pie estilo Apple debajo del login de instituciones."""
+    """Pie login: textos legales + footer OSCURO corporativo PROCSIS (no columnas Producto/Acceso/Legal)."""
     try:
         _ensure_login_pie_cols()
     except Exception:
@@ -11145,79 +11132,78 @@ def _html_login_pie_colegios():
         p = plataforma()
     except Exception:
         p = None
-    url = "/procsis"
-    try:
-        url = (getattr(p, "sitio_oficial_url", None) or getattr(p, "web", None) or "/procsis").strip() or "/procsis"
-    except Exception:
-        pass
-    if url and not url.startswith("http") and not url.startswith("/"):
-        url = "https://" + url
-    label = "procsis.com"
-    if "://" in url:
-        label = url.split("://", 1)[-1].rstrip("/")
-    elif url.startswith("/"):
-        label = "procsis.com"
     p1_def, p2_def, extra_def = _login_pie_defaults()
+    # Preferir defaults correctos si la BD tiene texto viejo roto
     p1 = (getattr(p, "login_pie_p1", None) or "").strip() or p1_def
     p2 = (getattr(p, "login_pie_p2", None) or "").strip() or p2_def
     extra = (getattr(p, "login_pie_extra", None) or "").strip() or extra_def
-    link = '<a href="%s" style="color:#0066cc;text-decoration:underline">%s</a>' % (_esc(url), _esc(label))
-    def _fill(txt):
-        t = (txt or "").replace("{url}", "§URL§")
-        t = _esc(t).replace("§URL§", link)
-        # también reemplazar menciones literales a procsis.com
-        t = t.replace(_esc("procsis.com"), link)
+    for bad in ("support.support.procsis.com", "support.support."):
+        p1 = p1.replace(bad, "procsis.com")
+        p2 = p2.replace(bad, "support.procsis.com")
+    link_main = '<a href="/procsis" style="color:#2997ff;text-decoration:underline">procsis.com</a>'
+    link_sup = '<a href="/support" style="color:#2997ff;text-decoration:underline">support.procsis.com</a>'
+    def _fill_p1(txt):
+        t = _esc(txt or "")
+        t = t.replace(_esc("support.support.procsis.com"), link_main)
+        t = t.replace(_esc("procsis.com"), link_main)
         return t
+    def _fill_p2(txt):
+        t = _esc(txt or "")
+        t = t.replace(_esc("support.support.procsis.com"), link_sup)
+        t = t.replace(_esc("support.procsis.com"), link_sup)
+        return t
+    try:
+        corp_email = (getattr(p, "email_empresa", None) or getattr(p, "email_soporte", None) or "procsis.edu@gmail.com") if p else "procsis.edu@gmail.com"
+        corp_tel = (getattr(p, "telefono_empresa", None) or getattr(p, "telefono_soporte", None) or "3246868183") if p else "3246868183"
+    except Exception:
+        corp_email, corp_tel = "procsis.edu@gmail.com", "3246868183"
     return f"""
 <style>
-.login-apple-foot{{max-width:980px;margin:0 auto;padding:28px 20px 40px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}}
+.login-apple-foot{{max-width:1100px;margin:0 auto;padding:28px 20px 8px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
 .login-apple-foot .laf-notes{{font-size:12px;line-height:1.55;color:#6e6e73;margin:0 0 10px}}
 .login-apple-foot .laf-notes a{{color:#0066cc;text-decoration:underline}}
-.login-apple-foot .laf-rule{{border:0;border-top:1px solid #d2d2d7;margin:22px 0 20px}}
-.login-apple-foot .laf-cols{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 24px;font-size:12px}}
-.login-apple-foot .laf-cols h4{{margin:0 0 10px;font-size:12px;font-weight:600;color:#1d1d1f}}
-.login-apple-foot .laf-cols a,.login-apple-foot .laf-cols span{{display:block;color:#424245;text-decoration:none;margin:0 0 8px;line-height:1.35}}
-.login-apple-foot .laf-cols a:hover{{text-decoration:underline;color:#0066cc}}
-.login-apple-foot .laf-copy{{margin-top:22px;font-size:11px;color:#86868b}}
-@media(max-width:800px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr 1fr}}}}
-@media(max-width:480px){{.login-apple-foot .laf-cols{{grid-template-columns:1fr}}}}
+.login-corp-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:12px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
+.login-corp-foot .lcf-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:32px}}
+@media(max-width:800px){{.login-corp-foot .lcf-inner{{grid-template-columns:1fr}}}}
+.login-corp-foot .lcf-brand{{font-weight:600;font-size:15px;color:#f5f5f7;margin-bottom:12px}}
+.login-corp-foot a{{color:#2997ff;text-decoration:none;display:block;margin:8px 0;font-size:13px;font-weight:500}}
+.login-corp-foot a:hover{{text-decoration:underline}}
+.login-corp-foot h4{{margin:0 0 12px;color:#f5f5f7;font-size:13px;font-weight:600}}
+.login-corp-foot p{{margin:4px 0;font-size:13px;color:#a1a1a6;line-height:1.5}}
+.login-corp-foot .lcf-copy{{max-width:1100px;margin:28px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6e6e73;text-align:center}}
 </style>
 <div class="login-apple-foot">
-  <p class="laf-notes">{_fill(p1)}</p>
-  <p class="laf-notes">{_fill(p2)}</p>
-  <p class="laf-notes">{_fill(extra)}</p>
-  <hr class="laf-rule">
-  <div class="laf-cols">
+  <p class="laf-notes">{_fill_p1(p1)}</p>
+  <p class="laf-notes">{_fill_p2(p2)}</p>
+  <p class="laf-notes">{_esc(extra)}</p>
+</div>
+<footer class="login-corp-foot">
+  <div class="lcf-inner">
     <div>
-      <h4>Producto</h4>
-      <a href="/ventas">Planes EduTrack</a>
-      <a href="/tecnologia">Tecnología</a>
-      <a href="/ayuda">Centro de ayuda</a>
-      <a href="/pqr">Radicar PQR</a>
+      <div class="lcf-brand">PROCSIS</div>
+      <p>Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.</p>
     </div>
     <div>
-      <h4>Acceso</h4>
-      <a href="/login">Portal instituciones</a>
-      <a href="/familia-login">Portal familiar</a>
-      <a href="/backoffice">Backoffice PROCSIS</a>
+      <h4>Navegación</h4>
+      <a href="/">Inicio</a>
+      <a href="/procsis">Portafolio</a>
+      <a href="/procsis">PROCSIS</a>
+      <a href="/ventas">Planes</a>
+      <a href="/login">Acceso instituciones</a>
+      <a href="/support">Support</a>
     </div>
     <div>
-      <h4>Empresa</h4>
-      <a href="{_esc(url)}">Sitio oficial PROCSIS</a>
-      <a href="/contacto">Contacto</a>
-      <a href="/quienes-somos">Quiénes somos</a>
-    </div>
-    <div>
-      <h4>Legal</h4>
-      <a href="/legal">Privacidad</a>
-      <a href="/cookies">Cookies</a>
-      <a href="/tratamiento-datos">Tratamiento de datos</a>
-      <a href="/politica-pqr">Política PQR</a>
+      <h4>Contacto</h4>
+      <p>{_esc(corp_email)}</p>
+      <p>{_esc(corp_tel)}</p>
+      <a href="/contacto">Formulario de contacto</a>
+      <a href="/legal">Privacidad y datos</a>
     </div>
   </div>
-  <div class="laf-copy">© EduTrack · PROCSIS. Contenido del pie editable desde Gerencia.</div>
-</div>
+  <div class="lcf-copy">© 2026 PROCSIS · Soluciones digitales. Todos los derechos reservados.</div>
+</footer>
 """
+
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -64602,560 +64588,6 @@ def aceptar_terminos_pago():
     return redirect(request.form.get("next") or request.referrer or "/pagar")
 
 
-# ── Tickets Soporte → Desarrollo + Support mínimo ────────────────────────────
-
-class TicketDev(db.Model):
-    """Reporte técnico escalado de Soporte a Desarrollo."""
-    __tablename__ = "tickets_dev"
-    id = db.Column(db.Integer, primary_key=True)
-    codigo = db.Column(db.String(40), unique=True, index=True)  # DEV-2026-0001
-    institucion_id = db.Column(db.Integer, index=True)
-    colegio_nombre = db.Column(db.String(200), default="")
-    plan_activo = db.Column(db.String(80), default="")
-    modulo_afectado = db.Column(db.String(160), default="")
-    descripcion = db.Column(db.Text, default="")
-    logs_consola = db.Column(db.Text, default="")
-    evidencia_path = db.Column(db.Text, default="")  # captura/video
-    verificado_suplantacion = db.Column(db.Boolean, default=False)
-    # RADICADO | EN_VALIDACION | RESUELTO
-    estado = db.Column(db.String(30), default="RADICADO", index=True)
-    prioridad = db.Column(db.String(20), default="MEDIA")  # ALTA Premium, MEDIA, BAJA
-    radicado_por = db.Column(db.String(120), default="")
-    asignado_a = db.Column(db.String(120), default="")
-    nota_desarrollo = db.Column(db.Text, default="")  # qué se reparó
-    creado_en = db.Column(db.String(30), default="")
-    actualizado_en = db.Column(db.String(30), default="")
-    resuelto_en = db.Column(db.String(30), default="")
-    aviso_soporte = db.Column(db.Boolean, default=False)
-
-
-class ArticuloAyuda(db.Model):
-    __tablename__ = "articulos_ayuda"
-    id = db.Column(db.Integer, primary_key=True)
-    slug = db.Column(db.String(160), unique=True, index=True)
-    titulo = db.Column(db.String(255), nullable=False)
-    resumen = db.Column(db.String(500), default="")
-    cuerpo = db.Column(db.Text, default="")
-    categoria = db.Column(db.String(80), default="General")
-    estado = db.Column(db.String(20), default="BORRADOR")
-    sensible = db.Column(db.Boolean, default=False)
-    banner_upgrade = db.Column(db.Text, default="")
-    creado_por = db.Column(db.String(120), default="")
-    actualizado_por = db.Column(db.String(120), default="")
-    publicado_por = db.Column(db.String(120), default="")
-    creado_en = db.Column(db.String(30), default="")
-    actualizado_en = db.Column(db.String(30), default="")
-    publicado_en = db.Column(db.String(30), default="")
-
-
-def _ensure_ticket_dev_tables():
-    try:
-        db.create_all()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-
-
-def _ticket_dev_codigo():
-    try:
-        n = TicketDev.query.count() + 1
-    except Exception:
-        n = 1
-    return "DEV-%s-%04d" % ((fecha_hoy() or "2026")[:4], n)
-
-
-_MODULOS_DEV = [
-    "/notas/planilla", "/notas", "/portal", "/familia", "/asistencia",
-    "/qr", "/porteria", "/api/wati", "API WATI", "/login", "/reportes",
-    "/simat", "/carnes", "/coordinacion", "/otro",
-]
-
-
-def _prioridad_por_plan(plan):
-    p = (plan or "").lower()
-    if "premium" in p or "plus" in p:
-        return "ALTA"
-    if "institucional" in p:
-        return "MEDIA"
-    return "MEDIA"
-
-
-@app.route("/soporte/ticket-dev", methods=["GET", "POST"])
-def soporte_ticket_dev_nuevo():
-    """Soporte radica falla de sistema hacia Desarrollo."""
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
-    _ensure_ticket_dev_tables()
-    msg = err = ""
-    try:
-        colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
-    except Exception:
-        colegios = []
-    if request.method == "POST":
-        iid = request.form.get("institucion_id")
-        inst = Institucion.query.get(int(iid)) if iid and str(iid).isdigit() else None
-        modulo = (request.form.get("modulo_afectado") or "").strip()[:160]
-        desc = (request.form.get("descripcion") or "").strip()
-        logs = (request.form.get("logs_consola") or "").strip()
-        verif = request.form.get("verificado_suplantacion") == "1"
-        if not inst:
-            err = "Seleccione el colegio."
-        elif not modulo or not desc:
-            err = "Módulo afectado y descripción técnica son obligatorios."
-        else:
-            evidencia = ""
-            f = request.files.get("evidencia")
-            if f and f.filename:
-                try:
-                    folder = os.path.join(app.root_path, "static", "uploads", "tickets_dev")
-                    os.makedirs(folder, exist_ok=True)
-                    ext = (os.path.splitext(f.filename)[1] or ".png").lower()[:8]
-                    if ext not in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".pdf"):
-                        ext = ".png"
-                    fname = "tdev_%s_%s%s" % (secrets.token_hex(6), (fecha_hoy() or "").replace("-", ""), ext)
-                    path = os.path.join(folder, fname)
-                    f.save(path)
-                    evidencia = "/static/uploads/tickets_dev/" + fname
-                except Exception as ex:
-                    err = "No se pudo guardar evidencia: " + str(ex)[:80]
-            if not err:
-                plan = (getattr(inst, "plan", None) or "Basico")
-                ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
-                t = TicketDev(
-                    codigo=_ticket_dev_codigo(),
-                    institucion_id=inst.id,
-                    colegio_nombre=(inst.nombre or inst.codigo or "")[:200],
-                    plan_activo=plan[:80],
-                    modulo_afectado=modulo,
-                    descripcion=desc,
-                    logs_consola=logs,
-                    evidencia_path=evidencia,
-                    verificado_suplantacion=verif,
-                    estado="RADICADO",
-                    prioridad=_prioridad_por_plan(plan),
-                    radicado_por=session.get("usuario") or "Soporte",
-                    creado_en=ahora_s,
-                    actualizado_en=ahora_s,
-                )
-                db.session.add(t)
-                db.session.commit()
-                try:
-                    registrar_auditoria(
-                        "Ticket Dev radicado",
-                        "%s · %s · módulo %s" % (t.codigo, t.colegio_nombre, t.modulo_afectado),
-                    )
-                except Exception:
-                    pass
-                msg = "Ticket %s radicado. Desarrollo ya puede verlo en su bandeja." % t.codigo
-    opts = "".join(
-        '<option value="%s">%s — plan %s</option>' % (
-            i.id, _esc(i.nombre or i.codigo), _esc(i.plan or "Basico")
-        ) for i in colegios
-    )
-    mod_opts = "".join('<option value="%s">%s</option>' % (_esc(m), _esc(m)) for m in _MODULOS_DEV)
-    content = f"""
-<header class="role-hero"><div>
-  <h1>Escalar a Desarrollo</h1>
-  <p>Use este formulario solo si la falla es del sistema (no error de uso del colegio).</p>
-</div>
-<a class="btn" href="/soporte/mis-tickets-dev">Mis tickets</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-<section class="role-panel" style="max-width:720px">
-<form method="POST" enctype="multipart/form-data" style="display:grid;gap:12px">
-  <label><b>Colegio</b></label>
-  <select name="institucion_id" required><option value="">— Seleccionar —</option>{opts}</select>
-  <p class="mini-text">El plan activo se toma automáticamente del colegio (prioridad para Desarrollo).</p>
-  <label><b>Módulo afectado</b></label>
-  <select name="modulo_afectado" required><option value="">— Ruta / módulo —</option>{mod_opts}</select>
-  <label><b>Descripción técnica</b> (qué hace el sistema frente al error)</label>
-  <textarea name="descripcion" rows="5" required placeholder="Ej: Al guardar planilla del periodo 2 responde 500 y no persiste la nota."></textarea>
-  <label><b>Logs del servidor / consola</b></label>
-  <textarea name="logs_consola" rows="4" placeholder="Pegue el Error 500 o traceback de Logs de errores"></textarea>
-  <label><b>Captura o video</b> (pantallazo del Rector)</label>
-  <input type="file" name="evidencia" accept="image/*,video/*,.pdf">
-  <label style="display:flex;gap:10px;align-items:center">
-    <input type="checkbox" name="verificado_suplantacion" value="1">
-    Error verificado mediante <b>suplantación de usuario</b>
-  </label>
-  <button class="btn" type="submit" style="background:#b91c1c;color:#fff;font-weight:800">Radicar a Desarrollo</button>
-</form>
-</section>"""
-    return page("Escalar a Desarrollo", shell_soporte(content))
-
-
-@app.route("/soporte/mis-tickets-dev")
-def soporte_mis_tickets_dev():
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
-    _ensure_ticket_dev_tables()
-    user = session.get("usuario") or ""
-    try:
-        tickets = TicketDev.query.filter_by(radicado_por=user).order_by(TicketDev.id.desc()).limit(80).all()
-    except Exception:
-        tickets = TicketDev.query.order_by(TicketDev.id.desc()).limit(80).all()
-    def badge(e):
-        e = (e or "").upper()
-        if e == "RADICADO":
-            return '<span style="background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">🔴 Radicado</span>'
-        if e == "EN_VALIDACION":
-            return '<span style="background:#fef9c3;color:#854d0e;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">🟡 En validación</span>'
-        if e == "RESUELTO":
-            return '<span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">🟢 Resuelto</span>'
-        return _esc(e)
-    filas = "".join(
-        "<tr><td><a href='/soporte/ticket-dev/%s'>%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-        % (t.id, _esc(t.codigo), _esc(t.colegio_nombre), _esc(t.modulo_afectado), badge(t.estado),
-           _esc(t.prioridad), _esc(t.creado_en or ""))
-        for t in tickets
-    ) or "<tr><td colspan='6'>Sin tickets radicados aún.</td></tr>"
-    avisos = [t for t in tickets if t.estado == "RESUELTO" and t.aviso_soporte]
-    alertas = "".join(
-        '<div class="msg ok">✅ El error en <b>%s</b> (%s) fue solucionado. Ya puedes avisar al Rector. '
-        '<a href="/soporte/ticket-dev/%s">Ver detalle</a></div>'
-        % (_esc(t.colegio_nombre), _esc(t.codigo), t.id) for t in avisos
-    )
-    content = f"""
-<header class="role-hero"><div><h1>Mis tickets a Desarrollo</h1>
-<p>Estado en tiempo real. Cuando pase a 🟢 Resuelto, avise al colegio.</p></div>
-<a class="btn" href="/soporte/ticket-dev">+ Nuevo</a></header>
-{alertas}
-<section class="role-panel">
-<table class="table" style="width:100%">
-<tr><th>Código</th><th>Colegio</th><th>Módulo</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr>
-{filas}
-</table>
-</section>"""
-    return page("Mis tickets Dev", shell_soporte(content))
-
-
-@app.route("/soporte/ticket-dev/<int:tid>")
-def soporte_ticket_dev_detalle(tid):
-    if not requiere_login() or rol_actual() not in ("Soporte", "Desarrollador", "Developer", "Gerente", "Superadmin", "Administrador", "Gerencia"):
-        return redirect("/login")
-    _ensure_ticket_dev_tables()
-    t = TicketDev.query.get(tid)
-    if not t:
-        return acceso_denegado("Ticket no encontrado.")
-    msg_estado = ""
-    if t.estado == "EN_VALIDACION":
-        msg_estado = '<div class="msg" style="background:#fef9c3;border:1px solid #fde047">El equipo de ingeniería está trabajando en la solución.</div>'
-    elif t.estado == "RESUELTO":
-        msg_estado = '<div class="msg ok">Resuelto en producción. %s</div>' % _esc(t.nota_desarrollo or "")
-    ev = ('<p><a href="%s" target="_blank">Ver evidencia</a></p>' % _esc(t.evidencia_path)) if t.evidencia_path else ""
-    content = f"""
-<header class="role-hero"><div><h1>{_esc(t.codigo)}</h1>
-<p>{_esc(t.colegio_nombre)} · Plan {_esc(t.plan_activo)} · Prioridad {_esc(t.prioridad)}</p></div>
-<a class="btn" href="/soporte/mis-tickets-dev">Volver</a></header>
-{msg_estado}
-<section class="role-panel">
-<p><b>Estado:</b> {_esc(t.estado)} · <b>Módulo:</b> {_esc(t.modulo_afectado)}</p>
-<p><b>Radicado por:</b> {_esc(t.radicado_por)} · {_esc(t.creado_en)}</p>
-<p><b>Suplantación verificada:</b> {"Sí" if t.verificado_suplantacion else "No"}</p>
-<h3>Descripción técnica</h3>
-<pre style="white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:8px">{_esc(t.descripcion)}</pre>
-<h3>Logs</h3>
-<pre style="white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-size:12px">{_esc(t.logs_consola or "—")}</pre>
-{ev}
-{"<h3>Nota de Desarrollo</h3><p>"+_esc(t.nota_desarrollo)+"</p>" if t.nota_desarrollo else ""}
-</section>"""
-    if rol_actual() == "Soporte":
-        return page(t.codigo, shell_soporte(content))
-    return page(t.codigo, shell(content))
-
-
-@app.route("/desarrollo/tickets")
-def desarrollo_tickets():
-    """Bandeja de ingeniería: tickets de Soporte."""
-    if not requiere_login() or rol_actual() not in ("Desarrollador", "Developer", "Superadmin"):
-        return redirect("/dev-console-login")
-    _ensure_ticket_dev_tables()
-    filtro = (request.args.get("estado") or "").strip().upper()
-    try:
-        q = TicketDev.query
-        if filtro in ("RADICADO", "EN_VALIDACION", "RESUELTO"):
-            q = q.filter_by(estado=filtro)
-        tickets = q.order_by(TicketDev.id.desc()).limit(100).all()
-    except Exception:
-        tickets = []
-    n_rad = TicketDev.query.filter_by(estado="RADICADO").count() if tickets is not None else 0
-    try:
-        n_rad = TicketDev.query.filter_by(estado="RADICADO").count()
-        n_val = TicketDev.query.filter_by(estado="EN_VALIDACION").count()
-        n_res = TicketDev.query.filter_by(estado="RESUELTO").count()
-    except Exception:
-        n_rad = n_val = n_res = 0
-
-    def badge(e):
-        e = (e or "").upper()
-        if e == "RADICADO":
-            return "🔴 Radicado"
-        if e == "EN_VALIDACION":
-            return "🟡 En validación"
-        if e == "RESUELTO":
-            return "🟢 Resuelto"
-        return e
-
-    filas = "".join(
-        "<tr style='%s'><td><a href='/desarrollo/tickets/%s'><b>%s</b></a></td><td>%s</td><td>%s</td>"
-        "<td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-        % (
-            "background:#fef2f2" if t.estado == "RADICADO" else "",
-            t.id, _esc(t.codigo), _esc(t.colegio_nombre), _esc(t.plan_activo),
-            _esc(t.modulo_afectado), badge(t.estado), _esc(t.prioridad), _esc(t.creado_en or ""),
-        )
-        for t in tickets
-    ) or "<tr><td colspan='7'>Sin tickets.</td></tr>"
-    content = f"""
-<header class="role-hero"><div>
-  <h1>Tickets de ingeniería</h1>
-  <p>Fallas de sistema escaladas por Soporte. Priorice planes Premium / QR Plus.</p>
-</div></header>
-<section class="role-grid">
-  <div class="role-panel"><h2>{n_rad}</h2><p>🔴 Radicados</p></div>
-  <div class="role-panel"><h2>{n_val}</h2><p>🟡 En validación</p></div>
-  <div class="role-panel"><h2>{n_res}</h2><p>🟢 Resueltos</p></div>
-</section>
-<p style="margin:12px 0">
-  <a class="btn" href="/desarrollo/tickets">Todos</a>
-  <a class="btn" href="/desarrollo/tickets?estado=RADICADO">Radicados</a>
-  <a class="btn" href="/desarrollo/tickets?estado=EN_VALIDACION">En validación</a>
-  <a class="btn" href="/desarrollo/tickets?estado=RESUELTO">Resueltos</a>
-</p>
-<section class="role-panel">
-<table class="table" style="width:100%">
-<tr><th>Código</th><th>Colegio</th><th>Plan</th><th>Módulo</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr>
-{filas}
-</table>
-</section>"""
-    return page("Tickets Dev", shell(content))
-
-
-@app.route("/desarrollo/tickets/<int:tid>", methods=["GET", "POST"])
-def desarrollo_ticket_detalle(tid):
-    if not requiere_login() or rol_actual() not in ("Desarrollador", "Developer", "Superadmin"):
-        return redirect("/dev-console-login")
-    _ensure_ticket_dev_tables()
-    t = TicketDev.query.get(tid)
-    if not t:
-        return acceso_denegado("Ticket no encontrado.")
-    msg = ""
-    if request.method == "POST":
-        accion = (request.form.get("accion") or "").strip()
-        nota = (request.form.get("nota_desarrollo") or "").strip()
-        ahora_s = (fecha_hoy() or "") + " " + (hora_actual() or "")
-        user = session.get("usuario") or "Desarrollo"
-        if accion == "validacion":
-            t.estado = "EN_VALIDACION"
-            t.asignado_a = user
-            t.actualizado_en = ahora_s
-            if nota:
-                t.nota_desarrollo = nota
-            db.session.commit()
-            msg = "Estado: En validación / corrección."
-        elif accion == "resolver":
-            t.estado = "RESUELTO"
-            t.asignado_a = user
-            t.nota_desarrollo = nota or t.nota_desarrollo or "Fix desplegado en producción."
-            t.resuelto_en = ahora_s
-            t.actualizado_en = ahora_s
-            t.aviso_soporte = True
-            db.session.commit()
-            # Auditoría en historial del colegio
-            try:
-                registrar_auditoria(
-                    "Ticket Dev resuelto",
-                    "%s · colegio %s · módulo %s · fix: %s"
-                    % (t.codigo, t.colegio_nombre, t.modulo_afectado, (t.nota_desarrollo or "")[:200]),
-                )
-            except Exception:
-                pass
-            msg = "Marcado RESUELTO. Soporte recibió aviso automático."
-        elif accion == "guardar_nota":
-            t.nota_desarrollo = nota
-            t.actualizado_en = ahora_s
-            db.session.commit()
-            msg = "Nota guardada."
-    ev = ('<p><a href="%s" target="_blank">Ver evidencia</a></p>' % _esc(t.evidencia_path)) if t.evidencia_path else ""
-    content = f"""
-<header class="role-hero"><div><h1>{_esc(t.codigo)}</h1>
-<p>{_esc(t.colegio_nombre)} · {_esc(t.plan_activo)} · Prioridad <b>{_esc(t.prioridad)}</b></p></div>
-<a class="btn" href="/desarrollo/tickets">Bandeja</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel">
-<p><b>Estado:</b> {_esc(t.estado)} · <b>Módulo:</b> {_esc(t.modulo_afectado)}</p>
-<p><b>Radicado por Soporte:</b> {_esc(t.radicado_por)} · {_esc(t.creado_en)}</p>
-<p><b>Suplantación:</b> {"Verificada" if t.verificado_suplantacion else "No marcada"}</p>
-<h3>Descripción</h3>
-<pre style="white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:8px">{_esc(t.descripcion)}</pre>
-<h3>Logs</h3>
-<pre style="white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font-size:12px">{_esc(t.logs_consola or "—")}</pre>
-{ev}
-</section>
-<section class="role-panel" style="max-width:640px">
-<form method="POST" style="display:grid;gap:10px">
-<label><b>Nota de ingeniería</b> (archivo/función reparada)</label>
-<textarea name="nota_desarrollo" rows="3" placeholder="Ej: Corregido null en planilla_guardar línea 420">{_esc(t.nota_desarrollo or "")}</textarea>
-<div style="display:flex;gap:8px;flex-wrap:wrap">
-  <button class="btn" name="accion" value="validacion" type="submit" style="background:#ca8a04;color:#fff">🟡 En validación</button>
-  <button class="btn" name="accion" value="resolver" type="submit" style="background:#15803d;color:#fff">🟢 Resuelto en producción</button>
-  <button class="btn" name="accion" value="guardar_nota" type="submit">Guardar nota</button>
-</div>
-</form>
-</section>"""
-    return page(t.codigo, shell(content))
-
-
-@app.route("/gerencia/calidad-dev")
-def gerencia_calidad_dev():
-    """Tablero de control de calidad: estadísticas de tickets Dev."""
-    try:
-        g = _guard_gerencia()
-        if g:
-            return g
-    except Exception:
-        if rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return acceso_denegado()
-    _ensure_ticket_dev_tables()
-    try:
-        total = TicketDev.query.count()
-        n_rad = TicketDev.query.filter_by(estado="RADICADO").count()
-        n_val = TicketDev.query.filter_by(estado="EN_VALIDACION").count()
-        n_res = TicketDev.query.filter_by(estado="RESUELTO").count()
-        alta = TicketDev.query.filter_by(prioridad="ALTA").filter(TicketDev.estado != "RESUELTO").count()
-        recientes = TicketDev.query.order_by(TicketDev.id.desc()).limit(15).all()
-    except Exception:
-        total = n_rad = n_val = n_res = alta = 0
-        recientes = []
-    filas = "".join(
-        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-        % (_esc(t.codigo), _esc(t.colegio_nombre), _esc(t.modulo_afectado),
-           _esc(t.estado), _esc(t.prioridad), _esc(t.creado_en or ""))
-        for t in recientes
-    ) or "<tr><td colspan='6'>Sin datos</td></tr>"
-    content = f"""
-<header class="role-hero"><div>
-  <h1>Calidad · Tickets Desarrollo</h1>
-  <p>Supervisión en tiempo real. Gerencia no atiende el ticket; ve métricas y cuellos de botella.</p>
-</div>
-<a class="btn" href="/gerencia/hq">HQ</a></header>
-<section class="role-grid">
-  <div class="role-panel"><h2>{total}</h2><p>Total reportes</p></div>
-  <div class="role-panel"><h2 style="color:#b91c1c">{n_rad}</h2><p>🔴 Radicados (cola)</p></div>
-  <div class="role-panel"><h2 style="color:#a16207">{n_val}</h2><p>🟡 En validación</p></div>
-  <div class="role-panel"><h2 style="color:#15803d">{n_res}</h2><p>🟢 Resueltos</p></div>
-  <div class="role-panel"><h2>{alta}</h2><p>Prioridad ALTA abiertos</p></div>
-</section>
-<section class="role-panel" style="margin-top:14px">
-<h2>Últimos tickets</h2>
-<table class="table" style="width:100%">
-<tr><th>Código</th><th>Colegio</th><th>Módulo</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr>
-{filas}
-</table>
-</section>"""
-    return page("Calidad Dev", shell(content))
-
-
-# Support público mínimo (si no estaba desplegado)
-@app.route("/support")
-@app.route("/support/")
-def support_home():
-    _ensure_ticket_dev_tables()
-    q = (request.args.get("q") or "").strip()
-    try:
-        query = ArticuloAyuda.query.filter_by(estado="PUBLICADO")
-        if q:
-            like = "%" + q + "%"
-            query = query.filter(db.or_(ArticuloAyuda.titulo.ilike(like), ArticuloAyuda.cuerpo.ilike(like)))
-        arts = query.order_by(ArticuloAyuda.id.desc()).limit(30).all()
-    except Exception:
-        arts = []
-    items = "".join(
-        '<a href="/support/a/%s" style="display:block;padding:14px 0;border-bottom:1px solid #d2d2d7;color:#1d1d1f;text-decoration:none"><b>%s</b><br><span style="color:#6e6e73;font-size:14px">%s</span></a>'
-        % (_esc(a.slug or a.id), _esc(a.titulo), _esc(a.categoria or ""))
-        for a in arts
-    ) or '<p style="color:#6e6e73">Aún no hay artículos. Soporte puede redactar en /support/editor.</p>'
-    body = f"""
-<style>
-.as{{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;max-width:692px;margin:0 auto;padding:48px 22px}}
-.as h1{{font-size:40px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px}}
-.as p.lead{{font-size:19px;color:#6e6e73;margin:0 0 28px}}
-.as input{{width:100%;padding:14px;border:1px solid #d2d2d7;border-radius:12px;font-size:17px;background:#f5f5f7;box-sizing:border-box}}
-</style>
-<div class="as">
-  <h1>Support</h1>
-  <p class="lead">Guías y respuestas sobre EduTrack.</p>
-  <form method="GET" action="/support" style="margin-bottom:28px"><input name="q" value="{_esc(q)}" placeholder="Buscar en Support"></form>
-  {items}
-  <p style="margin-top:32px;font-size:12px;color:#86868b">© 2026 PROCSIS · support.procsis.com</p>
-</div>"""
-    return page("PROCSIS Support", body)
-
-
-@app.route("/support/a/<slug>")
-def support_articulo(slug):
-    _ensure_ticket_dev_tables()
-    a = ArticuloAyuda.query.filter_by(slug=slug).first()
-    if not a or (a.estado != "PUBLICADO" and rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia")):
-        return page("Support", "<div style='padding:40px;text-align:center'><h1>No disponible</h1><a href='/support'>Volver</a></div>")
-    body = f"""
-<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:692px;margin:0 auto;padding:40px 22px">
-  <a href="/support" style="color:#06c;text-decoration:none">‹ Support</a>
-  <h1 style="font-size:36px;font-weight:600;margin:16px 0 12px">{_esc(a.titulo)}</h1>
-  <p style="color:#6e6e73;font-size:18px">{_esc(a.resumen or "")}</p>
-  <div style="font-size:17px;line-height:1.5;white-space:pre-wrap;margin-top:24px">{_esc(a.cuerpo or "")}</div>
-</div>"""
-    return page(a.titulo or "Support", body)
-
-
-@app.route("/support/editor", methods=["GET", "POST"])
-def support_editor():
-    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
-        return redirect("/soporte-login")
-    _ensure_ticket_dev_tables()
-    es_g = rol_actual() in ("Gerente", "Superadmin", "Administrador", "Gerencia")
-    msg = ""
-    if request.method == "POST":
-        titulo = (request.form.get("titulo") or "").strip()[:255]
-        cuerpo = (request.form.get("cuerpo") or "").strip()
-        categoria = (request.form.get("categoria") or "General")[:80]
-        accion = request.form.get("accion") or "guardar"
-        if titulo and cuerpo:
-            import re as _re
-            slug = _re.sub(r"[\s_]+", "-", _re.sub(r"[^\w\s-]", "", titulo.lower())).strip("-")[:140]
-            art = ArticuloAyuda(slug=slug or secrets.token_hex(4), titulo=titulo, cuerpo=cuerpo,
-                                categoria=categoria, estado="BORRADOR",
-                                creado_por=session.get("usuario") or "", creado_en=fecha_hoy() or "")
-            base, n = art.slug, 1
-            while ArticuloAyuda.query.filter_by(slug=art.slug).first():
-                art.slug = "%s-%s" % (base, n)
-                n += 1
-            if accion == "publicar" and es_g:
-                art.estado = "PUBLICADO"
-                art.publicado_por = session.get("usuario") or ""
-                art.publicado_en = fecha_hoy() or ""
-            db.session.add(art)
-            db.session.commit()
-            msg = "Guardado (%s)." % art.estado
-    lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(40).all()
-    filas = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria)) for a in lista) or "<tr><td colspan='3'>—</td></tr>"
-    pub = '<button name="accion" value="publicar" type="submit" class="btn">Publicar</button>' if es_g else ""
-    content = f"""
-<header class="role-hero"><div><h1>Support · Editor</h1></div><a class="btn" href="/support">Ver público</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel" style="max-width:640px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Título</label><input name="titulo" required>
-<label>Categoría</label><input name="categoria" value="General">
-<label>Contenido</label><textarea name="cuerpo" rows="10" required></textarea>
-<div style="display:flex;gap:8px"><button name="accion" value="guardar" type="submit" class="btn">Guardar borrador</button>{pub}</div>
-</form></section>
-<section class="role-panel"><table class="table" style="width:100%"><tr><th>Título</th><th>Estado</th><th>Cat.</th></tr>{filas}</table></section>"""
-    return page("Editor Support", shell(content))
-
-
 if __name__ == "__main__":
     with app.app_context():
         inicializar_bd()
@@ -65166,4 +64598,3 @@ if __name__ == "__main__":
         except Exception as _e:
             print("ciclo facturacion:", _e)
     app.run(debug=True, host="0.0.0.0")
-
