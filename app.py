@@ -3679,6 +3679,7 @@ def _staff_nav_items(path, rol=""):
             ("/dev-console?tab=anuncios", "Seguridad"),
             ("/dev-console?tab=temas", "Diseño / CSS"),
             ("/gerencia/planes/nuevo", "Crear plan (técnico)"),
+            ("/seguridad", "Seguridad e incidentes"),
             ("/backoffice/hub", "Tablero maestro"),
             ("/logout", "Salir"),
         ]
@@ -3712,6 +3713,7 @@ def _staff_nav_items(path, rol=""):
             ("/auditoria", "Auditoría"),
             ("/planes/buscar", "Buscar planes"),
             ("/soporte/planes-vendidos", "Planes activos / vendidos"),
+            ("/seguridad", "Seguridad e incidentes"),
             ("/logout", "Salir"),
         ]
     elif rol == "Cobranza":
@@ -3742,6 +3744,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/paginas-legales", "Páginas legales"),
             ("/gerencia/pie-login", "Pie login colegios"),
             ("/gerencia/turnos", "Turnos del equipo"),
+            ("/seguridad", "Seguridad e incidentes"),
             ("/backoffice/hub", "Tablero maestro"),
             ("/logout", "Salir"),
         ]
@@ -4373,6 +4376,10 @@ def shell(content):
 
 
 def acceso_denegado(mensaje="No tienes permiso para acceder a este módulo."):
+    try:
+        _seg_registrar_evento("ACCESO_DENEGADO", session.get("usuario") or "")
+    except Exception:
+        pass
     return page("Acceso denegado", shell(f"""
 <div class='blocked-box'>
   <h1>Acceso restringido</h1>
@@ -5085,6 +5092,10 @@ def registrar_auditoria(accion, detalle=""):
             ruta=ruta,
         ))
         db.session.commit()
+        try:
+            _seg_sellar_auto()  # cadena de hashes (a lo sumo una vez por minuto)
+        except Exception:
+            pass
     except Exception as e:
         print("AUDITORIA:", e)
         try:
@@ -21570,7 +21581,11 @@ def ventas_comprar():
     body = f"""
 <style>
 .vc{{background:#f8fafc;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:24px}}
-.vc-wrap{{max-width:920px;margin:0 auto;display:grid;grid-template-columns:1.1fr .9fr;gap:16px}}
+.vc-wrap{{max-width:1140px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}}
+.vc-left{{display:flex;flex-direction:column;gap:16px;min-width:0}}
+.vc-wrap>.vc-box{{min-width:0}}
+.vc-box input[type=checkbox]{{width:auto!important;margin:3px 0 0!important;padding:0!important}}
+#vc-step1-btn,#vc-step2-btn,#btn-canal-online,#btn-canal-presencial{{color:#fff!important}}
 @media(max-width:800px){{.vc-wrap{{grid-template-columns:1fr}}}}
 .vc-box{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px;box-shadow:0 2px 16px rgba(0,0,0,.04)}}.vc input,.vc select{{border-radius:12px !important;border:1px solid #d2d2d7 !important}}.vc button[type=submit]{{border-radius:980px !important;background:#005BEA !important}}
 .vc-box h1{{margin:0 0 8px;color:#0B2D57;font-size:22px}}
@@ -21589,8 +21604,9 @@ def ventas_comprar():
 .note{{font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:8px 10px;border-radius:8px;margin-top:10px}}
 </style>
 <div class="vc">
-  <p style="max-width:920px;margin:0 auto 12px"><a href="/ventas">← Volver a planes</a></p>
+  <p style="max-width:1140px;margin:0 auto 12px"><a href="/ventas">← Volver a planes</a></p>
   <div class="vc-wrap">
+    <div class="vc-left">
     <div class="vc-box">
       <span class="vc-plan">{plan_nom}</span>
       <h1 style="margin-top:8px">{plan_nom}</h1>
@@ -21608,6 +21624,48 @@ def ventas_comprar():
       <h2>No incluidos en este plan</h2>
       <ul>{li_ex}</ul>
     </div>
+    <div class="vc-box" id="vc-rector-box">
+      <h1 style="font-size:19px">Rector y usuarios del colegio</h1>
+      <p style="color:#64748b;font-size:13px;margin:0 0 10px">Datos del representante legal (obligatorios para el contrato) y usuarios que se crean con clave temporal. Se envían junto con el resto del formulario.</p>
+          <div style="background:rgba(0,91,234,.06);border-radius:16px;padding:14px 16px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:#005BEA;text-transform:uppercase;letter-spacing:.04em">Paso 2 · Identidad del rector</div>
+            <div style="font-size:13px;color:#1d1d1f;margin-top:4px">Datos del representante legal de la institucion (obligatorio para el contrato).</div>
+          </div>
+          <label>Nombre completo del rector / representante legal *</label>
+          <input form="form-activar-plan" name="rector" id="campo-rector" required placeholder="Ej: Maria Perez Lopez" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
+          <input form="form-activar-plan" type="hidden" name="rector_nombre" id="campo-rector-nombre" value="">
+          <label>Cedula del rector</label>
+          <input form="form-activar-plan" name="rector_cedula" placeholder="Numero de documento" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
+          <label>Telefono de contacto</label>
+          <input form="form-activar-plan" name="telefono" placeholder="Celular" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
+          <label>Correo institucional</label>
+          <input form="form-activar-plan" name="correo" type="email" placeholder="rector@colegio.edu.co" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
+                  <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0">
+        <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Usuarios del colegio (obligatorio)</h3>
+        <p style="font-size:12px;color:#64748b;margin:0 0 12px">Se crearán con clave temporal. Al primer ingreso el sistema les pedirá cambiar la clave.</p>
+
+        <label>Rector(a) — nombre completo *</label>
+        <input form="form-activar-plan" name="rector_nombre" placeholder="Nombre del rector o rectora">
+        <label>Usuario de ingreso Rectoría *</label>
+        <input form="form-activar-plan" name="rector_usuario" placeholder="Ej: rector.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+
+        <label>Secretaria(o) — nombre completo *</label>
+        <input form="form-activar-plan" name="secretaria_nombre" placeholder="Nombre de secretaría académica">
+        <label>Usuario de ingreso Secretaría *</label>
+        <input form="form-activar-plan" name="secretaria_usuario" placeholder="Ej: secretaria.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+
+        <label>Coordinador(a) — nombre completo *</label>
+        <input form="form-activar-plan" name="coord_nombre" placeholder="Nombre de coordinación">
+        <label>Usuario de ingreso Coordinación *</label>
+        <input form="form-activar-plan" name="coord_usuario" placeholder="Ej: coord.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+
+        <label>Clave temporal compartida (mín. 8 caracteres) *</label>
+        <input form="form-activar-plan" name="clave_temporal" minlength="8" value="Colegio2026*" placeholder="La cambiarán al entrar">
+
+        <label>Asesor</label>
+        <input form="form-activar-plan" name="asesor" value="{session.get('usuario') or ''}">
+    </div>
+    </div>
     <div class="vc-box">
       <h1>Activar institución</h1>
       <p style="color:#64748b;font-size:13px">Complete los datos. <b>La foto/logo del colegio es obligatoria</b> antes de activar.</p>
@@ -21624,7 +21682,7 @@ def ventas_comprar():
 
         <div style="display:flex;gap:8px;margin-bottom:16px">
           <button type="button" id="vc-step1-btn" onclick="vcStep(1)" style="border:0;padding:8px 16px;border-radius:980px;background:#005BEA;color:#fff;font-weight:600;font-size:12px;cursor:pointer">1. Identidad</button>
-          <button type="button" id="vc-step2-btn" onclick="vcStep(2)" style="border:0;padding:8px 16px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;font-weight:500;font-size:12px;cursor:pointer">2. Contacto</button>
+          <button type="button" id="vc-step2-btn" onclick="vcStep(2)" style="border:0;padding:8px 16px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;font-weight:500;font-size:12px;cursor:pointer">2. Rector y usuarios</button>
         </div>
 
         <div id="vc-step1"><div style="background:#f5f5f7;border-radius:16px;padding:14px 16px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#002060;text-transform:uppercase;letter-spacing:.04em">Paso 1 · Datos del colegio</div><div style="font-size:13px;color:#86868b;margin-top:4px">Nombre, codigo, NIT, DANE y logo oficial de la institucion.</div></div>
@@ -21640,20 +21698,7 @@ def ventas_comprar():
         </div>
 
         <div id="vc-step2" style="display:block;margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
-          <div style="background:rgba(0,91,234,.06);border-radius:16px;padding:14px 16px;margin-bottom:14px">
-            <div style="font-size:12px;font-weight:700;color:#005BEA;text-transform:uppercase;letter-spacing:.04em">Paso 2 · Identidad del rector</div>
-            <div style="font-size:13px;color:#1d1d1f;margin-top:4px">Datos del representante legal de la institucion (obligatorio para el contrato).</div>
-          </div>
-          <label>Nombre completo del rector / representante legal *</label>
-          <input name="rector" id="campo-rector" required placeholder="Ej: Maria Perez Lopez" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
-          <input type="hidden" name="rector_nombre" id="campo-rector-nombre" value="">
-          <label>Cedula del rector</label>
-          <input name="rector_cedula" placeholder="Numero de documento" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
-          <label>Telefono de contacto</label>
-          <input name="telefono" placeholder="Celular" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
-          <label>Correo institucional</label>
-          <input name="correo" type="email" placeholder="rector@colegio.edu.co" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
-          <p style="font-size:12px;color:#86868b;margin:8px 0 12px">Logo: se captura en el Paso 1 (Identidad). Si no lo subio, vuelva atras.</p>
+          <div style="background:#f5f5f7;border-radius:16px;padding:14px 16px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#002060;text-transform:uppercase;letter-spacing:.04em">Ubicación y periodos</div><div style="font-size:13px;color:#86868b;margin-top:4px">Departamento, municipio, sede principal y periodos del SIEE.</div></div>
           {geo_campos}
           <label>Sede principal</label>
           <input name="sede" placeholder="Principal" style="border-radius:12px;border:1px solid #d2d2d7">
@@ -21664,32 +21709,7 @@ def ventas_comprar():
           </select>
           <p style="font-size:12px;color:#86868b;margin:4px 0 10px">Cortes de evaluación (SIEE).</p>
 
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0">
-        <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Usuarios del colegio (obligatorio)</h3>
-        <p style="font-size:12px;color:#64748b;margin:0 0 12px">Se crearán con clave temporal. Al primer ingreso el sistema les pedirá cambiar la clave.</p>
-
-        <label>Rector(a) — nombre completo *</label>
-        <input name="rector_nombre" placeholder="Nombre del rector o rectora">
-        <label>Usuario de ingreso Rectoría *</label>
-        <input name="rector_usuario" placeholder="Ej: rector.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
-
-        <label>Secretaria(o) — nombre completo *</label>
-        <input name="secretaria_nombre" placeholder="Nombre de secretaría académica">
-        <label>Usuario de ingreso Secretaría *</label>
-        <input name="secretaria_usuario" placeholder="Ej: secretaria.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
-
-        <label>Coordinador(a) — nombre completo *</label>
-        <input name="coord_nombre" placeholder="Nombre de coordinación">
-        <label>Usuario de ingreso Coordinación *</label>
-        <input name="coord_usuario" placeholder="Ej: coord.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
-
-        <label>Clave temporal compartida (mín. 8 caracteres) *</label>
-        <input name="clave_temporal" minlength="8" value="Colegio2026*" placeholder="La cambiarán al entrar">
-
-        <label>Asesor</label>
-        <input name="asesor" value="{session.get('usuario') or ''}">
         </div>
-        <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:8px">
         <div style="margin-top:16px;padding:16px;border:1px solid rgba(0,0,0,.06);border-radius:16px;background:#fafafa">
           <h3 style="margin:0 0 10px;color:#002060;font-size:15px">Consentimiento y canal</h3>
           <p style="margin:0 0 10px;font-size:12px;color:#86868b">Texto legal solo editable en Gerencia. Aqui se fusiona con datos del colegio.</p>
@@ -21723,9 +21743,23 @@ def ventas_comprar():
           }}
           vcPreviewConsent();
         }}
+        document.addEventListener("input", function(e) {{
+          var t = e.target;
+          if (!t) return;
+          if (t.id === "rector_doc") t.setAttribute("data-tocado", "1");
+          if (t.name === "rector_cedula") {{
+            var d = document.getElementById("rector_doc");
+            if (d && !d.getAttribute("data-tocado")) d.value = t.value;
+          }}
+        }});
+        function vcField(form, n) {{
+          var els = form ? form.elements : [];
+          for (var i = 0; i < els.length; i++) {{ if (els[i].name === n) return els[i]; }}
+          return null;
+        }}
         function vcTokens() {{
           var f = document.getElementById("form-activar-plan");
-          function v(n) {{ var el = f ? f.querySelector('[name="' + n + '"]') : null; return el ? el.value : ""; }}
+          function v(n) {{ var el = vcField(f, n); return el ? el.value : ""; }}
           return {{ canal: window._vcCanal, nombre: v("nombre"), nit: v("nit"), dane: v("dane"), codigo: v("codigo"),
             rector: v("rector") || v("rector_nombre"), rector_doc: v("rector_doc"), plan: v("plan"), ciudad: v("ciudad") }};
         }}
@@ -21754,8 +21788,6 @@ def ventas_comprar():
         </script>
 
 <script>
-
-<script>
 (function(){{
   var inp = document.getElementById("logo_colegio");
   if (!inp) return;
@@ -21780,7 +21812,7 @@ function vcStep(n) {{
   if (s1) s1.style.display = "block";
   if (s2) s2.style.display = "block";
   try {{
-    var el = document.getElementById(n === 2 ? "vc-step2" : "vc-step1");
+    var el = document.getElementById(n === 2 ? "vc-rector-box" : "vc-step1");
     if (el) el.scrollIntoView({{ behavior: "smooth", block: "start" }});
   }} catch (e) {{}}
 }}
@@ -21794,13 +21826,13 @@ document.addEventListener("DOMContentLoaded", function() {{
 <script>
 function vcSubmitGuard(form) {{
   try {{
-    var nombre = (form.querySelector('[name="nombre"]') || {{}}).value || "";
-    var codigo = (form.querySelector('[name="codigo"]') || {{}}).value || "";
-    var rectorEl = form.querySelector('[name="rector"]');
+    var nombre = (vcField(form, 'nombre') || {{}}).value || "";
+    var codigo = (vcField(form, 'codigo') || {{}}).value || "";
+    var rectorEl = vcField(form, 'rector');
     var rector = rectorEl ? (rectorEl.value || "") : "";
-    var rectorN = form.querySelector('[name="rector_nombre"]');
+    var rectorN = vcField(form, 'rector_nombre');
     if (rectorN) rectorN.value = rector;
-    var firma = form.querySelector('[name="firma_acepta"]');
+    var firma = vcField(form, 'firma_acepta');
     if (!String(nombre).trim() || !String(codigo).trim()) {{
       alert("Complete nombre y codigo del colegio en el Paso 1 (Identidad).");
       try {{ vcStep(1); }} catch (e1) {{}}
@@ -21815,7 +21847,7 @@ function vcSubmitGuard(form) {{
       alert("Marque la casilla de aceptacion y firma del consentimiento.");
       return false;
     }}
-    var logoInp = form.querySelector('[name="logo_colegio"]');
+    var logoInp = vcField(form, 'logo_colegio');
     if (logoInp && (!logoInp.files || !logoInp.files.length)) {{
       if (!confirm("No selecciono logo del colegio. ¿Continuar sin logo?")) {{
         try {{ vcStep(1); }} catch (e3) {{}}
@@ -66289,6 +66321,2238 @@ def planes_vendidos_panel():
 </details>
 """
     return page("Planes vendidos", shell(content))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  SEGURIDAD E INCIDENTES  (Ley 1581 de 2012 · reporte a la SIC)
+#  1 Registro de incidentes · 2 Contención · 3 Rotación de credenciales
+#  4 Bitácora a prueba de alteraciones · 5 Integridad SIEE/SIMAT/asistencia
+#  6 Control de respaldos · 7 Reporte SIC y comunicado al rector
+#  8 Informe post-incidente · 9 Alertas de detección
+# ═════════════════════════════════════════════════════════════════════════════
+import hashlib as _hashlib
+import threading as _threading
+import time as _time
+import zlib as _zlib
+import base64 as _b64
+from datetime import date as _date, datetime as _datetime, timedelta as _timedelta
+
+_SEG_ROLES_GER = ("Gerente", "Superadmin", "Administrador", "Gerencia")
+_SEG_ROLES_OPERAR = _SEG_ROLES_GER + ("Soporte", "Desarrollador", "Developer")
+_SEG_ROLES_GLOBAL = _SEG_ROLES_GER + ("Desarrollador", "Developer")
+_SEG_ROLES_EXENTOS = tuple(ROLES_INTERNOS) + ("Developer", "Gerencia", "Ventas", "Supervisor de Ventas")
+
+_SEG_TIPOS = [
+    "Acceso no autorizado", "Intento de hackeo / fuerza bruta", "Filtración de datos",
+    "Pérdida de datos", "Adulteración de datos", "Falla de seguridad / vulnerabilidad",
+    "Malware / ransomware", "Otro",
+]
+_SEG_GRAVEDAD = ["BAJA", "MEDIA", "ALTA", "CRITICA"]
+_SEG_ESTADOS = {
+    "POR_CONFIRMAR": "Por confirmar", "ABIERTO": "Abierto", "CONTENIDO": "Contenido",
+    "RESTAURADO": "Restaurado", "CERRADO": "Cerrado", "DESCARTADO": "Descartado",
+}
+_SEG_FASES = {
+    "DETECCION": "Detección", "F1": "Fase 1 · Contención", "F2": "Fase 2 · Reporte SIC",
+    "F3": "Fase 3 · Restauración", "F4": "Fase 4 · Bitácora e informe",
+}
+_SEG_FMT = "%Y-%m-%d %H:%M:%S"
+_SEG_GENESIS = "0" * 64
+_SEG_MAX_FILAS = 300000
+_SEG_DATASETS = {
+    "SIEE": "Notas SIEE (planillas)",
+    "CIERRES": "Cierres de periodo",
+    "MATRICULA": "Matrícula / SIMAT (estudiantes)",
+    "PORTERIA": "Asistencia en portería",
+    "ASISTENCIA": "Asistencia en clase",
+}
+_SEG_READY = False
+_SEG_LOCK = _threading.Lock()
+_SEG_SELLO_T = {"t": 0.0}
+_SEG_CACHE = {"t": 0.0, "bloq": set(), "ro": set(), "bg": False, "rg": False, "ses": {}}
+_SEG_LOGIN_PATHS = (
+    "/login", "/docente-login", "/familia-login", "/backoffice", "/backoffice/login", "/ventas-login",
+    "/gerencia-login", "/soporte-login", "/cobranza-login", "/estudiante-login", "/dev-console-login",
+)
+_SEG_PERMITIDAS = (
+    "/static", "/seguridad", "/login", "/logout", "/backoffice", "/soporte-login", "/gerencia-login",
+    "/ventas-login", "/cobranza-login", "/dev-console-login", "/docente-login", "/familia-login",
+    "/estudiante-login", "/mfa", "/cambiar_password", "/biometria", "/soporte/verificar-pin", "/favicon",
+)
+
+
+# ── Modelos ──────────────────────────────────────────────────────────────────
+class IncidenteSeg(db.Model):
+    __tablename__ = "incidentes_seg"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(30), unique=True, index=True)
+    titulo = db.Column(db.String(220), default="")
+    tipo = db.Column(db.String(80), default="")
+    gravedad = db.Column(db.String(12), default="MEDIA")
+    estado = db.Column(db.String(20), default="ABIERTO", index=True)
+    origen = db.Column(db.String(20), default="MANUAL")  # MANUAL | ALERTA
+    regla = db.Column(db.String(80), default="", index=True)
+    descripcion = db.Column(db.Text, default="")
+    datos_personales = db.Column(db.Boolean, default=True)
+    datos_menores = db.Column(db.Boolean, default=False)
+    instituciones_ids = db.Column(db.Text, default="")  # CSV de ids
+    titulares_aprox = db.Column(db.Integer, default=0)
+    detectado_en = db.Column(db.String(25), default="")  # hora Colombia
+    contenido_en = db.Column(db.String(25), default="")
+    restaurado_en = db.Column(db.String(25), default="")
+    reportado_sic_en = db.Column(db.String(25), default="")
+    cerrado_en = db.Column(db.String(25), default="")
+    radicado_rnbd = db.Column(db.String(80), default="")
+    medidas_contencion = db.Column(db.Text, default="")
+    plan_mitigacion = db.Column(db.Text, default="")
+    causa_raiz = db.Column(db.Text, default="")
+    acciones_correctivas = db.Column(db.Text, default="")
+    lecciones = db.Column(db.Text, default="")
+    evidencias = db.Column(db.Text, default="")
+    creado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(25), default="")
+
+
+class IncidenteEvento(db.Model):
+    __tablename__ = "incidentes_seg_eventos"
+    id = db.Column(db.Integer, primary_key=True)
+    incidente_id = db.Column(db.Integer, index=True)
+    fase = db.Column(db.String(20), default="DETECCION")
+    detalle = db.Column(db.Text, default="")
+    usuario = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(25), default="")
+
+
+class ContencionSeg(db.Model):
+    __tablename__ = "contenciones_seg"
+    id = db.Column(db.Integer, primary_key=True)
+    incidente_id = db.Column(db.Integer, nullable=True, index=True)
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)  # NULL = global
+    accion = db.Column(db.String(30), index=True)
+    activa = db.Column(db.Boolean, default=False)
+    motivo = db.Column(db.Text, default="")
+    detalle_json = db.Column(db.Text, default="")
+    creado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(25), default="")
+    creado_ts = db.Column(db.Float, default=0.0)
+    levantado_por = db.Column(db.String(120), default="")
+    levantado_en = db.Column(db.String(25), default="")
+
+
+class EventoSeg(db.Model):
+    __tablename__ = "eventos_seg"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(30), index=True)
+    ip = db.Column(db.String(60), index=True)
+    usuario = db.Column(db.String(80), default="")
+    ruta = db.Column(db.String(200), default="")
+    creado_en = db.Column(db.String(25), default="")
+    creado_ts = db.Column(db.Float, default=0.0, index=True)
+
+
+class RespaldoSeg(db.Model):
+    __tablename__ = "respaldos_seg"
+    id = db.Column(db.Integer, primary_key=True)
+    fecha = db.Column(db.String(25), default="", index=True)
+    tamano_mb = db.Column(db.Float, default=0.0)
+    checksum = db.Column(db.String(100), default="")
+    ubicacion = db.Column(db.String(300), default="")
+    tipo = db.Column(db.String(30), default="DIARIO")
+    restauracion_ok = db.Column(db.Boolean, default=False)
+    restauracion_en = db.Column(db.String(25), default="")
+    restauracion_por = db.Column(db.String(120), default="")
+    notas = db.Column(db.Text, default="")
+    origen = db.Column(db.String(20), default="MANUAL")
+    registrado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(25), default="")
+
+
+class HuellaSeg(db.Model):
+    __tablename__ = "huellas_seg"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    dataset = db.Column(db.String(30), index=True)
+    filas = db.Column(db.Integer, default=0)
+    digest = db.Column(db.String(64), default="")
+    datos = db.Column(db.Text, default="")
+    truncado = db.Column(db.Boolean, default=False)
+    creado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(25), default="")
+
+
+class AuditoriaSello(db.Model):
+    __tablename__ = "auditoria_sellos"
+    id = db.Column(db.Integer, primary_key=True)
+    auditoria_id = db.Column(db.Integer, unique=True, index=True)
+    hash_prev = db.Column(db.String(64), default="")
+    hash = db.Column(db.String(64), default="")
+    creado_en = db.Column(db.String(25), default="")
+
+
+class ReporteSeg(db.Model):
+    __tablename__ = "reportes_seg"
+    id = db.Column(db.Integer, primary_key=True)
+    incidente_id = db.Column(db.Integer, index=True)
+    tipo = db.Column(db.String(12), default="SIC")  # SIC | RECTOR
+    institucion_id = db.Column(db.Integer, nullable=True)
+    destinatario = db.Column(db.String(200), default="")
+    asunto = db.Column(db.String(250), default="")
+    cuerpo = db.Column(db.Text, default="")
+    estado = db.Column(db.String(12), default="BORRADOR")  # BORRADOR | APROBADO | ENVIADO
+    radicado = db.Column(db.String(80), default="")
+    creado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(25), default="")
+    aprobado_por = db.Column(db.String(120), default="")
+    aprobado_en = db.Column(db.String(25), default="")
+    enviado_por = db.Column(db.String(120), default="")
+    enviado_en = db.Column(db.String(25), default="")
+    error_envio = db.Column(db.Text, default="")
+
+
+class SegConfig(db.Model):
+    __tablename__ = "seg_config"
+    clave = db.Column(db.String(60), primary_key=True)
+    valor = db.Column(db.Text, default="")
+
+
+# ── Utilidades ───────────────────────────────────────────────────────────────
+def _seg_ensure():
+    """Crea las tablas de seguridad la primera vez (idempotente)."""
+    global _SEG_READY
+    if _SEG_READY:
+        return
+    try:
+        db.create_all()
+        _SEG_READY = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("seguridad create_all:", ex)
+
+
+def _seg_now_s():
+    return ahora().strftime(_SEG_FMT)
+
+
+def _seg_parse(s):
+    try:
+        return _datetime.strptime((s or "")[:19], _SEG_FMT).replace(tzinfo=BOGOTA)
+    except Exception:
+        return None
+
+
+def _seg_usuario():
+    try:
+        return (session.get("usuario") or "Sistema")[:120]
+    except Exception:
+        return "Sistema"
+
+
+def _seg_ip():
+    try:
+        return _client_ip_audit()
+    except Exception:
+        try:
+            return (request.remote_addr or "")[:60]
+        except Exception:
+            return ""
+
+
+def _seg_cfg(clave, default=""):
+    try:
+        r = SegConfig.query.get(clave)
+        return (r.valor if r and r.valor is not None else default) or default
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return default
+
+
+def _seg_cfg_set(clave, valor):
+    r = SegConfig.query.get(clave)
+    if r:
+        r.valor = valor
+    else:
+        db.session.add(SegConfig(clave=clave, valor=valor))
+    db.session.commit()
+
+
+def _seg_txt_delta(seg):
+    seg = int(abs(seg))
+    d, r = divmod(seg, 86400)
+    h, r = divmod(r, 3600)
+    m = r // 60
+    if d:
+        return "%d d %d h" % (d, h)
+    if h:
+        return "%d h %02d min" % (h, m)
+    return "%d min" % m
+
+
+# ── Festivos de Colombia y días hábiles ──────────────────────────────────────
+_FESTIVOS_CACHE = {}
+
+
+def _pascua(y):
+    a = y % 19
+    b, c = divmod(y, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = ((h + l - 7 * m + 114) % 31) + 1
+    return _date(y, mes, dia)
+
+
+def _lunes_siguiente(d):
+    return d if d.weekday() == 0 else d + _timedelta(days=7 - d.weekday())
+
+
+def _festivos_co(y):
+    """Festivos nacionales de Colombia (Ley Emiliani + Semana Santa). Cálculo orientativo."""
+    if y in _FESTIVOS_CACHE:
+        return _FESTIVOS_CACHE[y]
+    p = _pascua(y)
+    s = {_date(y, m, d) for m, d in ((1, 1), (5, 1), (7, 20), (8, 7), (12, 8), (12, 25))}
+    s |= {_lunes_siguiente(_date(y, m, d)) for m, d in ((1, 6), (3, 19), (6, 29), (8, 15), (10, 12), (11, 1), (11, 11))}
+    s |= {p - _timedelta(days=3), p - _timedelta(days=2)}
+    s |= {p + _timedelta(days=43), p + _timedelta(days=64), p + _timedelta(days=71)}
+    _FESTIVOS_CACHE[y] = s
+    return s
+
+
+def _es_habil(d):
+    return d.weekday() < 5 and d not in _festivos_co(d.year)
+
+
+def _sumar_habiles(desde, n):
+    cur, cont = desde, 0
+    while cont < n:
+        cur = cur + _timedelta(days=1)
+        if _es_habil(cur):
+            cont += 1
+    return cur
+
+
+# ── Plazos del incidente (1 h · 4 h · 15 días hábiles) ───────────────────────
+def _seg_plazos(inc):
+    """Devuelve la lista de cronómetros del incidente: contención, restauración y reporte SIC."""
+    now = ahora()
+    det = _seg_parse(inc.detectado_en)
+    con = _seg_parse(inc.contenido_en)
+    res = _seg_parse(inc.restaurado_en)
+    sic = _seg_parse(inc.reportado_sic_en)
+
+    def _mk(clave, etiqueta, limite, hecho, total_s, aviso_s):
+        d = {"clave": clave, "etiqueta": etiqueta, "limite": limite, "hecho": hecho, "estado": "pendiente", "texto": "", "restante": None}
+        if hecho and limite:
+            dentro = hecho <= limite
+            d["estado"] = "cumplido" if dentro else "tarde"
+            d["texto"] = "Cumplido" if dentro else "Cumplido fuera de plazo"
+        elif hecho:
+            d["estado"], d["texto"] = "cumplido", "Cumplido"
+        elif limite is None:
+            d["estado"], d["texto"] = "pendiente", "Inicia al contener"
+        else:
+            rest = (limite - now).total_seconds()
+            d["restante"] = rest
+            if rest < 0:
+                d["estado"], d["texto"] = "vencido", "Vencido hace " + _seg_txt_delta(rest)
+            elif rest <= aviso_s:
+                d["estado"], d["texto"] = "urgente", "Quedan " + _seg_txt_delta(rest)
+            else:
+                d["estado"], d["texto"] = "en_curso", "Quedan " + _seg_txt_delta(rest)
+        return d
+
+    out = []
+    if inc.estado in ("DESCARTADO",):
+        return out
+    lim1 = det + _timedelta(hours=1) if det else None
+    out.append(_mk("contencion", "Contención · 1 h", lim1, con, 3600, 900))
+    lim2 = con + _timedelta(hours=4) if con else None
+    out.append(_mk("restauracion", "Restauración · 4 h", lim2, res, 4 * 3600, 3600))
+    if inc.datos_personales:
+        lim3 = None
+        if det:
+            fin = _sumar_habiles(det.date(), 15)
+            lim3 = _datetime(fin.year, fin.month, fin.day, 23, 59, 59, tzinfo=BOGOTA)
+        out.append(_mk("sic", "Reporte SIC · 15 días hábiles", lim3, sic, 15 * 86400, 3 * 86400))
+        if lim3 is None:
+            out[-1]["estado"], out[-1]["texto"] = "pendiente", "Sin fecha de detección"
+    else:
+        out.append({"clave": "sic", "etiqueta": "Reporte SIC · 15 días hábiles", "limite": None, "hecho": None,
+                    "estado": "na", "texto": "No aplica (sin datos personales)", "restante": None})
+    return out
+
+
+def _seg_codigo():
+    anio = ahora().year
+    n = IncidenteSeg.query.count() + 1
+    while True:
+        cod = "INC-%d-%04d" % (anio, n)
+        if IncidenteSeg.query.filter_by(codigo=cod).first() is None:
+            return cod
+        n += 1
+
+
+def _seg_evento(incidente_id, fase, detalle):
+    try:
+        db.session.add(IncidenteEvento(
+            incidente_id=incidente_id, fase=fase, detalle=(detalle or "")[:4000],
+            usuario=_seg_usuario(), creado_en=_seg_now_s(),
+        ))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+# ── 9. Alertas de detección ──────────────────────────────────────────────────
+def _seg_abrir_alerta(regla, titulo, tipo, gravedad, descripcion):
+    """Abre un incidente 'por confirmar' (sin duplicar la misma alerta en 60 min)."""
+    previo = IncidenteSeg.query.filter_by(regla=regla).order_by(IncidenteSeg.id.desc()).first()
+    if previo is not None:
+        t = _seg_parse(previo.detectado_en)
+        if t is not None and (ahora() - t).total_seconds() < 3600:
+            return None
+    inc = IncidenteSeg(
+        codigo=_seg_codigo(), titulo=titulo[:220], tipo=tipo, gravedad=gravedad, estado="POR_CONFIRMAR",
+        origen="ALERTA", regla=regla[:80], descripcion=descripcion, datos_personales=True,
+        detectado_en=_seg_now_s(), creado_por="Sistema (alerta automática)", creado_en=_seg_now_s(),
+    )
+    db.session.add(inc)
+    db.session.commit()
+    _seg_evento(inc.id, "DETECCION", "Alerta automática: " + descripcion)
+    return inc
+
+
+def _seg_evaluar_reglas(tipo, ip, usuario, now):
+    """Reglas simples sobre los eventos de los últimos 10 minutos."""
+    desde = now - 600
+    if tipo == "LOGIN_FALLIDO":
+        por_ip = EventoSeg.query.filter_by(tipo="LOGIN_FALLIDO", ip=ip).filter(EventoSeg.creado_ts > desde).count()
+        if por_ip >= 10:
+            _seg_abrir_alerta(
+                "login_ip:%s" % ip, "Posible ataque de fuerza bruta desde %s" % ip,
+                "Intento de hackeo / fuerza bruta", "CRITICA" if por_ip >= 30 else "ALTA",
+                "%d intentos de inicio de sesión fallidos desde la IP %s en 10 minutos." % (por_ip, ip),
+            )
+        total = EventoSeg.query.filter_by(tipo="LOGIN_FALLIDO").filter(EventoSeg.creado_ts > desde).count()
+        if total >= 30:
+            _seg_abrir_alerta(
+                "login_global", "Múltiples intentos de acceso fallidos (posible ataque distribuido)",
+                "Intento de hackeo / fuerza bruta", "ALTA",
+                "%d intentos de inicio de sesión fallidos en 10 minutos desde distintas IP." % total,
+            )
+    elif tipo == "ACCESO_DENEGADO":
+        n = EventoSeg.query.filter_by(tipo="ACCESO_DENEGADO", ip=ip).filter(EventoSeg.creado_ts > desde).count()
+        if n >= 10:
+            _seg_abrir_alerta(
+                "denegado:%s" % ip, "Accesos reiterados a rutas protegidas desde %s" % ip,
+                "Acceso no autorizado", "MEDIA",
+                "%d accesos denegados a módulos protegidos desde la IP %s (usuario: %s) en 10 minutos." % (n, ip, usuario or "sin sesión"),
+            )
+
+
+def _seg_registrar_evento(tipo, usuario=""):
+    """Guarda un evento de seguridad (con tope anti-inundación) y evalúa las reglas de alerta."""
+    try:
+        _seg_ensure()
+        ip = _seg_ip()
+        now = _time.time()
+        if EventoSeg.query.filter_by(ip=ip).filter(EventoSeg.creado_ts > now - 3600).count() >= 300:
+            return
+        db.session.add(EventoSeg(
+            tipo=tipo, ip=ip, usuario=(usuario or "")[:80], ruta=(request.path or "")[:200],
+            creado_en=_seg_now_s(), creado_ts=now,
+        ))
+        db.session.commit()
+        _seg_evaluar_reglas(tipo, ip, usuario, now)
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("seguridad evento:", ex)
+
+
+# ── 2. Contención: estado en caché + control de solicitudes ──────────────────
+def _seg_estado():
+    now = _time.time()
+    if now - _SEG_CACHE["t"] < 5:
+        return _SEG_CACHE
+    _SEG_CACHE["t"] = now
+    try:
+        _seg_ensure()
+        bloq, ro, bg, rg, ses = set(), set(), False, False, {}
+        for c in ContencionSeg.query.filter_by(activa=True).all():
+            if c.accion == "BLOQUEO":
+                if c.institucion_id is None:
+                    bg = True
+                else:
+                    bloq.add(c.institucion_id)
+            elif c.accion == "SOLO_LECTURA":
+                if c.institucion_id is None:
+                    rg = True
+                else:
+                    ro.add(c.institucion_id)
+        for c in ContencionSeg.query.filter_by(accion="SESIONES").filter(ContencionSeg.creado_ts > now - 30 * 86400).all():
+            k = c.institucion_id or 0
+            ses[k] = max(ses.get(k, 0), c.creado_ts or 0)
+        _SEG_CACHE.update({"bloq": bloq, "ro": ro, "bg": bg, "rg": rg, "ses": ses})
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("seguridad estado:", ex)
+    return _SEG_CACHE
+
+
+def _seg_invalidar_cache():
+    _SEG_CACHE["t"] = 0.0
+
+
+def _seg_bloqueado(modo):
+    txt = (
+        "El acceso a esta institución está suspendido temporalmente por una medida de seguridad."
+        if modo == "acceso" else
+        "La plataforma está en modo solo lectura por una medida de seguridad. Puede consultar, pero no guardar cambios."
+    )
+    try:
+        if (request.path or "").startswith("/api/") or "application/json" in (request.headers.get("Accept") or ""):
+            r = jsonify({"ok": False, "error": txt, "codigo": "SEGURIDAD"})
+            r.status_code = 423
+            return r
+    except Exception:
+        pass
+    html = (
+        "<!doctype html><html lang='es'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Medida de seguridad</title><body style=\"font-family:Segoe UI,system-ui,sans-serif;background:#f5f5f7;margin:0;"
+        "display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px\">"
+        "<div style=\"max-width:520px;background:#fff;border-radius:20px;padding:32px;box-shadow:0 12px 40px rgba(0,0,0,.08);text-align:center\">"
+        "<h1 style=\"color:#0B2D57;font-size:22px;margin:0 0 12px\">Medida de seguridad en curso</h1>"
+        "<p style=\"color:#475569;line-height:1.55;margin:0 0 18px\">%s</p>"
+        "<p style=\"color:#64748b;font-size:13px;margin:0\">Estamos trabajando para restablecer el servicio. "
+        "Si necesita ayuda, comuníquese con el soporte de PROCSIS.</p>"
+        "<p style=\"margin:20px 0 0\"><a href=\"/logout\" style=\"color:#005BEA\">Cerrar sesión</a></p></div></body></html>" % txt
+    )
+    return Response(html, status=423, mimetype="text/html")
+
+
+@app.before_request
+def _seg_before_request():
+    """Aplica bloqueo de institución, modo solo lectura y cierre masivo de sesiones."""
+    try:
+        p = request.path or ""
+        if p.startswith(("/static", "/seguridad")):
+            return None
+        st = _seg_estado()
+        if not (st["bloq"] or st["ro"] or st["bg"] or st["rg"] or st["ses"]):
+            return None
+        if (session.get("rol") or "") in _SEG_ROLES_EXENTOS:
+            return None
+        iid = session.get("institucion_id")
+        if session.get("usuario"):
+            ep = max(st["ses"].get(0, 0), st["ses"].get(iid, 0) if iid else 0)
+            if ep:
+                ini = session.get("_seg_ini")
+                if ini is None:
+                    session["_seg_ini"] = _time.time()
+                elif ini < ep:
+                    session.clear()
+                    return redirect("/login")
+        permitida = p.startswith(_SEG_PERMITIDAS)
+        if (st["bg"] or (iid and iid in st["bloq"])) and not permitida:
+            return _seg_bloqueado("acceso")
+        if (st["rg"] or (iid and iid in st["ro"])) and request.method not in ("GET", "HEAD", "OPTIONS") and not permitida:
+            return _seg_bloqueado("lectura")
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("seguridad before_request:", ex)
+    return None
+
+
+@app.after_request
+def _seg_after_request(resp):
+    """Cuenta los inicios de sesión fallidos (respuesta sin sesión creada) para las alertas."""
+    try:
+        if (request.method == "POST" and request.path in _SEG_LOGIN_PATHS and resp.status_code in (200, 401, 403)
+                and not session.get("usuario") and not session.get("bio_uid") and not session.get("mfa_pendiente")):
+            u = request.form.get("usuario") or request.form.get("username") or request.form.get("user") or ""
+            _seg_registrar_evento("LOGIN_FALLIDO", u[:60])
+    except Exception:
+        pass
+    return resp
+
+
+# ── 4. Bitácora a prueba de alteraciones (cadena de hashes) ──────────────────
+def _seg_canon(a):
+    return "|".join([
+        str(a.id), a.fecha or "", a.hora or "", a.usuario or "", a.rol or "", a.accion or "",
+        a.detalle or "", a.ip or "", a.ruta or "", str(a.institucion_id or ""),
+    ])
+
+
+def _seg_hash(prev, canon):
+    return _hashlib.sha256((prev + "|" + canon).encode("utf-8")).hexdigest()
+
+
+def _seg_sellar(limite=2000):
+    """Encadena con SHA-256 los registros de auditoría que aún no tienen sello. Devuelve cuántos selló."""
+    n = 0
+    with _SEG_LOCK:
+        try:
+            ultimo = AuditoriaSello.query.order_by(AuditoriaSello.auditoria_id.desc()).first()
+            prev = ultimo.hash if ultimo else _SEG_GENESIS
+            desde = ultimo.auditoria_id if ultimo else 0
+            filas = Auditoria.query.filter(Auditoria.id > desde).order_by(Auditoria.id.asc()).limit(limite).all()
+            for a in filas:
+                h = _seg_hash(prev, _seg_canon(a))
+                db.session.add(AuditoriaSello(auditoria_id=a.id, hash_prev=prev, hash=h, creado_en=_seg_now_s()))
+                prev = h
+                n += 1
+            if n:
+                db.session.commit()
+        except Exception as ex:
+            n = 0
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            print("seguridad sellar:", ex)
+    return n
+
+
+def _seg_sellar_auto():
+    """Sellado oportunista desde registrar_auditoria: como máximo una vez por minuto y proceso."""
+    now = _time.time()
+    if now - _SEG_SELLO_T["t"] < 60:
+        return
+    _SEG_SELLO_T["t"] = now
+    try:
+        _seg_ensure()
+        _seg_sellar(500)
+    except Exception:
+        pass
+
+
+def _seg_verificar():
+    """Recalcula la cadena completa y reporta registros modificados, eliminados o vínculos rotos."""
+    res = {"selladas": 0, "anomalias": [], "n_anom": 0, "pendientes": 0, "cabeza": "", "ok": True}
+    prev, ultimo_id = _SEG_GENESIS, 0
+    while True:
+        sellos = AuditoriaSello.query.filter(AuditoriaSello.auditoria_id > ultimo_id).order_by(AuditoriaSello.auditoria_id.asc()).limit(2000).all()
+        if not sellos:
+            break
+        filas = {a.id: a for a in Auditoria.query.filter(Auditoria.id.in_([s.auditoria_id for s in sellos])).all()}
+        for s in sellos:
+            res["selladas"] += 1
+            problema = ""
+            if s.hash_prev != prev:
+                problema = "Cadena rota: el vínculo con el registro anterior no coincide"
+            a = filas.get(s.auditoria_id)
+            if a is None:
+                problema = "Registro eliminado de la auditoría"
+            elif _seg_hash(s.hash_prev, _seg_canon(a)) != s.hash:
+                problema = "Registro modificado después de sellarse"
+            if problema:
+                res["n_anom"] += 1
+                if len(res["anomalias"]) < 30:
+                    res["anomalias"].append((s.auditoria_id, problema))
+            prev = s.hash
+            ultimo_id = s.auditoria_id
+    res["cabeza"] = prev if res["selladas"] else ""
+    res["pendientes"] = Auditoria.query.filter(Auditoria.id > ultimo_id).count()
+    res["ok"] = res["n_anom"] == 0
+    return res
+
+
+# ── 5. Huellas de integridad (SIEE · SIMAT · asistencia) ─────────────────────
+def _seg_crc(*partes):
+    return format(_zlib.crc32("|".join(str(x) for x in partes).encode("utf-8")) & 0xFFFFFFFF, "x")
+
+
+def _seg_lotes(base_q, modelo):
+    """Recorre una consulta por lotes de id para no cargar todo en memoria."""
+    ultimo = 0
+    while True:
+        filas = base_q().filter(modelo.id > ultimo).order_by(modelo.id.asc()).limit(5000).all()
+        if not filas:
+            break
+        for r in filas:
+            yield r
+        ultimo = filas[-1].id
+
+
+def _seg_mapa_dataset(inst_id, dataset):
+    """{id: crc32} de las filas del dataset del colegio. Devuelve (mapa, truncado)."""
+    mapa, trunc = {}, False
+
+    def _acum(iterador, fn):
+        nonlocal trunc
+        for r in iterador:
+            if len(mapa) >= _SEG_MAX_FILAS:
+                trunc = True
+                break
+            mapa[r.id] = fn(r)
+
+    if dataset == "SIEE":
+        _acum(_seg_lotes(lambda: NotaRegistro.query.filter_by(institucion_id=inst_id), NotaRegistro),
+              lambda r: _seg_crc(r.estudiante_id, r.criterio_id, r.asignatura, r.grado, r.periodo, r.valor, r.logro, r.docente))
+    elif dataset == "CIERRES":
+        _acum(_seg_lotes(lambda: CierrePeriodo.query.filter_by(institucion_id=inst_id), CierrePeriodo),
+              lambda r: _seg_crc(r.periodo, r.fecha_cierre, r.hora_cierre, r.cerrado))
+    elif dataset == "MATRICULA":
+        _acum(_seg_lotes(lambda: Estudiante.query.filter_by(institucion_id=inst_id), Estudiante),
+              lambda r: _seg_crc(r.codigo, r.documento, r.tipo_doc, r.nombre, r.apellido, r.grado, r.estado))
+    elif dataset in ("PORTERIA", "ASISTENCIA"):
+        modelo = IngresoPorteria if dataset == "PORTERIA" else AsistenciaClase
+        ids_est = [e.id for e in Estudiante.query.filter_by(institucion_id=inst_id).all()]
+        for i in range(0, len(ids_est), 400):
+            trozo = ids_est[i:i + 400]
+            _acum(_seg_lotes(lambda: modelo.query.filter(modelo.estudiante_id.in_(trozo)), modelo),
+                  lambda r: _seg_crc(r.estudiante_id, r.fecha, r.hora, r.estado, r.periodo))
+            if trunc:
+                break
+    return mapa, trunc
+
+
+def _seg_digest(mapa):
+    m = _hashlib.sha256()
+    for k in sorted(mapa):
+        m.update(("%s:%s\n" % (k, mapa[k])).encode("utf-8"))
+    return m.hexdigest()
+
+
+def _seg_pack(mapa):
+    return _b64.b64encode(_zlib.compress(json.dumps(mapa, separators=(",", ":")).encode("utf-8"), 6)).decode("ascii")
+
+
+def _seg_unpack(txt):
+    try:
+        d = json.loads(_zlib.decompress(_b64.b64decode((txt or "").encode("ascii"))).decode("utf-8"))
+        return {int(k): v for k, v in d.items()}
+    except Exception:
+        return {}
+
+
+def _seg_tomar_huella(inst_id, dataset):
+    mapa, trunc = _seg_mapa_dataset(inst_id, dataset)
+    h = HuellaSeg(
+        institucion_id=inst_id, dataset=dataset, filas=len(mapa), digest=_seg_digest(mapa),
+        datos=_seg_pack(mapa), truncado=trunc, creado_por=_seg_usuario(), creado_en=_seg_now_s(),
+    )
+    db.session.add(h)
+    db.session.commit()
+    return h
+
+
+def _seg_comparar_huella(h):
+    """Compara la huella guardada con el estado actual. Devuelve dict con agregados/eliminados/modificados."""
+    antes = _seg_unpack(h.datos)
+    ahora_m, trunc = _seg_mapa_dataset(h.institucion_id, h.dataset)
+    agreg = sorted(i for i in ahora_m if i not in antes)
+    elim = sorted(i for i in antes if i not in ahora_m)
+    modif = sorted(i for i in antes if i in ahora_m and antes[i] != ahora_m[i])
+    sin_traza = []
+    if h.dataset == "SIEE" and (elim or modif):
+        cambiados = set(elim) | set(modif)
+        con_traza = set()
+        try:
+            for lg in LogAuditoriaNota.query.filter_by(institucion_id=h.institucion_id).all():
+                marca = "%s %s" % (lg.fecha or "", lg.hora or "")
+                if lg.registro_nota_id in cambiados and marca >= (h.creado_en or "")[:len(marca)]:
+                    con_traza.add(lg.registro_nota_id)
+        except Exception:
+            pass
+        sin_traza = sorted(cambiados - con_traza)
+    return {
+        "antes": len(antes), "ahora": len(ahora_m), "agregados": agreg, "eliminados": elim,
+        "modificados": modif, "sin_traza": sin_traza, "truncado": bool(h.truncado or trunc),
+    }
+
+
+# ── 8/7. PDF simple para informes y reportes ─────────────────────────────────
+def _seg_pdf_bytes(titulo, subtitulo, bloques):
+    """bloques: lista de (encabezado | None, texto). Devuelve los bytes del PDF."""
+    from reportlab.platypus import SimpleDocTemplate, Spacer
+    from reportlab.lib.units import cm
+    from xml.sax.saxutils import escape
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=2.2 * cm, rightMargin=2.2 * cm,
+                            topMargin=2 * cm, bottomMargin=2 * cm, title=titulo)
+    ss = getSampleStyleSheet()
+    azul = colors.HexColor("#0B2D57")
+    h1 = ParagraphStyle("sg_h1", parent=ss["Title"], fontSize=17, leading=21, textColor=azul, alignment=0, spaceAfter=4)
+    sub = ParagraphStyle("sg_sub", parent=ss["Normal"], fontSize=10, leading=13, textColor=colors.HexColor("#64748b"))
+    h2 = ParagraphStyle("sg_h2", parent=ss["Heading3"], fontSize=12, leading=15, textColor=azul, spaceBefore=12, spaceAfter=4)
+    body = ParagraphStyle("sg_body", parent=ss["Normal"], fontSize=10.5, leading=15, spaceAfter=6)
+    story = [Paragraph(escape(titulo), h1), Paragraph(escape(subtitulo), sub), Spacer(1, 8)]
+    for enc, texto in bloques:
+        if enc:
+            story.append(Paragraph(escape(enc), h2))
+        for parr in (texto or "—").split("\n\n"):
+            story.append(Paragraph(escape(parr).replace("\n", "<br/>"), body))
+    doc.build(story)
+    return buf.getvalue()
+
+
+_SEG_CSS = """<style id="sg-css">
+.sg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:8px 0 20px}
+.sg-mod{display:block;background:#fff;border:1px solid #dbe5f5;border-radius:16px;padding:16px 18px;text-decoration:none;color:#0f172a}
+.sg-mod:hover{border-color:#005BEA;box-shadow:0 6px 20px rgba(0,91,234,.10)}
+.sg-mod b{display:block;color:#0a2a7a;font-size:15px;margin-bottom:4px}
+.sg-mod span{font-size:13px;color:#475569;line-height:1.4}
+.sg-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 16px}
+.sg-kpi{background:#fff;border:1px solid #dbe5f5;border-radius:14px;padding:12px 14px}
+.sg-kpi small{display:block;color:#64748b;font-weight:600;font-size:12px}
+.sg-kpi b{font-size:22px;color:#0a2a7a}
+.sg-kpi.bad{border-color:#fca5a5;background:#fef2f2}.sg-kpi.bad b{color:#991b1b}
+.sg-kpi.warn{border-color:#fcd34d;background:#fffbeb}.sg-kpi.warn b{color:#92400e}
+.sg-kpi.ok{border-color:#86efac;background:#f0fdf4}.sg-kpi.ok b{color:#166534}
+.sg-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#e2e8f0;color:#334155;white-space:nowrap}
+.sg-badge.ok{background:#dcfce7;color:#166534}.sg-badge.warn{background:#fef3c7;color:#92400e}.sg-badge.bad{background:#fee2e2;color:#991b1b}.sg-badge.info{background:#dbeafe;color:#1e40af}
+.sg-timers{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 14px}
+.sg-timer{border-radius:14px;padding:10px 14px;min-width:210px;border:1px solid #dbe5f5;background:#f8fafc;color:#0f172a}
+.sg-timer small{display:block;color:#64748b;font-weight:600;font-size:12px}
+.sg-timer b{display:block;font-size:16px;margin:2px 0}
+.sg-timer.en_curso,.sg-timer.cumplido{border-color:#86efac;background:#f0fdf4}
+.sg-timer.urgente{border-color:#fcd34d;background:#fffbeb}
+.sg-timer.vencido{border-color:#fca5a5;background:#fef2f2}
+.sg-timer.tarde{border-color:#fdba74;background:#fff7ed}
+.sg-form{display:grid;gap:10px}
+.sg-form label{font-weight:700;font-size:13px;color:#0f2a5c}
+.sg-form input[type=text],.sg-form input[type=number],.sg-form input[type=datetime-local],.sg-form input[type=email],.sg-form input[type=file],.sg-form select,.sg-form textarea{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #b8c7e3;border-radius:12px;font:inherit;background:#fff;color:#0f172a}
+.sg-form textarea{min-height:110px;line-height:1.45;resize:vertical}
+.sg-form input:focus-visible,.sg-form select:focus-visible,.sg-form textarea:focus-visible{outline:3px solid #7ab8ff;outline-offset:1px}
+.sg-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.sg-check{display:flex;gap:8px;align-items:center;font-weight:600}
+.sg-check input{width:auto!important}
+.sg-2col{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:18px;align-items:start}
+.sg-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 14px}
+.sg-actions form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0}
+.sg-actions input{width:auto!important;min-width:0;max-width:230px}
+.sg-mod span{font-weight:400}
+.sg-btn{display:inline-flex;align-items:center;padding:9px 16px;border-radius:999px;font-weight:700;font-size:13px;text-decoration:none;cursor:pointer;border:1.5px solid #c3d4f2!important;background:#fff!important;color:#0a3aa5!important;box-shadow:none!important}
+.sg-btn.pri{background:#0a3aa5!important;border-color:#0a3aa5!important;color:#fff!important}
+.sg-btn.bad{border-color:#dc2626!important;color:#b91c1c!important}
+.sg-btn.ok{background:#15803d!important;border-color:#15803d!important;color:#fff!important}
+.sg-btn:focus-visible{outline:3px solid #ffcf33;outline-offset:2px}
+.sg-tl{list-style:none;margin:0;padding:0}
+.sg-tl li{border-left:3px solid #c3d4f2;padding:2px 0 12px 12px;margin-left:6px;position:relative;font-size:13.5px;color:#1e293b}
+.sg-tl li::before{content:"";position:absolute;left:-8px;top:5px;width:11px;height:11px;border-radius:50%;background:#0a3aa5}
+.sg-tl small{display:block;color:#64748b}
+.sg-note{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;margin:0 0 12px}
+.sg-warn{background:#fffbeb;border:1px solid #fcd34d;color:#78350f;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;margin:0 0 12px}
+.sg-bad{background:#fef2f2;border:1px solid #fca5a5;color:#7f1d1d;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;margin:0 0 12px}
+.sg-mono{font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all}
+.sg-h{margin:0 0 8px;font-size:17px;color:#0a2a7a}
+@media(max-width:900px){.sg-2col{grid-template-columns:1fr}}
+</style>"""
+
+_SEG_JS = r"""<script>
+(function(){
+  function fmt(s){s=Math.abs(Math.floor(s));var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);
+    if(d)return d+' d '+h+' h'; if(h)return h+' h '+(m<10?'0':'')+m+' min'; return m+' min';}
+  function tick(){
+    document.querySelectorAll('.sg-timer[data-lim]').forEach(function(el){
+      var lim=parseInt(el.getAttribute('data-lim'),10); if(!lim)return;
+      var rest=(lim-Date.now())/1000, av=parseInt(el.getAttribute('data-aviso')||'0',10), b=el.querySelector('b');
+      el.classList.remove('en_curso','urgente','vencido');
+      if(rest<0){el.classList.add('vencido'); if(b)b.textContent='Vencido hace '+fmt(rest);}
+      else{el.classList.add(rest<=av?'urgente':'en_curso'); if(b)b.textContent='Quedan '+fmt(rest);}
+    });
+  }
+  tick(); setInterval(tick,15000);
+})();
+</script>"""
+
+
+def _sg_page(titulo, contenido):
+    _marcar_layout_staff()
+    return page(titulo, shell(_SEG_CSS + contenido + _SEG_JS))
+
+
+def _seg_guard(gerencia=False):
+    if not requiere_login():
+        return redirect("/backoffice")
+    if rol_actual() not in (_SEG_ROLES_GER if gerencia else _SEG_ROLES_OPERAR):
+        return acceso_denegado()
+    _seg_ensure()
+    return None
+
+
+def _sg_es_ger():
+    return rol_actual() in _SEG_ROLES_GER
+
+
+def _sg_opts(valores, sel=""):
+    return "".join('<option value="%s"%s>%s</option>' % (_esc(v), " selected" if v == sel else "", _esc(v)) for v in valores)
+
+
+def _sg_inst_map():
+    try:
+        return {i.id: "%s (%s)" % (i.nombre, i.codigo) for i in Institucion.query.order_by(Institucion.nombre).all()}
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return {}
+
+
+def _sg_badge_estado(inc):
+    kind = {"POR_CONFIRMAR": "warn", "ABIERTO": "bad", "CONTENIDO": "warn", "RESTAURADO": "info", "CERRADO": "ok", "DESCARTADO": ""}.get(inc.estado, "")
+    return '<span class="sg-badge %s">%s</span>' % (kind, _esc(_SEG_ESTADOS.get(inc.estado, inc.estado)))
+
+
+def _sg_badge_grav(g):
+    kind = {"BAJA": "ok", "MEDIA": "info", "ALTA": "warn", "CRITICA": "bad"}.get(g, "")
+    return '<span class="sg-badge %s">%s</span>' % (kind, _esc((g or "").capitalize().replace("Critica", "Crítica")))
+
+
+def _sg_timers_html(inc):
+    out = []
+    for t in _seg_plazos(inc):
+        vivo = t["limite"] is not None and t["estado"] in ("en_curso", "urgente", "vencido")
+        aviso = {"contencion": 900, "restauracion": 3600, "sic": 3 * 86400}.get(t["clave"], 0)
+        attrs = (' data-lim="%d" data-aviso="%d"' % (int(t["limite"].timestamp() * 1000), aviso)) if vivo else ""
+        lim_txt = ("<small>Límite: %s</small>" % t["limite"].strftime("%Y-%m-%d %H:%M")) if t["limite"] is not None else ""
+        out.append('<div class="sg-timer %s"%s><small>%s</small><b>%s</b>%s</div>' % (
+            t["estado"], attrs, _esc(t["etiqueta"]), _esc(t["texto"]), lim_txt))
+    return '<div class="sg-timers">%s</div>' % "".join(out)
+
+
+def _sg_timers_mini(inc):
+    partes = []
+    for t in _seg_plazos(inc):
+        kind = {"vencido": "bad", "urgente": "warn", "tarde": "warn", "cumplido": "ok", "en_curso": "info"}.get(t["estado"], "")
+        corto = {"contencion": "Contención", "restauracion": "Restauración", "sic": "SIC"}.get(t["clave"], t["etiqueta"])
+        partes.append('<span class="sg-badge %s" title="%s">%s: %s</span>' % (kind, _esc(t["texto"]), corto, _esc(t["texto"])))
+    return " ".join(partes) or "—"
+
+
+def _sg_dt_local(s):
+    """'YYYY-MM-DDTHH:MM' (datetime-local) -> 'YYYY-MM-DD HH:MM:00' o ''."""
+    s = (s or "").strip().replace("T", " ")
+    if len(s) == 16:
+        s += ":00"
+    return s[:19] if _seg_parse(s) else ""
+
+
+# ── Panel ────────────────────────────────────────────────────────────────────
+@app.route("/seguridad")
+def seguridad_hub():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    msg = (request.args.get("msg") or "").strip()
+    try:
+        _seg_sellar(500)
+    except Exception:
+        pass
+    activos = IncidenteSeg.query.filter(IncidenteSeg.estado.in_(["POR_CONFIRMAR", "ABIERTO", "CONTENIDO", "RESTAURADO"])).order_by(IncidenteSeg.id.desc()).all()
+    por_conf = [i for i in activos if i.estado == "POR_CONFIRMAR"]
+    abiertos = [i for i in activos if i.estado != "POR_CONFIRMAR"]
+    contenciones = ContencionSeg.query.filter_by(activa=True).all()
+    resp = sorted(RespaldoSeg.query.order_by(RespaldoSeg.id.desc()).limit(30).all(), key=lambda r: r.fecha or "", reverse=True)
+    ult = resp[0] if resp else None
+    horas = None
+    if ult is not None:
+        f = _seg_parse(ult.fecha if len(ult.fecha or "") > 10 else (ult.fecha or "") + " 00:00:00")
+        if f is not None:
+            horas = (ahora() - f).total_seconds() / 3600.0
+    ult_sello = AuditoriaSello.query.order_by(AuditoriaSello.auditoria_id.desc()).first()
+    pend = Auditoria.query.filter(Auditoria.id > (ult_sello.auditoria_id if ult_sello else 0)).count()
+    n_sellos = AuditoriaSello.query.count()
+
+    def kpi(rot, val, kind=""):
+        return '<div class="sg-kpi %s"><small>%s</small><b>%s</b></div>' % (kind, rot, val)
+
+    k_resp = kpi("Último respaldo", "Sin registros" if ult is None else ("hace %s" % _seg_txt_delta(horas * 3600) if horas is not None else "—"),
+                 "bad" if (ult is None or (horas is not None and horas > 24)) else "ok")
+    kpis = (
+        kpi("Alertas por confirmar", len(por_conf), "warn" if por_conf else "ok")
+        + kpi("Incidentes abiertos", len(abiertos), "bad" if abiertos else "ok")
+        + kpi("Contenciones activas", len(contenciones), "warn" if contenciones else "ok")
+        + k_resp
+        + kpi("Bitácora sellada", "%d registros" % n_sellos, "warn" if pend > 500 else "ok")
+    )
+    filas = "".join(
+        '<tr><td><a href="/seguridad/incidentes/%d"><b>%s</b></a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % (
+            i.id, _esc(i.codigo), _esc(i.titulo), _sg_badge_grav(i.gravedad), _sg_badge_estado(i), _sg_timers_mini(i))
+        for i in (por_conf + abiertos)[:10]
+    ) or "<tr><td colspan='5'>No hay incidentes abiertos.</td></tr>"
+    mods = (
+        '<a class="sg-mod" href="/seguridad/incidentes"><b>Registro de incidentes</b><span>Ficha por incidente con cronómetros de 1 h, 4 h y 15 días hábiles, y línea de tiempo por fase.</span></a>'
+        '<a class="sg-mod" href="/seguridad/contencion"><b>Contención y credenciales</b><span>Bloquear un colegio, modo solo lectura, cerrar sesiones, apagar funciones y rotar claves.</span></a>'
+        '<a class="sg-mod" href="/seguridad/bitacora"><b>Bitácora a prueba de alteraciones</b><span>Cadena de hashes sobre la auditoría y verificación de integridad.</span></a>'
+        '<a class="sg-mod" href="/seguridad/integridad"><b>Integridad SIEE, SIMAT y asistencia</b><span>Huellas por colegio y comparación después de un incidente.</span></a>'
+        '<a class="sg-mod" href="/seguridad/respaldos"><b>Control de respaldos</b><span>Registro de copias, checksum, ubicación y pruebas de restauración.</span></a>'
+        '<a class="sg-mod" href="/seguridad/reportes"><b>Reporte SIC y comunicado al rector</b><span>Borradores prellenados, aprobación de Gerencia, radicado RNBD, PDF y correo.</span></a>'
+    )
+    cfg = ""
+    if _sg_es_ger():
+        cfg = (
+            '<section class="role-panel"><h2 class="sg-h">Oficial de Protección de Datos</h2>'
+            '<p class="sg-note">Estos datos se usan en los reportes a la SIC y en los comunicados al rector.</p>'
+            '<form method="POST" action="/seguridad/config" class="sg-form"><div class="sg-row">'
+            '<div><label>Nombre</label><input type="text" name="opd_nombre" value="%s"></div>'
+            '<div><label>Cargo</label><input type="text" name="opd_cargo" value="%s"></div>'
+            '<div><label>Correo</label><input type="email" name="opd_correo" value="%s"></div>'
+            '<div><label>Teléfono</label><input type="text" name="opd_tel" value="%s"></div></div>'
+            '<div><button class="sg-btn pri" type="submit">Guardar</button></div></form></section>'
+            % (_esc(_seg_cfg("opd_nombre")), _esc(_seg_cfg("opd_cargo")), _esc(_seg_cfg("opd_correo")), _esc(_seg_cfg("opd_tel")))
+        )
+    content = f"""
+<header class="role-hero"><div><h1>Seguridad e incidentes</h1>
+<p>Gestión de incidentes de seguridad y cumplimiento de la Ley 1581 de 2012 (SIC).</p></div>
+<a class="btn" href="/seguridad/incidentes/nuevo">Registrar incidente</a></header>
+{_msg_html(msg)}
+<div class="sg-kpis">{kpis}</div>
+<section class="role-panel"><h2 class="sg-h">Incidentes que requieren atención</h2>
+<div class="table-card"><table style="width:100%"><tr><th>Código</th><th>Título</th><th>Gravedad</th><th>Estado</th><th>Plazos</th></tr>{filas}</table></div></section>
+<div class="sg-grid">{mods}</div>
+{cfg}
+"""
+    return _sg_page("Seguridad e incidentes", content)
+
+
+@app.route("/seguridad/config", methods=["POST"])
+def seguridad_config():
+    g = _seg_guard(gerencia=True)
+    if g is not None:
+        return g
+    try:
+        for k in ("opd_nombre", "opd_cargo", "opd_correo", "opd_tel"):
+            _seg_cfg_set(k, (request.form.get(k) or "").strip()[:200])
+        registrar_auditoria("Seguridad: Oficial de Protección de Datos actualizado", (request.form.get("opd_nombre") or "")[:80])
+        msg = "Datos del Oficial de Protección de Datos guardados."
+    except Exception as ex:
+        db.session.rollback()
+        msg = "No se pudo guardar: %s" % str(ex)[:80]
+    return redirect("/seguridad?msg=" + quote(msg))
+
+
+# ── 1. Registro de incidentes ────────────────────────────────────────────────
+@app.route("/seguridad/incidentes")
+def seguridad_incidentes():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    msg = (request.args.get("msg") or "").strip()
+    vista = (request.args.get("ver") or "activos").strip().lower()
+    todos = IncidenteSeg.query.order_by(IncidenteSeg.id.desc()).limit(300).all()
+    if vista == "cerrados":
+        lista = [i for i in todos if i.estado in ("CERRADO", "DESCARTADO")]
+    elif vista == "todos":
+        lista = todos
+    else:
+        vista = "activos"
+        lista = [i for i in todos if i.estado not in ("CERRADO", "DESCARTADO")]
+    chips = "".join(
+        '<a class="ec-fchip%s" href="/seguridad/incidentes?ver=%s">%s</a>' % (" on" if vista == k else "", k, t)
+        for k, t in (("activos", "Activos"), ("cerrados", "Cerrados"), ("todos", "Todos"))
+    )
+    filas = "".join(
+        '<tr><td><a href="/seguridad/incidentes/%d"><b>%s</b></a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % (
+            i.id, _esc(i.codigo), _esc(i.titulo), _esc(i.tipo), _sg_badge_grav(i.gravedad), _sg_badge_estado(i),
+            _esc((i.detectado_en or "")[:16]), _sg_timers_mini(i))
+        for i in lista
+    ) or "<tr><td colspan='7'>No hay incidentes en esta vista.</td></tr>"
+    content = f"""
+{_PLAN_CARD_CSS}
+<header class="role-hero"><div><h1>Registro de incidentes</h1><p>Una ficha por incidente, con sus plazos legales y línea de tiempo.</p></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/seguridad">← Seguridad</a><a class="btn" href="/seguridad/incidentes/nuevo">Registrar incidente</a></div></header>
+{_msg_html(msg)}
+<section class="role-panel"><div class="ec-fchips" style="margin:0 0 12px">{chips}</div>
+<div class="table-card"><table style="width:100%"><tr><th>Código</th><th>Título</th><th>Tipo</th><th>Gravedad</th><th>Estado</th><th>Detectado</th><th>Plazos</th></tr>{filas}</table></div></section>
+"""
+    return _sg_page("Registro de incidentes", content)
+
+
+@app.route("/seguridad/incidentes/nuevo", methods=["GET", "POST"])
+def seguridad_incidente_nuevo():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    err = ""
+    inst = _sg_inst_map()
+    if request.method == "POST":
+        titulo = (request.form.get("titulo") or "").strip()
+        det = _sg_dt_local(request.form.get("detectado")) or _seg_now_s()
+        det_dt = _seg_parse(det)
+        if not titulo:
+            err = "Escriba un título para el incidente."
+        elif det_dt is not None and det_dt > ahora() + _timedelta(minutes=5):
+            err = "La fecha de detección no puede estar en el futuro."
+        else:
+            try:
+                ids = [x for x in request.form.getlist("inst") if x.isdigit()]
+                try:
+                    titulares = max(0, int(request.form.get("titulares") or 0))
+                except Exception:
+                    titulares = 0
+                gr = (request.form.get("gravedad") or "MEDIA").upper()
+                inc = IncidenteSeg(
+                    codigo=_seg_codigo(), titulo=titulo[:220], tipo=(request.form.get("tipo") or "Otro")[:80],
+                    gravedad=gr if gr in _SEG_GRAVEDAD else "MEDIA", estado="ABIERTO", origen="MANUAL",
+                    descripcion=(request.form.get("descripcion") or "").strip(), datos_personales=bool(request.form.get("datos_personales")),
+                    datos_menores=bool(request.form.get("datos_menores")), instituciones_ids=",".join(ids),
+                    titulares_aprox=titulares, detectado_en=det, creado_por=_seg_usuario(), creado_en=_seg_now_s(),
+                )
+                db.session.add(inc)
+                db.session.commit()
+                _seg_evento(inc.id, "DETECCION", "Incidente registrado. " + (inc.descripcion or "")[:500])
+                registrar_auditoria("Seguridad: incidente registrado", "%s · %s" % (inc.codigo, inc.titulo))
+                return redirect("/seguridad/incidentes/%d?msg=%s" % (inc.id, quote("Incidente registrado. Los cronómetros ya están corriendo.")))
+            except Exception as ex:
+                db.session.rollback()
+                err = "No se pudo registrar: %s" % str(ex)[:120]
+    ahora_local = ahora().strftime("%Y-%m-%dT%H:%M")
+    opciones_inst = "".join('<option value="%d">%s</option>' % (k, _esc(v)) for k, v in inst.items())
+    content = f"""
+<header class="role-hero"><div><h1>Registrar incidente</h1>
+<p>Al guardar empiezan a correr los plazos: contención 1 h, restauración 4 h y reporte a la SIC 15 días hábiles.</p></div>
+<a class="btn" href="/seguridad/incidentes">← Incidentes</a></header>
+{_msg_html("", err)}
+<section class="role-panel"><form method="POST" class="sg-form">
+<div class="sg-row">
+  <div><label for="ti">Título *</label><input id="ti" type="text" name="titulo" required maxlength="220" placeholder="Ej: Accesos no autorizados al portal de un colegio"></div>
+  <div><label for="tp">Tipo</label><select id="tp" name="tipo">{_sg_opts(_SEG_TIPOS)}</select></div>
+  <div><label for="gr">Gravedad</label><select id="gr" name="gravedad">{_sg_opts(_SEG_GRAVEDAD, "MEDIA")}</select></div>
+  <div><label for="de">Fecha y hora de detección</label><input id="de" type="datetime-local" name="detectado" value="{ahora_local}" max="{ahora_local}"></div>
+</div>
+<div><label for="ds">Qué pasó</label><textarea id="ds" name="descripcion" placeholder="Qué se detectó, cómo, qué sistemas o datos podrían estar comprometidos."></textarea></div>
+<div class="sg-row">
+  <div><label for="in">Colegios afectados (Ctrl para varios)</label><select id="in" name="inst" multiple size="6">{opciones_inst}</select></div>
+  <div><label for="tt">Titulares afectados (aprox.)</label><input id="tt" type="number" min="0" name="titulares" value="0">
+    <label class="sg-check" style="margin-top:12px"><input type="checkbox" name="datos_personales" checked> Involucra datos personales</label>
+    <label class="sg-check"><input type="checkbox" name="datos_menores"> Incluye datos de niños, niñas o adolescentes</label></div>
+</div>
+<div><button class="sg-btn pri" type="submit">Registrar incidente</button></div>
+</form></section>
+"""
+    return _sg_page("Registrar incidente", content)
+
+
+def _sg_reportes_de(inc_id):
+    return ReporteSeg.query.filter_by(incidente_id=inc_id).order_by(ReporteSeg.id.desc()).all()
+
+
+@app.route("/seguridad/incidentes/<int:iid>")
+def seguridad_incidente(iid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    inc = IncidenteSeg.query.get_or_404(iid)
+    msg = (request.args.get("msg") or "").strip()
+    inst = _sg_inst_map()
+    ids = [int(x) for x in (inc.instituciones_ids or "").split(",") if x.isdigit()]
+    nombres = ", ".join(inst.get(i, "Colegio %d" % i) for i in ids) or "—"
+    eventos = IncidenteEvento.query.filter_by(incidente_id=iid).order_by(IncidenteEvento.id.desc()).all()
+    tl = "".join(
+        '<li><b>%s</b> · %s<small>%s · %s</small></li>' % (
+            _esc(_SEG_FASES.get(e.fase, e.fase)), _esc(e.detalle), _esc(e.usuario), _esc((e.creado_en or "")[:16]))
+        for e in eventos
+    ) or "<li>Sin eventos.</li>"
+    cont = ContencionSeg.query.filter_by(incidente_id=iid).order_by(ContencionSeg.id.desc()).all()
+    cont_html = "".join(
+        "<li>%s · %s · <span class='sg-badge %s'>%s</span><small>%s · %s</small></li>" % (
+            _esc(c.accion.replace("_", " ").capitalize()), _esc(inst.get(c.institucion_id, "Global") if c.institucion_id else "Global"),
+            "warn" if c.activa else "", "Activa" if c.activa else "Levantada", _esc(c.creado_por), _esc((c.creado_en or "")[:16]))
+        for c in cont
+    ) or "<li>No se han aplicado medidas desde el módulo de contención.</li>"
+    reps = _sg_reportes_de(iid)
+    reps_html = "".join(
+        '<li><a href="/seguridad/reportes/%d">%s</a> · <span class="sg-badge %s">%s</span><small>%s</small></li>' % (
+            r.id, "Reporte a la SIC" if r.tipo == "SIC" else "Comunicado · " + _esc(inst.get(r.institucion_id, "rector")),
+            {"BORRADOR": "warn", "APROBADO": "info", "ENVIADO": "ok"}.get(r.estado, ""), _esc(r.estado.capitalize()), _esc((r.creado_en or "")[:16]))
+        for r in reps
+    ) or "<li>Todavía no hay reportes ni comunicados.</li>"
+
+    def _post(accion, texto, cls="", extra="", confirmar=""):
+        oc = (' onsubmit="return confirm(\'%s\')"' % confirmar) if confirmar else ""
+        return ('<form method="POST" action="/seguridad/incidentes/%d/hito"%s><input type="hidden" name="accion" value="%s">%s'
+                '<button class="sg-btn %s" type="submit">%s</button></form>' % (iid, oc, accion, extra, cls, texto))
+
+    hora = ('<label style="font-size:12px;color:#64748b;font-weight:600">Hora real (opcional)</label>'
+            '<input type="datetime-local" name="cuando" title="Hora real del hito, si ya ocurrió" style="padding:8px 10px;border:1px solid #b8c7e3;border-radius:10px" max="%s">' % ahora().strftime("%Y-%m-%dT%H:%M"))
+    acciones = []
+    if inc.estado == "POR_CONFIRMAR":
+        acciones.append(_post("confirmar", "Confirmar incidente", "pri"))
+        acciones.append(_post("descartar", "Descartar (falsa alarma)", "bad", confirmar="¿Descartar esta alerta?"))
+    elif inc.estado == "ABIERTO":
+        acciones.append(_post("contenido", "Marcar contención completada", "pri", hora))
+        acciones.append('<a class="sg-btn" href="/seguridad/contencion?incidente=%d">Ejecutar contención</a>' % iid)
+    elif inc.estado == "CONTENIDO":
+        acciones.append(_post("restaurado", "Marcar restauración completada", "pri", hora))
+        acciones.append('<a class="sg-btn" href="/seguridad/integridad">Verificar integridad SIEE</a>')
+    elif inc.estado == "RESTAURADO":
+        acciones.append(_post("cerrar", "Cerrar incidente", "ok", confirmar="¿Cerrar el incidente? Asegúrese de haber completado el informe."))
+    elif inc.estado in ("CERRADO", "DESCARTADO"):
+        acciones.append(_post("reabrir", "Reabrir", "", confirmar="¿Reabrir el incidente?"))
+    if inc.datos_personales and not inc.reportado_sic_en and inc.estado not in ("POR_CONFIRMAR", "DESCARTADO"):
+        acciones.append(
+            '<form method="POST" action="/seguridad/incidentes/%d/hito"><input type="hidden" name="accion" value="sic">'
+            '<input type="text" name="radicado" placeholder="Radicado RNBD" style="padding:8px 10px;border:1px solid #b8c7e3;border-radius:10px;width:170px">%s'
+            '<button class="sg-btn" type="submit">Registrar reporte a la SIC</button></form>' % (iid, hora))
+    acciones_html = '<div class="sg-actions">%s</div>' % "".join(acciones)
+    extra_btns = (
+        '<a class="sg-btn" href="/seguridad/incidentes/%d/informe">Informe post-incidente</a>'
+        '<a class="sg-btn" href="/seguridad/reportes/nuevo?incidente=%d&tipo=SIC">Borrador reporte SIC</a>'
+        '<a class="sg-btn" href="/seguridad/reportes/nuevo?incidente=%d&tipo=RECTOR">Comunicado al rector</a>' % (iid, iid, iid)
+    )
+    origen = "Alerta automática" if inc.origen == "ALERTA" else "Registro manual"
+    aviso_alerta = ""
+    if inc.estado == "POR_CONFIRMAR":
+        aviso_alerta = '<div class="sg-warn">Este incidente lo abrió una alerta automática y está <b>por confirmar</b>. Revise la descripción y confírmelo o descártelo.</div>'
+    editable = (
+        '<form method="POST" action="/seguridad/incidentes/%d/editar" class="sg-form">'
+        '<div class="sg-row"><div><label>Título</label><input type="text" name="titulo" value="%s" maxlength="220"></div>'
+        '<div><label>Tipo</label><select name="tipo">%s</select></div>'
+        '<div><label>Gravedad</label><select name="gravedad">%s</select></div>'
+        '<div><label>Titulares afectados (aprox.)</label><input type="number" min="0" name="titulares" value="%d"></div></div>'
+        '<div><label>Qué pasó</label><textarea name="descripcion">%s</textarea></div>'
+        '<div><label>Fase 1 · Medidas de contención aplicadas</label><textarea name="medidas">%s</textarea></div>'
+        '<div><label>Plan de mitigación en curso</label><textarea name="plan">%s</textarea></div>'
+        '<div><button class="sg-btn pri" type="submit">Guardar cambios</button></div></form>'
+        % (iid, _esc(inc.titulo), _sg_opts(_SEG_TIPOS, inc.tipo), _sg_opts(_SEG_GRAVEDAD, inc.gravedad), int(inc.titulares_aprox or 0),
+           _esc(inc.descripcion), _esc(inc.medidas_contencion), _esc(inc.plan_mitigacion))
+    )
+    fase_opts = "".join('<option value="%s">%s</option>' % (k, _esc(v)) for k, v in _SEG_FASES.items())
+    content = f"""
+<header class="role-hero"><div><h1>{_esc(inc.codigo)} · {_esc(inc.titulo)}</h1>
+<p>{_sg_badge_estado(inc)} {_sg_badge_grav(inc.gravedad)} <span class="sg-badge info">{_esc(inc.tipo or 'Sin tipo')}</span> <span class="sg-badge">{origen}</span></p></div>
+<a class="btn" href="/seguridad/incidentes">← Incidentes</a></header>
+{_msg_html(msg)}{aviso_alerta}
+{_sg_timers_html(inc)}
+{acciones_html}
+<div class="sg-actions">{extra_btns}</div>
+<div class="sg-2col">
+  <div>
+    <section class="role-panel"><h2 class="sg-h">Datos del incidente</h2>
+      <p style="margin:0 0 10px;font-size:13.5px;color:#334155"><b>Detectado:</b> {_esc((inc.detectado_en or '')[:16])} · <b>Colegios:</b> {_esc(nombres)} ·
+      <b>Datos personales:</b> {'Sí' if inc.datos_personales else 'No'}{' (incluye menores de edad)' if inc.datos_menores else ''} ·
+      <b>Radicado RNBD:</b> {_esc(inc.radicado_rnbd or '—')}</p>
+      {editable}
+    </section>
+  </div>
+  <div>
+    <section class="role-panel"><h2 class="sg-h">Línea de tiempo</h2>
+      <form method="POST" action="/seguridad/incidentes/{iid}/evento" class="sg-form" style="margin-bottom:12px">
+        <div class="sg-row"><div><label>Fase</label><select name="fase">{fase_opts}</select></div></div>
+        <div><label>Nuevo registro</label><textarea name="detalle" required style="min-height:70px" placeholder="Qué se hizo, quién y con qué resultado."></textarea></div>
+        <div><button class="sg-btn" type="submit">Agregar a la línea de tiempo</button></div>
+      </form>
+      <ul class="sg-tl">{tl}</ul>
+    </section>
+    <section class="role-panel"><h2 class="sg-h">Medidas de contención</h2><ul class="sg-tl">{cont_html}</ul></section>
+    <section class="role-panel"><h2 class="sg-h">Reportes y comunicados</h2><ul class="sg-tl">{reps_html}</ul></section>
+  </div>
+</div>
+"""
+    return _sg_page("Incidente " + inc.codigo, content)
+
+
+@app.route("/seguridad/incidentes/<int:iid>/editar", methods=["POST"])
+def seguridad_incidente_editar(iid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    inc = IncidenteSeg.query.get_or_404(iid)
+    try:
+        inc.titulo = (request.form.get("titulo") or inc.titulo)[:220]
+        inc.tipo = (request.form.get("tipo") or inc.tipo)[:80]
+        gr = (request.form.get("gravedad") or inc.gravedad).upper()
+        inc.gravedad = gr if gr in _SEG_GRAVEDAD else inc.gravedad
+        try:
+            inc.titulares_aprox = max(0, int(request.form.get("titulares") or 0))
+        except Exception:
+            pass
+        inc.descripcion = (request.form.get("descripcion") or "").strip()
+        inc.medidas_contencion = (request.form.get("medidas") or "").strip()
+        inc.plan_mitigacion = (request.form.get("plan") or "").strip()
+        db.session.commit()
+        registrar_auditoria("Seguridad: incidente actualizado", inc.codigo)
+        msg = "Cambios guardados."
+    except Exception as ex:
+        db.session.rollback()
+        msg = "No se pudo guardar: %s" % str(ex)[:80]
+    return redirect("/seguridad/incidentes/%d?msg=%s" % (iid, quote(msg)))
+
+
+@app.route("/seguridad/incidentes/<int:iid>/evento", methods=["POST"])
+def seguridad_incidente_evento(iid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    IncidenteSeg.query.get_or_404(iid)
+    fase = (request.form.get("fase") or "F1")
+    detalle = (request.form.get("detalle") or "").strip()
+    if detalle:
+        _seg_evento(iid, fase if fase in _SEG_FASES else "F1", detalle)
+    return redirect("/seguridad/incidentes/%d" % iid)
+
+
+@app.route("/seguridad/incidentes/<int:iid>/hito", methods=["POST"])
+def seguridad_incidente_hito(iid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    inc = IncidenteSeg.query.get_or_404(iid)
+    accion = (request.form.get("accion") or "").strip()
+    cuando = _sg_dt_local(request.form.get("cuando")) or _seg_now_s()
+    cd = _seg_parse(cuando)
+    if cd is not None and cd > ahora() + _timedelta(minutes=5):
+        return redirect("/seguridad/incidentes/%d?msg=%s" % (iid, quote("La hora del hito no puede estar en el futuro.")))
+    msg = ""
+    try:
+        if accion == "confirmar" and inc.estado == "POR_CONFIRMAR":
+            inc.estado = "ABIERTO"
+            _seg_evento(iid, "DETECCION", "Incidente confirmado por %s." % _seg_usuario())
+            msg = "Incidente confirmado."
+        elif accion == "descartar" and inc.estado == "POR_CONFIRMAR":
+            inc.estado = "DESCARTADO"
+            _seg_evento(iid, "DETECCION", "Alerta descartada como falsa alarma por %s." % _seg_usuario())
+            msg = "Alerta descartada."
+        elif accion == "contenido" and inc.estado == "ABIERTO":
+            inc.estado, inc.contenido_en = "CONTENIDO", cuando
+            _seg_evento(iid, "F1", "Contención completada (%s)." % cuando[:16])
+            msg = "Contención registrada. Empieza a correr el plazo de restauración (4 h)."
+        elif accion == "restaurado" and inc.estado == "CONTENIDO":
+            inc.estado, inc.restaurado_en = "RESTAURADO", cuando
+            _seg_evento(iid, "F3", "Restauración completada (%s)." % cuando[:16])
+            msg = "Restauración registrada."
+        elif accion == "sic" and inc.datos_personales:
+            inc.reportado_sic_en = cuando
+            inc.radicado_rnbd = (request.form.get("radicado") or inc.radicado_rnbd or "").strip()[:80]
+            _seg_evento(iid, "F2", "Reporte a la SIC registrado. Radicado: %s." % (inc.radicado_rnbd or "sin número"))
+            msg = "Reporte a la SIC registrado."
+        elif accion == "cerrar" and inc.estado == "RESTAURADO":
+            inc.estado, inc.cerrado_en = "CERRADO", cuando
+            _seg_evento(iid, "F4", "Incidente cerrado.")
+            msg = "Incidente cerrado."
+        elif accion == "reabrir" and inc.estado in ("CERRADO", "DESCARTADO"):
+            inc.estado, inc.cerrado_en = "ABIERTO", ""
+            _seg_evento(iid, "DETECCION", "Incidente reabierto por %s." % _seg_usuario())
+            msg = "Incidente reabierto."
+        else:
+            msg = "Esa acción no aplica al estado actual."
+        db.session.commit()
+        if msg and "no aplica" not in msg:
+            registrar_auditoria("Seguridad: " + accion, "%s · %s" % (inc.codigo, cuando[:16]))
+            try:
+                _seg_sellar(500)
+            except Exception:
+                pass
+    except Exception as ex:
+        db.session.rollback()
+        msg = "No se pudo registrar: %s" % str(ex)[:80]
+    return redirect("/seguridad/incidentes/%d?msg=%s" % (iid, quote(msg)))
+
+
+# ── 8. Informe post-incidente ────────────────────────────────────────────────
+def _seg_informe_bloques(inc):
+    inst = _sg_inst_map()
+    ids = [int(x) for x in (inc.instituciones_ids or "").split(",") if x.isdigit()]
+    plazos = "\n".join("%s: %s" % (t["etiqueta"], t["texto"]) for t in _seg_plazos(inc))
+    tl = "\n".join(
+        "%s · %s · %s (%s)" % ((e.creado_en or "")[:16], _SEG_FASES.get(e.fase, e.fase), e.detalle, e.usuario)
+        for e in IncidenteEvento.query.filter_by(incidente_id=inc.id).order_by(IncidenteEvento.id.asc()).all()
+    )
+    cont = "\n".join(
+        "%s · %s · %s" % ((c.creado_en or "")[:16], c.accion.replace("_", " "), c.motivo)
+        for c in ContencionSeg.query.filter_by(incidente_id=inc.id).order_by(ContencionSeg.id.asc()).all()
+    )
+    return [
+        ("1. Resumen del incidente",
+         "Código: %s\nTítulo: %s\nTipo: %s · Gravedad: %s\nDetectado: %s\nColegios afectados: %s\nTitulares afectados (aprox.): %s\nDatos personales: %s%s" % (
+             inc.codigo, inc.titulo, inc.tipo, inc.gravedad, (inc.detectado_en or "")[:16],
+             ", ".join(inst.get(i, "Colegio %d" % i) for i in ids) or "—", inc.titulares_aprox or 0,
+             "Sí" if inc.datos_personales else "No", " (incluye menores de edad)" if inc.datos_menores else "")),
+        ("2. Qué ocurrió", inc.descripcion),
+        ("3. Cumplimiento de plazos", plazos),
+        ("4. Fase 1 · Medidas de contención", (inc.medidas_contencion or "—") + ("\n\nRegistro en la plataforma:\n" + cont if cont else "")),
+        ("5. Fase 2 · Reporte a la SIC", "Radicado RNBD: %s\nFecha del reporte: %s" % (inc.radicado_rnbd or "—", (inc.reportado_sic_en or "—")[:16])),
+        ("6. Fase 3 · Restauración", "Contenido: %s\nRestaurado: %s" % ((inc.contenido_en or "—")[:16], (inc.restaurado_en or "—")[:16])),
+        ("7. Causa raíz", inc.causa_raiz),
+        ("8. Acciones correctivas y preventivas", inc.acciones_correctivas),
+        ("9. Lecciones aprendidas", inc.lecciones),
+        ("10. Evidencias", inc.evidencias),
+        ("11. Plan de mitigación", inc.plan_mitigacion),
+        ("12. Línea de tiempo", tl),
+    ]
+
+
+@app.route("/seguridad/incidentes/<int:iid>/informe", methods=["GET", "POST"])
+def seguridad_incidente_informe(iid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    inc = IncidenteSeg.query.get_or_404(iid)
+    msg = ""
+    if request.method == "POST":
+        try:
+            inc.causa_raiz = (request.form.get("causa_raiz") or "").strip()
+            inc.acciones_correctivas = (request.form.get("acciones") or "").strip()
+            inc.lecciones = (request.form.get("lecciones") or "").strip()
+            inc.evidencias = (request.form.get("evidencias") or "").strip()
+            db.session.commit()
+            _seg_evento(iid, "F4", "Informe post-incidente actualizado.")
+            registrar_auditoria("Seguridad: informe post-incidente", inc.codigo)
+            msg = "Informe guardado."
+        except Exception as ex:
+            db.session.rollback()
+            msg = "No se pudo guardar: %s" % str(ex)[:80]
+    content = f"""
+<header class="role-hero"><div><h1>Informe post-incidente</h1><p>{_esc(inc.codigo)} · {_esc(inc.titulo)}</p></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/seguridad/incidentes/{iid}">← Incidente</a>
+<a class="btn" href="/seguridad/incidentes/{iid}/informe.pdf" target="_blank" rel="noopener">Descargar PDF</a></div></header>
+{_msg_html(msg)}
+<section class="role-panel"><p class="sg-note">El PDF reúne automáticamente los datos del incidente, los plazos, las medidas de contención y la línea de tiempo. Aquí completa el análisis.</p>
+<form method="POST" class="sg-form">
+<div><label>Causa raíz</label><textarea name="causa_raiz">{_esc(inc.causa_raiz)}</textarea></div>
+<div><label>Acciones correctivas y preventivas</label><textarea name="acciones">{_esc(inc.acciones_correctivas)}</textarea></div>
+<div><label>Lecciones aprendidas</label><textarea name="lecciones">{_esc(inc.lecciones)}</textarea></div>
+<div><label>Evidencias (ubicación de logs, capturas, respaldos, hashes)</label><textarea name="evidencias">{_esc(inc.evidencias)}</textarea></div>
+<div><button class="sg-btn pri" type="submit">Guardar informe</button></div></form></section>
+"""
+    return _sg_page("Informe post-incidente", content)
+
+
+@app.route("/seguridad/incidentes/<int:iid>/informe.pdf")
+def seguridad_incidente_informe_pdf(iid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    inc = IncidenteSeg.query.get_or_404(iid)
+    try:
+        emp = (plataforma().empresa or "PROCSIS")
+    except Exception:
+        emp = "PROCSIS"
+    pdf = _seg_pdf_bytes("Informe post-incidente · %s" % inc.codigo, "%s · Generado el %s" % (emp, _seg_now_s()[:16]), _seg_informe_bloques(inc))
+    return Response(pdf, mimetype="application/pdf", headers={"Content-Disposition": 'inline; filename="informe-%s.pdf"' % inc.codigo})
+
+
+# ── 2 y 3. Contención y rotación de credenciales ─────────────────────────────
+_SEG_ACCIONES = [
+    ("BLOQUEO", "Bloquear el acceso",
+     "Los usuarios del colegio (o de toda la plataforma) ven un aviso de medida de seguridad y no pueden usar el sistema. El equipo interno sigue entrando."),
+    ("SOLO_LECTURA", "Modo solo lectura",
+     "Se puede consultar, pero no guardar nada: notas, asistencia, portería y formularios quedan bloqueados."),
+    ("SESIONES", "Cerrar todas las sesiones",
+     "Obliga a volver a iniciar sesión a todos los usuarios del colegio (o de toda la plataforma)."),
+    ("FLAGS_OFF", "Apagar funciones (feature flags)",
+     "Desactiva las funciones activadas por flag del colegio; se pueden restaurar al levantar la medida."),
+    ("USUARIOS", "Suspender usuarios comprometidos",
+     "Desactiva las cuentas que indique (una por línea). Solo por colegio."),
+    ("ROTACION", "Rotar credenciales del colegio",
+     "Obliga a todos sus usuarios a cambiar la contraseña en el próximo ingreso y cierra sus sesiones. Solo por colegio."),
+]
+_SEG_NOMBRE_ACCION = {k: t for k, t, _ in _SEG_ACCIONES}
+
+
+def _sg_usuarios_colegio(iid):
+    return [u for u in Usuario.query.filter_by(institucion_id=iid).all() if (u.rol or "") not in ROLES_INTERNOS]
+
+
+@app.route("/seguridad/contencion")
+def seguridad_contencion():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    msg = (request.args.get("msg") or "").strip()
+    pre = request.args.get("incidente") or ""
+    inst = _sg_inst_map()
+    es_glob = rol_actual() in _SEG_ROLES_GLOBAL
+    abiertos = IncidenteSeg.query.filter(IncidenteSeg.estado.in_(["ABIERTO", "CONTENIDO", "RESTAURADO"])).order_by(IncidenteSeg.id.desc()).all()
+    opt_inc = '<option value="">— Sin incidente asociado —</option>' + "".join(
+        '<option value="%d"%s>%s · %s</option>' % (i.id, " selected" if str(i.id) == pre else "", _esc(i.codigo), _esc(i.titulo)) for i in abiertos)
+    opt_al = ('<option value="0">Toda la plataforma (global)</option>' if es_glob else "") + "".join(
+        '<option value="%d">%s</option>' % (k, _esc(v)) for k, v in inst.items())
+    radios = "".join(
+        '<label class="sg-check" style="align-items:flex-start;margin:4px 0"><input type="radio" name="accion" value="%s" %s>'
+        '<span><b>%s</b><br><small style="font-weight:400;color:#475569">%s</small></span></label>' % (k, "required" if i == 0 else "", _esc(t), _esc(d))
+        for i, (k, t, d) in enumerate(_SEG_ACCIONES)
+    )
+    activas = ContencionSeg.query.filter_by(activa=True).order_by(ContencionSeg.id.desc()).all()
+    filas_act = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><form method="POST" action="/seguridad/contencion/%d/levantar" '
+        'onsubmit="return confirm(\'¿Levantar esta medida?\')"><button class="sg-btn ok" type="submit">Levantar</button></form></td></tr>' % (
+            _esc(_SEG_NOMBRE_ACCION.get(c.accion, c.accion)), _esc(inst.get(c.institucion_id, "?") if c.institucion_id else "Toda la plataforma"),
+            _esc((c.motivo or "")[:120]), _esc(c.creado_por), _esc((c.creado_en or "")[:16]), c.id)
+        for c in activas
+    ) or "<tr><td colspan='6'>No hay medidas activas.</td></tr>"
+    hist = ContencionSeg.query.order_by(ContencionSeg.id.desc()).limit(30).all()
+    filas_h = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % (
+            _esc(_SEG_NOMBRE_ACCION.get(c.accion, c.accion)), _esc(inst.get(c.institucion_id, "?") if c.institucion_id else "Global"),
+            _esc(c.creado_por), _esc((c.creado_en or "")[:16]),
+            ("Levantada " + _esc((c.levantado_en or "")[:16])) if c.levantado_en else ("Activa" if c.activa else "Aplicada"))
+        for c in hist
+    ) or "<tr><td colspan='5'>Sin historial.</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Contención y credenciales</h1>
+<p>Medidas de emergencia (Fase 1 del protocolo). Todo queda en la auditoría y en la línea de tiempo del incidente.</p></div>
+<a class="btn" href="/seguridad">← Seguridad</a></header>
+{_msg_html(msg)}
+<div class="sg-warn"><b>Use con cuidado.</b> Estas acciones afectan a personas reales en el colegio. Escriba el motivo y la palabra CONFIRMAR para ejecutarlas. El equipo interno (Soporte, Gerencia, Desarrollo) no se ve afectado por el bloqueo ni por el modo solo lectura.</div>
+<section class="role-panel"><h2 class="sg-h">Ejecutar una medida</h2>
+<form method="POST" action="/seguridad/contencion/ejecutar" class="sg-form">
+<div class="sg-row">
+  <div><label for="al">Alcance</label><select id="al" name="alcance" required><option value="">— Elija el colegio —</option>{opt_al}</select></div>
+  <div><label for="ic">Incidente relacionado</label><select id="ic" name="incidente">{opt_inc}</select></div>
+</div>
+<div><label>Medida</label>{radios}</div>
+<div class="sg-row">
+  <div><label for="us">Solo para «Suspender usuarios»: cuentas (una por línea)</label><textarea id="us" name="usuarios" style="min-height:70px" placeholder="usuario1&#10;usuario2"></textarea></div>
+  <div><label class="sg-check"><input type="checkbox" name="invalidar"> Solo para «Rotar credenciales»: invalidar también las claves actuales</label>
+  <p class="sg-note" style="margin-top:8px">Si se invalidan, nadie podrá entrar con su clave anterior: deberán recuperarla o pedir un reseteo a Soporte. Úselo cuando las credenciales pudieron ser robadas.</p></div>
+</div>
+<div><label for="mo">Motivo * (mínimo 10 caracteres)</label><textarea id="mo" name="motivo" required style="min-height:70px"></textarea></div>
+<div class="sg-row"><div><label for="cf">Escriba CONFIRMAR para ejecutar</label><input id="cf" type="text" name="confirmar" autocomplete="off" required></div></div>
+<div><button class="sg-btn bad" type="submit">Ejecutar medida</button></div>
+</form></section>
+<section class="role-panel"><h2 class="sg-h">Medidas activas</h2>
+<div class="table-card"><table style="width:100%"><tr><th>Medida</th><th>Alcance</th><th>Motivo</th><th>Por</th><th>Desde</th><th></th></tr>{filas_act}</table></div></section>
+<section class="role-panel"><h2 class="sg-h">Historial reciente</h2>
+<div class="table-card"><table style="width:100%"><tr><th>Medida</th><th>Alcance</th><th>Por</th><th>Fecha</th><th>Estado</th></tr>{filas_h}</table></div></section>
+"""
+    return _sg_page("Contención y credenciales", content)
+
+
+@app.route("/seguridad/contencion/ejecutar", methods=["POST"])
+def seguridad_contencion_ejecutar():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    volver = "/seguridad/contencion?msg="
+    alcance = (request.form.get("alcance") or "").strip()
+    accion = (request.form.get("accion") or "").strip()
+    motivo = (request.form.get("motivo") or "").strip()
+    if (request.form.get("confirmar") or "").strip().upper() != "CONFIRMAR":
+        return redirect(volver + quote("Debe escribir CONFIRMAR para ejecutar la medida."))
+    if len(motivo) < 10:
+        return redirect(volver + quote("Explique el motivo (mínimo 10 caracteres)."))
+    if accion not in _SEG_NOMBRE_ACCION or not alcance.isdigit():
+        return redirect(volver + quote("Elija el alcance y la medida."))
+    es_global = alcance == "0"
+    if es_global and rol_actual() not in _SEG_ROLES_GLOBAL:
+        return redirect(volver + quote("Solo Gerencia o Desarrollo pueden aplicar medidas globales."))
+    if es_global and accion in ("USUARIOS", "ROTACION"):
+        return redirect(volver + quote("Esa medida solo se aplica a un colegio."))
+    iid = None if es_global else int(alcance)
+    if iid is not None and Institucion.query.get(iid) is None:
+        return redirect(volver + quote("El colegio no existe."))
+    inc_id = int(request.form.get("incidente")) if (request.form.get("incidente") or "").isdigit() else None
+    nom = _SEG_NOMBRE_ACCION[accion]
+    ahora_ts = _time.time()
+    try:
+        det, activa, afectados, resumen = {}, False, 0, ""
+        if accion in ("BLOQUEO", "SOLO_LECTURA"):
+            ya = [c for c in ContencionSeg.query.filter_by(accion=accion, activa=True).all() if c.institucion_id == iid]
+            if ya:
+                return redirect(volver + quote("Esa medida ya está activa para ese alcance."))
+            activa, resumen = True, "%s activado" % nom
+        elif accion == "SESIONES":
+            for u in (_sg_usuarios_colegio(iid) if iid else [x for x in Usuario.query.all() if (x.rol or "") not in ROLES_INTERNOS]):
+                u.session_token = secrets.token_hex(16)
+                afectados += 1
+            resumen = "Sesiones cerradas (%d usuarios)" % afectados
+        elif accion == "FLAGS_OFF":
+            flags = [f for f in FeatureFlag.query.filter_by(activo=True).all() if f.institucion_id == iid]
+            for f in flags:
+                f.activo = False
+            det["flags"] = [f.id for f in flags]
+            activa, afectados = bool(flags), len(flags)
+            resumen = "%d funciones apagadas" % afectados
+        elif accion == "USUARIOS":
+            pedidos = {x.strip().lower() for x in (request.form.get("usuarios") or "").replace(",", "\n").splitlines() if x.strip()}
+            if not pedidos:
+                return redirect(volver + quote("Indique al menos una cuenta."))
+            objetivo = [u for u in _sg_usuarios_colegio(iid) if (u.usuario or "").lower() in pedidos and u.activo is not False]
+            for u in objetivo:
+                u.activo = False
+                u.session_token = secrets.token_hex(16)
+            det["usuarios"] = [u.id for u in objetivo]
+            det["nombres"] = [u.usuario for u in objetivo]
+            activa, afectados = bool(objetivo), len(objetivo)
+            resumen = "%d usuarios suspendidos" % afectados
+            if not objetivo:
+                return redirect(volver + quote("No se encontró ninguna de esas cuentas activas en el colegio."))
+        elif accion == "ROTACION":
+            invalidar = bool(request.form.get("invalidar"))
+            for u in _sg_usuarios_colegio(iid):
+                u.password_temporal = True
+                u.session_token = secrets.token_hex(16)
+                if invalidar:
+                    u.password = crear_hash(secrets.token_urlsafe(24))
+                afectados += 1
+            det["invalidadas"] = invalidar
+            resumen = "Rotación de credenciales: %d usuarios%s" % (afectados, " (claves invalidadas)" if invalidar else "")
+        db.session.add(ContencionSeg(
+            incidente_id=inc_id, institucion_id=iid, accion=accion, activa=activa, motivo=motivo[:2000],
+            detalle_json=json.dumps(det), creado_por=_seg_usuario(), creado_en=_seg_now_s(), creado_ts=ahora_ts,
+        ))
+        if accion == "ROTACION":  # además, cerrar sesiones que no tengan token
+            db.session.add(ContencionSeg(
+                incidente_id=inc_id, institucion_id=iid, accion="SESIONES", activa=False, motivo="Rotación de credenciales",
+                creado_por=_seg_usuario(), creado_en=_seg_now_s(), creado_ts=ahora_ts,
+            ))
+        db.session.commit()
+        _seg_invalidar_cache()
+        alc = ("colegio %s" % (Institucion.query.get(iid).codigo)) if iid else "toda la plataforma"
+        registrar_auditoria("Seguridad: " + nom, "%s · %s · %s" % (alc, resumen, motivo[:200]))
+        if inc_id:
+            _seg_evento(inc_id, "F3" if accion == "ROTACION" else "F1", "%s — %s. Motivo: %s" % (nom, resumen, motivo[:300]))
+        try:
+            _seg_sellar(500)
+        except Exception:
+            pass
+        msg = "%s." % resumen
+    except Exception as ex:
+        db.session.rollback()
+        msg = "No se pudo ejecutar: %s" % str(ex)[:100]
+    return redirect(volver + quote(msg))
+
+
+@app.route("/seguridad/contencion/<int:cid>/levantar", methods=["POST"])
+def seguridad_contencion_levantar(cid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    c = ContencionSeg.query.get_or_404(cid)
+    if c.institucion_id is None and rol_actual() not in _SEG_ROLES_GLOBAL:
+        return redirect("/seguridad/contencion?msg=" + quote("Solo Gerencia o Desarrollo pueden levantar medidas globales."))
+    try:
+        det = json.loads(c.detalle_json or "{}")
+        if c.accion == "FLAGS_OFF":
+            for f in FeatureFlag.query.filter(FeatureFlag.id.in_(det.get("flags") or [0])).all():
+                f.activo = True
+        elif c.accion == "USUARIOS":
+            for u in Usuario.query.filter(Usuario.id.in_(det.get("usuarios") or [0])).all():
+                u.activo = True
+        c.activa, c.levantado_por, c.levantado_en = False, _seg_usuario(), _seg_now_s()
+        db.session.commit()
+        _seg_invalidar_cache()
+        registrar_auditoria("Seguridad: medida levantada", "%s · id %d" % (_SEG_NOMBRE_ACCION.get(c.accion, c.accion), cid))
+        if c.incidente_id:
+            _seg_evento(c.incidente_id, "F3", "Medida levantada: %s." % _SEG_NOMBRE_ACCION.get(c.accion, c.accion))
+        msg = "Medida levantada."
+    except Exception as ex:
+        db.session.rollback()
+        msg = "No se pudo levantar: %s" % str(ex)[:100]
+    return redirect("/seguridad/contencion?msg=" + quote(msg))
+
+
+# ── 4. Bitácora a prueba de alteraciones ─────────────────────────────────────
+@app.route("/seguridad/bitacora", methods=["GET", "POST"])
+def seguridad_bitacora():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    msg, res, sellados_ahora = "", None, 0
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "")
+        if accion == "sellar":
+            for _ in range(10):
+                n = _seg_sellar(2000)
+                sellados_ahora += n
+                if n < 2000:
+                    break
+            msg = "Se sellaron %d registros nuevos." % sellados_ahora
+        elif accion == "verificar":
+            _seg_sellar(2000)
+            res = _seg_verificar()
+            registrar_auditoria("Seguridad: verificación de bitácora", "selladas=%d anomalías=%d" % (res["selladas"], res["n_anom"]))
+    ult = AuditoriaSello.query.order_by(AuditoriaSello.auditoria_id.desc()).first()
+    n_sellos = AuditoriaSello.query.count()
+    pend = Auditoria.query.filter(Auditoria.id > (ult.auditoria_id if ult else 0)).count()
+    resultado = ""
+    if res is not None:
+        if res["ok"]:
+            resultado = ('<div class="sg-note" style="background:#f0fdf4;border-color:#86efac;color:#166534"><b>Integridad verificada.</b> '
+                         '%d registros sellados, ninguno modificado ni eliminado.<br>Hash de cabeza de la cadena: <span class="sg-mono">%s</span></div>' % (res["selladas"], res["cabeza"]))
+        else:
+            filas = "".join("<tr><td>%d</td><td>%s</td></tr>" % (i, _esc(p)) for i, p in res["anomalias"])
+            resultado = ('<div class="sg-bad"><b>Se detectaron %d alteraciones.</b> Conserve esta pantalla como evidencia y abra un incidente.</div>'
+                         '<div class="table-card"><table style="width:100%%"><tr><th>Registro de auditoría</th><th>Problema</th></tr>%s</table></div>' % (res["n_anom"], filas))
+        if res["pendientes"]:
+            resultado += '<p class="sg-note">Hay %d registros recientes que aún no se han sellado.</p>' % res["pendientes"]
+    content = f"""
+<header class="role-hero"><div><h1>Bitácora a prueba de alteraciones</h1>
+<p>Cada registro de auditoría se encadena con el hash del anterior (SHA-256). Si alguien modifica o borra uno, la verificación lo detecta.</p></div>
+<a class="btn" href="/seguridad">← Seguridad</a></header>
+{_msg_html(msg)}
+<div class="sg-kpis"><div class="sg-kpi ok"><small>Registros sellados</small><b>{n_sellos}</b></div>
+<div class="sg-kpi {'warn' if pend else 'ok'}"><small>Pendientes de sellar</small><b>{pend}</b></div>
+<div class="sg-kpi"><small>Último sello</small><b style="font-size:14px">{_esc((ult.creado_en if ult else '—')[:16])}</b></div></div>
+<section class="role-panel"><div class="sg-actions">
+<form method="POST"><input type="hidden" name="accion" value="verificar"><button class="sg-btn pri" type="submit">Verificar integridad</button></form>
+<form method="POST"><input type="hidden" name="accion" value="sellar"><button class="sg-btn" type="submit">Sellar registros pendientes</button></form>
+<a class="sg-btn" href="/seguridad/bitacora/exportar">Exportar evidencia (CSV)</a></div>
+{resultado}
+<p class="sg-note">Los registros nuevos se sellan automáticamente cada minuto. <b>Importante:</b> los sellos viven en la misma base de datos, por eso quien tuviera acceso total a ella podría recalcularlos. Para que la evidencia sea sólida, exporte el CSV y guarde el hash de cabeza en un lugar externo (por ejemplo, su correo) de forma periódica.</p>
+</section>
+"""
+    return _sg_page("Bitácora a prueba de alteraciones", content)
+
+
+@app.route("/seguridad/bitacora/exportar")
+def seguridad_bitacora_exportar():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    _seg_sellar(2000)
+    import csv
+    from io import StringIO
+    out = StringIO()
+    w = csv.writer(out)
+    w.writerow(["auditoria_id", "fecha", "hora", "usuario", "rol", "accion", "ip", "hash_prev", "hash"])
+    sellos = AuditoriaSello.query.order_by(AuditoriaSello.auditoria_id.desc()).limit(50000).all()
+    sellos.reverse()
+    filas = {a.id: a for a in Auditoria.query.filter(Auditoria.id.in_([s.auditoria_id for s in sellos])).all()} if sellos else {}
+    for s in sellos:
+        a = filas.get(s.auditoria_id)
+        w.writerow([s.auditoria_id, a.fecha if a else "", a.hora if a else "", a.usuario if a else "", a.rol if a else "",
+                    a.accion if a else "(eliminado)", a.ip if a else "", s.hash_prev, s.hash])
+    registrar_auditoria("Seguridad: exportación de bitácora", "%d filas" % len(sellos))
+    return Response("\ufeff" + out.getvalue(), mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="bitacora-sellada.csv"'})
+
+
+# ── 5. Integridad SIEE · SIMAT · asistencia ──────────────────────────────────
+@app.route("/seguridad/integridad", methods=["GET", "POST"])
+def seguridad_integridad():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    msg, err = (request.args.get("msg") or "").strip(), ""
+    inst = _sg_inst_map()
+    if request.method == "POST":
+        iid = (request.form.get("inst") or "")
+        sets = [d for d in request.form.getlist("dataset") if d in _SEG_DATASETS]
+        if not iid.isdigit() or int(iid) not in inst:
+            err = "Elija un colegio."
+        elif not sets:
+            err = "Elija al menos un conjunto de datos."
+        else:
+            try:
+                for d in sets:
+                    _seg_tomar_huella(int(iid), d)
+                registrar_auditoria("Seguridad: huella de integridad", "%s · %s" % (inst[int(iid)], ", ".join(sets)))
+                msg = "Huella guardada (%d conjunto(s))." % len(sets)
+            except Exception as ex:
+                db.session.rollback()
+                err = "No se pudo tomar la huella: %s" % str(ex)[:120]
+    huellas = HuellaSeg.query.order_by(HuellaSeg.id.desc()).limit(60).all()
+    filas = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%d%s</td><td>%s</td><td class="sg-mono">%s</td><td><a class="sg-btn" href="/seguridad/integridad/%d/comparar">Comparar con hoy</a></td></tr>' % (
+            _esc(inst.get(h.institucion_id, "?")), _esc(_SEG_DATASETS.get(h.dataset, h.dataset)), h.filas or 0,
+            " (truncado)" if h.truncado else "", _esc((h.creado_en or "")[:16]), _esc((h.digest or "")[:16]), h.id)
+        for h in huellas
+    ) or "<tr><td colspan='6'>Todavía no hay huellas. Tome la primera ahora.</td></tr>"
+    opt_i = '<option value="">— Elija el colegio —</option>' + "".join('<option value="%d">%s</option>' % (k, _esc(v)) for k, v in inst.items())
+    checks = "".join('<label class="sg-check"><input type="checkbox" name="dataset" value="%s" checked> %s</label>' % (k, _esc(v)) for k, v in _SEG_DATASETS.items())
+    content = f"""
+<header class="role-hero"><div><h1>Integridad SIEE, SIMAT y asistencia</h1>
+<p>Guarda una «huella» del estado de los datos de un colegio. Después de un incidente se compara con el estado actual.</p></div>
+<a class="btn" href="/seguridad">← Seguridad</a></header>
+{_msg_html(msg, err)}
+<div class="sg-note">Para que la comparación sirva, tome huellas <b>antes</b> de que pase algo (por ejemplo, al cerrar cada periodo o cada semana). Agregar notas o asistencia es normal; lo que debe preocupar son registros <b>eliminados</b> o <b>modificados</b> sin explicación.</div>
+<section class="role-panel"><h2 class="sg-h">Tomar una huella</h2>
+<form method="POST" class="sg-form"><div class="sg-row"><div><label for="ii">Colegio</label><select id="ii" name="inst" required>{opt_i}</select></div>
+<div><label>Conjuntos de datos</label>{checks}</div></div>
+<div><button class="sg-btn pri" type="submit">Tomar huella ahora</button></div></form></section>
+<section class="role-panel"><h2 class="sg-h">Huellas guardadas</h2>
+<div class="table-card"><table style="width:100%"><tr><th>Colegio</th><th>Datos</th><th>Filas</th><th>Fecha</th><th>Huella</th><th></th></tr>{filas}</table></div></section>
+"""
+    return _sg_page("Integridad de datos", content)
+
+
+@app.route("/seguridad/integridad/<int:hid>/comparar")
+def seguridad_integridad_comparar(hid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    h = HuellaSeg.query.get_or_404(hid)
+    inst = _sg_inst_map()
+    try:
+        r = _seg_comparar_huella(h)
+    except Exception as ex:
+        db.session.rollback()
+        return _sg_page("Comparación", '<header class="role-hero"><div><h1>No se pudo comparar</h1><p>%s</p></div><a class="btn" href="/seguridad/integridad">← Integridad</a></header>' % _esc(str(ex)[:200]))
+
+    def lista(titulo, ids, kind):
+        if not ids:
+            return ""
+        return ('<section class="role-panel"><h2 class="sg-h">%s <span class="sg-badge %s">%d</span></h2><p class="sg-mono">%s%s</p></section>' % (
+            titulo, kind, len(ids), ", ".join(str(i) for i in ids[:60]), " …" if len(ids) > 60 else ""))
+
+    alerta = bool(r["eliminados"] or r["sin_traza"] or (r["modificados"] and h.dataset != "SIEE"))
+    if alerta:
+        veredicto = '<div class="sg-bad"><b>Revise estas diferencias.</b> Hay registros eliminados o modificados sin explicación en la auditoría.</div>'
+    elif r["modificados"] or r["agregados"]:
+        veredicto = '<div class="sg-note">Solo hay cambios que quedaron registrados en la auditoría o registros nuevos, lo esperado en el uso normal.</div>'
+    else:
+        veredicto = '<div class="sg-note" style="background:#f0fdf4;border-color:#86efac;color:#166534"><b>Sin diferencias.</b> Los datos coinciden con la huella.</div>'
+    if r["truncado"]:
+        veredicto += '<div class="sg-warn">El conjunto superó el límite de %d filas: la comparación es parcial.</div>' % _SEG_MAX_FILAS
+    nota_siee = ""
+    if h.dataset == "SIEE":
+        nota_siee = '<p class="sg-note">«Sin registro en la auditoría» = el cambio no aparece en el historial de notas (logs_auditoria) desde que se tomó la huella.</p>'
+    content = f"""
+<header class="role-hero"><div><h1>Comparación · {_esc(_SEG_DATASETS.get(h.dataset, h.dataset))}</h1>
+<p>{_esc(inst.get(h.institucion_id, '?'))} · huella del {_esc((h.creado_en or '')[:16])}</p></div>
+<a class="btn" href="/seguridad/integridad">← Integridad</a></header>
+<div class="sg-kpis"><div class="sg-kpi"><small>Filas en la huella</small><b>{r['antes']}</b></div><div class="sg-kpi"><small>Filas hoy</small><b>{r['ahora']}</b></div></div>
+{veredicto}{nota_siee}
+{lista('Eliminados', r['eliminados'], 'bad')}{lista('Modificados', r['modificados'], 'warn')}{lista('Sin registro en la auditoría', r['sin_traza'], 'bad')}{lista('Agregados', r['agregados'], 'info')}
+"""
+    return _sg_page("Comparación de integridad", content)
+
+
+# ── 6. Control de respaldos ──────────────────────────────────────────────────
+@app.route("/seguridad/respaldos", methods=["GET", "POST"])
+def seguridad_respaldos():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    msg, err = (request.args.get("msg") or "").strip(), ""
+    if request.method == "POST":
+        try:
+            fecha = _sg_dt_local(request.form.get("fecha")) or _seg_now_s()
+            tam, chk = 0.0, (request.form.get("checksum") or "").strip().lower()[:100]
+            f = request.files.get("archivo")
+            if f is not None and f.filename:
+                h, total = _hashlib.sha256(), 0
+                for trozo in iter(lambda: f.stream.read(1024 * 1024), b""):
+                    h.update(trozo)
+                    total += len(trozo)
+                chk, tam = h.hexdigest(), round(total / 1048576.0, 2)
+            else:
+                try:
+                    tam = max(0.0, float((request.form.get("tamano") or "0").replace(",", ".")))
+                except Exception:
+                    tam = 0.0
+            if not chk:
+                err = "Indique el checksum SHA-256 o suba el archivo para calcularlo."
+            else:
+                ubic = ("%s · %s" % (request.form.get("destino") or "", request.form.get("ubicacion") or "")).strip(" ·")[:300]
+                db.session.add(RespaldoSeg(
+                    fecha=fecha, tamano_mb=tam, checksum=chk, ubicacion=ubic, tipo=(request.form.get("tipo") or "DIARIO")[:30],
+                    notas=(request.form.get("notas") or "").strip(), origen="MANUAL", registrado_por=_seg_usuario(), creado_en=_seg_now_s(),
+                ))
+                db.session.commit()
+                registrar_auditoria("Seguridad: respaldo registrado", "%s · %.2f MB" % (fecha[:16], tam))
+                msg = "Respaldo registrado."
+        except Exception as ex:
+            db.session.rollback()
+            err = "No se pudo registrar: %s" % str(ex)[:120]
+    lista = sorted(RespaldoSeg.query.order_by(RespaldoSeg.id.desc()).limit(60).all(), key=lambda r: r.fecha or "", reverse=True)
+    alertas = ""
+    if not lista:
+        alertas += '<div class="sg-bad"><b>No hay respaldos registrados.</b> Sin copias verificadas no se puede restaurar limpio después de un incidente.</div>'
+    else:
+        f = _seg_parse(lista[0].fecha)
+        if f is not None:
+            h24 = (ahora() - f).total_seconds() / 3600.0
+            if h24 > 24:
+                alertas += '<div class="sg-bad"><b>El último respaldo tiene %s.</b> El protocolo exige una copia diaria.</div>' % _seg_txt_delta(h24 * 3600)
+        pruebas = [r for r in lista if r.restauracion_ok and _seg_parse(r.restauracion_en)]
+        if not pruebas:
+            alertas += '<div class="sg-warn">Ningún respaldo tiene una prueba de restauración registrada. Una copia que nunca se probó no es una garantía.</div>'
+        else:
+            dias = (ahora() - max(_seg_parse(r.restauracion_en) for r in pruebas)).days
+            if dias > 90:
+                alertas += '<div class="sg-warn">La última prueba de restauración fue hace %d días. Se recomienda probar al menos cada 90 días.</div>' % dias
+    filas = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%.2f MB</td><td>%s</td><td class="sg-mono">%s</td><td>%s</td><td>%s</td></tr>' % (
+            _esc((r.fecha or "")[:16]), _esc(r.tipo), r.tamano_mb or 0, _esc(r.ubicacion), _esc((r.checksum or "")[:20] + "…"),
+            ('<span class="sg-badge ok">Probada %s</span>' % _esc((r.restauracion_en or "")[:10])) if r.restauracion_ok else
+            ('<form method="POST" action="/seguridad/respaldos/%d/restauracion"><button class="sg-btn" type="submit">Marcar prueba OK</button></form>' % r.id),
+            _esc(r.origen))
+        for r in lista
+    ) or "<tr><td colspan='7'>Sin respaldos.</td></tr>"
+    ahora_local = ahora().strftime("%Y-%m-%dT%H:%M")
+    token_ok = bool((os.environ.get("SEGURIDAD_API_TOKEN") or "").strip())
+    content = f"""
+<header class="role-hero"><div><h1>Control de respaldos</h1><p>Registro de copias de seguridad, checksum, ubicación y pruebas de restauración.</p></div>
+<a class="btn" href="/seguridad">← Seguridad</a></header>
+{_msg_html(msg, err)}{alertas}
+<section class="role-panel"><h2 class="sg-h">Registrar un respaldo</h2>
+<form method="POST" enctype="multipart/form-data" class="sg-form">
+<div class="sg-row"><div><label for="rf">Fecha y hora</label><input id="rf" type="datetime-local" name="fecha" value="{ahora_local}" max="{ahora_local}"></div>
+<div><label for="rt">Tipo</label><select id="rt" name="tipo">{_sg_opts(["DIARIO", "SEMANAL", "MANUAL", "ANTES DE CAMBIO"])}</select></div>
+<div><label for="rd">Destino</label><select id="rd" name="destino">{_sg_opts(["Amazon S3", "Google Cloud Storage", "Otro"])}</select></div>
+<div><label for="ru">Ubicación (bucket / ruta)</label><input id="ru" type="text" name="ubicacion" placeholder="s3://procsis-backups/2026-09-20.dump.enc"></div></div>
+<div class="sg-row"><div><label for="ra">Archivo (opcional: calcula el SHA-256 y el tamaño; no se guarda)</label><input id="ra" type="file" name="archivo"></div>
+<div><label for="rc">Checksum SHA-256</label><input id="rc" type="text" name="checksum" placeholder="Si no sube el archivo"></div>
+<div><label for="rm">Tamaño (MB)</label><input id="rm" type="number" step="0.01" min="0" name="tamano"></div></div>
+<div><label for="rn">Notas</label><textarea id="rn" name="notas" style="min-height:60px"></textarea></div>
+<div><button class="sg-btn pri" type="submit">Registrar respaldo</button></div></form></section>
+<section class="role-panel"><h2 class="sg-h">Respaldos registrados</h2>
+<div class="table-card"><table style="width:100%"><tr><th>Fecha</th><th>Tipo</th><th>Tamaño</th><th>Ubicación</th><th>Checksum</th><th>Restauración</th><th>Origen</th></tr>{filas}</table></div></section>
+<section class="role-panel"><h2 class="sg-h">Registro automático desde su script de respaldo</h2>
+<p class="sg-note">El respaldo y la restauración los hace su infraestructura (S3 o Google Cloud). Para que este registro se llene solo, al terminar cada copia el script puede llamar a <span class="sg-mono">POST /seguridad/api/respaldos</span> con la cabecera <span class="sg-mono">X-Seg-Token</span> y un JSON con <span class="sg-mono">checksum</span>, <span class="sg-mono">tamano_mb</span>, <span class="sg-mono">ubicacion</span> y <span class="sg-mono">tipo</span>.
+Estado: <b>{'activado' if token_ok else 'desactivado (defina la variable de entorno SEGURIDAD_API_TOKEN)'}</b>.</p></section>
+"""
+    return _sg_page("Control de respaldos", content)
+
+
+@app.route("/seguridad/respaldos/<int:rid>/restauracion", methods=["POST"])
+def seguridad_respaldo_restauracion(rid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    r = RespaldoSeg.query.get_or_404(rid)
+    try:
+        r.restauracion_ok, r.restauracion_en, r.restauracion_por = True, _seg_now_s(), _seg_usuario()
+        db.session.commit()
+        registrar_auditoria("Seguridad: prueba de restauración", "respaldo %s" % (r.fecha or "")[:16])
+        msg = "Prueba de restauración registrada."
+    except Exception as ex:
+        db.session.rollback()
+        msg = "No se pudo registrar: %s" % str(ex)[:80]
+    return redirect("/seguridad/respaldos?msg=" + quote(msg))
+
+
+@app.route("/seguridad/api/respaldos", methods=["POST"])
+def seguridad_api_respaldos():
+    """Registro automático de respaldos desde el script de la infraestructura (token en cabecera)."""
+    import hmac
+    token = (os.environ.get("SEGURIDAD_API_TOKEN") or "").strip()
+    dado = (request.headers.get("X-Seg-Token") or "").strip()
+    if not token or not hmac.compare_digest(token, dado):
+        return jsonify({"ok": False, "error": "No autorizado"}), 403
+    d = request.get_json(silent=True) or {}
+    chk = str(d.get("checksum") or "").strip().lower()[:100]
+    if not chk:
+        return jsonify({"ok": False, "error": "Falta checksum"}), 400
+    try:
+        _seg_ensure()
+        fecha = _sg_dt_local(str(d.get("fecha") or "")) or _seg_now_s()
+        db.session.add(RespaldoSeg(
+            fecha=fecha, tamano_mb=float(d.get("tamano_mb") or 0), checksum=chk, ubicacion=str(d.get("ubicacion") or "")[:300],
+            tipo=str(d.get("tipo") or "DIARIO")[:30], notas=str(d.get("notas") or "")[:2000], origen="API",
+            registrado_por="script", creado_en=_seg_now_s(),
+        ))
+        db.session.commit()
+        return jsonify({"ok": True})
+    except Exception as ex:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(ex)[:120]}), 500
+
+
+# ── 7. Reporte a la SIC y comunicado al rector ───────────────────────────────
+def _seg_opd_txt():
+    n, c, e, t = _seg_cfg("opd_nombre"), _seg_cfg("opd_cargo"), _seg_cfg("opd_correo"), _seg_cfg("opd_tel")
+    partes = [x for x in (n, c, e, t) if x]
+    return " · ".join(partes) if partes else "(Complete los datos del Oficial de Protección de Datos en el panel de Seguridad)"
+
+
+def _seg_empresa():
+    try:
+        p = plataforma()
+        return (p.empresa or "PROCSIS"), (getattr(p, "nombre_producto", None) or "EduTrack")
+    except Exception:
+        return "PROCSIS", "EduTrack"
+
+
+def _seg_borrador_sic(inc):
+    emp, prod = _seg_empresa()
+    inst = _sg_inst_map()
+    ids = [int(x) for x in (inc.instituciones_ids or "").split(",") if x.isdigit()]
+    colegios = "\n".join("- " + inst.get(i, "Colegio %d" % i) for i in ids) or "- (por definir)"
+    eventos = IncidenteEvento.query.filter_by(incidente_id=inc.id, fase="F1").order_by(IncidenteEvento.id.asc()).all()
+    f1 = (inc.medidas_contencion or "").strip() or "\n".join("- %s" % e.detalle for e in eventos) or "(Describa las medidas de contención aplicadas)"
+    f3 = ("Contenido el %s. Restaurado el %s." % ((inc.contenido_en or "—")[:16], (inc.restaurado_en or "—")[:16])) if inc.contenido_en else "(Aún en curso)"
+    menores = "\nLos datos afectados incluyen información de niños, niñas y adolescentes." if inc.datos_menores else ""
+    asunto = "Reporte de incidente de seguridad en el tratamiento de datos personales · %s" % inc.codigo
+    cuerpo = (
+        "Señores\nSuperintendencia de Industria y Comercio\nDelegatura para la Protección de Datos Personales · Registro Nacional de Bases de Datos (RNBD)\n\n"
+        "Referencia: Reporte de incidente de seguridad %s\n\n"
+        "%s, proveedor de la plataforma %s para instituciones educativas, informa la ocurrencia de un incidente de seguridad, "
+        "en cumplimiento de la Ley 1581 de 2012 y sus normas reglamentarias.\n\n"
+        "1. Identificación del incidente\nCódigo interno: %s\nFecha y hora de detección: %s\nTipo: %s\nGravedad: %s\nDescripción: %s\n\n"
+        "2. Bases de datos y titulares afectados\nInstituciones educativas (responsables del tratamiento):\n%s\n"
+        "Cantidad aproximada de titulares afectados (estudiantes, padres o docentes): %s%s\n\n"
+        "3. Medidas de contención aplicadas (Fase 1)\n%s\n\n"
+        "4. Medidas de restauración (Fase 3)\n%s\n\n"
+        "5. Plan de mitigación en curso\n%s\n\n"
+        "6. Contacto\nOficial de Protección de Datos: %s\n\n"
+        "Atentamente,\nGerencia de %s"
+    ) % (inc.codigo, emp, prod, inc.codigo, (inc.detectado_en or "")[:16], inc.tipo or "—", inc.gravedad, inc.descripcion or "—",
+         colegios, inc.titulares_aprox or "por determinar", menores, f1, f3, inc.plan_mitigacion or "(Describa el plan de mitigación)", _seg_opd_txt(), emp)
+    return asunto, cuerpo
+
+
+def _seg_borrador_rector(inc, inst_id):
+    emp, prod = _seg_empresa()
+    i = Institucion.query.get(inst_id)
+    nombre_col = i.nombre if i else "su institución"
+    rector = ((i.rector if i else "") or "").strip()
+    correo = ""
+    try:
+        for u in Usuario.query.filter_by(institucion_id=inst_id, rol="Rectoría").all():
+            if not rector and (u.nombre_completo or ""):
+                rector = u.nombre_completo
+            if (u.correo or "").strip() and not correo:
+                correo = u.correo.strip()
+    except Exception:
+        pass
+    asunto = "Comunicado de seguridad de la información · %s" % inc.codigo
+    estado = "El incidente ya fue contenido y los servicios están estabilizados." if inc.contenido_en and inc.restaurado_en else (
+        "El incidente fue contenido y estamos restableciendo los servicios." if inc.contenido_en else "Estamos aplicando las medidas de contención.")
+    cuerpo = (
+        "Estimado(a) %s,\nRector(a) de %s:\n\n"
+        "Le escribimos para informarle, con total transparencia, que el %s detectamos un incidente de seguridad (%s) que puede haber "
+        "afectado información de su institución en la plataforma %s.\n\n"
+        "Qué ocurrió\n%s\n\n"
+        "Qué información pudo verse comprometida\nDatos personales tratados en la plataforma (estudiantes, docentes o acudientes). "
+        "Titulares potencialmente afectados en su institución: por confirmar.%s\n\n"
+        "Qué hemos hecho\n%s\n%s\n\n"
+        "Estado actual\n%s\n\n"
+        "Qué recomendamos a la institución\n"
+        "- Solicitar a su equipo el cambio de contraseñas al próximo ingreso.\n"
+        "- Revisar los accesos recientes de los usuarios de la institución y avisarnos de cualquier actividad extraña.\n"
+        "- Evaluar, junto con su asesor jurídico, si debe informar a los titulares de los datos.\n\n"
+        "Nuestro compromiso\nHemos reportado o reportaremos el incidente a la Superintendencia de Industria y Comercio dentro de los plazos "
+        "legales, y le compartiremos el informe final.\n\n"
+        "Contacto\n%s\n\nAtentamente,\nGerencia de %s"
+    ) % (rector or "Rector(a)", nombre_col, (inc.detectado_en or "")[:16], inc.tipo or "seguridad", prod, inc.descripcion or "—",
+         " Incluye información de niños, niñas y adolescentes." if inc.datos_menores else "",
+         (inc.medidas_contencion or "Aislamos los sistemas afectados, bloqueamos accesos sospechosos y aplicamos correcciones de seguridad."),
+         ("Restauramos los datos desde una copia de seguridad verificada y forzamos el cambio de credenciales." if inc.restaurado_en else ""),
+         estado, _seg_opd_txt(), emp)
+    return asunto, cuerpo, correo
+
+
+@app.route("/seguridad/reportes")
+def seguridad_reportes():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    msg = (request.args.get("msg") or "").strip()
+    inst = _sg_inst_map()
+    incs = {i.id: i for i in IncidenteSeg.query.all()}
+    filas = "".join(
+        '<tr><td><a href="/seguridad/reportes/%d"><b>%s</b></a></td><td>%s</td><td>%s</td><td><span class="sg-badge %s">%s</span></td><td>%s</td></tr>' % (
+            r.id, "Reporte a la SIC" if r.tipo == "SIC" else "Comunicado al rector", _esc(incs[r.incidente_id].codigo if r.incidente_id in incs else "?"),
+            _esc(inst.get(r.institucion_id, "—") if r.institucion_id else "SIC"), {"BORRADOR": "warn", "APROBADO": "info", "ENVIADO": "ok"}.get(r.estado, ""),
+            _esc(r.estado.capitalize()), _esc((r.creado_en or "")[:16]))
+        for r in ReporteSeg.query.order_by(ReporteSeg.id.desc()).limit(100).all()
+    ) or "<tr><td colspan='5'>Todavía no hay reportes. Se crean desde la ficha de cada incidente.</td></tr>"
+    content = f"""
+<header class="role-hero"><div><h1>Reporte a la SIC y comunicados</h1><p>Borradores prellenados con los datos del incidente. Gerencia aprueba antes de enviar.</p></div>
+<a class="btn" href="/seguridad">← Seguridad</a></header>
+{_msg_html(msg)}
+<div class="sg-note">Estos textos son un punto de partida técnico. <b>Que su abogado los revise</b> antes de enviarlos: la calidad de PROCSIS (responsable o encargado), quién reporta y el contenido exacto deben ser validados por un profesional.</div>
+<section class="role-panel"><div class="table-card"><table style="width:100%"><tr><th>Documento</th><th>Incidente</th><th>Destino</th><th>Estado</th><th>Creado</th></tr>{filas}</table></div></section>
+"""
+    return _sg_page("Reportes de seguridad", content)
+
+
+@app.route("/seguridad/reportes/nuevo", methods=["GET", "POST"])
+def seguridad_reporte_nuevo():
+    g = _seg_guard()
+    if g is not None:
+        return g
+    src = request.form if request.method == "POST" else request.args
+    iid = src.get("incidente") or ""
+    tipo = (src.get("tipo") or "SIC").upper()
+    if not iid.isdigit() or tipo not in ("SIC", "RECTOR"):
+        return redirect("/seguridad/incidentes")
+    inc = IncidenteSeg.query.get_or_404(int(iid))
+    inst = _sg_inst_map()
+    ids = [int(x) for x in (inc.instituciones_ids or "").split(",") if x.isdigit()]
+    if request.method == "POST":
+        try:
+            if tipo == "SIC":
+                asunto, cuerpo = _seg_borrador_sic(inc)
+                r = ReporteSeg(incidente_id=inc.id, tipo="SIC", asunto=asunto, cuerpo=cuerpo, creado_por=_seg_usuario(), creado_en=_seg_now_s())
+                creados = [r]
+            else:
+                elegidos = [int(x) for x in request.form.getlist("inst") if x.isdigit()] or ids
+                creados = []
+                for k in elegidos:
+                    asunto, cuerpo, correo = _seg_borrador_rector(inc, k)
+                    creados.append(ReporteSeg(incidente_id=inc.id, tipo="RECTOR", institucion_id=k, destinatario=correo, asunto=asunto,
+                                              cuerpo=cuerpo, creado_por=_seg_usuario(), creado_en=_seg_now_s()))
+            for r in creados:
+                db.session.add(r)
+            db.session.commit()
+            _seg_evento(inc.id, "F2" if tipo == "SIC" else "F4", "Borrador de %s creado (%d)." % ("reporte a la SIC" if tipo == "SIC" else "comunicado al rector", len(creados)))
+            return redirect("/seguridad/reportes/%d" % creados[0].id)
+        except Exception as ex:
+            db.session.rollback()
+            return redirect("/seguridad/incidentes/%d?msg=%s" % (inc.id, quote("No se pudo crear el borrador: %s" % str(ex)[:80])))
+    if tipo == "SIC":
+        form = '<p>Se creará un borrador del reporte a la SIC con los datos de la ficha. Podrá editarlo antes de aprobarlo.</p>'
+    else:
+        opts = "".join('<label class="sg-check"><input type="checkbox" name="inst" value="%d" checked> %s</label>' % (k, _esc(inst.get(k, "Colegio %d" % k))) for k in ids)
+        form = ('<p>Se creará un comunicado por cada colegio elegido.</p>%s' % (opts or '<p class="sg-warn">El incidente no tiene colegios asociados. Edite la ficha y elija los colegios afectados.</p>'))
+    content = f"""
+<header class="role-hero"><div><h1>{'Borrador de reporte a la SIC' if tipo == 'SIC' else 'Comunicado al rector'}</h1><p>{_esc(inc.codigo)} · {_esc(inc.titulo)}</p></div>
+<a class="btn" href="/seguridad/incidentes/{inc.id}">← Incidente</a></header>
+<section class="role-panel"><form method="POST" class="sg-form"><input type="hidden" name="incidente" value="{inc.id}"><input type="hidden" name="tipo" value="{tipo}">
+{form}<div><button class="sg-btn pri" type="submit"{' disabled' if (tipo == 'RECTOR' and not ids) else ''}>Crear borrador</button></div></form></section>
+"""
+    return _sg_page("Nuevo borrador", content)
+
+
+@app.route("/seguridad/reportes/<int:rid>")
+def seguridad_reporte(rid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    r = ReporteSeg.query.get_or_404(rid)
+    inc = IncidenteSeg.query.get(r.incidente_id)
+    msg = (request.args.get("msg") or "").strip()
+    inst = _sg_inst_map()
+    es_ger = _sg_es_ger()
+    borrador = r.estado == "BORRADOR"
+    ro = "" if borrador else " readonly"
+    acciones = []
+    if borrador:
+        acciones.append('<button class="sg-btn pri" type="submit" name="accion" value="guardar">Guardar borrador</button>')
+        if es_ger:
+            acciones.append('<button class="sg-btn ok" type="submit" name="accion" value="aprobar">Aprobar</button>')
+    else:
+        if es_ger and r.estado == "APROBADO":
+            acciones.append('<button class="sg-btn" type="submit" name="accion" value="borrador">Volver a borrador</button>')
+            if r.tipo == "RECTOR":
+                acciones.append('<button class="sg-btn ok" type="submit" name="accion" value="enviar" onclick="return confirm(\'¿Enviar el comunicado por correo al rector?\')">Enviar por correo</button>')
+                acciones.append('<button class="sg-btn" type="submit" name="accion" value="enviado">Marcar como enviado</button>')
+            else:
+                acciones.append('<button class="sg-btn ok" type="submit" name="accion" value="radicar">Registrar radicado y marcar enviado</button>')
+    acciones.append('<a class="sg-btn" href="/seguridad/reportes/%d/pdf" target="_blank" rel="noopener">Descargar PDF</a>' % rid)
+    aviso_ger = "" if es_ger else '<div class="sg-note">Solo Gerencia puede aprobar y enviar. Usted puede preparar y editar el borrador.</div>'
+    err = ('<div class="sg-bad"><b>El último envío falló:</b> %s</div>' % _esc(r.error_envio)) if r.error_envio else ""
+    radic = ""
+    if r.tipo == "SIC" and r.estado in ("APROBADO", "ENVIADO"):
+        radic = '<div><label>Radicado RNBD</label><input type="text" name="radicado" value="%s"%s></div>' % (_esc(r.radicado or (inc.radicado_rnbd if inc else "")), ro if r.estado == "ENVIADO" else "")
+    dest = ""
+    if r.tipo == "RECTOR":
+        dest = '<div><label>Correo del rector (destinatario)</label><input type="email" name="destinatario" value="%s"%s></div>' % (_esc(r.destinatario), ro)
+    trazas = "Creado por %s el %s" % (_esc(r.creado_por), _esc((r.creado_en or "")[:16]))
+    if r.aprobado_en:
+        trazas += " · Aprobado por %s el %s" % (_esc(r.aprobado_por), _esc(r.aprobado_en[:16]))
+    if r.enviado_en:
+        trazas += " · Enviado por %s el %s" % (_esc(r.enviado_por), _esc(r.enviado_en[:16]))
+    titulo = "Reporte a la SIC" if r.tipo == "SIC" else "Comunicado · " + inst.get(r.institucion_id, "rector")
+    est_cls = {"BORRADOR": "warn", "APROBADO": "info", "ENVIADO": "ok"}.get(r.estado, "")
+    content = f"""
+<header class="role-hero"><div><h1>{_esc(titulo)}</h1><p><span class="sg-badge {est_cls}">{_esc(r.estado.capitalize())}</span> {_esc(inc.codigo if inc else '')} · {trazas}</p></div>
+<a class="btn" href="/seguridad/incidentes/{r.incidente_id}">← Incidente</a></header>
+{_msg_html(msg)}{err}{aviso_ger}
+<section class="role-panel"><form method="POST" action="/seguridad/reportes/{rid}/accion" class="sg-form">
+{dest}
+<div><label>Asunto</label><input type="text" name="asunto" value="{_esc(r.asunto)}"{ro}></div>
+<div><label>Texto</label><textarea name="cuerpo" style="min-height:520px"{ro}>{_esc(r.cuerpo)}</textarea></div>
+{radic}
+<div class="sg-actions">{''.join(acciones)}</div></form></section>
+"""
+    return _sg_page("Reporte de seguridad", content)
+
+
+@app.route("/seguridad/reportes/<int:rid>/accion", methods=["POST"])
+def seguridad_reporte_accion(rid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    r = ReporteSeg.query.get_or_404(rid)
+    inc = IncidenteSeg.query.get(r.incidente_id)
+    accion = (request.form.get("accion") or "").strip()
+    es_ger = _sg_es_ger()
+    msg = ""
+    try:
+        if accion == "guardar" and r.estado == "BORRADOR":
+            r.asunto = (request.form.get("asunto") or r.asunto)[:250]
+            r.cuerpo = (request.form.get("cuerpo") or "").strip()
+            if r.tipo == "RECTOR":
+                r.destinatario = (request.form.get("destinatario") or "").strip()[:200]
+            msg = "Borrador guardado."
+        elif accion == "aprobar" and es_ger and r.estado == "BORRADOR":
+            r.asunto = (request.form.get("asunto") or r.asunto)[:250]
+            r.cuerpo = (request.form.get("cuerpo") or "").strip()
+            if r.tipo == "RECTOR":
+                r.destinatario = (request.form.get("destinatario") or "").strip()[:200]
+            r.estado, r.aprobado_por, r.aprobado_en = "APROBADO", _seg_usuario(), _seg_now_s()
+            msg = "Aprobado por Gerencia."
+        elif accion == "borrador" and es_ger and r.estado == "APROBADO":
+            r.estado, r.aprobado_por, r.aprobado_en = "BORRADOR", "", ""
+            msg = "Vuelve a borrador."
+        elif accion == "radicar" and es_ger and r.tipo == "SIC" and r.estado == "APROBADO":
+            r.radicado = (request.form.get("radicado") or "").strip()[:80]
+            r.estado, r.enviado_por, r.enviado_en = "ENVIADO", _seg_usuario(), _seg_now_s()
+            if inc is not None:
+                inc.reportado_sic_en, inc.radicado_rnbd = _seg_now_s(), r.radicado
+                _seg_evento(inc.id, "F2", "Reporte a la SIC enviado. Radicado: %s." % (r.radicado or "sin número"))
+            msg = "Reporte marcado como enviado a la SIC."
+        elif accion in ("enviar", "enviado") and es_ger and r.tipo == "RECTOR" and r.estado == "APROBADO":
+            r.destinatario = (request.form.get("destinatario") or r.destinatario or "").strip()[:200]
+            if accion == "enviar":
+                if "@" not in (r.destinatario or ""):
+                    raise ValueError("Falta un correo válido del rector.")
+                correo_envio, password = _credenciales_smtp("soporte")
+                if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not correo_envio or not password):
+                    raise ValueError("Falta configurar el correo de envío (RESEND_API_KEY o el correo de soporte).")
+                if not correo_envio:
+                    correo_envio = (os.environ.get("RESEND_FROM") or "EduTrack <onboarding@resend.dev>").strip()
+                em = EmailMessage()
+                em["Subject"], em["From"], em["To"] = r.asunto, correo_envio, r.destinatario
+                em.set_content(r.cuerpo)
+                em.add_alternative('<div style="font-family:Segoe UI,Arial,sans-serif;max-width:640px;font-size:14px;line-height:1.55;color:#0f172a">%s</div>'
+                                   % _esc(r.cuerpo).replace("\n", "<br>"), subtype="html")
+                _smtp_enviar(em, correo_envio, password)
+            r.estado, r.enviado_por, r.enviado_en, r.error_envio = "ENVIADO", _seg_usuario(), _seg_now_s(), ""
+            if inc is not None:
+                _seg_evento(inc.id, "F4", "Comunicado al rector enviado a %s." % (r.destinatario or "—"))
+            msg = "Comunicado enviado." if accion == "enviar" else "Comunicado marcado como enviado."
+        else:
+            msg = "Esa acción no aplica o requiere permisos de Gerencia."
+        db.session.commit()
+        if "no aplica" not in msg:
+            registrar_auditoria("Seguridad: reporte " + accion, "%s · %s" % (r.tipo, inc.codigo if inc else ""))
+    except Exception as ex:
+        db.session.rollback()
+        try:
+            r2 = ReporteSeg.query.get(rid)
+            if r2 is not None and accion == "enviar":
+                r2.error_envio = str(ex)[:500]
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+        msg = "No se pudo completar: %s" % str(ex)[:120]
+    return redirect("/seguridad/reportes/%d?msg=%s" % (rid, quote(msg)))
+
+
+@app.route("/seguridad/reportes/<int:rid>/pdf")
+def seguridad_reporte_pdf(rid):
+    g = _seg_guard()
+    if g is not None:
+        return g
+    r = ReporteSeg.query.get_or_404(rid)
+    emp, _ = _seg_empresa()
+    estado = "" if r.estado != "BORRADOR" else " · BORRADOR sin aprobar"
+    pdf = _seg_pdf_bytes(r.asunto, "%s · %s%s" % (emp, (r.creado_en or "")[:16], estado), [(None, r.cuerpo)])
+    return Response(pdf, mimetype="application/pdf", headers={"Content-Disposition": 'inline; filename="reporte-%d.pdf"' % rid})
 
 
 if __name__ == "__main__":
