@@ -3769,6 +3769,8 @@ def _staff_nav_items(path, rol=""):
             active = " is-active" if path == "/gerencia/planes" else ""
         elif href == "/gerencia/planes/nuevo":
             active = " is-active" if path.startswith("/gerencia/planes/nuevo") else ""
+        elif href.rstrip("/") == "/support":
+            active = " is-active" if (path.rstrip("/") == "/support" or path.startswith("/support/a/")) else ""
         else:
             active = " is-active" if (path == href or path.startswith(href.rstrip("/") + "/")) else ""
         html.append('<a class="nav-item-apple' + active + '" href="' + href + '">' + lab + "</a>")
@@ -33078,9 +33080,501 @@ def modulo_retencion():
 
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+#  TARJETA DE PLAN EDUTRACK (diseño "plan con descuento")
+#  Se usa en: Buscar planes (Soporte / Ventas / Gerencia), Planes activos,
+#  Beneficios y Planes vendidos.  Activar / suspender planes: solo Gerencia.
+# ═════════════════════════════════════════════════════════════════════════════
+
+_ROLES_GERENCIA_PLANES = ("Gerente", "Superadmin", "Administrador")
+_ROLES_VER_PLANES = (
+    "Soporte", "Gerente", "Gerencia", "Superadmin", "Administrador",
+    "Comercial", "Ventas", "Supervisor de Ventas",
+)
+
+def _marcar_layout_staff():
+    """Pide a page() que envuelva esta página con el layout principal (menú lateral + barra superior)."""
+    try:
+        from flask import g as _g_flask
+        _g_flask._staff_wrap = True
+    except Exception:
+        pass
+
+
+# clave de módulo -> etiqueta completa (pantalla "Ver políticas")
+_PLAN_MODULOS_LARGO = {
+    "reportes_basicos": "Reportes en pantalla",
+    "reportes_excel": "Exportar Excel / PDF / Word",
+    "estudiantes": "Estudiantes y grupos",
+    "portal_docente": "Portal docente",
+    "notas_basico": "Notas / SIEE básico",
+    "notas_completo": "Planilla de notas tipo Excel",
+    "boletines_pdf": "Boletines PDF",
+    "siee": "SIEE completo",
+    "import_excel": "Importar Excel + SIMAT",
+    "novedades": "Convivencia / novedades",
+    "citaciones": "Citaciones",
+    "horarios": "Horarios",
+    "reportes_padres": "Reportes a padres",
+    "carnes": "Carnés digitales",
+    "asistencia_qr": "Asistencia QR",
+    "portal_porteria": "Portal de portería / QR de ingreso",
+    "ingreso_manual": "Ingreso manual",
+    "aviso_ingreso_whatsapp": "Aviso de ingreso por WhatsApp",
+    "calendario": "Calendario escolar",
+    "multi_sede": "Multi-sede",
+    "historial_padres": "Portal familiar de asistencia",
+    "alertas_impuntualidad": "Alertas de impuntualidad",
+    "eduaura": "EduAura IA",
+    "auditoria": "Auditoría de notas",
+    "contacto": "PQR de padres + PQR a PROCSIS",
+}
+
+# (clave, etiqueta corta) en orden de prioridad para las fichas de la tarjeta
+_PLAN_MODULOS_CORTO = [
+    ("asistencia_qr", "Asistencia QR"), ("portal_porteria", "Portería QR"),
+    ("notas_completo", "Notas"), ("notas_basico", "Notas"),
+    ("boletines_pdf", "Boletines"), ("portal_docente", "Portal docente"),
+    ("reportes_padres", "Portal padres"), ("historial_padres", "Portal familiar"),
+    ("siee", "SIEE"), ("horarios", "Horarios"), ("carnes", "Carnés"),
+    ("eduaura", "EduAura IA"), ("multi_sede", "Multi-sede"),
+    ("estudiantes", "Estudiantes"), ("reportes_basicos", "Reportes"),
+    ("reportes_excel", "Excel / PDF"),
+]
+
+_EC_ICO = {
+    "cap": (
+        '<svg class="ec-cap" viewBox="0 0 64 48" aria-hidden="true">'
+        '<path d="M32 3 2 17l30 14 30-14L32 3z" fill="#7fd8ff"/>'
+        '<path d="M13 26v10c0 4.4 8.1 8 19 8s19-3.6 19-8V26l-19 8.8L13 26z" fill="#3ab6f5"/>'
+        '<path d="M58 19v17" stroke="#7fd8ff" stroke-width="3" stroke-linecap="round" fill="none"/></svg>'
+    ),
+    "users": (
+        '<svg class="ec-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/>'
+        '<path d="M3 20c.9-3.4 3.2-5 6-5s5.1 1.6 6 5"/><circle cx="17.5" cy="9" r="2.4"/>'
+        '<path d="M16.6 14.4c2.3.2 3.9 1.7 4.6 4.6"/></svg>'
+    ),
+    "sedes": (
+        '<svg class="ec-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5l8-2 8 2v16"/>'
+        '<path d="M2.5 21h19M9 9h2M13 9h2M9 13h2M13 13h2M10 21v-4h4v4"/></svg>'
+    ),
+    "soporte": (
+        '<svg class="ec-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"/>'
+        '<path d="M8.8 12l2.2 2.2L15.4 10"/></svg>'
+    ),
+    "doc": (
+        '<svg class="ec-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/>'
+        '<path d="M14 3v5h5M10 13h6M10 17h6"/></svg>'
+    ),
+    "star": (
+        '<svg class="ec-ico fill" viewBox="0 0 24 24" aria-hidden="true">'
+        '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z"/></svg>'
+    ),
+}
+
+_PLAN_CARD_CSS = """<style id="ec-plan-card-css">
+.role-hero .btn{white-space:nowrap}
+.ec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:28px 24px;align-items:start;margin:10px 0 26px}
+.ec-item{display:flex;flex-direction:column;gap:10px;min-width:0}
+.ec-card{position:relative;width:100%;max-width:410px;margin:0 auto;box-sizing:border-box;padding:16px;border-radius:30px;color:#fff;font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;line-height:1.2;background:linear-gradient(165deg,#1b66e6 0%,#0f4fc9 52%,#0a3aa5 100%);box-shadow:0 20px 44px rgba(10,58,165,.30),inset 0 0 0 2px rgba(255,255,255,.18)}
+.ec-card *{box-sizing:border-box}
+.ec-ico{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ec-ico.fill{fill:currentColor;stroke:none}
+.ec-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 2px 12px}
+.ec-brand{display:flex;align-items:center;gap:9px;min-width:0}
+.ec-cap{width:46px;height:36px;flex:none}
+.ec-logo{font-size:27px;font-weight:800;letter-spacing:-.025em;color:#fff}
+.ec-logo b{color:#63d3ff;font-weight:800}
+.ec-logo sup{font-size:9px;font-weight:600;vertical-align:top;margin-left:1px}
+.ec-sub{font-size:12.5px;font-weight:600;color:#e4f1ff;margin-top:3px}
+.ec-pill{flex:none;background:#13b6ff;border:2px solid rgba(255,255,255,.92);color:#fff;font-weight:700;font-size:12.5px;padding:7px 13px;border-radius:999px;white-space:nowrap}
+.ec-pill.off{background:#6b7280;border-color:#e5e7eb}
+.ec-title{border-radius:18px;overflow:hidden;background:#fff;margin-bottom:10px}
+.ec-name{padding:13px 12px 11px;text-align:center;font-size:22px;font-weight:800;color:#0a2a7a;line-height:1.15;overflow-wrap:anywhere}
+.ec-code{background:#8ed5ff;color:#0a2a7a;text-align:center;font-weight:600;font-size:14.5px;padding:7px 10px;overflow-wrap:anywhere}
+.ec-code b{font-weight:800}
+.ec-data{background:#0a2472;border-radius:22px;padding:13px 14px 14px;margin-bottom:10px}
+.ec-data-h{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:17px}
+.ec-data-h .ec-ico{color:#63d3ff}
+.ec-big{text-align:center;font-size:52px;font-weight:800;line-height:1.05;margin:2px 0 9px;letter-spacing:-.02em}
+.ec-big.txt{font-size:36px;padding:8px 0 10px}
+.ec-bar{background:#fff;color:#0a2a7a;border-radius:13px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+.ec-chip{background:#dff0ff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700;color:#0a2a7a}
+.ec-share{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;font-weight:700;font-size:15.5px}
+.ec-share>span{display:flex;align-items:center;gap:9px}
+.ec-share .ec-ico{color:#63d3ff;width:26px;height:26px}
+.ec-box{background:#8ed5ff;color:#0a2a7a;border-radius:13px;padding:6px 16px;text-align:center;min-width:108px}
+.ec-box small{display:block;font-size:13px;font-weight:700}
+.ec-box b{display:block;font-size:27px;font-weight:800;line-height:1.05}
+.ec-blk{border-radius:16px;overflow:hidden;background:#0a2472;border:1px solid rgba(255,255,255,.35);margin-bottom:10px}
+.ec-blk-h{background:#e3f0ff;color:#0a2a7a;display:flex;align-items:center;justify-content:center;gap:7px;font-weight:800;font-size:14px;padding:6px 8px}
+.ec-blk-h .ec-ico{width:18px;height:18px}
+.ec-blk-b{text-align:center;font-weight:800;font-size:19px;padding:11px 8px;overflow-wrap:anywhere}
+.ec-blk-b small{font-size:13px;font-weight:600;opacity:.9}
+.ec-prices{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;background:#fff;border-radius:18px;padding:10px 10px 12px;margin-bottom:8px}
+.ec-prices>div{text-align:center;color:#0a2a7a;min-width:0}
+.ec-prices>div+div{border-left:1px solid #dbe5f5;padding-left:10px}
+.ec-lab{display:block;font-weight:800;font-size:14.5px;margin-bottom:6px}
+.ec-p{border-radius:12px;font-weight:800;font-size:22px;padding:9px 4px;letter-spacing:-.01em;overflow-wrap:anywhere}
+.ec-p.a{background:#8ed5ff}
+.ec-p.b{background:#d8e51a}
+.ec-p.c{background:#e3f0ff;font-size:19px}
+.ec-nota{display:block;margin-top:5px;font-size:11.5px;font-weight:700;color:#475569}
+.ec-card a.ec-pol{display:flex;align-items:center;justify-content:center;gap:9px;background:#fff;color:#0a2a7a!important;font-weight:800;font-size:15px;padding:11px 12px;border-radius:14px;text-decoration:none;margin-bottom:13px}
+.ec-pol .ec-ico{width:20px;height:20px}
+.ec-card a.ec-pol:hover{background:#eaf4ff}
+.ec-card a.ec-pol:focus-visible{outline:3px solid #ffcf33;outline-offset:2px}
+.ec-foot{display:flex;align-items:center;gap:10px;justify-content:center;font-size:14px;font-weight:600;color:#e9f4ff}
+.ec-foot i{flex:1;height:1px;background:rgba(255,255,255,.55)}
+.ec-foot .ec-ico{width:16px;height:16px}
+.ec-off .ec-card{filter:grayscale(.9) brightness(.94)}
+.ec-act{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:410px;width:100%;margin:0 auto}
+.ec-act form{margin:0}
+.ec-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 16px;border-radius:999px;font-weight:700;font-size:13px;text-decoration:none;cursor:pointer;font-family:inherit;line-height:1.1;background:#fff!important;color:#0a3aa5!important;border:1.5px solid #c3d4f2!important;box-shadow:none!important}
+.ec-btn:hover{background:#eef5ff!important}
+.ec-btn:focus-visible{outline:3px solid #ffcf33;outline-offset:2px}
+.ec-btn.on{background:#15803d!important;border-color:#15803d!important;color:#fff!important}
+.ec-btn.off{border-color:#dc2626!important;color:#b91c1c!important}
+.ec-btn.pri{background:#0a3aa5!important;border-color:#0a3aa5!important;color:#fff!important}
+.ec-copy{max-width:410px;width:100%;margin:0 auto;background:#fff;border:1px solid #dbe5f5;border-radius:16px;padding:11px 13px;font-size:12.5px;color:#1e293b;box-sizing:border-box}
+.ec-copy b{display:block;color:#0a2a7a;font-size:13.5px;margin-bottom:4px}
+.ec-copy pre{margin:0;white-space:pre-wrap;font-family:inherit;line-height:1.4;max-height:96px;overflow:hidden}
+.ec-copy .cta{margin-top:6px;font-weight:700;color:#0a3aa5}
+.ec-copy.vacio{color:#64748b}
+.ec-vend{max-width:410px;width:100%;margin:0 auto;background:#fff;border:1px solid #dbe5f5;border-radius:16px;padding:10px 13px;font-size:13px;box-sizing:border-box;color:#1e293b}
+.ec-vend summary{cursor:pointer;font-weight:800;color:#0a2a7a}
+.ec-vend ul{margin:8px 0 0;padding:0;list-style:none;max-height:190px;overflow:auto}
+.ec-vend li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #eef2f8}
+.ec-vend .est{font-size:11.5px;color:#64748b;white-space:nowrap}
+.ec-search{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ec-search input[type=search],.ec-search input[type=text]{flex:1 1 260px;min-width:0;padding:14px 16px;border-radius:14px;border:1px solid #b8c7e3;font-size:16px;background:#fff;color:#0f172a}
+.ec-search input:focus-visible{outline:3px solid #7ab8ff;outline-offset:1px}
+.ec-fchips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+.ec-fchip{padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #cbd5e1;color:#0f2a5c;font-weight:700;font-size:13px;text-decoration:none}
+.ec-fchip.on{background:#0a3aa5;border-color:#0a3aa5;color:#fff}
+.ec-empty{text-align:center;padding:38px 16px;color:#475569;font-size:15px;line-height:1.5}
+.ec-empty b{color:#0a2a7a}
+.ec-res{margin:4px 2px 12px;font-weight:700;color:#0f2a5c}
+.ec-okmsg{background:#dcfce7;color:#166534;padding:11px 14px;border-radius:12px;margin:0 0 14px;font-weight:600}
+.ec-errmsg{background:#fee2e2;color:#991b1b;padding:11px 14px;border-radius:12px;margin:0 0 14px;font-weight:600}
+.ec-pol-grid{display:grid;grid-template-columns:minmax(300px,410px) minmax(0,1fr);gap:26px;align-items:start}
+.ec-sec{margin:0 0 20px}
+.ec-sec h2{font-size:17px;margin:0 0 9px;color:#0a2a7a}
+.ec-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:7px 18px}
+.ec-list li{padding-left:22px;position:relative;font-size:14px;color:#1e293b}
+.ec-list li::before{content:"\\2713";position:absolute;left:0;color:#15803d;font-weight:800}
+.ec-list.no li::before{content:"\\2715";color:#b91c1c}
+.ec-dl{display:grid;grid-template-columns:max-content 1fr;gap:7px 20px;margin:0;font-size:14px}
+.ec-dl dt{color:#475569;font-weight:600}
+.ec-dl dd{margin:0;color:#0f172a;font-weight:700}
+.ec-chipset{display:flex;flex-wrap:wrap;gap:6px}
+.ec-chipset span{background:#e3f0ff;color:#0a2a7a;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700}
+.ec-msg{white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.5;margin:0;background:#f4f8ff;border-radius:12px;padding:12px 14px;color:#1e293b}
+@media(max-width:900px){.ec-pol-grid{grid-template-columns:1fr}}
+@media(max-width:380px){.ec-name{font-size:19px}.ec-big{font-size:42px}.ec-logo{font-size:23px}.ec-pill{font-size:11.5px;padding:6px 10px}.ec-p{font-size:19px}.ec-grid{grid-template-columns:1fr}}
+</style>"""
+
+
+def _plan_features(p):
+    """features_json del plan (dict o lista) -> dict normalizado."""
+    out = {
+        "incluidos": [], "excluidos": [], "modulos": [],
+        "soporte": "", "vigencia": "", "badge": "", "nota_qr": "", "tagline": "", "linea": "",
+    }
+    raw = getattr(p, "features_json", None) or ""
+    try:
+        d = json.loads(raw) if raw else {}
+    except Exception:
+        d = {}
+    if isinstance(d, list):
+        d = {"incluidos": [str(x) for x in d]}
+    if not isinstance(d, dict):
+        d = {}
+    for k in ("incluidos", "excluidos", "modulos"):
+        v = d.get(k) or []
+        out[k] = [str(x).strip() for x in v if str(x).strip()] if isinstance(v, list) else []
+    for k in ("soporte", "vigencia", "badge", "nota_qr", "tagline", "linea"):
+        out[k] = str(d.get(k) or "").strip()
+    return out
+
+
+def _plan_nombre_vista(nombre):
+    """'EDUTRACK 2.5 FC BASICO' -> 'EduTrack 2.5 FC Basico' (solo si viene todo en mayúsculas)."""
+    n = (nombre or "").strip()
+    if not n or n != n.upper():
+        return n
+    out = []
+    for w in n.split():
+        if w == "EDUTRACK":
+            out.append("EduTrack")
+        elif any(c.isdigit() for c in w) or len(w) <= 2:
+            out.append(w)
+        else:
+            out.append(w.capitalize())
+    return " ".join(out)
+
+
+def _fmt_cop(v):
+    try:
+        return "$ " + "{:,.0f}".format(float(v or 0)).replace(",", ".")
+    except Exception:
+        return "$ 0"
+
+
+def _fmt_num(v):
+    try:
+        return "{:,.0f}".format(float(v or 0)).replace(",", ".")
+    except Exception:
+        return "0"
+
+
+def _plan_precios(p, promo=None):
+    """Valores para la tarjeta: precio lista, precio con descuento, % y duración."""
+    try:
+        pleno = float(getattr(p, "precio_lista", 0) or 0) or float(getattr(p, "precio_mensual", 0) or 0)
+    except Exception:
+        pleno = 0.0
+    try:
+        pct = float(getattr(p, "descuento_pct", 0) or 0)
+    except Exception:
+        pct = 0.0
+    try:
+        meses = int(getattr(p, "descuento_meses", 0) or 0)
+    except Exception:
+        meses = 0
+    neto = pleno
+    duracion = ""
+    promo_nombre = ""
+    hasta = ""
+    if pct > 0:
+        try:
+            neto = float(getattr(p, "precio_mensual", 0) or 0) or round(pleno * (1 - pct / 100.0))
+        except Exception:
+            neto = pleno
+        duracion = ("Mes 1 al %d" % meses) if meses > 0 else "Descuento vigente"
+    elif promo is not None and pleno > 0:
+        try:
+            pv = _calcular_promo_valores(pleno, promo)
+            if float(pv.get("porcentaje") or 0) > 0:
+                pct = float(pv.get("porcentaje") or 0)
+                neto = float(pv.get("valor_descuento") or pleno)
+                promo_nombre = pv.get("nombre_promo") or ""
+                hasta = pv.get("fecha_caducidad_texto") or ""
+                if (pv.get("duracion_unidad") or "") == "MESES" and int(pv.get("duracion_valor") or 0) > 0:
+                    duracion = "Mes 1 al %d" % int(pv.get("duracion_valor") or 0)
+                else:
+                    duracion = ("Durante " + str(pv.get("tiempo_promo"))) if pv.get("tiempo_promo") else "Promoción vigente"
+        except Exception:
+            pct = 0.0
+            neto = pleno
+    tiene = pct > 0 and pleno > neto
+    return {
+        "lista": pleno, "neto": neto, "pct": pct, "meses": meses, "duracion": duracion,
+        "tiene": tiene, "promo_nombre": promo_nombre, "hasta": hasta,
+    }
+
+
+def _plan_chips(f, max_n=3):
+    """Fichas 'Incluye:' de la tarjeta: módulos activos o, si no hay, los beneficios listados."""
+    chips = []
+    mods = set(f.get("modulos") or [])
+    for clave, lab in _PLAN_MODULOS_CORTO:
+        if clave in mods and lab not in chips:
+            chips.append(lab)
+    if not chips:
+        for x in (f.get("incluidos") or []):
+            x = str(x).strip()
+            if x:
+                chips.append(x if len(x) <= 24 else x[:23].rstrip() + "…")
+    extra = max(0, len(chips) - max_n)
+    chips = chips[:max_n]
+    if extra:
+        chips.append("+%d" % extra)
+    return chips
+
+
+def _plan_card_html(p, promo=None, politicas=True):
+    """Tarjeta visual del plan (diseño 'plan con descuento') con los datos reales de EduTrack."""
+    f = _plan_features(p)
+    pr = _plan_precios(p, promo)
+    activo = bool(getattr(p, "activo", True))
+    cod = (getattr(p, "codigo", "") or "").strip()
+    mod = (getattr(p, "modalidad", None) or "presencial").strip().lower()
+    es_qr = (f["linea"] == "qr") or cod.lower().startswith("qr")
+    sub = "Online Virtual" if mod == "online" else ("Acceso QR" if es_qr else "Presencial")
+    if not activo:
+        pill = '<span class="ec-pill off">Suspendido</span>'
+    elif pr["tiene"]:
+        pill = '<span class="ec-pill">Plan con descuento</span>'
+    else:
+        etiqueta = (f["badge"] or "Plan").title().replace("Qr", "QR")
+        pill = '<span class="ec-pill">%s</span>' % _esc(etiqueta)
+
+    try:
+        me = int(getattr(p, "max_estudiantes", 0) or 0)
+    except Exception:
+        me = 0
+    if me <= 0 or me >= 99999:
+        grande = '<div class="ec-big txt">Ilimitado</div>'
+    else:
+        grande = '<div class="ec-big">%s</div>' % _fmt_num(me)
+    chips_html = "".join('<span class="ec-chip">%s</span>' % _esc(c) for c in _plan_chips(f)) \
+        or '<span class="ec-chip">Plataforma EduTrack</span>'
+    try:
+        ms = int(getattr(p, "max_sedes", 0) or 0)
+    except Exception:
+        ms = 0
+    sedes_txt = str(ms) if ms > 0 else "—"
+    try:
+        n_doc = int(getattr(p, "max_docentes", 0) or 0)
+    except Exception:
+        n_doc = 0
+    try:
+        n_adm = int(getattr(p, "max_admin", 0) or 0)
+    except Exception:
+        n_adm = 0
+    usuarios_txt = "<b>%d</b> docentes · <b>%d</b> admin." % (n_doc, n_adm)
+    soporte_txt = _esc(f["soporte"] or "Soporte estándar")
+    vigencia_txt = _esc(f["vigencia"] or "Mensual")
+
+    if pr["tiene"]:
+        pct_txt = ("%g" % round(pr["pct"], 2))
+        izq = ("Valor", _fmt_cop(pr["lista"]), "a", "")
+        der = ("Valor con dcto.", _fmt_cop(pr["neto"]), "b",
+               '<span class="ec-nota">%s%% · %s</span>' % (pct_txt, _esc(pr["duracion"])))
+    else:
+        try:
+            fee = float(getattr(p, "fee_implementacion", 0) or 0)
+        except Exception:
+            fee = 0.0
+        izq = ("Valor mensual", _fmt_cop(pr["lista"]), "a", "")
+        der = ("Implementación", _fmt_cop(fee) if fee > 0 else "Sin costo", "c",
+               '<span class="ec-nota">Pago único</span>' if fee > 0 else "")
+    precios = (
+        '<div class="ec-prices">'
+        '<div><span class="ec-lab">%s</span><div class="ec-p %s">%s</div></div>'
+        '<div><span class="ec-lab">%s</span><div class="ec-p %s">%s</div>%s</div>'
+        '</div>'
+    ) % (izq[0], izq[2], _esc(izq[1]), der[0], der[2], _esc(der[1]), der[3])
+
+    if politicas and cod:
+        pol = (
+            '<a class="ec-pol" href="/planes/politicas/%s">%s<span>Ver políticas</span></a>'
+            % (quote(cod, safe=""), _EC_ICO["doc"])
+        )
+    else:
+        pol = ""
+
+    return (
+        '<article class="ec-card" aria-label="Plan %s">'
+        '<div class="ec-top"><div class="ec-brand">%s<div><div class="ec-logo">Edu<b>Track</b><sup>®</sup></div>'
+        '<div class="ec-sub">%s</div></div></div>%s</div>'
+        '<div class="ec-title"><div class="ec-name">%s</div>'
+        '<div class="ec-code">Código único: <b>%s</b></div></div>'
+        '<div class="ec-data"><div class="ec-data-h">%s<span>Estudiantes incluidos</span></div>%s'
+        '<div class="ec-bar"><span>Incluye:</span>%s</div>'
+        '<div class="ec-share"><span>%s Sedes incluidas:</span>'
+        '<div class="ec-box"><small>Hasta</small><b>%s</b></div></div></div>'
+        '<div class="ec-blk"><div class="ec-blk-h">%s<span>Usuarios de la plataforma</span></div>'
+        '<div class="ec-blk-b">%s</div></div>'
+        '<div class="ec-blk"><div class="ec-blk-h">%s<span>Soporte y vigencia</span></div>'
+        '<div class="ec-blk-b">%s <small>(%s)</small></div></div>'
+        '%s%s'
+        '<div class="ec-foot"><i></i>%s<span>Conecta, estudia y avanza</span><i></i></div>'
+        '</article>'
+    ) % (
+        _esc(getattr(p, "nombre", "") or cod),
+        _EC_ICO["cap"], _esc(sub), pill,
+        _esc(_plan_nombre_vista(getattr(p, "nombre", "") or cod)), _esc(cod),
+        _EC_ICO["users"], grande, chips_html,
+        _EC_ICO["sedes"], _esc(sedes_txt),
+        _EC_ICO["users"], usuarios_txt,
+        _EC_ICO["soporte"], soporte_txt, vigencia_txt,
+        precios, pol,
+        _EC_ICO["star"],
+    )
+
+
+def _plan_acciones_html(p, next_url="/gerencia/planes"):
+    """Botones de Gerencia bajo la tarjeta: editar, beneficios y activar / suspender."""
+    activo = bool(getattr(p, "activo", True))
+    nu = _esc(next_url)
+    if activo:
+        estado_btn = (
+            '<form method="POST" action="/gerencia/planes/%d/estado" '
+            'onsubmit="return confirm(\'¿Suspender este plan? Deja de ofrecerse en ventas y en el catálogo. '
+            'Los colegios que ya lo tienen no se afectan.\')">'
+            '<input type="hidden" name="accion" value="suspender">'
+            '<input type="hidden" name="next" value="%s">'
+            '<button type="submit" class="ec-btn off">Suspender</button></form>' % (p.id, nu)
+        )
+    else:
+        estado_btn = (
+            '<form method="POST" action="/gerencia/planes/%d/estado">'
+            '<input type="hidden" name="accion" value="activar">'
+            '<input type="hidden" name="next" value="%s">'
+            '<button type="submit" class="ec-btn on">Activar plan</button></form>' % (p.id, nu)
+        )
+    return (
+        '<div class="ec-act">'
+        '<a class="ec-btn pri" href="/gerencia/planes/editar/%d">Editar plan</a>'
+        '<a class="ec-btn" href="/gerencia/beneficios/%d">Beneficios</a>%s</div>' % (p.id, p.id, estado_btn)
+    )
+
+
+def _next_seguro(nxt, default):
+    """Solo rutas internas de planes (evita redirecciones abiertas)."""
+    nxt = (nxt or "").strip()
+    permitidos = ("/gerencia/planes", "/gerencia/beneficios", "/planes/buscar")
+    if nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt and nxt.startswith(permitidos):
+        return nxt
+    return default
+
+
+def _msg_html(msg, err=""):
+    out = ""
+    if msg:
+        out += '<div class="ec-okmsg" role="status">%s</div>' % _esc(msg)
+    if err:
+        out += '<div class="ec-errmsg" role="alert">%s</div>' % _esc(err)
+    return out
+
+
+@app.route("/gerencia/planes/<int:pid>/estado", methods=["POST"])
+def gerencia_plan_estado(pid):
+    """Gerencia activa o suspende un plan del catálogo (no afecta a colegios que ya lo tienen)."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    dest = _next_seguro(request.form.get("next"), "/gerencia/planes")
+    accion = (request.form.get("accion") or "").strip().lower()
+    p = PlanComercial.query.get_or_404(pid)
+    if accion not in ("activar", "suspender"):
+        msg = "Acción no válida."
+    else:
+        try:
+            p.activo = (accion == "activar")
+            db.session.commit()
+            try:
+                registrar_auditoria(
+                    "Plan activado" if p.activo else "Plan suspendido",
+                    "%s · %s" % (p.codigo or p.id, p.nombre or ""),
+                )
+            except Exception:
+                pass
+            msg = "Plan «%s» %s." % (p.nombre or p.codigo, "activado" if p.activo else "suspendido")
+        except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            msg = "No se pudo cambiar el estado: %s" % str(ex)[:100]
+    return redirect(dest + ("&" if "?" in dest else "?") + "msg=" + quote(msg))
+
+
 @app.route("/gerencia/planes", methods=["GET", "POST"])
 def gerencia_planes():
-    """Listado de planes en tarjetas. Edición y alta van a páginas separadas."""
+    """Planes activos: tarjetas con activar / suspender. Edición y alta van a páginas separadas."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
@@ -33090,88 +33584,199 @@ def gerencia_planes():
     except Exception:
         pass
     msg = (request.args.get("msg") or "").strip()
-    # Compat: si alguien entra con ?edit= redirigir a página de edición
     edit_id = request.args.get("edit")
     if edit_id:
         return redirect("/gerencia/planes/editar/%s" % edit_id)
-    planes = PlanComercial.query.order_by(PlanComercial.orden, PlanComercial.id).all()
-    addons = AddonComercial.query.filter_by(activo=True).all()
-    cards = ""
-    for p in planes:
-        img_html = (
-            f'<img src="{_esc(p.imagen_path)}" alt="" class="pcard-img" style="height:64px;max-height:64px;width:100%;object-fit:cover">'
-            if getattr(p, "imagen_path", None)
-            else '<div class="pcard-img ph">EduTrack</div>'
+    q = (request.args.get("q") or "").strip()
+    estado = (request.args.get("estado") or "todos").strip().lower()
+    if estado not in ("todos", "activos", "suspendidos"):
+        estado = "todos"
+    todos = PlanComercial.query.order_by(PlanComercial.orden, PlanComercial.id).all()
+    n_act = sum(1 for p in todos if p.activo)
+    n_sus = len(todos) - n_act
+    nq = _norm_txt(q)
+    vistos = []
+    for p in todos:
+        if estado == "activos" and not p.activo:
+            continue
+        if estado == "suspendidos" and p.activo:
+            continue
+        if nq and nq not in _norm_txt(p.codigo) and nq not in _norm_txt(p.nombre):
+            continue
+        vistos.append(p)
+    promo = None
+    try:
+        promo = _promo_activa_global()
+    except Exception:
+        promo = None
+    next_url = "/gerencia/planes?estado=%s&q=%s" % (estado, quote_plus(q))
+    items = "".join(
+        '<div class="ec-item%s">%s%s</div>' % (
+            "" if p.activo else " ec-off", _plan_card_html(p, promo), _plan_acciones_html(p, next_url)
         )
-        mod = (getattr(p, "modalidad", None) or "presencial").lower()
-        mod_badge = "Online" if mod == "online" else "Presencial"
-        desc_m = int(getattr(p, "descuento_meses", 0) or 0)
-        desc_line = ""
-        if float(getattr(p, "descuento_pct", 0) or 0) > 0:
-            desc_line = (
-                '<div style="color:#16a34a;font-size:12px;font-weight:700">Desc. %s%% · antes %s'
-                % (int(getattr(p, "descuento_pct", 0) or 0), _cop(getattr(p, "precio_lista", None) or p.precio_mensual))
-            )
-            if desc_m > 0:
-                desc_line += " · %s mes(es)" % desc_m
-            desc_line += "</div>"
-        cards += f"""
-        <div class="pcard">
-          {img_html}
-          <div class="pcard-code">{_esc(p.codigo)} · {mod_badge}</div>
-          <div class="pcard-name">{_esc(p.nombre)}</div>
-          <div class="pcard-price">{_cop(p.precio_mensual)}<span> / mes</span></div>
-          {desc_line}
-          <div class="pcard-meta">Impl. {_cop(p.fee_implementacion)} · ≤{p.max_estudiantes} est. · {p.max_sedes} sede(s)
-          · Adm {getattr(p,'max_admin',10) or 10} · Doc {getattr(p,'max_docentes',30) or 30}</div>
-          <a class="pcard-btn" href="/gerencia/planes/editar/{p.id}">Editar plan</a>
-        </div>"""
+        for p in vistos
+    )
+    if not items:
+        items = (
+            '<div class="ec-empty" style="grid-column:1/-1">No hay planes con ese filtro. '
+            'Cambie el estado o cree un plan nuevo.</div>'
+        )
+
+    def _chip(clave, texto, n):
+        href = "/gerencia/planes?estado=%s&q=%s" % (clave, quote_plus(q))
+        return '<a class="ec-fchip%s" href="%s">%s (%d)</a>' % (" on" if estado == clave else "", href, texto, n)
+
+    chips = _chip("todos", "Todos", len(todos)) + _chip("activos", "Activos", n_act) + _chip("suspendidos", "Suspendidos", n_sus)
+    addons = AddonComercial.query.filter_by(activo=True).all()
     add_html = "".join(
-        f'<div class="addon"><b>{_esc(a.nombre)}</b><span>{_cop(a.precio_mensual)} / mes</span><small>{_esc(a.descripcion)}</small></div>'
+        '<li style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #e6edf7">'
+        '<span><b>%s</b><br><small style="color:#64748b">%s</small></span><b style="color:#15803d;white-space:nowrap">%s / mes</b></li>'
+        % (_esc(a.nombre), _esc(a.descripcion), _fmt_cop(a.precio_mensual))
         for a in addons
     )
-    body = f"""
-<style>
-.gpages{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px 16px 40px}}
-.gpages-in{{max-width:1100px;margin:0 auto}}
-.gpages a.back{{color:#0B2D57;font-weight:700;text-decoration:none;font-size:13px}}
-.gpages h1{{color:#0B2D57;margin:8px 0 6px;font-size:22px}}
-.gpages .sub{{color:#64748b;font-size:13px;margin-bottom:16px}}
-.pgrid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:20px;align-items:start}}
-.pcard{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(15,23,42,.04);display:flex;flex-direction:column}}
-.pcard-img,.pcard img{{width:100%!important;height:64px!important;max-height:64px!important;object-fit:cover!important;border-radius:8px;margin-bottom:8px;background:#0B2D57;display:block}}
-.pcard-img.ph{{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px}}
-.pcard-code{{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em;font-weight:700}}
-.pcard-name{{font-size:18px;font-weight:800;color:#0B2D57;margin:4px 0}}
-.pcard-price{{font-size:20px;font-weight:800;color:#0f172a;margin:6px 0}}
-.pcard-price span{{font-size:12px;font-weight:600;color:#64748b}}
-.pcard-meta{{font-size:11px;color:#64748b;margin-bottom:10px;line-height:1.4}}
-.pcard-btn{{display:block;background:#0B2D57;color:#fff;text-align:center;padding:10px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;margin-top:auto}}
-.addons{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}}
-.addon{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px}}
-.addon b{{display:block;color:#0B2D57}}.addon span{{color:#15803d;font-weight:800;font-size:14px}}
-.addon small{{display:block;color:#64748b;margin-top:4px}}
-.msg{{background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin-bottom:12px;font-weight:600}}
-.top-actions{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}}
-.top-actions a{{display:inline-block;padding:10px 16px;border-radius:980px;font-weight:700;font-size:13px;text-decoration:none}}
-.top-actions .prim{{background:#005BEA;color:#fff}}.top-actions .sec{{background:#f5f5f7;color:#0B2D57}}
-</style>
-<div class="gpages"><div class="gpages-in">
-  <a class="back" href="/gerencia/hq">← Módulos HQ</a>
-  <h1>Planes comerciales</h1>
-  <p class="sub">Elija un plan y edítelo en una ventana separada. Beneficios y alta de planes tienen su propio módulo.</p>
-  {"<div class='msg'>"+_esc(msg)+"</div>" if msg else ""}
-  <div class="top-actions">
-    <a class="prim" href="/gerencia/planes/nuevo">+ Crear plan nuevo</a>
-    <a class="sec" href="/gerencia/beneficios">Ver beneficios (solo copy)</a>
-    <a class="sec" href="/ventas/beneficios" target="_blank">Portal ventas / público</a>
-  </div>
-  <div class="pgrid">{cards or "<p>Sin planes. Cree el primero.</p>"}</div>
-  <h2 style="color:#0B2D57;font-size:16px">Add-ons</h2>
-  <div class="addons">{add_html or "<p>Sin add-ons</p>"}</div>
-</div></div>
+    content = f"""
+{_PLAN_CARD_CSS}
+<header class="role-hero"><div>
+  <h1>Planes activos</h1>
+  <p>Active o suspenda planes del catálogo. Un plan suspendido deja de ofrecerse en ventas; los colegios que ya lo tienen siguen igual.</p>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+  <a class="btn" href="/gerencia/planes/nuevo">+ Crear plan nuevo</a>
+  <a class="btn" href="/gerencia/beneficios">Beneficios</a>
+  <a class="btn" href="/planes/buscar">Buscar plan</a>
+</div></header>
+{_msg_html(msg)}
+<section class="role-panel">
+  <form method="GET" class="ec-search" role="search">
+    <input type="hidden" name="estado" value="{_esc(estado)}">
+    <input type="search" name="q" value="{_esc(q)}" placeholder="Filtrar por código o nombre" aria-label="Filtrar planes por código o nombre" autocomplete="off">
+    <button type="submit" class="btn">Filtrar</button>
+  </form>
+  <div class="ec-fchips">{chips}</div>
+</section>
+<div class="ec-grid">{items}</div>
+<section class="role-panel">
+  <h2 style="margin:0 0 6px;font-size:17px;color:#0a2a7a">Add-ons</h2>
+  <ul style="list-style:none;margin:0;padding:0">{add_html or '<li style="color:#64748b">Sin add-ons</li>'}</ul>
+</section>
 """
-    return page("Planes gerencia", body)
+    return page("Planes gerencia", shell(content))
+
+
+@app.route("/planes/politicas/<codigo>")
+def planes_politicas(codigo):
+    """'Ver políticas': beneficios, límites y condiciones que trae cada plan (uso interno)."""
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in _ROLES_VER_PLANES:
+        return acceso_denegado()
+    _marcar_layout_staff()
+    try:
+        _ensure_plan_comercial_cols()
+    except Exception:
+        pass
+    cod = (codigo or "").strip()
+    p = PlanComercial.query.filter_by(codigo=cod).first()
+    if p is None:
+        p = PlanComercial.query.filter(func.lower(PlanComercial.codigo) == cod.lower()).first()
+    if p is None:
+        body = (
+            '<header class="role-hero"><div><h1>Plan no encontrado</h1>'
+            '<p>No existe un plan con el código «%s».</p></div>'
+            '<a class="btn" href="/planes/buscar">← Buscar planes</a></header>' % _esc(cod)
+        )
+        return page("Plan no encontrado", shell(body))
+    promo = None
+    try:
+        promo = _promo_activa_global()
+    except Exception:
+        promo = None
+    f = _plan_features(p)
+    pr = _plan_precios(p, promo)
+    es_ger = rol in _ROLES_GERENCIA_PLANES
+    activo = bool(p.activo)
+
+    incluidos = f["incluidos"] or [_PLAN_MODULOS_LARGO.get(m, m) for m in f["modulos"]]
+    sec_incl = ""
+    if incluidos:
+        sec_incl = (
+            '<section class="ec-sec"><h2>Beneficios que trae el plan</h2><ul class="ec-list">%s</ul></section>'
+            % "".join("<li>%s</li>" % _esc(x) for x in incluidos)
+        )
+    sec_mods = ""
+    if f["modulos"] and f["incluidos"]:
+        sec_mods = (
+            '<section class="ec-sec"><h2>Funciones activas</h2><div class="ec-chipset">%s</div></section>'
+            % "".join("<span>%s</span>" % _esc(_PLAN_MODULOS_LARGO.get(m, m)) for m in f["modulos"])
+        )
+    sec_no = ""
+    if f["excluidos"]:
+        sec_no = (
+            '<section class="ec-sec"><h2>No incluye</h2><ul class="ec-list no">%s</ul></section>'
+            % "".join("<li>%s</li>" % _esc(x) for x in f["excluidos"])
+        )
+    titulo = (getattr(p, "titulo_comercial", None) or "").strip()
+    wa = (getattr(p, "mensaje_whatsapp", None) or "").strip()
+    cta = (getattr(p, "cta_comercial", None) or "").strip()
+    sec_copy = ""
+    if titulo or wa or cta:
+        sec_copy = '<section class="ec-sec"><h2>Mensaje comercial</h2>'
+        if titulo:
+            sec_copy += '<p style="margin:0 0 8px;font-weight:700;color:#0a2a7a">%s</p>' % _esc(titulo)
+        if wa:
+            sec_copy += '<pre class="ec-msg">%s</pre>' % _esc(wa)
+        if cta:
+            sec_copy += '<p style="margin:8px 0 0;font-weight:700;color:#0a3aa5">%s</p>' % _esc(cta)
+        sec_copy += "</section>"
+    me = int(getattr(p, "max_estudiantes", 0) or 0)
+    fee = float(getattr(p, "fee_implementacion", 0) or 0)
+    if pr["tiene"]:
+        pct_txt = "%g" % round(pr["pct"], 2)
+        desc_txt = "%s%% de descuento · %s. Pasa de %s a %s al mes." % (
+            pct_txt, pr["duracion"].lower() if pr["duracion"] else "vigente", _fmt_cop(pr["lista"]), _fmt_cop(pr["neto"]))
+        if pr["promo_nombre"]:
+            desc_txt += " Promoción: %s." % pr["promo_nombre"]
+    else:
+        desc_txt = "Sin descuento vigente."
+    filas = [
+        ("Estado del plan", "Activo" if activo else "Suspendido (no se ofrece en ventas)"),
+        ("Modalidad", "Online / virtual" if (getattr(p, "modalidad", "") or "").lower() == "online" else "Presencial"),
+        ("Estudiantes", "Ilimitados" if (me <= 0 or me >= 99999) else _fmt_num(me)),
+        ("Sedes", (str(int(getattr(p, "max_sedes", 0) or 0)) if int(getattr(p, "max_sedes", 0) or 0) > 0 else "—")),
+        ("Usuarios administrativos", str(int(getattr(p, "max_admin", 0) or 0))),
+        ("Docentes", str(int(getattr(p, "max_docentes", 0) or 0))),
+        ("Soporte", f["soporte"] or "Soporte estándar"),
+        ("Vigencia", f["vigencia"] or "Mensual"),
+        ("Valor mensual", _fmt_cop(pr["lista"])),
+        ("Implementación", (_fmt_cop(fee) + " (pago único)") if fee > 0 else "Sin costo"),
+        ("Descuento", desc_txt),
+    ]
+    dl = "".join("<dt>%s</dt><dd>%s</dd>" % (_esc(k), _esc(v)) for k, v in filas)
+    nota = ('<section class="ec-sec"><h2>Nota</h2><p style="margin:0;font-size:14px;color:#334155">%s</p></section>' % _esc(f["nota_qr"])) if f["nota_qr"] else ""
+    acciones_ger = ""
+    if es_ger:
+        acciones_ger = (
+            '<a class="btn" href="/gerencia/beneficios/%d">Editar beneficios</a>'
+            '<a class="btn" href="/gerencia/planes/editar/%d">Editar plan</a>' % (p.id, p.id)
+        )
+    content = f"""
+{_PLAN_CARD_CSS}
+<header class="role-hero"><div>
+  <h1>Políticas · {_esc(_plan_nombre_vista(p.nombre) or p.codigo)}</h1>
+  <p>Lo que trae este plan: beneficios, límites y condiciones comerciales.</p>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">{acciones_ger}<a class="btn" href="/planes/buscar">← Buscar planes</a></div></header>
+<div class="ec-pol-grid">
+  <div class="{'ec-off' if not activo else ''}">{_plan_card_html(p, promo, politicas=False)}</div>
+  <div class="role-panel">
+    {sec_incl}{sec_mods}{sec_no}{sec_copy}
+    <section class="ec-sec"><h2>Condiciones del plan</h2><dl class="ec-dl">{dl}</dl></section>
+    {nota}
+  </div>
+</div>
+"""
+    return page("Políticas del plan", shell(content))
 
 
 def _plan_form_fields(p=None, crear=False):
@@ -33670,109 +34275,44 @@ def gerencia_beneficios(pid=None):
 """
         return page("Editar beneficios", body)
 
-    # Listado tipo vista previa + botón editar beneficios
-    cards = []
-    for pl in planes:
-        pleno = float(getattr(pl, "precio_lista", 0) or 0) or float(getattr(pl, "precio_mensual", 0) or 0)
-        try:
-            pv = _calcular_promo_valores(pleno, promo)
-        except Exception:
-            pv = {"valor_pleno": int(pleno), "valor_descuento": int(float(pl.precio_mensual or pleno)), "porcentaje": float(getattr(pl, "descuento_pct", 0) or 0), "nombre_promo": "", "fecha_caducidad_texto": ""}
-        if float(getattr(pl, "descuento_pct", 0) or 0) > 0:
-            pct = float(pl.descuento_pct)
-            val_desc = int(float(pl.precio_mensual or 0)) or int(round(pleno * (1 - pct / 100)))
-            val_pleno = int(pleno)
-        else:
-            pct = float(pv.get("porcentaje") or 0)
-            val_desc = int(pv.get("valor_descuento") or pleno)
-            val_pleno = int(pv.get("valor_pleno") or pleno)
-        meses = int(getattr(pl, "descuento_meses", 0) or 0)
+    # Listado: tarjeta del plan + vista previa del mensaje comercial + botones de edición
+    todos_pl = PlanComercial.query.order_by(PlanComercial.orden, PlanComercial.id).all()
+    items = []
+    for pl in todos_pl:
         titulo = (getattr(pl, "titulo_comercial", None) or "").strip()
         msg_wa = (getattr(pl, "mensaje_whatsapp", None) or "").strip()
         cta = (getattr(pl, "cta_comercial", None) or "").strip()
-        badge = ""
-        if pct > 0:
-            nom = (pv.get("nombre_promo") or "DESCUENTO INSTITUCIONAL").upper()
-            badge = (
-                '<div class="bp-badge">%s · %s%%'
-                % (_esc(nom[:40]), ("{:.1f}".format(pct).rstrip("0").rstrip(".")))
-            )
-            if meses > 0:
-                badge += " · %s MESES" % meses
-            badge += "</div>"
-            if pv.get("fecha_caducidad_texto"):
-                badge += '<div class="bp-until">Hasta %s</div>' % _esc(pv.get("fecha_caducidad_texto"))
-        precio_html = (
-            '<div class="bp-price">$%s <span>COP/mes</span></div>'
-            % ("{:,.0f}".format(val_desc).replace(",", "."))
-        )
-        if pct > 0 and val_pleno > val_desc:
-            precio_html += (
-                '<div class="bp-strike">$%s COP</div>'
-                % ("{:,.0f}".format(val_pleno).replace(",", "."))
-            )
-        copy_block = ""
         if titulo or msg_wa or cta:
-            copy_block = '<div class="bp-copy">'
+            copy_html = '<div class="ec-copy">'
             if titulo:
-                copy_block += '<div class="bp-title-c">%s</div>' % _esc(titulo)
+                copy_html += "<b>%s</b>" % _esc(titulo)
             if msg_wa:
-                copy_block += '<pre class="bp-msg">%s</pre>' % _esc(msg_wa)
+                copy_html += "<pre>%s</pre>" % _esc(msg_wa)
             if cta:
-                copy_block += '<div class="bp-cta">%s</div>' % _esc(cta)
-            copy_block += "</div>"
+                copy_html += '<div class="cta">%s</div>' % _esc(cta)
+            copy_html += "</div>"
         else:
-            copy_block = '<p class="bp-empty">Sin beneficios configurados · pulse Editar</p>'
-        cards.append(
-            '<div class="bp-card">'
-            '<div class="bp-code">%s</div>'
-            '<div class="bp-name">%s</div>'
-            '%s%s%s'
-            '<a class="bp-btn" href="/gerencia/beneficios/%s">Editar beneficios</a>'
-            '</div>'
-            % (
-                _esc((pl.codigo or "").upper()),
-                _esc(pl.nombre or pl.codigo),
-                precio_html,
-                badge,
-                copy_block,
-                pl.id,
-            )
+            copy_html = '<div class="ec-copy vacio">Sin mensaje comercial. Pulse «Editar beneficios».</div>'
+        acciones = (
+            '<div class="ec-act"><a class="ec-btn pri" href="/gerencia/beneficios/%d">Editar beneficios</a>'
+            '<a class="ec-btn" href="/gerencia/planes/editar/%d">Editar plan</a></div>' % (pl.id, pl.id)
         )
-
+        items.append(
+            '<div class="ec-item%s">%s%s%s</div>' % (
+                "" if pl.activo else " ec-off", _plan_card_html(pl, promo), copy_html, acciones)
+        )
+    items_html = "".join(items) or '<div class="ec-empty" style="grid-column:1/-1">Todavía no hay planes creados.</div>'
     body = f"""
-<style>
-.bp{{background:#f5f5f7;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px 16px 48px}}
-.bp-in{{max-width:1100px;margin:0 auto}}
-.bp h1{{color:#002060;margin:8px 0 4px;font-size:24px;font-weight:700}}
-.bp .sub{{color:#86868b;font-size:13px;margin:0 0 18px}}
-.bp-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}}
-.bp-card{{background:#fff;border-radius:18px;padding:18px 16px;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 12px rgba(0,0,0,.03);display:flex;flex-direction:column}}
-.bp-code{{font-size:11px;font-weight:700;color:#86868b;letter-spacing:.06em;text-transform:uppercase}}
-.bp-name{{font-size:18px;font-weight:700;color:#1d1d1f;margin:4px 0 8px}}
-.bp-price{{font-size:26px;font-weight:700;color:#005BEA}}
-.bp-price span{{font-size:13px;font-weight:500;color:#86868b}}
-.bp-strike{{font-size:13px;color:#86868b;text-decoration:line-through;margin-top:2px}}
-.bp-badge{{display:inline-block;margin-top:10px;background:#e8f1ff;color:#005BEA;font-size:11px;font-weight:700;padding:6px 10px;border-radius:999px}}
-.bp-until{{font-size:11px;color:#86868b;margin-top:6px}}
-.bp-copy{{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;flex:1}}
-.bp-title-c{{font-weight:700;color:#002060;font-size:14px;margin-bottom:6px}}
-.bp-msg{{white-space:pre-wrap;font-family:inherit;font-size:12px;color:#1d1d1f;margin:0;line-height:1.45}}
-.bp-cta{{margin-top:8px;font-size:12px;font-weight:600;color:#005BEA}}
-.bp-empty{{font-size:12px;color:#94a3b8;margin:12px 0;flex:1}}
-.bp-btn{{display:block;text-align:center;margin-top:14px;padding:10px 14px;border-radius:980px;background:#005BEA;color:#fff;text-decoration:none;font-weight:600;font-size:13px}}
-.msg{{padding:12px;border-radius:12px;margin-bottom:14px;font-weight:600;font-size:13px}}
-.ok{{background:#ecfdf5;color:#065f46}}.err{{background:#fef2f2;color:#991b1b}}
-</style>
-<div class="bp"><div class="bp-in">
-  <h1>Vista previa en planes (datos reales)</h1>
-  <p class="sub">Si cambia el % o el copy en Gerencia, estos valores se recalculan al instante. Pulse <b>Editar beneficios</b> en cada tarjeta.</p>
-  {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-  {"<div class='msg err'>"+_esc(err)+"</div>" if err else ""}
-  <div class="bp-grid">{"".join(cards) or "<p>No hay planes activos.</p>"}</div>
-</div></div>
+{_PLAN_CARD_CSS}
+<header class="role-hero"><div>
+  <h1>Beneficios de los planes</h1>
+  <p>Así ve el asesor cada plan, con datos reales. Edite el mensaje comercial y el descuento; se refleja al instante en ventas. En «Ver políticas» está el detalle de lo que trae cada plan.</p>
+</div>
+<a class="btn" href="/gerencia/planes">Planes activos</a></header>
+{_msg_html(msg, err)}
+<div class="ec-grid">{items_html}</div>
 """
-    return page("Beneficios planes", body)
+    return page("Beneficios planes", shell(body))
 
 
 @app.route("/soporte/verificar-pin/<token>", methods=["GET", "POST"])
@@ -35416,7 +35956,7 @@ def _seed_planes_comerciales():
             force = True
         if PlanComercial.query.filter_by(codigo="qr_basico").first() is None:
             force = True
-        if PlanComercial.query.filter_by(activo=True).count() < 3:
+        if PlanComercial.query.count() < 3:
             force = True
     except Exception:
         force = True
@@ -35435,6 +35975,7 @@ def _seed_planes_comerciales():
                 force_this = force
         else:
             force_this = force
+        _es_nuevo = p.id is None  # solo un plan recién creado nace activo; después decide Gerencia
         feats = {
             "incluidos": d["incluidos"],
             "excluidos": d.get("excluidos") or [],
@@ -35485,7 +36026,8 @@ def _seed_planes_comerciales():
                 p.precio_mensual = float(d.get("precio") or 0)
             if float(p.fee_implementacion or 0) <= 0:
                 p.fee_implementacion = float(d.get("fee") or 0)
-        p.activo = True
+        if _es_nuevo or p.activo is None:
+            p.activo = True
         if not p.max_sedes:
             p.max_sedes = 20
         try:
@@ -35506,9 +36048,8 @@ def _seed_planes_comerciales():
                     p.features_json = _j2.dumps(_fx, ensure_ascii=False)
         except Exception:
             pass
-    for extra in PlanComercial.query.all():
-        if (extra.codigo or "").lower() not in codigos_ok:
-            extra.activo = False
+    # Los planes creados en Gerencia (p. ej. los online) conservan el estado que Gerencia les dé.
+    # Antes se desactivaban aquí en cada visita por no estar en el catálogo oficial.
     # Sincronizar catálogo de add-ons (sin sede extra; sedes incluidas en plan)
     try:
         for cod_off in ("sede_extra", "sede"):
@@ -64770,7 +65311,7 @@ def support_home():
                 '<article style="margin:0 0 36px;padding-bottom:28px;border-bottom:1px solid #e8e8ed">'
                 '<h3 style="font-size:22px;font-weight:600;color:#1d1d1f;margin:0 0 12px;letter-spacing:-.02em">%s</h3>'
                 '<div style="font-size:17px;line-height:1.55;color:#1d1d1f;white-space:pre-wrap">%s</div>'
-                '</article>' % (_esc(a.titulo or "Artículo"), _esc(cuerpo))
+                '</article>' % (_esc(a.titulo or "Artículo"), _support_fmt(cuerpo))
             )
         bloques.append(
             '<section style="margin:0 0 40px">'
@@ -64803,56 +65344,180 @@ def support_articulo(slug):
 <div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;max-width:692px;margin:0 auto;padding:48px 22px 80px">
   <a href="/support" style="color:#06c;text-decoration:none;font-size:14px">‹ Support</a>
   <h1 style="font-size:40px;font-weight:600;letter-spacing:-.02em;margin:20px 0 24px;color:#1d1d1f">{_esc(a.titulo)}</h1>
-  <div style="font-size:17px;line-height:1.55;color:#1d1d1f;white-space:pre-wrap">{_esc(a.cuerpo or "")}</div>
+  <div style="font-size:17px;line-height:1.55;color:#1d1d1f;white-space:pre-wrap">{_support_fmt(a.cuerpo or "")}</div>
 </div>"""
     return page(a.titulo or "Support", body)
 
 
+def _support_fmt(texto):
+    """Escapa el texto y convierte **negrita** en <strong>. Seguro: primero escapa, luego marca."""
+    seguro = _esc(texto or "")
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", seguro, flags=re.S)
+
+
+_SUPPORT_EDITOR_CSS = """<style>
+.sp-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
+.sp-col{display:grid;gap:10px;min-width:0}
+.sp-col label{font-weight:700;color:#0f2a5c;font-size:13px}
+.sp-col input[type=text],.sp-col textarea{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #b8c7e3;border-radius:12px;font:inherit;background:#fff;color:#0f172a}
+.sp-col textarea{min-height:320px;line-height:1.5;resize:vertical}
+.sp-col input:focus-visible,.sp-col textarea:focus-visible{outline:3px solid #7ab8ff;outline-offset:1px}
+.sp-tools{display:flex;align-items:center;gap:12px}
+.sp-tools .sp-b{width:40px;height:40px;padding:0;border-radius:10px;font-weight:900;font-size:18px;cursor:pointer;background:#fff!important;color:#0a3aa5!important;border:1.5px solid #b8c7e3!important;box-shadow:none!important}
+.sp-tools .sp-b:hover{background:#eef5ff!important}
+.sp-tools .sp-b:focus-visible{outline:3px solid #ffcf33;outline-offset:2px}
+.sp-prev{border:1px dashed #b8c7e3;border-radius:14px;padding:16px 18px;background:#fff;min-height:320px;font-size:16px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;color:#1d1d1f}
+.sp-aviso{background:#fff7e0;border:1px solid #f3d27a;color:#7a5200;padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;margin:0 0 12px}
+.sp-est{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.sp-est.pub{background:#dcfce7;color:#166534}
+.sp-est.bor{background:#fef3c7;color:#92400e}
+.sp-acc{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.sp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+@media(max-width:900px){.sp-grid{grid-template-columns:1fr}}
+</style>"""
+
+_SUPPORT_EDITOR_JS = r"""<script>
+(function(){
+  var ta=document.getElementById('sp-cuerpo'), pv=document.getElementById('sp-prev'),
+      tt=document.getElementById('sp-titulo'), btn=document.getElementById('sp-bold');
+  if(!ta||!pv||!btn) return;
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+  function render(){
+    var t=esc(ta.value).replace(/\*\*([\s\S]+?)\*\*/g,'<strong>$1</strong>');
+    var h=(tt&&tt.value)?'<h3 style="margin:0 0 10px;font-size:22px;font-weight:600">'+esc(tt.value)+'</h3>':'';
+    pv.innerHTML=h+(t||'<span style="color:#86868b">La vista previa aparece aquí.</span>');
+  }
+  function negrita(){
+    var s=ta.selectionStart,e=ta.selectionEnd,v=ta.value,sel=v.slice(s,e);
+    if(sel.length>=4&&sel.slice(0,2)==='**'&&sel.slice(-2)==='**'){
+      ta.value=v.slice(0,s)+sel.slice(2,-2)+v.slice(e); ta.setSelectionRange(s,e-4);
+    }else if(s>=2&&v.slice(s-2,s)==='**'&&v.slice(e,e+2)==='**'){
+      ta.value=v.slice(0,s-2)+sel+v.slice(e+2); ta.setSelectionRange(s-2,e-2);
+    }else{
+      ta.value=v.slice(0,s)+'**'+sel+'**'+v.slice(e);
+      if(sel){ta.setSelectionRange(s,e+4);}else{ta.setSelectionRange(s+2,s+2);}
+    }
+    ta.focus(); render();
+  }
+  btn.addEventListener('click',negrita);
+  ta.addEventListener('keydown',function(ev){
+    if((ev.ctrlKey||ev.metaKey)&&(ev.key==='b'||ev.key==='B')){ev.preventDefault();negrita();}
+  });
+  ta.addEventListener('input',render);
+  if(tt) tt.addEventListener('input',render);
+  render();
+})();
+</script>"""
+
+
 @app.route("/support/editor", methods=["GET", "POST"])
 def support_editor():
-    """Soporte redacta; solo guarda BORRADOR. Publica Gerencia."""
+    """Soporte redacta y edita artículos (con negrita). La publicación la autoriza Gerencia."""
     if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador", "Gerencia"):
         return redirect("/soporte-login")
+    _marcar_layout_staff()
     _ensure_mod_tables()
-    msg = ""
+    es_ger = rol_actual() in ("Gerente", "Superadmin", "Administrador", "Gerencia")
+    msg = err = ""
+    eid = (request.values.get("id") or "").strip()
+    art = ArticuloAyuda.query.get(int(eid)) if eid.isdigit() else None
+    v_titulo = art.titulo if art else ""
+    v_cat = (art.categoria if art else "") or "General"
+    v_cuerpo = (art.cuerpo if art else "") or ""
     if request.method == "POST":
         titulo = (request.form.get("titulo") or "").strip()[:255]
         cuerpo = (request.form.get("cuerpo") or "").strip()
-        cat = (request.form.get("categoria") or "General")[:80]
-        if titulo and cuerpo:
-            import re as _re
-            slug = _re.sub(r"[\s_]+", "-", _re.sub(r"[^\w\s-]", "", titulo.lower())).strip("-")[:140] or secrets.token_hex(4)
-            art = ArticuloAyuda(
-                slug=slug, titulo=titulo, cuerpo=cuerpo, categoria=cat, estado="BORRADOR",
-                creado_por=session.get("usuario") or "", creado_en=fecha_hoy() or "",
-            )
-            n, base = 1, art.slug
-            while ArticuloAyuda.query.filter_by(slug=art.slug).first():
-                art.slug = "%s-%s" % (base, n)
-                n += 1
-            db.session.add(art)
-            db.session.commit()
-            msg = "Borrador guardado. Gerencia debe autorizar la publicación."
-    lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(25).all()
+        cat = ((request.form.get("categoria") or "General").strip() or "General")[:80]
+        v_titulo, v_cat, v_cuerpo = titulo, cat, cuerpo
+        if not titulo or not cuerpo:
+            err = "Escriba el título y el contenido."
+        else:
+            try:
+                if art is not None:
+                    art.titulo, art.cuerpo, art.categoria = titulo, cuerpo, cat
+                    if art.estado == "PUBLICADO" and not es_ger:
+                        art.estado = "BORRADOR"
+                        msg = ("Cambios guardados. El artículo estaba publicado: vuelve a borrador "
+                               "hasta que Gerencia lo autorice de nuevo.")
+                    else:
+                        msg = "Cambios guardados."
+                    db.session.commit()
+                else:
+                    slug = re.sub(r"[\s_]+", "-", re.sub(r"[^\w\s-]", "", titulo.lower())).strip("-")[:140] or secrets.token_hex(4)
+                    nuevo = ArticuloAyuda(
+                        slug=slug, titulo=titulo, cuerpo=cuerpo, categoria=cat, estado="BORRADOR",
+                        creado_por=session.get("usuario") or "", creado_en=fecha_hoy() or "",
+                    )
+                    n, base = 1, nuevo.slug
+                    while ArticuloAyuda.query.filter_by(slug=nuevo.slug).first():
+                        nuevo.slug = "%s-%s" % (base, n)
+                        n += 1
+                    db.session.add(nuevo)
+                    db.session.commit()
+                    msg = "Borrador guardado. Gerencia debe autorizar la publicación."
+                    v_titulo, v_cat, v_cuerpo = "", "General", ""
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = "No se pudo guardar: %s" % str(ex)[:120]
+                msg = ""
+    lista = ArticuloAyuda.query.order_by(ArticuloAyuda.id.desc()).limit(50).all()
     filas = "".join(
-        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-        % (_esc(a.titulo), _esc(a.estado), _esc(a.categoria), _esc(a.creado_por or ""))
+        '<tr><td>%s</td><td><span class="sp-est %s">%s</span></td><td>%s</td><td>%s</td>'
+        '<td><div class="sp-acc"><a class="btn" href="/support/editor?id=%d">Editar</a>'
+        '<a class="btn" href="/support/a/%s" target="_blank" rel="noopener">Ver</a></div></td></tr>'
+        % (
+            _esc(a.titulo), "pub" if a.estado == "PUBLICADO" else "bor",
+            "Publicado" if a.estado == "PUBLICADO" else "Borrador",
+            _esc(a.categoria), _esc(a.creado_por or ""), a.id, quote(a.slug or "", safe=""),
+        )
         for a in lista
-    ) or "<tr><td colspan='4'>—</td></tr>"
+    ) or "<tr><td colspan='5'>Aún no hay artículos.</td></tr>"
+    editando = art is not None
+    aviso = ""
+    if editando and art.estado == "PUBLICADO" and not es_ger:
+        aviso = ('<div class="sp-aviso">Este artículo está publicado. Al guardar los cambios vuelve a borrador '
+                 'y Gerencia debe autorizarlo de nuevo.</div>')
+    hidden_id = '<input type="hidden" name="id" value="%d">' % art.id if editando else ""
+    boton = "Guardar cambios" if editando else "Guardar borrador"
+    extra = '<a class="btn" href="/support/editor">Nuevo artículo</a>' if editando else ""
     content = f"""
-<header class="role-hero"><div><h1>Redactar Support</h1>
-<p>Soporte escribe el artículo. <b>No se publica</b> hasta que Gerencia lo autorice.</p></div>
-<a class="btn" href="/support">Ver Support</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-<section class="role-panel" style="max-width:640px">
-<form method="POST" style="display:grid;gap:10px">
-<label>Título</label><input name="titulo" required>
-<label>Categoría</label><input name="categoria" value="General">
-<label>Contenido</label><textarea name="cuerpo" rows="12" required></textarea>
-<button class="btn" type="submit">Guardar borrador</button>
-</form></section>
-<section class="role-panel"><table class="table" style="width:100%">
-<tr><th>Título</th><th>Estado</th><th>Categoría</th><th>Autor</th></tr>{filas}</table></section>"""
+{_SUPPORT_EDITOR_CSS}
+<header class="role-hero"><div><h1>{"Editar artículo" if editando else "Redactar Support"}</h1>
+<p>Soporte escribe y edita el artículo. <b>No se publica</b> hasta que Gerencia lo autorice.</p></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">{extra}<a class="btn" href="/support">Ver Support</a></div></header>
+{_msg_html(msg, err)}
+<section class="role-panel">
+{aviso}
+<form method="POST">
+{hidden_id}
+<div class="sp-grid">
+  <div class="sp-col">
+    <label for="sp-titulo">Título</label>
+    <input id="sp-titulo" name="titulo" type="text" required value="{_esc(v_titulo)}">
+    <label for="sp-cat">Categoría</label>
+    <input id="sp-cat" name="categoria" type="text" value="{_esc(v_cat)}">
+    <label for="sp-cuerpo">Contenido</label>
+    <div class="sp-tools">
+      <button type="button" id="sp-bold" class="sp-b" title="Negrita (Ctrl+B)" aria-label="Negrita"><b>B</b></button>
+      <span class="mini-text">Seleccione el texto y pulse B para ponerlo en negrita.</span>
+    </div>
+    <textarea id="sp-cuerpo" name="cuerpo" required>{_esc(v_cuerpo)}</textarea>
+  </div>
+  <div class="sp-col">
+    <label>Vista previa</label>
+    <div id="sp-prev" class="sp-prev" aria-live="polite"></div>
+  </div>
+</div>
+<div class="sp-actions"><button class="btn" type="submit">{boton}</button></div>
+</form>
+</section>
+<div class="table-card"><table class="table" style="width:100%">
+<tr><th>Título</th><th>Estado</th><th>Categoría</th><th>Autor</th><th>Acciones</th></tr>{filas}</table></div>
+{_SUPPORT_EDITOR_JS}
+"""
     return page("Redactar Support", shell(content))
 
 
@@ -65431,137 +66096,199 @@ def soporte_auditoria_colegio_bloqueada():
 
 @app.route("/planes/buscar")
 def planes_buscar():
-    """Buscar planes por nombre o código — Gerencia, Ventas y Soporte."""
+    """Buscar planes por código o nombre — Gerencia, Ventas y Soporte. No lista todo: solo lo que se busca."""
     if not requiere_login():
         return redirect("/login")
     rol = rol_actual()
-    if rol not in (
-        "Soporte", "Gerente", "Gerencia", "Superadmin", "Administrador",
-        "Comercial", "Ventas", "Supervisor de Ventas",
-    ):
+    if rol not in _ROLES_VER_PLANES:
         return acceso_denegado()
+    _marcar_layout_staff()
     q = (request.args.get("q") or "").strip()
-    rows = []
-    try:
+    msg = (request.args.get("msg") or "").strip()
+    es_ger = rol in _ROLES_GERENCIA_PLANES
+    resultados, total, err = [], 0, ""
+    if q:
         try:
             _ensure_plan_comercial_cols()
+            nq = _norm_txt(q)
+            for p in PlanComercial.query.order_by(PlanComercial.orden.asc(), PlanComercial.id.asc()).all():
+                if any(nq in _norm_txt(c) for c in (p.codigo, p.nombre, getattr(p, "titulo_comercial", None))):
+                    resultados.append(p)
+            resultados.sort(key=lambda pl: 0 if _norm_txt(pl.codigo) == nq else 1)  # código exacto primero
+            total = len(resultados)
+            resultados = resultados[:24]
+        except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = "No se pudo buscar: %s" % str(ex)[:120]
+    if es_ger:
+        vend = "/gerencia/planes-vendidos"
+    elif rol == "Soporte":
+        vend = "/soporte/planes-vendidos"
+    else:
+        vend = "/ventas/planes-vendidos"
+
+    if q and resultados:
+        promo = None
+        try:
+            promo = _promo_activa_global()
         except Exception:
-            pass
-        qry = PlanComercial.query
-        if q:
-            like = "%" + q + "%"
-            qry = qry.filter(db.or_(
-                PlanComercial.codigo.ilike(like),
-                PlanComercial.nombre.ilike(like),
-                PlanComercial.titulo_comercial.ilike(like),
-            ))
-        planes = qry.order_by(PlanComercial.orden.asc(), PlanComercial.id.asc()).limit(80).all()
-        for p in planes:
-            img = (getattr(p, "imagen_path", None) or "").strip()
-            img_html = ('<img src="%s" style="width:48px;height:48px;object-fit:cover;border-radius:10px">' % _esc(img)) if img else "—"
-            rows.append(
-                "<tr><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
-                    img_html, _esc(p.codigo or ""), _esc(p.nombre or ""),
-                    _esc(getattr(p, "modalidad", None) or "—"),
-                    "Activo" if p.activo else "Inactivo",
-                    ("$ {:,.0f}".format(float(p.precio_mensual or 0))).replace(",", "."),
-                )
+            promo = None
+        next_url = "/planes/buscar?q=" + quote_plus(q)
+        items = "".join(
+            '<div class="ec-item%s">%s%s</div>' % (
+                "" if p.activo else " ec-off",
+                _plan_card_html(p, promo),
+                _plan_acciones_html(p, next_url) if es_ger else "",
             )
-    except Exception as ex:
-        rows = ["<tr><td colspan='6'>Error: %s</td></tr>" % _esc(str(ex)[:120])]
-    body = f"""
+            for p in resultados
+        )
+        cuenta = "%d resultado%s para «%s»" % (total, "" if total == 1 else "s", _esc(q))
+        if total > len(resultados):
+            cuenta += " · mostrando los primeros %d, afina la búsqueda" % len(resultados)
+        cuerpo = '<p class="ec-res">%s</p><div class="ec-grid">%s</div>' % (cuenta, items)
+    elif q and not err:
+        cuerpo = (
+            '<div class="ec-empty role-panel"><b>No encontramos planes con «%s».</b><br>'
+            'Revisa el código o prueba con una parte del nombre.</div>' % _esc(q)
+        )
+    elif not q:
+        cuerpo = (
+            '<div class="ec-empty role-panel">Escribe el <b>código</b> o el <b>nombre</b> del plan para ver su tarjeta.<br>'
+            'Por ejemplo, un código como 2501 o una palabra como «basico» o «QR».</div>'
+        )
+    else:
+        cuerpo = ""
+    limpiar = ('<a class="ec-fchip" href="/planes/buscar">Limpiar</a>' if q else "")
+    content = f"""
+{_PLAN_CARD_CSS}
 <header class="role-hero"><div>
   <h1>Buscar planes</h1>
-  <p>Por nombre o código único del plan.</p>
-</div></header>
+  <p>Por código único o por nombre del plan.</p>
+</div>
+<a class="btn" href="{vend}">Planes vendidos</a></header>
+{_msg_html(msg, err)}
 <section class="role-panel">
-  <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-    <input name="q" value="{_esc(q)}" placeholder="Nombre o código del plan"
-      style="flex:1;min-width:200px;padding:12px;border-radius:12px;border:1px solid #e2e8f0">
+  <form method="GET" class="ec-search" role="search">
+    <input type="search" name="q" value="{_esc(q)}" placeholder="Código o nombre del plan (ej. 2501, basico, QR)" aria-label="Buscar plan por código o nombre" autocomplete="off" autofocus>
     <button type="submit" class="btn">Buscar</button>
+    {limpiar}
   </form>
-  <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#f1f5f9;text-align:left">
-      <th style="padding:8px">Foto</th><th style="padding:8px">Código</th><th style="padding:8px">Nombre</th>
-      <th style="padding:8px">Modalidad</th><th style="padding:8px">Estado</th><th style="padding:8px">Precio</th>
-    </tr>
-    {"".join(rows) or "<tr><td colspan='6' style='padding:12px'>Sin resultados</td></tr>"}
-  </table>
 </section>
+{cuerpo}
 """
-    return page("Buscar planes", shell(body))
+    return page("Buscar planes", shell(content))
 
 
 @app.route("/gerencia/planes-vendidos")
 @app.route("/ventas/planes-vendidos")
 @app.route("/soporte/planes-vendidos")
 def planes_vendidos_panel():
-    """Panel de planes activos en catálogo y planes vendidos (colegios)."""
+    """Planes vendidos: tarjeta de cada plan con los colegios que lo tienen, y planes activos sin ventas."""
     if not requiere_login():
         return redirect("/login")
     rol = rol_actual()
-    if rol not in (
-        "Soporte", "Gerente", "Gerencia", "Superadmin", "Administrador",
-        "Comercial", "Ventas", "Supervisor de Ventas",
-    ):
+    if rol not in _ROLES_VER_PLANES:
         return acceso_denegado()
     try:
         _ensure_plan_comercial_cols()
     except Exception:
         pass
-    activos = []
+    promo = None
     try:
-        for p in PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden).all():
-            img = (getattr(p, "imagen_path", None) or "").strip()
-            img_h = ('<img src="%s" style="height:40px;border-radius:8px;object-fit:cover">' % _esc(img)) if img else "—"
-            activos.append(
-                "<tr><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
-                    img_h, _esc(p.codigo or ""), _esc(p.nombre or ""),
-                    _esc(getattr(p, "modalidad", None) or "—"),
-                    ("$ {:,.0f}".format(float(p.precio_mensual or 0))).replace(",", "."),
-                )
-            )
+        promo = _promo_activa_global()
     except Exception:
-        activos = []
-    vendidos = []
+        promo = None
     try:
-        for inst in Institucion.query.order_by(Institucion.nombre).limit(500).all():
-            plan = (inst.plan or "").strip()
-            if not plan:
-                continue
-            vendidos.append(
-                "<tr><td>%s</td><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td></tr>" % (
-                    _esc(inst.codigo or ""), _esc(inst.nombre or ""), _esc(plan),
-                    _esc(inst.estado or ""), _esc(getattr(inst, "fecha_inicio_licencia", None) or "—"),
-                )
-            )
+        planes = PlanComercial.query.order_by(PlanComercial.orden.asc(), PlanComercial.id.asc()).all()
     except Exception:
-        vendidos = []
-    body = f"""
+        planes = []
+    try:
+        insts = Institucion.query.order_by(Institucion.nombre).limit(500).all()
+    except Exception:
+        insts = []
+
+    def _clave(s):
+        return _norm_txt(s).replace(" ", "_").lower()
+
+    por_clave = {}
+    for p in planes:
+        for k in (_clave(p.codigo), _clave(p.nombre)):
+            if k:
+                por_clave.setdefault(k, p)
+    ventas, sin_ficha, con_plan = {}, [], []
+    for inst in insts:
+        plan_txt = (inst.plan or "").strip()
+        if not plan_txt:
+            continue
+        con_plan.append(inst)
+        pl = por_clave.get(_clave(plan_txt))
+        if pl is None:
+            sin_ficha.append(inst)
+        else:
+            ventas.setdefault(pl.id, []).append(inst)
+
+    def _bloque_colegios(lista):
+        li = "".join(
+            '<li><span>%s <small style="color:#64748b">· %s</small></span><span class="est">%s</span></li>'
+            % (_esc(i.nombre or ""), _esc(i.codigo or ""), _esc(i.estado or ""))
+            for i in lista
+        )
+        return '<details class="ec-vend"><summary>%d colegio%s con este plan</summary><ul>%s</ul></details>' % (
+            len(lista), "" if len(lista) == 1 else "s", li)
+
+    vendidos = sorted((p for p in planes if p.id in ventas), key=lambda p: -len(ventas[p.id]))
+    libres = [p for p in planes if p.activo and p.id not in ventas]
+    items_v = "".join(
+        '<div class="ec-item%s">%s%s</div>' % (
+            "" if p.activo else " ec-off", _plan_card_html(p, promo), _bloque_colegios(ventas[p.id]))
+        for p in vendidos
+    ) or '<div class="ec-empty" style="grid-column:1/-1">Todavía no hay colegios con un plan asignado.</div>'
+    items_l = "".join(
+        '<div class="ec-item">%s</div>' % _plan_card_html(p, promo) for p in libres
+    ) or '<div class="ec-empty" style="grid-column:1/-1">Todos los planes activos ya tienen ventas.</div>'
+
+    filas = "".join(
+        "<tr><td>%s</td><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td></tr>" % (
+            _esc(i.codigo or ""), _esc(i.nombre or ""), _esc(i.plan or ""),
+            _esc(i.estado or ""), _esc(getattr(i, "fecha_inicio_licencia", None) or "—"))
+        for i in con_plan
+    ) or "<tr><td colspan='5'>Sin ventas registradas</td></tr>"
+    aviso_sin_ficha = ""
+    if sin_ficha:
+        aviso_sin_ficha = (
+            '<section class="role-panel"><h2 style="margin:0 0 6px;font-size:17px;color:#0a2a7a">'
+            'Colegios con un plan que no está en el catálogo (%d)</h2>'
+            '<p style="margin:0 0 8px;color:#475569;font-size:13px">Su plan no coincide con ningún código ni nombre de plan. '
+            'Revise el plan asignado al colegio.</p><ul style="margin:0;padding-left:18px;font-size:14px">%s</ul></section>'
+            % (len(sin_ficha), "".join("<li>%s · <code>%s</code></li>" % (_esc(i.nombre or i.codigo), _esc(i.plan or "")) for i in sin_ficha))
+        )
+    content = f"""
+{_PLAN_CARD_CSS}
 <header class="role-hero"><div>
-  <h1>Planes activos y vendidos</h1>
-  <p>Catálogo publicado + instituciones con plan asignado.</p>
+  <h1>Planes vendidos</h1>
+  <p>{len(con_plan)} colegio(s) con plan asignado · {len(vendidos)} plan(es) con ventas · {len(libres)} plan(es) activo(s) sin ventas todavía.</p>
 </div>
-<a class="btn" href="/planes/buscar">Buscar plan</a>
-</header>
-<section class="role-panel" style="margin-bottom:18px">
-  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Planes activos en catálogo</h2>
-  <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#f1f5f9;text-align:left"><th style="padding:8px">Foto</th><th style="padding:8px">Código</th>
-    <th style="padding:8px">Nombre</th><th style="padding:8px">Modalidad</th><th style="padding:8px">Precio</th></tr>
-    {"".join(activos) or "<tr><td colspan='5'>Sin planes activos</td></tr>"}
-  </table>
-</section>
-<section class="role-panel">
-  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Planes vendidos (colegios)</h2>
-  <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#f1f5f9;text-align:left"><th style="padding:8px">Código colegio</th><th style="padding:8px">Institución</th>
-    <th style="padding:8px">Plan</th><th style="padding:8px">Estado</th><th style="padding:8px">Inicio licencia</th></tr>
-    {"".join(vendidos) or "<tr><td colspan='5'>Sin ventas registradas</td></tr>"}
-  </table>
-</section>
+<a class="btn" href="/planes/buscar">Buscar plan</a></header>
+<h2 style="margin:6px 2px 0;font-size:18px;color:#0a2a7a">Planes con ventas</h2>
+<div class="ec-grid">{items_v}</div>
+{aviso_sin_ficha}
+<h2 style="margin:6px 2px 0;font-size:18px;color:#0a2a7a">Planes activos sin ventas</h2>
+<div class="ec-grid">{items_l}</div>
+<details class="role-panel">
+  <summary style="cursor:pointer;font-weight:800;color:#0a2a7a">Detalle por colegio ({len(con_plan)})</summary>
+  <div class="table-card" style="margin-top:10px">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="background:#f1f5f9;text-align:left"><th style="padding:8px">Código colegio</th><th style="padding:8px">Institución</th>
+      <th style="padding:8px">Plan</th><th style="padding:8px">Estado</th><th style="padding:8px">Inicio licencia</th></tr>
+      {filas}
+    </table>
+  </div>
+</details>
 """
-    return page("Planes activos y vendidos", shell(body))
+    return page("Planes vendidos", shell(content))
 
 
 if __name__ == "__main__":
