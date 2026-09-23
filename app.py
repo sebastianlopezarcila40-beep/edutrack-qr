@@ -306,6 +306,30 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _engine_opts
 db = SQLAlchemy(app)
 
 
+@app.teardown_appcontext
+def _shutdown_db_session(exception=None):
+    """CORRECCIÓN CRÍTICA: sin esto, cuando una consulta falla en cualquier
+    ruta (ej. columna faltante o violación de constraint), Postgres deja la
+    transacción en estado 'aborted' y la sesión/conexión queda envenenada.
+    Como Flask-SQLAlchemy reutiliza conexiones del pool entre peticiones,
+    ese envenenamiento se propagaba a peticiones y usuarios completamente
+    distintos (Dashboard, Docente, Rectoría, Coordinación, Secretaría,
+    Cobranza), produciendo 'current transaction is aborted' / 'Algo salió
+    mal' en cascada aunque la ruta afectada no tuviera nada que ver con el
+    error original. Al final de CADA request se hace rollback (si hubo
+    excepción) y se libera la sesión, dejando la conexión limpia para la
+    siguiente petición."""
+    if exception is not None:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        db.session.remove()
+    except Exception:
+        pass
+
+
 @app.after_request
 def _security_headers_extra(resp):
     """Cabeceras de seguridad para datos sensibles (estudiantes / acudientes)."""
