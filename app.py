@@ -720,7 +720,7 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 
 .modern-hero{background:white;border-radius:24px;border-top:5px solid #facc15;padding:28px;box-shadow:var(--s);display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.modern-hero h1{margin:0;color:#0f172a;font-size:30px}.modern-hero p{margin:8px 0 0;color:#334155}.modern-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.brand-card{background:linear-gradient(135deg,#0f5132,#22c55e);color:white;border-radius:24px;border-bottom:6px solid #facc15;padding:38px;box-shadow:var(--s);text-align:center}.brand-card img{width:84px;height:84px;object-fit:contain;background:white;border-radius:18px;padding:8px}.brand-card h2{font-size:26px;margin:16px 0 8px}.brand-card p{color:#e8fff2}.summary-card,.modern-card{background:white;border-radius:24px;border-top:5px solid #facc15;padding:24px;box-shadow:var(--s)}.summary-card h2,.modern-card h2{margin-top:0;color:#0f172a}.modern-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.modern-stat{background:#f8fafc;border-left:5px solid #15803d;border-radius:18px;padding:18px}.modern-stat h3{font-size:31px;margin:0;color:#0f172a}.modern-stat p{margin:6px 0 0;color:#334155;font-size:13px}.modules-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin:18px 0}.modern-card a{color:#14532d}.client-note{background:#ecfdf5;border:1px solid #bbf7d0;border-radius:18px;padding:16px;margin-top:14px;color:#14532d;font-weight:700}
 .table-card{background:white;border-radius:12px;padding:16px;box-shadow:var(--s);margin-bottom:16px}.table-card h2{color:var(--azul);margin-top:0}table{width:100%;border-collapse:collapse;margin-top:10px}th{background:var(--azul);color:white;padding:10px;font-size:12px}td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px}.estado{padding:5px 9px;border-radius:999px;font-weight:800;font-size:12px}.estado-temprano{background:#dcfce7;color:#047857}.estado-tarde{background:#fef3c7;color:#b45309}.estado-no{background:#fee2e2;color:#b91c1c}.qr-img{width:76px}.danger-link{color:var(--rojo)}
-.footer{margin-top:20px;text-align:center;color:#64748b;font-size:13px}.footer strong{color:var(--azul)}.footer-dark,.footer.footer-dark{background:#1d1d1f;color:#a1a1a6;padding:22px 16px;margin:0;border:0;font-size:12px;line-height:1.55}.footer-dark strong,.footer.footer-dark strong{color:#f5f5f7}.footer-dark b{color:#f5f5f7}.portal{width:100%;max-width:460px;text-align:center}.portal #reader{max-width:330px;margin:16px auto;border-radius:18px;overflow:hidden}.carnet{width:360px;background:white;border-radius:28px;padding:24px;text-align:center;box-shadow:var(--s);border-top:8px solid var(--azul2)}.carnet-head{background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:22px;padding:18px;border-bottom:6px solid var(--amarillo)}.carnet .qr{width:180px;margin:18px auto}.print-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f1f5f9;flex-direction:column}.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.contact-card{background:white;border-radius:20px;padding:22px;box-shadow:var(--s);border-top:5px solid var(--azul2)}.contact-icon{width:50px;height:50px;border-radius:15px;background:var(--azul2);color:white;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:12px}.slogan-box{margin-top:25px;background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:24px;padding:26px;text-align:center}
+.footer{margin-top:20px;text-align:center;color:#64748b;font-size:13px}.footer strong{color:var(--azul)}.portal{width:100%;max-width:460px;text-align:center}.portal #reader{max-width:330px;margin:16px auto;border-radius:18px;overflow:hidden}.carnet{width:360px;background:white;border-radius:28px;padding:24px;text-align:center;box-shadow:var(--s);border-top:8px solid var(--azul2)}.carnet-head{background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:22px;padding:18px;border-bottom:6px solid var(--amarillo)}.carnet .qr{width:180px;margin:18px auto}.print-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f1f5f9;flex-direction:column}.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.contact-card{background:white;border-radius:20px;padding:22px;box-shadow:var(--s);border-top:5px solid var(--azul2)}.contact-icon{width:50px;height:50px;border-radius:15px;background:var(--azul2);color:white;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:12px}.slogan-box{margin-top:25px;background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:24px;padding:26px;text-align:center}
 
 /* ESTUDIANTES MODERNO */
 .student-page{display:grid;grid-template-columns:420px 1fr;gap:18px;align-items:start}
@@ -855,8 +855,8 @@ body{
 .lp-gallery figure{margin:0;background:#f8fafc;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0}
 .lp-gallery img{width:100%;height:160px;object-fit:cover;display:block}
 .lp-gallery figcaption{padding:8px 10px;font-size:12px;color:#475569;text-align:center}
-.lp-footer{text-align:center;padding:22px 16px;color:#a1a1a6;font-size:12px;background:#1d1d1f;border:0;line-height:1.55}
-.lp-footer b{color:#f5f5f7}
+.lp-footer{text-align:center;padding:20px;color:#64748b;font-size:12px}
+.lp-footer b{color:#0B2D57}
 .lp-portals{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
 .lp-portal-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 12px;border-radius:14px;font-weight:800;font-size:14px;text-decoration:none;text-align:center;border:1px solid transparent;transition:.15s}
 .lp-portal-btn.doc{background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;box-shadow:0 10px 24px rgba(29,78,216,.28)}
@@ -1403,14 +1403,6 @@ class Plataforma(db.Model):
     kit_confirmacion_contrato = db.Column(db.Text, default="")
     # Centro de actualizaciones (visible en login)
     version_sistema = db.Column(db.String(40), default="2.5.0")
-    horario_atencion = db.Column(db.Text, default="")
-    horario_soporte = db.Column(db.Text, default="")
-    horario_ventas = db.Column(db.Text, default="")
-    horario_facturacion = db.Column(db.Text, default="")
-    telefono_ventas = db.Column(db.String(40), default="")
-    email_ventas = db.Column(db.String(120), default="")
-    telefono_facturacion = db.Column(db.String(40), default="")
-    email_facturacion = db.Column(db.String(120), default="")
     novedades = db.Column(db.Text, default="")
     faq = db.Column(db.Text, default="")
     mantenimiento_programado = db.Column(db.Text, default="")
@@ -4072,14 +4064,7 @@ window.addEventListener('pageshow', function (event) {
 
 
 def footer():
-    try:
-        ver = _footer_version_txt()
-    except Exception:
-        ver = "2.5.0"
-    return (
-        f"""<div class="footer footer-dark"><strong>{nombre_producto()}</strong> © 2026 · {SLOGAN}<br>"""
-        f"""Desarrollado por <b>{nombre_empresa()}</b> · Versión {ver}</div>"""
-    )
+    return f"""<div class="footer"><strong>{nombre_producto()}</strong> © 2026 | {SLOGAN}<br>Desarrollado por <b>{nombre_empresa()}</b></div>"""
 
 
 
@@ -4738,14 +4723,6 @@ def migrar_columnas():
         ("pre_matriculas", "etnia", "ALTER TABLE pre_matriculas ADD COLUMN etnia VARCHAR(80) DEFAULT ''"),
         ("pre_matriculas", "grupo_asignado", "ALTER TABLE pre_matriculas ADD COLUMN grupo_asignado VARCHAR(30) DEFAULT ''"),
         ("plataforma", "version_sistema", "ALTER TABLE plataforma ADD COLUMN version_sistema VARCHAR(40) DEFAULT '2.5.0'"),
-        ("plataforma", "horario_atencion", "ALTER TABLE plataforma ADD COLUMN horario_atencion TEXT"),
-        ("plataforma", "horario_soporte", "ALTER TABLE plataforma ADD COLUMN horario_soporte TEXT"),
-        ("plataforma", "horario_ventas", "ALTER TABLE plataforma ADD COLUMN horario_ventas TEXT"),
-        ("plataforma", "horario_facturacion", "ALTER TABLE plataforma ADD COLUMN horario_facturacion TEXT"),
-        ("plataforma", "telefono_ventas", "ALTER TABLE plataforma ADD COLUMN telefono_ventas VARCHAR(40)"),
-        ("plataforma", "email_ventas", "ALTER TABLE plataforma ADD COLUMN email_ventas VARCHAR(120)"),
-        ("plataforma", "telefono_facturacion", "ALTER TABLE plataforma ADD COLUMN telefono_facturacion VARCHAR(40)"),
-        ("plataforma", "email_facturacion", "ALTER TABLE plataforma ADD COLUMN email_facturacion VARCHAR(120)"),
         ("plataforma", "novedades", "ALTER TABLE plataforma ADD COLUMN novedades TEXT DEFAULT ''"),
         ("plataforma", "faq", "ALTER TABLE plataforma ADD COLUMN faq TEXT DEFAULT ''"),
         ("plataforma", "mantenimiento_programado", "ALTER TABLE plataforma ADD COLUMN mantenimiento_programado TEXT DEFAULT ''"),
@@ -5839,24 +5816,19 @@ def contenido_login_novedades():
             # (no sobrescribe si ya hay texto editado en Soporte)
     except Exception:
         last = None
-    # NO sobrescribir BD con 2.5.0: solo sincronizar si hay versión real del historial
-    _ver_desde_historial = bool(last and (getattr(last, "version", None) or "").strip())
     if not version:
-        version = (getattr(p, "version_sistema", None) or "").strip() or "2.5.0"
-    if _ver_desde_historial:
+        version = "2.5.0"
+    # Sincronizar plataforma.version_sistema con el historial
+    try:
+        if p is not None and (getattr(p, "version_sistema", None) or "").strip() != version:
+            p.version_sistema = version
+            db.session.execute(text("UPDATE plataforma SET version_sistema=:v"), {"v": version})
+            db.session.commit()
+    except Exception:
         try:
-            if p is not None and (getattr(p, "version_sistema", None) or "").strip() != version:
-                try:
-                    p.version_sistema = version
-                except Exception:
-                    pass
-                db.session.execute(text("UPDATE plataforma SET version_sistema=:v"), {"v": version})
-                db.session.commit()
+            db.session.rollback()
         except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
+            pass
     novedades = (getattr(p, "novedades", None) or "").strip()
     # Si no hay novedades manuales, mostrar el resumen de la última versión publicada
     if not novedades and last is not None and (getattr(last, "resumen", None) or "").strip():
@@ -25681,8 +25653,7 @@ def gerencia_hq():
             <div class="hq-pills">
               <a href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
               <a class="hq-pill-primary" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
-              <a href="/gerencia/marca-contacto">Marca y contacto (tel./correo)</a>
-              <a href="/gerencia/horarios-atencion">Horarios de atención</a>
+              <a href="/soporte/marca">Marca y contacto (tel./correo)</a>
               <a href="/gerencia/wati-conexion">API WATI</a>
               <a class="hq-pill-primary" href="/gerencia/eduaura-ia">🧠 Conectores IA</a>
               <a href="/gerencia/procsis-web">Noticias / productos</a>
@@ -25710,12 +25681,146 @@ def gerencia_hq():
             <a class="hq-pill-more" href="/gerencia/turnos">Turnos</a>
             <a class="hq-pill-more" href="/gerencia/contabilidad/nueva">Nueva operación</a>
             <a class="hq-pill-more" href="/gerencia/login-banners">Salida segura</a>
+    
+        <div class="hq-bento-card" style="margin-top:8px">
+          <h3>Todos los módulos de Gerencia</h3>
+          <p class="hq-bento-sub">Acceso directo a cada función del sistema (visibles y activas)</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-top:12px;text-align:left">
+
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Talento / personal</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/admision-personal">Admisión de personal</a>
+                <a href="/gerencia/certificados-apoyo">Certificados de apoyo</a>
+                <a href="/gerencia/certificaciones">Certificaciones</a>
+                <a href="/gerencia/nomina">Nómina</a>
+                <a href="/gerencia/planillas-pila">Planillas PILA</a>
+                <a href="/gerencia/matriz-epp">Matriz EPP</a>
+                <a href="/gerencia/talento-legal">Guía talento legal</a>
+                <a href="/gerencia/usuarios">Usuarios gerencia</a>
+                <a href="/gerencia/roles">Roles</a>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Legal / contratos</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/contratos">Contratos colegios</a>
+                <a href="/gerencia/contratos-saas">Contratos SaaS</a>
+                <a href="/gerencia/contratos-firmas">Firmas de contratos</a>
+                <a href="/gerencia/contrato-plantilla">Plantilla de contrato</a>
+                <a href="/gerencia/plantilla-contrato">Plantilla contrato</a>
+                <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
+                <a href="/gerencia/legal/consentimientos">Consentimientos</a>
+                <a href="/gerencia/paginas-legales">Páginas legales</a>
+                <a href="/gerencia/libro-actas">Libro de actas</a>
+                <a href="/gerencia/requerimientos-autoridades">Req. autoridades</a>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Finanzas / ventas</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/ventas">Panel ventas</a>
+                <a href="/gerencia/validaciones-ventas">Validaciones ventas</a>
+                <a href="/gerencia/planes-vendidos">Planes vendidos</a>
+                <a href="/gerencia/descuentos">Descuentos</a>
+                <a href="/gerencia/finanzas/promociones">Promociones</a>
+                <a href="/gerencia/facturacion-cobranza">Facturación / cobranza</a>
+                <a href="/gerencia/recursos-financieros">Recursos financieros</a>
+                <a href="/gerencia/metas">Metas</a>
+                <a href="/gerencia/cancelaciones">Cancelaciones</a>
+                <a href="/gerencia/retractos">Retractos</a>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Web / marca / login</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/web-corporativa">Web corporativa</a>
+                <a href="/gerencia/empresa">Empresa</a>
+                <a href="/gerencia/marca-contacto">Marca y contacto</a>
+                <a href="/gerencia/horarios-atencion">Horarios de atención</a>
+                <a href="/gerencia/diseno-login">Diseño del login</a>
+                <a href="/gerencia/pie-login">Pie del login</a>
+                <a href="/gerencia/backoffice-branding">Branding backoffice</a>
+                <a href="/gerencia/alianzas-clientes">Alianzas / clientes</a>
+                <a href="/gerencia/changelog">Changelog</a>
+                <a href="/gerencia/pqr-info">Info PQR</a>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Operación / sistema</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte rectores</a>
+                <a href="/gerencia/notas">Notas (gerencia)</a>
+                <a href="/gerencia/limpieza">Limpieza de datos</a>
+                <a href="/gerencia/dev-console">Consola de desarrollo</a>
+              </div>
+            </div>
+
           </div>
+        </div>
+
+      </div>
         </div>
       </div>
 
       
-      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details></aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v{_footer_version_txt()}</div></div></div></div></div>
+      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/gerencia/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios gerencia</a><a href="/gerencia/roles" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Roles</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Talento extra</summary>
+<a href="/gerencia/admision-personal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Admisión personal</a>
+<a href="/gerencia/nomina" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Nómina</a>
+<a href="/gerencia/planillas-pila" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Planillas PILA</a>
+<a href="/gerencia/certificados-apoyo" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Certificados apoyo</a>
+<a href="/gerencia/certificaciones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Certificaciones</a>
+<a href="/gerencia/matriz-epp" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Matriz EPP</a>
+<a href="/gerencia/talento-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Talento legal</a>
+</details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal / contratos</summary>
+<a href="/gerencia/contratos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Contratos colegios</a>
+<a href="/gerencia/contratos-saas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Contratos SaaS</a>
+<a href="/gerencia/contratos-firmas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Firmas contratos</a>
+<a href="/gerencia/contrato-plantilla" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Plantilla contrato</a>
+<a href="/gerencia/plantilla-contrato" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Plantilla contrato 2</a>
+<a href="/gerencia/firmas-corporativas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Firmas corporativas</a>
+<a href="/gerencia/legal/consentimientos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Consentimientos</a>
+<a href="/gerencia/paginas-legales" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Páginas legales</a>
+<a href="/gerencia/libro-actas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Libro de actas</a>
+<a href="/gerencia/requerimientos-autoridades" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Req. autoridades</a>
+</details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas / ventas</summary>
+<a href="/gerencia/ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Panel ventas</a>
+<a href="/gerencia/validaciones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Validaciones ventas</a>
+<a href="/gerencia/planes-vendidos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Planes vendidos</a>
+<a href="/gerencia/descuentos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Descuentos</a>
+<a href="/gerencia/finanzas/promociones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Promociones</a>
+<a href="/gerencia/facturacion-cobranza" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Facturación / cobranza</a>
+<a href="/gerencia/recursos-financieros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Recursos financieros</a>
+<a href="/gerencia/metas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Metas</a>
+<a href="/gerencia/cancelaciones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cancelaciones</a>
+<a href="/gerencia/retractos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Retractos</a>
+</details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Web / marca</summary>
+<a href="/gerencia/web-corporativa" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Web corporativa</a>
+<a href="/gerencia/empresa" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Empresa</a>
+<a href="/gerencia/marca-contacto" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Marca y contacto</a>
+<a href="/gerencia/horarios-atencion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Horarios atención</a>
+<a href="/gerencia/diseno-login" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Diseño login</a>
+<a href="/gerencia/pie-login" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Pie del login</a>
+<a href="/gerencia/backoffice-branding" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Branding backoffice</a>
+<a href="/gerencia/alianzas-clientes" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Alianzas / clientes</a>
+<a href="/gerencia/changelog" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Changelog</a>
+<a href="/gerencia/pqr-info" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Info PQR</a>
+</details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Operación</summary>
+<a href="/gerencia/autorizar-soporte-rectores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Autorizar soporte rectores</a>
+<a href="/gerencia/notas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Notas gerencia</a>
+<a href="/gerencia/limpieza" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Limpieza de datos</a>
+<a href="/gerencia/dev-console" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Consola desarrollo</a>
+</details>
+</aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v2.6.0</div></div></div></div></div>
 
       <div id="hq-tab-contingencia" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Boveda documental, juridica y DRP</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Boveda documental, juridica y DRP</h3><div style="display:flex;flex-wrap:wrap;gap:8px"><a href="/gerencia/documentos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Biblioteca</a><a href="/gerencia/documentos/plan-drp" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan DRP</a><a href="/gerencia/documentos/politica-datos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Politica de datos</a><a href="/gerencia/documentos/plan-contingencia" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan contingencia</a><a href="/gerencia/documentos/contrato-licenciamiento" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contrato SaaS</a><a href="/gerencia/contratos-personal" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contratos</a></div></div></div>
 
@@ -27547,20 +27652,7 @@ def gerencia_documentos_lista():
 <div class="dl">
   <p><a href="/gerencia/hq">← Gerencia HQ</a></p>
   <h1>Biblioteca documental · Contingencia y legal</h1>
-  <p style="color:#64748b;font-size:13px">Editor corporativo con negrita, listas y títulos. Guarde y descargue PDF / Word. Públicos en <code>/docs/…</code>.</p>
-  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px">
-    <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Crear documento nuevo</h3>
-    <form method="POST" action="/gerencia/documentos/nuevo" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-      <div style="flex:1;min-width:180px"><label style="font-size:11px;font-weight:700">Título</label>
-        <input name="titulo" required placeholder="Ej: Política de seguridad" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
-      <div style="width:140px"><label style="font-size:11px;font-weight:700">Clave URL</label>
-        <input name="clave" placeholder="auto" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
-      <div style="width:140px"><label style="font-size:11px;font-weight:700">Categoría</label>
-        <select name="categoria" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px"><option value="interno">Interno</option><option value="legal">Legal</option><option value="contingencia">Contingencia</option><option value="publico">Público</option></select></div>
-      <label style="font-size:12px;font-weight:600"><input type="checkbox" name="publico" value="1"> Público</label>
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer">Crear y editar</button>
-    </form>
-  </div>
+  <p style="color:#64748b;font-size:13px">Editor corporativo. Guarde y descargue PDF. Públicos en <code>/docs/…</code>.</p>
   <table>
     <tr><th>Documento</th><th>Visibilidad</th><th>Última edición</th><th>Acciones</th></tr>
     {filas or "<tr><td colspan=4>Sin documentos</td></tr>"}
@@ -27568,55 +27660,6 @@ def gerencia_documentos_lista():
 </div>
 """
     return page("Documentos Gerencia", body)
-
-
-
-@app.route("/gerencia/documentos/nuevo", methods=["POST", "GET"])
-def gerencia_documento_nuevo():
-    """Crea un documento corporativo nuevo y abre el editor (negrita, listas, etc.)."""
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    if request.method == "GET":
-        return redirect("/gerencia/documentos")
-    titulo = (request.form.get("titulo") or "").strip()[:220]
-    clave = (request.form.get("clave") or "").strip().lower()
-    clave = re.sub(r"[^a-z0-9\-]+", "-", clave).strip("-")[:80]
-    if not clave and titulo:
-        import re as _re
-        clave = _re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")[:60] or "doc"
-    if not clave:
-        clave = "doc-" + fecha_hoy().replace("-", "")
-    # unicidad
-    base, n = clave, 2
-    while DocumentoCorp.query.filter_by(clave=clave).first():
-        clave = "%s-%d" % (base, n)
-        n += 1
-    cat = (request.form.get("categoria") or "interno").strip()[:40]
-    pub = request.form.get("publico") == "1"
-    row = DocumentoCorp(
-        clave=clave,
-        titulo=titulo or clave,
-        cuerpo_html="<h2>1. Introducción</h2><p>Escriba aquí el contenido del documento. Use la barra de herramientas para <b>negrita</b>, cursiva y listas.</p>",
-        publico=pub,
-        categoria=cat,
-        actualizado_en=f"{fecha_hoy()} {hora_actual()}",
-        actualizado_por=session.get("usuario") or "gerencia",
-    )
-    try:
-        db.session.add(row)
-        db.session.commit()
-        try:
-            registrar_auditoria("Documento corp nuevo", clave)
-        except Exception:
-            pass
-    except Exception as ex:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return page("Error", f"<p>No se pudo crear: {ex}</p><p><a href='/gerencia/documentos'>Volver</a></p>")
-    return redirect("/gerencia/documentos/" + clave)
 
 
 @app.route("/gerencia/documentos/<clave>", methods=["GET", "POST"])
@@ -37100,206 +37143,6 @@ def soporte_admin():
 
 
 @app.route("/soporte/marca", methods=["GET", "POST"])
-
-@app.route("/gerencia/marca-contacto", methods=["GET", "POST"])
-@app.route("/gerencia/marca", methods=["GET", "POST"])
-def gerencia_marca_contacto():
-    """Marca y contactos de la empresa — accesible desde Gerencia HQ (no redirige a Soporte)."""
-    g = _guard_gerencia()
-    if g is not None:
-        return g
-    p = plataforma()
-    mensaje = ""
-    if request.method == "POST":
-        try:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            p.empresa = (request.form.get("empresa") or getattr(p, "empresa", None) or "Procsis").strip()
-            p.nombre_producto = (request.form.get("nombre_producto") or getattr(p, "nombre_producto", None) or "EduTrack").strip()
-            p.slogan = (request.form.get("slogan") or getattr(p, "slogan", None) or "").strip()
-            p.desarrollador = (request.form.get("desarrollador") or getattr(p, "desarrollador", None) or "").strip()
-            p.telefono_soporte = (request.form.get("telefono_soporte") or "").strip()
-            p.email_soporte = (request.form.get("email_soporte") or "").strip()
-            p.telefono_cartera = (request.form.get("telefono_cartera") or "").strip()
-            p.email_cartera = (request.form.get("email_cartera") or "").strip()
-            p.web = (request.form.get("web") or "").strip()
-            p.notas = (request.form.get("notas") or "").strip()
-            # Campos extra de atención
-            for col, key in (
-                ("telefono_ventas", "telefono_ventas"),
-                ("email_ventas", "email_ventas"),
-                ("telefono_facturacion", "telefono_facturacion"),
-                ("email_facturacion", "email_facturacion"),
-                ("horario_atencion", "horario_atencion"),
-                ("horario_soporte", "horario_soporte"),
-                ("horario_ventas", "horario_ventas"),
-            ):
-                val = (request.form.get(key) or "").strip()
-                try:
-                    setattr(p, col, val)
-                except Exception:
-                    pass
-            logo_file = request.files.get("logo")
-            if logo_file and logo_file.filename:
-                try:
-                    nueva = guardar_logo_institucional(logo_file, None)
-                    if nueva:
-                        p.logo_path = nueva
-                except Exception:
-                    pass
-            db.session.commit()
-            # SQL fallback columnas críticas
-            try:
-                db.session.execute(text(
-                    "UPDATE plataforma SET telefono_soporte=:ts, email_soporte=:es, "
-                    "telefono_cartera=:tc, email_cartera=:ec, web=:w"
-                ), {
-                    "ts": p.telefono_soporte or "", "es": p.email_soporte or "",
-                    "tc": p.telefono_cartera or "", "ec": p.email_cartera or "",
-                    "w": p.web or "",
-                })
-                db.session.commit()
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-            mensaje = "Marca y contactos guardados."
-            try:
-                registrar_auditoria("Marca/contacto gerencia", p.empresa or "")
-            except Exception:
-                pass
-        except Exception as ex:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            mensaje = "Error: " + str(ex)[:160]
-    def _gv(attr, default=""):
-        return (getattr(p, attr, None) or default or "").replace(chr(34), "")
-    content = f"""
-<section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:22px;padding:24px;margin-bottom:16px">
-  <h1 style="margin:0">Marca y contacto</h1>
-  <p style="margin:8px 0 0;opacity:.9">Empresa, producto, teléfonos y correos de soporte, ventas y facturación. Visible en web y login.</p>
-</section>
-{'<div class="msg ok">'+mensaje+'</div>' if mensaje else ''}
-<section class="role-panel">
-<form method="POST" enctype="multipart/form-data">
-  <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
-    <img src="{logo_plataforma()}" style="width:100px;height:100px;object-fit:contain;background:#fff;border-radius:18px;padding:8px;border:1px solid #e2e8f0">
-    <div style="flex:1;min-width:220px">
-      <label><b>Logo</b></label>
-      <input type="file" name="logo" accept="image/*">
-    </div>
-  </div>
-  <div class="form-row">
-    <div><label><b>Empresa</b></label><input name="empresa" value="{_gv('empresa','Procsis')}" required></div>
-    <div><label><b>Producto</b></label><input name="nombre_producto" value="{_gv('nombre_producto','EduTrack')}" required></div>
-  </div>
-  <label><b>Slogan</b></label>
-  <input name="slogan" value="{_gv('slogan')}">
-  <label><b>Responsable / desarrollador</b></label>
-  <input name="desarrollador" value="{_gv('desarrollador')}">
-  <h3 style="color:#0B2D57;margin:18px 0 8px">Soporte</h3>
-  <div class="form-row">
-    <div><label><b>Tel. soporte</b></label><input name="telefono_soporte" value="{_gv('telefono_soporte')}"></div>
-    <div><label><b>Email soporte</b></label><input name="email_soporte" value="{_gv('email_soporte')}"></div>
-  </div>
-  <h3 style="color:#0B2D57;margin:18px 0 8px">Ventas</h3>
-  <div class="form-row">
-    <div><label><b>Tel. ventas</b></label><input name="telefono_ventas" value="{_gv('telefono_ventas')}"></div>
-    <div><label><b>Email ventas</b></label><input name="email_ventas" value="{_gv('email_ventas')}"></div>
-  </div>
-  <h3 style="color:#0B2D57;margin:18px 0 8px">Cartera / facturación</h3>
-  <div class="form-row">
-    <div><label><b>Tel. cartera</b></label><input name="telefono_cartera" value="{_gv('telefono_cartera')}"></div>
-    <div><label><b>Email cartera</b></label><input name="email_cartera" value="{_gv('email_cartera')}"></div>
-  </div>
-  <div class="form-row">
-    <div><label><b>Tel. facturación</b></label><input name="telefono_facturacion" value="{_gv('telefono_facturacion')}"></div>
-    <div><label><b>Email facturación</b></label><input name="email_facturacion" value="{_gv('email_facturacion')}"></div>
-  </div>
-  <h3 style="color:#0B2D57;margin:18px 0 8px">Horarios de atención</h3>
-  <label><b>Horario general</b></label>
-  <textarea name="horario_atencion" rows="2" placeholder="Lun–Vie 8:00–17:00 (Colombia)">{_gv('horario_atencion')}</textarea>
-  <label><b>Horario soporte</b></label>
-  <textarea name="horario_soporte" rows="2" placeholder="Lun–Vie 7:00–18:00">{_gv('horario_soporte')}</textarea>
-  <label><b>Horario ventas</b></label>
-  <textarea name="horario_ventas" rows="2" placeholder="Lun–Vie 8:00–17:00">{_gv('horario_ventas')}</textarea>
-  <label><b>Sitio web</b></label>
-  <input name="web" value="{_gv('web')}">
-  <label><b>Notas internas</b></label>
-  <textarea name="notas" rows="3">{_gv('notas')}</textarea>
-  <button type="submit">Guardar</button>
-  <a class="btn" href="/gerencia/hq">← HQ</a>
-  <a class="btn" href="/gerencia/horarios-atencion">Horarios de atención →</a>
-</form>
-</section>
-"""
-    return page("Marca y contacto", shell(content))
-
-
-@app.route("/gerencia/horarios-atencion", methods=["GET", "POST"])
-def gerencia_horarios_atencion():
-    """Horarios de atención de la empresa (soporte, ventas, facturación)."""
-    g = _guard_gerencia()
-    if g is not None:
-        return g
-    p = plataforma()
-    mensaje = ""
-    if request.method == "POST":
-        try:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            for col in ("horario_atencion", "horario_soporte", "horario_ventas", "horario_facturacion"):
-                val = (request.form.get(col) or "").strip()[:500]
-                try:
-                    setattr(p, col, val)
-                except Exception:
-                    pass
-            db.session.commit()
-            mensaje = "Horarios de atención guardados."
-            try:
-                registrar_auditoria("Horarios atención", "Actualizados")
-            except Exception:
-                pass
-        except Exception as ex:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            mensaje = "Error: " + str(ex)[:160]
-    def _gv(attr):
-        return (getattr(p, attr, None) or "").replace("<", "").replace(">", "")
-    content = f"""
-<section style="background:linear-gradient(135deg,#0B1220,#1e3a5f);color:#fff;border-radius:22px;padding:24px;margin-bottom:16px">
-  <h1 style="margin:0">Horarios de atención</h1>
-  <p style="margin:8px 0 0;opacity:.9">Define los horarios de la empresa (soporte, ventas y facturación). Se usan en contacto y ayuda.</p>
-</section>
-{'<div class="msg ok">'+mensaje+'</div>' if mensaje else ''}
-<section class="role-panel">
-<form method="POST">
-  <label><b>Horario general de la empresa</b></label>
-  <textarea name="horario_atencion" rows="3" placeholder="Lunes a viernes 8:00 a.m. – 5:00 p.m. (hora Colombia)">{_gv('horario_atencion')}</textarea>
-  <label><b>Soporte técnico</b></label>
-  <textarea name="horario_soporte" rows="3" placeholder="Lun–Vie 7:00–18:00 · Sáb 8:00–12:00">{_gv('horario_soporte')}</textarea>
-  <label><b>Ventas / comercial</b></label>
-  <textarea name="horario_ventas" rows="3" placeholder="Lun–Vie 8:00–17:00">{_gv('horario_ventas')}</textarea>
-  <label><b>Facturación / cartera</b></label>
-  <textarea name="horario_facturacion" rows="3" placeholder="Lun–Vie 8:00–16:00">{_gv('horario_facturacion')}</textarea>
-  <button type="submit">Guardar horarios</button>
-  <a class="btn" href="/gerencia/hq">← HQ</a>
-  <a class="btn" href="/gerencia/marca-contacto">Marca y contacto</a>
-</form>
-</section>
-"""
-    return page("Horarios de atención", shell(content))
-
-
 def soporte_marca():
     """Nombres globales (empresa + producto), logo y contactos de soporte."""
     _g = _guard_soporte()
