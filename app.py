@@ -2395,6 +2395,21 @@ class PlanComercial(db.Model):
 
 
 
+class ConectorIA(db.Model):
+    """Configuración del 'cerebro' de EduAura IA: qué proveedor de IA está activo,
+    a qué endpoint/URL se conecta y con qué llave. Fila única (id=1) editable desde
+    Gerencia en /gerencia/eduaura-ia."""
+    __tablename__ = "conectores_ia"
+    id = db.Column(db.Integer, primary_key=True)
+    proveedor = db.Column(db.String(30), default="anthropic")  # anthropic | gemini | openai
+    endpoint_url = db.Column(db.Text, default="")
+    api_key = db.Column(db.Text, default="")
+    modelo = db.Column(db.String(80), default="")
+    activo = db.Column(db.Boolean, default=False)
+    actualizado_en = db.Column(db.String(30), default="")
+    actualizado_por = db.Column(db.String(120), default="")
+
+
 def _ensure_plan_comercial_cols():
     """Columnas extra de planes comerciales. Usa conexión autocommit para no envenenar la sesión."""
     if getattr(_ensure_plan_comercial_cols, "_ok", False):
@@ -24248,11 +24263,89 @@ def activar_colegio_rector(id):
             r.direccion, r.telefono, r.correo = direccion, telefono, correo
             r.actualizado_en = fecha_hoy() + " " + hora_actual()
             inst.rector = (nombres + " " + apellidos).strip()[:160]
-            if (inst.estado or "").upper() != "ACTIVA":
+            ya_estaba_activa = (inst.estado or "").upper() == "ACTIVA"
+            if not ya_estaba_activa:
                 inst.estado = "ACTIVA"
             db.session.commit()
+
+            # Al activar (primera vez): dispara facturación (arranca a los 10 días, ver
+            # _activar_facturacion_institucion) y genera el contrato del colegio con el
+            # plan y los beneficios, listo para descargar o enviar al rector.
+            contrato_url = ""
+            if not ya_estaba_activa:
+                try:
+                    pc = PlanComercial.query.filter_by(nombre=inst.plan).first()
+                    fee_valor = float(pc.fee_implementacion) if pc and pc.fee_implementacion else 0.0
+                    _activar_facturacion_institucion(inst, fee_valor=fee_valor)
+                    beneficios = []
+                    if pc and pc.features_json:
+                        try:
+                            beneficios = json.loads(pc.features_json) or []
+                        except Exception:
+                            beneficios = []
+                    ben_html = ("<ul>" + "".join(f"<li>{_esc(str(b))}</li>" for b in beneficios) + "</ul>") if beneficios else "<p>—</p>"
+                    precio_txt = _cop(pc.precio_mensual) if pc else "—"
+                    html_body = (
+                        "<p>Contrato entre PROCSIS (Proveedor) y la institución educativa (Cliente) que se identifica "
+                        "a continuación. Documento generado automáticamente al activar el colegio en el sistema.</p>"
+                        "<h2>1. Partes y objeto</h2>"
+                        "<p>Licencia de uso no exclusiva, intransferible y temporal de EduTrack según el plan "
+                        "contratado, más implementación y soporte.</p>"
+                        "<h2>2. Información del cliente</h2>"
+                        f"<p>Colegio: <b>{_esc(inst.nombre)}</b> &nbsp; NIT: <b>{_esc(inst.nit or '—')}</b> &nbsp; "
+                        f"Ciudad: <b>{_esc(inst.municipio or '—')}</b> &nbsp; "
+                        f"Rector / representante legal: <b>{_esc(nombres + ' ' + apellidos)}</b> "
+                        f"({_esc(tipo_id)} {_esc(numero_id)})</p>"
+                        "<h2>3. Plan, valor y beneficios incluidos</h2>"
+                        f"<p>Plan: <b>{_esc(inst.plan or '—')}</b> &nbsp; Valor mensual: <b>{precio_txt}</b></p>"
+                        f"{ben_html}"
+                        "<h2>4. Facturación</h2>"
+                        "<p>La primera mensualidad se factura a los 10 días calendario de la activación. "
+                        "Cada factura otorga 15 días calendario de plazo de pago antes de suspender el servicio.</p>"
+                        "<h2>5. Datos personales</h2>"
+                        "<p>Tratamiento conforme a la Ley 1581 de 2012 y la Política de Tratamiento de Datos de PROCSIS.</p>"
+                        "<h2>6. Firmas</h2>"
+                        f"<p>Fecha: {fecha_hoy()}</p>"
+                        "<p>Por PROCSIS: ____________ &nbsp; Por el Cliente: ____________</p>"
+                    )
+                    pdf_bytes = _doc_pdf_bytes(f"Contrato EduTrack — {inst.nombre}", html_body, confidencial=True)
+                    up_dir = os.path.join(app.root_path, "static", "uploads", "contratos")
+                    os.makedirs(up_dir, exist_ok=True)
+                    safe_name = "".join(c for c in (inst.nombre or "colegio") if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_") or "colegio"
+                    fname = f"{safe_name}_{int(__import__('time').time())}.pdf"
+                    with open(os.path.join(up_dir, fname), "wb") as fpdf:
+                        fpdf.write(pdf_bytes)
+                    contrato_url = f"/static/uploads/contratos/{fname}"
+                    registrar_auditoria("Colegio activado + contrato generado", f"{inst.nombre} (NIT {inst.nit}) plan {inst.plan} por {session.get('usuario')}")
+                except Exception as ex:
+                    print("activar_colegio_rector contrato:", ex)
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
+            tel_digits = "".join(c for c in (telefono or "") if c.isdigit())
+            if tel_digits and not tel_digits.startswith("57") and len(tel_digits) == 10:
+                tel_digits = "57" + tel_digits
+            wa_msg = quote_plus(f"Hola {nombres}, adjuntamos el contrato de EduTrack para {inst.nombre}.")
+            wa_href = f"https://wa.me/{tel_digits}?text={wa_msg}" if tel_digits else ""
+            mailto_href = f"mailto:{correo}?subject={quote_plus('Contrato EduTrack — ' + (inst.nombre or ''))}" if correo else ""
+            destino_final = "/soporte/rectores" if rol_actual() == "Soporte" else "/gerencia/rectores"
+            if contrato_url:
+                return page("Contrato generado", shell(f"""
+<header class="role-hero"><div><h1>✅ Colegio activado — {_esc(inst.nombre)}</h1>
+<p>Contrato generado con el plan y los beneficios del colegio.</p></div>
+<a class="btn" href="{destino_final}">Continuar</a></header>
+<section class="role-panel">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+    <a class="btn" href="{contrato_url}" download>⬇ Descargar contrato (PDF)</a>
+    {"<a class='btn' href='" + mailto_href + "'>✉ Enviar por correo</a>" if mailto_href else ""}
+    {"<a class='btn' target='_blank' rel='noopener' href='" + wa_href + "'>📱 Enviar por WhatsApp</a>" if wa_href else ""}
+    <a class="btn" href="{destino_final}">Continuar</a>
+  </div>
+</section>"""))
             msg = "Colegio activo y datos del rector registrados."
-            return redirect("/soporte/rectores" if rol_actual() == "Soporte" else "/gerencia/rectores")
+            return redirect(destino_final)
     content = """
 <header class="role-hero"><div><h1>Activación · Datos del rector</h1>
 <p>Colegio: <b>%s</b> · Obligatorio antes de operar</p></div></header>
@@ -36210,6 +36303,7 @@ def _modulos_por_rol(rol):
         ("📧 Correo de Soporte", "/gerencia/correo-soporte", "#0f766e"),
         ("📧 Correo de Notificaciones", "/gerencia/correo-notificaciones", "#0f766e"),
         ("🔌 Mesa de Conexión API (WATI)", "/gerencia/wati-conexion", "#25D366"),
+        ("🧠 Conectores IA (EduAura)", "/gerencia/eduaura-ia", "#7c3aed"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Facturación", "/gerencia/facturacion", "#0B2D57"),
         ("Gastos", "/gerencia/gastos", "#0B2D57"),
@@ -49333,10 +49427,17 @@ def _dias_facturando(inst):
 
 def _activar_facturacion_institucion(inst, fee_valor=None, generar_primera_factura=True):
     """Activa el arranque de facturación de una institución: fija fecha_inicio_licencia si no la
-    tiene (para que el ciclo automático la tome desde ya) y genera de una vez el cobro de
-    implementación (one_time) + la primera mensualidad (recurring) del mes en curso, para que
-    la facturación no espere hasta el próximo aniversario. Es idempotente: no duplica facturas.
-    Planes demo/piloto: no generan facturas."""
+    tiene (para que el ciclo automático la tome desde ya).
+
+    REGLA COMERCIAL (vigente):
+    - El cobro de la mensualidad NO se genera el mismo día de la activación: arranca
+      10 días calendario después (lo hace _ciclo_facturacion_automatica, que revisa
+      _dias_facturando(inst) cada vez que corre).
+    - Cada factura, al emitirse, da un plazo de 15 días calendario para pagar antes
+      de que el colegio quede SUSPENDIDA (ver _ciclo_facturacion_automatica).
+    - El fee de implementación (one_time), si se cobra, sí se genera de una vez porque
+      es un cobro aparte de la mensualidad; su vencimiento también queda a 15 días.
+    Es idempotente: no duplica facturas. Planes demo/piloto: no generan facturas."""
     if _es_plan_demo(inst):
         return {"fecha_inicio_nueva": False, "facturas_creadas": [], "omitido": "plan_demo"}
     hoy = ahora().date() if hasattr(ahora(), "date") else datetime.now().date()
@@ -49355,7 +49456,7 @@ def _activar_facturacion_institucion(inst, fee_valor=None, generar_primera_factu
                 institucion_id=inst.id, tipo="one_time",
                 concepto=f"Fee de implementación EduTrack — {inst.plan or 'plan'}",
                 valor=float(fee_valor), estado="PENDIENTE", ciclo=ciclo,
-                vencimiento=(hoy + timedelta(days=5)).isoformat(),
+                vencimiento=(hoy + timedelta(days=15)).isoformat(),
                 creado_en=ahora().strftime("%Y-%m-%d %H:%M:%S") if hasattr(ahora(), "strftime") else hoy.isoformat(),
                 proveedor="interno", colegio_snapshot=inst.nombre or "", nit_snapshot=inst.nit or "",
             )
@@ -49363,31 +49464,11 @@ def _activar_facturacion_institucion(inst, fee_valor=None, generar_primera_factu
             db.session.flush()
             f1.consecutivo = f"REC-{f1.id:04d}"
             creadas.append(f1)
-    if generar_primera_factura:
-        ya = FacturaCobro.query.filter_by(institucion_id=inst.id, tipo="recurring", ciclo=ciclo).first()
-        if not ya:
-            precio = _precio_plan_institucion(inst)
-            try:
-                pct_d, lista_d, final_d = _descuento_plan_institucion(inst)
-                precio = final_d or precio
-            except Exception:
-                pct_d, lista_d = 0, precio
-            desc_txt = ""
-            if pct_d and pct_d > 0:
-                desc_txt = f" · Desc. {pct_d:.0f}% (lista ${_cop_plain(lista_d) if False else int(lista_d)})"
-            venc_d = hoy + timedelta(days=5)  # 5 días calendario desde emisión (estándar SaaS Colombia)
-            f2 = FacturaCobro(
-                institucion_id=inst.id, tipo="recurring",
-                concepto=f"Mensualidad licencia EduTrack — {inst.plan or 'plan'} ({ciclo}){desc_txt}",
-                valor=float(precio), estado="PENDIENTE", ciclo=ciclo,
-                vencimiento=venc_d.isoformat(),
-                creado_en=ahora().strftime("%Y-%m-%d %H:%M:%S") if hasattr(ahora(), "strftime") else hoy.isoformat(),
-                proveedor="interno", colegio_snapshot=inst.nombre or "", nit_snapshot=inst.nit or "",
-            )
-            db.session.add(f2)
-            db.session.flush()
-            f2.consecutivo = f"REC-{f2.id:04d}"
-            creadas.append(f2)
+    # NOTA: ya NO se genera aquí la primera mensualidad (tipo="recurring").
+    # Eso lo hace _ciclo_facturacion_automatica, 10 días después de fecha_inicio_licencia,
+    # para respetar la regla de "cobro empieza 10 días después de activar el colegio".
+    # El parámetro generar_primera_factura se conserva por compatibilidad con quien lo
+    # invoque, pero ya no dispara una factura inmediata.
     db.session.commit()
     return {"fecha_inicio_nueva": creado_nueva_fecha, "facturas_creadas": creadas}
 
@@ -49455,16 +49536,55 @@ def _ciclo_facturacion_automatica():
             fi = (getattr(inst, "fecha_inicio_licencia", None) or "").strip()
             if not fi:
                 continue
+
+            # REGLA COMERCIAL — primera mensualidad, 10 días después de activar el colegio:
+            # si la institución todavía no tiene NINGUNA factura recurring (mensualidad),
+            # se genera apenas se cumplan (o superen) 10 días desde fecha_inicio_licencia.
+            # Esa factura queda con 15 días de plazo para pago (vencimiento = hoy + 15).
+            try:
+                d0 = datetime.strptime(fi[:10], "%Y-%m-%d").date()
+                dias_desde_activacion = (hoy - d0).days
+            except Exception:
+                dias_desde_activacion = None
+            if dias_desde_activacion is not None and dias_desde_activacion >= 10:
+                tiene_recurring = FacturaCobro.query.filter_by(
+                    institucion_id=inst.id, tipo="recurring"
+                ).first()
+                if not tiene_recurring:
+                    precio0 = _precio_plan_institucion(inst)
+                    try:
+                        _pct0, _lista0, final0 = _descuento_plan_institucion(inst)
+                        precio0 = final0 or precio0
+                    except Exception:
+                        pass
+                    ciclo0 = hoy.strftime("%Y-%m")
+                    venc0 = hoy + timedelta(days=15)
+                    f0 = FacturaCobro(
+                        institucion_id=inst.id, tipo="recurring",
+                        concepto=f"Mensualidad licencia EduTrack — {inst.plan or 'plan'} ({ciclo0}) · primera factura (10 días post-activación)",
+                        valor=float(precio0), estado="PENDIENTE", ciclo=ciclo0,
+                        vencimiento=venc0.isoformat(),
+                        creado_en=ahora().strftime("%Y-%m-%d %H:%M:%S") if hasattr(ahora(), "strftime") else hoy.isoformat(),
+                        proveedor="interno", colegio_snapshot=inst.nombre or "", nit_snapshot=inst.nit or "",
+                    )
+                    db.session.add(f0)
+                    db.session.flush()
+                    f0.consecutivo = f"REC-{f0.id:04d}"
+                    db.session.commit()
+                    generadas += 1
+                    continue  # ya facturó este ciclo; el resto de la función es para meses siguientes
+
             # día del mes de inicio
             try:
                 parts = fi[:10].split("-")
                 dia_corte = int(parts[2])
             except Exception:
                 continue
-            # Regla de mora estricta (sobre factura del ciclo actual):
-            # Día 1–5: factura PENDIENTE, acceso normal
-            # Día 6–10: aviso (popup en login) — sin suspender aún
-            # Día 11+: SUSPENDIDA automática
+            # Regla de mora estricta (sobre facturas pendientes/vencidas):
+            # Cada factura da 15 días calendario desde su emisión para pagar
+            # (factura.vencimiento = factura.creado_en + 15 días).
+            # Mientras no se cumpla ese plazo: acceso normal.
+            # Al pasar el plazo (hoy > vencimiento): SUSPENDIDA automática.
             try:
                 ciclo_hoy = hoy.strftime("%Y-%m")
                 pend = FacturaCobro.query.filter_by(
@@ -49512,12 +49632,9 @@ def _ciclo_facturacion_automatica():
             if existe:
                 continue
             precio = _precio_plan_institucion(inst)
-            from datetime import timedelta as _td
-            # Vence conceptualmente el día 10 del mes (antes de suspensión día 11)
-            try:
-                venc_d = hoy.replace(day=min(10, 28))
-            except Exception:
-                venc_d = hoy + _td(days=10)
+            # Plazo de pago estándar: 15 días calendario desde la emisión de la factura
+            # (regla comercial vigente; antes de eso no se suspende el servicio).
+            venc_d = hoy + timedelta(days=15)
             f = FacturaCobro(
                 institucion_id=inst.id,
                 tipo="recurring",
@@ -53037,6 +53154,151 @@ def _wa_upsert_chat(telefono, nombre="", texto="", direccion="in", canal="soport
     except Exception:
         db.session.rollback()
     return chat
+
+
+_EDUAURA_PROMPT_MAESTRO = (
+    "Usted no es un asistente genérico. Usted es EduAura IA, el motor de inteligencia artificial "
+    "exclusivo del software educativo PROCSIS HQ. Su rol es asistir a directivos y docentes en "
+    "Colombia bajo los lineamientos del Decreto 1290 de 2009 (SIEE), la Ley 1620 de 2013 "
+    "(Convivencia) y la Ley 1581 de 2012 (Protección de datos). Queda estrictamente prohibido "
+    "inventar calificaciones, alterar registros de asistencia tomados en portería QR o procesar "
+    "información financiera confidencial de la empresa. Genere respuestas pedagógicas, "
+    "profesionales y objetivas."
+)
+
+_EDUAURA_PROVEEDORES = {
+    "anthropic": {
+        "label": "Anthropic Claude",
+        "modelo_sugerido": "claude-sonnet-4-6",
+        "protocolo": "MCP (Model Context Protocol) — servidor de contexto",
+        "formato_llave": "sk-ant-api...",
+    },
+    "gemini": {
+        "label": "Google Gemini",
+        "modelo_sugerido": "gemini-1.5-pro",
+        "protocolo": "Vertex AI SDK / API REST — Function Calling (Tools)",
+        "formato_llave": "Credenciales JSON de Google Cloud",
+    },
+    "openai": {
+        "label": "OpenAI ChatGPT",
+        "modelo_sugerido": "gpt-4o",
+        "protocolo": "Custom Actions / Assistants API — esquema OpenAPI",
+        "formato_llave": "sk-proj-...",
+    },
+}
+
+
+def _eduaura_get_config():
+    """Fila única de configuración del conector IA. La crea si no existe."""
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    cfg = ConectorIA.query.get(1)
+    if not cfg:
+        cfg = ConectorIA(id=1, proveedor="anthropic", activo=False)
+        db.session.add(cfg)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    return cfg
+
+
+@app.route("/gerencia/eduaura-ia", methods=["GET", "POST"])
+def gerencia_eduaura_ia():
+    """Panel de Gerencia: selector de 'cerebro' activo (Claude / Gemini / ChatGPT),
+    endpoint/URL del conector y llave de API. La llave se guarda cifrada (mismo
+    cifrado que usa la Mesa de Conexión WATI), nunca en texto plano en el código."""
+    if not requiere_login():
+        return redirect("/gerencia-login")
+    if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        return acceso_denegado("Solo Gerencia configura los conectores de IA.")
+    cfg = _eduaura_get_config()
+    msg = err = ""
+    if request.method == "POST":
+        proveedor = (request.form.get("proveedor") or "anthropic").strip().lower()
+        endpoint = (request.form.get("endpoint_url") or "").strip()[:500]
+        modelo = (request.form.get("modelo") or "").strip()[:80]
+        api_key_form = (request.form.get("api_key") or "").strip()
+        if proveedor not in _EDUAURA_PROVEEDORES:
+            err = "Proveedor no reconocido."
+        elif not endpoint:
+            err = "El endpoint / URL del conector es obligatorio."
+        else:
+            cfg.proveedor = proveedor
+            cfg.endpoint_url = endpoint
+            cfg.modelo = modelo or _EDUAURA_PROVEEDORES[proveedor]["modelo_sugerido"]
+            if api_key_form:
+                cfg.api_key = _wati_encrypt(api_key_form)
+            cfg.activo = True
+            cfg.actualizado_en = f"{fecha_hoy()} {hora_actual()}"
+            cfg.actualizado_por = session.get("usuario") or ""
+            try:
+                db.session.commit()
+                msg = f"Cerebro activo: {_EDUAURA_PROVEEDORES[proveedor]['label']}. Configuración guardada."
+                registrar_auditoria("EduAura IA: conector actualizado", f"{proveedor} · {endpoint[:80]} por {session.get('usuario')}")
+            except Exception as ex:
+                db.session.rollback()
+                err = f"No se pudo guardar: {ex}"
+    api_key_actual = ""
+    try:
+        api_key_actual = _wati_decrypt(cfg.api_key or "") if (cfg.api_key or "") else ""
+    except Exception:
+        api_key_actual = ""
+    api_key_mask = (api_key_actual[:6] + "…" + api_key_actual[-4:]) if len(api_key_actual) > 12 else ("•" * len(api_key_actual))
+    opciones = "".join(
+        f'<option value="{k}"{" selected" if cfg.proveedor == k else ""}>{v["label"]}</option>'
+        for k, v in _EDUAURA_PROVEEDORES.items()
+    )
+    filas_spec = "".join(
+        f"<tr><td style='padding:6px 10px;font-weight:700'>{_esc(v['label'])}</td>"
+        f"<td style='padding:6px 10px'>{_esc(v['protocolo'])}</td>"
+        f"<td style='padding:6px 10px'>{_esc(v['modelo_sugerido'])}</td>"
+        f"<td style='padding:6px 10px;font-family:monospace;font-size:11px'>{_esc(v['formato_llave'])}</td></tr>"
+        for v in _EDUAURA_PROVEEDORES.values()
+    )
+    content = f"""
+<style>
+.ia-box{{max-width:720px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px;box-shadow:0 8px 24px rgba(15,23,42,.06)}}
+.ia-box label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:12px 0 4px}}
+.ia-box input,.ia-box select{{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-size:14px}}
+.ia-status{{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-weight:800;font-size:13px;background:#ede9fe;color:#6d28d9}}
+.ia-spec{{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}}
+.ia-spec th{{background:#0B2D57;color:#fff;padding:6px 10px;text-align:left}}
+.ia-prompt{{background:#f8fafc;border:1px dashed #94a3b8;border-radius:10px;padding:12px;font-size:12px;color:#475569;white-space:pre-wrap}}
+</style>
+<header class="role-hero"><div>
+  <h1>🧠 Conectores IA · EduAura</h1>
+  <p>Elige qué proveedor de IA impulsa a EduAura IA y con qué credenciales se conecta a EduTrack.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<div class="ia-box">
+  <div style="margin-bottom:6px">
+    {"<span class='ia-status'>● Cerebro activo: " + _esc(_EDUAURA_PROVEEDORES.get(cfg.proveedor, {}).get('label', cfg.proveedor or '—')) + "</span>" if cfg.activo else "<span class='ia-status' style='background:#fee2e2;color:#b91c1c'>● Sin configurar</span>"}
+  </div>
+  {"<div class='msg ok' style='margin:10px 0'>" + _esc(msg) + "</div>" if msg else ""}
+  {"<div class='msg danger' style='margin:10px 0'>" + _esc(err) + "</div>" if err else ""}
+  <form method="POST">
+    <label>Selector de cerebro activo</label>
+    <select name="proveedor">{opciones}</select>
+    <label>Endpoint / URL del conector (servidor MCP / API)</label>
+    <input name="endpoint_url" value="{_esc(cfg.endpoint_url or '')}" placeholder="https://procsis.com/mcp" required>
+    <label>Modelo (opcional — se usa el sugerido si se deja vacío)</label>
+    <input name="modelo" value="{_esc(cfg.modelo or '')}" placeholder="{_esc(_EDUAURA_PROVEEDORES.get(cfg.proveedor, {}).get('modelo_sugerido',''))}">
+    <label>Llave de API {"(actual: " + _esc(api_key_mask) + " — deje vacío para conservarla)" if api_key_actual else ""}</label>
+    <input name="api_key" type="password" placeholder="{_esc(_EDUAURA_PROVEEDORES.get(cfg.proveedor, {}).get('formato_llave',''))}" autocomplete="off">
+    <div style="margin-top:16px"><button type="submit">Guardar y activar</button></div>
+  </form>
+  <table class="ia-spec">
+    <tr><th>Proveedor</th><th>Protocolo</th><th>Modelo sugerido</th><th>Formato de llave</th></tr>
+    {filas_spec}
+  </table>
+  <label style="margin-top:16px">Prompt maestro de identidad (fijo — se inyecta siempre, sin importar el proveedor elegido)</label>
+  <div class="ia-prompt">{_esc(_EDUAURA_PROMPT_MAESTRO)}</div>
+</div>
+"""
+    return page("Conectores IA", shell(content))
 
 
 @app.route("/gerencia/wati-conexion", methods=["GET", "POST"])
