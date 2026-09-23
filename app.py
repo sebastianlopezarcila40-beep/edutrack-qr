@@ -720,7 +720,7 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 
 .modern-hero{background:white;border-radius:24px;border-top:5px solid #facc15;padding:28px;box-shadow:var(--s);display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.modern-hero h1{margin:0;color:#0f172a;font-size:30px}.modern-hero p{margin:8px 0 0;color:#334155}.modern-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.brand-card{background:linear-gradient(135deg,#0f5132,#22c55e);color:white;border-radius:24px;border-bottom:6px solid #facc15;padding:38px;box-shadow:var(--s);text-align:center}.brand-card img{width:84px;height:84px;object-fit:contain;background:white;border-radius:18px;padding:8px}.brand-card h2{font-size:26px;margin:16px 0 8px}.brand-card p{color:#e8fff2}.summary-card,.modern-card{background:white;border-radius:24px;border-top:5px solid #facc15;padding:24px;box-shadow:var(--s)}.summary-card h2,.modern-card h2{margin-top:0;color:#0f172a}.modern-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.modern-stat{background:#f8fafc;border-left:5px solid #15803d;border-radius:18px;padding:18px}.modern-stat h3{font-size:31px;margin:0;color:#0f172a}.modern-stat p{margin:6px 0 0;color:#334155;font-size:13px}.modules-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin:18px 0}.modern-card a{color:#14532d}.client-note{background:#ecfdf5;border:1px solid #bbf7d0;border-radius:18px;padding:16px;margin-top:14px;color:#14532d;font-weight:700}
 .table-card{background:white;border-radius:12px;padding:16px;box-shadow:var(--s);margin-bottom:16px}.table-card h2{color:var(--azul);margin-top:0}table{width:100%;border-collapse:collapse;margin-top:10px}th{background:var(--azul);color:white;padding:10px;font-size:12px}td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px}.estado{padding:5px 9px;border-radius:999px;font-weight:800;font-size:12px}.estado-temprano{background:#dcfce7;color:#047857}.estado-tarde{background:#fef3c7;color:#b45309}.estado-no{background:#fee2e2;color:#b91c1c}.qr-img{width:76px}.danger-link{color:var(--rojo)}
-.footer{margin-top:20px;text-align:center;color:#64748b;font-size:13px}.footer strong{color:var(--azul)}.footer-dark,.footer.footer-dark{background:#1d1d1f;color:#a1a1a6;padding:22px 16px;margin:0;font-size:12px;line-height:1.55;border:0}.footer-dark strong,.footer.footer-dark strong,.footer-dark b{color:#f5f5f7}.portal{width:100%;max-width:460px;text-align:center}.portal #reader{max-width:330px;margin:16px auto;border-radius:18px;overflow:hidden}.carnet{width:360px;background:white;border-radius:28px;padding:24px;text-align:center;box-shadow:var(--s);border-top:8px solid var(--azul2)}.carnet-head{background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:22px;padding:18px;border-bottom:6px solid var(--amarillo)}.carnet .qr{width:180px;margin:18px auto}.print-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f1f5f9;flex-direction:column}.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.contact-card{background:white;border-radius:20px;padding:22px;box-shadow:var(--s);border-top:5px solid var(--azul2)}.contact-icon{width:50px;height:50px;border-radius:15px;background:var(--azul2);color:white;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:12px}.slogan-box{margin-top:25px;background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:24px;padding:26px;text-align:center}
+.footer{margin-top:20px;text-align:center;color:#64748b;font-size:13px}.footer strong{color:var(--azul)}.portal{width:100%;max-width:460px;text-align:center}.portal #reader{max-width:330px;margin:16px auto;border-radius:18px;overflow:hidden}.carnet{width:360px;background:white;border-radius:28px;padding:24px;text-align:center;box-shadow:var(--s);border-top:8px solid var(--azul2)}.carnet-head{background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:22px;padding:18px;border-bottom:6px solid var(--amarillo)}.carnet .qr{width:180px;margin:18px auto}.print-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f1f5f9;flex-direction:column}.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.contact-card{background:white;border-radius:20px;padding:22px;box-shadow:var(--s);border-top:5px solid var(--azul2)}.contact-icon{width:50px;height:50px;border-radius:15px;background:var(--azul2);color:white;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:12px}.slogan-box{margin-top:25px;background:linear-gradient(135deg,var(--azul),var(--azul2));color:white;border-radius:24px;padding:26px;text-align:center}
 
 /* ESTUDIANTES MODERNO */
 .student-page{display:grid;grid-template-columns:420px 1fr;gap:18px;align-items:start}
@@ -855,8 +855,8 @@ body{
 .lp-gallery figure{margin:0;background:#f8fafc;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0}
 .lp-gallery img{width:100%;height:160px;object-fit:cover;display:block}
 .lp-gallery figcaption{padding:8px 10px;font-size:12px;color:#475569;text-align:center}
-.lp-footer{text-align:center;padding:22px 16px;color:#a1a1a6;font-size:12px;background:#1d1d1f;border:0;line-height:1.55}
-.lp-footer b{color:#f5f5f7}
+.lp-footer{text-align:center;padding:20px;color:#64748b;font-size:12px}
+.lp-footer b{color:#0B2D57}
 .lp-portals{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
 .lp-portal-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 12px;border-radius:14px;font-weight:800;font-size:14px;text-decoration:none;text-align:center;border:1px solid transparent;transition:.15s}
 .lp-portal-btn.doc{background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;box-shadow:0 10px 24px rgba(29,78,216,.28)}
@@ -2353,26 +2353,6 @@ class LiderEmpresa(db.Model):
 
 
 
-
-class SolicitudCambioPlan(db.Model):
-    """Soporte solicita cambio de plan; Gerencia acepta (máx. 5 días)."""
-    __tablename__ = "solicitudes_cambio_plan"
-    id = db.Column(db.Integer, primary_key=True)
-    institucion_id = db.Column(db.Integer, index=True)
-    codigo_colegio = db.Column(db.String(40), default="")
-    nombre_colegio = db.Column(db.String(200), default="")
-    plan_actual = db.Column(db.String(80), default="")
-    plan_solicitado = db.Column(db.String(80), default="")
-    motivo = db.Column(db.Text, default="")
-    solicitado_por = db.Column(db.String(120), default="")
-    estado = db.Column(db.String(30), default="PENDIENTE")  # PENDIENTE | ACEPTADA | RECHAZADA | VENCIDA
-    creado_en = db.Column(db.String(30), default="")
-    vence_en = db.Column(db.String(30), default="")
-    resuelto_en = db.Column(db.String(30), default="")
-    resuelto_por = db.Column(db.String(120), default="")
-    nota_gerencia = db.Column(db.Text, default="")
-
-
 class CalendarioEvento(db.Model):
     """Eventos del calendario escolar (hasta 2040). Multi-tenant."""
     __tablename__ = "calendario_eventos"
@@ -2500,6 +2480,36 @@ class DocumentoCorp(db.Model):
     categoria = db.Column(db.String(80), default="interno")  # contingencia | legal | publico | ops
     actualizado_en = db.Column(db.String(30), default="")
     actualizado_por = db.Column(db.String(80), default="")
+    area_origen = db.Column(db.String(40), default="gerencia")
+    destino = db.Column(db.String(40), default="")
+    plantilla_tipo = db.Column(db.String(80), default="")
+    estado_doc = db.Column(db.String(40), default="BORRADOR")
+
+
+class BoletaCruceFinanciero(db.Model):
+    """Boleta interna Soporte->Cobranza amarrada a PQR publica."""
+    __tablename__ = "boletas_cruce_financiero"
+    id = db.Column(db.Integer, primary_key=True)
+    id_interno_bcf = db.Column(db.String(40), unique=True, index=True)
+    pqr_id = db.Column(db.Integer, index=True)
+    pqr_cliente_relacionada = db.Column(db.String(40), index=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    codigo_colegio = db.Column(db.String(40), default="")
+    nombre_colegio = db.Column(db.String(200), default="")
+    nit_colegio = db.Column(db.String(40), default="")
+    plan_contrato = db.Column(db.String(80), default="")
+    valor_plan = db.Column(db.String(40), default="")
+    hechos_queja = db.Column(db.Text, default="")
+    validacion_soporte = db.Column(db.Boolean, default=False)
+    validado_por = db.Column(db.String(120), default="")
+    validado_en = db.Column(db.String(30), default="")
+    estado = db.Column(db.String(40), default="PENDIENTE")
+    resolucion_cobranza = db.Column(db.Text, default="")
+    resuelto_por = db.Column(db.String(120), default="")
+    resuelto_en = db.Column(db.String(30), default="")
+    cun = db.Column(db.String(40), default="")
+    creado_en = db.Column(db.String(30), default="")
+    auditoria_sesiones = db.Column(db.Text, default="")
 
 
 class NotaInteraccion(db.Model):
@@ -4084,14 +4094,7 @@ window.addEventListener('pageshow', function (event) {
 
 
 def footer():
-    try:
-        ver = _footer_version_txt()
-    except Exception:
-        ver = "2.5.0"
-    return (
-        f"""<div class="footer footer-dark"><strong>{nombre_producto()}</strong> © 2026 · {SLOGAN}<br>"""
-        f"""Desarrollado por <b>{nombre_empresa()}</b> · Versión {ver}</div>"""
-    )
+    return f"""<div class="footer"><strong>{nombre_producto()}</strong> © 2026 | {SLOGAN}<br>Desarrollado por <b>{nombre_empresa()}</b></div>"""
 
 
 
@@ -6155,15 +6158,6 @@ def plataforma():
         x.anuncio_version = "1"
         x.anuncio_img1 = ""
         x.anuncio_img2 = ""
-        # PQR / kit legal (evita AttributeError en /gerencia/pqr-info)
-        x.pqr_presentacion = ""
-        x.pqr_radicado = ""
-        x.pqr_facturacion = ""
-        x.pqr_plazo = ""
-        x.kit_habeas_data = ""
-        x.kit_confirmacion_contrato = ""
-        x.changelog_publico = ""
-        x.horario_atencion = x.horario_soporte = x.horario_ventas = x.horario_facturacion = ""
         return x
 
 
@@ -7973,7 +7967,14 @@ def _cargar_divipola():
                 return getattr(mod, "COLOMBIA_DEPARTAMENTOS", {}) or {}
     except Exception as e:
         print("divipola load:", e)
-    return {}
+    # Fallback embebido (siempre disponible en Railway)
+    try:
+        return _DIVIPOLA_EMBED
+    except Exception:
+        return {}
+
+_DIVIPOLA_EMBED = {'Amazonas': ['Leticia', 'El Encanto', 'La Chorrera', 'La Pedrera', 'La Victoria', 'Mirití-Paraná', 'Puerto Alegría', 'Puerto Arica', 'Puerto Nariño', 'Puerto Santander', 'Tarapacá'], 'Antioquia': ['Medellín', 'Abejorral', 'Abriaquí', 'Alejandría', 'Amagá', 'Amalfi', 'Andes', 'Angelópolis', 'Angostura', 'Anorí', 'Anzá', 'Apartadó', 'Arboletes', 'Argelia', 'Armenia', 'Barbosa', 'Bello', 'Belmira', 'Betania', 'Betulia', 'Briceño', 'Buriticá', 'Cáceres', 'Caicedo', 'Caldas', 'Campamento', 'Cañasgordas', 'Caracolí', 'Caramanta', 'Carepa', 'Carolina del Príncipe', 'Caucasia', 'Chigorodó', 'Cisneros', 'Ciudad Bolívar', 'Cocorná', 'Concepción', 'Concordia', 'Copacabana', 'Dabeiba', 'Donmatías', 'Ebéjico', 'El Bagre', 'El Carmen de Viboral', 'El Peñol', 'El Retiro', 'El Santuario', 'Entrerríos', 'Envigado', 'Fredonia', 'Frontino', 'Giraldo', 'Girardota', 'Gómez Plata', 'Granada', 'Guadalupe', 'Guarne', 'Guatapé', 'Heliconia', 'Hispania', 'Itagüí', 'Ituango', 'Jardín', 'Jericó', 'La Ceja', 'La Estrella', 'La Pintada', 'La Unión', 'Liborina', 'Maceo', 'Marinilla', 'Montebello', 'Murindó', 'Mutatá', 'Nariño', 'Nechí', 'Necoclí', 'Olaya', 'Peque', 'Pueblorrico', 'Puerto Berrío', 'Puerto Nare', 'Puerto Triunfo', 'Remedios', 'Rionegro', 'Sabanalarga', 'Sabaneta', 'Salgar', 'San Andrés de Cuerquia', 'San Carlos', 'San Francisco', 'San Jerónimo', 'San José de la Montaña', 'San Juan de Urabá', 'San Luis', 'San Pedro de los Milagros', 'San Pedro de Urabá', 'San Rafael', 'San Roque', 'San Vicente Ferrer', 'Santa Bárbara', 'Santa Fe de Antioquia', 'Santa Rosa de Osos', 'Santo Domingo', 'Segovia', 'Sonsón', 'Sopetrán', 'Támesis', 'Tarazá', 'Tarso', 'Titiribí', 'Toledo', 'Turbo', 'Uramita', 'Urrao', 'Valdivia', 'Valparaíso', 'Vegachí', 'Venecia', 'Vigía del Fuerte', 'Yalí', 'Yarumal', 'Yolombó', 'Yondó', 'Zaragoza'], 'Arauca': ['Arauca', 'Arauquita', 'Cravo Norte', 'Fortul', 'Puerto Rondón', 'Saravena', 'Tame'], 'Archipiélago de San Andrés, Providencia y Santa Catalina': ['San Andrés', 'Providencia'], 'Atlántico': ['Barranquilla', 'Baranoa', 'Campo de la Cruz', 'Candelaria', 'Galapa', 'Juan de Acosta', 'Luruaco', 'Malambo', 'Manatí', 'Palmar de Varela', 'Piojó', 'Polonuevo', 'Ponedera', 'Puerto Colombia', 'Repelón', 'Sabanagrande', 'Sabanalarga', 'Santa Lucía', 'Santo Tomás', 'Soledad', 'Suan', 'Tubará', 'Usiacurí'], 'Bogotá, D.C.': ['Bogotá, D.C.'], 'Bolívar': ['Cartagena de Indias', 'Achí', 'Altos del Rosario', 'Arenal', 'Arjona', 'Arroyohondo', 'Barranco de Loba', 'Calamar', 'Cantagallo', 'Cicuco', 'Clemencia', 'Córdoba', 'El Carmen de Bolívar', 'El Guamo', 'El Peñón', 'Hatillo de Loba', 'Magangué', 'Mahates', 'Margarita', 'María la Baja', 'Mompós', 'Montecristo', 'Morales', 'Norosí', 'Pinillos', 'Regidor', 'Río Viejo', 'San Cristóbal', 'San Estanislao', 'San Fernando', 'San Jacinto', 'San Jacinto del Cauca', 'San Juan Nepomuceno', 'San Martín de Loba', 'San Pablo', 'Santa Catalina', 'Santa Rosa', 'Santa Rosa del Sur', 'Simití', 'Soplaviento', 'Talaigua Nuevo', 'Tiquisio', 'Turbaco', 'Turbaná', 'Villanueva', 'Zambrano'], 'Boyacá': ['Tunja', 'Almeida', 'Aquitania', 'Arcabuco', 'Belén', 'Berbeo', 'Betéitiva', 'Boavita', 'Boyacá', 'Briceño', 'Buenavista', 'Busbanzá', 'Caldas', 'Campohermoso', 'Cerinza', 'Chinavita', 'Chiquinquirá', 'Chíquiza', 'Chiscas', 'Chita', 'Chitaraque', 'Chivatá', 'Chivor', 'Ciénega', 'Cómbita', 'Coper', 'Corrales', 'Covarachía', 'Cubará', 'Cucaita', 'Cuítiva', 'Duitama', 'El Cocuy', 'El Espino', 'Firavitoba', 'Floresta', 'Gachantivá', 'Gámeza', 'Garagoa', 'Guacamayas', 'Guateque', 'Guayatá', 'Güicán', 'Iza', 'Jenesano', 'Jericó', 'La Capilla', 'La Uvita', 'La Victoria', 'Labranzagrande', 'Macanal', 'Maripí', 'Miraflores', 'Mongua', 'Monguí', 'Moniquirá', 'Motavita', 'Muzo', 'Nobsa', 'Nuevo Colón', 'Oicatá', 'Otanche', 'Pachavita', 'Páez', 'Paipa', 'Pajarito', 'Panqueba', 'Pauna', 'Paya', 'Paz de Río', 'Pesca', 'Pisba', 'Puerto Boyacá', 'Quípama', 'Ramiriquí', 'Ráquira', 'Rondón', 'Saboyá', 'Sáchica', 'Samacá', 'San Eduardo', 'San José de Pare', 'San Luis de Gaceno', 'San Mateo', 'San Miguel de Sema', 'San Pablo de Borbur', 'Santa María', 'Santa Rosa de Viterbo', 'Santa Sofía', 'Santana', 'Sativanorte', 'Sativasur', 'Siachoque', 'Soatá', 'Socha', 'Socotá', 'Sogamoso', 'Somondoco', 'Sora', 'Soracá', 'Sotaquirá', 'Susacón', 'Sutamarchán', 'Sutatenza', 'Tasco', 'Tenza', 'Tibaná', 'Tibasosa', 'Tinjacá', 'Tipacoque', 'Toca', 'Togüí', 'Tópaga', 'Tota', 'Tununguá', 'Turmequé', 'Tuta', 'Tutazá', 'Úmbita', 'Ventaquemada', 'Villa de Leyva', 'Viracachá', 'Zetaquira'], 'Caldas': ['Manizales', 'Aguadas', 'Anserma', 'Aranzazu', 'Belalcázar', 'Chinchiná', 'Filadelfia', 'La Dorada', 'La Merced', 'Manzanares', 'Marmato', 'Marquetalia', 'Marulanda', 'Neira', 'Norcasia', 'Pácora', 'Palestina', 'Pensilvania', 'Riosucio', 'Risaralda', 'Salamina', 'Samaná', 'San José', 'Supía', 'Victoria', 'Villamaría', 'Viterbo'], 'Caquetá': ['Florencia', 'Albania', 'Belén de los Andaquíes', 'Cartagena del Chairá', 'Curillo', 'El Doncello', 'El Paujil', 'La Montañita', 'Milán', 'Morelia', 'Puerto Rico', 'San José del Fragua', 'San Vicente del Caguán', 'Solano', 'Solita', 'Valparaíso'], 'Casanare': ['Yopal', 'Aguazul', 'Chámeza', 'Hato Corozal', 'La Salina', 'Maní', 'Monterrey', 'Nunchía', 'Orocué', 'Paz de Ariporo', 'Pore', 'Recetor', 'Sabanalarga', 'Sácama', 'San Luis de Palenque', 'Támara', 'Tauramena', 'Trinidad', 'Villanueva'], 'Cauca': ['Popayán', 'Almaguer', 'Argelia', 'Balboa', 'Bolívar', 'Buenos Aires', 'Cajibío', 'Caldono', 'Caloto', 'Corinto', 'El Tambo', 'Florencia', 'Guachené', 'Guapi', 'Inzá', 'Jambaló', 'La Sierra', 'La Vega', 'López de Micay', 'Mercaderes', 'Miranda', 'Morales', 'Padilla', 'Páez', 'Patía', 'Piamonte', 'Piendamó', 'Puerto Tejada', 'Puracé', 'Rosas', 'San Sebastián', 'Santander de Quilichao', 'Santa Rosa', 'Silvia', 'Sotará', 'Suárez', 'Sucre', 'Timbío', 'Timbiquí', 'Toribío', 'Totoró', 'Villa Rica'], 'Cesar': ['Valledupar', 'Aguachica', 'Agustín Codazzi', 'Astrea', 'Becerril', 'Bosconia', 'Chimichagua', 'Chiriguaná', 'Curumaní', 'El Copey', 'El Paso', 'Gamarra', 'González', 'La Gloria', 'La Jagua de Ibirico', 'La Paz', 'Manaure Balcón del Cesar', 'Pailitas', 'Pelaya', 'Pueblo Bello', 'Río de Oro', 'San Alberto', 'San Diego', 'San Martín', 'Tamalameque'], 'Chocó': ['Quibdó', 'Acandí', 'Alto Baudó', 'Atrato', 'Bagadó', 'Bahía Solano', 'Bajo Baudó', 'Bojayá', 'Carmen del Darién', 'Cértegui', 'Condoto', 'El Cantón de San Pablo', 'El Carmen de Atrato', 'El Litoral del San Juan', 'Istmina', 'Juradó', 'Lloró', 'Medio Atrato', 'Medio Baudó', 'Medio San Juan', 'Nóvita', 'Nuquí', 'Río Iró', 'Río Quito', 'Riosucio', 'San José del Palmar', 'Sipí', 'Tadó', 'Unguía', 'Unión Panamericana'], 'Córdoba': ['Montería', 'Ayapel', 'Buenavista', 'Canalete', 'Cereté', 'Chimá', 'Chinú', 'Ciénaga de Oro', 'Cotorra', 'La Apartada', 'Lorica', 'Los Córdobas', 'Momil', 'Moñitos', 'Montelíbano', 'Planeta Rica', 'Pueblo Nuevo', 'Puerto Escondido', 'Puerto Libertador', 'Purísima', 'Sahagún', 'San Andrés de Sotavento', 'San Antero', 'San Bernardo del Viento', 'San Carlos', 'San José de Uré', 'San Pelayo', 'Tierralta', 'Tuchín', 'Valencia'], 'Cundinamarca': ['Agua de Dios', 'Albán', 'Anapoima', 'Anolaima', 'Apulo', 'Arbeláez', 'Beltrán', 'Bituima', 'Bojacá', 'Cabrera', 'Cachipay', 'Cajicá', 'Caparrapí', 'Cáqueza', 'Carmen de Carupa', 'Chaguaní', 'Chía', 'Chipaque', 'Choachí', 'Chocontá', 'Cogua', 'Cota', 'Cucunubá', 'El Colegio', 'El Peñón', 'El Rosal', 'Facatativá', 'Fómeque', 'Fosca', 'Funza', 'Fúquene', 'Fusagasugá', 'Gachalá', 'Gachancipá', 'Gachetá', 'Gama', 'Girardot', 'Granada', 'Guachetá', 'Guaduas', 'Guasca', 'Guataquí', 'Guatavita', 'Guayabal de Síquima', 'Guayabetal', 'Gutiérrez', 'Jerusalén', 'Junín', 'La Calera', 'La Mesa', 'La Palma', 'La Peña', 'La Vega', 'Lenguazaque', 'Machetá', 'Madrid', 'Manta', 'Medina', 'Mosquera', 'Nariño', 'Nemocón', 'Nilo', 'Nimaima', 'Nocaima', 'Pacho', 'Paime', 'Pandi', 'Paratebueno', 'Pasca', 'Puerto Salgar', 'Pulí', 'Quebradanegra', 'Quetame', 'Quipile', 'Ricaurte', 'San Antonio del Tequendama', 'San Bernardo', 'San Cayetano', 'San Francisco', 'San Juan de Rioseco', 'Sasaima', 'Sesquilé', 'Sibaté', 'Silvania', 'Simijaca', 'Soacha', 'Sopó', 'Subachoque', 'Suesca', 'Supatá', 'Susa', 'Sutatausa', 'Tabio', 'Tausa', 'Tena', 'Tenjo', 'Tibacuy', 'Tibirita', 'Tocaima', 'Tocancipá', 'Topaipí', 'Ubalá', 'Ubaque', 'Une', 'Útica', 'Venecia', 'Vergara', 'Vianí', 'Villa de San Diego de Ubaté', 'Villagómez', 'Villapinzón', 'Villeta', 'Viotá', 'Yacopí', 'Zipacón', 'Zipaquirá'], 'Guainía': ['Inírida', 'Barranco Minas', 'Mapiripana', 'San Felipe', 'Puerto Colombia', 'La Guadalupe', 'Cacahual', 'Pana Pana', 'Morichal'], 'Guaviare': ['San José del Guaviare', 'Calamar', 'El Retorno', 'Miraflores'], 'Huila': ['Neiva', 'Acevedo', 'Agrado', 'Aipe', 'Algeciras', 'Altamira', 'Baraya', 'Campoalegre', 'Colombia', 'Elías', 'Garzón', 'Gigante', 'Guadalupe', 'Hobo', 'Íquira', 'Isnos', 'La Argentina', 'La Plata', 'Nátaga', 'Oporapa', 'Paicol', 'Palermo', 'Palestina', 'Pital', 'Pitalito', 'Rivera', 'Saladoblanco', 'San Agustín', 'Santa María', 'Suaza', 'Tarqui', 'Tello', 'Teruel', 'Tesalia', 'Timaná', 'Villavieja', 'Yaguará'], 'La Guajira': ['Riohacha', 'Albania', 'Barrancas', 'Dibulla', 'Distracción', 'El Molino', 'Fonseca', 'Hatonuevo', 'La Jagua del Pilar', 'Maicao', 'Manaure', 'San Juan del Cesar', 'Uribia', 'Urumita', 'Villanueva'], 'Magdalena': ['Santa Marta', 'Algarrobo', 'Aracataca', 'Ariguaní', 'Cerro de San Antonio', 'Chivolo', 'Ciénaga', 'Concordia', 'El Banco', 'El Piñón', 'El Retén', 'Fundación', 'Guamal', 'Nueva Granada', 'Pedraza', 'Pijiño del Carmen', 'Pivijay', 'Plato', 'Pueblo Viejo', 'Remolino', 'Sabanas de San Ángel', 'Salamina', 'San Sebastián de Buenavista', 'San Zenón', 'Santa Ana', 'Santa Bárbara de Pinto', 'Sitionuevo', 'Tenerife', 'Zapayán', 'Zona Bananera'], 'Meta': ['Villavicencio', 'Acacías', 'Barranca de Upía', 'Cabuyaro', 'Castilla la Nueva', 'Cubarral', 'Cumaral', 'El Calvario', 'El Castillo', 'El Dorado', 'Fuente de Oro', 'Granada', 'Guamal', 'La Macarena', 'Lejanías', 'Mapiripán', 'Mesetas', 'Puerto Concordia', 'Puerto Gaitán', 'Puerto Lleras', 'Puerto López', 'Puerto Rico', 'Restrepo', 'San Carlos de Guaroa', 'San Juan de Arama', 'San Juanito', 'San Martín', 'Uribe', 'Vista Hermosa'], 'Nariño': ['Pasto', 'Albán', 'Aldana', 'Ancuyá', 'Arboleda', 'Barbacoas', 'Belén', 'Buesaco', 'Chachagüí', 'Colón', 'Consacá', 'Contadero', 'Córdoba', 'Cuaspud', 'Cumbal', 'Cumbitara', 'El Charco', 'El Peñol', 'El Rosario', 'El Tablón de Gómez', 'El Tambo', 'Francisco Pizarro', 'Funes', 'Guachucal', 'Guaitarilla', 'Gualmatán', 'Iles', 'Imués', 'Ipiales', 'La Cruz', 'La Florida', 'La Llanada', 'La Tola', 'La Unión', 'Leiva', 'Linares', 'Los Andes', 'Magüí', 'Mallama', 'Mosquera', 'Nariño', 'Olaya Herrera', 'Ospina', 'Policarpa', 'Potosí', 'Providencia', 'Puerres', 'Pupiales', 'Ricaurte', 'Roberto Payán', 'Samaniego', 'San Bernardo', 'San Lorenzo', 'San Pablo', 'San Pedro de Cartago', 'Sandoná', 'Santa Bárbara', 'Santacruz', 'Sapuyes', 'Taminango', 'Tangua', 'Tumaco', 'Túquerres', 'Yacuanquer'], 'Norte de Santander': ['Cúcuta', 'Ábrego', 'Arboledas', 'Bochalema', 'Bucarasica', 'Cáchira', 'Cácota', 'Chinácota', 'Chitagá', 'Convención', 'Cucutilla', 'Duranía', 'El Carmen', 'El Tarra', 'El Zulia', 'Gramalote', 'Hacarí', 'Herrán', 'La Esperanza', 'La Playa', 'Labateca', 'Los Patios', 'Lourdes', 'Mutiscua', 'Ocaña', 'Pamplona', 'Pamplonita', 'Puerto Santander', 'Ragonvalia', 'Salazar', 'San Calixto', 'San Cayetano', 'Santiago', 'Sardinata', 'Silos', 'Teorama', 'Tibú', 'Toledo', 'Villa Caro', 'Villa del Rosario'], 'Putumayo': ['Mocoa', 'Colón', 'Orito', 'Puerto Asís', 'Puerto Caicedo', 'Puerto Guzmán', 'Puerto Leguízamo', 'San Francisco', 'San Miguel', 'Santiago', 'Sibundoy', 'Valle del Guamuez', 'Villagarzón'], 'Quindío': ['Armenia', 'Buenavista', 'Calarcá', 'Circasia', 'Córdoba', 'Filandia', 'Génova', 'La Tebaida', 'Montenegro', 'Pijao', 'Quimbaya', 'Salento'], 'Risaralda': ['Pereira', 'Apía', 'Balboa', 'Belén de Umbría', 'Dosquebradas', 'Guática', 'La Celia', 'La Virginia', 'Marsella', 'Mistrató', 'Pueblo Rico', 'Quinchía', 'Santa Rosa de Cabal', 'Santuario'], 'Santander': ['Bucaramanga', 'Aguada', 'Albania', 'Aratoca', 'Barbosa', 'Barichara', 'Barrancabermeja', 'Betulia', 'Bolívar', 'Cabrera', 'California', 'Capitanejo', 'Carcasí', 'Cepitá', 'Cerrito', 'Charalá', 'Charta', 'Chima', 'Chipatá', 'Cimitarra', 'Concepción', 'Confines', 'Contratación', 'Coromoro', 'Curití', 'El Carmen de Chucurí', 'El Guacamayo', 'El Peñón', 'El Playón', 'Encino', 'Enciso', 'Florián', 'Floridablanca', 'Galán', 'Gámbita', 'Girón', 'Guaca', 'Guadalupe', 'Guapotá', 'Guavatá', 'Güepsa', 'Hato', 'Jesús María', 'Jordán', 'La Belleza', 'La Paz', 'Landázuri', 'Lebrija', 'Los Santos', 'Macaravita', 'Málaga', 'Matanza', 'Mogotes', 'Molagavita', 'Ocamonte', 'Oiba', 'Onzaga', 'Palmar', 'Palmas del Socorro', 'Páramo', 'Piedecuesta', 'Pinchote', 'Puente Nacional', 'Puerto Parra', 'Puerto Wilches', 'Rionegro', 'Sabana de Torres', 'San Andrés', 'San Benito', 'San Gil', 'San Joaquín', 'San José de Miranda', 'San Miguel', 'San Vicente de Chucurí', 'Santa Bárbara', 'Santa Helena del Opón', 'Simacota', 'Socorro', 'Suaita', 'Sucre', 'Suratá', 'Tona', 'Valle de San José', 'Vélez', 'Vetas', 'Villanueva', 'Zapatoca'], 'Sucre': ['Sincelejo', 'Buenavista', 'Caimito', 'Colosó', 'Corozal', 'Coveñas', 'El Roble', 'Galeras', 'Guaranda', 'La Unión', 'Los Palmitos', 'Majagual', 'Morroa', 'Ovejas', 'Palmito', 'Sampués', 'San Benito Abad', 'San Juan de Betulia', 'San Marcos', 'San Onofre', 'San Pedro', 'Santiago de Tolú', 'Sincé', 'Sucre', 'Tolú Viejo'], 'Tolima': ['Ibagué', 'Alpujarra', 'Alvarado', 'Ambalema', 'Anzoátegui', 'Armero', 'Ataco', 'Cajamarca', 'Carmen de Apicalá', 'Casabianca', 'Chaparral', 'Coello', 'Coyaima', 'Cunday', 'Dolores', 'Espinal', 'Falan', 'Flandes', 'Fresno', 'Guamo', 'Herveo', 'Honda', 'Icononzo', 'Lérida', 'Líbano', 'Mariquita', 'Melgar', 'Murillo', 'Natagaima', 'Ortega', 'Palocabildo', 'Piedras', 'Planadas', 'Prado', 'Purificación', 'Rioblanco', 'Roncesvalles', 'Rovira', 'Saldaña', 'San Antonio', 'San Luis', 'Santa Isabel', 'Suárez', 'Valle de San Juan', 'Venadillo', 'Villahermosa', 'Villarrica'], 'Valle del Cauca': ['Cali', 'Alcalá', 'Andalucía', 'Ansermanuevo', 'Argelia', 'Bolívar', 'Buenaventura', 'Buga', 'Bugalagrande', 'Caicedonia', 'Calima', 'Candelaria', 'Cartago', 'Dagua', 'El Águila', 'El Cairo', 'El Cerrito', 'El Dovio', 'Florida', 'Ginebra', 'Guacarí', 'Jamundí', 'La Cumbre', 'La Unión', 'La Victoria', 'Obando', 'Palmira', 'Pradera', 'Restrepo', 'Riofrío', 'Roldanillo', 'San Pedro', 'Sevilla', 'Toro', 'Trujillo', 'Tuluá', 'Ulloa', 'Versalles', 'Vijes', 'Yotoco', 'Yumbo', 'Zarzal'], 'Vaupés': ['Mitú', 'Carurú', 'Pacoa', 'Taraira', 'Papunaua', 'Yavaraté'], 'Vichada': ['Puerto Carreño', 'La Primavera', 'Santa Rosalía', 'Cumaribo']}
+
 
 
 def _divipola_json():
@@ -25717,7 +25718,6 @@ def gerencia_hq():
             <a class="hq-pill-more" href="/gerencia/turnos">Turnos</a>
             <a class="hq-pill-more" href="/gerencia/contabilidad/nueva">Nueva operación</a>
             <a class="hq-pill-more" href="/gerencia/login-banners">Salida segura</a>
-            <a class="hq-pill-primary" href="/gerencia/solicitudes-plan">Solicitudes cambio plan</a>
           </div>
         </div>
       </div>
@@ -27515,6 +27515,464 @@ def gerencia_matriz_epp():
 
 
 
+
+def _ensure_docs_area_cols():
+    try:
+        for sql in (
+            "ALTER TABLE documentos_corp ADD COLUMN IF NOT EXISTS area_origen VARCHAR(40) DEFAULT 'gerencia'",
+            "ALTER TABLE documentos_corp ADD COLUMN IF NOT EXISTS destino VARCHAR(40) DEFAULT ''",
+            "ALTER TABLE documentos_corp ADD COLUMN IF NOT EXISTS plantilla_tipo VARCHAR(80) DEFAULT ''",
+            "ALTER TABLE documentos_corp ADD COLUMN IF NOT EXISTS estado_doc VARCHAR(40) DEFAULT 'BORRADOR'",
+        ):
+            try:
+                db.session.execute(text(sql))
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS boletas_cruce_financiero ("
+            "id SERIAL PRIMARY KEY, id_interno_bcf VARCHAR(40) UNIQUE, pqr_id INTEGER, "
+            "pqr_cliente_relacionada VARCHAR(40), institucion_id INTEGER, codigo_colegio VARCHAR(40) DEFAULT '', "
+            "nombre_colegio VARCHAR(200) DEFAULT '', nit_colegio VARCHAR(40) DEFAULT '', "
+            "plan_contrato VARCHAR(80) DEFAULT '', valor_plan VARCHAR(40) DEFAULT '', "
+            "hechos_queja TEXT DEFAULT '', validacion_soporte BOOLEAN DEFAULT FALSE, "
+            "validado_por VARCHAR(120) DEFAULT '', validado_en VARCHAR(30) DEFAULT '', "
+            "estado VARCHAR(40) DEFAULT 'PENDIENTE', resolucion_cobranza TEXT DEFAULT '', "
+            "resuelto_por VARCHAR(120) DEFAULT '', resuelto_en VARCHAR(30) DEFAULT '', "
+            "cun VARCHAR(40) DEFAULT '', creado_en VARCHAR(30) DEFAULT '', auditoria_sesiones TEXT DEFAULT '')"
+        ))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+PLANTILLAS_DOCS = {
+    "soporte": [
+        ("acta-radicacion-queja", "Acta de Radicacion y Escalabilidad de Queja Tecnica",
+         "<h2>1. Identificacion</h2><p>Colegio: ... · Radicado: ...</p><h2>2. Descripcion del incidente</h2><p></p><h2>3. Escalamiento a Desarrollo</h2><p></p>"),
+        ("certificado-cierre-incidente", "Certificado de Cierre de Incidente",
+         "<h2>1. Incidente</h2><p></p><h2>2. Reparacion realizada</h2><p></p><h2>3. Confirmacion al Rector</h2><p></p>"),
+        ("prorroga-emergencia-24h", "Prorroga de Emergencia de 24 Horas",
+         "<h2>1. Colegio bloqueado</h2><p></p><h2>2. Justificacion de gracia 24h</h2><p></p>"),
+    ],
+    "ventas": [
+        ("propuesta-comercial", "Propuesta Comercial / Cotizacion",
+         "<h2>1. Colegio prospecto</h2><p></p><h2>2. Planes y precios</h2><p></p>"),
+        ("acta-autorizacion-digital", "Acta de Autorizacion Digital y Scoring",
+         "<h2>1. Rector / representante</h2><p></p><h2>2. Enlace unico y firmas</h2><p>IP · Hash</p>"),
+    ],
+    "desarrollo": [
+        ("post-mortem", "Informe Forense Post-Incidente (Post-Mortem)",
+         "<h2>1. Resumen</h2><p></p><h2>2. Contencion</h2><p></p><h2>3. Parches</h2><p></p>"),
+        ("changelog-interno", "Historial de Cambios (Changelog interno)",
+         "<h2>1. Version</h2><p></p><h2>2. Funciones publicadas</h2><ul><li></li></ul>"),
+    ],
+    "cobranza": [
+        ("acta-retracto-liquidacion", "Acta de Retracto, Liquidacion y Reembolso (Ley 1480)",
+         "<h2>1. Colegio</h2><p></p><h2>2. Calculo reembolso / penalidad 20%</h2><p></p>"),
+        ("paz-y-salvo-comercial", "Certificado de Paz y Salvo Comercial",
+         "<h2>1. Institucion</h2><p></p><h2>2. Estado de cuenta</h2><p>Al dia.</p>"),
+    ],
+    "gerencia": [
+        ("doc-corporativo", "Documento corporativo general", "<h2>1. Introduccion</h2><p></p>"),
+    ],
+}
+
+
+@app.route("/gerencia/documentos/nuevo", methods=["POST", "GET"])
+def gerencia_documento_nuevo():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    if request.method == "GET":
+        return redirect("/gerencia/documentos")
+    _ensure_docs_area_cols()
+    titulo = (request.form.get("titulo") or "").strip()[:220]
+    clave = (request.form.get("clave") or "").strip().lower()
+    import re as _re
+    clave = _re.sub(r"[^a-z0-9\-]+", "-", clave).strip("-")[:80]
+    if not clave and titulo:
+        clave = _re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")[:60] or "doc"
+    if not clave:
+        clave = "doc-" + (fecha_hoy() or "").replace("-", "")
+    base, n = clave, 2
+    while DocumentoCorp.query.filter_by(clave=clave).first():
+        clave = "%s-%d" % (base, n)
+        n += 1
+    cat = (request.form.get("categoria") or "interno").strip()[:40]
+    pub = request.form.get("publico") == "1"
+    row = DocumentoCorp(
+        clave=clave, titulo=titulo or clave,
+        cuerpo_html="<h2>1. Introduccion</h2><p>Escriba aqui. Use negrita, listas y titulos.</p>",
+        publico=pub, categoria=cat,
+        area_origen="gerencia", destino="interno", plantilla_tipo="doc-corporativo",
+        estado_doc="BORRADOR",
+        actualizado_en="%s %s" % (fecha_hoy(), hora_actual()),
+        actualizado_por=session.get("usuario") or "gerencia",
+    )
+    try:
+        db.session.add(row)
+        db.session.commit()
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return page("Error", "<p>No se pudo crear: %s</p><p><a href='/gerencia/documentos'>Volver</a></p>" % ex)
+    return redirect("/gerencia/documentos/" + clave)
+
+
+def _docs_area_panel(area, titulo_area, volver_url, puede_destino=False):
+    _ensure_docs_area_cols()
+    msg = err = ""
+    if request.method == "POST":
+        plantilla = (request.form.get("plantilla") or "").strip()
+        titulo = (request.form.get("titulo") or "").strip()[:220]
+        destino = (request.form.get("destino") or "interno").strip()[:40] if puede_destino else "interno"
+        cuerpo = "<h2>1. Contenido</h2><p></p>"
+        for code, t, html0 in PLANTILLAS_DOCS.get(area, []):
+            if code == plantilla:
+                if not titulo:
+                    titulo = t
+                cuerpo = html0
+                break
+        if not titulo:
+            err = "Indique titulo o elija plantilla."
+        else:
+            import re as _re
+            clave = _re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")[:50] or "doc"
+            clave = "%s-%s" % (area, clave)
+            base, n = clave, 2
+            while DocumentoCorp.query.filter_by(clave=clave).first():
+                clave = "%s-%d" % (base, n)
+                n += 1
+            row = DocumentoCorp(
+                clave=clave, titulo=titulo, cuerpo_html=cuerpo,
+                publico=False, categoria=area,
+                area_origen=area, destino=destino, plantilla_tipo=plantilla or "",
+                estado_doc="BORRADOR" if destino == "interno" else "ENVIADO",
+                actualizado_en="%s %s" % (fecha_hoy(), hora_actual()),
+                actualizado_por=session.get("usuario") or area,
+            )
+            try:
+                db.session.add(row)
+                db.session.commit()
+                return redirect("/gerencia/documentos/" + clave)
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = str(ex)[:140]
+    try:
+        rows = DocumentoCorp.query.filter_by(area_origen=area).order_by(DocumentoCorp.id.desc()).limit(50).all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        rows = []
+    filas = ""
+    for r in rows:
+        dest = getattr(r, "destino", None) or "interno"
+        filas += (
+            '<tr><td><b>%s</b><br><span style="font-size:11px;color:#64748b">%s</span></td>'
+            '<td>%s</td><td>%s</td>'
+            '<td><a href="/gerencia/documentos/%s" style="font-weight:700">Editar</a> · '
+            '<a href="/gerencia/documentos/%s/pdf">PDF</a> · <a href="/gerencia/documentos/%s/word">Word</a></td></tr>'
+        ) % (
+            r.titulo or "", r.clave or "", dest, getattr(r, "estado_doc", None) or "",
+            r.clave, r.clave, r.clave,
+        )
+    opts_plant = "".join(
+        '<option value="%s">%s</option>' % (c, t) for c, t, _ in PLANTILLAS_DOCS.get(area, [])
+    )
+    if puede_destino:
+        dest_html = (
+            '<label style="font-size:12px;font-weight:700">Enviar / radicar hacia</label>'
+            '<select name="destino" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px">'
+            '<option value="interno">Solo archivo interno</option>'
+            '<option value="gerencia">Gerencia</option>'
+            '<option value="cobranza">Cobranza</option>'
+            '<option value="ventas">Ventas</option>'
+            '<option value="desarrollo">Desarrollo</option>'
+            '</select>'
+            '<p style="font-size:11px;color:#64748b;margin:0 0 8px">Registro de quien solicito y hacia que area (como PQR interna).</p>'
+        )
+    else:
+        dest_html = ""
+    body = (
+        '<div style="max-width:920px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
+        '<p><a href="%s" style="color:#0B2D57;font-weight:700">&larr; Volver</a></p>'
+        '<h1 style="color:#0B2D57">%s</h1>'
+        '<p style="color:#64748b;font-size:14px">Documentos del area. Editor con negrita/listas; PDF y Word. Ligado a Gerencia.</p>'
+        '%s%s'
+        '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0">'
+        '<h3 style="margin-top:0;color:#0B2D57">Crear documento</h3>'
+        '<form method="POST">'
+        '<label style="font-size:12px;font-weight:700">Plantilla</label>'
+        '<select name="plantilla" style="width:100%%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px">'
+        '<option value="">— Libre —</option>%s</select>'
+        '<label style="font-size:12px;font-weight:700">Titulo</label>'
+        '<input name="titulo" style="width:100%%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-bottom:8px">'
+        '%s'
+        '<button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800;cursor:pointer">Crear y editar</button>'
+        '</form></div>'
+        '<table style="width:100%%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:13px">'
+        '<tr style="background:#0B2D57;color:#fff"><th style="padding:10px;text-align:left">Documento</th>'
+        '<th style="padding:10px;text-align:left">Destino</th><th style="padding:10px;text-align:left">Estado</th>'
+        '<th style="padding:10px;text-align:left">Acciones</th></tr>'
+        '%s</table></div>'
+    ) % (
+        volver_url, titulo_area,
+        (('<div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px">' + msg + '</div>') if msg else ''),
+        (('<div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px">' + err + '</div>') if err else ''),
+        opts_plant, dest_html,
+        filas or '<tr><td colspan=4 style="padding:12px;color:#64748b">Sin documentos aun.</td></tr>',
+    )
+    return page(titulo_area, body)
+
+
+@app.route("/soporte/documentos", methods=["GET", "POST"])
+def soporte_documentos():
+    if not requiere_login() or rol_actual() not in ("Soporte", "Superadmin", "Administrador"):
+        return redirect("/soporte-login")
+    return _docs_area_panel("soporte", "Documentos · Soporte Tecnico", "/soporte_admin", puede_destino=True)
+
+
+@app.route("/ventas/documentos", methods=["GET", "POST"])
+def ventas_documentos():
+    if not requiere_login() or rol_actual() not in ("Comercial", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/ventas-login")
+    return _docs_area_panel("ventas", "Documentos · Ventas", "/ventas/panel", puede_destino=False)
+
+
+@app.route("/desarrollo/documentos", methods=["GET", "POST"])
+def desarrollo_documentos():
+    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/login")
+    return _docs_area_panel("desarrollo", "Documentos · Desarrollo / Ingenieria", "/dev-console", puede_destino=False)
+
+
+@app.route("/cobranza/documentos", methods=["GET", "POST"])
+def cobranza_documentos():
+    if not requiere_login() or rol_actual() not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/cobranza-login")
+    return _docs_area_panel("cobranza", "Documentos · Cobranza y Facturacion", "/cobranza/panel", puede_destino=False)
+
+
+def _next_bcf_code():
+    from datetime import datetime
+    d = datetime.now().strftime("%Y-%m-%d")
+    try:
+        n = BoletaCruceFinanciero.query.count() + 1
+    except Exception:
+        n = 1
+    return "%s-BCF-%05d" % (d, n)
+
+
+@app.route("/soporte/boleta-cruce", methods=["GET", "POST"])
+def soporte_boleta_cruce():
+    if not requiere_login() or rol_actual() not in ("Soporte", "Superadmin", "Administrador", "Gerente"):
+        return redirect("/soporte-login")
+    _ensure_docs_area_cols()
+    msg = err = ""
+    if request.method == "POST":
+        pqr_rad = (request.form.get("pqr_cliente_relacionada") or "").strip()[:40]
+        try:
+            iid = int(request.form.get("institucion_id") or 0)
+        except ValueError:
+            iid = 0
+        inst = Institucion.query.get(iid) if iid else None
+        hechos = (request.form.get("hechos_queja") or "").strip()
+        validado = request.form.get("validacion_soporte") == "1"
+        if not validado:
+            err = "Debe marcar: Datos del cliente validados en el sistema."
+        elif not inst:
+            err = "Seleccione el colegio."
+        elif not pqr_rad:
+            err = "Indique el radicado PQR del cliente."
+        else:
+            from datetime import datetime
+            code = _next_bcf_code()
+            row = BoletaCruceFinanciero(
+                id_interno_bcf=code,
+                pqr_cliente_relacionada=pqr_rad,
+                institucion_id=inst.id,
+                codigo_colegio=inst.codigo or "",
+                nombre_colegio=inst.nombre or "",
+                nit_colegio=getattr(inst, "nit", None) or "",
+                plan_contrato=inst.plan or "Basico",
+                hechos_queja=hechos,
+                validacion_soporte=True,
+                validado_por=session.get("usuario") or "soporte",
+                validado_en=datetime.now().strftime("%Y-%m-%d %H:%M"),
+                estado="PENDIENTE",
+                creado_en=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            )
+            try:
+                db.session.add(row)
+                db.session.commit()
+                msg = "Boleta %s creada y enviada a Cobranza. Asociada a PQR %s." % (code, pqr_rad)
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = str(ex)[:140]
+    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    opts = "".join(
+        '<option value="%d">%s — %s (plan: %s)</option>' % (
+            c.id, c.codigo or "", (c.nombre or "")[:50], c.plan or "Basico"
+        ) for c in colegios
+    )
+    try:
+        mis = BoletaCruceFinanciero.query.order_by(BoletaCruceFinanciero.id.desc()).limit(20).all()
+    except Exception:
+        mis = []
+    filas = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td style='font-weight:700'>%s</td><td>%s</td></tr>" % (
+            b.id_interno_bcf, b.pqr_cliente_relacionada, b.codigo_colegio, b.estado, b.creado_en
+        ) for b in mis
+    )
+    body = (
+        '<div style="max-width:800px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
+        '<p><a href="/soporte_admin" style="color:#0B2D57;font-weight:700">&larr; Soporte</a> · '
+        '<a href="/soporte/documentos">Documentos</a></p>'
+        '<h1 style="color:#0B2D57">Boleta de Cruce Financiero</h1>'
+        '<p style="color:#64748b;font-size:14px">Validacion de identidad → documento interno hacia Cobranza. '
+        'El cliente solo ve su radicado PQR; el codigo BCF es interno.</p>'
+        '%s%s'
+        '<form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px">'
+        '<label style="font-size:12px;font-weight:700">Radicado PQR del cliente (publico)</label>'
+        '<input name="pqr_cliente_relacionada" required placeholder="Ej: 202622000002" '
+        'style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;margin-bottom:10px">'
+        '<label style="font-size:12px;font-weight:700">Colegio</label>'
+        '<select name="institucion_id" required style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:10px">%s</select>'
+        '<label style="font-size:12px;font-weight:700">Hechos de la queja</label>'
+        '<textarea name="hechos_queja" rows="4" style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></textarea>'
+        '<label style="display:flex;gap:8px;align-items:center;margin:14px 0;font-weight:700;font-size:13px">'
+        '<input type="checkbox" name="validacion_soporte" value="1" required> '
+        'Datos del cliente validados en el sistema (cedula/NIT, contrato activo o suspendido)</label>'
+        '<button type="submit" style="background:#005BEA;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">'
+        'Expedir Boleta y enviar a Cobranza</button></form>'
+        '<h2 style="color:#0B2D57;font-size:16px;margin-top:24px">Boletas recientes</h2>'
+        '<table style="width:100%%;border-collapse:collapse;background:#fff;font-size:13px">'
+        '<tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">BCF interno</th>'
+        '<th style="padding:8px;text-align:left">PQR cliente</th><th style="padding:8px;text-align:left">Colegio</th>'
+        '<th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Fecha</th></tr>'
+        '%s</table></div>'
+    ) % (
+        (('<div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px">' + msg + '</div>') if msg else ''),
+        (('<div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px">' + err + '</div>') if err else ''),
+        opts,
+        filas or '<tr><td colspan=5 style="padding:12px;color:#64748b">Ninguna aun.</td></tr>',
+    )
+    return page("Boleta de Cruce", body)
+
+
+@app.route("/cobranza/boletas-cruce", methods=["GET", "POST"])
+def cobranza_boletas_cruce():
+    if not requiere_login() or rol_actual() not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/cobranza-login")
+    _ensure_docs_area_cols()
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            bid = int(request.form.get("boleta_id") or 0)
+        except ValueError:
+            bid = 0
+        accion = (request.form.get("accion") or "").strip()
+        resol = (request.form.get("resolucion_cobranza") or "").strip()
+        b = BoletaCruceFinanciero.query.get(bid) if bid else None
+        if not b:
+            err = "Boleta no encontrada."
+        elif b.estado != "PENDIENTE":
+            err = "Esta boleta ya fue resuelta."
+        elif accion in ("aprobar", "rechazar"):
+            from datetime import datetime
+            b.estado = "APROBADO" if accion == "aprobar" else "RECHAZADO"
+            b.resolucion_cobranza = resol or ("Aprobado por Cobranza." if accion == "aprobar" else "Rechazado.")
+            b.resuelto_por = session.get("usuario") or "cobranza"
+            b.resuelto_en = datetime.now().strftime("%Y-%m-%d %H:%M")
+            if accion == "aprobar":
+                b.cun = "CUN-%s-%05d" % (datetime.now().strftime("%Y%m%d"), b.id)
+            try:
+                db.session.commit()
+                msg = ("Boleta %s APROBADA. CUN %s. Soporte puede cerrar PQR %s." % (
+                    b.id_interno_bcf, b.cun, b.pqr_cliente_relacionada
+                )) if accion == "aprobar" else "Boleta rechazada."
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = str(ex)[:120]
+    try:
+        rows = BoletaCruceFinanciero.query.order_by(BoletaCruceFinanciero.id.desc()).limit(40).all()
+    except Exception:
+        rows = []
+    cards = ""
+    for b in rows:
+        color = {"PENDIENTE": "#b45309", "APROBADO": "#166534", "RECHAZADO": "#991b1b"}.get(b.estado, "#334155")
+        if b.estado == "PENDIENTE":
+            acciones = (
+                '<form method="POST" style="margin-top:10px">'
+                '<input type="hidden" name="boleta_id" value="%d">'
+                '<label style="font-size:12px;font-weight:700">Resolucion formal de Cobranza</label>'
+                '<textarea name="resolucion_cobranza" rows="3" style="width:100%%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></textarea>'
+                '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'
+                '<button name="accion" value="aprobar" style="background:#166534;color:#fff;border:0;padding:8px 14px;border-radius:8px;font-weight:800;cursor:pointer">'
+                'Aplicar Nota Credito y Aprobar</button>'
+                '<button name="accion" value="rechazar" style="background:#991b1b;color:#fff;border:0;padding:8px 14px;border-radius:8px;font-weight:800;cursor:pointer">Rechazar</button>'
+                '</div></form>'
+            ) % b.id
+        else:
+            acciones = (
+                '<p style="font-size:12px;color:#64748b">Resuelto por %s · %s · CUN: %s</p>'
+                '<p style="font-size:13px">%s</p>'
+            ) % (b.resuelto_por or "—", b.resuelto_en or "", b.cun or "—", (b.resolucion_cobranza or "")[:500])
+        cards += (
+            '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:12px">'
+            '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px">'
+            '<div><div style="font-size:11px;color:#64748b">ID tramite interno</div>'
+            '<div style="font-weight:800;color:#0B2D57;font-size:15px">%s</div>'
+            '<div style="font-size:12px;margin-top:4px">Asociado a PQR cliente: <b>%s</b></div></div>'
+            '<div style="color:%s;font-weight:800;font-size:13px">%s</div></div>'
+            '<p style="font-size:13px;margin:10px 0 0"><b>%s</b> (%s) · NIT %s · Plan %s</p>'
+            '<p style="font-size:12px;color:#475569;background:#f8fafc;padding:10px;border-radius:8px">%s</p>'
+            '<p style="font-size:11px;color:#64748b">Validacion Soporte: %s · %s</p>%s</div>'
+        ) % (
+            b.id_interno_bcf, b.pqr_cliente_relacionada, color, b.estado,
+            b.nombre_colegio or "", b.codigo_colegio or "", b.nit_colegio or "—", b.plan_contrato or "",
+            (b.hechos_queja or "")[:800],
+            ("OK " + (b.validado_por or "")) if b.validacion_soporte else "Pendiente",
+            b.validado_en or "", acciones,
+        )
+    body = (
+        '<div style="max-width:900px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
+        '<p><a href="/cobranza/panel" style="color:#0B2D57;font-weight:700">&larr; Cobranza</a> · '
+        '<a href="/cobranza/documentos">Documentos</a></p>'
+        '<h1 style="color:#0B2D57">Panel de resolucion financiera · Boletas de Cruce</h1>'
+        '<p style="color:#64748b;font-size:14px">Tramites internos. Al aprobar se genera CUN para cierre de PQR.</p>'
+        '%s%s%s</div>'
+    ) % (
+        (('<div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px">' + msg + '</div>') if msg else ''),
+        (('<div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px">' + err + '</div>') if err else ''),
+        cards or '<p style="color:#64748b">No hay boletas.</p>',
+    )
+    return page("Boletas Cruce Financiero", body)
+
+
 @app.route("/gerencia/documentos")
 def gerencia_documentos_lista():
     _g = _guard_gerencia()
@@ -27555,7 +28013,23 @@ def gerencia_documentos_lista():
 <div class="dl">
   <p><a href="/gerencia/hq">← Gerencia HQ</a></p>
   <h1>Biblioteca documental · Contingencia y legal</h1>
-  <p style="color:#64748b;font-size:13px">Editor corporativo. Guarde y descargue PDF. Públicos en <code>/docs/…</code>.</p>
+  <p style="color:#64748b;font-size:13px">Editor tipo Word (negrita, listas). Cree documentos nuevos. Públicos en <code>/docs/…</code>.</p>
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px">
+    <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Crear documento nuevo</h3>
+    <form method="POST" action="/gerencia/documentos/nuevo" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div style="flex:1;min-width:180px"><label style="font-size:11px;font-weight:700">Título</label>
+        <input name="titulo" required placeholder="Título del documento" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
+      <div style="width:140px"><label style="font-size:11px;font-weight:700">Clave URL</label>
+        <input name="clave" placeholder="auto" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
+      <div style="width:140px"><label style="font-size:11px;font-weight:700">Categoría</label>
+        <select name="categoria" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
+          <option value="interno">Interno</option><option value="legal">Legal</option>
+          <option value="contingencia">Contingencia</option><option value="publico">Público</option>
+        </select></div>
+      <label style="font-size:12px;font-weight:600"><input type="checkbox" name="publico" value="1"> Público</label>
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer">Crear y editar</button>
+    </form>
+  </div>
   <table>
     <tr><th>Documento</th><th>Visibilidad</th><th>Última edición</th><th>Acciones</th></tr>
     {filas or "<tr><td colspan=4>Sin documentos</td></tr>"}
@@ -30009,337 +30483,6 @@ def gerencia_web_corporativa():
 </div>
 """
     return page("Web corporativa · Gerencia", content)
-
-
-
-def _ensure_solicitudes_plan_table():
-    try:
-        db.session.execute(text(
-            "CREATE TABLE IF NOT EXISTS solicitudes_cambio_plan ("
-            "id SERIAL PRIMARY KEY, institucion_id INTEGER, codigo_colegio VARCHAR(40) DEFAULT '', "
-            "nombre_colegio VARCHAR(200) DEFAULT '', plan_actual VARCHAR(80) DEFAULT '', "
-            "plan_solicitado VARCHAR(80) DEFAULT '', motivo TEXT DEFAULT '', "
-            "solicitado_por VARCHAR(120) DEFAULT '', estado VARCHAR(30) DEFAULT 'PENDIENTE', "
-            "creado_en VARCHAR(30) DEFAULT '', vence_en VARCHAR(30) DEFAULT '', "
-            "resuelto_en VARCHAR(30) DEFAULT '', resuelto_por VARCHAR(120) DEFAULT '', "
-            "nota_gerencia TEXT DEFAULT '')"
-        ))
-        db.session.commit()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-
-
-def _planes_activos_lista():
-    """Lista de planes activos/recomendados para selector."""
-    planes = []
-    try:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        rows = PlanComercial.query.order_by(PlanComercial.nombre.asc()).all()
-        # filtrar activos si el campo existe
-        _tmp = []
-        for r in rows:
-            act = getattr(r, "activo", True)
-            if act is False or act == 0:
-                continue
-            _tmp.append(r)
-        rows = _tmp
-        for r in rows:
-            planes.append({
-                "codigo": (getattr(r, "codigo", None) or getattr(r, "nombre", None) or "").strip(),
-                "nombre": (getattr(r, "nombre", None) or getattr(r, "codigo", None) or "").strip(),
-                "precio": float(getattr(r, "precio_mensual", None) or 0),
-            })
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-    if not planes:
-        planes = [
-            {"codigo": "Basico", "nombre": "Básico", "precio": 0},
-            {"codigo": "Estandar", "nombre": "Estándar", "precio": 0},
-            {"codigo": "Premium", "nombre": "Premium", "precio": 0},
-            {"codigo": "2501", "nombre": "Plan 2501", "precio": 0},
-        ]
-    return planes
-
-
-@app.route("/soporte/solicitud-plan", methods=["GET", "POST"])
-def soporte_solicitud_plan():
-    """Soporte elige colegio + plan y envía solicitud a Gerencia (vence en 5 días)."""
-    if not requiere_login():
-        return redirect("/soporte-login")
-    rol = rol_actual()
-    if rol not in ("Soporte", "Superadmin", "Administrador"):
-        return acceso_denegado("Solo Soporte puede crear solicitudes de cambio de plan.")
-    _ensure_solicitudes_plan_table()
-    msg = err = ""
-    inst_id = 0
-    try:
-        inst_id = int(request.args.get("inst") or request.form.get("institucion_id") or 0)
-    except ValueError:
-        inst_id = 0
-    inst = Institucion.query.get(inst_id) if inst_id else None
-    planes = _planes_activos_lista()
-    if request.method == "POST":
-        try:
-            iid = int(request.form.get("institucion_id") or 0)
-        except ValueError:
-            iid = 0
-        inst = Institucion.query.get(iid) if iid else None
-        plan_sol = (request.form.get("plan_solicitado") or "").strip()[:80]
-        motivo = (request.form.get("motivo") or "").strip()[:2000]
-        if not inst:
-            err = "Seleccione un colegio."
-        elif not plan_sol:
-            err = "Seleccione el plan solicitado."
-        else:
-            from datetime import datetime, timedelta
-            ahora_s = datetime.now().strftime("%Y-%m-%d %H:%M")
-            vence_s = (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d %H:%M")
-            row = SolicitudCambioPlan(
-                institucion_id=inst.id,
-                codigo_colegio=inst.codigo or "",
-                nombre_colegio=inst.nombre or "",
-                plan_actual=(inst.plan or "Basico"),
-                plan_solicitado=plan_sol,
-                motivo=motivo,
-                solicitado_por=session.get("usuario") or "soporte",
-                estado="PENDIENTE",
-                creado_en=ahora_s,
-                vence_en=vence_s,
-            )
-            try:
-                db.session.add(row)
-                db.session.commit()
-                msg = "Solicitud enviada a Gerencia. Plazo máximo de respuesta: 5 días (vence %s)." % vence_s
-                try:
-                    registrar_auditoria("Solicitud cambio plan", "%s → %s" % (inst.codigo, plan_sol))
-                except Exception:
-                    pass
-            except Exception as ex:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                err = "Error: " + str(ex)[:140]
-    # Listado instituciones para selector
-    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
-    opts = "".join(
-        '<option value="%d" %s>%s — %s (plan: %s)</option>' % (
-            c.id,
-            "selected" if inst and c.id == inst.id else "",
-            (c.codigo or ""),
-            (c.nombre or "").replace("<", ""),
-            (c.plan or "Basico"),
-        )
-        for c in colegios
-    )
-    opts_plan = "".join(
-        '<option value="%s">%s%s</option>' % (
-            (p["codigo"] or p["nombre"]).replace('"', ""),
-            (p["nombre"] or p["codigo"]).replace("<", ""),
-            (" · $%s/mes" % int(p["precio"])) if p.get("precio") else "",
-        )
-        for p in planes
-    )
-    # Mis solicitudes recientes
-    try:
-        mis = SolicitudCambioPlan.query.order_by(SolicitudCambioPlan.id.desc()).limit(30).all()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        mis = []
-    filas_mis = ""
-    for s in mis:
-        color = {"PENDIENTE": "#b45309", "ACEPTADA": "#166534", "RECHAZADA": "#991b1b", "VENCIDA": "#64748b"}.get(s.estado, "#334155")
-        filas_mis += (
-            '<tr><td>%d</td><td>%s</td><td>%s → <b>%s</b></td><td style="color:%s;font-weight:700">%s</td>'
-            '<td style="font-size:12px">%s<br>Vence: %s</td></tr>'
-        ) % (
-            s.id, (s.codigo_colegio or ""), (s.plan_actual or ""), (s.plan_solicitado or ""),
-            color, s.estado or "", s.creado_en or "", s.vence_en or "",
-        )
-    body = f"""
-<div style="max-width:820px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">
-  <p><a href="/soporte_admin" style="color:#0B2D57;font-weight:700">← Soporte</a> · <a href="/tenants">Instituciones</a></p>
-  <h1 style="color:#0B2D57">Solicitud de cambio de plan</h1>
-  <p style="color:#64748b;font-size:14px">Elija el colegio y el plan. Gerencia recibe la solicitud y tiene <b>máximo 5 días</b> para aceptar o rechazar.</p>
-  {"<div style='background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:10px 0'>"+msg+"</div>" if msg else ""}
-  {"<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0'>"+err+"</div>" if err else ""}
-  <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
-    <label style="font-size:12px;font-weight:700">Colegio</label>
-    <select name="institucion_id" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px">{opts}</select>
-    <label style="font-size:12px;font-weight:700">Plan solicitado (activos / recomendados)</label>
-    <select name="plan_solicitado" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px">{opts_plan}</select>
-    <label style="font-size:12px;font-weight:700">Motivo / nota para Gerencia</label>
-    <textarea name="motivo" rows="3" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box" placeholder="Ej: el rector solicitó subir a Premium por más usuarios"></textarea>
-    <button type="submit" style="margin-top:14px;background:#005BEA;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Enviar solicitud a Gerencia</button>
-  </form>
-  <h2 style="color:#0B2D57;margin-top:28px;font-size:18px">Solicitudes recientes</h2>
-  <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">ID</th><th style="padding:8px;text-align:left">Colegio</th><th style="padding:8px;text-align:left">Plan</th><th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Fechas</th></tr>
-    {filas_mis or "<tr><td colspan=5 style='padding:12px;color:#64748b'>Sin solicitudes aún.</td></tr>"}
-  </table>
-</div>
-"""
-    return page("Solicitud cambio de plan", body)
-
-
-@app.route("/gerencia/solicitudes-plan", methods=["GET", "POST"])
-def gerencia_solicitudes_plan():
-    """Gerencia ve solicitudes de Soporte y acepta/rechaza (máx. 5 días)."""
-    g = _guard_gerencia()
-    if g is not None:
-        return g
-    _ensure_solicitudes_plan_table()
-    msg = err = ""
-    # Marcar vencidas
-    try:
-        from datetime import datetime
-        now = datetime.now()
-        for s in SolicitudCambioPlan.query.filter_by(estado="PENDIENTE").all():
-            try:
-                if s.vence_en and datetime.strptime(s.vence_en[:16], "%Y-%m-%d %H:%M") < now:
-                    s.estado = "VENCIDA"
-            except Exception:
-                pass
-        db.session.commit()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-    if request.method == "POST":
-        accion = (request.form.get("accion") or "").strip()
-        try:
-            sid = int(request.form.get("solicitud_id") or 0)
-        except ValueError:
-            sid = 0
-        s = SolicitudCambioPlan.query.get(sid) if sid else None
-        nota = (request.form.get("nota_gerencia") or "").strip()[:1000]
-        if not s:
-            err = "Solicitud no encontrada."
-        elif s.estado not in ("PENDIENTE",):
-            err = "Esta solicitud ya no está pendiente."
-        elif accion == "aceptar":
-            try:
-                inst = Institucion.query.get(s.institucion_id)
-                if inst:
-                    inst.plan = s.plan_solicitado
-                    try:
-                        inst.plan_pendiente = ""
-                        inst.fecha_corte_plan = ""
-                    except Exception:
-                        pass
-                from datetime import datetime
-                s.estado = "ACEPTADA"
-                s.resuelto_en = datetime.now().strftime("%Y-%m-%d %H:%M")
-                s.resuelto_por = session.get("usuario") or "gerencia"
-                s.nota_gerencia = nota
-                db.session.commit()
-                msg = "Plan aplicado a %s → %s." % (s.codigo_colegio, s.plan_solicitado)
-                try:
-                    registrar_auditoria("Aceptó cambio plan", "%s → %s" % (s.codigo_colegio, s.plan_solicitado))
-                except Exception:
-                    pass
-            except Exception as ex:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                err = "Error: " + str(ex)[:140]
-        elif accion == "rechazar":
-            try:
-                from datetime import datetime
-                s.estado = "RECHAZADA"
-                s.resuelto_en = datetime.now().strftime("%Y-%m-%d %H:%M")
-                s.resuelto_por = session.get("usuario") or "gerencia"
-                s.nota_gerencia = nota or "Rechazada"
-                db.session.commit()
-                msg = "Solicitud rechazada."
-            except Exception as ex:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                err = "Error: " + str(ex)[:140]
-    try:
-        rows = SolicitudCambioPlan.query.order_by(SolicitudCambioPlan.id.desc()).limit(80).all()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        rows = []
-    filas = ""
-    for s in rows:
-        color = {"PENDIENTE": "#b45309", "ACEPTADA": "#166534", "RECHAZADA": "#991b1b", "VENCIDA": "#64748b"}.get(s.estado, "#334155")
-        acciones = ""
-        if s.estado == "PENDIENTE":
-            acciones = (
-                '<form method="POST" style="display:inline-block;margin:2px">'
-                '<input type="hidden" name="solicitud_id" value="%d">'
-                '<input type="hidden" name="accion" value="aceptar">'
-                '<input name="nota_gerencia" placeholder="Nota (opcional)" style="padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;width:120px">'
-                '<button type="submit" style="background:#166534;color:#fff;border:0;padding:6px 10px;border-radius:6px;font-weight:700;cursor:pointer">Aceptar</button></form> '
-                '<form method="POST" style="display:inline-block;margin:2px">'
-                '<input type="hidden" name="solicitud_id" value="%d">'
-                '<input type="hidden" name="accion" value="rechazar">'
-                '<input name="nota_gerencia" placeholder="Motivo" style="padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;width:120px">'
-                '<button type="submit" style="background:#991b1b;color:#fff;border:0;padding:6px 10px;border-radius:6px;font-weight:700;cursor:pointer">Rechazar</button></form>'
-            ) % (s.id, s.id)
-        else:
-            acciones = '<span style="font-size:11px;color:#64748b">%s · %s</span>' % (
-                (s.resuelto_por or ""), (s.resuelto_en or ""),
-            )
-        filas += (
-            '<tr style="border-bottom:1px solid #e2e8f0">'
-            '<td style="padding:10px">#%d<br><span style="font-size:11px;color:#64748b">por %s</span></td>'
-            '<td style="padding:10px"><b>%s</b><br>%s</td>'
-            '<td style="padding:10px">%s → <b>%s</b></td>'
-            '<td style="padding:10px;color:%s;font-weight:800">%s</td>'
-            '<td style="padding:10px;font-size:12px">Creada: %s<br>Vence: %s</td>'
-            '<td style="padding:10px">%s</td>'
-            '</tr>'
-        ) % (
-            s.id, (s.solicitado_por or ""),
-            (s.codigo_colegio or ""), (s.nombre_colegio or "")[:40],
-            (s.plan_actual or ""), (s.plan_solicitado or ""),
-            color, s.estado or "",
-            s.creado_en or "", s.vence_en or "",
-            acciones,
-        )
-    body = f"""
-<div style="max-width:1000px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">
-  <p><a href="/gerencia/hq" style="color:#0B2D57;font-weight:700">← HQ</a></p>
-  <h1 style="color:#0B2D57">Solicitudes de cambio de plan</h1>
-  <p style="color:#64748b;font-size:14px">Enviadas por Soporte. Plazo máximo <b>5 días</b>. Al aceptar se aplica el plan al colegio de inmediato.</p>
-  {"<div style='background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:10px 0'>"+msg+"</div>" if msg else ""}
-  {"<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0'>"+err+"</div>" if err else ""}
-  <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:13px;box-shadow:0 4px 16px rgba(15,23,42,.06)">
-    <tr style="background:#0B2D57;color:#fff">
-      <th style="padding:10px;text-align:left">Solicitud</th>
-      <th style="padding:10px;text-align:left">Colegio</th>
-      <th style="padding:10px;text-align:left">Plan</th>
-      <th style="padding:10px;text-align:left">Estado</th>
-      <th style="padding:10px;text-align:left">Plazo</th>
-      <th style="padding:10px;text-align:left">Acción</th>
-    </tr>
-    {filas or "<tr><td colspan=6 style='padding:16px;color:#64748b'>No hay solicitudes.</td></tr>"}
-  </table>
-</div>
-"""
-    return page("Solicitudes cambio de plan", body)
-
 
 
 @app.route("/gerencia/lideres", methods=["GET", "POST"])
@@ -38167,28 +38310,11 @@ def tenants():
               <td style="text-align:right;color:#166534;font-weight:700">{pagos_txt}</td>
               <td><span class="mini-text" style="color:#64748b">Solo lectura</span></td>
             </tr>"""
-        elif rol == "Soporte":
-            # Soporte: SOLO información (usuarios, estudiantes, datos). Sin editar ni eliminar.
-            filas += f"""<tr>
-              <td>{i.id}</td>
-              <td><img src='{logo}' alt='' style='width:36px;height:36px;object-fit:contain;background:#fff;border-radius:8px'></td>
-              <td><b>{i.codigo}</b></td>
-              <td>{i.nombre}<br><span class='mini-text'>{i.municipio or ''} / {i.departamento or ''}</span></td>
-              <td>{i.sede or ''}</td>
-              <td>{i.estado}</td>
-              <td><b>{i.plan or 'Basico'}</b></td>
-              <td><b>{n_users}</b> usr / <b>{n_est}</b> est</td>
-              <td>{i.fecha_creacion or ''}</td>
-              <td>
-                <a href='/soporte/solicitud-plan?inst={i.id}' style="font-weight:700;color:#005BEA">Solicitar cambio de plan</a>
-              </td>
-            </tr>"""
         else:
             _eliminar_link = (
                 f"· <a class='danger-link' href='/eliminar_institucion/{i.id}' onclick=\"return confirm('¿Eliminar institución {i.codigo}?')\">Eliminar</a>"
                 if rol in ("Gerente", "Superadmin", "Administrador") else ""
             )
-            # Gerencia: puede editar datos; cambio de plan preferible vía solicitudes
             filas += f"""<tr>
               <td>{i.id}</td>
               <td><img src='{logo}' alt='' style='width:36px;height:36px;object-fit:contain;background:#fff;border-radius:8px'></td>
@@ -38201,9 +38327,7 @@ def tenants():
               <td>{i.fecha_creacion or ''}</td>
               <td>
                 <a href='/entrar_institucion/{i.id}'>Entrar</a> ·
-                <a href='/editar_institucion/{i.id}'>Editar</a>
-                · <a href='/gerencia/solicitudes-plan'>Solicitudes plan</a>
-                {_eliminar_link}
+                <a href='/editar_institucion/{i.id}'>Editar</a> {_eliminar_link}
               </td>
             </tr>"""
 
@@ -38430,10 +38554,6 @@ def nueva_institucion():
 def editar_institucion(id):
     if rol_actual() == "Cobranza":
         return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
-    if rol_actual() == "Soporte":
-        return acceso_denegado(
-            "Soporte no edita colegios. Solo consulta usuarios/estudiantes y puede solicitar cambio de plan a Gerencia."
-        )
     if not requiere_soporte_global():
         return redirect("/login")
     inst = Institucion.query.get_or_404(id)
@@ -45631,30 +45751,15 @@ def gerencia_editar_pqr_info():
     p = plataforma()
     mensaje = ""
     if request.method == "POST":
-        try:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            for _col in ("pqr_presentacion", "pqr_radicado", "pqr_facturacion", "pqr_plazo",
-                         "kit_habeas_data", "kit_confirmacion_contrato"):
-                val = (request.form.get(_col) or "").strip()
-                try:
-                    setattr(p, _col, val)
-                except Exception:
-                    pass
-            db.session.commit()
-            try:
-                registrar_auditoria("Textos PQR/kit legal actualizados", session.get("usuario") or "")
-            except Exception:
-                pass
-            mensaje = "Guardado."
-        except Exception as ex:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            mensaje = "Error: " + str(ex)[:120]
+        p.pqr_presentacion = (request.form.get("pqr_presentacion") or "").strip()
+        p.pqr_radicado = (request.form.get("pqr_radicado") or "").strip()
+        p.pqr_facturacion = (request.form.get("pqr_facturacion") or "").strip()
+        p.pqr_plazo = (request.form.get("pqr_plazo") or "").strip()
+        p.kit_habeas_data = (request.form.get("kit_habeas_data") or "").strip()
+        p.kit_confirmacion_contrato = (request.form.get("kit_confirmacion_contrato") or "").strip()
+        db.session.commit()
+        registrar_auditoria("Textos PQR/kit legal actualizados", session.get("usuario") or "")
+        mensaje = "Guardado."
     volver = {"Comercial": "/ventas/kit-mensajes"}.get(rol_actual(), "/pqr-info")
     content = f"""
 <header class="role-hero"><div>
@@ -45666,17 +45771,17 @@ def gerencia_editar_pqr_info():
 <section class="role-panel">
   <form method="POST">
     <label><b>Presentación de la PQR</b></label>
-    <textarea name="pqr_presentacion" rows="3" placeholder="(vacío = usa el texto por defecto)">{_esc(getattr(p, "pqr_presentacion", None) or "")}</textarea>
+    <textarea name="pqr_presentacion" rows="3" placeholder="(vacío = usa el texto por defecto)">{_esc(p.pqr_presentacion)}</textarea>
     <label style="margin-top:10px;display:block"><b>Radicado y seguimiento</b></label>
-    <textarea name="pqr_radicado" rows="3">{_esc(getattr(p, "pqr_radicado", None) or "")}</textarea>
+    <textarea name="pqr_radicado" rows="3">{_esc(p.pqr_radicado)}</textarea>
     <label style="margin-top:10px;display:block"><b>PQR y facturación</b></label>
-    <textarea name="pqr_facturacion" rows="3">{_esc(getattr(p, "pqr_facturacion", None) or "")}</textarea>
+    <textarea name="pqr_facturacion" rows="3">{_esc(p.pqr_facturacion)}</textarea>
     <label style="margin-top:10px;display:block"><b>Plazo de respuesta</b></label>
-    <textarea name="pqr_plazo" rows="4">{_esc(getattr(p, "pqr_plazo", None) or "")}</textarea>
+    <textarea name="pqr_plazo" rows="4">{_esc(p.pqr_plazo)}</textarea>
     <label style="margin-top:16px;display:block"><b>Kit de prospección · guion de datos personales (Habeas Data)</b></label>
-    <textarea name="kit_habeas_data" rows="5" placeholder="(vacío = usa el texto por defecto)">{_esc(getattr(p, "kit_habeas_data", None) or "")}</textarea>
+    <textarea name="kit_habeas_data" rows="5" placeholder="(vacío = usa el texto por defecto)">{_esc(p.kit_habeas_data)}</textarea>
     <label style="margin-top:10px;display:block"><b>Kit de prospección · confirmación de contrato</b></label>
-    <textarea name="kit_confirmacion_contrato" rows="5">{_esc(getattr(p, "kit_confirmacion_contrato", None) or "")}</textarea>
+    <textarea name="kit_confirmacion_contrato" rows="5">{_esc(p.kit_confirmacion_contrato)}</textarea>
     <button type="submit" style="margin-top:14px">Guardar</button>
   </form>
 </section>
