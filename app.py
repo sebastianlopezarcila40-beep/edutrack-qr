@@ -308,9 +308,7 @@ db = SQLAlchemy(app)
 
 @app.before_request
 def _db_limpiar_transaccion_abortada():
-    """CRÍTICO Postgres: si una consulta falló antes, la transacción queda
-    'aborted' y CUALQUIER query posterior falla con InFailedSqlTransaction
-    (dashboard, FAQ, login, etc.). Limpiamos al inicio de cada request."""
+    """Limpia transacción Postgres abortada al inicio de cada request."""
     try:
         db.session.rollback()
     except Exception:
@@ -4419,7 +4417,7 @@ def shell(content):
   </div>
   <nav class="role-icons">{icon_html}</nav>
   <div class="role-welcome">Bienvenido(a) a <b>{APP_NAME}</b>. Gestión académica institucional · PROCSIS</div>
-  <main class="role-main">{_safe_banner_licencia()}{content}{footer()}</main>
+  <main class="role-main">{banner_licencia_html()}{content}{footer()}</main>
 </div>
 {ss_js}
 """
@@ -5815,24 +5813,82 @@ def datos_login_institucion(inst_id=None):
 
 
 def contenido_login_novedades():
-    """Textos del bloque inferior del login (editables desde Soporte)."""
+    """Textos del bloque inferior del login (editables desde Soporte / Dev).
+    Lee siempre desde BD (ORM + SQL de respaldo). No inventa defaults si hay datos."""
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
     p = plataforma()
     version = (getattr(p, "version_sistema", None) or "").strip() or None
-    # Fuente de verdad: última fila del historial inmutable (ChangelogVersion)
+    novedades = (getattr(p, "novedades", None) or "").strip()
+    faq = (getattr(p, "faq", None) or "").strip()
+    mant = (getattr(p, "mantenimiento_programado", None) or "").strip()
+    habeas = (getattr(p, "habeas_data", None) or "").strip()
+    reinicio = (getattr(p, "reinicio_aviso", None) or "").strip()
+    last = None
+    # Fuente de verdad versión: ChangelogVersion (historial inmutable)
     try:
         last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
         if last and (last.version or "").strip():
             version = (last.version or "").strip()
-            # Si hay resumen de mejoras, usarlo como novedades cuando el campo está vacío
-            # (no sobrescribe si ya hay texto editado en Soporte)
     except Exception:
-        last = None
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            row_v = db.session.execute(text(
+                "SELECT version, resumen FROM changelog_versiones ORDER BY id DESC LIMIT 1"
+            )).first()
+            if row_v:
+                version = (row_v[0] or version or "").strip() or version
+                if not novedades and row_v[1]:
+                    novedades = (row_v[1] or "").strip()
+                class _L: pass
+                last = _L()
+                last.version = version
+                last.resumen = row_v[1] if row_v else ""
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            last = None
+    # Si ORM no trajo faq/novedades, leer SQL directo de plataforma
+    if not faq or not novedades or not version:
+        try:
+            row = db.session.execute(text(
+                "SELECT version_sistema, novedades, faq, mantenimiento_programado, "
+                "habeas_data, reinicio_aviso FROM plataforma ORDER BY id ASC LIMIT 1"
+            )).first()
+            if row:
+                if not version and row[0]:
+                    version = (row[0] or "").strip()
+                if not novedades and row[1]:
+                    novedades = (row[1] or "").strip()
+                if not faq and row[2]:
+                    faq = (row[2] or "").strip()
+                if not mant and row[3]:
+                    mant = (row[3] or "").strip()
+                if not habeas and row[4]:
+                    habeas = (row[4] or "").strip()
+                if not reinicio and row[5]:
+                    reinicio = (row[5] or "").strip()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
     if not version:
         version = "2.5.0"
-    # Sincronizar plataforma.version_sistema con el historial
+    # Sincronizar plataforma.version_sistema con el historial (best-effort)
     try:
-        if p is not None and (getattr(p, "version_sistema", None) or "").strip() != version:
-            p.version_sistema = version
+        if (getattr(p, "version_sistema", None) or "").strip() != version:
+            try:
+                p.version_sistema = version
+            except Exception:
+                pass
             db.session.execute(text("UPDATE plataforma SET version_sistema=:v"), {"v": version})
             db.session.commit()
     except Exception:
@@ -5840,14 +5896,10 @@ def contenido_login_novedades():
             db.session.rollback()
         except Exception:
             pass
-    novedades = (getattr(p, "novedades", None) or "").strip()
-    # Si no hay novedades manuales, mostrar el resumen de la última versión publicada
+    # Si no hay novedades manuales, usar resumen de la última versión
     if not novedades and last is not None and (getattr(last, "resumen", None) or "").strip():
         novedades = (last.resumen or "").strip()
-    faq = (getattr(p, "faq", None) or "").strip()
-    mant = (getattr(p, "mantenimiento_programado", None) or "").strip()
-    habeas = (getattr(p, "habeas_data", None) or "").strip()
-    reinicio = (getattr(p, "reinicio_aviso", None) or "").strip()
+    # Defaults SOLO si realmente no hay nada en BD
     if not novedades:
         novedades = (
             "Gracias por creer en nuestra empresa. Con su apoyo hemos implementado cambios que mejoran "
@@ -5861,7 +5913,6 @@ def contenido_login_novedades():
     if not faq:
         faq = (
             "¿Olvidé mi contraseña?\nUse «¿Olvidaste tu contraseña?» en el login o contacte a su administrador.\n\n"
-
             "¿Cómo ingreso como docente?\nUse el enlace Docentes o el usuario asignado por el colegio.\n\n"
             "¿Qué es multi-inquilino?\nCada colegio tiene sus datos aislados: no ve información de otra institución.\n\n"
             "¿Cómo radico una PQR?\nIngrese a /pqr, complete el formulario y conserve el radicado.\n\n"
@@ -5875,13 +5926,13 @@ def contenido_login_novedades():
             "escribiendo a soporte."
         )
     imgs = []
-    for i in (1, 2, 3):
-        path = (getattr(p, f"novedad_img{i}", None) or "").strip()
+    for i in (1, 2, 3, 4, 5):
+        path_img = (getattr(p, f"novedad_img{i}", None) or "").strip()
         cap = (getattr(p, f"novedad_img{i}_cap", None) or "").strip()
-        if path:
-            if not path.startswith("/") and not path.startswith("http"):
-                path = "/" + path
-            imgs.append({"src": path, "cap": cap})
+        if path_img:
+            if not path_img.startswith("/") and not path_img.startswith("http"):
+                path_img = "/" + path_img
+            imgs.append({"src": path_img, "cap": cap})
     hero_chip = (getattr(p, "hero_chip", None) or "").strip() or "Plataforma institucional · Acceso seguro"
     hero_titulo = (getattr(p, "hero_titulo", None) or "").strip() or "Tecnología educativa con control y transparencia"
     hero_texto = (getattr(p, "hero_texto", None) or "").strip()
@@ -5903,6 +5954,7 @@ def contenido_login_novedades():
         "hero_titulo": hero_titulo,
         "hero_texto": hero_texto,
     }
+
 
 
 def _txt_a_html_lista(texto):
@@ -6097,49 +6149,84 @@ def _corp_cfg_from_db():
 
 
 def plataforma():
-
-    """Configuración de la empresa de soporte (Procsis), no del colegio."""
+    """Configuración de la empresa de soporte (Procsis), no del colegio.
+    Siempre intenta leer de BD (con rollback si la transacción estaba abortada).
+    Solo usa objeto dummy si la BD es realmente inaccesible."""
+    # 1) Limpiar transacción abortada y leer ORM
+    for _intento in (1, 2):
+        try:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            p = Plataforma.query.first()
+            if not p:
+                p = Plataforma()
+                db.session.add(p)
+                db.session.commit()
+            return p
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+    # 2) Lectura directa por SQL (por si el ORM falla pero la tabla existe)
     try:
-        p = Plataforma.query.first()
-        if not p:
-            p = Plataforma()
-            db.session.add(p)
-            db.session.commit()
-        return p
+        row = db.session.execute(text(
+            "SELECT version_sistema, novedades, faq, mantenimiento_programado, "
+            "habeas_data, reinicio_aviso, hero_chip, hero_titulo, hero_texto, "
+            "novedad_img1, novedad_img2, novedad_img3, novedad_img4, novedad_img5, "
+            "novedad_img1_cap, novedad_img2_cap, novedad_img3_cap, novedad_img4_cap, novedad_img5_cap, "
+            "empresa, slogan, logo_path, anuncio_activo, anuncio_titulo, anuncio_cuerpo, "
+            "anuncio_version, anuncio_img1, anuncio_img2 "
+            "FROM plataforma ORDER BY id ASC LIMIT 1"
+        )).mappings().first()
+        if row:
+            class _P: pass
+            x = _P()
+            for k, v in dict(row).items():
+                setattr(x, k, v if v is not None else "")
+            if not hasattr(x, "anuncio_activo"):
+                x.anuncio_activo = False
+            return x
     except Exception:
-        class _P: pass
-        x = _P()
-        x.empresa = DESARROLLADOR
-        x.slogan = SLOGAN
-        x.logo_path = "/static/img/logo-procsis.png"
-        x.desarrollador = "Sebastián López"
-        x.telefono_soporte = SOPORTE_TELEFONO
-        x.email_soporte = SOPORTE_EMAIL or "soporte@procsis.com"
-        x.telefono_cartera = CARTERA_TELEFONO
-        x.email_cartera = CARTERA_EMAIL
-        x.web = ""
-        x.notas = ""
-        x.version_sistema = "2.5.0"
-        x.novedades = ""
-        x.faq = ""
-        x.mantenimiento_programado = ""
-        x.habeas_data = ""
-        x.reinicio_aviso = ""
-        x.novedad_img1 = x.novedad_img2 = x.novedad_img3 = x.novedad_img4 = x.novedad_img5 = ""
-        x.novedad_img1_cap = x.novedad_img2_cap = x.novedad_img3_cap = x.novedad_img4_cap = x.novedad_img5_cap = ""
-        x.hero_chip = "Plataforma institucional · Acceso seguro"
-        x.hero_titulo = "Tecnología educativa con control y transparencia"
-        x.hero_texto = ""
-        x.smtp_correo = x.smtp_password = x.smtp_notif_correo = x.smtp_notif_password = ""
-        # Anuncios institucionales (evita AttributeError en /gerencia/anuncios si la BD falla)
-        x.anuncio_activo = False
-        x.anuncio_titulo = ""
-        x.anuncio_cuerpo = ""
-        x.anuncio_cuenta = ""
-        x.anuncio_version = "1"
-        x.anuncio_img1 = ""
-        x.anuncio_img2 = ""
-        return x
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    # 3) Dummy mínimo (solo si la BD no responde)
+    class _P: pass
+    x = _P()
+    x.empresa = DESARROLLADOR
+    x.slogan = SLOGAN
+    x.logo_path = "/static/img/logo-procsis.png"
+    x.desarrollador = "Sebastián López"
+    x.telefono_soporte = SOPORTE_TELEFONO
+    x.email_soporte = SOPORTE_EMAIL or "soporte@procsis.com"
+    x.telefono_cartera = CARTERA_TELEFONO
+    x.email_cartera = CARTERA_EMAIL
+    x.web = ""
+    x.notas = ""
+    x.version_sistema = ""
+    x.novedades = ""
+    x.faq = ""
+    x.mantenimiento_programado = ""
+    x.habeas_data = ""
+    x.reinicio_aviso = ""
+    x.novedad_img1 = x.novedad_img2 = x.novedad_img3 = x.novedad_img4 = x.novedad_img5 = ""
+    x.novedad_img1_cap = x.novedad_img2_cap = x.novedad_img3_cap = x.novedad_img4_cap = x.novedad_img5_cap = ""
+    x.hero_chip = "Plataforma institucional · Acceso seguro"
+    x.hero_titulo = "Tecnología educativa con control y transparencia"
+    x.hero_texto = ""
+    x.smtp_correo = x.smtp_password = x.smtp_notif_correo = x.smtp_notif_password = ""
+    x.anuncio_activo = False
+    x.anuncio_titulo = ""
+    x.anuncio_cuerpo = ""
+    x.anuncio_cuenta = ""
+    x.anuncio_version = "1"
+    x.anuncio_img1 = ""
+    x.anuncio_img2 = ""
+    return x
 
 
 def _credenciales_smtp(uso="soporte"):
@@ -7026,36 +7113,14 @@ def aplicar_cambios_plan_pendientes():
             pass
 
 
-
-def _safe_banner_licencia():
-    try:
-        return banner_licencia_html() or ""
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return ""
-
 def banner_licencia_html(inst=None):
-    try:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        if inst is None:
-            iid = institucion_id_actual()
-            inst = Institucion.query.get(iid) if iid else None
-        info = estado_licencia(inst) or {}
-        if info.get("estado") == "ok" or not info.get("mensaje"):
-            return ""
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
+    if inst is None:
+        iid = institucion_id_actual()
+        inst = Institucion.query.get(iid) if iid else None
+    info = estado_licencia(inst)
+    if info["estado"] == "ok" or not info["mensaje"]:
         return ""
-    color = "#b45309" if info.get("estado") in ("aviso", "mora_aviso", "cancelacion") else "#b91c1c"
+    color = "#b45309" if info["estado"] in ("aviso", "mora_aviso", "cancelacion") else "#b91c1c"
     bg = "#fffbeb" if info["estado"] in ("aviso", "mora_aviso", "cancelacion") else "#fef2f2"
     popup = ""
     if info.get("popup_mora"):
@@ -11344,9 +11409,6 @@ def login():
             if (user.rol or "").strip() in ROLES_INTERNOS or (user.rol or "").strip() == "Soporte":
                 rol_u = (user.rol or "").strip()
                 error = f"Las cuentas internas deben ingresar por su portal ({_login_portal(rol_u)}), no por el login de colegios."
-                user = None
-            if user and hasattr(user, "activo") and user.activo is False:
-                error = "Esta cuenta está desactivada. Contacte a soporte o a la rectoría."
                 user = None
             if user and inst_id and user.institucion_id and int(user.institucion_id) != int(inst_id):
                 error = "Este usuario no pertenece a la institución seleccionada."
@@ -29643,10 +29705,6 @@ def _capturar_error_sistema(e):
         pass
     log_id = None
     try:
-        db.session.rollback()
-    except Exception:
-        pass
-    try:
         if request.path.startswith("/static"):
             raise e
         log = LogErrorSistema(
@@ -45612,7 +45670,7 @@ def soporte_actualizaciones():
         accion = request.form.get("accion") or "guardar"
         try:
             if accion == "guardar":
-                # FIX: Soporte Y Desarrollador publican FAQ y novedades. Persistencia doble.
+                # FIX: Soporte Y Desarrollador publican FAQ y novedades
                 try:
                     db.session.rollback()
                 except Exception:
@@ -45625,27 +45683,26 @@ def soporte_actualizaciones():
                 hero_chip_val = (request.form.get("hero_chip") or "").strip()[:120]
                 hero_titulo_val = (request.form.get("hero_titulo") or "").strip()[:220]
                 hero_texto_val = (request.form.get("hero_texto") or "").strip()
-                caps = {i: (request.form.get(f"novedad_img{i}_cap") or "").strip()[:120] for i in (1, 2, 3, 4, 5)}
+                caps = {i: (request.form.get("novedad_img%d_cap" % i) or "").strip()[:120] for i in (1, 2, 3, 4, 5)}
                 import os as _os_up
                 upload_dir = _os_up.path.join(app.root_path, "static", "img", "novedades")
                 _os_up.makedirs(upload_dir, exist_ok=True)
                 img_paths = {}
                 for i in (1, 2, 3, 4, 5):
-                    fimg = request.files.get(f"novedad_img{i}")
-                    actual = (getattr(p, f"novedad_img{i}", None) or "").strip()
+                    fimg = request.files.get("novedad_img%d" % i)
+                    actual = (getattr(p, "novedad_img%d" % i, None) or "").strip()
                     if fimg and (fimg.filename or "").strip():
                         ext = (fimg.filename.rsplit(".", 1)[-1] or "png").lower()
                         if ext not in ("png", "jpg", "jpeg", "webp", "gif"):
                             ext = "png"
-                        fname = f"nov{i}_{fecha_hoy().replace('-','')}.{ext}"
-                        fpath = _os_up.path.join(upload_dir, fname)
-                        fimg.save(fpath)
-                        actual = f"/static/img/novedades/{fname}"
+                        fname = "nov%d_%s.%s" % (i, fecha_hoy().replace("-", ""), ext)
+                        fimg.save(_os_up.path.join(upload_dir, fname))
+                        actual = "/static/img/novedades/%s" % fname
                     else:
-                        url_manual = (request.form.get(f"novedad_img{i}_url") or "").strip()
+                        url_manual = (request.form.get("novedad_img%d_url" % i) or "").strip()
                         if url_manual:
                             actual = url_manual[:255]
-                    if request.form.get(f"novedad_img{i}_clear"):
+                    if request.form.get("novedad_img%d_clear" % i):
                         actual = ""
                     img_paths[i] = actual
                 try:
@@ -45658,8 +45715,8 @@ def soporte_actualizaciones():
                     p.hero_titulo = hero_titulo_val
                     p.hero_texto = hero_texto_val
                     for i in (1, 2, 3, 4, 5):
-                        setattr(p, f"novedad_img{i}_cap", caps[i])
-                        setattr(p, f"novedad_img{i}", img_paths[i])
+                        setattr(p, "novedad_img%d_cap" % i, caps[i])
+                        setattr(p, "novedad_img%d" % i, img_paths[i])
                 except Exception:
                     pass
                 if request.form.get("publicar_como_anuncio"):
@@ -45669,7 +45726,7 @@ def soporte_actualizaciones():
                     primera_linea = (nov_val or "").strip().split("\n")[0][:120] or "Mejoras en la plataforma"
                     try:
                         p.anuncio_activo = True
-                        p.anuncio_titulo = f"{_icono} {_etiqueta}: {primera_linea}"
+                        p.anuncio_titulo = "%s %s: %s" % (_icono, _etiqueta, primera_linea)
                         p.anuncio_cuerpo = (nov_val or "").strip()[:2000]
                         try:
                             p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
@@ -45709,11 +45766,9 @@ def soporte_actualizaciones():
                         db.session.rollback()
                     except Exception:
                         pass
-                    for col, val in (("faq", faq_val), ("novedades", nov_val),
-                                     ("mantenimiento_programado", mant_val),
-                                     ("habeas_data", habeas_val), ("reinicio_aviso", reinicio_val)):
+                    for col, val in (("faq", faq_val), ("novedades", nov_val)):
                         try:
-                            db.session.execute(text("UPDATE plataforma SET " + col + "=:v"), {"v": val})
+                            db.session.execute(text("UPDATE plataforma SET %s=:v" % col), {"v": val})
                             db.session.commit()
                         except Exception:
                             try:
@@ -45725,8 +45780,6 @@ def soporte_actualizaciones():
                 except Exception:
                     pass
                 mensaje = "FAQ, actualizaciones e imágenes publicadas en el login."
-                if request.form.get("publicar_como_anuncio"):
-                    mensaje += " También se publicó como anuncio institucional."
             elif accion == "aviso_reinicio":
                 p.reinicio_aviso = (request.form.get("reinicio_aviso") or "La plataforma se reiniciará en breve por mantenimiento técnico.").strip()[:255]
                 db.session.commit()
@@ -45741,8 +45794,11 @@ def soporte_actualizaciones():
     _ro_faq = ""
     _ro_nov = ""
     _nota_rol = (
-        "Puedes publicar <b>Preguntas frecuentes</b> y <b>Últimas actualizaciones / novedades</b>. "
-        "Lo que guardes aquí se muestra en el login de las instituciones."
+        "Estás editando como <b>Soporte</b>: puedes cambiar FAQ, Ayuda, mantenimiento y Habeas Data. "
+        "El campo de novedades lo administra Desarrollador (aquí solo se muestra)."
+        if es_soporte else
+        "Estás editando como <b>Desarrollador</b>: puedes publicar las últimas actualizaciones y mejoras. "
+        "FAQ, Ayuda y mantenimiento los administra Soporte (aquí solo se muestran)."
     )
     content = f"""
 <header class="role-hero">
@@ -45769,7 +45825,7 @@ def soporte_actualizaciones():
     <label><b>Últimas actualizaciones / novedades</b></label>
     <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa...">{_esc(getattr(p,'novedades',None) or '')}</textarea>
     <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin:6px 0 12px">
-      <label style="display:flex;gap:8px;align-items:center;font-weight:700;font-size:13px"><input type="checkbox" name="publicar_como_anuncio" value="1" style="width:auto"> Publicar también como anuncio institucional</label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:700;font-size:13px"><input type="checkbox" name="publicar_como_anuncio" value="1" style="width:auto"> Publicar también como anuncio institucional (aparece como banner en el login)</label>
       <select name="tipo_actualizacion" style="margin-top:8px;padding:8px">
         <option value="mejora">Mejora / nueva función</option>
         <option value="seguridad">Actualización de seguridad</option>
@@ -45777,12 +45833,12 @@ def soporte_actualizaciones():
     </div>
     <label><b>Preguntas frecuentes</b> (separa cada pregunta con una línea en blanco)</label>
     <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...">{_esc(getattr(p,'faq',None) or '')}</textarea>
-    <label><b>Mantenimiento programado</b></label>
-    <textarea name="mantenimiento_programado" rows="3">{_esc(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
+    <label><b>Mantenimiento programado</b> (fecha, hora, mensaje)</label>
+    <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores">{_esc(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
     <label><b>Texto Habeas Data (Colombia)</b></label>
     <textarea name="habeas_data" rows="4">{_esc(getattr(p,'habeas_data',None) or '')}</textarea>
-    <label><b>Aviso corto de reinicio</b></label>
-    <input name="reinicio_aviso" value="{_esc(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min">
+    <label><b>Aviso corto de reinicio / plataforma</b></label>
+    <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min">
     <h3 style="margin-top:18px;color:#0B2D57">Imágenes de novedades (máx. 3)</h3>
     <p class="mini-text">Se muestran en una columna estrecha al lado del texto en el login. PNG/JPG/WebP o URL.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
@@ -63761,14 +63817,29 @@ def _ensure_dev_version_cols():
 
 def _footer_version_txt():
     try:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         # Prioridad: historial inmutable → plataforma → default
         last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
         if last and (last.version or "").strip():
             return (last.version or "").strip()
         p = plataforma()
         v = (getattr(p, "version_sistema", None) or "").strip()
+        if v:
+            return v
+        row = db.session.execute(text(
+            "SELECT version FROM changelog_versiones ORDER BY id DESC LIMIT 1"
+        )).first()
+        if row and row[0]:
+            return str(row[0]).strip()
         return v or "1.0.0"
     except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return "1.0.0"
 
 
@@ -66944,10 +67015,6 @@ def _seg_ensure():
     if _SEG_READY:
         return
     try:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
         db.create_all()
         _SEG_READY = True
     except Exception as ex:
@@ -66956,25 +67023,6 @@ def _seg_ensure():
         except Exception:
             pass
         print("seguridad create_all:", ex)
-        # Intento mínimo: solo eventos_seg (evita abortar el request)
-        try:
-            db.session.execute(text("""
-                CREATE TABLE IF NOT EXISTS eventos_seg (
-                    id SERIAL PRIMARY KEY,
-                    tipo VARCHAR(30),
-                    ip VARCHAR(60),
-                    usuario VARCHAR(80) DEFAULT '',
-                    ruta VARCHAR(200) DEFAULT '',
-                    creado_en VARCHAR(25) DEFAULT '',
-                    creado_ts DOUBLE PRECISION DEFAULT 0
-                )
-            """))
-            db.session.commit()
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
 
 
 def _seg_now_s():
@@ -67212,35 +67260,17 @@ def _seg_evaluar_reglas(tipo, ip, usuario, now):
 def _seg_registrar_evento(tipo, usuario=""):
     """Guarda un evento de seguridad (con tope anti-inundación) y evalúa las reglas de alerta."""
     try:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
         _seg_ensure()
         ip = _seg_ip()
         now = _time.time()
-        try:
-            n_recientes = EventoSeg.query.filter_by(ip=ip).filter(EventoSeg.creado_ts > now - 3600).count()
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            n_recientes = 0
-        if n_recientes >= 300:
+        if EventoSeg.query.filter_by(ip=ip).filter(EventoSeg.creado_ts > now - 3600).count() >= 300:
             return
         db.session.add(EventoSeg(
             tipo=tipo, ip=ip, usuario=(usuario or "")[:80], ruta=(request.path or "")[:200],
             creado_en=_seg_now_s(), creado_ts=now,
         ))
         db.session.commit()
-        try:
-            _seg_evaluar_reglas(tipo, ip, usuario, now)
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
+        _seg_evaluar_reglas(tipo, ip, usuario, now)
     except Exception as ex:
         try:
             db.session.rollback()
