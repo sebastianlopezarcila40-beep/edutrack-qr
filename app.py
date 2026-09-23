@@ -25652,7 +25652,10 @@ def gerencia_hq():
             <p class="hq-bento-sub">WhatsApp, correo, landing y contenidos públicos</p>
             <div class="hq-pills">
               <a href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
+              <a class="hq-pill-primary" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
+              <a href="/soporte/marca">Marca y contacto (tel./correo)</a>
               <a href="/gerencia/wati-conexion">API WATI</a>
+              <a class="hq-pill-primary" href="/gerencia/eduaura-ia">🧠 Conectores IA</a>
               <a href="/gerencia/procsis-web">Noticias / productos</a>
               <a class="hq-pill-primary" href="/gerencia/login-banners">Banners Login</a>
               <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
@@ -36304,6 +36307,7 @@ def _modulos_por_rol(rol):
         ("📧 Correo de Notificaciones", "/gerencia/correo-notificaciones", "#0f766e"),
         ("🔌 Mesa de Conexión API (WATI)", "/gerencia/wati-conexion", "#25D366"),
         ("🧠 Conectores IA (EduAura)", "/gerencia/eduaura-ia", "#7c3aed"),
+        ("🏢 Datos de la empresa", "/gerencia/datos-empresa", "#0B2D57"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Facturación", "/gerencia/facturacion", "#0B2D57"),
         ("Gastos", "/gerencia/gastos", "#0B2D57"),
