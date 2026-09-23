@@ -3945,119 +3945,29 @@ def page(title, body):
     body = (_APPLE_SHELL_CSS or "") + (_STAFF_TAB_JS or "") + body
 
     cookie_banner = """
-<style>
-#cookie-banner{
-  display:none;position:fixed;inset:0;z-index:99999;
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  background:rgba(15,23,42,.42);
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  align-items:flex-end;justify-content:center;
-  padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));
-  animation:ckFadeIn .28s ease-out;
-}
-@keyframes ckFadeIn{from{opacity:0}to{opacity:1}}
-@keyframes ckSlideUp{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-#cookie-banner .ck-card{
-  width:min(440px,100%);
-  background:rgba(255,255,255,.92);
-  border:1px solid rgba(255,255,255,.55);
-  border-radius:22px;
-  box-shadow:0 28px 80px rgba(2,8,23,.28),0 4px 16px rgba(2,8,23,.10);
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  padding:28px 26px 22px;
-  animation:ckSlideUp .34s cubic-bezier(.22,1,.36,1);
-  color:#0f172a;
-}
-#cookie-banner .ck-icon{
-  width:48px;height:48px;border-radius:14px;margin:0 auto 14px;
-  background:linear-gradient(145deg,#062b63,#0b63ce);
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 10px 24px rgba(11,99,206,.28);
-  color:#fff;font-size:22px;
-}
-#cookie-banner h2{
-  margin:0 0 8px;text-align:center;
-  font-size:19px;font-weight:700;letter-spacing:-.02em;color:#0B2D57;line-height:1.25;
-}
-#cookie-banner .ck-body{
-  margin:0 0 18px;text-align:center;
-  font-size:13.5px;line-height:1.55;color:#475569;font-weight:400;
-}
-#cookie-banner .ck-body a{color:#0b63ce;font-weight:600;text-decoration:none}
-#cookie-banner .ck-body a:hover{text-decoration:underline}
-#cookie-banner .ck-actions{display:flex;flex-direction:column;gap:8px}
-#cookie-banner .ck-btn{
-  display:block;width:100%;border:0;cursor:pointer;
-  border-radius:14px;padding:13px 16px;font-size:15px;font-weight:600;
-  letter-spacing:-.01em;transition:filter .15s ease,transform .12s ease;
-  font-family:inherit;box-sizing:border-box;text-align:center;
-}
-#cookie-banner .ck-btn:active{transform:scale(.985)}
-#cookie-banner .ck-btn-primary{
-  background:linear-gradient(135deg,#062b63,#0b63ce);color:#fff;
-  box-shadow:0 12px 28px rgba(11,99,206,.28);
-}
-#cookie-banner .ck-btn-primary:hover{filter:brightness(1.06)}
-#cookie-banner .ck-btn-secondary{
-  background:rgba(11,45,87,.06);color:#0B2D57;
-}
-#cookie-banner .ck-btn-secondary:hover{background:rgba(11,45,87,.10)}
-#cookie-banner .ck-btn-ghost{
-  background:transparent;color:#64748b;font-weight:500;font-size:13.5px;padding:8px;
-}
-#cookie-banner .ck-btn-ghost:hover{color:#0B2D57}
-#cookie-config-panel{
-  display:none;margin:0 0 14px;padding:14px 14px 10px;
-  background:rgba(11,45,87,.04);border:1px solid rgba(11,45,87,.08);
-  border-radius:16px;font-size:13px;color:#334155;text-align:left;
-}
-#cookie-config-panel label{
-  display:flex;gap:10px;align-items:flex-start;margin:0 0 10px;
-  line-height:1.4;cursor:pointer;font-weight:500;
-}
-#cookie-config-panel input[type=checkbox]{
-  width:18px;height:18px;margin-top:1px;accent-color:#0b63ce;flex-shrink:0;
-}
-#cookie-config-panel .ck-hint{display:block;font-size:11.5px;color:#94a3b8;font-weight:400;margin-top:2px}
-@media(max-width:480px){
-  #cookie-banner{padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px))}
-  #cookie-banner .ck-card{border-radius:20px;padding:24px 18px 18px}
-  #cookie-banner h2{font-size:17.5px}
-}
-</style>
-<div id="cookie-banner" role="dialog" aria-modal="true" aria-labelledby="ck-title">
-  <div class="ck-card">
-    <div class="ck-icon" aria-hidden="true">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
-    </div>
-    <h2 id="ck-title">Privacidad y cookies</h2>
-    <p class="ck-body">
-      Usamos cookies propias para el acceso seguro, tu sesión y el funcionamiento del sitio.
-      <b>No usamos publicidad de terceros.</b>
-      Al continuar, aceptas su uso.
-      <a href="/cookies">Política de cookies</a>
-      ·
-      <a href="/tratamiento-datos">Datos personales</a>
+<div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;font-family:Segoe UI,Arial,sans-serif">
+  <div style="max-width:920px;margin:0 auto 16px;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.2);padding:22px 24px;border:1px solid #e5e7eb">
+    <h2 style="margin:0 0 10px;font-size:22px;color:#16a34a;font-weight:800">Usamos cookies para mejorar tu experiencia</h2>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.55;color:#334155">
+      En este portal utilizamos datos de navegación / cookies propias y técnicas para gestionar el acceso seguro,
+      mantener tu sesión, elaborar información estadística básica de uso del sistema y optimizar la funcionalidad del sitio.
+      <b>No usamos cookies de publicidad de terceros.</b>
+      Si continúa navegando o acepta, autoriza esta utilización.
+      Puede conocer más en
+      <a href="/cookies" style="color:#15803d;font-weight:700">política completa de cookies</a>
+      y
+      <a href="/tratamiento-datos" style="color:#15803d;font-weight:700">política de tratamiento de datos personales</a>.
     </p>
-    <div id="cookie-config-panel">
-      <label>
-        <input type="checkbox" checked disabled>
-        <span>Esenciales<span class="ck-hint">Sesión y seguridad — siempre activas</span></span>
-      </label>
-      <label>
-        <input type="checkbox" id="ck-pref" checked>
-        <span>Preferencias<span class="ck-hint">Recuerda opciones de interfaz</span></span>
-      </label>
-      <label>
-        <input type="checkbox" id="ck-stat">
-        <span>Estadística<span class="ck-hint">Uso anónimo para mejorar el servicio</span></span>
-      </label>
-      <button type="button" id="cookie-save-cfg" class="ck-btn ck-btn-primary" style="margin-top:4px">Guardar preferencias</button>
+    <div id="cookie-config-panel" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;margin-bottom:14px;font-size:13px;color:#166534">
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" checked disabled> Cookies esenciales (sesión / seguridad) — siempre activas</label>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="ck-pref" checked> Preferencias de interfaz</label>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="ck-stat"> Estadística anónima de uso</label>
+      <button type="button" id="cookie-save-cfg" style="margin-top:8px;background:#15803d;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">Guardar preferencias</button>
     </div>
-    <div class="ck-actions">
-      <button type="button" id="cookie-accept-all" class="ck-btn ck-btn-primary">Aceptar</button>
-      <button type="button" id="cookie-reject" class="ck-btn ck-btn-secondary">Solo esenciales</button>
-      <button type="button" id="cookie-config" class="ck-btn ck-btn-ghost">Configurar…</button>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
+      <button type="button" id="cookie-accept-all" style="background:#16a34a;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:800;cursor:pointer;font-size:14px">Aceptar todas las cookies</button>
+      <button type="button" id="cookie-reject" style="background:#fff;color:#166534;border:2px solid #16a34a;border-radius:999px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:14px">Rechazar cookies no esenciales</button>
+      <button type="button" id="cookie-config" style="background:#fff;color:#166534;border:2px solid #16a34a;border-radius:999px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:14px">Configurar cookies</button>
     </div>
   </div>
 </div>
@@ -4067,17 +3977,13 @@ def page(title, body):
     var KEY = 'edutrack_cookies_pref';
     if (!localStorage.getItem(KEY)) {
       var b = document.getElementById('cookie-banner');
-      if (b) b.style.display = 'flex';
+      if (b) b.style.display = 'block';
     }
     function save(pref) {
       localStorage.setItem(KEY, JSON.stringify(pref));
       localStorage.setItem('edutrack_cookies_ok', '1');
       var b = document.getElementById('cookie-banner');
-      if (b) {
-        b.style.opacity = '0';
-        b.style.transition = 'opacity .2s ease';
-        setTimeout(function(){ b.style.display = 'none'; }, 200);
-      }
+      if (b) b.style.display = 'none';
     }
     var a = document.getElementById('cookie-accept-all');
     if (a) a.onclick = function(){ save({essential:true, pref:true, stat:true, all:true}); };
@@ -4086,7 +3992,7 @@ def page(title, body):
     var c = document.getElementById('cookie-config');
     if (c) c.onclick = function(){
       var p = document.getElementById('cookie-config-panel');
-      if (p) p.style.display = p.style.display === 'none' || !p.style.display ? 'block' : 'none';
+      if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
     };
     var s = document.getElementById('cookie-save-cfg');
     if (s) s.onclick = function(){
@@ -9723,24 +9629,54 @@ def seguridad_empleados_gate():
 
 
 def _html_lideres_login():
-    """Bloque de líderes al final del login: foto, cargo, año y biografía (estudios / rol en la empresa)."""
+    """Bloque de líderes: foto, cargo, año y biografía completa (con Leer más)."""
     try:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         db.create_all()
         rows = LiderEmpresa.query.filter_by(activo=True).order_by(LiderEmpresa.orden.asc(), LiderEmpresa.id.asc()).all()
     except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         rows = []
     if not rows:
         return ""
     cards = []
     for L in rows:
+        inicial = ((L.nombre or "?").strip()[:1] or "?").upper()
         if L.foto_path:
-            foto = '<img src="%s" alt="%s" loading="lazy">' % (L.foto_path, (L.nombre or "").replace('"', ""))
+            src_foto = (L.foto_path or "").strip()
+            # cache-bust suave por id para que al cambiar foto se vea de inmediato
+            if src_foto and "?" not in src_foto:
+                src_foto = src_foto + "?v=" + str(L.id or 0)
+            foto = (
+                '<img src="%s" alt="%s" loading="lazy" '
+                'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+                '<div class="ldr-ph" style="display:none">%s</div>'
+            ) % (src_foto, (L.nombre or "").replace('"', ""), inicial)
         else:
-            foto = '<div class="ldr-ph">%s</div>' % ((L.nombre or "?")[:1].upper())
+            foto = '<div class="ldr-ph">%s</div>' % inicial
         bio = (L.bio or "").strip()
-        if len(bio) > 280:
-            bio = bio[:277] + "…"
-        bio_html = ('<p class="ldr-bio">%s</p>' % bio.replace("<", "&lt;").replace("\n", "<br>")) if bio else ""
+        bio_esc = bio.replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+        if bio and len(bio) > 180:
+            bio_html = (
+                '<div class="ldr-bio-wrap">'
+                '<p class="ldr-bio ldr-bio-short">%s…</p>'
+                '<p class="ldr-bio ldr-bio-full" hidden>%s</p>'
+                '<button type="button" class="ldr-more" onclick="var w=this.parentNode;'
+                'var s=w.querySelector(\'.ldr-bio-short\');var f=w.querySelector(\'.ldr-bio-full\');'
+                'if(f.hidden){f.hidden=false;s.hidden=true;this.textContent=\'Ver menos\'}'
+                'else{f.hidden=true;s.hidden=false;this.textContent=\'Leer más\'}">Leer más</button>'
+                '</div>'
+            ) % (bio_esc[:180], bio_esc)
+        elif bio:
+            bio_html = '<p class="ldr-bio">%s</p>' % bio_esc
+        else:
+            bio_html = ""
         cards.append(
             '<article class="ldr-card">'
             '<div class="ldr-photo">%s</div>'
@@ -9766,25 +9702,28 @@ def _html_lideres_login():
         "border-radius:20px;box-shadow:0 8px 28px rgba(15,23,42,.06)}"
         ".ldr-head{text-align:center;margin-bottom:22px}"
         ".ldr-head h2{margin:0 0 6px;font-size:26px;font-weight:800;color:#0B2D57;"
-        "letter-spacing:-0.02em;font-family:Segoe UI,system-ui,sans-serif}"
+        "letter-spacing:-0.02em;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,system-ui,sans-serif}"
         ".ldr-sub{margin:0;font-size:14px;color:#64748b;font-weight:500}"
         ".ldr-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:22px}"
-        ".ldr-card{width:200px;text-align:center;padding:16px 14px 18px;background:#fff;"
-        "border:1px solid #e8eef5;border-radius:16px;box-shadow:0 4px 14px rgba(15,23,42,.04);"
+        ".ldr-card{width:240px;text-align:center;padding:18px 16px 20px;background:#fff;"
+        "border:1px solid #e8eef5;border-radius:18px;box-shadow:0 4px 14px rgba(15,23,42,.04);"
         "transition:transform .18s ease,box-shadow .18s ease}"
         ".ldr-card:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(15,23,42,.10)}"
-        ".ldr-photo{width:112px;height:112px;margin:0 auto 12px;border-radius:50%;overflow:hidden;"
-        "background:#e2e8f0;border:3px solid #dbeafe;box-shadow:0 4px 12px rgba(11,45,87,.12)}"
+        ".ldr-photo{width:120px;height:120px;margin:0 auto 12px;border-radius:50%;overflow:hidden;"
+        "background:#e2e8f0;border:3px solid #dbeafe;box-shadow:0 4px 12px rgba(11,45,87,.12);position:relative}"
         ".ldr-photo img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}"
         ".ldr-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;"
-        "font-size:34px;font-weight:800;color:#0B2D57;background:linear-gradient(135deg,#dbeafe,#e2e8f0)}"
+        "font-size:36px;font-weight:800;color:#0B2D57;background:linear-gradient(135deg,#dbeafe,#e2e8f0)}"
         ".ldr-name{font-size:13px;font-weight:800;color:#0B2D57;text-transform:uppercase;"
         "letter-spacing:.04em;line-height:1.3}"
         ".ldr-role{font-size:12px;color:#334155;margin-top:4px;font-weight:600;line-height:1.35}"
         ".ldr-year{font-size:11px;color:#94a3b8;margin-top:4px;font-weight:500}"
-        ".ldr-bio{font-size:12px;color:#64748b;line-height:1.45;margin:10px 0 0;text-align:left;"
+        ".ldr-bio,.ldr-bio-short,.ldr-bio-full{font-size:12.5px;color:#64748b;line-height:1.5;margin:10px 0 0;text-align:left;"
         "padding-top:10px;border-top:1px solid #f1f5f9}"
-        "@media(max-width:520px){.ldr-card{width:100%;max-width:280px}}"
+        ".ldr-more{margin-top:8px;background:none;border:0;color:#0b63ce;font-weight:700;font-size:12px;"
+        "cursor:pointer;padding:0;font-family:inherit}"
+        ".ldr-more:hover{text-decoration:underline}"
+        "@media(max-width:520px){.ldr-card{width:100%;max-width:320px}}"
         "</style>"
         "</section>"
     )
@@ -9909,15 +9848,23 @@ def _nav_public_html(active=""):
     html = """
 <style>
 /* NAV-APPLE-V2 span-not-button */
-.navbar-apple-wrap{position:sticky;top:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.navbar-apple-wrap{position:fixed;top:0;left:0;right:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 .navbar-apple-glass{
   position:relative;width:100%;box-sizing:border-box;
   display:flex;justify-content:space-between;align-items:center;
   padding:12px 28px;gap:16px;
   background-color:rgba(255,255,255,.72);
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
   border-bottom:1px solid rgba(0,0,0,.08);
+  transition:background-color .25s ease,box-shadow .25s ease,backdrop-filter .25s ease;
 }
+.navbar-apple-wrap.is-scrolled .navbar-apple-glass{
+  background-color:rgba(255,255,255,.82);
+  backdrop-filter:saturate(200%) blur(28px);-webkit-backdrop-filter:saturate(200%) blur(28px);
+  box-shadow:0 8px 32px rgba(15,23,42,.08);
+  border-bottom-color:rgba(0,0,0,.06);
+}
+body.has-apple-nav{padding-top:58px}
 .nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1d1d1f;font-weight:600;font-size:14px;flex-shrink:0}
 .nav-logo-apple .logo-micro{height:22px;width:auto;object-fit:contain}
 .nav-links-center{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:center;flex:1}
@@ -10021,6 +9968,18 @@ def _nav_public_html(active=""):
 </div>
 </div>
 <script>
+(function(){
+  var w = document.getElementById("navAppleWrap");
+  if (!w) return;
+  document.body.classList.add("has-apple-nav");
+  function onScroll(){
+    if (window.scrollY > 8) w.classList.add("is-scrolled");
+    else w.classList.remove("is-scrolled");
+  }
+  window.addEventListener("scroll", onScroll, {passive:true});
+  onScroll();
+})();
+
 (function(){
   var wrap=document.getElementById("navAppleWrap");
   var dd=document.getElementById("appleDropdown");
@@ -30084,6 +30043,15 @@ def gerencia_lideres():
     except Exception:
         pass
     msg = error = ""
+    try:
+        edit_id = int(request.args.get("edit") or 0)
+    except ValueError:
+        edit_id = 0
+    edit_L = None
+    try:
+        edit_L = LiderEmpresa.query.get(edit_id) if edit_id else None
+    except Exception:
+        edit_L = None
     if request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
         if accion == "eliminar":
@@ -30118,28 +30086,43 @@ def gerencia_lideres():
                 L.creado_en = ahora().strftime("%Y-%m-%d %H:%M") if hasattr(ahora(), "strftime") else ""
             img = request.files.get("foto")
             if img and img.filename:
-                folder = os.path.join(app.root_path, "static", "uploads", "lideres")
-                os.makedirs(folder, exist_ok=True)
-                db.session.flush()
-                fname = "lider_%s.jpg" % (L.id or "tmp")
-                dest = os.path.join(folder, fname)
+                # Preferir data URI (persiste en BD en Railway; /static/uploads se pierde al redesplegar)
+                data_uri = None
                 try:
-                    from PIL import Image
-                    from io import BytesIO
-                    im = Image.open(BytesIO(img.read()))
-                    if im.mode in ("RGBA", "P"):
-                        im = im.convert("RGB")
-                    im.thumbnail((600, 600), Image.Resampling.LANCZOS)
-                    canvas = Image.new("RGB", (600, 600), (241, 245, 249))
-                    canvas.paste(im, ((600 - im.width) // 2, (600 - im.height) // 2))
-                    canvas.save(dest, "JPEG", quality=88)
+                    data_uri = _archivo_a_data_uri(img, max_bytes=2_000_000)
                 except Exception:
+                    data_uri = None
+                if data_uri:
+                    L.foto_path = data_uri
+                else:
+                    folder = os.path.join(app.root_path, "static", "uploads", "lideres")
+                    os.makedirs(folder, exist_ok=True)
+                    db.session.flush()
+                    import time as _t_foto
+                    fname = "lider_%s_%s.jpg" % (L.id or "tmp", int(_t_foto.time()))
+                    dest = os.path.join(folder, fname)
                     try:
                         img.seek(0)
                     except Exception:
                         pass
-                    img.save(dest)
-                L.foto_path = "/static/uploads/lideres/" + fname
+                    try:
+                        from PIL import Image
+                        from io import BytesIO
+                        raw = img.read()
+                        im = Image.open(BytesIO(raw))
+                        if im.mode in ("RGBA", "P"):
+                            im = im.convert("RGB")
+                        im.thumbnail((600, 600), Image.Resampling.LANCZOS)
+                        canvas = Image.new("RGB", (600, 600), (241, 245, 249))
+                        canvas.paste(im, ((600 - im.width) // 2, (600 - im.height) // 2))
+                        canvas.save(dest, "JPEG", quality=88)
+                    except Exception:
+                        try:
+                            img.seek(0)
+                        except Exception:
+                            pass
+                        img.save(dest)
+                    L.foto_path = "/static/uploads/lideres/" + fname
             if not L.nombre:
                 error = "El nombre es obligatorio."
                 db.session.rollback()
@@ -30160,6 +30143,7 @@ def gerencia_lideres():
             + '<br><span style="font-size:12px;color:#64748b">Ingreso: ' + (L.anio_ingreso or "—")
             + " · Orden " + str(L.orden) + (" · Activo" if L.activo else " · Oculto") + "</span>"
             + '<p style="font-size:12px;color:#475569">' + (L.bio or "")[:200] + "</p>"
+            + '<a href="/gerencia/lideres?edit=' + str(L.id) + '" style="display:inline-block;background:#0B2D57;color:#fff;border:0;padding:4px 10px;border-radius:6px;font-size:11px;text-decoration:none;margin-right:6px">Editar</a>'
             + '<form method="POST" style="display:inline" onsubmit="return confirm(\'Eliminar?\')">'
             + '<input type="hidden" name="accion" value="eliminar"><input type="hidden" name="lider_id" value="' + str(L.id) + '">'
             + '<button type="submit" style="background:#b91c1c;color:#fff;border:0;padding:4px 8px;border-radius:6px;font-size:11px">Eliminar</button></form></div></div>'
@@ -30173,22 +30157,22 @@ def gerencia_lideres():
         + (('<div style="background:#dcfce7;color:#166534;padding:8px;border-radius:8px;margin:8px 0">' + msg + "</div>") if msg else "")
         + (('<div style="background:#fee2e2;color:#991b1b;padding:8px;border-radius:8px;margin:8px 0">' + error + "</div>") if error else "")
         + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0">'
-        + '<h3 style="color:#0B2D57;margin-top:0">Agregar líder</h3>'
+        + '<h3 style="color:#0B2D57;margin-top:0">' + ('Editar líder' if edit_L else 'Agregar líder') + '</h3>'
         + '<form method="POST" enctype="multipart/form-data">'
-        + '<input type="hidden" name="lider_id" value="0">'
+        + '<input type="hidden" name="lider_id" value="' + str(edit_L.id if edit_L else 0) + '">'
         + '<label style="display:block;font-size:12px;font-weight:700;margin-top:8px">Nombre</label>'
-        + '<input name="nombre" required style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">'
+        + '<input name="nombre" required value="' + ((edit_L.nombre or '') if edit_L else '').replace(chr(34), '&quot;') + '" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">'
         + '<label style="display:block;font-size:12px;font-weight:700;margin-top:8px">Cargo</label>'
-        + '<input name="cargo" required placeholder="Ej: Director Legal" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">'
+        + '<input name="cargo" required value="' + ((edit_L.cargo or '') if edit_L else '').replace(chr(34), '&quot;') + '" placeholder="Ej: Director Legal" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">'
         + '<label style="display:block;font-size:12px;font-weight:700;margin-top:8px">Año de ingreso</label>'
-        + '<input name="anio_ingreso" placeholder="2025" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">'
+        + '<input name="anio_ingreso" value="' + ((edit_L.anio_ingreso or '') if edit_L else '') + '" placeholder="2025" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">'
         + '<label style="display:block;font-size:12px;font-weight:700;margin-top:8px">Biografía</label>'
-        + '<textarea name="bio" rows="5" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></textarea>'
+        + '<textarea name="bio" rows="8" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">' + ((edit_L.bio or '') if edit_L else '') + '</textarea>'
         + '<label style="display:block;font-size:12px;font-weight:700;margin-top:8px">Orden</label>'
-        + '<input name="orden" type="number" value="0" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">'
+        + '<input name="orden" type="number" value="' + str(edit_L.orden if edit_L else 0) + '" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box">'
         + '<label style="display:block;font-size:12px;font-weight:700;margin-top:8px">Foto</label>'
         + '<input type="file" name="foto" accept="image/*">'
-        + '<label style="display:block;margin-top:8px"><input type="checkbox" name="activo" value="1" checked> Visible en login</label>'
+        + '<label style="display:block;margin-top:8px"><input type="checkbox" name="activo" value="1"' + (' checked' if (not edit_L or edit_L.activo) else '') + '> Visible en web / login</label>'
         + '<button type="submit" style="margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800;cursor:pointer">Guardar líder</button>'
         + "</form></div>"
         + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px">'
@@ -52427,6 +52411,17 @@ def pagina_corporativa_procsis():
         cta_txt = "Solicite una demostración o hable con un asesor comercial."
         foot_txt = "Soluciones digitales para el sector educativo. Plataforma académica multi-institucional."
     try:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            db.create_all()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
         # Publicado = activo True o NULL (registros antiguos sin flag)
         _productos_pub = (
             ProductoProcsis.query
@@ -52434,23 +52429,44 @@ def pagina_corporativa_procsis():
             .order_by(ProductoProcsis.orden.asc(), ProductoProcsis.id.asc())
             .all()
         )
+        if not _productos_pub:
+            # Fallback: mostrar todos si ninguno tiene activo=True (datos sin flag)
+            _todos = ProductoProcsis.query.order_by(ProductoProcsis.orden.asc(), ProductoProcsis.id.asc()).all()
+            _productos_pub = [p for p in _todos if p.activo is not False]
     except Exception:
         try:
+            db.session.rollback()
             _productos_pub = [p for p in ProductoProcsis.query.order_by(ProductoProcsis.orden.asc()).all() if p.activo is not False]
         except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             _productos_pub = []
     try:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         _noticias_pub = (
             NoticiaProcsis.query
             .filter((NoticiaProcsis.activo.is_(True)) | (NoticiaProcsis.activo.is_(None)))
             .order_by(NoticiaProcsis.id.desc())
-            .limit(8)
+            .limit(12)
             .all()
         )
+        if not _noticias_pub:
+            _todos_n = NoticiaProcsis.query.order_by(NoticiaProcsis.id.desc()).limit(12).all()
+            _noticias_pub = [n for n in _todos_n if n.activo is not False]
     except Exception:
         try:
-            _noticias_pub = [n for n in NoticiaProcsis.query.order_by(NoticiaProcsis.id.desc()).limit(8).all() if n.activo is not False]
+            db.session.rollback()
+            _noticias_pub = [n for n in NoticiaProcsis.query.order_by(NoticiaProcsis.id.desc()).limit(12).all() if n.activo is not False]
         except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             _noticias_pub = []
     try:
         anio = ahora().year
@@ -52786,7 +52802,7 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
         f'''<div class="pc-card">
           {f'<img src="{_esc(n.imagen)}" style="width:100%;border-radius:12px;margin-bottom:10px;max-height:160px;object-fit:cover">' if n.imagen else '<div class="ico">◆</div>'}
           <span style="font-size:12px;color:#86868b">{_esc(n.fecha)}</span>
-          <h3>{_esc(n.titulo)}</h3><p>{_esc(n.cuerpo)[:220]}{'…' if len(n.cuerpo or '')>220 else ''}</p></div>'''
+          <h3>{_esc(n.titulo)}</h3><p class="pc-news-body">{_esc(n.cuerpo or "")}</p></div>'''
         for n in _noticias_pub
       ) or '''
       <div class="pc-card">
