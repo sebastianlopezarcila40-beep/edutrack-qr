@@ -306,15 +306,6 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _engine_opts
 db = SQLAlchemy(app)
 
 
-@app.before_request
-def _db_limpiar_transaccion_abortada():
-    """Limpia transacción Postgres abortada al inicio de cada request."""
-    try:
-        db.session.rollback()
-    except Exception:
-        pass
-
-
 @app.teardown_appcontext
 def _shutdown_db_session(exception=None):
     """CORRECCIÓN CRÍTICA: sin esto, cuando una consulta falla en cualquier
@@ -3954,29 +3945,119 @@ def page(title, body):
     body = (_APPLE_SHELL_CSS or "") + (_STAFF_TAB_JS or "") + body
 
     cookie_banner = """
-<div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;font-family:Segoe UI,Arial,sans-serif">
-  <div style="max-width:920px;margin:0 auto 16px;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.2);padding:22px 24px;border:1px solid #e5e7eb">
-    <h2 style="margin:0 0 10px;font-size:22px;color:#16a34a;font-weight:800">Usamos cookies para mejorar tu experiencia</h2>
-    <p style="margin:0 0 16px;font-size:14px;line-height:1.55;color:#334155">
-      En este portal utilizamos datos de navegación / cookies propias y técnicas para gestionar el acceso seguro,
-      mantener tu sesión, elaborar información estadística básica de uso del sistema y optimizar la funcionalidad del sitio.
-      <b>No usamos cookies de publicidad de terceros.</b>
-      Si continúa navegando o acepta, autoriza esta utilización.
-      Puede conocer más en
-      <a href="/cookies" style="color:#15803d;font-weight:700">política completa de cookies</a>
-      y
-      <a href="/tratamiento-datos" style="color:#15803d;font-weight:700">política de tratamiento de datos personales</a>.
-    </p>
-    <div id="cookie-config-panel" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;margin-bottom:14px;font-size:13px;color:#166534">
-      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" checked disabled> Cookies esenciales (sesión / seguridad) — siempre activas</label>
-      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="ck-pref" checked> Preferencias de interfaz</label>
-      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="ck-stat"> Estadística anónima de uso</label>
-      <button type="button" id="cookie-save-cfg" style="margin-top:8px;background:#15803d;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">Guardar preferencias</button>
+<style>
+#cookie-banner{
+  display:none;position:fixed;inset:0;z-index:99999;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:rgba(15,23,42,.42);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  align-items:flex-end;justify-content:center;
+  padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));
+  animation:ckFadeIn .28s ease-out;
+}
+@keyframes ckFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes ckSlideUp{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+#cookie-banner .ck-card{
+  width:min(440px,100%);
+  background:rgba(255,255,255,.92);
+  border:1px solid rgba(255,255,255,.55);
+  border-radius:22px;
+  box-shadow:0 28px 80px rgba(2,8,23,.28),0 4px 16px rgba(2,8,23,.10);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  padding:28px 26px 22px;
+  animation:ckSlideUp .34s cubic-bezier(.22,1,.36,1);
+  color:#0f172a;
+}
+#cookie-banner .ck-icon{
+  width:48px;height:48px;border-radius:14px;margin:0 auto 14px;
+  background:linear-gradient(145deg,#062b63,#0b63ce);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 10px 24px rgba(11,99,206,.28);
+  color:#fff;font-size:22px;
+}
+#cookie-banner h2{
+  margin:0 0 8px;text-align:center;
+  font-size:19px;font-weight:700;letter-spacing:-.02em;color:#0B2D57;line-height:1.25;
+}
+#cookie-banner .ck-body{
+  margin:0 0 18px;text-align:center;
+  font-size:13.5px;line-height:1.55;color:#475569;font-weight:400;
+}
+#cookie-banner .ck-body a{color:#0b63ce;font-weight:600;text-decoration:none}
+#cookie-banner .ck-body a:hover{text-decoration:underline}
+#cookie-banner .ck-actions{display:flex;flex-direction:column;gap:8px}
+#cookie-banner .ck-btn{
+  display:block;width:100%;border:0;cursor:pointer;
+  border-radius:14px;padding:13px 16px;font-size:15px;font-weight:600;
+  letter-spacing:-.01em;transition:filter .15s ease,transform .12s ease;
+  font-family:inherit;box-sizing:border-box;text-align:center;
+}
+#cookie-banner .ck-btn:active{transform:scale(.985)}
+#cookie-banner .ck-btn-primary{
+  background:linear-gradient(135deg,#062b63,#0b63ce);color:#fff;
+  box-shadow:0 12px 28px rgba(11,99,206,.28);
+}
+#cookie-banner .ck-btn-primary:hover{filter:brightness(1.06)}
+#cookie-banner .ck-btn-secondary{
+  background:rgba(11,45,87,.06);color:#0B2D57;
+}
+#cookie-banner .ck-btn-secondary:hover{background:rgba(11,45,87,.10)}
+#cookie-banner .ck-btn-ghost{
+  background:transparent;color:#64748b;font-weight:500;font-size:13.5px;padding:8px;
+}
+#cookie-banner .ck-btn-ghost:hover{color:#0B2D57}
+#cookie-config-panel{
+  display:none;margin:0 0 14px;padding:14px 14px 10px;
+  background:rgba(11,45,87,.04);border:1px solid rgba(11,45,87,.08);
+  border-radius:16px;font-size:13px;color:#334155;text-align:left;
+}
+#cookie-config-panel label{
+  display:flex;gap:10px;align-items:flex-start;margin:0 0 10px;
+  line-height:1.4;cursor:pointer;font-weight:500;
+}
+#cookie-config-panel input[type=checkbox]{
+  width:18px;height:18px;margin-top:1px;accent-color:#0b63ce;flex-shrink:0;
+}
+#cookie-config-panel .ck-hint{display:block;font-size:11.5px;color:#94a3b8;font-weight:400;margin-top:2px}
+@media(max-width:480px){
+  #cookie-banner{padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px))}
+  #cookie-banner .ck-card{border-radius:20px;padding:24px 18px 18px}
+  #cookie-banner h2{font-size:17.5px}
+}
+</style>
+<div id="cookie-banner" role="dialog" aria-modal="true" aria-labelledby="ck-title">
+  <div class="ck-card">
+    <div class="ck-icon" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
-      <button type="button" id="cookie-accept-all" style="background:#16a34a;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:800;cursor:pointer;font-size:14px">Aceptar todas las cookies</button>
-      <button type="button" id="cookie-reject" style="background:#fff;color:#166534;border:2px solid #16a34a;border-radius:999px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:14px">Rechazar cookies no esenciales</button>
-      <button type="button" id="cookie-config" style="background:#fff;color:#166534;border:2px solid #16a34a;border-radius:999px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:14px">Configurar cookies</button>
+    <h2 id="ck-title">Privacidad y cookies</h2>
+    <p class="ck-body">
+      Usamos cookies propias para el acceso seguro, tu sesión y el funcionamiento del sitio.
+      <b>No usamos publicidad de terceros.</b>
+      Al continuar, aceptas su uso.
+      <a href="/cookies">Política de cookies</a>
+      ·
+      <a href="/tratamiento-datos">Datos personales</a>
+    </p>
+    <div id="cookie-config-panel">
+      <label>
+        <input type="checkbox" checked disabled>
+        <span>Esenciales<span class="ck-hint">Sesión y seguridad — siempre activas</span></span>
+      </label>
+      <label>
+        <input type="checkbox" id="ck-pref" checked>
+        <span>Preferencias<span class="ck-hint">Recuerda opciones de interfaz</span></span>
+      </label>
+      <label>
+        <input type="checkbox" id="ck-stat">
+        <span>Estadística<span class="ck-hint">Uso anónimo para mejorar el servicio</span></span>
+      </label>
+      <button type="button" id="cookie-save-cfg" class="ck-btn ck-btn-primary" style="margin-top:4px">Guardar preferencias</button>
+    </div>
+    <div class="ck-actions">
+      <button type="button" id="cookie-accept-all" class="ck-btn ck-btn-primary">Aceptar</button>
+      <button type="button" id="cookie-reject" class="ck-btn ck-btn-secondary">Solo esenciales</button>
+      <button type="button" id="cookie-config" class="ck-btn ck-btn-ghost">Configurar…</button>
     </div>
   </div>
 </div>
@@ -3986,13 +4067,17 @@ def page(title, body):
     var KEY = 'edutrack_cookies_pref';
     if (!localStorage.getItem(KEY)) {
       var b = document.getElementById('cookie-banner');
-      if (b) b.style.display = 'block';
+      if (b) b.style.display = 'flex';
     }
     function save(pref) {
       localStorage.setItem(KEY, JSON.stringify(pref));
       localStorage.setItem('edutrack_cookies_ok', '1');
       var b = document.getElementById('cookie-banner');
-      if (b) b.style.display = 'none';
+      if (b) {
+        b.style.opacity = '0';
+        b.style.transition = 'opacity .2s ease';
+        setTimeout(function(){ b.style.display = 'none'; }, 200);
+      }
     }
     var a = document.getElementById('cookie-accept-all');
     if (a) a.onclick = function(){ save({essential:true, pref:true, stat:true, all:true}); };
@@ -4001,7 +4086,7 @@ def page(title, body):
     var c = document.getElementById('cookie-config');
     if (c) c.onclick = function(){
       var p = document.getElementById('cookie-config-panel');
-      if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+      if (p) p.style.display = p.style.display === 'none' || !p.style.display ? 'block' : 'none';
     };
     var s = document.getElementById('cookie-save-cfg');
     if (s) s.onclick = function(){
@@ -5813,82 +5898,24 @@ def datos_login_institucion(inst_id=None):
 
 
 def contenido_login_novedades():
-    """Textos del bloque inferior del login (editables desde Soporte / Dev).
-    Lee siempre desde BD (ORM + SQL de respaldo). No inventa defaults si hay datos."""
-    try:
-        db.session.rollback()
-    except Exception:
-        pass
+    """Textos del bloque inferior del login (editables desde Soporte)."""
     p = plataforma()
     version = (getattr(p, "version_sistema", None) or "").strip() or None
-    novedades = (getattr(p, "novedades", None) or "").strip()
-    faq = (getattr(p, "faq", None) or "").strip()
-    mant = (getattr(p, "mantenimiento_programado", None) or "").strip()
-    habeas = (getattr(p, "habeas_data", None) or "").strip()
-    reinicio = (getattr(p, "reinicio_aviso", None) or "").strip()
-    last = None
-    # Fuente de verdad versión: ChangelogVersion (historial inmutable)
+    # Fuente de verdad: última fila del historial inmutable (ChangelogVersion)
     try:
         last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
         if last and (last.version or "").strip():
             version = (last.version or "").strip()
+            # Si hay resumen de mejoras, usarlo como novedades cuando el campo está vacío
+            # (no sobrescribe si ya hay texto editado en Soporte)
     except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        try:
-            row_v = db.session.execute(text(
-                "SELECT version, resumen FROM changelog_versiones ORDER BY id DESC LIMIT 1"
-            )).first()
-            if row_v:
-                version = (row_v[0] or version or "").strip() or version
-                if not novedades and row_v[1]:
-                    novedades = (row_v[1] or "").strip()
-                class _L: pass
-                last = _L()
-                last.version = version
-                last.resumen = row_v[1] if row_v else ""
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            last = None
-    # Si ORM no trajo faq/novedades, leer SQL directo de plataforma
-    if not faq or not novedades or not version:
-        try:
-            row = db.session.execute(text(
-                "SELECT version_sistema, novedades, faq, mantenimiento_programado, "
-                "habeas_data, reinicio_aviso FROM plataforma ORDER BY id ASC LIMIT 1"
-            )).first()
-            if row:
-                if not version and row[0]:
-                    version = (row[0] or "").strip()
-                if not novedades and row[1]:
-                    novedades = (row[1] or "").strip()
-                if not faq and row[2]:
-                    faq = (row[2] or "").strip()
-                if not mant and row[3]:
-                    mant = (row[3] or "").strip()
-                if not habeas and row[4]:
-                    habeas = (row[4] or "").strip()
-                if not reinicio and row[5]:
-                    reinicio = (row[5] or "").strip()
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
+        last = None
     if not version:
         version = "2.5.0"
-    # Sincronizar plataforma.version_sistema con el historial (best-effort)
+    # Sincronizar plataforma.version_sistema con el historial
     try:
-        if (getattr(p, "version_sistema", None) or "").strip() != version:
-            try:
-                p.version_sistema = version
-            except Exception:
-                pass
+        if p is not None and (getattr(p, "version_sistema", None) or "").strip() != version:
+            p.version_sistema = version
             db.session.execute(text("UPDATE plataforma SET version_sistema=:v"), {"v": version})
             db.session.commit()
     except Exception:
@@ -5896,10 +5923,14 @@ def contenido_login_novedades():
             db.session.rollback()
         except Exception:
             pass
-    # Si no hay novedades manuales, usar resumen de la última versión
+    novedades = (getattr(p, "novedades", None) or "").strip()
+    # Si no hay novedades manuales, mostrar el resumen de la última versión publicada
     if not novedades and last is not None and (getattr(last, "resumen", None) or "").strip():
         novedades = (last.resumen or "").strip()
-    # Defaults SOLO si realmente no hay nada en BD
+    faq = (getattr(p, "faq", None) or "").strip()
+    mant = (getattr(p, "mantenimiento_programado", None) or "").strip()
+    habeas = (getattr(p, "habeas_data", None) or "").strip()
+    reinicio = (getattr(p, "reinicio_aviso", None) or "").strip()
     if not novedades:
         novedades = (
             "Gracias por creer en nuestra empresa. Con su apoyo hemos implementado cambios que mejoran "
@@ -5913,6 +5944,7 @@ def contenido_login_novedades():
     if not faq:
         faq = (
             "¿Olvidé mi contraseña?\nUse «¿Olvidaste tu contraseña?» en el login o contacte a su administrador.\n\n"
+
             "¿Cómo ingreso como docente?\nUse el enlace Docentes o el usuario asignado por el colegio.\n\n"
             "¿Qué es multi-inquilino?\nCada colegio tiene sus datos aislados: no ve información de otra institución.\n\n"
             "¿Cómo radico una PQR?\nIngrese a /pqr, complete el formulario y conserve el radicado.\n\n"
@@ -5926,13 +5958,13 @@ def contenido_login_novedades():
             "escribiendo a soporte."
         )
     imgs = []
-    for i in (1, 2, 3, 4, 5):
-        path_img = (getattr(p, f"novedad_img{i}", None) or "").strip()
+    for i in (1, 2, 3):
+        path = (getattr(p, f"novedad_img{i}", None) or "").strip()
         cap = (getattr(p, f"novedad_img{i}_cap", None) or "").strip()
-        if path_img:
-            if not path_img.startswith("/") and not path_img.startswith("http"):
-                path_img = "/" + path_img
-            imgs.append({"src": path_img, "cap": cap})
+        if path:
+            if not path.startswith("/") and not path.startswith("http"):
+                path = "/" + path
+            imgs.append({"src": path, "cap": cap})
     hero_chip = (getattr(p, "hero_chip", None) or "").strip() or "Plataforma institucional · Acceso seguro"
     hero_titulo = (getattr(p, "hero_titulo", None) or "").strip() or "Tecnología educativa con control y transparencia"
     hero_texto = (getattr(p, "hero_texto", None) or "").strip()
@@ -5954,7 +5986,6 @@ def contenido_login_novedades():
         "hero_titulo": hero_titulo,
         "hero_texto": hero_texto,
     }
-
 
 
 def _txt_a_html_lista(texto):
@@ -6149,84 +6180,49 @@ def _corp_cfg_from_db():
 
 
 def plataforma():
-    """Configuración de la empresa de soporte (Procsis), no del colegio.
-    Siempre intenta leer de BD (con rollback si la transacción estaba abortada).
-    Solo usa objeto dummy si la BD es realmente inaccesible."""
-    # 1) Limpiar transacción abortada y leer ORM
-    for _intento in (1, 2):
-        try:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            p = Plataforma.query.first()
-            if not p:
-                p = Plataforma()
-                db.session.add(p)
-                db.session.commit()
-            return p
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-    # 2) Lectura directa por SQL (por si el ORM falla pero la tabla existe)
+
+    """Configuración de la empresa de soporte (Procsis), no del colegio."""
     try:
-        row = db.session.execute(text(
-            "SELECT version_sistema, novedades, faq, mantenimiento_programado, "
-            "habeas_data, reinicio_aviso, hero_chip, hero_titulo, hero_texto, "
-            "novedad_img1, novedad_img2, novedad_img3, novedad_img4, novedad_img5, "
-            "novedad_img1_cap, novedad_img2_cap, novedad_img3_cap, novedad_img4_cap, novedad_img5_cap, "
-            "empresa, slogan, logo_path, anuncio_activo, anuncio_titulo, anuncio_cuerpo, "
-            "anuncio_version, anuncio_img1, anuncio_img2 "
-            "FROM plataforma ORDER BY id ASC LIMIT 1"
-        )).mappings().first()
-        if row:
-            class _P: pass
-            x = _P()
-            for k, v in dict(row).items():
-                setattr(x, k, v if v is not None else "")
-            if not hasattr(x, "anuncio_activo"):
-                x.anuncio_activo = False
-            return x
+        p = Plataforma.query.first()
+        if not p:
+            p = Plataforma()
+            db.session.add(p)
+            db.session.commit()
+        return p
     except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-    # 3) Dummy mínimo (solo si la BD no responde)
-    class _P: pass
-    x = _P()
-    x.empresa = DESARROLLADOR
-    x.slogan = SLOGAN
-    x.logo_path = "/static/img/logo-procsis.png"
-    x.desarrollador = "Sebastián López"
-    x.telefono_soporte = SOPORTE_TELEFONO
-    x.email_soporte = SOPORTE_EMAIL or "soporte@procsis.com"
-    x.telefono_cartera = CARTERA_TELEFONO
-    x.email_cartera = CARTERA_EMAIL
-    x.web = ""
-    x.notas = ""
-    x.version_sistema = ""
-    x.novedades = ""
-    x.faq = ""
-    x.mantenimiento_programado = ""
-    x.habeas_data = ""
-    x.reinicio_aviso = ""
-    x.novedad_img1 = x.novedad_img2 = x.novedad_img3 = x.novedad_img4 = x.novedad_img5 = ""
-    x.novedad_img1_cap = x.novedad_img2_cap = x.novedad_img3_cap = x.novedad_img4_cap = x.novedad_img5_cap = ""
-    x.hero_chip = "Plataforma institucional · Acceso seguro"
-    x.hero_titulo = "Tecnología educativa con control y transparencia"
-    x.hero_texto = ""
-    x.smtp_correo = x.smtp_password = x.smtp_notif_correo = x.smtp_notif_password = ""
-    x.anuncio_activo = False
-    x.anuncio_titulo = ""
-    x.anuncio_cuerpo = ""
-    x.anuncio_cuenta = ""
-    x.anuncio_version = "1"
-    x.anuncio_img1 = ""
-    x.anuncio_img2 = ""
-    return x
+        class _P: pass
+        x = _P()
+        x.empresa = DESARROLLADOR
+        x.slogan = SLOGAN
+        x.logo_path = "/static/img/logo-procsis.png"
+        x.desarrollador = "Sebastián López"
+        x.telefono_soporte = SOPORTE_TELEFONO
+        x.email_soporte = SOPORTE_EMAIL or "soporte@procsis.com"
+        x.telefono_cartera = CARTERA_TELEFONO
+        x.email_cartera = CARTERA_EMAIL
+        x.web = ""
+        x.notas = ""
+        x.version_sistema = "2.5.0"
+        x.novedades = ""
+        x.faq = ""
+        x.mantenimiento_programado = ""
+        x.habeas_data = ""
+        x.reinicio_aviso = ""
+        x.novedad_img1 = x.novedad_img2 = x.novedad_img3 = x.novedad_img4 = x.novedad_img5 = ""
+        x.novedad_img1_cap = x.novedad_img2_cap = x.novedad_img3_cap = x.novedad_img4_cap = x.novedad_img5_cap = ""
+        x.hero_chip = "Plataforma institucional · Acceso seguro"
+        x.hero_titulo = "Tecnología educativa con control y transparencia"
+        x.hero_texto = ""
+        x.smtp_correo = x.smtp_password = x.smtp_notif_correo = x.smtp_notif_password = ""
+        # Anuncios institucionales (evita AttributeError en /gerencia/anuncios si la BD falla)
+        x.anuncio_activo = False
+        x.anuncio_titulo = ""
+        x.anuncio_cuerpo = ""
+        x.anuncio_cuenta = ""
+        x.anuncio_version = "1"
+        x.anuncio_img1 = ""
+        x.anuncio_img2 = ""
+        return x
 
 
 def _credenciales_smtp(uso="soporte"):
@@ -7808,25 +7804,16 @@ def requiere_confirmacion_sensible():
 
 
 def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
-    """Busca usuario. Si hay institucion_id, prioriza el de ese colegio."""
+    """Busca usuario. Si hay institucion_id, prioriza el de ese colegio (y Soporte global)."""
     usuario = (usuario or "").strip()
     password = (password or "").strip()
     if not usuario or not password:
         return None
-    try:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        candidatos = Usuario.query.filter(func.lower(Usuario.usuario) == usuario.lower()).all()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return None
+
+    candidatos = Usuario.query.filter(func.lower(Usuario.usuario) == usuario.lower()).all()
     if not candidatos:
         return None
+
     u = None
     if institucion_id is not None:
         try:
@@ -7834,28 +7821,23 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
         except (TypeError, ValueError):
             iid = None
         if iid is not None:
+            # 1) Usuario del colegio elegido
             for c in candidatos:
-                try:
-                    if c.institucion_id is not None and int(c.institucion_id) == iid:
-                        u = c
-                        break
-                except (TypeError, ValueError):
-                    continue
-            if u is None and len(candidatos) == 1:
-                solo = candidatos[0]
-                rol_solo = (solo.rol or "").strip()
-                if rol_solo not in ROLES_INTERNOS and rol_solo != "Soporte" and solo.institucion_id is None:
-                    u = solo
+                if c.institucion_id is not None and int(c.institucion_id) == iid:
+                    u = c
+                    break
+            pass
     else:
+        # Priorizar cuenta interna (Soporte/Admin) si hay varias con el mismo nombre
+        u = None
         for c in candidatos:
             if (c.rol or "").strip() in ROLES_INTERNOS:
                 u = c
                 break
         if u is None:
             u = candidatos[0]
+
     if u is None:
-        return None
-    if hasattr(u, "activo") and u.activo is False:
         return None
     if not verificar_password(u.password, password):
         return None
@@ -7863,22 +7845,11 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
         rol_u = (u.rol or "").strip()
         if rol_u in ROLES_INTERNOS or rol_u == "Soporte":
             return None
-    if rol_requerido:
-        aliases = {"coordinacion": "coordinación", "secretaria": "secretaría",
-                   "rectoria": "rectoría", "admin": "administrador"}
-        req = aliases.get(rol_requerido.lower().strip(), rol_requerido.lower().strip())
-        got = aliases.get((u.rol or "").lower().strip(), (u.rol or "").lower().strip())
-        if got != req:
-            return None
+    if rol_requerido and u.rol.lower().strip() != rol_requerido.lower().strip():
+        return None
     if not es_hash_password(u.password):
-        try:
-            u.password = crear_hash(password)
-            db.session.commit()
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
+        u.password = crear_hash(password)
+        db.session.commit()
     return u
 
 
@@ -11413,24 +11384,9 @@ def login():
             if user and inst_id and user.institucion_id and int(user.institucion_id) != int(inst_id):
                 error = "Este usuario no pertenece a la institución seleccionada."
                 user = None
-            elif user and user.institucion_id is None and (user.rol or "").strip() not in ("Soporte",):
-                if inst_id and (user.rol or "").strip() in (
-                    "Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador",
-                    "Rectoria", "Coordinacion", "Secretaria",
-                ):
-                    try:
-                        user.institucion_id = int(inst_id)
-                        db.session.commit()
-                    except Exception:
-                        try:
-                            db.session.rollback()
-                        except Exception:
-                            pass
-                        error = "Usuario sin institución asignada. Contacta a soporte."
-                        user = None
-                else:
-                    error = "Usuario sin institución asignada. Contacta a soporte."
-                    user = None
+            elif user and user.institucion_id is None and user.rol != "Soporte":
+                error = "Usuario sin institución asignada. Contacta a soporte."
+                user = None
             elif user:
                 try:
                     sincronizar_licencias()
@@ -45670,116 +45626,66 @@ def soporte_actualizaciones():
         accion = request.form.get("accion") or "guardar"
         try:
             if accion == "guardar":
-                # FIX: Soporte Y Desarrollador publican FAQ y novedades
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                faq_val = (request.form.get("faq") or "").strip()
-                nov_val = (request.form.get("novedades") or "").strip()
-                mant_val = (request.form.get("mantenimiento_programado") or "").strip()
-                habeas_val = (request.form.get("habeas_data") or "").strip()
-                reinicio_val = (request.form.get("reinicio_aviso") or "").strip()[:255]
-                hero_chip_val = (request.form.get("hero_chip") or "").strip()[:120]
-                hero_titulo_val = (request.form.get("hero_titulo") or "").strip()[:220]
-                hero_texto_val = (request.form.get("hero_texto") or "").strip()
-                caps = {i: (request.form.get("novedad_img%d_cap" % i) or "").strip()[:120] for i in (1, 2, 3, 4, 5)}
-                import os as _os_up
-                upload_dir = _os_up.path.join(app.root_path, "static", "img", "novedades")
-                _os_up.makedirs(upload_dir, exist_ok=True)
-                img_paths = {}
+                # Cada rol solo puede editar lo suyo: Soporte → FAQ/Ayuda/mantenimiento;
+                # Desarrollador → últimas actualizaciones y mejoras (novedades).
+                if es_desarrollo:
+                    p.novedades = (request.form.get("novedades") or "").strip()
+                if es_soporte:
+                    p.faq = (request.form.get("faq") or "").strip()
+                    p.mantenimiento_programado = (request.form.get("mantenimiento_programado") or "").strip()
+                    p.habeas_data = (request.form.get("habeas_data") or "").strip()
+                    p.reinicio_aviso = (request.form.get("reinicio_aviso") or "").strip()[:255]
+                p.hero_chip = (request.form.get("hero_chip") or "").strip()[:120]
+                p.hero_titulo = (request.form.get("hero_titulo") or "").strip()[:220]
+                p.hero_texto = (request.form.get("hero_texto") or "").strip()
+                p.novedad_img1_cap = (request.form.get("novedad_img1_cap") or "").strip()[:120]
+                p.novedad_img2_cap = (request.form.get("novedad_img2_cap") or "").strip()[:120]
+                p.novedad_img3_cap = (request.form.get("novedad_img3_cap") or "").strip()[:120]
+                p.novedad_img4_cap = (request.form.get("novedad_img4_cap") or "").strip()[:120]
+                p.novedad_img5_cap = (request.form.get("novedad_img5_cap") or "").strip()[:120]
+                # Subir hasta 5 imágenes de carrusel
+                import os
+                upload_dir = os.path.join(app.root_path, "static", "img", "novedades")
+                os.makedirs(upload_dir, exist_ok=True)
                 for i in (1, 2, 3, 4, 5):
-                    fimg = request.files.get("novedad_img%d" % i)
-                    actual = (getattr(p, "novedad_img%d" % i, None) or "").strip()
+                    fimg = request.files.get(f"novedad_img{i}")
                     if fimg and (fimg.filename or "").strip():
                         ext = (fimg.filename.rsplit(".", 1)[-1] or "png").lower()
                         if ext not in ("png", "jpg", "jpeg", "webp", "gif"):
                             ext = "png"
-                        fname = "nov%d_%s.%s" % (i, fecha_hoy().replace("-", ""), ext)
-                        fimg.save(_os_up.path.join(upload_dir, fname))
-                        actual = "/static/img/novedades/%s" % fname
-                    else:
-                        url_manual = (request.form.get("novedad_img%d_url" % i) or "").strip()
-                        if url_manual:
-                            actual = url_manual[:255]
-                    if request.form.get("novedad_img%d_clear" % i):
-                        actual = ""
-                    img_paths[i] = actual
-                try:
-                    p.faq = faq_val
-                    p.novedades = nov_val
-                    p.mantenimiento_programado = mant_val
-                    p.habeas_data = habeas_val
-                    p.reinicio_aviso = reinicio_val
-                    p.hero_chip = hero_chip_val
-                    p.hero_titulo = hero_titulo_val
-                    p.hero_texto = hero_texto_val
-                    for i in (1, 2, 3, 4, 5):
-                        setattr(p, "novedad_img%d_cap" % i, caps[i])
-                        setattr(p, "novedad_img%d" % i, img_paths[i])
-                except Exception:
-                    pass
-                if request.form.get("publicar_como_anuncio"):
+                        fname = f"nov{i}_{fecha_hoy().replace('-','')}.{ext}"
+                        fpath = os.path.join(upload_dir, fname)
+                        fimg.save(fpath)
+                        setattr(p, f"novedad_img{i}", f"/static/img/novedades/{fname}")
+                    # URL manual alternativa
+                    url_manual = (request.form.get(f"novedad_img{i}_url") or "").strip()
+                    if url_manual and not (fimg and fimg.filename):
+                        setattr(p, f"novedad_img{i}", url_manual[:255])
+                    if request.form.get(f"novedad_img{i}_clear"):
+                        setattr(p, f"novedad_img{i}", "")
+                # Auto-anuncio: si Desarrollador marcó la casilla, la actualización que
+                # acaba de publicar también aparece como anuncio institucional (banner
+                # que ya se ve en /login y portales, gestionado en /gerencia/anuncios).
+                if es_desarrollo and request.form.get("publicar_como_anuncio"):
                     tipo_upd = (request.form.get("tipo_actualizacion") or "mejora").strip()
                     _icono = "🔒" if tipo_upd == "seguridad" else "🚀"
                     _etiqueta = "Actualización de seguridad" if tipo_upd == "seguridad" else "Nueva actualización"
-                    primera_linea = (nov_val or "").strip().split("\n")[0][:120] or "Mejoras en la plataforma"
+                    primera_linea = (p.novedades or "").strip().split("\n")[0][:120] or "Mejoras en la plataforma"
+                    p.anuncio_activo = True
+                    p.anuncio_titulo = f"{_icono} {_etiqueta}: {primera_linea}"
+                    p.anuncio_cuerpo = (p.novedades or "").strip()[:2000]
                     try:
-                        p.anuncio_activo = True
-                        p.anuncio_titulo = "%s %s: %s" % (_icono, _etiqueta, primera_linea)
-                        p.anuncio_cuerpo = (nov_val or "").strip()[:2000]
-                        try:
-                            p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
-                        except Exception:
-                            p.anuncio_version = "1"
+                        p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
+                    except Exception:
+                        p.anuncio_version = "1"
+                    try:
+                        registrar_auditoria("Anuncio automático por actualización", f"Desarrollador publicó {tipo_upd}: {primera_linea}")
                     except Exception:
                         pass
-                try:
-                    db.session.commit()
-                except Exception:
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-                try:
-                    db.session.execute(text(
-                        "UPDATE plataforma SET faq=:faq, novedades=:nov, "
-                        "mantenimiento_programado=:mant, habeas_data=:hab, reinicio_aviso=:rei, "
-                        "hero_chip=:hc, hero_titulo=:ht, hero_texto=:hx, "
-                        "novedad_img1=:i1, novedad_img2=:i2, novedad_img3=:i3, "
-                        "novedad_img4=:i4, novedad_img5=:i5, "
-                        "novedad_img1_cap=:c1, novedad_img2_cap=:c2, novedad_img3_cap=:c3, "
-                        "novedad_img4_cap=:c4, novedad_img5_cap=:c5"
-                    ), {
-                        "faq": faq_val, "nov": nov_val, "mant": mant_val,
-                        "hab": habeas_val, "rei": reinicio_val,
-                        "hc": hero_chip_val, "ht": hero_titulo_val, "hx": hero_texto_val,
-                        "i1": img_paths.get(1, ""), "i2": img_paths.get(2, ""),
-                        "i3": img_paths.get(3, ""), "i4": img_paths.get(4, ""),
-                        "i5": img_paths.get(5, ""),
-                        "c1": caps[1], "c2": caps[2], "c3": caps[3],
-                        "c4": caps[4], "c5": caps[5],
-                    })
-                    db.session.commit()
-                except Exception:
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-                    for col, val in (("faq", faq_val), ("novedades", nov_val)):
-                        try:
-                            db.session.execute(text("UPDATE plataforma SET %s=:v" % col), {"v": val})
-                            db.session.commit()
-                        except Exception:
-                            try:
-                                db.session.rollback()
-                            except Exception:
-                                pass
-                try:
-                    db.session.expire_all()
-                except Exception:
-                    pass
-                mensaje = "FAQ, actualizaciones e imágenes publicadas en el login."
+                db.session.commit()
+                mensaje = "Actualizaciones e imágenes publicadas en el login."
+                if es_desarrollo and request.form.get("publicar_como_anuncio"):
+                    mensaje += " También se publicó como anuncio institucional (ya está activo)."
             elif accion == "aviso_reinicio":
                 p.reinicio_aviso = (request.form.get("reinicio_aviso") or "La plataforma se reiniciará en breve por mantenimiento técnico.").strip()[:255]
                 db.session.commit()
@@ -45791,8 +45697,8 @@ def soporte_actualizaciones():
         except Exception as ex:
             db.session.rollback()
             mensaje = f"Error: {ex}"
-    _ro_faq = ""
-    _ro_nov = ""
+    _ro_faq = "" if es_soporte else " readonly disabled"
+    _ro_nov = "" if es_desarrollo else " readonly disabled"
     _nota_rol = (
         "Estás editando como <b>Soporte</b>: puedes cambiar FAQ, Ayuda, mantenimiento y Habeas Data. "
         "El campo de novedades lo administra Desarrollador (aquí solo se muestra)."
@@ -45822,23 +45728,23 @@ def soporte_actualizaciones():
     <label>Texto (párrafos separados por línea en blanco)</label>
     <textarea name="hero_texto" rows="5">{(getattr(p,'hero_texto',None) or '')}</textarea>
     <p class="mini-text">Todo lo que guardes aquí se muestra en el <b>login</b> (bloque con scroll). Usa párrafos separados y viñetas con <code>•</code> o <code>-</code>.</p>
-    <label><b>Últimas actualizaciones / novedades</b></label>
-    <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa...">{_esc(getattr(p,'novedades',None) or '')}</textarea>
-    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin:6px 0 12px">
+    <label><b>Últimas actualizaciones / novedades</b> {"" if es_desarrollo else "(solo lectura · lo edita Desarrollador)"}</label>
+    <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa..."{_ro_nov}>{(getattr(p,'novedades',None) or '')}</textarea>
+    {('''<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin:6px 0 12px">
       <label style="display:flex;gap:8px;align-items:center;font-weight:700;font-size:13px"><input type="checkbox" name="publicar_como_anuncio" value="1" style="width:auto"> Publicar también como anuncio institucional (aparece como banner en el login)</label>
       <select name="tipo_actualizacion" style="margin-top:8px;padding:8px">
         <option value="mejora">Mejora / nueva función</option>
         <option value="seguridad">Actualización de seguridad</option>
       </select>
-    </div>
-    <label><b>Preguntas frecuentes</b> (separa cada pregunta con una línea en blanco)</label>
-    <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...">{_esc(getattr(p,'faq',None) or '')}</textarea>
+    </div>''') if es_desarrollo else ''}
+    <label><b>Preguntas frecuentes</b> {"" if es_soporte else "(solo lectura · lo edita Soporte)"} (separa cada pregunta con una línea en blanco)</label>
+    <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...&#10;&#10;¿Cómo ingreso como docente?&#10;Respuesta..."{_ro_faq}>{(getattr(p,'faq',None) or '')}</textarea>
     <label><b>Mantenimiento programado</b> (fecha, hora, mensaje)</label>
-    <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores">{_esc(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
+    <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores"{_ro_faq}>{(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
     <label><b>Texto Habeas Data (Colombia)</b></label>
-    <textarea name="habeas_data" rows="4">{_esc(getattr(p,'habeas_data',None) or '')}</textarea>
+    <textarea name="habeas_data" rows="4"{_ro_faq}>{(getattr(p,'habeas_data',None) or '')}</textarea>
     <label><b>Aviso corto de reinicio / plataforma</b></label>
-    <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min">
+    <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min"{_ro_faq}>
     <h3 style="margin-top:18px;color:#0B2D57">Imágenes de novedades (máx. 3)</h3>
     <p class="mini-text">Se muestran en una columna estrecha al lado del texto en el login. PNG/JPG/WebP o URL.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
@@ -63817,29 +63723,14 @@ def _ensure_dev_version_cols():
 
 def _footer_version_txt():
     try:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
         # Prioridad: historial inmutable → plataforma → default
         last = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).first()
         if last and (last.version or "").strip():
             return (last.version or "").strip()
         p = plataforma()
         v = (getattr(p, "version_sistema", None) or "").strip()
-        if v:
-            return v
-        row = db.session.execute(text(
-            "SELECT version FROM changelog_versiones ORDER BY id DESC LIMIT 1"
-        )).first()
-        if row and row[0]:
-            return str(row[0]).strip()
         return v or "1.0.0"
     except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
         return "1.0.0"
 
 
