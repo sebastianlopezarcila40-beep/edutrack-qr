@@ -5575,7 +5575,9 @@ def before():
                        "Superadmin": "/backoffice"}.get(rol_expirado, "/login")
             return redirect(destino)
         session["ultimo_movimiento"] = ahora_ts
-        if session.get("password_temporal") and request.path not in ["/cambiar_password", "/logout", "/docente-login"] and not request.path.startswith("/static") and not request.path.startswith("/docente"):
+        if session.get("password_temporal") and request.path not in (
+            "/cambiar_password", "/cambiar-clave", "/logout", "/docente-login", "/login"
+        ) and not request.path.startswith("/static") and not request.path.startswith("/docente"):
             return redirect("/cambiar_password")
         # Mantener datos institucionales sincronizados con el tenant de la sesión
         try:
@@ -7716,7 +7718,14 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
     if not usuario or not password:
         return None
 
-    candidatos = Usuario.query.filter(func.lower(Usuario.usuario) == usuario.lower()).all()
+    try:
+        candidatos = Usuario.query.filter(func.lower(Usuario.usuario) == usuario.lower()).all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
     if not candidatos:
         return None
 
@@ -7727,15 +7736,23 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
         except (TypeError, ValueError):
             iid = None
         if iid is not None:
-            # 1) Usuario del colegio elegido
+            # 1) Usuario del colegio elegido (prioridad)
             for c in candidatos:
-                if c.institucion_id is not None and int(c.institucion_id) == iid:
-                    u = c
-                    break
-            pass
+                try:
+                    if c.institucion_id is not None and int(c.institucion_id) == iid:
+                        u = c
+                        break
+                except (TypeError, ValueError):
+                    continue
+            # 2) Si no hay match y es el único candidato de rol colegio sin tenant
+            if u is None and len(candidatos) == 1:
+                solo = candidatos[0]
+                rol_solo = (solo.rol or "").strip()
+                if rol_solo not in ROLES_INTERNOS and rol_solo != "Soporte":
+                    if solo.institucion_id is None:
+                        u = solo
     else:
         # Priorizar cuenta interna (Soporte/Admin) si hay varias con el mismo nombre
-        u = None
         for c in candidatos:
             if (c.rol or "").strip() in ROLES_INTERNOS:
                 u = c
@@ -7745,17 +7762,35 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
 
     if u is None:
         return None
+    # Cuenta desactivada
+    if hasattr(u, "activo") and u.activo is False:
+        return None
     if not verificar_password(u.password, password):
         return None
     if institucion_id is not None:
         rol_u = (u.rol or "").strip()
         if rol_u in ROLES_INTERNOS or rol_u == "Soporte":
             return None
-    if rol_requerido and u.rol.lower().strip() != rol_requerido.lower().strip():
-        return None
+    if rol_requerido:
+        aliases = {
+            "coordinacion": "coordinación",
+            "secretaria": "secretaría",
+            "rectoria": "rectoría",
+            "admin": "administrador",
+        }
+        req = aliases.get(rol_requerido.lower().strip(), rol_requerido.lower().strip())
+        got = aliases.get((u.rol or "").lower().strip(), (u.rol or "").lower().strip())
+        if got != req:
+            return None
     if not es_hash_password(u.password):
-        u.password = crear_hash(password)
-        db.session.commit()
+        try:
+            u.password = crear_hash(password)
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
     return u
 
 
@@ -11287,12 +11322,32 @@ def login():
                 rol_u = (user.rol or "").strip()
                 error = f"Las cuentas internas deben ingresar por su portal ({_login_portal(rol_u)}), no por el login de colegios."
                 user = None
+            if user and hasattr(user, "activo") and user.activo is False:
+                error = "Esta cuenta está desactivada. Contacte a soporte o a la rectoría."
+                user = None
             if user and inst_id and user.institucion_id and int(user.institucion_id) != int(inst_id):
                 error = "Este usuario no pertenece a la institución seleccionada."
                 user = None
-            elif user and user.institucion_id is None and user.rol != "Soporte":
-                error = "Usuario sin institución asignada. Contacta a soporte."
-                user = None
+            elif user and user.institucion_id is None and (user.rol or "").strip() not in ("Soporte",):
+                # FIX: asignar automáticamente la institución seleccionada si el usuario
+                # de colegio quedó sin tenant (caso frecuente tras migraciones).
+                if inst_id and (user.rol or "").strip() in (
+                    "Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador",
+                    "Rectoria", "Coordinacion", "Secretaria",
+                ):
+                    try:
+                        user.institucion_id = int(inst_id)
+                        db.session.commit()
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        error = "Usuario sin institución asignada. Contacta a soporte."
+                        user = None
+                else:
+                    error = "Usuario sin institución asignada. Contacta a soporte."
+                    user = None
             elif user:
                 try:
                     sincronizar_licencias()
@@ -11356,16 +11411,31 @@ def login():
                     dest = "/docente-escritorio" if (user.rol or "").strip() == "Docente" else "/dashboard"
                     return redirect(dest)
         else:
-            # Mensaje más claro: ¿existe el usuario en otro colegio?
-            mismos = Usuario.query.filter(func.lower(Usuario.usuario) == (usuario_in or "").strip().lower()).all()
+            # Mensaje más claro: ¿existe el usuario en otro colegio? / inactivo / sin institución
+            try:
+                mismos = Usuario.query.filter(func.lower(Usuario.usuario) == (usuario_in or "").strip().lower()).all()
+            except Exception:
+                mismos = []
             if mismos and inst_id:
                 en_este = [x for x in mismos if x.institucion_id is not None and int(x.institucion_id) == int(inst_id)]
-                if not en_este:
-                    error = "Ese usuario no existe en el colegio seleccionado. Revisa el usuario admin creado para esa institución (ej: admin_CODIGO)."
+                inactivos = [x for x in en_este if hasattr(x, "activo") and x.activo is False]
+                if inactivos and not [x for x in en_este if not (hasattr(x, "activo") and x.activo is False)]:
+                    error = "Esta cuenta está desactivada. Contacte a soporte o a la rectoría."
+                elif not en_este:
+                    sin_inst = [x for x in mismos if x.institucion_id is None and (x.rol or "").strip() not in ROLES_INTERNOS]
+                    if sin_inst:
+                        error = "El usuario existe pero no tiene institución asignada. Soporte debe vincularlo al colegio."
+                    else:
+                        error = "Ese usuario no existe en el colegio seleccionado. Revisa el usuario creado para esa institución."
                 else:
                     error = "Contraseña incorrecta para este colegio."
+                _rate_limit_fail(portal="colegios")
             elif mismos:
-                error = "Contraseña incorrecta."
+                inactivos = [x for x in mismos if hasattr(x, "activo") and x.activo is False]
+                if inactivos and len(inactivos) == len(mismos):
+                    error = "Esta cuenta está desactivada. Contacte a soporte."
+                else:
+                    error = "Contraseña incorrecta. Seleccione el colegio correcto e intente de nuevo."
                 _rate_limit_fail(portal="colegios")
             else:
                 _rate_limit_fail(portal="colegios")
@@ -45532,29 +45602,27 @@ def soporte_actualizaciones():
         accion = request.form.get("accion") or "guardar"
         try:
             if accion == "guardar":
-                # Cada rol solo puede editar lo suyo: Soporte → FAQ/Ayuda/mantenimiento;
-                # Desarrollador → últimas actualizaciones y mejoras (novedades).
-                if es_desarrollo:
-                    p.novedades = (request.form.get("novedades") or "").strip()
-                if es_soporte:
-                    p.faq = (request.form.get("faq") or "").strip()
-                    p.mantenimiento_programado = (request.form.get("mantenimiento_programado") or "").strip()
-                    p.habeas_data = (request.form.get("habeas_data") or "").strip()
-                    p.reinicio_aviso = (request.form.get("reinicio_aviso") or "").strip()[:255]
-                p.hero_chip = (request.form.get("hero_chip") or "").strip()[:120]
-                p.hero_titulo = (request.form.get("hero_titulo") or "").strip()[:220]
-                p.hero_texto = (request.form.get("hero_texto") or "").strip()
-                p.novedad_img1_cap = (request.form.get("novedad_img1_cap") or "").strip()[:120]
-                p.novedad_img2_cap = (request.form.get("novedad_img2_cap") or "").strip()[:120]
-                p.novedad_img3_cap = (request.form.get("novedad_img3_cap") or "").strip()[:120]
-                p.novedad_img4_cap = (request.form.get("novedad_img4_cap") or "").strip()[:120]
-                p.novedad_img5_cap = (request.form.get("novedad_img5_cap") or "").strip()[:120]
-                # Subir hasta 5 imágenes de carrusel
+                # FIX 2026-09: Soporte Y Desarrollador pueden publicar FAQ y novedades.
+                # Persistencia doble (ORM + SQL) para que sí se refleje en el login.
+                faq_val = (request.form.get("faq") or "").strip()
+                nov_val = (request.form.get("novedades") or "").strip()
+                mant_val = (request.form.get("mantenimiento_programado") or "").strip()
+                habeas_val = (request.form.get("habeas_data") or "").strip()
+                reinicio_val = (request.form.get("reinicio_aviso") or "").strip()[:255]
+                hero_chip_val = (request.form.get("hero_chip") or "").strip()[:120]
+                hero_titulo_val = (request.form.get("hero_titulo") or "").strip()[:220]
+                hero_texto_val = (request.form.get("hero_texto") or "").strip()
+                caps = {
+                    i: (request.form.get(f"novedad_img{i}_cap") or "").strip()[:120]
+                    for i in (1, 2, 3, 4, 5)
+                }
                 import os
                 upload_dir = os.path.join(app.root_path, "static", "img", "novedades")
                 os.makedirs(upload_dir, exist_ok=True)
+                img_paths = {}
                 for i in (1, 2, 3, 4, 5):
                     fimg = request.files.get(f"novedad_img{i}")
+                    actual = (getattr(p, f"novedad_img{i}", None) or "").strip()
                     if fimg and (fimg.filename or "").strip():
                         ext = (fimg.filename.rsplit(".", 1)[-1] or "png").lower()
                         if ext not in ("png", "jpg", "jpeg", "webp", "gif"):
@@ -45562,55 +45630,154 @@ def soporte_actualizaciones():
                         fname = f"nov{i}_{fecha_hoy().replace('-','')}.{ext}"
                         fpath = os.path.join(upload_dir, fname)
                         fimg.save(fpath)
-                        setattr(p, f"novedad_img{i}", f"/static/img/novedades/{fname}")
-                    # URL manual alternativa
-                    url_manual = (request.form.get(f"novedad_img{i}_url") or "").strip()
-                    if url_manual and not (fimg and fimg.filename):
-                        setattr(p, f"novedad_img{i}", url_manual[:255])
+                        actual = f"/static/img/novedades/{fname}"
+                    else:
+                        url_manual = (request.form.get(f"novedad_img{i}_url") or "").strip()
+                        if url_manual:
+                            actual = url_manual[:255]
                     if request.form.get(f"novedad_img{i}_clear"):
-                        setattr(p, f"novedad_img{i}", "")
-                # Auto-anuncio: si Desarrollador marcó la casilla, la actualización que
-                # acaba de publicar también aparece como anuncio institucional (banner
-                # que ya se ve en /login y portales, gestionado en /gerencia/anuncios).
-                if es_desarrollo and request.form.get("publicar_como_anuncio"):
+                        actual = ""
+                    img_paths[i] = actual
+                try:
+                    p.faq = faq_val
+                    p.novedades = nov_val
+                    p.mantenimiento_programado = mant_val
+                    p.habeas_data = habeas_val
+                    p.reinicio_aviso = reinicio_val
+                    p.hero_chip = hero_chip_val
+                    p.hero_titulo = hero_titulo_val
+                    p.hero_texto = hero_texto_val
+                    for i in (1, 2, 3, 4, 5):
+                        setattr(p, f"novedad_img{i}_cap", caps[i])
+                        setattr(p, f"novedad_img{i}", img_paths[i])
+                except Exception:
+                    pass
+                if request.form.get("publicar_como_anuncio"):
                     tipo_upd = (request.form.get("tipo_actualizacion") or "mejora").strip()
                     _icono = "🔒" if tipo_upd == "seguridad" else "🚀"
                     _etiqueta = "Actualización de seguridad" if tipo_upd == "seguridad" else "Nueva actualización"
-                    primera_linea = (p.novedades or "").strip().split("\n")[0][:120] or "Mejoras en la plataforma"
-                    p.anuncio_activo = True
-                    p.anuncio_titulo = f"{_icono} {_etiqueta}: {primera_linea}"
-                    p.anuncio_cuerpo = (p.novedades or "").strip()[:2000]
+                    primera_linea = (nov_val or "").strip().split("\n")[0][:120] or "Mejoras en la plataforma"
                     try:
-                        p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
-                    except Exception:
-                        p.anuncio_version = "1"
-                    try:
-                        registrar_auditoria("Anuncio automático por actualización", f"Desarrollador publicó {tipo_upd}: {primera_linea}")
+                        p.anuncio_activo = True
+                        p.anuncio_titulo = f"{_icono} {_etiqueta}: {primera_linea}"
+                        p.anuncio_cuerpo = (nov_val or "").strip()[:2000]
+                        try:
+                            p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
+                        except Exception:
+                            p.anuncio_version = "1"
+                        registrar_auditoria(
+                            "Anuncio automático por actualización",
+                            f"{_rol_act} publicó {tipo_upd}: {primera_linea}",
+                        )
                     except Exception:
                         pass
-                db.session.commit()
-                mensaje = "Actualizaciones e imágenes publicadas en el login."
-                if es_desarrollo and request.form.get("publicar_como_anuncio"):
+                try:
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                try:
+                    db.session.execute(text(
+                        "UPDATE plataforma SET faq=:faq, novedades=:nov, "
+                        "mantenimiento_programado=:mant, habeas_data=:hab, reinicio_aviso=:rei, "
+                        "hero_chip=:hc, hero_titulo=:ht, hero_texto=:hx, "
+                        "novedad_img1=:i1, novedad_img2=:i2, novedad_img3=:i3, "
+                        "novedad_img4=:i4, novedad_img5=:i5, "
+                        "novedad_img1_cap=:c1, novedad_img2_cap=:c2, novedad_img3_cap=:c3, "
+                        "novedad_img4_cap=:c4, novedad_img5_cap=:c5"
+                    ), {
+                        "faq": faq_val, "nov": nov_val, "mant": mant_val,
+                        "hab": habeas_val, "rei": reinicio_val,
+                        "hc": hero_chip_val, "ht": hero_titulo_val, "hx": hero_texto_val,
+                        "i1": img_paths.get(1, ""), "i2": img_paths.get(2, ""),
+                        "i3": img_paths.get(3, ""), "i4": img_paths.get(4, ""),
+                        "i5": img_paths.get(5, ""),
+                        "c1": caps[1], "c2": caps[2], "c3": caps[3],
+                        "c4": caps[4], "c5": caps[5],
+                    })
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    for col, val in (
+                        ("faq", faq_val), ("novedades", nov_val),
+                        ("mantenimiento_programado", mant_val),
+                        ("habeas_data", habeas_val), ("reinicio_aviso", reinicio_val),
+                    ):
+                        try:
+                            db.session.execute(text("UPDATE plataforma SET " + col + "=:v"), {"v": val})
+                            db.session.commit()
+                        except Exception:
+                            try:
+                                db.session.rollback()
+                            except Exception:
+                                pass
+                try:
+                    db.session.expire_all()
+                except Exception:
+                    pass
+                mensaje = "FAQ, actualizaciones e imágenes publicadas en el login."
+                if request.form.get("publicar_como_anuncio"):
                     mensaje += " También se publicó como anuncio institucional (ya está activo)."
+                try:
+                    registrar_auditoria(
+                        "Soporte/Dev: actualizaciones login",
+                        "FAQ %d chars · Novedades %d chars" % (len(faq_val), len(nov_val)),
+                    )
+                except Exception:
+                    pass
             elif accion == "aviso_reinicio":
                 p.reinicio_aviso = (request.form.get("reinicio_aviso") or "La plataforma se reiniciará en breve por mantenimiento técnico.").strip()[:255]
-                db.session.commit()
+                try:
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                try:
+                    db.session.execute(text("UPDATE plataforma SET reinicio_aviso=:v"), {"v": p.reinicio_aviso})
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                 mensaje = "Aviso de reinicio publicado en el login."
             elif accion == "limpiar_aviso":
                 p.reinicio_aviso = ""
-                db.session.commit()
+                try:
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                try:
+                    db.session.execute(text("UPDATE plataforma SET reinicio_aviso=''"))
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                 mensaje = "Aviso de reinicio retirado."
         except Exception as ex:
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             mensaje = f"Error: {ex}"
-    _ro_faq = "" if es_soporte else " readonly disabled"
-    _ro_nov = "" if es_desarrollo else " readonly disabled"
+    # FIX: ambos roles pueden editar FAQ y novedades (ya no readonly disabled)
+    _ro_faq = ""
+    _ro_nov = ""
     _nota_rol = (
-        "Estás editando como <b>Soporte</b>: puedes cambiar FAQ, Ayuda, mantenimiento y Habeas Data. "
-        "El campo de novedades lo administra Desarrollador (aquí solo se muestra)."
-        if es_soporte else
-        "Estás editando como <b>Desarrollador</b>: puedes publicar las últimas actualizaciones y mejoras. "
-        "FAQ, Ayuda y mantenimiento los administra Soporte (aquí solo se muestran)."
+        "Puedes publicar <b>Preguntas frecuentes</b> y <b>Últimas actualizaciones / novedades</b>. "
+        "Lo que guardes aquí se muestra en el login de las instituciones (bloque inferior)."
     )
     content = f"""
 <header class="role-hero">
@@ -45628,29 +45795,29 @@ def soporte_actualizaciones():
     <input type="hidden" name="accion" value="guardar">
     <h3 style="margin-top:16px;color:#0B2D57">Panel derecho del login (mensaje ejecutivo)</h3>
     <label>Chip / etiqueta</label>
-    <input name="hero_chip" value="{(getattr(p,'hero_chip',None) or '')}" placeholder="Plataforma institucional · Acceso seguro">
+    <input name="hero_chip" value="{_esc(getattr(p,'hero_chip',None) or '')}" placeholder="Plataforma institucional · Acceso seguro">
     <label>Título</label>
-    <input name="hero_titulo" value="{(getattr(p,'hero_titulo',None) or '')}" placeholder="Tecnología educativa...">
+    <input name="hero_titulo" value="{_esc(getattr(p,'hero_titulo',None) or '')}" placeholder="Tecnología educativa...">
     <label>Texto (párrafos separados por línea en blanco)</label>
-    <textarea name="hero_texto" rows="5">{(getattr(p,'hero_texto',None) or '')}</textarea>
+    <textarea name="hero_texto" rows="5">{_esc(getattr(p,'hero_texto',None) or '')}</textarea>
     <p class="mini-text">Todo lo que guardes aquí se muestra en el <b>login</b> (bloque con scroll). Usa párrafos separados y viñetas con <code>•</code> o <code>-</code>.</p>
-    <label><b>Últimas actualizaciones / novedades</b> {"" if es_desarrollo else "(solo lectura · lo edita Desarrollador)"}</label>
-    <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa..."{_ro_nov}>{(getattr(p,'novedades',None) or '')}</textarea>
-    {('''<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin:6px 0 12px">
+    <label><b>Últimas actualizaciones / novedades</b></label>
+    <textarea name="novedades" rows="10" placeholder="Gracias por creer en nuestra empresa...">{_esc(getattr(p,'novedades',None) or '')}</textarea>
+    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin:6px 0 12px">
       <label style="display:flex;gap:8px;align-items:center;font-weight:700;font-size:13px"><input type="checkbox" name="publicar_como_anuncio" value="1" style="width:auto"> Publicar también como anuncio institucional (aparece como banner en el login)</label>
       <select name="tipo_actualizacion" style="margin-top:8px;padding:8px">
         <option value="mejora">Mejora / nueva función</option>
         <option value="seguridad">Actualización de seguridad</option>
       </select>
-    </div>''') if es_desarrollo else ''}
-    <label><b>Preguntas frecuentes</b> {"" if es_soporte else "(solo lectura · lo edita Soporte)"} (separa cada pregunta con una línea en blanco)</label>
-    <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...&#10;&#10;¿Cómo ingreso como docente?&#10;Respuesta..."{_ro_faq}>{(getattr(p,'faq',None) or '')}</textarea>
+    </div>
+    <label><b>Preguntas frecuentes</b> (separa cada pregunta con una línea en blanco)</label>
+    <textarea name="faq" rows="10" placeholder="¿Olvidé mi contraseña?&#10;Respuesta...&#10;&#10;¿Cómo ingreso como docente?&#10;Respuesta...">{_esc(getattr(p,'faq',None) or '')}</textarea>
     <label><b>Mantenimiento programado</b> (fecha, hora, mensaje)</label>
-    <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores"{_ro_faq}>{(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
+    <textarea name="mantenimiento_programado" rows="3" placeholder="Domingo 10 ago · 02:00–04:00 a.m. · Actualización de servidores">{_esc(getattr(p,'mantenimiento_programado',None) or '')}</textarea>
     <label><b>Texto Habeas Data (Colombia)</b></label>
-    <textarea name="habeas_data" rows="4"{_ro_faq}>{(getattr(p,'habeas_data',None) or '')}</textarea>
+    <textarea name="habeas_data" rows="4">{_esc(getattr(p,'habeas_data',None) or '')}</textarea>
     <label><b>Aviso corto de reinicio / plataforma</b></label>
-    <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min"{_ro_faq}>
+    <input name="reinicio_aviso" value="{_esc(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min">
     <h3 style="margin-top:18px;color:#0B2D57">Imágenes de novedades (máx. 3)</h3>
     <p class="mini-text">Se muestran en una columna estrecha al lado del texto en el login. PNG/JPG/WebP o URL.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
