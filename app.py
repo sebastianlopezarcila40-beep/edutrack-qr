@@ -35,16 +35,46 @@ from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from sqlalchemy import func, text, or_
-from modules.tenants import (
-    init_tenants_db,
-    crear_institucion,
-    listar_instituciones,
-    total_instituciones
-)
+try:
+    from modules.tenants import (
+        init_tenants_db,
+        crear_institucion,
+        listar_instituciones,
+        total_instituciones,
+    )
+except Exception as _tenants_imp_err:
+    print("modules.tenants no disponible, usando fallbacks:", _tenants_imp_err)
+
+    def init_tenants_db():
+        return None
+
+    def crear_institucion(codigo, nombre, municipio=None, departamento=None, estado=None, **kwargs):
+        return None
+
+    def listar_instituciones():
+        try:
+            return Institucion.query.order_by(Institucion.id.desc()).all()
+        except Exception:
+            return []
+
+    def total_instituciones():
+        try:
+            return Institucion.query.count()
+        except Exception:
+            return 0
+
 
 app = Flask(__name__)
 
 _promo_cron_last = {"day": ""}
+
+
+@app.before_request
+def _db_clean_aborted():
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
 
 
 @app.before_request
@@ -284,14 +314,11 @@ def _security_before():
 
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///edutrack.db")
-# Railway a veces entrega postgres:// — normalizar y forzar driver psycopg2
-# (SQLAlchemy 2 con postgresql:// intenta importar "psycopg" v3 y tumba el deploy)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 if DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 elif DATABASE_URL.startswith("postgresql+psycopg://"):
-    # si alguien puso psycopg v3 y no está instalado, bajar a psycopg2
     DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
@@ -25690,6 +25717,55 @@ def gerencia_hq():
             <a class="hq-pill-more" href="/gerencia/login-banners">Salida segura</a>
           </div>
         </div>
+        <div class="hq-bento-card" style="margin-top:8px">
+          <h3>Todos los módulos de Gerencia</h3>
+          <p class="hq-bento-sub">Acceso directo a cada función del sistema</p>
+          <div class="hq-pills" style="justify-content:flex-start;flex-wrap:wrap">
+            <a href="/gerencia/admision-personal">Admisión personal</a>
+            <a href="/gerencia/nomina">Nómina</a>
+            <a href="/gerencia/planillas-pila">Planillas PILA</a>
+            <a href="/gerencia/certificados-apoyo">Certificados apoyo</a>
+            <a href="/gerencia/certificaciones">Certificaciones</a>
+            <a href="/gerencia/matriz-epp">Matriz EPP</a>
+            <a href="/gerencia/talento-legal">Talento legal</a>
+            <a href="/gerencia/usuarios">Usuarios</a>
+            <a href="/gerencia/roles">Roles</a>
+            <a href="/gerencia/contratos">Contratos colegios</a>
+            <a href="/gerencia/contratos-saas">Contratos SaaS</a>
+            <a href="/gerencia/contratos-firmas">Firmas contratos</a>
+            <a href="/gerencia/contrato-plantilla">Plantilla contrato</a>
+            <a href="/gerencia/plantilla-contrato">Plantilla contrato 2</a>
+            <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
+            <a href="/gerencia/legal/consentimientos">Consentimientos</a>
+            <a href="/gerencia/paginas-legales">Páginas legales</a>
+            <a href="/gerencia/libro-actas">Libro de actas</a>
+            <a href="/gerencia/requerimientos-autoridades">Req. autoridades</a>
+            <a href="/gerencia/ventas">Panel ventas</a>
+            <a href="/gerencia/validaciones-ventas">Validaciones ventas</a>
+            <a href="/gerencia/planes-vendidos">Planes vendidos</a>
+            <a href="/gerencia/descuentos">Descuentos</a>
+            <a href="/gerencia/finanzas/promociones">Promociones</a>
+            <a href="/gerencia/facturacion-cobranza">Facturación / cobranza</a>
+            <a href="/gerencia/recursos-financieros">Recursos financieros</a>
+            <a href="/gerencia/metas">Metas</a>
+            <a href="/gerencia/cancelaciones">Cancelaciones</a>
+            <a href="/gerencia/retractos">Retractos</a>
+            <a href="/gerencia/web-corporativa">Web corporativa</a>
+            <a href="/gerencia/empresa">Empresa</a>
+            <a href="/gerencia/diseno-login">Diseño login</a>
+            <a href="/gerencia/pie-login">Pie login</a>
+            <a href="/gerencia/backoffice-branding">Branding backoffice</a>
+            <a href="/gerencia/alianzas-clientes">Alianzas</a>
+            <a href="/gerencia/changelog">Changelog</a>
+            <a href="/gerencia/pqr-info">Info PQR</a>
+            <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte rectores</a>
+            <a href="/gerencia/notas">Notas</a>
+            <a href="/gerencia/limpieza">Limpieza datos</a>
+            <a href="/gerencia/dev-console">Consola desarrollo</a>
+            <a href="/gerencia/documentos">Biblioteca documentos</a>
+            <a href="/gerencia/lideres">Líderes</a>
+          </div>
+        </div>
       </div>
 
       
@@ -27485,6 +27561,50 @@ def gerencia_matriz_epp():
 
 
 
+
+@app.route("/gerencia/documentos/nuevo", methods=["POST", "GET"])
+def gerencia_documento_nuevo():
+    """Crea documento corporativo nuevo y abre el editor."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    if request.method == "GET":
+        return redirect("/gerencia/documentos")
+    titulo = (request.form.get("titulo") or "").strip()[:220]
+    clave = (request.form.get("clave") or "").strip().lower()
+    import re as _re
+    clave = _re.sub(r"[^a-z0-9\-]+", "-", clave).strip("-")[:80]
+    if not clave and titulo:
+        clave = _re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")[:60] or "doc"
+    if not clave:
+        clave = "doc-" + (fecha_hoy() or "").replace("-", "")
+    base, n = clave, 2
+    while DocumentoCorp.query.filter_by(clave=clave).first():
+        clave = "%s-%d" % (base, n)
+        n += 1
+    cat = (request.form.get("categoria") or "interno").strip()[:40]
+    pub = request.form.get("publico") == "1"
+    row = DocumentoCorp(
+        clave=clave,
+        titulo=titulo or clave,
+        cuerpo_html="<h2>1. Introducción</h2><p>Escriba aquí. Use negrita, listas y títulos en la barra.</p>",
+        publico=pub,
+        categoria=cat,
+        actualizado_en="%s %s" % (fecha_hoy(), hora_actual()),
+        actualizado_por=session.get("usuario") or "gerencia",
+    )
+    try:
+        db.session.add(row)
+        db.session.commit()
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return page("Error", "<p>No se pudo crear: %s</p><p><a href='/gerencia/documentos'>Volver</a></p>" % ex)
+    return redirect("/gerencia/documentos/" + clave)
+
+
 @app.route("/gerencia/documentos")
 def gerencia_documentos_lista():
     _g = _guard_gerencia()
@@ -27525,7 +27645,23 @@ def gerencia_documentos_lista():
 <div class="dl">
   <p><a href="/gerencia/hq">← Gerencia HQ</a></p>
   <h1>Biblioteca documental · Contingencia y legal</h1>
-  <p style="color:#64748b;font-size:13px">Editor corporativo. Guarde y descargue PDF. Públicos en <code>/docs/…</code>.</p>
+  <p style="color:#64748b;font-size:13px">Editor tipo Word (negrita, listas). Cree documentos nuevos. Públicos en <code>/docs/…</code>.</p>
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px">
+    <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Crear documento nuevo</h3>
+    <form method="POST" action="/gerencia/documentos/nuevo" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div style="flex:1;min-width:180px"><label style="font-size:11px;font-weight:700">Título</label>
+        <input name="titulo" required placeholder="Título del documento" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
+      <div style="width:140px"><label style="font-size:11px;font-weight:700">Clave URL</label>
+        <input name="clave" placeholder="auto" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
+      <div style="width:140px"><label style="font-size:11px;font-weight:700">Categoría</label>
+        <select name="categoria" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
+          <option value="interno">Interno</option><option value="legal">Legal</option>
+          <option value="contingencia">Contingencia</option><option value="publico">Público</option>
+        </select></div>
+      <label style="font-size:12px;font-weight:600"><input type="checkbox" name="publico" value="1"> Público</label>
+      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer">Crear y editar</button>
+    </form>
+  </div>
   <table>
     <tr><th>Documento</th><th>Visibilidad</th><th>Última edición</th><th>Acciones</th></tr>
     {filas or "<tr><td colspan=4>Sin documentos</td></tr>"}
@@ -37806,6 +37942,20 @@ def tenants():
               <td style="text-align:right;color:#166534;font-weight:700">{pagos_txt}</td>
               <td><span class="mini-text" style="color:#64748b">Solo lectura</span></td>
             </tr>"""
+        elif rol == "Soporte":
+            # SOPORTE: solo lectura — usuarios, estudiantes, datos. SIN editar/entrar/eliminar
+            filas += f"""<tr>
+              <td>{i.id}</td>
+              <td><img src='{logo}' alt='' style='width:36px;height:36px;object-fit:contain;background:#fff;border-radius:8px'></td>
+              <td><b>{i.codigo}</b></td>
+              <td>{i.nombre}<br><span class='mini-text'>{i.municipio or ''} / {i.departamento or ''}</span></td>
+              <td>{i.sede or ''}</td>
+              <td>{i.estado}</td>
+              <td><b>{i.plan or 'Basico'}</b></td>
+              <td><b>{n_users}</b> usr / <b>{n_est}</b> est</td>
+              <td>{i.fecha_creacion or ''}</td>
+              <td><span class="mini-text" style="color:#64748b">Solo consulta</span></td>
+            </tr>"""
         else:
             _eliminar_link = (
                 f"· <a class='danger-link' href='/eliminar_institucion/{i.id}' onclick=\"return confirm('¿Eliminar institución {i.codigo}?')\">Eliminar</a>"
@@ -38050,6 +38200,8 @@ def nueva_institucion():
 def editar_institucion(id):
     if rol_actual() == "Cobranza":
         return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
+    if rol_actual() == "Soporte":
+        return acceso_denegado("Soporte no edita colegios. Solo consulta usuarios, estudiantes e información del colegio.")
     if not requiere_soporte_global():
         return redirect("/login")
     inst = Institucion.query.get_or_404(id)
