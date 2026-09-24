@@ -35,48 +35,16 @@ from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from sqlalchemy import func, text, or_
-try:
-    from modules.tenants import (
-        init_tenants_db,
-        crear_institucion,
-        listar_instituciones,
-        total_instituciones,
-    )
-except Exception as _tenants_imp_err:
-    print("modules.tenants no disponible, usando fallbacks:", _tenants_imp_err)
-
-    def init_tenants_db():
-        return None
-
-    def crear_institucion(codigo, nombre, municipio=None, departamento=None, estado=None, **kwargs):
-        return None
-
-    def listar_instituciones():
-        try:
-            return Institucion.query.order_by(Institucion.id.desc()).all()
-        except Exception:
-            return []
-
-    def total_instituciones():
-        try:
-            return Institucion.query.count()
-        except Exception:
-            return 0
-
+from modules.tenants import (
+    init_tenants_db,
+    crear_institucion,
+    listar_instituciones,
+    total_instituciones
+)
 
 app = Flask(__name__)
 
 _promo_cron_last = {"day": ""}
-
-
-
-@app.before_request
-def _db_clean_aborted():
-    """Evita que una transaccion Postgres abortada tumbe todo el sistema."""
-    try:
-        db.session.rollback()
-    except Exception:
-        pass
 
 
 @app.before_request
@@ -316,8 +284,15 @@ def _security_before():
 
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///edutrack.db")
+# Railway a veces entrega postgres:// — normalizar y forzar driver psycopg2
+# (SQLAlchemy 2 con postgresql:// intenta importar "psycopg" v3 y tumba el deploy)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql+psycopg://"):
+    # si alguien puso psycopg v3 y no está instalado, bajar a psycopg2
+    DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -25713,58 +25688,7 @@ def gerencia_hq():
             <a class="hq-pill-more" href="/gerencia/turnos">Turnos</a>
             <a class="hq-pill-more" href="/gerencia/contabilidad/nueva">Nueva operación</a>
             <a class="hq-pill-more" href="/gerencia/login-banners">Salida segura</a>
-    
-        <div class="hq-bento-card" style="margin-top:8px">
-          <h3>Todos los módulos de Gerencia</h3>
-          <p class="hq-bento-sub">Acceso directo a cada función del sistema</p>
-          <div class="hq-pills" style="justify-content:flex-start;flex-wrap:wrap">
-            <a href="/gerencia/admision-personal">Admisión personal</a>
-            <a href="/gerencia/nomina">Nómina</a>
-            <a href="/gerencia/planillas-pila">Planillas PILA</a>
-            <a href="/gerencia/certificados-apoyo">Certificados apoyo</a>
-            <a href="/gerencia/certificaciones">Certificaciones</a>
-            <a href="/gerencia/matriz-epp">Matriz EPP</a>
-            <a href="/gerencia/talento-legal">Talento legal</a>
-            <a href="/gerencia/usuarios">Usuarios</a>
-            <a href="/gerencia/roles">Roles</a>
-            <a href="/gerencia/contratos">Contratos colegios</a>
-            <a href="/gerencia/contratos-saas">Contratos SaaS</a>
-            <a href="/gerencia/contratos-firmas">Firmas contratos</a>
-            <a href="/gerencia/contrato-plantilla">Plantilla contrato</a>
-            <a href="/gerencia/plantilla-contrato">Plantilla contrato 2</a>
-            <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
-            <a href="/gerencia/legal/consentimientos">Consentimientos</a>
-            <a href="/gerencia/paginas-legales">Páginas legales</a>
-            <a href="/gerencia/libro-actas">Libro de actas</a>
-            <a href="/gerencia/requerimientos-autoridades">Req. autoridades</a>
-            <a href="/gerencia/ventas">Panel ventas</a>
-            <a href="/gerencia/validaciones-ventas">Validaciones ventas</a>
-            <a href="/gerencia/planes-vendidos">Planes vendidos</a>
-            <a href="/gerencia/descuentos">Descuentos</a>
-            <a href="/gerencia/finanzas/promociones">Promociones</a>
-            <a href="/gerencia/facturacion-cobranza">Facturación / cobranza</a>
-            <a href="/gerencia/recursos-financieros">Recursos financieros</a>
-            <a href="/gerencia/metas">Metas</a>
-            <a href="/gerencia/cancelaciones">Cancelaciones</a>
-            <a href="/gerencia/retractos">Retractos</a>
-            <a href="/gerencia/web-corporativa">Web corporativa</a>
-            <a href="/gerencia/empresa">Empresa</a>
-            <a href="/gerencia/diseno-login">Diseño login</a>
-            <a href="/gerencia/pie-login">Pie login</a>
-            <a href="/gerencia/backoffice-branding">Branding backoffice</a>
-            <a href="/gerencia/alianzas-clientes">Alianzas</a>
-            <a href="/gerencia/changelog">Changelog</a>
-            <a href="/gerencia/pqr-info">Info PQR</a>
-            <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte rectores</a>
-            <a href="/gerencia/notas">Notas</a>
-            <a href="/gerencia/limpieza">Limpieza datos</a>
-            <a href="/gerencia/dev-console">Consola desarrollo</a>
-            <a href="/gerencia/documentos">Biblioteca documentos</a>
-            <a href="/gerencia/lideres">Líderes</a>
           </div>
-        </div>
-
-      </div>
         </div>
       </div>
 
