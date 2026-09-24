@@ -2480,36 +2480,6 @@ class DocumentoCorp(db.Model):
     categoria = db.Column(db.String(80), default="interno")  # contingencia | legal | publico | ops
     actualizado_en = db.Column(db.String(30), default="")
     actualizado_por = db.Column(db.String(80), default="")
-    area_origen = db.Column(db.String(40), default="gerencia")
-    destino = db.Column(db.String(40), default="")
-    plantilla_tipo = db.Column(db.String(80), default="")
-    estado_doc = db.Column(db.String(40), default="BORRADOR")
-
-
-class BoletaCruceFinanciero(db.Model):
-    """Boleta interna Soporte->Cobranza amarrada a PQR publica."""
-    __tablename__ = "boletas_cruce_financiero"
-    id = db.Column(db.Integer, primary_key=True)
-    id_interno_bcf = db.Column(db.String(40), unique=True, index=True)
-    pqr_id = db.Column(db.Integer, index=True)
-    pqr_cliente_relacionada = db.Column(db.String(40), index=True)
-    institucion_id = db.Column(db.Integer, index=True)
-    codigo_colegio = db.Column(db.String(40), default="")
-    nombre_colegio = db.Column(db.String(200), default="")
-    nit_colegio = db.Column(db.String(40), default="")
-    plan_contrato = db.Column(db.String(80), default="")
-    valor_plan = db.Column(db.String(40), default="")
-    hechos_queja = db.Column(db.Text, default="")
-    validacion_soporte = db.Column(db.Boolean, default=False)
-    validado_por = db.Column(db.String(120), default="")
-    validado_en = db.Column(db.String(30), default="")
-    estado = db.Column(db.String(40), default="PENDIENTE")
-    resolucion_cobranza = db.Column(db.Text, default="")
-    resuelto_por = db.Column(db.String(120), default="")
-    resuelto_en = db.Column(db.String(30), default="")
-    cun = db.Column(db.String(40), default="")
-    creado_en = db.Column(db.String(30), default="")
-    auditoria_sesiones = db.Column(db.Text, default="")
 
 
 class NotaInteraccion(db.Model):
@@ -7967,14 +7937,7 @@ def _cargar_divipola():
                 return getattr(mod, "COLOMBIA_DEPARTAMENTOS", {}) or {}
     except Exception as e:
         print("divipola load:", e)
-    # Fallback embebido (siempre disponible en Railway)
-    try:
-        return _DIVIPOLA_EMBED
-    except Exception:
-        return {}
-
-_DIVIPOLA_EMBED = {'Amazonas': ['Leticia', 'El Encanto', 'La Chorrera', 'La Pedrera', 'La Victoria', 'Mirití-Paraná', 'Puerto Alegría', 'Puerto Arica', 'Puerto Nariño', 'Puerto Santander', 'Tarapacá'], 'Antioquia': ['Medellín', 'Abejorral', 'Abriaquí', 'Alejandría', 'Amagá', 'Amalfi', 'Andes', 'Angelópolis', 'Angostura', 'Anorí', 'Anzá', 'Apartadó', 'Arboletes', 'Argelia', 'Armenia', 'Barbosa', 'Bello', 'Belmira', 'Betania', 'Betulia', 'Briceño', 'Buriticá', 'Cáceres', 'Caicedo', 'Caldas', 'Campamento', 'Cañasgordas', 'Caracolí', 'Caramanta', 'Carepa', 'Carolina del Príncipe', 'Caucasia', 'Chigorodó', 'Cisneros', 'Ciudad Bolívar', 'Cocorná', 'Concepción', 'Concordia', 'Copacabana', 'Dabeiba', 'Donmatías', 'Ebéjico', 'El Bagre', 'El Carmen de Viboral', 'El Peñol', 'El Retiro', 'El Santuario', 'Entrerríos', 'Envigado', 'Fredonia', 'Frontino', 'Giraldo', 'Girardota', 'Gómez Plata', 'Granada', 'Guadalupe', 'Guarne', 'Guatapé', 'Heliconia', 'Hispania', 'Itagüí', 'Ituango', 'Jardín', 'Jericó', 'La Ceja', 'La Estrella', 'La Pintada', 'La Unión', 'Liborina', 'Maceo', 'Marinilla', 'Montebello', 'Murindó', 'Mutatá', 'Nariño', 'Nechí', 'Necoclí', 'Olaya', 'Peque', 'Pueblorrico', 'Puerto Berrío', 'Puerto Nare', 'Puerto Triunfo', 'Remedios', 'Rionegro', 'Sabanalarga', 'Sabaneta', 'Salgar', 'San Andrés de Cuerquia', 'San Carlos', 'San Francisco', 'San Jerónimo', 'San José de la Montaña', 'San Juan de Urabá', 'San Luis', 'San Pedro de los Milagros', 'San Pedro de Urabá', 'San Rafael', 'San Roque', 'San Vicente Ferrer', 'Santa Bárbara', 'Santa Fe de Antioquia', 'Santa Rosa de Osos', 'Santo Domingo', 'Segovia', 'Sonsón', 'Sopetrán', 'Támesis', 'Tarazá', 'Tarso', 'Titiribí', 'Toledo', 'Turbo', 'Uramita', 'Urrao', 'Valdivia', 'Valparaíso', 'Vegachí', 'Venecia', 'Vigía del Fuerte', 'Yalí', 'Yarumal', 'Yolombó', 'Yondó', 'Zaragoza'], 'Arauca': ['Arauca', 'Arauquita', 'Cravo Norte', 'Fortul', 'Puerto Rondón', 'Saravena', 'Tame'], 'Archipiélago de San Andrés, Providencia y Santa Catalina': ['San Andrés', 'Providencia'], 'Atlántico': ['Barranquilla', 'Baranoa', 'Campo de la Cruz', 'Candelaria', 'Galapa', 'Juan de Acosta', 'Luruaco', 'Malambo', 'Manatí', 'Palmar de Varela', 'Piojó', 'Polonuevo', 'Ponedera', 'Puerto Colombia', 'Repelón', 'Sabanagrande', 'Sabanalarga', 'Santa Lucía', 'Santo Tomás', 'Soledad', 'Suan', 'Tubará', 'Usiacurí'], 'Bogotá, D.C.': ['Bogotá, D.C.'], 'Bolívar': ['Cartagena de Indias', 'Achí', 'Altos del Rosario', 'Arenal', 'Arjona', 'Arroyohondo', 'Barranco de Loba', 'Calamar', 'Cantagallo', 'Cicuco', 'Clemencia', 'Córdoba', 'El Carmen de Bolívar', 'El Guamo', 'El Peñón', 'Hatillo de Loba', 'Magangué', 'Mahates', 'Margarita', 'María la Baja', 'Mompós', 'Montecristo', 'Morales', 'Norosí', 'Pinillos', 'Regidor', 'Río Viejo', 'San Cristóbal', 'San Estanislao', 'San Fernando', 'San Jacinto', 'San Jacinto del Cauca', 'San Juan Nepomuceno', 'San Martín de Loba', 'San Pablo', 'Santa Catalina', 'Santa Rosa', 'Santa Rosa del Sur', 'Simití', 'Soplaviento', 'Talaigua Nuevo', 'Tiquisio', 'Turbaco', 'Turbaná', 'Villanueva', 'Zambrano'], 'Boyacá': ['Tunja', 'Almeida', 'Aquitania', 'Arcabuco', 'Belén', 'Berbeo', 'Betéitiva', 'Boavita', 'Boyacá', 'Briceño', 'Buenavista', 'Busbanzá', 'Caldas', 'Campohermoso', 'Cerinza', 'Chinavita', 'Chiquinquirá', 'Chíquiza', 'Chiscas', 'Chita', 'Chitaraque', 'Chivatá', 'Chivor', 'Ciénega', 'Cómbita', 'Coper', 'Corrales', 'Covarachía', 'Cubará', 'Cucaita', 'Cuítiva', 'Duitama', 'El Cocuy', 'El Espino', 'Firavitoba', 'Floresta', 'Gachantivá', 'Gámeza', 'Garagoa', 'Guacamayas', 'Guateque', 'Guayatá', 'Güicán', 'Iza', 'Jenesano', 'Jericó', 'La Capilla', 'La Uvita', 'La Victoria', 'Labranzagrande', 'Macanal', 'Maripí', 'Miraflores', 'Mongua', 'Monguí', 'Moniquirá', 'Motavita', 'Muzo', 'Nobsa', 'Nuevo Colón', 'Oicatá', 'Otanche', 'Pachavita', 'Páez', 'Paipa', 'Pajarito', 'Panqueba', 'Pauna', 'Paya', 'Paz de Río', 'Pesca', 'Pisba', 'Puerto Boyacá', 'Quípama', 'Ramiriquí', 'Ráquira', 'Rondón', 'Saboyá', 'Sáchica', 'Samacá', 'San Eduardo', 'San José de Pare', 'San Luis de Gaceno', 'San Mateo', 'San Miguel de Sema', 'San Pablo de Borbur', 'Santa María', 'Santa Rosa de Viterbo', 'Santa Sofía', 'Santana', 'Sativanorte', 'Sativasur', 'Siachoque', 'Soatá', 'Socha', 'Socotá', 'Sogamoso', 'Somondoco', 'Sora', 'Soracá', 'Sotaquirá', 'Susacón', 'Sutamarchán', 'Sutatenza', 'Tasco', 'Tenza', 'Tibaná', 'Tibasosa', 'Tinjacá', 'Tipacoque', 'Toca', 'Togüí', 'Tópaga', 'Tota', 'Tununguá', 'Turmequé', 'Tuta', 'Tutazá', 'Úmbita', 'Ventaquemada', 'Villa de Leyva', 'Viracachá', 'Zetaquira'], 'Caldas': ['Manizales', 'Aguadas', 'Anserma', 'Aranzazu', 'Belalcázar', 'Chinchiná', 'Filadelfia', 'La Dorada', 'La Merced', 'Manzanares', 'Marmato', 'Marquetalia', 'Marulanda', 'Neira', 'Norcasia', 'Pácora', 'Palestina', 'Pensilvania', 'Riosucio', 'Risaralda', 'Salamina', 'Samaná', 'San José', 'Supía', 'Victoria', 'Villamaría', 'Viterbo'], 'Caquetá': ['Florencia', 'Albania', 'Belén de los Andaquíes', 'Cartagena del Chairá', 'Curillo', 'El Doncello', 'El Paujil', 'La Montañita', 'Milán', 'Morelia', 'Puerto Rico', 'San José del Fragua', 'San Vicente del Caguán', 'Solano', 'Solita', 'Valparaíso'], 'Casanare': ['Yopal', 'Aguazul', 'Chámeza', 'Hato Corozal', 'La Salina', 'Maní', 'Monterrey', 'Nunchía', 'Orocué', 'Paz de Ariporo', 'Pore', 'Recetor', 'Sabanalarga', 'Sácama', 'San Luis de Palenque', 'Támara', 'Tauramena', 'Trinidad', 'Villanueva'], 'Cauca': ['Popayán', 'Almaguer', 'Argelia', 'Balboa', 'Bolívar', 'Buenos Aires', 'Cajibío', 'Caldono', 'Caloto', 'Corinto', 'El Tambo', 'Florencia', 'Guachené', 'Guapi', 'Inzá', 'Jambaló', 'La Sierra', 'La Vega', 'López de Micay', 'Mercaderes', 'Miranda', 'Morales', 'Padilla', 'Páez', 'Patía', 'Piamonte', 'Piendamó', 'Puerto Tejada', 'Puracé', 'Rosas', 'San Sebastián', 'Santander de Quilichao', 'Santa Rosa', 'Silvia', 'Sotará', 'Suárez', 'Sucre', 'Timbío', 'Timbiquí', 'Toribío', 'Totoró', 'Villa Rica'], 'Cesar': ['Valledupar', 'Aguachica', 'Agustín Codazzi', 'Astrea', 'Becerril', 'Bosconia', 'Chimichagua', 'Chiriguaná', 'Curumaní', 'El Copey', 'El Paso', 'Gamarra', 'González', 'La Gloria', 'La Jagua de Ibirico', 'La Paz', 'Manaure Balcón del Cesar', 'Pailitas', 'Pelaya', 'Pueblo Bello', 'Río de Oro', 'San Alberto', 'San Diego', 'San Martín', 'Tamalameque'], 'Chocó': ['Quibdó', 'Acandí', 'Alto Baudó', 'Atrato', 'Bagadó', 'Bahía Solano', 'Bajo Baudó', 'Bojayá', 'Carmen del Darién', 'Cértegui', 'Condoto', 'El Cantón de San Pablo', 'El Carmen de Atrato', 'El Litoral del San Juan', 'Istmina', 'Juradó', 'Lloró', 'Medio Atrato', 'Medio Baudó', 'Medio San Juan', 'Nóvita', 'Nuquí', 'Río Iró', 'Río Quito', 'Riosucio', 'San José del Palmar', 'Sipí', 'Tadó', 'Unguía', 'Unión Panamericana'], 'Córdoba': ['Montería', 'Ayapel', 'Buenavista', 'Canalete', 'Cereté', 'Chimá', 'Chinú', 'Ciénaga de Oro', 'Cotorra', 'La Apartada', 'Lorica', 'Los Córdobas', 'Momil', 'Moñitos', 'Montelíbano', 'Planeta Rica', 'Pueblo Nuevo', 'Puerto Escondido', 'Puerto Libertador', 'Purísima', 'Sahagún', 'San Andrés de Sotavento', 'San Antero', 'San Bernardo del Viento', 'San Carlos', 'San José de Uré', 'San Pelayo', 'Tierralta', 'Tuchín', 'Valencia'], 'Cundinamarca': ['Agua de Dios', 'Albán', 'Anapoima', 'Anolaima', 'Apulo', 'Arbeláez', 'Beltrán', 'Bituima', 'Bojacá', 'Cabrera', 'Cachipay', 'Cajicá', 'Caparrapí', 'Cáqueza', 'Carmen de Carupa', 'Chaguaní', 'Chía', 'Chipaque', 'Choachí', 'Chocontá', 'Cogua', 'Cota', 'Cucunubá', 'El Colegio', 'El Peñón', 'El Rosal', 'Facatativá', 'Fómeque', 'Fosca', 'Funza', 'Fúquene', 'Fusagasugá', 'Gachalá', 'Gachancipá', 'Gachetá', 'Gama', 'Girardot', 'Granada', 'Guachetá', 'Guaduas', 'Guasca', 'Guataquí', 'Guatavita', 'Guayabal de Síquima', 'Guayabetal', 'Gutiérrez', 'Jerusalén', 'Junín', 'La Calera', 'La Mesa', 'La Palma', 'La Peña', 'La Vega', 'Lenguazaque', 'Machetá', 'Madrid', 'Manta', 'Medina', 'Mosquera', 'Nariño', 'Nemocón', 'Nilo', 'Nimaima', 'Nocaima', 'Pacho', 'Paime', 'Pandi', 'Paratebueno', 'Pasca', 'Puerto Salgar', 'Pulí', 'Quebradanegra', 'Quetame', 'Quipile', 'Ricaurte', 'San Antonio del Tequendama', 'San Bernardo', 'San Cayetano', 'San Francisco', 'San Juan de Rioseco', 'Sasaima', 'Sesquilé', 'Sibaté', 'Silvania', 'Simijaca', 'Soacha', 'Sopó', 'Subachoque', 'Suesca', 'Supatá', 'Susa', 'Sutatausa', 'Tabio', 'Tausa', 'Tena', 'Tenjo', 'Tibacuy', 'Tibirita', 'Tocaima', 'Tocancipá', 'Topaipí', 'Ubalá', 'Ubaque', 'Une', 'Útica', 'Venecia', 'Vergara', 'Vianí', 'Villa de San Diego de Ubaté', 'Villagómez', 'Villapinzón', 'Villeta', 'Viotá', 'Yacopí', 'Zipacón', 'Zipaquirá'], 'Guainía': ['Inírida', 'Barranco Minas', 'Mapiripana', 'San Felipe', 'Puerto Colombia', 'La Guadalupe', 'Cacahual', 'Pana Pana', 'Morichal'], 'Guaviare': ['San José del Guaviare', 'Calamar', 'El Retorno', 'Miraflores'], 'Huila': ['Neiva', 'Acevedo', 'Agrado', 'Aipe', 'Algeciras', 'Altamira', 'Baraya', 'Campoalegre', 'Colombia', 'Elías', 'Garzón', 'Gigante', 'Guadalupe', 'Hobo', 'Íquira', 'Isnos', 'La Argentina', 'La Plata', 'Nátaga', 'Oporapa', 'Paicol', 'Palermo', 'Palestina', 'Pital', 'Pitalito', 'Rivera', 'Saladoblanco', 'San Agustín', 'Santa María', 'Suaza', 'Tarqui', 'Tello', 'Teruel', 'Tesalia', 'Timaná', 'Villavieja', 'Yaguará'], 'La Guajira': ['Riohacha', 'Albania', 'Barrancas', 'Dibulla', 'Distracción', 'El Molino', 'Fonseca', 'Hatonuevo', 'La Jagua del Pilar', 'Maicao', 'Manaure', 'San Juan del Cesar', 'Uribia', 'Urumita', 'Villanueva'], 'Magdalena': ['Santa Marta', 'Algarrobo', 'Aracataca', 'Ariguaní', 'Cerro de San Antonio', 'Chivolo', 'Ciénaga', 'Concordia', 'El Banco', 'El Piñón', 'El Retén', 'Fundación', 'Guamal', 'Nueva Granada', 'Pedraza', 'Pijiño del Carmen', 'Pivijay', 'Plato', 'Pueblo Viejo', 'Remolino', 'Sabanas de San Ángel', 'Salamina', 'San Sebastián de Buenavista', 'San Zenón', 'Santa Ana', 'Santa Bárbara de Pinto', 'Sitionuevo', 'Tenerife', 'Zapayán', 'Zona Bananera'], 'Meta': ['Villavicencio', 'Acacías', 'Barranca de Upía', 'Cabuyaro', 'Castilla la Nueva', 'Cubarral', 'Cumaral', 'El Calvario', 'El Castillo', 'El Dorado', 'Fuente de Oro', 'Granada', 'Guamal', 'La Macarena', 'Lejanías', 'Mapiripán', 'Mesetas', 'Puerto Concordia', 'Puerto Gaitán', 'Puerto Lleras', 'Puerto López', 'Puerto Rico', 'Restrepo', 'San Carlos de Guaroa', 'San Juan de Arama', 'San Juanito', 'San Martín', 'Uribe', 'Vista Hermosa'], 'Nariño': ['Pasto', 'Albán', 'Aldana', 'Ancuyá', 'Arboleda', 'Barbacoas', 'Belén', 'Buesaco', 'Chachagüí', 'Colón', 'Consacá', 'Contadero', 'Córdoba', 'Cuaspud', 'Cumbal', 'Cumbitara', 'El Charco', 'El Peñol', 'El Rosario', 'El Tablón de Gómez', 'El Tambo', 'Francisco Pizarro', 'Funes', 'Guachucal', 'Guaitarilla', 'Gualmatán', 'Iles', 'Imués', 'Ipiales', 'La Cruz', 'La Florida', 'La Llanada', 'La Tola', 'La Unión', 'Leiva', 'Linares', 'Los Andes', 'Magüí', 'Mallama', 'Mosquera', 'Nariño', 'Olaya Herrera', 'Ospina', 'Policarpa', 'Potosí', 'Providencia', 'Puerres', 'Pupiales', 'Ricaurte', 'Roberto Payán', 'Samaniego', 'San Bernardo', 'San Lorenzo', 'San Pablo', 'San Pedro de Cartago', 'Sandoná', 'Santa Bárbara', 'Santacruz', 'Sapuyes', 'Taminango', 'Tangua', 'Tumaco', 'Túquerres', 'Yacuanquer'], 'Norte de Santander': ['Cúcuta', 'Ábrego', 'Arboledas', 'Bochalema', 'Bucarasica', 'Cáchira', 'Cácota', 'Chinácota', 'Chitagá', 'Convención', 'Cucutilla', 'Duranía', 'El Carmen', 'El Tarra', 'El Zulia', 'Gramalote', 'Hacarí', 'Herrán', 'La Esperanza', 'La Playa', 'Labateca', 'Los Patios', 'Lourdes', 'Mutiscua', 'Ocaña', 'Pamplona', 'Pamplonita', 'Puerto Santander', 'Ragonvalia', 'Salazar', 'San Calixto', 'San Cayetano', 'Santiago', 'Sardinata', 'Silos', 'Teorama', 'Tibú', 'Toledo', 'Villa Caro', 'Villa del Rosario'], 'Putumayo': ['Mocoa', 'Colón', 'Orito', 'Puerto Asís', 'Puerto Caicedo', 'Puerto Guzmán', 'Puerto Leguízamo', 'San Francisco', 'San Miguel', 'Santiago', 'Sibundoy', 'Valle del Guamuez', 'Villagarzón'], 'Quindío': ['Armenia', 'Buenavista', 'Calarcá', 'Circasia', 'Córdoba', 'Filandia', 'Génova', 'La Tebaida', 'Montenegro', 'Pijao', 'Quimbaya', 'Salento'], 'Risaralda': ['Pereira', 'Apía', 'Balboa', 'Belén de Umbría', 'Dosquebradas', 'Guática', 'La Celia', 'La Virginia', 'Marsella', 'Mistrató', 'Pueblo Rico', 'Quinchía', 'Santa Rosa de Cabal', 'Santuario'], 'Santander': ['Bucaramanga', 'Aguada', 'Albania', 'Aratoca', 'Barbosa', 'Barichara', 'Barrancabermeja', 'Betulia', 'Bolívar', 'Cabrera', 'California', 'Capitanejo', 'Carcasí', 'Cepitá', 'Cerrito', 'Charalá', 'Charta', 'Chima', 'Chipatá', 'Cimitarra', 'Concepción', 'Confines', 'Contratación', 'Coromoro', 'Curití', 'El Carmen de Chucurí', 'El Guacamayo', 'El Peñón', 'El Playón', 'Encino', 'Enciso', 'Florián', 'Floridablanca', 'Galán', 'Gámbita', 'Girón', 'Guaca', 'Guadalupe', 'Guapotá', 'Guavatá', 'Güepsa', 'Hato', 'Jesús María', 'Jordán', 'La Belleza', 'La Paz', 'Landázuri', 'Lebrija', 'Los Santos', 'Macaravita', 'Málaga', 'Matanza', 'Mogotes', 'Molagavita', 'Ocamonte', 'Oiba', 'Onzaga', 'Palmar', 'Palmas del Socorro', 'Páramo', 'Piedecuesta', 'Pinchote', 'Puente Nacional', 'Puerto Parra', 'Puerto Wilches', 'Rionegro', 'Sabana de Torres', 'San Andrés', 'San Benito', 'San Gil', 'San Joaquín', 'San José de Miranda', 'San Miguel', 'San Vicente de Chucurí', 'Santa Bárbara', 'Santa Helena del Opón', 'Simacota', 'Socorro', 'Suaita', 'Sucre', 'Suratá', 'Tona', 'Valle de San José', 'Vélez', 'Vetas', 'Villanueva', 'Zapatoca'], 'Sucre': ['Sincelejo', 'Buenavista', 'Caimito', 'Colosó', 'Corozal', 'Coveñas', 'El Roble', 'Galeras', 'Guaranda', 'La Unión', 'Los Palmitos', 'Majagual', 'Morroa', 'Ovejas', 'Palmito', 'Sampués', 'San Benito Abad', 'San Juan de Betulia', 'San Marcos', 'San Onofre', 'San Pedro', 'Santiago de Tolú', 'Sincé', 'Sucre', 'Tolú Viejo'], 'Tolima': ['Ibagué', 'Alpujarra', 'Alvarado', 'Ambalema', 'Anzoátegui', 'Armero', 'Ataco', 'Cajamarca', 'Carmen de Apicalá', 'Casabianca', 'Chaparral', 'Coello', 'Coyaima', 'Cunday', 'Dolores', 'Espinal', 'Falan', 'Flandes', 'Fresno', 'Guamo', 'Herveo', 'Honda', 'Icononzo', 'Lérida', 'Líbano', 'Mariquita', 'Melgar', 'Murillo', 'Natagaima', 'Ortega', 'Palocabildo', 'Piedras', 'Planadas', 'Prado', 'Purificación', 'Rioblanco', 'Roncesvalles', 'Rovira', 'Saldaña', 'San Antonio', 'San Luis', 'Santa Isabel', 'Suárez', 'Valle de San Juan', 'Venadillo', 'Villahermosa', 'Villarrica'], 'Valle del Cauca': ['Cali', 'Alcalá', 'Andalucía', 'Ansermanuevo', 'Argelia', 'Bolívar', 'Buenaventura', 'Buga', 'Bugalagrande', 'Caicedonia', 'Calima', 'Candelaria', 'Cartago', 'Dagua', 'El Águila', 'El Cairo', 'El Cerrito', 'El Dovio', 'Florida', 'Ginebra', 'Guacarí', 'Jamundí', 'La Cumbre', 'La Unión', 'La Victoria', 'Obando', 'Palmira', 'Pradera', 'Restrepo', 'Riofrío', 'Roldanillo', 'San Pedro', 'Sevilla', 'Toro', 'Trujillo', 'Tuluá', 'Ulloa', 'Versalles', 'Vijes', 'Yotoco', 'Yumbo', 'Zarzal'], 'Vaupés': ['Mitú', 'Carurú', 'Pacoa', 'Taraira', 'Papunaua', 'Yavaraté'], 'Vichada': ['Puerto Carreño', 'La Primavera', 'Santa Rosalía', 'Cumaribo']}
-
+    return {}
 
 
 def _divipola_json():
@@ -25718,12 +25681,144 @@ def gerencia_hq():
             <a class="hq-pill-more" href="/gerencia/turnos">Turnos</a>
             <a class="hq-pill-more" href="/gerencia/contabilidad/nueva">Nueva operación</a>
             <a class="hq-pill-more" href="/gerencia/login-banners">Salida segura</a>
+    
+        <div class="hq-bento-card" style="margin-top:8px">
+          <h3>Todos los módulos de Gerencia</h3>
+          <p class="hq-bento-sub">Acceso directo a cada función del sistema (visibles y activas)</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-top:12px;text-align:left">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Talento / personal</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/admision-personal">Admisión de personal</a>
+                <a href="/gerencia/certificados-apoyo">Certificados de apoyo</a>
+                <a href="/gerencia/certificaciones">Certificaciones</a>
+                <a href="/gerencia/nomina">Nómina</a>
+                <a href="/gerencia/planillas-pila">Planillas PILA</a>
+                <a href="/gerencia/matriz-epp">Matriz EPP</a>
+                <a href="/gerencia/talento-legal">Guía talento legal</a>
+                <a href="/gerencia/usuarios">Usuarios gerencia</a>
+                <a href="/gerencia/roles">Roles</a>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Legal / contratos</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/contratos">Contratos colegios</a>
+                <a href="/gerencia/contratos-saas">Contratos SaaS</a>
+                <a href="/gerencia/contratos-firmas">Firmas de contratos</a>
+                <a href="/gerencia/contrato-plantilla">Plantilla de contrato</a>
+                <a href="/gerencia/plantilla-contrato">Plantilla contrato</a>
+                <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
+                <a href="/gerencia/legal/consentimientos">Consentimientos</a>
+                <a href="/gerencia/paginas-legales">Páginas legales</a>
+                <a href="/gerencia/libro-actas">Libro de actas</a>
+                <a href="/gerencia/requerimientos-autoridades">Req. autoridades</a>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Finanzas / ventas</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/ventas">Panel ventas</a>
+                <a href="/gerencia/validaciones-ventas">Validaciones ventas</a>
+                <a href="/gerencia/planes-vendidos">Planes vendidos</a>
+                <a href="/gerencia/descuentos">Descuentos</a>
+                <a href="/gerencia/finanzas/promociones">Promociones</a>
+                <a href="/gerencia/facturacion-cobranza">Facturación / cobranza</a>
+                <a href="/gerencia/recursos-financieros">Recursos financieros</a>
+                <a href="/gerencia/metas">Metas</a>
+                <a href="/gerencia/cancelaciones">Cancelaciones</a>
+                <a href="/gerencia/retractos">Retractos</a>
+                <a href="/gerencia/solicitudes-plan">Solicitudes cambio plan</a>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Web / marca / login</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/web-corporativa">Web corporativa</a>
+                <a href="/gerencia/empresa">Empresa</a>
+                <a href="/gerencia/marca-contacto">Marca y contacto</a>
+                <a href="/gerencia/horarios-atencion">Horarios de atención</a>
+                <a href="/gerencia/diseno-login">Diseño del login</a>
+                <a href="/gerencia/pie-login">Pie del login</a>
+                <a href="/gerencia/backoffice-branding">Branding backoffice</a>
+                <a href="/gerencia/alianzas-clientes">Alianzas / clientes</a>
+                <a href="/gerencia/changelog">Changelog</a>
+                <a href="/gerencia/pqr-info">Info PQR</a>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Operación / sistema</div>
+              <div class="hq-pills" style="justify-content:flex-start">
+                <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte rectores</a>
+                <a href="/gerencia/notas">Notas (gerencia)</a>
+                <a href="/gerencia/limpieza">Limpieza de datos</a>
+                <a href="/gerencia/dev-console">Consola de desarrollo</a>
+                <a href="/gerencia/documentos">Biblioteca documentos</a>
+              </div>
+            </div>
           </div>
+        </div>
+
+      </div>
         </div>
       </div>
 
       
-      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details></aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v2.6.0</div></div></div></div></div>
+      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/gerencia/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios gerencia</a><a href="/gerencia/roles" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Roles</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Talento extra</summary>
+<a href="/gerencia/admision-personal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Admisión personal</a>
+<a href="/gerencia/nomina" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Nómina</a>
+<a href="/gerencia/planillas-pila" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Planillas PILA</a>
+<a href="/gerencia/certificados-apoyo" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Certificados apoyo</a>
+<a href="/gerencia/certificaciones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Certificaciones</a>
+<a href="/gerencia/matriz-epp" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Matriz EPP</a>
+<a href="/gerencia/talento-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Talento legal</a>
+</details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal / contratos</summary>
+<a href="/gerencia/contratos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Contratos colegios</a>
+<a href="/gerencia/contratos-saas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Contratos SaaS</a>
+<a href="/gerencia/contratos-firmas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Firmas contratos</a>
+<a href="/gerencia/contrato-plantilla" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Plantilla contrato</a>
+<a href="/gerencia/plantilla-contrato" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Plantilla contrato 2</a>
+<a href="/gerencia/firmas-corporativas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Firmas corporativas</a>
+<a href="/gerencia/legal/consentimientos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Consentimientos</a>
+<a href="/gerencia/paginas-legales" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Páginas legales</a>
+<a href="/gerencia/libro-actas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Libro de actas</a>
+<a href="/gerencia/requerimientos-autoridades" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Req. autoridades</a>
+</details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas / ventas</summary>
+<a href="/gerencia/ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Panel ventas</a>
+<a href="/gerencia/validaciones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Validaciones ventas</a>
+<a href="/gerencia/planes-vendidos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Planes vendidos</a>
+<a href="/gerencia/descuentos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Descuentos</a>
+<a href="/gerencia/finanzas/promociones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Promociones</a>
+<a href="/gerencia/facturacion-cobranza" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Facturación / cobranza</a>
+<a href="/gerencia/recursos-financieros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Recursos financieros</a>
+<a href="/gerencia/metas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Metas</a>
+<a href="/gerencia/cancelaciones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cancelaciones</a>
+<a href="/gerencia/retractos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Retractos</a>
+<a href="/gerencia/solicitudes-plan" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Solicitudes cambio plan</a>
+</details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Web / marca</summary>
+<a href="/gerencia/web-corporativa" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Web corporativa</a>
+<a href="/gerencia/empresa" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Empresa</a>
+<a href="/gerencia/marca-contacto" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Marca y contacto</a>
+<a href="/gerencia/horarios-atencion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Horarios atención</a>
+<a href="/gerencia/diseno-login" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Diseño login</a>
+<a href="/gerencia/pie-login" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Pie del login</a>
+<a href="/gerencia/backoffice-branding" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Branding backoffice</a>
+<a href="/gerencia/alianzas-clientes" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Alianzas / clientes</a>
+<a href="/gerencia/changelog" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Changelog</a>
+<a href="/gerencia/pqr-info" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Info PQR</a>
+</details>
+<details><summary style="cursor:pointer;font-weight:600;padding:8px">Operación</summary>
+<a href="/gerencia/autorizar-soporte-rectores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Autorizar soporte rectores</a>
+<a href="/gerencia/notas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Notas gerencia</a>
+<a href="/gerencia/limpieza" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Limpieza de datos</a>
+<a href="/gerencia/dev-console" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Consola desarrollo</a>
+<a href="/gerencia/documentos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Biblioteca documentos</a>
+</details>
+</aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v2.6.0</div></div></div></div></div>
 
       <div id="hq-tab-contingencia" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Boveda documental, juridica y DRP</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Boveda documental, juridica y DRP</h3><div style="display:flex;flex-wrap:wrap;gap:8px"><a href="/gerencia/documentos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Biblioteca</a><a href="/gerencia/documentos/plan-drp" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan DRP</a><a href="/gerencia/documentos/politica-datos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Politica de datos</a><a href="/gerencia/documentos/plan-contingencia" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan contingencia</a><a href="/gerencia/documentos/contrato-licenciamiento" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contrato SaaS</a><a href="/gerencia/contratos-personal" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contratos</a></div></div></div>
 
@@ -27515,464 +27610,6 @@ def gerencia_matriz_epp():
 
 
 
-
-def _ensure_docs_area_cols():
-    try:
-        for sql in (
-            "ALTER TABLE documentos_corp ADD COLUMN IF NOT EXISTS area_origen VARCHAR(40) DEFAULT 'gerencia'",
-            "ALTER TABLE documentos_corp ADD COLUMN IF NOT EXISTS destino VARCHAR(40) DEFAULT ''",
-            "ALTER TABLE documentos_corp ADD COLUMN IF NOT EXISTS plantilla_tipo VARCHAR(80) DEFAULT ''",
-            "ALTER TABLE documentos_corp ADD COLUMN IF NOT EXISTS estado_doc VARCHAR(40) DEFAULT 'BORRADOR'",
-        ):
-            try:
-                db.session.execute(text(sql))
-                db.session.commit()
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    try:
-        db.session.execute(text(
-            "CREATE TABLE IF NOT EXISTS boletas_cruce_financiero ("
-            "id SERIAL PRIMARY KEY, id_interno_bcf VARCHAR(40) UNIQUE, pqr_id INTEGER, "
-            "pqr_cliente_relacionada VARCHAR(40), institucion_id INTEGER, codigo_colegio VARCHAR(40) DEFAULT '', "
-            "nombre_colegio VARCHAR(200) DEFAULT '', nit_colegio VARCHAR(40) DEFAULT '', "
-            "plan_contrato VARCHAR(80) DEFAULT '', valor_plan VARCHAR(40) DEFAULT '', "
-            "hechos_queja TEXT DEFAULT '', validacion_soporte BOOLEAN DEFAULT FALSE, "
-            "validado_por VARCHAR(120) DEFAULT '', validado_en VARCHAR(30) DEFAULT '', "
-            "estado VARCHAR(40) DEFAULT 'PENDIENTE', resolucion_cobranza TEXT DEFAULT '', "
-            "resuelto_por VARCHAR(120) DEFAULT '', resuelto_en VARCHAR(30) DEFAULT '', "
-            "cun VARCHAR(40) DEFAULT '', creado_en VARCHAR(30) DEFAULT '', auditoria_sesiones TEXT DEFAULT '')"
-        ))
-        db.session.commit()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-
-
-PLANTILLAS_DOCS = {
-    "soporte": [
-        ("acta-radicacion-queja", "Acta de Radicacion y Escalabilidad de Queja Tecnica",
-         "<h2>1. Identificacion</h2><p>Colegio: ... · Radicado: ...</p><h2>2. Descripcion del incidente</h2><p></p><h2>3. Escalamiento a Desarrollo</h2><p></p>"),
-        ("certificado-cierre-incidente", "Certificado de Cierre de Incidente",
-         "<h2>1. Incidente</h2><p></p><h2>2. Reparacion realizada</h2><p></p><h2>3. Confirmacion al Rector</h2><p></p>"),
-        ("prorroga-emergencia-24h", "Prorroga de Emergencia de 24 Horas",
-         "<h2>1. Colegio bloqueado</h2><p></p><h2>2. Justificacion de gracia 24h</h2><p></p>"),
-    ],
-    "ventas": [
-        ("propuesta-comercial", "Propuesta Comercial / Cotizacion",
-         "<h2>1. Colegio prospecto</h2><p></p><h2>2. Planes y precios</h2><p></p>"),
-        ("acta-autorizacion-digital", "Acta de Autorizacion Digital y Scoring",
-         "<h2>1. Rector / representante</h2><p></p><h2>2. Enlace unico y firmas</h2><p>IP · Hash</p>"),
-    ],
-    "desarrollo": [
-        ("post-mortem", "Informe Forense Post-Incidente (Post-Mortem)",
-         "<h2>1. Resumen</h2><p></p><h2>2. Contencion</h2><p></p><h2>3. Parches</h2><p></p>"),
-        ("changelog-interno", "Historial de Cambios (Changelog interno)",
-         "<h2>1. Version</h2><p></p><h2>2. Funciones publicadas</h2><ul><li></li></ul>"),
-    ],
-    "cobranza": [
-        ("acta-retracto-liquidacion", "Acta de Retracto, Liquidacion y Reembolso (Ley 1480)",
-         "<h2>1. Colegio</h2><p></p><h2>2. Calculo reembolso / penalidad 20%</h2><p></p>"),
-        ("paz-y-salvo-comercial", "Certificado de Paz y Salvo Comercial",
-         "<h2>1. Institucion</h2><p></p><h2>2. Estado de cuenta</h2><p>Al dia.</p>"),
-    ],
-    "gerencia": [
-        ("doc-corporativo", "Documento corporativo general", "<h2>1. Introduccion</h2><p></p>"),
-    ],
-}
-
-
-@app.route("/gerencia/documentos/nuevo", methods=["POST", "GET"])
-def gerencia_documento_nuevo():
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    if request.method == "GET":
-        return redirect("/gerencia/documentos")
-    _ensure_docs_area_cols()
-    titulo = (request.form.get("titulo") or "").strip()[:220]
-    clave = (request.form.get("clave") or "").strip().lower()
-    import re as _re
-    clave = _re.sub(r"[^a-z0-9\-]+", "-", clave).strip("-")[:80]
-    if not clave and titulo:
-        clave = _re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")[:60] or "doc"
-    if not clave:
-        clave = "doc-" + (fecha_hoy() or "").replace("-", "")
-    base, n = clave, 2
-    while DocumentoCorp.query.filter_by(clave=clave).first():
-        clave = "%s-%d" % (base, n)
-        n += 1
-    cat = (request.form.get("categoria") or "interno").strip()[:40]
-    pub = request.form.get("publico") == "1"
-    row = DocumentoCorp(
-        clave=clave, titulo=titulo or clave,
-        cuerpo_html="<h2>1. Introduccion</h2><p>Escriba aqui. Use negrita, listas y titulos.</p>",
-        publico=pub, categoria=cat,
-        area_origen="gerencia", destino="interno", plantilla_tipo="doc-corporativo",
-        estado_doc="BORRADOR",
-        actualizado_en="%s %s" % (fecha_hoy(), hora_actual()),
-        actualizado_por=session.get("usuario") or "gerencia",
-    )
-    try:
-        db.session.add(row)
-        db.session.commit()
-    except Exception as ex:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return page("Error", "<p>No se pudo crear: %s</p><p><a href='/gerencia/documentos'>Volver</a></p>" % ex)
-    return redirect("/gerencia/documentos/" + clave)
-
-
-def _docs_area_panel(area, titulo_area, volver_url, puede_destino=False):
-    _ensure_docs_area_cols()
-    msg = err = ""
-    if request.method == "POST":
-        plantilla = (request.form.get("plantilla") or "").strip()
-        titulo = (request.form.get("titulo") or "").strip()[:220]
-        destino = (request.form.get("destino") or "interno").strip()[:40] if puede_destino else "interno"
-        cuerpo = "<h2>1. Contenido</h2><p></p>"
-        for code, t, html0 in PLANTILLAS_DOCS.get(area, []):
-            if code == plantilla:
-                if not titulo:
-                    titulo = t
-                cuerpo = html0
-                break
-        if not titulo:
-            err = "Indique titulo o elija plantilla."
-        else:
-            import re as _re
-            clave = _re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")[:50] or "doc"
-            clave = "%s-%s" % (area, clave)
-            base, n = clave, 2
-            while DocumentoCorp.query.filter_by(clave=clave).first():
-                clave = "%s-%d" % (base, n)
-                n += 1
-            row = DocumentoCorp(
-                clave=clave, titulo=titulo, cuerpo_html=cuerpo,
-                publico=False, categoria=area,
-                area_origen=area, destino=destino, plantilla_tipo=plantilla or "",
-                estado_doc="BORRADOR" if destino == "interno" else "ENVIADO",
-                actualizado_en="%s %s" % (fecha_hoy(), hora_actual()),
-                actualizado_por=session.get("usuario") or area,
-            )
-            try:
-                db.session.add(row)
-                db.session.commit()
-                return redirect("/gerencia/documentos/" + clave)
-            except Exception as ex:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                err = str(ex)[:140]
-    try:
-        rows = DocumentoCorp.query.filter_by(area_origen=area).order_by(DocumentoCorp.id.desc()).limit(50).all()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        rows = []
-    filas = ""
-    for r in rows:
-        dest = getattr(r, "destino", None) or "interno"
-        filas += (
-            '<tr><td><b>%s</b><br><span style="font-size:11px;color:#64748b">%s</span></td>'
-            '<td>%s</td><td>%s</td>'
-            '<td><a href="/gerencia/documentos/%s" style="font-weight:700">Editar</a> · '
-            '<a href="/gerencia/documentos/%s/pdf">PDF</a> · <a href="/gerencia/documentos/%s/word">Word</a></td></tr>'
-        ) % (
-            r.titulo or "", r.clave or "", dest, getattr(r, "estado_doc", None) or "",
-            r.clave, r.clave, r.clave,
-        )
-    opts_plant = "".join(
-        '<option value="%s">%s</option>' % (c, t) for c, t, _ in PLANTILLAS_DOCS.get(area, [])
-    )
-    if puede_destino:
-        dest_html = (
-            '<label style="font-size:12px;font-weight:700">Enviar / radicar hacia</label>'
-            '<select name="destino" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px">'
-            '<option value="interno">Solo archivo interno</option>'
-            '<option value="gerencia">Gerencia</option>'
-            '<option value="cobranza">Cobranza</option>'
-            '<option value="ventas">Ventas</option>'
-            '<option value="desarrollo">Desarrollo</option>'
-            '</select>'
-            '<p style="font-size:11px;color:#64748b;margin:0 0 8px">Registro de quien solicito y hacia que area (como PQR interna).</p>'
-        )
-    else:
-        dest_html = ""
-    body = (
-        '<div style="max-width:920px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
-        '<p><a href="%s" style="color:#0B2D57;font-weight:700">&larr; Volver</a></p>'
-        '<h1 style="color:#0B2D57">%s</h1>'
-        '<p style="color:#64748b;font-size:14px">Documentos del area. Editor con negrita/listas; PDF y Word. Ligado a Gerencia.</p>'
-        '%s%s'
-        '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0">'
-        '<h3 style="margin-top:0;color:#0B2D57">Crear documento</h3>'
-        '<form method="POST">'
-        '<label style="font-size:12px;font-weight:700">Plantilla</label>'
-        '<select name="plantilla" style="width:100%%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px">'
-        '<option value="">— Libre —</option>%s</select>'
-        '<label style="font-size:12px;font-weight:700">Titulo</label>'
-        '<input name="titulo" style="width:100%%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-bottom:8px">'
-        '%s'
-        '<button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800;cursor:pointer">Crear y editar</button>'
-        '</form></div>'
-        '<table style="width:100%%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:13px">'
-        '<tr style="background:#0B2D57;color:#fff"><th style="padding:10px;text-align:left">Documento</th>'
-        '<th style="padding:10px;text-align:left">Destino</th><th style="padding:10px;text-align:left">Estado</th>'
-        '<th style="padding:10px;text-align:left">Acciones</th></tr>'
-        '%s</table></div>'
-    ) % (
-        volver_url, titulo_area,
-        (('<div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px">' + msg + '</div>') if msg else ''),
-        (('<div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px">' + err + '</div>') if err else ''),
-        opts_plant, dest_html,
-        filas or '<tr><td colspan=4 style="padding:12px;color:#64748b">Sin documentos aun.</td></tr>',
-    )
-    return page(titulo_area, body)
-
-
-@app.route("/soporte/documentos", methods=["GET", "POST"])
-def soporte_documentos():
-    if not requiere_login() or rol_actual() not in ("Soporte", "Superadmin", "Administrador"):
-        return redirect("/soporte-login")
-    return _docs_area_panel("soporte", "Documentos · Soporte Tecnico", "/soporte_admin", puede_destino=True)
-
-
-@app.route("/ventas/documentos", methods=["GET", "POST"])
-def ventas_documentos():
-    if not requiere_login() or rol_actual() not in ("Comercial", "Gerente", "Superadmin", "Administrador"):
-        return redirect("/ventas-login")
-    return _docs_area_panel("ventas", "Documentos · Ventas", "/ventas/panel", puede_destino=False)
-
-
-@app.route("/desarrollo/documentos", methods=["GET", "POST"])
-def desarrollo_documentos():
-    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
-        return redirect("/login")
-    return _docs_area_panel("desarrollo", "Documentos · Desarrollo / Ingenieria", "/dev-console", puede_destino=False)
-
-
-@app.route("/cobranza/documentos", methods=["GET", "POST"])
-def cobranza_documentos():
-    if not requiere_login() or rol_actual() not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
-        return redirect("/cobranza-login")
-    return _docs_area_panel("cobranza", "Documentos · Cobranza y Facturacion", "/cobranza/panel", puede_destino=False)
-
-
-def _next_bcf_code():
-    from datetime import datetime
-    d = datetime.now().strftime("%Y-%m-%d")
-    try:
-        n = BoletaCruceFinanciero.query.count() + 1
-    except Exception:
-        n = 1
-    return "%s-BCF-%05d" % (d, n)
-
-
-@app.route("/soporte/boleta-cruce", methods=["GET", "POST"])
-def soporte_boleta_cruce():
-    if not requiere_login() or rol_actual() not in ("Soporte", "Superadmin", "Administrador", "Gerente"):
-        return redirect("/soporte-login")
-    _ensure_docs_area_cols()
-    msg = err = ""
-    if request.method == "POST":
-        pqr_rad = (request.form.get("pqr_cliente_relacionada") or "").strip()[:40]
-        try:
-            iid = int(request.form.get("institucion_id") or 0)
-        except ValueError:
-            iid = 0
-        inst = Institucion.query.get(iid) if iid else None
-        hechos = (request.form.get("hechos_queja") or "").strip()
-        validado = request.form.get("validacion_soporte") == "1"
-        if not validado:
-            err = "Debe marcar: Datos del cliente validados en el sistema."
-        elif not inst:
-            err = "Seleccione el colegio."
-        elif not pqr_rad:
-            err = "Indique el radicado PQR del cliente."
-        else:
-            from datetime import datetime
-            code = _next_bcf_code()
-            row = BoletaCruceFinanciero(
-                id_interno_bcf=code,
-                pqr_cliente_relacionada=pqr_rad,
-                institucion_id=inst.id,
-                codigo_colegio=inst.codigo or "",
-                nombre_colegio=inst.nombre or "",
-                nit_colegio=getattr(inst, "nit", None) or "",
-                plan_contrato=inst.plan or "Basico",
-                hechos_queja=hechos,
-                validacion_soporte=True,
-                validado_por=session.get("usuario") or "soporte",
-                validado_en=datetime.now().strftime("%Y-%m-%d %H:%M"),
-                estado="PENDIENTE",
-                creado_en=datetime.now().strftime("%Y-%m-%d %H:%M"),
-            )
-            try:
-                db.session.add(row)
-                db.session.commit()
-                msg = "Boleta %s creada y enviada a Cobranza. Asociada a PQR %s." % (code, pqr_rad)
-            except Exception as ex:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                err = str(ex)[:140]
-    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
-    opts = "".join(
-        '<option value="%d">%s — %s (plan: %s)</option>' % (
-            c.id, c.codigo or "", (c.nombre or "")[:50], c.plan or "Basico"
-        ) for c in colegios
-    )
-    try:
-        mis = BoletaCruceFinanciero.query.order_by(BoletaCruceFinanciero.id.desc()).limit(20).all()
-    except Exception:
-        mis = []
-    filas = "".join(
-        "<tr><td>%s</td><td>%s</td><td>%s</td><td style='font-weight:700'>%s</td><td>%s</td></tr>" % (
-            b.id_interno_bcf, b.pqr_cliente_relacionada, b.codigo_colegio, b.estado, b.creado_en
-        ) for b in mis
-    )
-    body = (
-        '<div style="max-width:800px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
-        '<p><a href="/soporte_admin" style="color:#0B2D57;font-weight:700">&larr; Soporte</a> · '
-        '<a href="/soporte/documentos">Documentos</a></p>'
-        '<h1 style="color:#0B2D57">Boleta de Cruce Financiero</h1>'
-        '<p style="color:#64748b;font-size:14px">Validacion de identidad → documento interno hacia Cobranza. '
-        'El cliente solo ve su radicado PQR; el codigo BCF es interno.</p>'
-        '%s%s'
-        '<form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px">'
-        '<label style="font-size:12px;font-weight:700">Radicado PQR del cliente (publico)</label>'
-        '<input name="pqr_cliente_relacionada" required placeholder="Ej: 202622000002" '
-        'style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;margin-bottom:10px">'
-        '<label style="font-size:12px;font-weight:700">Colegio</label>'
-        '<select name="institucion_id" required style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:10px">%s</select>'
-        '<label style="font-size:12px;font-weight:700">Hechos de la queja</label>'
-        '<textarea name="hechos_queja" rows="4" style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></textarea>'
-        '<label style="display:flex;gap:8px;align-items:center;margin:14px 0;font-weight:700;font-size:13px">'
-        '<input type="checkbox" name="validacion_soporte" value="1" required> '
-        'Datos del cliente validados en el sistema (cedula/NIT, contrato activo o suspendido)</label>'
-        '<button type="submit" style="background:#005BEA;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">'
-        'Expedir Boleta y enviar a Cobranza</button></form>'
-        '<h2 style="color:#0B2D57;font-size:16px;margin-top:24px">Boletas recientes</h2>'
-        '<table style="width:100%%;border-collapse:collapse;background:#fff;font-size:13px">'
-        '<tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">BCF interno</th>'
-        '<th style="padding:8px;text-align:left">PQR cliente</th><th style="padding:8px;text-align:left">Colegio</th>'
-        '<th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Fecha</th></tr>'
-        '%s</table></div>'
-    ) % (
-        (('<div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px">' + msg + '</div>') if msg else ''),
-        (('<div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px">' + err + '</div>') if err else ''),
-        opts,
-        filas or '<tr><td colspan=5 style="padding:12px;color:#64748b">Ninguna aun.</td></tr>',
-    )
-    return page("Boleta de Cruce", body)
-
-
-@app.route("/cobranza/boletas-cruce", methods=["GET", "POST"])
-def cobranza_boletas_cruce():
-    if not requiere_login() or rol_actual() not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
-        return redirect("/cobranza-login")
-    _ensure_docs_area_cols()
-    msg = err = ""
-    if request.method == "POST":
-        try:
-            bid = int(request.form.get("boleta_id") or 0)
-        except ValueError:
-            bid = 0
-        accion = (request.form.get("accion") or "").strip()
-        resol = (request.form.get("resolucion_cobranza") or "").strip()
-        b = BoletaCruceFinanciero.query.get(bid) if bid else None
-        if not b:
-            err = "Boleta no encontrada."
-        elif b.estado != "PENDIENTE":
-            err = "Esta boleta ya fue resuelta."
-        elif accion in ("aprobar", "rechazar"):
-            from datetime import datetime
-            b.estado = "APROBADO" if accion == "aprobar" else "RECHAZADO"
-            b.resolucion_cobranza = resol or ("Aprobado por Cobranza." if accion == "aprobar" else "Rechazado.")
-            b.resuelto_por = session.get("usuario") or "cobranza"
-            b.resuelto_en = datetime.now().strftime("%Y-%m-%d %H:%M")
-            if accion == "aprobar":
-                b.cun = "CUN-%s-%05d" % (datetime.now().strftime("%Y%m%d"), b.id)
-            try:
-                db.session.commit()
-                msg = ("Boleta %s APROBADA. CUN %s. Soporte puede cerrar PQR %s." % (
-                    b.id_interno_bcf, b.cun, b.pqr_cliente_relacionada
-                )) if accion == "aprobar" else "Boleta rechazada."
-            except Exception as ex:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                err = str(ex)[:120]
-    try:
-        rows = BoletaCruceFinanciero.query.order_by(BoletaCruceFinanciero.id.desc()).limit(40).all()
-    except Exception:
-        rows = []
-    cards = ""
-    for b in rows:
-        color = {"PENDIENTE": "#b45309", "APROBADO": "#166534", "RECHAZADO": "#991b1b"}.get(b.estado, "#334155")
-        if b.estado == "PENDIENTE":
-            acciones = (
-                '<form method="POST" style="margin-top:10px">'
-                '<input type="hidden" name="boleta_id" value="%d">'
-                '<label style="font-size:12px;font-weight:700">Resolucion formal de Cobranza</label>'
-                '<textarea name="resolucion_cobranza" rows="3" style="width:100%%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></textarea>'
-                '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'
-                '<button name="accion" value="aprobar" style="background:#166534;color:#fff;border:0;padding:8px 14px;border-radius:8px;font-weight:800;cursor:pointer">'
-                'Aplicar Nota Credito y Aprobar</button>'
-                '<button name="accion" value="rechazar" style="background:#991b1b;color:#fff;border:0;padding:8px 14px;border-radius:8px;font-weight:800;cursor:pointer">Rechazar</button>'
-                '</div></form>'
-            ) % b.id
-        else:
-            acciones = (
-                '<p style="font-size:12px;color:#64748b">Resuelto por %s · %s · CUN: %s</p>'
-                '<p style="font-size:13px">%s</p>'
-            ) % (b.resuelto_por or "—", b.resuelto_en or "", b.cun or "—", (b.resolucion_cobranza or "")[:500])
-        cards += (
-            '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:12px">'
-            '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px">'
-            '<div><div style="font-size:11px;color:#64748b">ID tramite interno</div>'
-            '<div style="font-weight:800;color:#0B2D57;font-size:15px">%s</div>'
-            '<div style="font-size:12px;margin-top:4px">Asociado a PQR cliente: <b>%s</b></div></div>'
-            '<div style="color:%s;font-weight:800;font-size:13px">%s</div></div>'
-            '<p style="font-size:13px;margin:10px 0 0"><b>%s</b> (%s) · NIT %s · Plan %s</p>'
-            '<p style="font-size:12px;color:#475569;background:#f8fafc;padding:10px;border-radius:8px">%s</p>'
-            '<p style="font-size:11px;color:#64748b">Validacion Soporte: %s · %s</p>%s</div>'
-        ) % (
-            b.id_interno_bcf, b.pqr_cliente_relacionada, color, b.estado,
-            b.nombre_colegio or "", b.codigo_colegio or "", b.nit_colegio or "—", b.plan_contrato or "",
-            (b.hechos_queja or "")[:800],
-            ("OK " + (b.validado_por or "")) if b.validacion_soporte else "Pendiente",
-            b.validado_en or "", acciones,
-        )
-    body = (
-        '<div style="max-width:900px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
-        '<p><a href="/cobranza/panel" style="color:#0B2D57;font-weight:700">&larr; Cobranza</a> · '
-        '<a href="/cobranza/documentos">Documentos</a></p>'
-        '<h1 style="color:#0B2D57">Panel de resolucion financiera · Boletas de Cruce</h1>'
-        '<p style="color:#64748b;font-size:14px">Tramites internos. Al aprobar se genera CUN para cierre de PQR.</p>'
-        '%s%s%s</div>'
-    ) % (
-        (('<div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px">' + msg + '</div>') if msg else ''),
-        (('<div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px">' + err + '</div>') if err else ''),
-        cards or '<p style="color:#64748b">No hay boletas.</p>',
-    )
-    return page("Boletas Cruce Financiero", body)
-
-
 @app.route("/gerencia/documentos")
 def gerencia_documentos_lista():
     _g = _guard_gerencia()
@@ -28013,23 +27650,7 @@ def gerencia_documentos_lista():
 <div class="dl">
   <p><a href="/gerencia/hq">← Gerencia HQ</a></p>
   <h1>Biblioteca documental · Contingencia y legal</h1>
-  <p style="color:#64748b;font-size:13px">Editor tipo Word (negrita, listas). Cree documentos nuevos. Públicos en <code>/docs/…</code>.</p>
-  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px">
-    <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Crear documento nuevo</h3>
-    <form method="POST" action="/gerencia/documentos/nuevo" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-      <div style="flex:1;min-width:180px"><label style="font-size:11px;font-weight:700">Título</label>
-        <input name="titulo" required placeholder="Título del documento" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
-      <div style="width:140px"><label style="font-size:11px;font-weight:700">Clave URL</label>
-        <input name="clave" placeholder="auto" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
-      <div style="width:140px"><label style="font-size:11px;font-weight:700">Categoría</label>
-        <select name="categoria" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
-          <option value="interno">Interno</option><option value="legal">Legal</option>
-          <option value="contingencia">Contingencia</option><option value="publico">Público</option>
-        </select></div>
-      <label style="font-size:12px;font-weight:600"><input type="checkbox" name="publico" value="1"> Público</label>
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer">Crear y editar</button>
-    </form>
-  </div>
+  <p style="color:#64748b;font-size:13px">Editor corporativo. Guarde y descargue PDF. Públicos en <code>/docs/…</code>.</p>
   <table>
     <tr><th>Documento</th><th>Visibilidad</th><th>Última edición</th><th>Acciones</th></tr>
     {filas or "<tr><td colspan=4>Sin documentos</td></tr>"}
