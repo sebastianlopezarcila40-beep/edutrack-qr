@@ -35,46 +35,16 @@ from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from sqlalchemy import func, text, or_
-try:
-    from modules.tenants import (
-        init_tenants_db,
-        crear_institucion,
-        listar_instituciones,
-        total_instituciones,
-    )
-except Exception as _tenants_imp_err:
-    print("modules.tenants no disponible, usando fallbacks:", _tenants_imp_err)
-
-    def init_tenants_db():
-        return None
-
-    def crear_institucion(codigo, nombre, municipio=None, departamento=None, estado=None, **kwargs):
-        return None
-
-    def listar_instituciones():
-        try:
-            return Institucion.query.order_by(Institucion.id.desc()).all()
-        except Exception:
-            return []
-
-    def total_instituciones():
-        try:
-            return Institucion.query.count()
-        except Exception:
-            return 0
-
+from modules.tenants import (
+    init_tenants_db,
+    crear_institucion,
+    listar_instituciones,
+    total_instituciones
+)
 
 app = Flask(__name__)
 
 _promo_cron_last = {"day": ""}
-
-
-@app.before_request
-def _db_clean_aborted():
-    try:
-        db.session.rollback()
-    except Exception:
-        pass
 
 
 @app.before_request
@@ -316,10 +286,6 @@ def _security_before():
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///edutrack.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-if DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-elif DATABASE_URL.startswith("postgresql+psycopg://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -2514,6 +2480,36 @@ class DocumentoCorp(db.Model):
     categoria = db.Column(db.String(80), default="interno")  # contingencia | legal | publico | ops
     actualizado_en = db.Column(db.String(30), default="")
     actualizado_por = db.Column(db.String(80), default="")
+
+
+
+class BoletaCruceFinanciero(db.Model):
+    """Boleta interna Soporte->Cobranza amarrada a PQR publica.
+    Radicado cliente (publico): pqr_cliente_relacionada
+    Radicado interno BCF: id_interno_bcf (ej. 2026-09-23-BCF-00085) — nunca lo ve el cliente.
+    """
+    __tablename__ = "boletas_cruce_financiero"
+    id = db.Column(db.Integer, primary_key=True)
+    id_interno_bcf = db.Column(db.String(40), unique=True, index=True)
+    pqr_id = db.Column(db.Integer, index=True)
+    pqr_cliente_relacionada = db.Column(db.String(40), index=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    codigo_colegio = db.Column(db.String(40), default="")
+    nombre_colegio = db.Column(db.String(200), default="")
+    nit_colegio = db.Column(db.String(40), default="")
+    plan_contrato = db.Column(db.String(80), default="")
+    valor_plan = db.Column(db.String(40), default="")
+    hechos_queja = db.Column(db.Text, default="")
+    validacion_soporte = db.Column(db.Boolean, default=False)
+    validado_por = db.Column(db.String(120), default="")
+    validado_en = db.Column(db.String(30), default="")
+    estado = db.Column(db.String(40), default="PENDIENTE")
+    resolucion_cobranza = db.Column(db.Text, default="")
+    resuelto_por = db.Column(db.String(120), default="")
+    resuelto_en = db.Column(db.String(30), default="")
+    cun = db.Column(db.String(40), default="")
+    creado_en = db.Column(db.String(30), default="")
+    auditoria_sesiones = db.Column(db.Text, default="")
 
 
 class NotaInteraccion(db.Model):
@@ -25687,7 +25683,7 @@ def gerencia_hq():
             <div class="hq-pills">
               <a href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
               <a class="hq-pill-primary" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
-              <a href="/soporte/marca">Marca y contacto (tel./correo)</a>
+              <a href="/soporte/boleta-cruce">Boleta Cruce Financiero</a> <a href="/soporte/marca">Marca y contacto (tel./correo)</a>
               <a href="/gerencia/wati-conexion">API WATI</a>
               <a class="hq-pill-primary" href="/gerencia/eduaura-ia">🧠 Conectores IA</a>
               <a href="/gerencia/procsis-web">Noticias / productos</a>
@@ -25715,55 +25711,6 @@ def gerencia_hq():
             <a class="hq-pill-more" href="/gerencia/turnos">Turnos</a>
             <a class="hq-pill-more" href="/gerencia/contabilidad/nueva">Nueva operación</a>
             <a class="hq-pill-more" href="/gerencia/login-banners">Salida segura</a>
-          </div>
-        </div>
-        <div class="hq-bento-card" style="margin-top:8px">
-          <h3>Todos los módulos de Gerencia</h3>
-          <p class="hq-bento-sub">Acceso directo a cada función del sistema</p>
-          <div class="hq-pills" style="justify-content:flex-start;flex-wrap:wrap">
-            <a href="/gerencia/admision-personal">Admisión personal</a>
-            <a href="/gerencia/nomina">Nómina</a>
-            <a href="/gerencia/planillas-pila">Planillas PILA</a>
-            <a href="/gerencia/certificados-apoyo">Certificados apoyo</a>
-            <a href="/gerencia/certificaciones">Certificaciones</a>
-            <a href="/gerencia/matriz-epp">Matriz EPP</a>
-            <a href="/gerencia/talento-legal">Talento legal</a>
-            <a href="/gerencia/usuarios">Usuarios</a>
-            <a href="/gerencia/roles">Roles</a>
-            <a href="/gerencia/contratos">Contratos colegios</a>
-            <a href="/gerencia/contratos-saas">Contratos SaaS</a>
-            <a href="/gerencia/contratos-firmas">Firmas contratos</a>
-            <a href="/gerencia/contrato-plantilla">Plantilla contrato</a>
-            <a href="/gerencia/plantilla-contrato">Plantilla contrato 2</a>
-            <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
-            <a href="/gerencia/legal/consentimientos">Consentimientos</a>
-            <a href="/gerencia/paginas-legales">Páginas legales</a>
-            <a href="/gerencia/libro-actas">Libro de actas</a>
-            <a href="/gerencia/requerimientos-autoridades">Req. autoridades</a>
-            <a href="/gerencia/ventas">Panel ventas</a>
-            <a href="/gerencia/validaciones-ventas">Validaciones ventas</a>
-            <a href="/gerencia/planes-vendidos">Planes vendidos</a>
-            <a href="/gerencia/descuentos">Descuentos</a>
-            <a href="/gerencia/finanzas/promociones">Promociones</a>
-            <a href="/gerencia/facturacion-cobranza">Facturación / cobranza</a>
-            <a href="/gerencia/recursos-financieros">Recursos financieros</a>
-            <a href="/gerencia/metas">Metas</a>
-            <a href="/gerencia/cancelaciones">Cancelaciones</a>
-            <a href="/gerencia/retractos">Retractos</a>
-            <a href="/gerencia/web-corporativa">Web corporativa</a>
-            <a href="/gerencia/empresa">Empresa</a>
-            <a href="/gerencia/diseno-login">Diseño login</a>
-            <a href="/gerencia/pie-login">Pie login</a>
-            <a href="/gerencia/backoffice-branding">Branding backoffice</a>
-            <a href="/gerencia/alianzas-clientes">Alianzas</a>
-            <a href="/gerencia/changelog">Changelog</a>
-            <a href="/gerencia/pqr-info">Info PQR</a>
-            <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte rectores</a>
-            <a href="/gerencia/notas">Notas</a>
-            <a href="/gerencia/limpieza">Limpieza datos</a>
-            <a href="/gerencia/dev-console">Consola desarrollo</a>
-            <a href="/gerencia/documentos">Biblioteca documentos</a>
-            <a href="/gerencia/lideres">Líderes</a>
           </div>
         </div>
       </div>
@@ -27562,47 +27509,283 @@ def gerencia_matriz_epp():
 
 
 
-@app.route("/gerencia/documentos/nuevo", methods=["POST", "GET"])
-def gerencia_documento_nuevo():
-    """Crea documento corporativo nuevo y abre el editor."""
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    if request.method == "GET":
-        return redirect("/gerencia/documentos")
-    titulo = (request.form.get("titulo") or "").strip()[:220]
-    clave = (request.form.get("clave") or "").strip().lower()
-    import re as _re
-    clave = _re.sub(r"[^a-z0-9\-]+", "-", clave).strip("-")[:80]
-    if not clave and titulo:
-        clave = _re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")[:60] or "doc"
-    if not clave:
-        clave = "doc-" + (fecha_hoy() or "").replace("-", "")
-    base, n = clave, 2
-    while DocumentoCorp.query.filter_by(clave=clave).first():
-        clave = "%s-%d" % (base, n)
-        n += 1
-    cat = (request.form.get("categoria") or "interno").strip()[:40]
-    pub = request.form.get("publico") == "1"
-    row = DocumentoCorp(
-        clave=clave,
-        titulo=titulo or clave,
-        cuerpo_html="<h2>1. Introducción</h2><p>Escriba aquí. Use negrita, listas y títulos en la barra.</p>",
-        publico=pub,
-        categoria=cat,
-        actualizado_en="%s %s" % (fecha_hoy(), hora_actual()),
-        actualizado_por=session.get("usuario") or "gerencia",
-    )
+def _ensure_boletas_cruce_table():
     try:
-        db.session.add(row)
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS boletas_cruce_financiero ("
+            "id SERIAL PRIMARY KEY, id_interno_bcf VARCHAR(40) UNIQUE, pqr_id INTEGER, "
+            "pqr_cliente_relacionada VARCHAR(40), institucion_id INTEGER, "
+            "codigo_colegio VARCHAR(40) DEFAULT '', nombre_colegio VARCHAR(200) DEFAULT '', "
+            "nit_colegio VARCHAR(40) DEFAULT '', plan_contrato VARCHAR(80) DEFAULT '', "
+            "valor_plan VARCHAR(40) DEFAULT '', hechos_queja TEXT DEFAULT '', "
+            "validacion_soporte BOOLEAN DEFAULT FALSE, validado_por VARCHAR(120) DEFAULT '', "
+            "validado_en VARCHAR(30) DEFAULT '', estado VARCHAR(40) DEFAULT 'PENDIENTE', "
+            "resolucion_cobranza TEXT DEFAULT '', resuelto_por VARCHAR(120) DEFAULT '', "
+            "resuelto_en VARCHAR(30) DEFAULT '', cun VARCHAR(40) DEFAULT '', "
+            "creado_en VARCHAR(30) DEFAULT '', auditoria_sesiones TEXT DEFAULT '')"
+        ))
         db.session.commit()
-    except Exception as ex:
+    except Exception:
         try:
             db.session.rollback()
         except Exception:
             pass
-        return page("Error", "<p>No se pudo crear: %s</p><p><a href='/gerencia/documentos'>Volver</a></p>" % ex)
-    return redirect("/gerencia/documentos/" + clave)
+
+
+def _next_bcf_code():
+    from datetime import datetime
+    d = datetime.now().strftime("%Y-%m-%d")
+    try:
+        n = BoletaCruceFinanciero.query.count() + 1
+    except Exception:
+        n = 1
+    return "%s-BCF-%05d" % (d, n)
+
+
+@app.route("/soporte/boleta-cruce", methods=["GET", "POST"])
+def soporte_boleta_cruce():
+    """Soporte valida identidad y expide Boleta de Cruce Financiero hacia Cobranza.
+    Radicado publico PQR del cliente + radicado interno BCF (solo equipo)."""
+    if not requiere_login() or rol_actual() not in ("Soporte", "Superadmin", "Administrador", "Gerente"):
+        return redirect("/soporte-login")
+    _ensure_boletas_cruce_table()
+    msg = err = ""
+    if request.method == "POST":
+        pqr_rad = (request.form.get("pqr_cliente_relacionada") or "").strip()[:40]
+        try:
+            iid = int(request.form.get("institucion_id") or 0)
+        except ValueError:
+            iid = 0
+        inst = Institucion.query.get(iid) if iid else None
+        hechos = (request.form.get("hechos_queja") or "").strip()
+        validado = request.form.get("validacion_soporte") == "1"
+        if not validado:
+            err = "Debe marcar: Datos del cliente validados en el sistema."
+        elif not inst:
+            err = "Seleccione el colegio."
+        elif not pqr_rad:
+            err = "Indique el radicado PQR del cliente (el que ve el Rector)."
+        else:
+            from datetime import datetime
+            code = _next_bcf_code()
+            row = BoletaCruceFinanciero(
+                id_interno_bcf=code,
+                pqr_cliente_relacionada=pqr_rad,
+                institucion_id=inst.id,
+                codigo_colegio=inst.codigo or "",
+                nombre_colegio=inst.nombre or "",
+                nit_colegio=getattr(inst, "nit", None) or "",
+                plan_contrato=inst.plan or "Basico",
+                hechos_queja=hechos,
+                validacion_soporte=True,
+                validado_por=session.get("usuario") or "soporte",
+                validado_en=datetime.now().strftime("%Y-%m-%d %H:%M"),
+                estado="PENDIENTE",
+                creado_en=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            )
+            try:
+                db.session.add(row)
+                db.session.commit()
+                msg = "Boleta interna %s creada y enviada a Cobranza. Asociada a PQR cliente %s." % (code, pqr_rad)
+                try:
+                    registrar_auditoria("Boleta BCF", "%s -> %s" % (code, pqr_rad))
+                except Exception:
+                    pass
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = str(ex)[:160]
+    colegios = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    opts = "".join(
+        '<option value="%d">%s — %s (plan: %s)</option>' % (
+            c.id, c.codigo or "", (c.nombre or "")[:50], c.plan or "Basico"
+        ) for c in colegios
+    )
+    try:
+        mis = BoletaCruceFinanciero.query.order_by(BoletaCruceFinanciero.id.desc()).limit(25).all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        mis = []
+    filas = "".join(
+        "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td style='font-weight:700'>%s</td><td>%s</td></tr>" % (
+            b.id_interno_bcf or "", b.pqr_cliente_relacionada or "", b.codigo_colegio or "",
+            b.estado or "", b.creado_en or ""
+        ) for b in mis
+    )
+    body = (
+        '<div style="max-width:860px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
+        '<p><a href="/soporte_admin" style="color:#0B2D57;font-weight:700">&larr; Soporte</a></p>'
+        '<h1 style="color:#0B2D57">Boleta de Cruce Financiero</h1>'
+        '<p style="color:#64748b;font-size:14px;line-height:1.5">'
+        '<b>Radicado PQR del cliente</b> (ej. 202622000002): lo ve el Rector en pantalla y correo.<br>'
+        '<b>Radicado interno BCF</b> (ej. 2026-09-23-BCF-00085): solo mesa de control / Cobranza. Nunca lo ve el cliente.'
+        '</p>'
+        '%s%s'
+        '<form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-top:12px">'
+        '<label style="font-size:12px;font-weight:700">Radicado PQR del cliente (publico)</label>'
+        '<input name="pqr_cliente_relacionada" required placeholder="Ej: 202622000002" '
+        'style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;margin-bottom:10px">'
+        '<label style="font-size:12px;font-weight:700">Colegio</label>'
+        '<select name="institucion_id" required style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:10px">%s</select>'
+        '<label style="font-size:12px;font-weight:700">Hechos de la queja (texto del cliente / PQR)</label>'
+        '<textarea name="hechos_queja" rows="4" style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box" '
+        'placeholder="Copie el texto de la PQR publica"></textarea>'
+        '<label style="display:flex;gap:8px;align-items:flex-start;margin:14px 0;font-weight:700;font-size:13px">'
+        '<input type="checkbox" name="validacion_soporte" value="1" required style="margin-top:3px"> '
+        '<span>Datos del cliente validados en el sistema (cedula/NIT, representante o secretaria autorizada, contrato activo o suspendido)</span></label>'
+        '<button type="submit" style="background:#005BEA;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">'
+        'Expedir Boleta BCF y enviar a Cobranza</button></form>'
+        '<h2 style="color:#0B2D57;font-size:16px;margin-top:28px">Boletas recientes</h2>'
+        '<table style="width:100%%;border-collapse:collapse;background:#fff;font-size:13px;border-radius:12px;overflow:hidden">'
+        '<tr style="background:#0B2D57;color:#fff">'
+        '<th style="padding:8px;text-align:left">BCF interno</th>'
+        '<th style="padding:8px;text-align:left">PQR cliente</th>'
+        '<th style="padding:8px;text-align:left">Colegio</th>'
+        '<th style="padding:8px;text-align:left">Estado</th>'
+        '<th style="padding:8px;text-align:left">Fecha</th></tr>'
+        '%s</table></div>'
+    ) % (
+        (('<div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:10px 0">' + msg + '</div>') if msg else ''),
+        (('<div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0">' + err + '</div>') if err else ''),
+        opts,
+        filas or '<tr><td colspan=5 style="padding:12px;color:#64748b">Ninguna aun.</td></tr>',
+    )
+    return page("Boleta de Cruce Financiero", body)
+
+
+@app.route("/cobranza/boletas-cruce", methods=["GET", "POST"])
+@app.route("/gerencia/boletas-cruce", methods=["GET", "POST"])
+def cobranza_boletas_cruce():
+    """Panel interno de resolucion financiera — ambos radicados visibles."""
+    if not requiere_login():
+        return redirect("/cobranza-login")
+    rol = rol_actual()
+    if rol not in ("Cobranza", "Gerente", "Superadmin", "Administrador"):
+        return acceso_denegado("Solo Cobranza o Gerencia.")
+    _ensure_boletas_cruce_table()
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            bid = int(request.form.get("boleta_id") or 0)
+        except ValueError:
+            bid = 0
+        accion = (request.form.get("accion") or "").strip()
+        resol = (request.form.get("resolucion_cobranza") or "").strip()
+        b = BoletaCruceFinanciero.query.get(bid) if bid else None
+        if not b:
+            err = "Boleta no encontrada."
+        elif b.estado != "PENDIENTE":
+            err = "Esta boleta ya fue resuelta."
+        elif accion in ("aprobar", "rechazar"):
+            from datetime import datetime
+            b.estado = "APROBADO" if accion == "aprobar" else "RECHAZADO"
+            b.resolucion_cobranza = resol or (
+                "Aprobado por Cobranza. Se aplica nota credito." if accion == "aprobar" else "Rechazado."
+            )
+            b.resuelto_por = session.get("usuario") or "cobranza"
+            b.resuelto_en = datetime.now().strftime("%Y-%m-%d %H:%M")
+            if accion == "aprobar":
+                b.cun = "CUN-%s-%05d" % (datetime.now().strftime("%Y%m%d"), b.id)
+            try:
+                db.session.commit()
+                msg = (
+                    "Boleta %s APROBADA. CUN %s. Soporte puede cerrar PQR %s." % (
+                        b.id_interno_bcf, b.cun, b.pqr_cliente_relacionada
+                    )
+                ) if accion == "aprobar" else ("Boleta %s rechazada." % (b.id_interno_bcf or ""))
+                try:
+                    registrar_auditoria("BCF " + accion, b.id_interno_bcf or "")
+                except Exception:
+                    pass
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                err = str(ex)[:140]
+    try:
+        rows = BoletaCruceFinanciero.query.order_by(BoletaCruceFinanciero.id.desc()).limit(40).all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        rows = []
+    cards = ""
+    for b in rows:
+        color = {"PENDIENTE": "#b45309", "APROBADO": "#166534", "RECHAZADO": "#991b1b"}.get(b.estado, "#334155")
+        estado_txt = {
+            "PENDIENTE": "PENDIENTE DE APROBACION POR COBRANZA",
+            "APROBADO": "APROBADO",
+            "RECHAZADO": "RECHAZADO",
+        }.get(b.estado, b.estado or "")
+        if b.estado == "PENDIENTE":
+            acciones = (
+                '<form method="POST" style="margin-top:12px">'
+                '<input type="hidden" name="boleta_id" value="%d">'
+                '<label style="font-size:12px;font-weight:700">Resolucion formal de Cobranza</label>'
+                '<textarea name="resolucion_cobranza" rows="3" style="width:100%%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box" '
+                'placeholder="Ej: Revisada la auditoria, se constata radicacion oportuna. Se anula cobro..."></textarea>'
+                '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'
+                '<button name="accion" value="aprobar" style="background:#166534;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800;cursor:pointer">'
+                'Aplicar Nota Credito y Aprobar</button>'
+                '<button name="accion" value="rechazar" style="background:#991b1b;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800;cursor:pointer">'
+                'Rechazar</button></div></form>'
+            ) % b.id
+        else:
+            acciones = (
+                '<p style="font-size:12px;color:#64748b;margin-top:10px">Resuelto por <b>%s</b> · %s · CUN: <b>%s</b></p>'
+                '<p style="font-size:13px;background:#f8fafc;padding:10px;border-radius:8px">%s</p>'
+            ) % (b.resuelto_por or "—", b.resuelto_en or "", b.cun or "—", (b.resolucion_cobranza or "")[:600])
+        cards += (
+            '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 4px 14px rgba(15,23,42,.04)">'
+            '<div style="font-size:11px;font-weight:700;color:#86868b;letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px">'
+            'Panel interno de resolucion financiera — PROCSIS HQ</div>'
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+            '<div style="background:#f8fafc;border-radius:10px;padding:10px">'
+            '<div style="font-size:11px;color:#64748b">ID de Tramite Interno (BCF)</div>'
+            '<div style="font-weight:800;color:#0B2D57;font-size:16px">%s</div></div>'
+            '<div style="background:#f8fafc;border-radius:10px;padding:10px">'
+            '<div style="font-size:11px;color:#64748b">Asociado a PQR Cliente</div>'
+            '<div style="font-weight:800;color:#005BEA;font-size:16px">%s</div></div></div>'
+            '<div style="color:%s;font-weight:800;font-size:13px;margin-bottom:8px">Estado: %s</div>'
+            '<p style="font-size:12px;margin:0 0 6px"><b>Validacion de Soporte:</b> %s · %s</p>'
+            '<p style="font-size:13px;margin:0 0 4px"><b>Institucion:</b> %s (%s)</p>'
+            '<p style="font-size:13px;margin:0 0 4px"><b>NIT:</b> %s · <b>Plan:</b> %s %s</p>'
+            '<div style="font-size:12px;color:#475569;background:#f1f5f9;padding:12px;border-radius:8px;margin-top:8px">'
+            '<b>Hechos de la queja:</b><br>%s</div>%s</div>'
+        ) % (
+            b.id_interno_bcf or "—",
+            b.pqr_cliente_relacionada or "—",
+            color, estado_txt,
+            ("[X] Identidad y contrato confirmados por " + (b.validado_por or "Soporte")) if b.validacion_soporte else "[ ] Pendiente",
+            b.validado_en or "",
+            b.nombre_colegio or "", b.codigo_colegio or "",
+            b.nit_colegio or "—", b.plan_contrato or "",
+            ("(" + b.valor_plan + ")") if b.valor_plan else "",
+            (b.hechos_queja or "—").replace("<", "&lt;"),
+            acciones,
+        )
+    volver = "/gerencia/hq" if rol in ("Gerente", "Superadmin", "Administrador") else "/cobranza/panel"
+    body = (
+        '<div style="max-width:920px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
+        '<p><a href="%s" style="color:#0B2D57;font-weight:700">&larr; Volver</a></p>'
+        '<h1 style="color:#0B2D57">Boletas de Cruce Financiero</h1>'
+        '<p style="color:#64748b;font-size:14px">Tramites internos. El BCF no lo ve el cliente. Al aprobar se genera CUN para cierre de la PQR.</p>'
+        '%s%s%s</div>'
+    ) % (
+        volver,
+        (('<div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:10px 0">' + msg + '</div>') if msg else ''),
+        (('<div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0">' + err + '</div>') if err else ''),
+        cards or '<p style="color:#64748b">No hay boletas.</p>',
+    )
+    return page("Boletas Cruce Financiero", body)
+
 
 
 @app.route("/gerencia/documentos")
@@ -27645,23 +27828,7 @@ def gerencia_documentos_lista():
 <div class="dl">
   <p><a href="/gerencia/hq">← Gerencia HQ</a></p>
   <h1>Biblioteca documental · Contingencia y legal</h1>
-  <p style="color:#64748b;font-size:13px">Editor tipo Word (negrita, listas). Cree documentos nuevos. Públicos en <code>/docs/…</code>.</p>
-  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0 16px">
-    <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Crear documento nuevo</h3>
-    <form method="POST" action="/gerencia/documentos/nuevo" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-      <div style="flex:1;min-width:180px"><label style="font-size:11px;font-weight:700">Título</label>
-        <input name="titulo" required placeholder="Título del documento" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
-      <div style="width:140px"><label style="font-size:11px;font-weight:700">Clave URL</label>
-        <input name="clave" placeholder="auto" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"></div>
-      <div style="width:140px"><label style="font-size:11px;font-weight:700">Categoría</label>
-        <select name="categoria" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
-          <option value="interno">Interno</option><option value="legal">Legal</option>
-          <option value="contingencia">Contingencia</option><option value="publico">Público</option>
-        </select></div>
-      <label style="font-size:12px;font-weight:600"><input type="checkbox" name="publico" value="1"> Público</label>
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer">Crear y editar</button>
-    </form>
-  </div>
+  <p style="color:#64748b;font-size:13px">Editor corporativo. Guarde y descargue PDF. Públicos en <code>/docs/…</code>.</p>
   <table>
     <tr><th>Documento</th><th>Visibilidad</th><th>Última edición</th><th>Acciones</th></tr>
     {filas or "<tr><td colspan=4>Sin documentos</td></tr>"}
@@ -37942,20 +38109,6 @@ def tenants():
               <td style="text-align:right;color:#166534;font-weight:700">{pagos_txt}</td>
               <td><span class="mini-text" style="color:#64748b">Solo lectura</span></td>
             </tr>"""
-        elif rol == "Soporte":
-            # SOPORTE: solo lectura — usuarios, estudiantes, datos. SIN editar/entrar/eliminar
-            filas += f"""<tr>
-              <td>{i.id}</td>
-              <td><img src='{logo}' alt='' style='width:36px;height:36px;object-fit:contain;background:#fff;border-radius:8px'></td>
-              <td><b>{i.codigo}</b></td>
-              <td>{i.nombre}<br><span class='mini-text'>{i.municipio or ''} / {i.departamento or ''}</span></td>
-              <td>{i.sede or ''}</td>
-              <td>{i.estado}</td>
-              <td><b>{i.plan or 'Basico'}</b></td>
-              <td><b>{n_users}</b> usr / <b>{n_est}</b> est</td>
-              <td>{i.fecha_creacion or ''}</td>
-              <td><span class="mini-text" style="color:#64748b">Solo consulta</span></td>
-            </tr>"""
         else:
             _eliminar_link = (
                 f"· <a class='danger-link' href='/eliminar_institucion/{i.id}' onclick=\"return confirm('¿Eliminar institución {i.codigo}?')\">Eliminar</a>"
@@ -38200,8 +38353,6 @@ def nueva_institucion():
 def editar_institucion(id):
     if rol_actual() == "Cobranza":
         return acceso_denegado("Cobranza no puede entrar, editar, crear ni eliminar colegios. Solo consulta de plan y saldos.")
-    if rol_actual() == "Soporte":
-        return acceso_denegado("Soporte no edita colegios. Solo consulta usuarios, estudiantes e información del colegio.")
     if not requiere_soporte_global():
         return redirect("/login")
     inst = Institucion.query.get_or_404(id)
