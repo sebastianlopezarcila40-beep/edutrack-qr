@@ -35,16 +35,48 @@ from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from sqlalchemy import func, text, or_
-from modules.tenants import (
-    init_tenants_db,
-    crear_institucion,
-    listar_instituciones,
-    total_instituciones
-)
+try:
+    from modules.tenants import (
+        init_tenants_db,
+        crear_institucion,
+        listar_instituciones,
+        total_instituciones,
+    )
+except Exception as _tenants_imp_err:
+    print("modules.tenants no disponible, usando fallbacks:", _tenants_imp_err)
+
+    def init_tenants_db():
+        return None
+
+    def crear_institucion(codigo, nombre, municipio=None, departamento=None, estado=None, **kwargs):
+        return None
+
+    def listar_instituciones():
+        try:
+            return Institucion.query.order_by(Institucion.id.desc()).all()
+        except Exception:
+            return []
+
+    def total_instituciones():
+        try:
+            return Institucion.query.count()
+        except Exception:
+            return 0
+
 
 app = Flask(__name__)
 
 _promo_cron_last = {"day": ""}
+
+
+
+@app.before_request
+def _db_clean_aborted():
+    """Evita que una transaccion Postgres abortada tumbe todo el sistema."""
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
 
 
 @app.before_request
@@ -25684,78 +25716,51 @@ def gerencia_hq():
     
         <div class="hq-bento-card" style="margin-top:8px">
           <h3>Todos los módulos de Gerencia</h3>
-          <p class="hq-bento-sub">Acceso directo a cada función del sistema (visibles y activas)</p>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-top:12px;text-align:left">
-            <div>
-              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Talento / personal</div>
-              <div class="hq-pills" style="justify-content:flex-start">
-                <a href="/gerencia/admision-personal">Admisión de personal</a>
-                <a href="/gerencia/certificados-apoyo">Certificados de apoyo</a>
-                <a href="/gerencia/certificaciones">Certificaciones</a>
-                <a href="/gerencia/nomina">Nómina</a>
-                <a href="/gerencia/planillas-pila">Planillas PILA</a>
-                <a href="/gerencia/matriz-epp">Matriz EPP</a>
-                <a href="/gerencia/talento-legal">Guía talento legal</a>
-                <a href="/gerencia/usuarios">Usuarios gerencia</a>
-                <a href="/gerencia/roles">Roles</a>
-              </div>
-            </div>
-            <div>
-              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Legal / contratos</div>
-              <div class="hq-pills" style="justify-content:flex-start">
-                <a href="/gerencia/contratos">Contratos colegios</a>
-                <a href="/gerencia/contratos-saas">Contratos SaaS</a>
-                <a href="/gerencia/contratos-firmas">Firmas de contratos</a>
-                <a href="/gerencia/contrato-plantilla">Plantilla de contrato</a>
-                <a href="/gerencia/plantilla-contrato">Plantilla contrato</a>
-                <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
-                <a href="/gerencia/legal/consentimientos">Consentimientos</a>
-                <a href="/gerencia/paginas-legales">Páginas legales</a>
-                <a href="/gerencia/libro-actas">Libro de actas</a>
-                <a href="/gerencia/requerimientos-autoridades">Req. autoridades</a>
-              </div>
-            </div>
-            <div>
-              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Finanzas / ventas</div>
-              <div class="hq-pills" style="justify-content:flex-start">
-                <a href="/gerencia/ventas">Panel ventas</a>
-                <a href="/gerencia/validaciones-ventas">Validaciones ventas</a>
-                <a href="/gerencia/planes-vendidos">Planes vendidos</a>
-                <a href="/gerencia/descuentos">Descuentos</a>
-                <a href="/gerencia/finanzas/promociones">Promociones</a>
-                <a href="/gerencia/facturacion-cobranza">Facturación / cobranza</a>
-                <a href="/gerencia/recursos-financieros">Recursos financieros</a>
-                <a href="/gerencia/metas">Metas</a>
-                <a href="/gerencia/cancelaciones">Cancelaciones</a>
-                <a href="/gerencia/retractos">Retractos</a>
-                <a href="/gerencia/solicitudes-plan">Solicitudes cambio plan</a>
-              </div>
-            </div>
-            <div>
-              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Web / marca / login</div>
-              <div class="hq-pills" style="justify-content:flex-start">
-                <a href="/gerencia/web-corporativa">Web corporativa</a>
-                <a href="/gerencia/empresa">Empresa</a>
-                <a href="/gerencia/marca-contacto">Marca y contacto</a>
-                <a href="/gerencia/horarios-atencion">Horarios de atención</a>
-                <a href="/gerencia/diseno-login">Diseño del login</a>
-                <a href="/gerencia/pie-login">Pie del login</a>
-                <a href="/gerencia/backoffice-branding">Branding backoffice</a>
-                <a href="/gerencia/alianzas-clientes">Alianzas / clientes</a>
-                <a href="/gerencia/changelog">Changelog</a>
-                <a href="/gerencia/pqr-info">Info PQR</a>
-              </div>
-            </div>
-            <div>
-              <div style="font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;margin-bottom:6px">Operación / sistema</div>
-              <div class="hq-pills" style="justify-content:flex-start">
-                <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte rectores</a>
-                <a href="/gerencia/notas">Notas (gerencia)</a>
-                <a href="/gerencia/limpieza">Limpieza de datos</a>
-                <a href="/gerencia/dev-console">Consola de desarrollo</a>
-                <a href="/gerencia/documentos">Biblioteca documentos</a>
-              </div>
-            </div>
+          <p class="hq-bento-sub">Acceso directo a cada función del sistema</p>
+          <div class="hq-pills" style="justify-content:flex-start;flex-wrap:wrap">
+            <a href="/gerencia/admision-personal">Admisión personal</a>
+            <a href="/gerencia/nomina">Nómina</a>
+            <a href="/gerencia/planillas-pila">Planillas PILA</a>
+            <a href="/gerencia/certificados-apoyo">Certificados apoyo</a>
+            <a href="/gerencia/certificaciones">Certificaciones</a>
+            <a href="/gerencia/matriz-epp">Matriz EPP</a>
+            <a href="/gerencia/talento-legal">Talento legal</a>
+            <a href="/gerencia/usuarios">Usuarios</a>
+            <a href="/gerencia/roles">Roles</a>
+            <a href="/gerencia/contratos">Contratos colegios</a>
+            <a href="/gerencia/contratos-saas">Contratos SaaS</a>
+            <a href="/gerencia/contratos-firmas">Firmas contratos</a>
+            <a href="/gerencia/contrato-plantilla">Plantilla contrato</a>
+            <a href="/gerencia/plantilla-contrato">Plantilla contrato 2</a>
+            <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
+            <a href="/gerencia/legal/consentimientos">Consentimientos</a>
+            <a href="/gerencia/paginas-legales">Páginas legales</a>
+            <a href="/gerencia/libro-actas">Libro de actas</a>
+            <a href="/gerencia/requerimientos-autoridades">Req. autoridades</a>
+            <a href="/gerencia/ventas">Panel ventas</a>
+            <a href="/gerencia/validaciones-ventas">Validaciones ventas</a>
+            <a href="/gerencia/planes-vendidos">Planes vendidos</a>
+            <a href="/gerencia/descuentos">Descuentos</a>
+            <a href="/gerencia/finanzas/promociones">Promociones</a>
+            <a href="/gerencia/facturacion-cobranza">Facturación / cobranza</a>
+            <a href="/gerencia/recursos-financieros">Recursos financieros</a>
+            <a href="/gerencia/metas">Metas</a>
+            <a href="/gerencia/cancelaciones">Cancelaciones</a>
+            <a href="/gerencia/retractos">Retractos</a>
+            <a href="/gerencia/web-corporativa">Web corporativa</a>
+            <a href="/gerencia/empresa">Empresa</a>
+            <a href="/gerencia/diseno-login">Diseño login</a>
+            <a href="/gerencia/pie-login">Pie login</a>
+            <a href="/gerencia/backoffice-branding">Branding backoffice</a>
+            <a href="/gerencia/alianzas-clientes">Alianzas</a>
+            <a href="/gerencia/changelog">Changelog</a>
+            <a href="/gerencia/pqr-info">Info PQR</a>
+            <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte rectores</a>
+            <a href="/gerencia/notas">Notas</a>
+            <a href="/gerencia/limpieza">Limpieza datos</a>
+            <a href="/gerencia/dev-console">Consola desarrollo</a>
+            <a href="/gerencia/documentos">Biblioteca documentos</a>
+            <a href="/gerencia/lideres">Líderes</a>
           </div>
         </div>
 
@@ -25764,61 +25769,7 @@ def gerencia_hq():
       </div>
 
       
-      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/gerencia/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios gerencia</a><a href="/gerencia/roles" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Roles</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details>
-<details><summary style="cursor:pointer;font-weight:600;padding:8px">Talento extra</summary>
-<a href="/gerencia/admision-personal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Admisión personal</a>
-<a href="/gerencia/nomina" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Nómina</a>
-<a href="/gerencia/planillas-pila" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Planillas PILA</a>
-<a href="/gerencia/certificados-apoyo" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Certificados apoyo</a>
-<a href="/gerencia/certificaciones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Certificaciones</a>
-<a href="/gerencia/matriz-epp" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Matriz EPP</a>
-<a href="/gerencia/talento-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Talento legal</a>
-</details>
-<details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal / contratos</summary>
-<a href="/gerencia/contratos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Contratos colegios</a>
-<a href="/gerencia/contratos-saas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Contratos SaaS</a>
-<a href="/gerencia/contratos-firmas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Firmas contratos</a>
-<a href="/gerencia/contrato-plantilla" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Plantilla contrato</a>
-<a href="/gerencia/plantilla-contrato" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Plantilla contrato 2</a>
-<a href="/gerencia/firmas-corporativas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Firmas corporativas</a>
-<a href="/gerencia/legal/consentimientos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Consentimientos</a>
-<a href="/gerencia/paginas-legales" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Páginas legales</a>
-<a href="/gerencia/libro-actas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Libro de actas</a>
-<a href="/gerencia/requerimientos-autoridades" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Req. autoridades</a>
-</details>
-<details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas / ventas</summary>
-<a href="/gerencia/ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Panel ventas</a>
-<a href="/gerencia/validaciones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Validaciones ventas</a>
-<a href="/gerencia/planes-vendidos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Planes vendidos</a>
-<a href="/gerencia/descuentos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Descuentos</a>
-<a href="/gerencia/finanzas/promociones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Promociones</a>
-<a href="/gerencia/facturacion-cobranza" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Facturación / cobranza</a>
-<a href="/gerencia/recursos-financieros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Recursos financieros</a>
-<a href="/gerencia/metas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Metas</a>
-<a href="/gerencia/cancelaciones" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cancelaciones</a>
-<a href="/gerencia/retractos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Retractos</a>
-<a href="/gerencia/solicitudes-plan" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Solicitudes cambio plan</a>
-</details>
-<details><summary style="cursor:pointer;font-weight:600;padding:8px">Web / marca</summary>
-<a href="/gerencia/web-corporativa" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Web corporativa</a>
-<a href="/gerencia/empresa" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Empresa</a>
-<a href="/gerencia/marca-contacto" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Marca y contacto</a>
-<a href="/gerencia/horarios-atencion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Horarios atención</a>
-<a href="/gerencia/diseno-login" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Diseño login</a>
-<a href="/gerencia/pie-login" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Pie del login</a>
-<a href="/gerencia/backoffice-branding" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Branding backoffice</a>
-<a href="/gerencia/alianzas-clientes" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Alianzas / clientes</a>
-<a href="/gerencia/changelog" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Changelog</a>
-<a href="/gerencia/pqr-info" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Info PQR</a>
-</details>
-<details><summary style="cursor:pointer;font-weight:600;padding:8px">Operación</summary>
-<a href="/gerencia/autorizar-soporte-rectores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Autorizar soporte rectores</a>
-<a href="/gerencia/notas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Notas gerencia</a>
-<a href="/gerencia/limpieza" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Limpieza de datos</a>
-<a href="/gerencia/dev-console" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Consola desarrollo</a>
-<a href="/gerencia/documentos" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Biblioteca documentos</a>
-</details>
-</aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v2.6.0</div></div></div></div></div>
+      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details></aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v2.6.0</div></div></div></div></div>
 
       <div id="hq-tab-contingencia" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Boveda documental, juridica y DRP</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Boveda documental, juridica y DRP</h3><div style="display:flex;flex-wrap:wrap;gap:8px"><a href="/gerencia/documentos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Biblioteca</a><a href="/gerencia/documentos/plan-drp" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan DRP</a><a href="/gerencia/documentos/politica-datos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Politica de datos</a><a href="/gerencia/documentos/plan-contingencia" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan contingencia</a><a href="/gerencia/documentos/contrato-licenciamiento" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contrato SaaS</a><a href="/gerencia/contratos-personal" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contratos</a></div></div></div>
 
