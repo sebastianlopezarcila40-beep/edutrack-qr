@@ -55145,6 +55145,37 @@ def contabilidad_comercial():
     return page("Contabilidad comercial", _cont_shell("📒 Contabilidad comercial", body, back))
 
 
+def _commit_con_reintento(intentos=3, espera=1.5):
+    """Reintenta el commit si la base de datos está reiniciando/arrancando
+    (típico segundos después de un deploy o reinicio en Railway/Render).
+    Devuelve (ok, error_legible)."""
+    import time as _time
+    from sqlalchemy.exc import OperationalError as _OpErr
+    ultimo_error = None
+    for intento in range(1, intentos + 1):
+        try:
+            db.session.commit()
+            return True, None
+        except _OpErr as e:
+            ultimo_error = e
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            if intento < intentos:
+                _time.sleep(espera)
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return False, str(e)[:200]
+    msg = str(ultimo_error) if ultimo_error else "Error de conexión"
+    if "starting up" in msg or "could not connect" in msg or "server closed the connection" in msg:
+        return False, "La base de datos se está reiniciando en este momento. Espera 15-20 segundos y vuelve a intentar — tu información NO se perdió, solo debes reenviar el formulario."
+    return False, msg[:200]
+
+
 @app.route("/gerencia/contabilidad/nueva", methods=["GET", "POST"])
 @app.route("/cobranza/contabilidad/nueva", methods=["GET", "POST"])
 def contabilidad_nueva():
@@ -55219,7 +55250,10 @@ def contabilidad_nueva():
                 if pt and not parte_nombre:
                     op.parte_nombre = pt.nombre
             db.session.add(op)
-            db.session.commit()
+            ok, err_legible = _commit_con_reintento()
+            if not ok:
+                err = err_legible
+                raise Exception(err_legible)
             try:
                 registrar_auditoria("Contabilidad nueva", "%s %s %s" % (op.codigo, op.tipo, op.valor_total))
             except Exception:
@@ -55227,7 +55261,7 @@ def contabilidad_nueva():
             return redirect("/gerencia/contabilidad/op/%s" % op.id)
         except Exception as e:
             db.session.rollback()
-            err = str(e)[:200]
+            err = err or str(e)[:200]
 
     opts_tipo = "".join('<option value="%s">%s — %s</option>' % (a, a, b) for a, b in TIPOS_OPERACION_CONT)
     partes_opts = '<option value="">— Manual / escribir nombre —</option>'
