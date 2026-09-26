@@ -3400,7 +3400,7 @@ def html_anuncio_global():
     try:
         if getattr(p, "anuncio_tecnico_activo", False) and (getattr(p, "anuncio_tecnico", None) or "").strip():
             path0 = (request.path or "")
-            if not path0.startswith(("/backoffice", "/dev-console", "/gerencia", "/ventas-login", "/soporte-login")):
+            if not path0.startswith(("/login", "/dev-console", "/gerencia", "/ventas-login", "/soporte-login")):
                 txt = _esc((p.anuncio_tecnico or "")[:500])
                 return (
                     '<div style="background:#0B2D57;color:#fff;padding:10px 16px;font-size:13px;text-align:center;'
@@ -3717,9 +3717,9 @@ _STAFF_TAB_JS = (
     "var path=location.pathname||'';"
     "if(path.indexOf('/logout')>=0){try{sessionStorage.removeItem(K);}catch(e){}return;}"
     "var isLogin=/\\/(login|gerencia-login|ventas-login|soporte-login|cobranza-login)(\\/|$)/.test(path)"
-    "||path==='/backoffice'||path==='/backoffice/login'||path==='/edutrack-backoffice';"
+    "||path==='/login';"
     "if(isLogin||path==='/' )return;"
-    "var staff=/\\/(backoffice\\/hub|gerencia|ventas|soporte|cobranza|dev-console|cerrar-turno)/.test(path);"
+    "var staff=/\\/(gerencia|ventas|soporte|cobranza|dev-console|cerrar-turno)/.test(path);"
     "if(!staff)return;"
     "try{sessionStorage.setItem(K,'1');}catch(e){}"
     "})();"
@@ -3733,12 +3733,11 @@ def _is_staff_path(path):
         return False
     skip = (
         "/logout", "/login", "/gerencia-login", "/ventas-login",
-        "/soporte-login", "/cobranza-login", "/backoffice",
-        "/backoffice/login", "/edutrack-backoffice",
+        "/soporte-login", "/cobranza-login",
     )
     if path in skip:
         return False
-    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/backoffice/hub", "/dev-console", "/cerrar-turno")
+    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/dev-console", "/cerrar-turno")
     return any(path == k or path.startswith(k + "/") or (k != "/gerencia" and path.startswith(k)) or path.startswith("/gerencia") for k in keys)
 
 
@@ -3773,7 +3772,7 @@ def _staff_nav_items(path, rol=""):
             ("/dev-console?tab=temas", "Diseño / CSS"),
             ("/gerencia/planes/nuevo", "Crear plan (técnico)"),
             ("/seguridad", "Seguridad e incidentes"),
-            ("/backoffice/hub", "Tablero maestro"),
+            ("/gerencia/hub", "Tablero maestro"),
             ("/logout", "Salir"),
         ]
     elif rol in ("Comercial", "Ventas", "Supervisor de Ventas"):
@@ -3819,6 +3818,14 @@ def _staff_nav_items(path, rol=""):
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/hq", "Dashboard"),
+            ("/gerencia/usuarios", "Usuarios internos"),
+            ("/gerencia/auditoria", "Auditoría IP"),
+            ("/gerencia/datos-empresa", "Datos de la empresa"),
+            ("/gerencia/web-corporativa", "Web corporativa (textos/contacto)"),
+            ("/gerencia/web-menu", "Menú público"),
+            ("/gerencia/colegios-config", "Colegios · configuración"),
+            ("/gerencia/reportes", "Reportes"),
+            ("/gerencia/indicadores", "Indicadores"),
             ("/gerencia/retractos", "Retractos y bajas"),
             ("/gerencia/retractos/config", "Leyes y cláusulas"),
             ("/gerencia/retractos/reembolsos", "Procesar reembolsos"),
@@ -3838,12 +3845,12 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/pie-login", "Pie login colegios"),
             ("/gerencia/turnos", "Turnos del equipo"),
             ("/seguridad", "Seguridad e incidentes"),
-            ("/backoffice/hub", "Tablero maestro"),
+            ("/gerencia/hub", "Tablero maestro (todos los módulos)"),
             ("/logout", "Salir"),
         ]
     else:
         # Fallback mínimo
-        items = [("/backoffice", "Backoffice"), ("/logout", "Salir")]
+        items = [("/login", "Portal de acceso"), ("/logout", "Salir")]
 
     html = []
     try:
@@ -5624,9 +5631,9 @@ def before():
         if ultimo and ahora_ts - float(ultimo) > TIEMPO_MAX_INACTIVIDAD:
             rol_expirado = session.get("rol")
             session.clear()
-            destino = {"Soporte": "/backoffice", "Comercial": "/backoffice",
-                       "Gerente": "/backoffice", "Administrador": "/backoffice",
-                       "Superadmin": "/backoffice"}.get(rol_expirado, "/login")
+            destino = {"Soporte": "/login", "Comercial": "/login",
+                       "Gerente": "/login", "Administrador": "/login",
+                       "Superadmin": "/login"}.get(rol_expirado, "/login")
             return redirect(destino)
         session["ultimo_movimiento"] = ahora_ts
         if session.get("password_temporal") and request.path not in ["/cambiar_password", "/logout", "/docente-login"] and not request.path.startswith("/static") and not request.path.startswith("/docente"):
@@ -8985,7 +8992,7 @@ def _guard_plan_qr_rutas():
         if not session.get("usuario"):
             return None
         path = (request.path or "").split("?")[0]
-        if path.startswith(("/static", "/api/", "/logout", "/login", "/anuncio", "/gerencia", "/ventas", "/soporte", "/cobranza", "/backoffice", "/dev-console")):
+        if path.startswith(("/static", "/api/", "/logout", "/login", "/anuncio", "/gerencia", "/ventas", "/soporte", "/cobranza", "/dev-console")):
             return None
         rol = rol_actual()
         if rol in _ROLES_GLOBAL or session.get("soporte"):
@@ -9565,7 +9572,7 @@ def _login_unico_backoffice():
             "/gerencia-login", "/ventas-login", "/soporte-login",
             "/cobranza-login", "/dev-console-login",
         ):
-            return redirect("/backoffice")
+            return redirect("/login")
     except Exception:
         pass
     return None
@@ -9597,16 +9604,16 @@ def session_idle_timeout():
         rol_exp = session.get("rol") or ""
         session.clear()
         destino = {
-            "Soporte": "/backoffice", "Comercial": "/backoffice", "Ventas": "/ventas-login",
-            "Gerente": "/backoffice", "Administrador": "/backoffice",
-            "Superadmin": "/backoffice", "Cobranza": "/backoffice",
+            "Soporte": "/login", "Comercial": "/login", "Ventas": "/login",
+            "Gerente": "/login", "Administrador": "/login",
+            "Superadmin": "/login", "Cobranza": "/login",
         }.get(rol_exp, "/login")
         if path.startswith("/soporte"):
-            destino = "/soporte-login"
+            destino = "/login"
         elif path.startswith("/gerencia"):
-            destino = "/gerencia-login"
+            destino = "/login"
         elif path.startswith("/ventas"):
-            destino = "/ventas-login"
+            destino = "/login"
         return redirect(destino)
     session["_last_active"] = now
     session["ultimo_movimiento"] = now
@@ -9620,7 +9627,7 @@ def seguridad_empleados_gate():
     path = request.path or ""
     if path.startswith("/static") or path in (
         "/login", "/soporte-login", "/docente-login", "/logout",
-        "/recuperar", "/cookies", "/legal", "/ayuda", "/centro-ayuda", "/backoffice", "/edutrack-backoffice", "/dev-console-login", "/dev-console", "/ventas-login", "/gerencia-login",
+        "/recuperar", "/cookies", "/legal", "/ayuda", "/centro-ayuda", "/dev-console-login", "/dev-console", "/ventas-login", "/gerencia-login",
         "/cobranza-login", "/cobranza", "/cobranza/panel",
         "/ventas", "/ventas-login", "/ventas/panel", "/gerencia-login", "/gerencia/planes", "/whatsapp", "/whatsapp-soporte", "/contacto", "/pqr",
         "/familia-login", "/familia", "/familia/boletin", "/familia/certificado",
@@ -9869,23 +9876,22 @@ def _nav_public_html(active=""):
     html = """
 <style>
 /* NAV-APPLE-V2 span-not-button */
-.navbar-apple-wrap{position:sticky;top:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.navbar-apple-wrap{position:static;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 .navbar-apple-glass{
   position:relative;width:100%;box-sizing:border-box;
   display:flex;justify-content:space-between;align-items:center;
   padding:12px 28px;gap:16px;
-  background-color:rgba(255,255,255,.72);
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  border-bottom:1px solid rgba(0,0,0,.08);
+  background-color:#1d1d1f;
+  border-bottom:1px solid rgba(255,255,255,.08);
 }
-.nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1d1d1f;font-weight:600;font-size:14px;flex-shrink:0}
+.nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#f5f5f7;font-weight:600;font-size:14px;flex-shrink:0}
 .nav-logo-apple .logo-micro{height:22px;width:auto;object-fit:contain}
 .nav-links-center{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:center;flex:1}
 /* Texto plano estilo Apple — NO button (el CSS global pinta todos los button de azul) */
 .navbar-apple-wrap span.link-apple,
 .navbar-apple-wrap .link-apple{
   font-size:14px !important;font-weight:400 !important;letter-spacing:-.01em !important;
-  color:#1d1d1f !important;text-decoration:none !important;opacity:.88 !important;
+  color:#f5f5f7 !important;text-decoration:none !important;opacity:.82 !important;
   padding:8px 12px !important;border-radius:0 !important;background:transparent !important;
   border:0 !important;cursor:pointer !important;font-family:inherit !important;
   box-shadow:none !important;width:auto !important;margin:0 !important;display:inline-block !important;
@@ -9895,7 +9901,7 @@ def _nav_public_html(active=""):
 .navbar-apple-wrap span.link-apple:hover,
 .navbar-apple-wrap .link-apple:hover,
 .navbar-apple-wrap .link-apple.is-hot{
-  opacity:1 !important;color:#0B63CE !important;background:transparent !important;box-shadow:none !important;
+  opacity:1 !important;color:#2997ff !important;background:transparent !important;box-shadow:none !important;
   filter:none !important;transform:none !important;
 }
 .nav-button-right{flex-shrink:0}
@@ -11326,38 +11332,138 @@ def login():
         inst_id = None
 
     if request.method == "POST" and not rate_blocked:
-        raw_inst = request.form.get("institucion_id")
-        try:
-            inst_id = int(raw_inst) if raw_inst else None
-        except (TypeError, ValueError):
-            inst_id = None
         usuario_in = request.form.get("usuario")
         password_in = request.form.get("password")
-        # Sin captcha en login de colegios (solo equipo Procsis en /soporte-login y /gerencia-login)
-        user = login_usuario(usuario_in, password_in, institucion_id=inst_id)
-        if user:
-            # Roles internos solo por /soporte-login
-            if (user.rol or "").strip() in ROLES_INTERNOS or (user.rol or "").strip() == "Soporte":
-                rol_u = (user.rol or "").strip()
-                error = f"Las cuentas internas deben ingresar por su portal ({_login_portal(rol_u)}), no por el login de colegios."
-                user = None
-            if user and inst_id and user.institucion_id and int(user.institucion_id) != int(inst_id):
-                error = "Este usuario no pertenece a la institución seleccionada."
-                user = None
-            elif user and user.institucion_id is None and user.rol != "Soporte":
-                error = "Usuario sin institución asignada. Contacta a soporte."
-                user = None
-            elif user:
+        raw_inst_txt = (request.form.get("institucion_id") or "").strip()
+        es_staff_procsis = raw_inst_txt.upper() == "PROCSIS"
+
+        if es_staff_procsis:
+            # ── Acceso único de equipo PROCSIS: mismo formulario, misma puerta ──
+            # Se identifican eligiendo "PROCSIS" en vez de un colegio real.
+            inst_id = None
+            roles_staff_login = (
+                "Gerente", "Gerencia", "Superadmin", "Administrador",
+                "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
+                "Cobranza", "Soporte", "Desarrollador", "Developer",
+            )
+            staff_user = None
+            try:
+                staff_user = login_usuario(usuario_in, password_in)
+            except Exception:
+                staff_user = None
+            if not staff_user or (staff_user.rol or "").strip() not in roles_staff_login:
+                _rate_limit_fail(portal="colegios")
+                error = "Usuario o contraseña incorrectos."
+            else:
+                staff_activo = True
                 try:
-                    sincronizar_licencias()
+                    staff_activo = bool(_usuario_activo_ok(staff_user))
                 except Exception:
-                    pass
-                tid = user.institucion_id or inst_id
-                if tid:
-                    inst_chk = Institucion.query.get(tid)
-                    lic = estado_licencia(inst_chk)
-                    if lic.get("bloqueado"):
-                        error = f"Institución suspendida: {lic.get('mensaje') or 'Contacte a Procsis / cartera.'}"
+                    staff_activo = True
+                if not staff_activo:
+                    error = "Usuario desactivado. Contacte a Gerencia."
+                else:
+                    rol_staff = (staff_user.rol or "").strip()
+                    try:
+                        session.clear()
+                    except Exception:
+                        pass
+                    session["usuario"] = staff_user.usuario
+                    session["rol"] = rol_staff
+                    session["uid"] = staff_user.id
+                    try:
+                        session["password_temporal"] = bool(getattr(staff_user, "password_temporal", False))
+                    except Exception:
+                        session["password_temporal"] = False
+                    session["panel"] = "backoffice"
+                    try:
+                        registrar_sesion_empleado(staff_user)
+                    except Exception:
+                        pass
+                    try:
+                        registrar_auditoria("Login equipo PROCSIS", "%s · %s" % (staff_user.usuario, rol_staff))
+                    except Exception:
+                        pass
+                    if rol_staff in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
+                        return redirect("/gerencia/hq")
+                    if rol_staff in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor"):
+                        return redirect("/ventas/panel")
+                    if rol_staff == "Cobranza":
+                        return redirect("/cobranza/panel")
+                    if rol_staff == "Soporte":
+                        return redirect("/soporte_admin")
+                    if rol_staff in ("Desarrollador", "Developer"):
+                        return redirect("/dev-console")
+                    return redirect("/login")
+        else:
+            try:
+                inst_id = int(raw_inst_txt) if raw_inst_txt else None
+            except (TypeError, ValueError):
+                inst_id = None
+            # Sin captcha en login de colegios (solo equipo Procsis se identifica con la palabra clave PROCSIS)
+            user = login_usuario(usuario_in, password_in, institucion_id=inst_id)
+            if user:
+                # Roles internos solo por /soporte-login
+                if (user.rol or "").strip() in ROLES_INTERNOS or (user.rol or "").strip() == "Soporte":
+                    rol_u = (user.rol or "").strip()
+                    error = f"Las cuentas internas deben ingresar por su portal ({_login_portal(rol_u)}), no por el login de colegios."
+                    user = None
+                if user and inst_id and user.institucion_id and int(user.institucion_id) != int(inst_id):
+                    error = "Este usuario no pertenece a la institución seleccionada."
+                    user = None
+                elif user and user.institucion_id is None and user.rol != "Soporte":
+                    error = "Usuario sin institución asignada. Contacta a soporte."
+                    user = None
+                elif user:
+                    try:
+                        sincronizar_licencias()
+                    except Exception:
+                        pass
+                    tid = user.institucion_id or inst_id
+                    if tid:
+                        inst_chk = Institucion.query.get(tid)
+                        lic = estado_licencia(inst_chk)
+                        if lic.get("bloqueado"):
+                            error = f"Institución suspendida: {lic.get('mensaje') or 'Contacte a Procsis / cartera.'}"
+                        else:
+                            session.pop("anuncio_dismissed_ver", None)
+                            session["usuario"] = user.usuario
+                            session["rol"] = user.rol
+                            session["user_id"] = user.id
+                            session["grupo_docente"] = user.grupo_docente or ""
+                            session["password_temporal"] = bool(user.password_temporal)
+                            session["ultimo_movimiento"] = ahora().timestamp()
+                            session["institucion_id"] = tid
+                            # Sede seleccionada en el login (Principal, Rural, Primaria…)
+                            raw_sede = request.form.get("sede_id")
+                            try:
+                                sede_id = int(raw_sede) if raw_sede else None
+                            except (TypeError, ValueError):
+                                sede_id = None
+                            if sede_id:
+                                sede_ok = SedeInstitucion.query.filter_by(
+                                    id=sede_id, institucion_id=tid, activa=True
+                                ).first()
+                                if sede_ok:
+                                    session["sede_id"] = sede_ok.id
+                                    session["sede_nombre"] = sede_ok.nombre
+                                    session["sede_tipo"] = sede_ok.tipo or ""
+                                else:
+                                    session.pop("sede_id", None)
+                                    session.pop("sede_nombre", None)
+                                    session.pop("sede_tipo", None)
+                            else:
+                                session.pop("sede_id", None)
+                                session.pop("sede_nombre", None)
+                                session.pop("sede_tipo", None)
+                            sincronizar_inst_globals()
+                            registrar_auditoria(
+                                "Inicio de sesión",
+                                f"Usuario {user.usuario} ingresó como {user.rol}"
+                                + (f" · sede {session.get('sede_nombre')}" if session.get("sede_nombre") else ""),
+                            )
+                            dest = "/docente-escritorio" if (user.rol or "").strip() == "Docente" else "/dashboard"
+                            return redirect(dest)
                     else:
                         session.pop("anuncio_dismissed_ver", None)
                         session["usuario"] = user.usuario
@@ -11367,63 +11473,24 @@ def login():
                         session["password_temporal"] = bool(user.password_temporal)
                         session["ultimo_movimiento"] = ahora().timestamp()
                         session["institucion_id"] = tid
-                        # Sede seleccionada en el login (Principal, Rural, Primaria…)
-                        raw_sede = request.form.get("sede_id")
-                        try:
-                            sede_id = int(raw_sede) if raw_sede else None
-                        except (TypeError, ValueError):
-                            sede_id = None
-                        if sede_id:
-                            sede_ok = SedeInstitucion.query.filter_by(
-                                id=sede_id, institucion_id=tid, activa=True
-                            ).first()
-                            if sede_ok:
-                                session["sede_id"] = sede_ok.id
-                                session["sede_nombre"] = sede_ok.nombre
-                                session["sede_tipo"] = sede_ok.tipo or ""
-                            else:
-                                session.pop("sede_id", None)
-                                session.pop("sede_nombre", None)
-                                session.pop("sede_tipo", None)
-                        else:
-                            session.pop("sede_id", None)
-                            session.pop("sede_nombre", None)
-                            session.pop("sede_tipo", None)
-                        sincronizar_inst_globals()
-                        registrar_auditoria(
-                            "Inicio de sesión",
-                            f"Usuario {user.usuario} ingresó como {user.rol}"
-                            + (f" · sede {session.get('sede_nombre')}" if session.get("sede_nombre") else ""),
-                        )
+                        registrar_auditoria("Inicio de sesión", f"Usuario {user.usuario} ingresó como {user.rol}")
                         dest = "/docente-escritorio" if (user.rol or "").strip() == "Docente" else "/dashboard"
                         return redirect(dest)
-                else:
-                    session.pop("anuncio_dismissed_ver", None)
-                    session["usuario"] = user.usuario
-                    session["rol"] = user.rol
-                    session["user_id"] = user.id
-                    session["grupo_docente"] = user.grupo_docente or ""
-                    session["password_temporal"] = bool(user.password_temporal)
-                    session["ultimo_movimiento"] = ahora().timestamp()
-                    session["institucion_id"] = tid
-                    registrar_auditoria("Inicio de sesión", f"Usuario {user.usuario} ingresó como {user.rol}")
-                    dest = "/docente-escritorio" if (user.rol or "").strip() == "Docente" else "/dashboard"
-                    return redirect(dest)
-        else:
-            # Mensaje más claro: ¿existe el usuario en otro colegio?
-            mismos = Usuario.query.filter(func.lower(Usuario.usuario) == (usuario_in or "").strip().lower()).all()
-            if mismos and inst_id:
-                en_este = [x for x in mismos if x.institucion_id is not None and int(x.institucion_id) == int(inst_id)]
-                if not en_este:
-                    error = "Ese usuario no existe en el colegio seleccionado. Revisa el usuario admin creado para esa institución (ej: admin_CODIGO)."
-                else:
-                    error = "Contraseña incorrecta para este colegio."
-            elif mismos:
-                error = "Contraseña incorrecta."
-                _rate_limit_fail(portal="colegios")
             else:
-                _rate_limit_fail(portal="colegios")
-                error = "Usuario o contraseña incorrectos."
+                # Mensaje más claro: ¿existe el usuario en otro colegio?
+                mismos = Usuario.query.filter(func.lower(Usuario.usuario) == (usuario_in or "").strip().lower()).all()
+                if mismos and inst_id:
+                    en_este = [x for x in mismos if x.institucion_id is not None and int(x.institucion_id) == int(inst_id)]
+                    if not en_este:
+                        error = "Ese usuario no existe en el colegio seleccionado. Revisa el usuario admin creado para esa institución (ej: admin_CODIGO)."
+                    else:
+                        error = "Contraseña incorrecta para este colegio."
+                elif mismos:
+                    error = "Contraseña incorrecta."
+                    _rate_limit_fail(portal="colegios")
+                else:
+                    _rate_limit_fail(portal="colegios")
+                    error = "Usuario o contraseña incorrectos."
 
     instituciones = Institucion.query.filter(
         Institucion.estado.in_(["ACTIVA", "CANCELACION_PENDIENTE"])
@@ -11431,11 +11498,14 @@ def login():
     if not inst_id and instituciones:
         inst_id = instituciones[0].id
     datos = datos_login_institucion(inst_id)
-    opciones = "".join(
-        f'<option value="{i.id}" {"selected" if datos.get("id")==i.id else ""}>'
-        f'{(i.codigo or "")} — {i.nombre}'
-        f'{((" · " + (i.municipio or "")) if i.municipio else "")}</option>'
-        for i in instituciones
+    opciones = (
+        '<option value="PROCSIS">— PROCSIS · Equipo interno —</option>'
+        + "".join(
+            f'<option value="{i.id}" {"selected" if datos.get("id")==i.id else ""}>'
+            f'{(i.codigo or "")} — {i.nombre}'
+            f'{((" · " + (i.municipio or "")) if i.municipio else "")}</option>'
+            for i in instituciones
+        )
     )
     # Mapa institución → sedes (para filtro dinámico en login)
     import json as _json
@@ -11716,12 +11786,7 @@ def login():
           <div class="sinai-card-label">ENCUENTRE SU INSTITUCIÓN</div>
           {err_block}
           <form method="POST" action="/login" class="sinai-form" id="form-login-inst">
-            <label>Buscar institución educativa</label>
-            <div class="sinai-search" style="position:relative">
-              <span class="sinai-search-ico">⌕</span>
-              <input type="text" id="inst-filter" placeholder="Escriba nombre, código o municipio…" autocomplete="off"
-                style="width:100%;padding:12px 14px 12px 36px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;box-sizing:border-box;margin-bottom:8px;background:#fff">
-            </div>
+            <label>Institución educativa</label>
             <select name="institucion_id" id="inst-select" required size="1"
               style="width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;margin-bottom:4px;background:#fff">
               {opciones if opciones else '<option value="">Sin instituciones activas</option>'}
@@ -19573,21 +19638,11 @@ def whatsapp_mensaje_legal():
 
 @app.route("/logout")
 def logout():
-    """Cierra sesion. Staff PROCSIS -> /backoffice; colegios -> /login."""
-    rol = (session.get("rol") or "").strip()
-    panel = (session.get("panel") or "").strip()
-    roles_staff = (
-        "Gerente", "Gerencia", "Superadmin", "Administrador",
-        "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-        "Cobranza", "Soporte", "Desarrollador", "Developer",
-    )
-    is_staff = panel in ("ventas", "soporte", "cobranza", "gerencia", "backoffice", "dev") or rol in roles_staff
+    """Cierra sesion. Todos (staff PROCSIS y colegios) entran por el mismo /login."""
     try:
         session.clear()
     except Exception:
         pass
-    if is_staff:
-        return redirect("/backoffice")
     return redirect("/login")
 
 
@@ -19859,21 +19914,21 @@ def _home_portal(rol=None):
         "Cobranza": "/cobranza/panel",
         "Desarrollador": "/dev-console",
         "Developer": "/dev-console",
-    }.get(r, "/backoffice")
+    }.get(r, "/login")
 
 
 def _login_portal(rol=None):
     r = (rol or rol_actual() or "").strip()
     return {
-        "Comercial": "/backoffice",
-        "Soporte": "/backoffice",
-        "Gerente": "/backoffice",
-        "Administrador": "/backoffice",
-        "Superadmin": "/backoffice",
-        "Cobranza": "/backoffice",
-        "Desarrollador": "/backoffice",
-        "Developer": "/backoffice",
-    }.get(r, "/backoffice")
+        "Comercial": "/login",
+        "Soporte": "/login",
+        "Gerente": "/login",
+        "Administrador": "/login",
+        "Superadmin": "/login",
+        "Cobranza": "/login",
+        "Desarrollador": "/login",
+        "Developer": "/login",
+    }.get(r, "/login")
 
 
 @app.before_request
@@ -19922,26 +19977,15 @@ def _aislar_paneles_internos():
         return None
 
     # Rutas siempre permitidas para staff
-    if path in ("/logout", "/mi-perfil", "/cambiar_password", "/mfa", "/backoffice", "/edutrack-backoffice", "/backoffice/login", "/backoffice/hub") or path.startswith("/biometria"):
+    if path in ("/logout", "/mi-perfil", "/cambiar_password", "/mfa", "/login", "/gerencia/hub") or path.startswith("/biometria"):
         return None
-    if path.startswith("/api/interno") or path.startswith("/backoffice"):
+    if path.startswith("/api/interno"):
         return None
 
     home = _home_portal(rol)
 
     def _login_del_portal(p):
-        """Login único staff: siempre /backoffice."""
-        return "/backoffice"
-        if p.startswith("/gerencia"):
-            return "/backoffice"
-        if p.startswith("/soporte_admin") or p.startswith("/soporte"):
-            return "/backoffice"
-        if p.startswith("/ventas"):
-            return "/backoffice"
-        if p.startswith("/cobranza"):
-            return "/backoffice"
-        if p.startswith("/dev-console"):
-            return "/dev-console-login"
+        """Login único staff: siempre /login (con palabra clave PROCSIS)."""
         return home
 
     # Rutas de colegio: staff no debe entrar al dashboard escolar
@@ -20013,8 +20057,8 @@ def _aislar_paneles_internos():
     elif rol in ("Desarrollador", "Developer"):
         ok_dev = (
             path.startswith("/dev-console")
-            or path == "/backoffice"
-            or path.startswith("/backoffice/")
+            or path == "/login"
+            or path.startswith("/gerencia/hub")
             or path.startswith("/logout")
             or path.startswith("/mi-perfil")
             or path.startswith("/cambiar_password")
@@ -20657,7 +20701,7 @@ def ventas_panel():
     <p style="margin:8px 0 0;font-size:12px;color:#64748b"><a href="/ventas/kit-mensajes">Ver todas las plantillas</a></p>
   </div>
 
-  <p style="margin-top:20px;font-size:12px;color:#94a3b8"><a href="/backoffice" style="color:#64748b">← Backoffice</a></p>
+  <p style="margin-top:20px;font-size:12px;color:#94a3b8"><a href="/login" style="color:#64748b">← Portal de acceso</a></p>
 </div>
 
 <!-- Modal MEN / DANE -->
@@ -21126,7 +21170,7 @@ def ventas_beneficios():
     """Catalogo comercial de planes con beneficios y precios (asesores)."""
     if session.get("rol") not in ("Comercial", "Ventas", "Supervisor de Ventas", "Gerencia", "Administrador", "Gerente", "Superadmin"):
         if not session.get("usuario"):
-            return redirect("/backoffice")
+            return redirect("/login")
         return redirect("/ventas")
     try:
         _seed_planes_comerciales()
@@ -22147,10 +22191,10 @@ def _destino_por_rol_staff(rol):
     if r in ("Cobranza",):
         return "/cobranza/panel"
     if r in ("Soporte",):
-        return "/soporte"
+        return "/soporte_admin"
     if r in ("Desarrollador", "Developer"):
         return "/dev-console"
-    return "/backoffice"
+    return "/login"
 
 
 def _html_hub_gerencia(logo, empresa, usuario=""):
@@ -22233,11 +22277,11 @@ font-size:12px;font-weight:700;white-space:nowrap}}
 """
 
 
-@app.route("/backoffice", methods=["GET", "POST"])
-@app.route("/edutrack-backoffice", methods=["GET", "POST"])
-@app.route("/backoffice/login", methods=["GET", "POST"])
-def portal_backoffice():
-    """Login único unificado por roles (RBAC). El hub de paneles solo lo ve Gerencia."""
+def _DEPRECATED_portal_backoffice_sin_ruta():
+    """Eliminado del enrutamiento (2026-09): el login de staff PROCSIS ahora vive
+    dentro de /login usando la palabra clave 'PROCSIS' como institución. Esta función
+    ya no tiene @app.route y se deja solo como referencia interna; no es alcanzable
+    por URL. Ver la rama 'es_staff_procsis' dentro de la vista login()."""
     try:
         logo = logo_plataforma()
         p = plataforma()
@@ -22343,7 +22387,7 @@ def portal_backoffice():
                                 return redirect("/soporte")
                             if rol in ("Desarrollador", "Developer"):
                                 return redirect("/dev-console")
-                            return redirect("/backoffice")
+                            return redirect("/login")
         except Exception as e:
             try:
                 db.session.rollback()
@@ -22526,11 +22570,11 @@ text-shadow:0 1px 10px rgba(0,0,0,.3)}}
     return page("PROCSIS Backoffice", body)
 
 
-@app.route("/backoffice/hub")
+@app.route("/gerencia/hub")
 def backoffice_hub_gerencia():
     """Tablero maestro — solo Gerencia / Superadmin."""
     if not session.get("usuario"):
-        return redirect("/backoffice")
+        return redirect("/login")
     rol = (session.get("rol") or "").strip()
     if rol not in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
         return redirect(_destino_por_rol_staff(rol))
@@ -22753,10 +22797,10 @@ def gerencia_backoffice_branding():
     body = f"""
 <header class="role-hero"><div>
   <h1>Gestor de Banners del Login Interno</h1>
-  <p>Hasta <b>4 imágenes activas</b> · rotación 5 s · fade Apple 0.6 s en <code>/backoffice</code></p>
+  <p>Hasta <b>4 imágenes activas</b> · rotación 5 s · fade Apple 0.6 s en <code>/login</code></p>
 </div>
 <a class="btn" href="/gerencia/hq">Volver a HQ</a>
-<a class="btn" href="/backoffice" target="_blank" style="margin-left:8px">Ver login →</a>
+<a class="btn" href="/login" target="_blank" style="margin-left:8px">Ver login →</a>
 </header>
 
 <section class="role-panel" style="max-width:720px;margin-bottom:16px;border:2px solid #0B2D57">
@@ -23205,7 +23249,7 @@ def recuperar_staff():
         "<a href='/ventas-login'>/ventas-login</a><br>"
         "Usuarios base: gerencia / Gerencia2026* · ventas / Ventas2026* · soporte / Soporte2026*"
         "</p>"
-        "<p style='font-size:11px'><a href='/backoffice'>Backoffice</a></p>"
+        "<p style='font-size:11px'><a href='/login'>Portal de acceso</a></p>"
         "</div></body></html>"
     )
     return html, 200
@@ -23294,7 +23338,7 @@ def ventas_login():
     <input name="password" type="password" required autocomplete="current-password">
     <button type="submit">Entrar a ventas</button>
   </form>
-  <p style="margin-top:12px;font-size:12px"><a href="/backoffice">Backoffice</a> · <a href="/ventas">Ver planes (público)</a></p>
+  <p style="margin-top:12px;font-size:12px"><a href="/login">Portal de acceso</a> · <a href="/ventas">Ver planes (público)</a></p>
 </div></div>
 """
     return page("Login Ventas", body)
@@ -23302,8 +23346,8 @@ def ventas_login():
 
 @app.route("/gerencia-login", methods=["GET", "POST"])
 def gerencia_login():
-    """Deprecated: Gerencia entra solo por /backoffice (login unificado)."""
-    return redirect("/backoffice")
+    """Deprecated: Gerencia entra solo por /login (login unificado, palabra clave PROCSIS)."""
+    return redirect("/login")
 
 
 
@@ -24615,7 +24659,7 @@ def gerencia_pqr_limpieza():
 @app.route("/gerencia/plantilla-contrato", methods=["GET", "POST"])
 def gerencia_plantilla_contrato():
     if not requiere_gerencia():
-        return redirect("/backoffice")
+        return redirect("/login")
     try:
         _seed_plantilla_contrato()
     except Exception:
@@ -24674,7 +24718,7 @@ def gerencia_plantilla_contrato():
 @app.route("/gerencia/contratos")
 def gerencia_contratos():
     if not requiere_gerencia() and (session.get("rol") or "") not in ("Comercial", "Ventas", "Supervisor de Ventas"):
-        return redirect("/backoffice")
+        return redirect("/login")
     try:
         db.create_all()
         rows = ContratoColegio.query.order_by(ContratoColegio.id.desc()).limit(100).all()
@@ -24718,7 +24762,7 @@ def gerencia_contratos():
 def gerencia_finanzas_promociones():
     """Billing & Promo Engine — reglas de descuento y caducidades."""
     if not requiere_gerencia():
-        return redirect("/backoffice")
+        return redirect("/login")
     msg = err = ""
     try:
         db.create_all()
@@ -24873,7 +24917,7 @@ def gerencia_promo_cron():
 def gerencia_legal_consentimientos():
     """Gestor de consentimientos: plantillas presencial y online (solo Gerencia)."""
     if not requiere_gerencia():
-        return redirect("/backoffice")
+        return redirect("/login")
     msg = err = ""
     try:
         _seed_plantillas_consentimiento()
@@ -25019,7 +25063,7 @@ def ventas_api_consentimiento_preview():
 @app.route("/gerencia/contrato-plantilla", methods=["GET", "POST"])
 def gerencia_contrato_plantilla():
     if not requiere_gerencia():
-        return redirect("/backoffice")
+        return redirect("/login")
     msg = err = ""
     try:
         db.create_all()
@@ -25071,7 +25115,7 @@ def gerencia_contrato_plantilla():
 @app.route("/ventas/contratos")
 def lista_contratos_institucion():
     if not session.get("usuario"):
-        return redirect("/backoffice")
+        return redirect("/login")
     try:
         db.create_all()
         rows = ContratoInstitucion.query.order_by(ContratoInstitucion.id.desc()).limit(200).all()
@@ -25101,7 +25145,7 @@ def lista_contratos_institucion():
 @app.route("/gerencia/contratos/<int:cid>")
 def contrato_detalle(cid):
     if not session.get("usuario"):
-        return redirect("/backoffice")
+        return redirect("/login")
     try:
         c = ContratoInstitucion.query.get(cid)
     except Exception:
@@ -25715,6 +25759,7 @@ def gerencia_hq():
               <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
               <a class="hq-pill-more" href="/gerencia/correo-notificaciones">Gmail Notif.</a>
               <a class="hq-pill-more" href="/gerencia/web-menu">Menú público</a>
+              <a class="hq-pill-more" href="/gerencia/web-corporativa">Web corporativa (textos y contacto)</a>
               <a class="hq-pill-more" href="/gerencia/casos-exito">Casos de éxito</a>
               <a class="hq-pill-more" href="/gerencia/landing-ventas">Landing ventas</a>
               <a class="hq-pill-primary" href="/gerencia/anuncios">Anuncios</a>
@@ -34663,7 +34708,7 @@ def soporte_verificar_pin(token):
 def biometria_esperar(token):
     ch = LoginChallenge.query.filter_by(token=token).first()
     if not ch:
-        return page("Validación", "<div class='center'><p>Solicitud no encontrada.</p><a href='/backoffice'>Backoffice</a></div>")
+        return page("Validación", "<div class='center'><p>Solicitud no encontrada.</p><a href='/login'>Portal de acceso</a></div>")
     u = Usuario.query.get(ch.usuario_id)
     base = request.url_root.rstrip("/")
     link = f"{base}/biometria/validar/{token}"
@@ -34692,7 +34737,7 @@ def biometria_esperar(token):
   <div class="be-linkbox">{link}</div>
   <p style="font-size:12px">Usuario: <b>{nombre}</b> · Válido 20 minutos</p>
   <div class="be-st" id="st">Esperando validación biométrica…</div>
-  <p style="margin-top:16px;font-size:12px"><a href="/backoffice">Cancelar</a></p>
+  <p style="margin-top:16px;font-size:12px"><a href="/login">Cancelar</a></p>
 </div></div>
 <script>
 (function(){{
@@ -35042,7 +35087,7 @@ def api_biometria_estado(token):
 
 @app.route("/biometria/app")
 def biometria_app():
-    return redirect("/backoffice")
+    return redirect("/login")
 
 
 
@@ -36815,7 +36860,7 @@ def soporte_colegio_auditoria(iid=None):
         return redirect("/soporte/auditoria-colegio")
     if rol not in ("Administrador", "Gerencia", "Gerente", "Comercial", "Ventas", "Supervisor de Ventas", "Superadmin"):
         if not session.get("usuario"):
-            return redirect("/backoffice")
+            return redirect("/login")
         return redirect("/soporte_admin")
     try:
         _ensure_inst_promo_columns()
@@ -49972,7 +50017,7 @@ def cerrar_turno_laboral():
             session.clear()
         except Exception:
             pass
-        return redirect("/backoffice")
+        return redirect("/login")
     content = (
         '<div class="role-panel" style="max-width:420px;margin:40px auto">'
         "<h2>Cerrar turno</h2>"
@@ -49993,7 +50038,7 @@ def cerrar_turno_laboral():
 def modulo_turnos():
     """Turnos: Gerencia define quién, día y horario. Otros roles no gestionan turnos desde el menú."""
     if not requiere_login():
-        return redirect("/backoffice")
+        return redirect("/login")
     rol = rol_actual()
     path = request.path or ""
     # Solo Gerencia administra turnos del equipo
@@ -50010,7 +50055,7 @@ def modulo_turnos():
     else:
         area = "Gerencia"
         if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return redirect("/backoffice")
+            return redirect("/login")
 
     try:
         db.create_all()
@@ -50794,7 +50839,7 @@ def cobranza_login():
     <input name="password" type="password" required autocomplete="current-password">
     <button type="submit">Entrar a cobranza</button>
   </form>
-  <p style="margin-top:14px;font-size:12px;text-align:center"><a href="/backoffice" style="color:#0B2D57;font-weight:600">Backoffice</a></p>
+  <p style="margin-top:14px;font-size:12px;text-align:center"><a href="/login" style="color:#0B2D57;font-weight:600">Portal de acceso</a></p>
 </div></div>
 """
     return page("Login Cobranza", body)
@@ -64307,7 +64352,7 @@ def dev_console():
     <div class="dev-hero-right">
       <div class="hi">Bienvenido, {_esc(_dev_user)}</div>
       <div class="meta">Rol Desarrollador · {_esc(_now_co)} · Hora Colombia</div>
-      <a class="back" href="/backoffice">← Backoffice</a>
+      <a class="back" href="/login">← Portal de acceso</a>
     </div>
   </div>
   <div class="dev-note">
@@ -64343,7 +64388,7 @@ def _dev_capture_500(e):
             "<div style='max-width:480px;margin:60px auto;padding:20px;font-family:Segoe UI,sans-serif'>"
             "<h1 style='color:#b91c1c;font-size:18px'>Error interno</h1>"
             "<p style='font-size:13px;color:#475569'>El equipo técnico fue notificado en el buffer de la Consola de Desarrollo.</p>"
-            "<a href='/backoffice'>Volver</a></div>",
+            "<a href='/login'>Volver</a></div>",
         ), 500
     except Exception:
         return "Error interno", 500
@@ -64410,7 +64455,7 @@ def dev_console_login():
     <input type="password" name="password" required autocomplete="current-password">
     <button type="submit">Entrar a la consola</button>
   </form>
-  <p style="margin-top:14px;font-size:12px;text-align:center"><a href="/backoffice" style="color:#64748b">← Backoffice</a></p>
+  <p style="margin-top:14px;font-size:12px;text-align:center"><a href="/login" style="color:#64748b">← Portal de acceso</a></p>
 </div></div>
 """
     return page("Consola Desarrollo · Login", body)
@@ -66808,11 +66853,11 @@ _SEG_LOCK = _threading.Lock()
 _SEG_SELLO_T = {"t": 0.0}
 _SEG_CACHE = {"t": 0.0, "bloq": set(), "ro": set(), "bg": False, "rg": False, "ses": {}}
 _SEG_LOGIN_PATHS = (
-    "/login", "/docente-login", "/familia-login", "/backoffice", "/backoffice/login", "/ventas-login",
+    "/login", "/docente-login", "/familia-login", "/ventas-login",
     "/gerencia-login", "/soporte-login", "/cobranza-login", "/estudiante-login", "/dev-console-login",
 )
 _SEG_PERMITIDAS = (
-    "/static", "/seguridad", "/login", "/logout", "/backoffice", "/soporte-login", "/gerencia-login",
+    "/static", "/seguridad", "/login", "/logout", "/soporte-login", "/gerencia-login",
     "/ventas-login", "/cobranza-login", "/dev-console-login", "/docente-login", "/familia-login",
     "/estudiante-login", "/mfa", "/cambiar_password", "/biometria", "/soporte/verificar-pin", "/favicon",
 )
@@ -67626,7 +67671,7 @@ def _sg_page(titulo, contenido):
 
 def _seg_guard(gerencia=False):
     if not requiere_login():
-        return redirect("/backoffice")
+        return redirect("/login")
     if rol_actual() not in (_SEG_ROLES_GER if gerencia else _SEG_ROLES_OPERAR):
         return acceso_denegado()
     _seg_ensure()
