@@ -25826,6 +25826,80 @@ def gerencia_hq():
       </div>
     </div>
 
+    <div class="sec" style="border:1px solid #e2e8f0;border-radius:4px;padding:18px 16px;background:#fafbfc">
+      <h2 style="margin:0 0 6px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0B2D57;font-weight:800;border-left:3px solid #0B2D57;padding-left:10px">
+        📂 Todos los módulos (antes sin acceso directo)
+      </h2>
+      <p style="font-size:12px;color:#64748b;margin:0 0 14px;line-height:1.5;max-width:760px">
+        Estos módulos ya existían en el sistema pero no tenían un botón en este panel. Se agregan aquí para que
+        ningún módulo quede oculto para Gerencia.
+      </p>
+
+      <h3 style="margin:14px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#0f6b3c">Talento humano</h3>
+      <div class="hq-pills">
+        <a href="/gerencia/talento-legal">Talento / legal laboral</a>
+        <a href="/gerencia/contratos-personal">Contratos de personal</a>
+        <a href="/gerencia/contratos-firmas">Firmas de contratos</a>
+        <a href="/gerencia/nomina">Nómina</a>
+        <a href="/gerencia/hojas-vida">Hojas de vida</a>
+        <a href="/gerencia/matriz-epp">Matriz EPP</a>
+        <a href="/gerencia/planillas-pila">Planillas PILA</a>
+        <a href="/gerencia/certificaciones">Certificaciones laborales</a>
+        <a href="/gerencia/certificados-apoyo">Certificados de apoyo</a>
+        <a href="/gerencia/requerimientos-autoridades">Requerimientos de autoridades</a>
+        <a href="/gerencia/admision-personal">Admisión de personal</a>
+        <a href="/gerencia/datos-rut">Datos RUT</a>
+      </div>
+
+      <h3 style="margin:16px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#7c2d12">Legal corporativo</h3>
+      <div class="hq-pills">
+        <a href="/gerencia/libro-actas">Libro de actas</a>
+        <a href="/gerencia/boveda-legal">Bóveda legal</a>
+        <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
+        <a href="/gerencia/contratos-saas">Contratos SaaS (colegios)</a>
+        <a href="/gerencia/contratos">Contratos</a>
+        <a href="/gerencia/contrato-plantilla">Plantilla de contrato (colegios)</a>
+        <a href="/gerencia/plantilla-contrato">Plantilla de contrato (personal)</a>
+        <a href="/gerencia/retractos">Retractos / reembolsos</a>
+        <a href="/gerencia/legal/consentimientos">Consentimientos (Habeas Data)</a>
+        <a href="/gerencia/paginas-legales">Páginas legales públicas</a>
+        <a href="/gerencia/pie-login">Pie de página del login</a>
+      </div>
+
+      <h3 style="margin:16px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#1e3a5f">Ventas y comercial</h3>
+      <div class="hq-pills">
+        <a href="/gerencia/ventas">Panel de ventas</a>
+        <a href="/gerencia/validaciones-ventas">Validaciones de ventas</a>
+        <a href="/gerencia/comisiones-ventas">Comisiones de ventas</a>
+        <a href="/gerencia/planes-vendidos">Planes vendidos</a>
+        <a href="/gerencia/descuentos">Descuentos</a>
+        <a href="/gerencia/alianzas-clientes">Alianzas y clientes</a>
+        <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte a rectores</a>
+        <a href="/gerencia/solicitudes-plan">Solicitudes de cambio de plan</a>
+      </div>
+
+      <h3 style="margin:16px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#1f2937">Sistema y configuración</h3>
+      <div class="hq-pills">
+        <a href="/gerencia/roles">Roles y permisos</a>
+        <a href="/gerencia/usuarios">Usuarios internos</a>
+        <a href="/gerencia/empresa">Datos de la empresa (alterno)</a>
+        <a href="/gerencia/finanzas/promociones">Promociones financieras</a>
+        <a href="/gerencia/dev-console">Consola de desarrollador</a>
+        <a href="/gerencia/diseno-login">Diseño del login</a>
+        <a href="/gerencia/backoffice-branding">Branding del backoffice</a>
+        <a href="/gerencia/changelog">Historial de cambios</a>
+        <a href="/gerencia/limpieza">Limpieza de datos</a>
+        <a href="/gerencia/facturacion-auto-test">Test facturación automática</a>
+        <a href="/gerencia/facturacion-cobranza">Facturación y cobranza</a>
+        <a href="/gerencia/recursos-financieros">Recursos financieros</a>
+        <a href="/gerencia/notas">Notas internas</a>
+        <a href="/gerencia/cancelaciones">Cancelaciones</a>
+        <a href="/gerencia/pqr-info">Información PQR</a>
+        <a href="/gerencia/support">Soporte interno</a>
+        <a href="/gerencia/metas">Metas comerciales</a>
+      </div>
+    </div>
+
   </div>
 </div>
 """
