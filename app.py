@@ -376,6 +376,40 @@ def _security_headers_extra(resp):
         resp.headers["Pragma"] = "no-cache"
     return resp
 
+
+@app.after_request
+def _gzip_response(resp):
+    """Comprime HTML/CSS/JS/JSON con gzip cuando el navegador lo acepta.
+    Las páginas de este sistema son HTML muy grande generado en Python;
+    comprimir reduce bastante el peso transferido y la sensación de lentitud,
+    sobre todo en conexiones no ideales, sin agregar dependencias nuevas."""
+    try:
+        if resp.direct_passthrough:
+            return resp
+        accept_enc = request.headers.get("Accept-Encoding", "")
+        if "gzip" not in accept_enc.lower():
+            return resp
+        if resp.headers.get("Content-Encoding"):
+            return resp
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+        compresible = any(t in ctype for t in ("text/html", "text/css", "application/javascript", "text/javascript", "application/json", "text/plain", "image/svg+xml"))
+        if not compresible:
+            return resp
+        data = resp.get_data()
+        if len(data) < 800:
+            return resp
+        import gzip as _gzip
+        comprimido = _gzip.compress(data, compresslevel=6)
+        if len(comprimido) >= len(data):
+            return resp
+        resp.set_data(comprimido)
+        resp.headers["Content-Encoding"] = "gzip"
+        resp.headers["Content-Length"] = str(len(comprimido))
+        resp.headers["Vary"] = "Accept-Encoding"
+    except Exception:
+        pass
+    return resp
+
 BOGOTA = ZoneInfo("America/Bogota")
 
 APP_NAME = "EduTrack"
@@ -890,7 +924,8 @@ body{
 .lp-gallery figure{margin:0;background:#f8fafc;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0}
 .lp-gallery img{width:100%;height:160px;object-fit:cover;display:block}
 .lp-gallery figcaption{padding:8px 10px;font-size:12px;color:#475569;text-align:center}
-.lp-footer{text-align:center;padding:20px;color:#64748b;font-size:12px}
+.lp-footer{text-align:center;padding:20px;color:#a1a1a6;font-size:12px;background:#1d1d1f}
+.lp-footer b{color:#f5f5f7}
 .lp-footer b{color:#0B2D57}
 .lp-portals{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
 .lp-portal-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 12px;border-radius:14px;font-weight:800;font-size:14px;text-decoration:none;text-align:center;border:1px solid transparent;transition:.15s}
@@ -9876,7 +9911,7 @@ def _nav_public_html(active=""):
     html = """
 <style>
 /* NAV-APPLE-V2 span-not-button */
-.navbar-apple-wrap{position:sticky;top:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.navbar-apple-wrap{position:static;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 .navbar-apple-glass{
   position:relative;width:100%;box-sizing:border-box;
   display:flex;justify-content:space-between;align-items:center;
@@ -22912,61 +22947,80 @@ def gerencia_web_menu():
     rows = []
     try:
         rows = db.session.execute(text(
-            "SELECT id, seccion, etiqueta, url, activo FROM web_menu_items ORDER BY seccion, orden, id"
+            "SELECT id, seccion, etiqueta, url, activo, orden FROM web_menu_items ORDER BY seccion, orden, id"
         )).fetchall()
     except Exception:
         try:
             db.session.rollback()
         except Exception:
             pass
-    filas = ""
+
+    secciones = [
+        ("procsis", "Explorar PROCSIS"),
+        ("soluciones_ges", "Gestión Escolar"),
+        ("soluciones_seg", "Seguridad Perimetral"),
+        ("planes", "Planes y tarifas"),
+        ("ayuda", "Ayuda y soporte"),
+    ]
+    por_seccion = {clave: [] for clave, _ in secciones}
     for r in rows:
-        on = bool(r[4])
-        filas += (
-            "<tr><td>%s</td><td><form method='POST' style='display:flex;gap:6px;flex-wrap:wrap'>"
-            "<input type='hidden' name='accion' value='editar'><input type='hidden' name='id' value='%s'>"
-            "<input name='etiqueta' value='%s' style='flex:1;min-width:120px;padding:6px'>"
-            "<input name='url' value='%s' style='flex:1;min-width:120px;padding:6px'>"
-            "<button type='submit' style='padding:6px 10px;border:0;border-radius:8px;background:#0B63CE;color:#fff;cursor:pointer'>Guardar</button>"
-            "</form></td><td>%s</td><td>"
-            "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='toggle'>"
-            "<input type='hidden' name='id' value='%s'><button type='submit' style='padding:4px 8px;border:0;border-radius:6px;"
-            "background:%s;color:#fff;cursor:pointer'>%s</button></form> "
-            "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Eliminar?')\">"
-            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
-            "<button type='submit' style='padding:4px 8px;border:1px solid #e2e8f0;background:#fff;color:#b91c1c;border-radius:6px;cursor:pointer'>X</button></form>"
-            "</td></tr>"
-            % (_esc(r[1]), r[0], _esc(r[2] or ""), _esc(r[3] or ""), "ON" if on else "OFF",
-               r[0], "#16a34a" if on else "#64748b", "ON" if on else "OFF", r[0])
-        )
+        por_seccion.setdefault(r[1], []).append(r)
+
+    def _item_card(r):
+        iid, sec, et, url, on, orden = r
+        on = bool(on)
+        return f"""
+  <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:10px;background:#fff">
+    <form method="POST" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+      <input type="hidden" name="accion" value="editar"><input type="hidden" name="id" value="{iid}">
+      <label style="flex:1;min-width:220px;font-size:11px;font-weight:700;color:#64748b;letter-spacing:.03em;text-transform:uppercase">Texto visible
+        <input name="etiqueta" value="{_esc(et or '')}" style="width:100%;margin-top:5px;padding:10px 12px;border:1px solid #d2d2d7;border-radius:10px;font-size:14px;box-sizing:border-box">
+      </label>
+      <label style="flex:1;min-width:220px;font-size:11px;font-weight:700;color:#64748b;letter-spacing:.03em;text-transform:uppercase">Ruta o URL
+        <input name="url" value="{_esc(url or '')}" style="width:100%;margin-top:5px;padding:10px 12px;border:1px solid #d2d2d7;border-radius:10px;font-size:14px;box-sizing:border-box">
+      </label>
+      <button type="submit" style="padding:10px 18px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:700;cursor:pointer;font-size:13px">Guardar</button>
+    </form>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+      <form method="POST"><input type="hidden" name="accion" value="toggle"><input type="hidden" name="id" value="{iid}">
+        <button type="submit" style="padding:5px 12px;border:0;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;background:{'#16a34a' if on else '#94a3b8'};color:#fff">{'VISIBLE' if on else 'OCULTO'}</button>
+      </form>
+      <form method="POST" onsubmit="return confirm('¿Eliminar este enlace?')"><input type="hidden" name="accion" value="eliminar"><input type="hidden" name="id" value="{iid}">
+        <button type="submit" style="padding:5px 12px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">Eliminar</button>
+      </form>
+    </div>
+  </div>"""
+
+    cards_html = ""
+    for clave, titulo in secciones:
+        items_html = "".join(_item_card(r) for r in por_seccion.get(clave, []))
+        cards_html += f"""
+<section style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:16px;padding:20px;margin-bottom:22px">
+  <h3 style="font-size:13px;font-weight:800;color:#0B2D57;letter-spacing:.04em;text-transform:uppercase;margin:0 0 14px">{_esc(titulo)}</h3>
+  {items_html or "<p style='color:#94a3b8;font-size:13px'>Sin enlaces en esta sección todavía.</p>"}
+  <details style="margin-top:6px">
+    <summary style="cursor:pointer;font-size:12px;color:#0B63CE;font-weight:700">+ Agregar enlace nuevo en «{_esc(titulo)}»</summary>
+    <form method="POST" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <input type="hidden" name="accion" value="nuevo">
+      <input type="hidden" name="seccion" value="{clave}">
+      <input name="etiqueta" placeholder="Texto visible" required style="flex:1;min-width:200px;padding:10px 12px;border:1px solid #d2d2d7;border-radius:10px;font-size:14px">
+      <input name="url" placeholder="/ruta o https://..." style="flex:1;min-width:200px;padding:10px 12px;border:1px solid #d2d2d7;border-radius:10px;font-size:14px">
+      <button type="submit" style="padding:10px 18px;border:0;border-radius:10px;background:#0B63CE;color:#fff;font-weight:700;cursor:pointer">Agregar</button>
+    </form>
+  </details>
+</section>"""
+
     body = f"""
 <header class="role-hero"><div>
-  <h1>Textos del menú público</h1>
-  <p>Edita los enlaces del mega-menú (Procsis · Soluciones · Planes · Ayuda)</p>
+  <h1>Web corporativa · Menú público</h1>
+  <p>Todo el contenido del menú de la página pública se edita aquí. No hace falta tocar código.</p>
 </div>
 <a class="btn" href="/gerencia/hq">Volver HQ</a>
 </header>
-<section class="role-panel" style="max-width:900px">
+<section class="role-panel" style="max-width:820px">
   {"<p style='color:#16a34a;font-weight:700'>"+_esc(msg)+"</p>" if msg else ""}
   {"<p style='color:#b91c1c'>"+_esc(err)+"</p>" if err else ""}
-  <h3 style="font-size:14px;color:#0B2D57">Agregar enlace</h3>
-  <form method="POST" style="display:grid;gap:8px;margin-bottom:20px">
-    <input type="hidden" name="accion" value="nuevo">
-    <select name="seccion" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-      <option value="procsis">Procsis</option>
-      <option value="soluciones_ges">Soluciones · Gestión escolar</option>
-      <option value="soluciones_seg">Soluciones · Seguridad perimetral</option>
-      <option value="planes">Planes</option>
-      <option value="ayuda">Ayuda</option>
-    </select>
-    <input name="etiqueta" placeholder="Texto visible" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <input name="url" placeholder="/ruta o https://..." style="padding:10px;border-radius:8px;border:1px solid #cbd5e1">
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:10px;font-weight:800;cursor:pointer">Agregar</button>
-  </form>
-  <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <thead><tr style="background:#f1f5f9;text-align:left"><th>Sección</th><th>Texto / URL</th><th>Estado</th><th></th></tr></thead>
-    <tbody>{filas or "<tr><td colspan='4'>Sin ítems</td></tr>"}</tbody>
-  </table>
+  {cards_html}
 </section>
 """
     return page("Menú web", shell(body))
@@ -69374,5 +69428,10 @@ if __name__ == "__main__":
             _ciclo_facturacion_automatica()
         except Exception as _e:
             print("ciclo facturacion:", _e)
-    app.run(debug=True, host="0.0.0.0")
+    # debug=True en producción es lento (recarga automática, sin caché de templates)
+    # y un riesgo de seguridad grave (consola interactiva remota). threaded=True permite
+    # atender varias peticiones a la vez en vez de una por una. PORT lo asigna Railway/Render.
+    _debug_on = os.environ.get("FLASK_DEBUG", "0") == "1"
+    _port = int(os.environ.get("PORT", 5000))
+    app.run(debug=_debug_on, host="0.0.0.0", port=_port, threaded=True)
 
