@@ -9876,22 +9876,23 @@ def _nav_public_html(active=""):
     html = """
 <style>
 /* NAV-APPLE-V2 span-not-button */
-.navbar-apple-wrap{position:static;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.navbar-apple-wrap{position:sticky;top:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 .navbar-apple-glass{
   position:relative;width:100%;box-sizing:border-box;
   display:flex;justify-content:space-between;align-items:center;
   padding:12px 28px;gap:16px;
-  background-color:#1d1d1f;
-  border-bottom:1px solid rgba(255,255,255,.08);
+  background-color:rgba(255,255,255,.72);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(0,0,0,.08);
 }
-.nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#f5f5f7;font-weight:600;font-size:14px;flex-shrink:0}
+.nav-logo-apple{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1d1d1f;font-weight:600;font-size:14px;flex-shrink:0}
 .nav-logo-apple .logo-micro{height:22px;width:auto;object-fit:contain}
 .nav-links-center{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:center;flex:1}
 /* Texto plano estilo Apple — NO button (el CSS global pinta todos los button de azul) */
 .navbar-apple-wrap span.link-apple,
 .navbar-apple-wrap .link-apple{
   font-size:14px !important;font-weight:400 !important;letter-spacing:-.01em !important;
-  color:#f5f5f7 !important;text-decoration:none !important;opacity:.82 !important;
+  color:#1d1d1f !important;text-decoration:none !important;opacity:.88 !important;
   padding:8px 12px !important;border-radius:0 !important;background:transparent !important;
   border:0 !important;cursor:pointer !important;font-family:inherit !important;
   box-shadow:none !important;width:auto !important;margin:0 !important;display:inline-block !important;
@@ -9901,7 +9902,7 @@ def _nav_public_html(active=""):
 .navbar-apple-wrap span.link-apple:hover,
 .navbar-apple-wrap .link-apple:hover,
 .navbar-apple-wrap .link-apple.is-hot{
-  opacity:1 !important;color:#2997ff !important;background:transparent !important;box-shadow:none !important;
+  opacity:1 !important;color:#0B63CE !important;background:transparent !important;box-shadow:none !important;
   filter:none !important;transform:none !important;
 }
 .nav-button-right{flex-shrink:0}
@@ -21013,8 +21014,7 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
         {('<img src="'+_esc(lv_img)+'" alt="" style="width:100%;max-height:120px;object-fit:contain;margin-bottom:10px;border-radius:12px">') if lv_img else ""}
         <h3>{_esc(lv_cta)}</h3>
         <p style="font-size:13px;color:#86868b;margin:0 0 8px">{_esc(lv_cta_sub)}</p>
-        <a class="btn btn-wa" href="{wa}" target="_blank" rel="noopener">Hablar por WhatsApp</a>
-        <a class="btn btn-reg" href="/ventas/comprar">Registrar colegio</a>
+        <a class="btn btn-wa" href="{wa}" target="_blank" rel="noopener" style="width:100%;text-align:center;display:block">Hablar por WhatsApp</a>
       </div>
     </div>
   </section>
@@ -21078,7 +21078,7 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
       <div class="lv-info">
         <h3>Para el aula</h3>
         <p>Planilla tipo Excel, auto-guardado, faltas, horarios y solo las materias asignadas a cada docente.</p>
-        <a href="/ventas/comprar">Activar institución →</a>
+        <a href="{wa}">Activar institución →</a>
       </div>
     </div>
   </section>
@@ -27692,6 +27692,7 @@ def gerencia_documentos_lista():
   <p><a href="/gerencia/hq">← Gerencia HQ</a></p>
   <h1>Biblioteca documental · Contingencia y legal</h1>
   <p style="color:#64748b;font-size:13px">Editor corporativo. Guarde y descargue PDF. Públicos en <code>/docs/…</code>.</p>
+  <p><a href="/gerencia/documentos/nuevo" style="display:inline-block;background:#0B2D57;color:#fff;padding:10px 18px;border-radius:8px;font-weight:700;text-decoration:none;font-size:13px">+ Nuevo documento</a></p>
   <table>
     <tr><th>Documento</th><th>Visibilidad</th><th>Última edición</th><th>Acciones</th></tr>
     {filas or "<tr><td colspan=4>Sin documentos</td></tr>"}
@@ -27699,6 +27700,77 @@ def gerencia_documentos_lista():
 </div>
 """
     return page("Documentos Gerencia", body)
+
+
+@app.route("/gerencia/documentos/nuevo", methods=["GET", "POST"])
+def gerencia_documento_nuevo():
+    """Crea un documento corporativo nuevo (no existía — el botón llevaba a una
+    clave inexistente y por eso siempre fallaba con 'Documento no encontrado')."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    err = ""
+    if request.method == "POST":
+        import re as _re
+        titulo = (request.form.get("titulo") or "").strip()[:220]
+        categoria = (request.form.get("categoria") or "interno").strip()[:80]
+        publico = request.form.get("publico") == "1"
+        clave_in = (request.form.get("clave") or "").strip().lower()
+        if not clave_in:
+            clave_in = _re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")
+        clave_in = _re.sub(r"[^a-z0-9\-]+", "-", clave_in).strip("-")[:80]
+        if not titulo:
+            err = "Escriba un título para el documento."
+        elif not clave_in:
+            err = "No se pudo generar una clave válida a partir del título. Escriba una clave manual (solo letras, números y guiones)."
+        elif DocumentoCorp.query.filter_by(clave=clave_in).first():
+            err = f"Ya existe un documento con la clave «{clave_in}». Use otra."
+        else:
+            row = DocumentoCorp(
+                clave=clave_in, titulo=titulo, cuerpo_html="<p>Escriba aquí el contenido…</p>",
+                publico=publico, categoria=categoria,
+                actualizado_en=f"{fecha_hoy()} {hora_actual()}",
+                actualizado_por=session.get("usuario") or "gerencia",
+            )
+            try:
+                db.session.add(row)
+                db.session.commit()
+                registrar_auditoria("Documento corp", f"Creó {clave_in}")
+                return redirect(f"/gerencia/documentos/{clave_in}")
+            except Exception as ex:
+                db.session.rollback()
+                err = f"Error al guardar: {ex}"
+    body = f"""
+<div style="max-width:640px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">
+  <p><a href="/gerencia/documentos">← Biblioteca</a></p>
+  <h1 style="color:#0B2D57;font-size:20px">Nuevo documento</h1>
+  {'<p style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;font-weight:600">'+err+'</p>' if err else ''}
+  <form method="POST" style="display:flex;flex-direction:column;gap:12px">
+    <label style="font-size:13px;font-weight:700;color:#334155">Título
+      <input type="text" name="titulo" required maxlength="220" placeholder="Ej: Política de retención de datos"
+        style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-top:4px">
+    </label>
+    <label style="font-size:13px;font-weight:700;color:#334155">Clave (URL) — opcional, se genera del título si la deja vacía
+      <input type="text" name="clave" maxlength="80" placeholder="Ej: politica-retencion-datos"
+        style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-top:4px">
+    </label>
+    <label style="font-size:13px;font-weight:700;color:#334155">Categoría
+      <select name="categoria" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-top:4px">
+        <option value="interno">Interno</option>
+        <option value="contingencia">Contingencia / DRP</option>
+        <option value="legal">Legal</option>
+        <option value="publico">Público</option>
+        <option value="ops">Operaciones</option>
+      </select>
+    </label>
+    <label style="font-size:13px;display:flex;align-items:center;gap:8px">
+      <input type="checkbox" name="publico" value="1"> Visible en la web pública (/docs/…)
+    </label>
+    <button type="submit" style="background:#0B2D57;color:#fff;padding:12px;border:0;border-radius:8px;font-weight:700;cursor:pointer">Crear y editar contenido</button>
+  </form>
+</div>
+"""
+    return page("Nuevo documento", body)
 
 
 @app.route("/gerencia/documentos/<clave>", methods=["GET", "POST"])
