@@ -9911,7 +9911,7 @@ def _nav_public_html(active=""):
     html = """
 <style>
 /* NAV-APPLE-V2 span-not-button */
-.navbar-apple-wrap{position:static;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.navbar-apple-wrap{position:sticky;top:0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 .navbar-apple-glass{
   position:relative;width:100%;box-sizing:border-box;
   display:flex;justify-content:space-between;align-items:center;
@@ -20797,7 +20797,6 @@ async function consultarMEN(){{
 
 
 @app.route("/ventas")
-@app.route("/ventas")
 @app.route("/gerencia/ventas")
 def portal_ventas():
     # Catálogo público/comercial de planes (sin create_all pesado)
@@ -25165,7 +25164,6 @@ def gerencia_contrato_plantilla():
     return page("Plantilla contractual", body)
 
 
-@app.route("/gerencia/contratos")
 @app.route("/ventas/contratos")
 def lista_contratos_institucion():
     if not session.get("usuario"):
@@ -25806,16 +25804,14 @@ def gerencia_hq():
               <a href="/whatsapp/inbox?canal=soporte">Inbox WhatsApp</a>
               <a class="hq-pill-primary" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
               <a href="/soporte/marca">Marca y contacto (tel./correo)</a>
-              <a href="/gerencia/wati-conexion">API WATI</a>
               <a class="hq-pill-primary" href="/gerencia/eduaura-ia">🧠 Conectores IA</a>
               <a href="/gerencia/procsis-web">Noticias / productos</a>
-              <a class="hq-pill-primary" href="/gerencia/login-banners">Banners Login</a>
+              <a class="hq-pill-primary" href="/gerencia/login-banners">Banners Login / Salida segura</a>
               <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
               <a class="hq-pill-more" href="/gerencia/correo-notificaciones">Gmail Notif.</a>
               <a class="hq-pill-more" href="/gerencia/web-menu">Menú público</a>
               <a class="hq-pill-more" href="/gerencia/web-corporativa">Web corporativa (textos y contacto)</a>
               <a class="hq-pill-more" href="/gerencia/casos-exito">Casos de éxito</a>
-              <a class="hq-pill-more" href="/gerencia/landing-ventas">Landing ventas</a>
               <a class="hq-pill-primary" href="/gerencia/anuncios">Anuncios</a>
               <a class="hq-pill-more" href="/gerencia/actualizaciones">FAQ / Ayuda</a>
             </div>
@@ -25826,14 +25822,10 @@ def gerencia_hq():
           <h3>Seguridad e internos</h3>
           <p class="hq-bento-sub">Auditoría, personal, planes y controles de acceso</p>
           <div class="hq-pills">
-            <a href="/gerencia/auditoria">Auditoría IP</a>
-            <a href="/auditoria">Auditoría global</a>
             <a class="hq-pill-primary" href="/gerencia/planes">Planes comerciales</a><a href="/gerencia/beneficios">Beneficios</a><a href="/gerencia/planes/nuevo">Crear plan</a>
             <a href="/gerencia/lideres">Líderes / equipo</a>
-            <a class="hq-pill-more" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
             <a class="hq-pill-more" href="/gerencia/turnos">Turnos</a>
             <a class="hq-pill-more" href="/gerencia/contabilidad/nueva">Nueva operación</a>
-            <a class="hq-pill-more" href="/gerencia/login-banners">Salida segura</a>
           </div>
         </div>
       </div>
@@ -25841,7 +25833,7 @@ def gerencia_hq():
       
       <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details></aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v2.6.0</div></div></div></div></div>
 
-      <div id="hq-tab-contingencia" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Boveda documental, juridica y DRP</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Boveda documental, juridica y DRP</h3><div style="display:flex;flex-wrap:wrap;gap:8px"><a href="/gerencia/documentos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Biblioteca</a><a href="/gerencia/documentos/plan-drp" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan DRP</a><a href="/gerencia/documentos/politica-datos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Politica de datos</a><a href="/gerencia/documentos/plan-contingencia" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan contingencia</a><a href="/gerencia/documentos/contrato-licenciamiento" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contrato SaaS</a><a href="/gerencia/contratos-personal" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contratos</a></div></div></div>
+      <div id="hq-tab-contingencia" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Boveda documental, juridica y DRP</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Boveda documental, juridica y DRP</h3><div style="display:flex;flex-wrap:wrap;gap:8px"><a href="/gerencia/documentos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Biblioteca</a><a href="/gerencia/documentos/plan-drp" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan DRP</a><a href="/gerencia/documentos/politica-datos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Politica de datos</a><a href="/gerencia/documentos/plan-contingencia" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan contingencia</a><a href="/gerencia/documentos/contrato-licenciamiento" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contrato SaaS</a></div></div></div>
 
       {tab_tecnica_panel}
 
@@ -27374,31 +27366,35 @@ def gerencia_contratos_personal():
                     except Exception:
                         pass
     rows = ContratoPersonal.query.order_by(ContratoPersonal.id.desc()).limit(100).all()
-    filas = []
-    for c in rows:
-        pdf_l = ("<a href='/gerencia/contratos-personal/%s/pdf' target='_blank'>PDF</a>" % c.id) if c.pdf_data else "—"
-        filas.append(
-            "<tr><td>%s</td><td><b>%s</b><br><span style='font-size:11px;color:#64748b'>%s</span></td>"
-            "<td>%s</td><td>%s</td><td>%s / %s</td><td>%s</td><td>%s</td>"
-            "<td>%s</td>"
-            "<td><form method='POST' style='display:inline' onsubmit='return confirm(\"Eliminar?\")'>"
-            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%s'>"
-            "<button type='submit' style='font-size:11px;background:#b91c1c;color:#fff;border:0;border-radius:4px;padding:3px 8px'>Eliminar</button></form></td></tr>"
-            % (
-                _esc(c.tipo or ""),
-                _esc(c.nombres or ""),
-                _esc(c.documento or ""),
-                _esc(c.cargo or ""),
-                _esc(c.area or ""),
-                _esc(c.fecha_inicio or ""),
-                _esc(c.fecha_fin or "—"),
-                _esc(c.estado or ""),
-                pdf_l,
-                c.id,
-            )
-        )
-    if not filas:
-        filas = ["<tr><td colspan='9' style='text-align:center;color:#94a3b8'>Sin contratos. Registre el primero abajo.</td></tr>"]
+    try:
+        filas = []
+        for c in rows:
+            pdf_l = (f"<a href='/gerencia/contratos-personal/{c.id}/pdf' target='_blank'>PDF</a>") if c.pdf_data else "—"
+            filas.append(f"""<tr>
+<td>{_esc(c.tipo or "")}</td>
+<td><b>{_esc(c.nombres or "")}</b><br><span style='font-size:11px;color:#64748b'>{_esc(c.documento or "")}</span></td>
+<td>{_esc(c.cargo or "")}</td>
+<td>{_esc(c.area or "")}</td>
+<td>{_esc(c.fecha_inicio or "")} / {_esc(c.fecha_fin or "—")}</td>
+<td>{_esc(c.estado or "")}</td>
+<td>{pdf_l}</td>
+<td><form method='POST' style='display:inline' onsubmit='return confirm("Eliminar?")'>
+<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='{c.id}'>
+<button type='submit' style='font-size:11px;background:#b91c1c;color:#fff;border:0;border-radius:4px;padding:3px 8px'>Eliminar</button></form></td>
+</tr>""")
+        if not filas:
+            filas = ["<tr><td colspan='9' style='text-align:center;color:#94a3b8'>Sin contratos. Registre el primero abajo.</td></tr>"]
+    except Exception as _ex_render:
+        # Antes esto se caía sin explicación ("Algo salió mal" genérico). Ahora se ve
+        # la causa exacta directo en la página para poder corregirla en el momento.
+        return page("Contratos personal", (
+            "<div style='max-width:700px;margin:40px auto;font-family:Segoe UI,system-ui,sans-serif'>"
+            "<p><a href='/gerencia/hq'>← HQ</a></p>"
+            "<h2 style='color:#b91c1c'>No se pudo cargar la lista de contratos</h2>"
+            f"<p style='background:#fee2e2;color:#7f1d1d;padding:12px;border-radius:8px;font-family:monospace;font-size:13px'>{_esc(str(_ex_render))}</p>"
+            "<p style='color:#64748b;font-size:13px'>Probablemente falta una columna nueva en la tabla contratos_personal. "
+            "Comparte este mensaje exacto para corregirlo.</p></div>"
+        ))
     body = (
         "<div style='max-width:1000px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
         "<p><a href='/gerencia/hq'>← HQ</a> · <a href='/gerencia/talento-legal'>Guía legal</a></p>"
@@ -52477,7 +52473,6 @@ def coord_reportes_areas():
 
 @app.route("/procsis")
 @app.route("/empresa")
-@app.route("/quienes-somos")
 def pagina_corporativa_procsis():
     """Sitio corporativo — diseño tipo Pacsis (header + portafolio). Textos desde Gerencia."""
     _rowc = None
@@ -53184,7 +53179,6 @@ def pagina_portafolio():
 
 
 @app.route("/tecnologia")
-@app.route("/soluciones")
 def pagina_tecnologia_edutrack():
     """Bloque público tipo 'Tecnología que impulsa instituciones' para EduTrack / Procsis."""
     body = """
@@ -55437,6 +55431,65 @@ def contabilidad_editar(oid):
 
 
 @app.route("/gerencia/contabilidad/op/<int:oid>")
+def contabilidad_op_detalle(oid):
+    """Detalle completo de la operación económica. Muestra toda la información
+    exista o no archivo adjunto (antes esta URL estaba mal enlazada al mismo
+    endpoint que sirve el archivo, y por eso fallaba si no había evidencia)."""
+    g = _guard_contabilidad()
+    if g is not None:
+        return g
+    try:
+        _ensure_cont_evidencia_cols()
+    except Exception:
+        pass
+    op = ContOperacion.query.get_or_404(oid)
+    tiene_archivo = bool((op.evidencia_archivo or "").startswith("data:"))
+    color_estado = {"PAGADO": "#16a34a", "PARCIAL": "#d97706", "ANULADO": "#b91c1c"}.get((op.estado or "").upper(), "#0B63CE")
+    archivo_html = (
+        f'<a href="/gerencia/contabilidad/op/{op.id}/evidencia" target="_blank" '
+        f'style="display:inline-block;background:#0B2D57;color:#fff;padding:9px 16px;border-radius:8px;'
+        f'text-decoration:none;font-weight:700;font-size:13px">📎 Ver archivo adjunto ({_esc(op.evidencia_nombre or "archivo")})</a>'
+        if tiene_archivo else
+        '<p style="color:#94a3b8;font-size:13px;font-style:italic">Sin archivo adjunto para esta operación.</p>'
+    )
+
+    def fila(label, valor):
+        return (f'<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eef2f7">'
+                f'<span style="color:#64748b;font-size:13px">{_esc(label)}</span>'
+                f'<span style="font-weight:600;font-size:13px;text-align:right;max-width:60%">{_esc(str(valor)) if valor not in (None, "") else "—"}</span></div>')
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>{_esc(op.codigo or "Operación")}</h1>
+  <p>{_esc(op.tipo or "")} · {_esc(op.fecha or "")} {_esc(op.hora or "")}</p>
+</div>
+<a class="btn" href="/gerencia/contabilidad">Operaciones</a>
+<a class="btn" href="/gerencia/contabilidad/op/{op.id}/pdf">⬇ Descargar PDF</a>
+<a class="btn" href="/gerencia/contabilidad/op/{op.id}/editar">Corregir</a>
+</header>
+<section class="role-panel" style="max-width:760px">
+  <span style="display:inline-block;background:{color_estado};color:#fff;padding:5px 14px;border-radius:999px;font-weight:800;font-size:12px;margin-bottom:16px">{_esc(op.estado or "")}</span>
+  {fila("Quién / a quién", op.parte_nombre)}
+  {fila("Producto", op.producto)}
+  {fila("Descripción", op.descripcion)}
+  {fila("Cantidad", op.cantidad)}
+  {fila("Valor unitario", f"$ {op.valor_unitario:,.0f}" if op.valor_unitario else "—")}
+  {fila("Valor total", f"$ {op.valor_total:,.0f}" if op.valor_total else "—")}
+  {fila("Pagado", f"$ {op.valor_pagado:,.0f}" if op.valor_pagado else "—")}
+  {fila("Saldo", f"$ {op.saldo:,.0f}" if op.saldo else "—")}
+  {fila("Medio de pago", op.medio_pago)}
+  {fila("Referencia", op.referencia)}
+  {fila("Solicitado por", op.solicitado_por)}
+  {fila("Registrado por", op.registrado_por)}
+  {fila("Institución", op.institucion_nombre)}
+  {fila("Nota / evidencia (texto)", op.evidencia)}
+  {fila("IP de registro", op.ip)}
+  <h3 style="font-size:13px;color:#0B2D57;margin-top:20px">Archivo adjunto</h3>
+  {archivo_html}
+</section>
+"""
+    return page(op.codigo or "Operación", _cont_shell("Detalle de operación", body))
+
 
 @app.route("/gerencia/contabilidad/op/<int:oid>/evidencia")
 def contabilidad_evidencia_archivo(oid):
