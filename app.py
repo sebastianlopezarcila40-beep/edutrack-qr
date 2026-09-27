@@ -3942,7 +3942,7 @@ def _wrap_staff_layout(title, body, path):
         alert_n += int(
             db.session.execute(
                 __import__("sqlalchemy").text(
-                    "SELECT COUNT(*) FROM pqr WHERE estado IN ('ABIERTA','URGENTE','PENDIENTE')"
+                    "SELECT COUNT(*) FROM tickets_pqr WHERE estado IN ('RADICADO','ABIERTA','URGENTE','PENDIENTE')"
                 )
             ).scalar()
             or 0
@@ -3956,7 +3956,7 @@ def _wrap_staff_layout(title, body, path):
         alert_n += int(
             db.session.execute(
                 __import__("sqlalchemy").text(
-                    "SELECT COUNT(*) FROM verificacion_identidad WHERE estado IN ('PENDIENTE','EN_REVISION')"
+                    "SELECT COUNT(*) FROM verificaciones_rector WHERE estado_validacion = 'ESPERANDO_CONFIRMACION'"
                 )
             ).scalar()
             or 0
@@ -4823,6 +4823,7 @@ def migrar_columnas():
         ("plataforma", "faq", "ALTER TABLE plataforma ADD COLUMN faq TEXT DEFAULT ''"),
         ("plataforma", "mantenimiento_programado", "ALTER TABLE plataforma ADD COLUMN mantenimiento_programado TEXT DEFAULT ''"),
         ("plataforma", "habeas_data", "ALTER TABLE plataforma ADD COLUMN habeas_data TEXT DEFAULT ''"),
+        ("plataforma", "login_mostrar_marca", "ALTER TABLE plataforma ADD COLUMN login_mostrar_marca BOOLEAN DEFAULT TRUE"),
         ("estudiantes", "estado", "ALTER TABLE estudiantes ADD COLUMN estado VARCHAR(30) DEFAULT 'ACTIVO'"),
         ("estudiantes", "tipo_doc", "ALTER TABLE estudiantes ADD COLUMN tipo_doc VARCHAR(20) DEFAULT 'TI'"),
         ("estudiantes", "exp_depa", "ALTER TABLE estudiantes ADD COLUMN exp_depa VARCHAR(80) DEFAULT ''"),
@@ -6192,6 +6193,15 @@ def plataforma():
             db.session.commit()
         return p
     except Exception:
+        # CRÍTICO: sin este rollback, si esta consulta falla (ej. falta una columna
+        # nueva y no se ha corrido la migración), la transacción de Postgres queda
+        # "abortada" y TODAS las consultas siguientes de esta misma petición fallan
+        # en cadena, aunque no tengan nada que ver con esto. Por eso un solo error
+        # aquí podía tumbar páginas enteras del sistema.
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         class _P: pass
         x = _P()
         x.empresa = DESARROLLADOR
@@ -9225,18 +9235,18 @@ def _ensure_scale_indexes():
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_est_institucion ON estudiantes (institucion_id)",
         "CREATE INDEX IF NOT EXISTS ix_est_inst_grado ON estudiantes (institucion_id, grado)",
-        "CREATE INDEX IF NOT EXISTS ix_ingreso_est_fecha ON ingresos_porteria (estudiante_id, fecha)",
+        "CREATE INDEX IF NOT EXISTS ix_ingreso_est_fecha ON ingresos (estudiante_id, fecha)",
         "CREATE INDEX IF NOT EXISTS ix_auth_salida_inst_est ON autorizaciones_salida (institucion_id, estado, fecha)",
         "CREATE INDEX IF NOT EXISTS ix_usuarios_inst ON usuarios (institucion_id)",
         "CREATE INDEX IF NOT EXISTS ix_sedes_inst ON sedes_institucion (institucion_id)",
         "CREATE INDEX IF NOT EXISTS ix_novedades_est_fecha ON novedades (estudiante_id, fecha)",
-        "CREATE INDEX IF NOT EXISTS ix_ingreso_inst_fecha ON ingresos_porteria (institucion_id, fecha)",
+        "CREATE INDEX IF NOT EXISTS ix_ingreso_inst_fecha ON ingresos (institucion_id, fecha)",
         "CREATE INDEX IF NOT EXISTS ix_usuarios_usuario ON usuarios (usuario)",
         "CREATE INDEX IF NOT EXISTS ix_inst_estado ON instituciones (estado)",
         "CREATE INDEX IF NOT EXISTS ix_inst_plan ON instituciones (plan)",
         "CREATE INDEX IF NOT EXISTS ix_planes_codigo ON planes_comerciales (codigo)",
         "CREATE INDEX IF NOT EXISTS ix_asist_clase_est_fecha ON asistencias_clase (estudiante_id, fecha)",
-        "CREATE INDEX IF NOT EXISTS ix_notas_est_per ON notas_registro (estudiante_id, periodo)",
+        "CREATE INDEX IF NOT EXISTS ix_notas_est_per ON notas_registros (estudiante_id, periodo)",
     ]
     try:
         for s in stmts:
@@ -20341,6 +20351,51 @@ body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#eef5fb;colo
     return body
 
 
+
+
+@app.route("/robots.txt")
+def _robots_txt():
+    """Sin este archivo, Google no tenía instrucción clara de qué indexar,
+    y con tantos errores 500 pasados es posible que haya bajado la confianza
+    del rastreo. Se permite todo lo público y se bloquea lo interno/privado."""
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /gerencia",
+        "Disallow: /ventas/panel",
+        "Disallow: /soporte_admin",
+        "Disallow: /cobranza",
+        "Disallow: /dev-console",
+        "Disallow: /familia",
+        "Disallow: /estudiantes",
+        "Disallow: /notas",
+        "Disallow: /static/",
+        "Disallow: /qr/",
+        "Sitemap: https://procsishq.com/sitemap.xml",
+    ]
+    return Response("\n".join(lines), mimetype="text/plain")
+
+
+@app.route("/sitemap.xml")
+def _sitemap_xml():
+    paginas = [
+        "/", "/login", "/ventas", "/procsis", "/tecnologia", "/soluciones",
+        "/politicas", "/politicas/seguridad-informacion", "/politicas/ciberseguridad",
+        "/politicas/cookies", "/politicas/datos-personales", "/politicas/aviso-privacidad",
+        "/politicas/habeas", "/pqr", "/whatsapp",
+    ]
+    hoy = fecha_hoy()
+    items = "".join(
+        f"<url><loc>https://procsishq.com{p}</loc><lastmod>{hoy}</lastmod></url>"
+        for p in paginas
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{items}"
+        "</urlset>"
+    )
+    return Response(xml, mimetype="application/xml")
 
 
 @app.route("/whatsapp")
