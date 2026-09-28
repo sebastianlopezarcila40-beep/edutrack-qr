@@ -3482,6 +3482,14 @@ def html_anuncio_global():
     if not getattr(p, "anuncio_activo", False):
         return ""
     ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")[:40]
+    # En las pantallas de login el anuncio sale SIEMPRE, en cada carga y antes de ingresar
+    # (antes se ocultaba para siempre si alguien lo cerraba una vez: sesión + localStorage).
+    try:
+        _p_login = (request.path or "").rstrip("/")
+        es_login = _p_login in ("/login", "/gerencia-login", "/soporte-login", "/ventas-login",
+                                "/cobranza-login", "/dev-login", "/desarrollo-login")
+    except Exception:
+        es_login = False
     # No mostrar en la web pública PROCSIS (solo login / sistema)
     try:
         path_pub = (request.path or "").rstrip("/") or "/"
@@ -3490,7 +3498,7 @@ def html_anuncio_global():
     except Exception:
         pass
     try:
-        if str(session.get("anuncio_dismissed_ver") or "") == ver:
+        if (not es_login) and str(session.get("anuncio_dismissed_ver") or "") == ver:
             return ""
     except Exception:
         pass
@@ -3560,19 +3568,23 @@ def html_anuncio_global():
         + cuenta_html
         + visual
         + '<p style="margin:14px 0 6px;font-size:12px;color:#94a3b8">'
-        "Al cerrar con la X no volverá a mostrarse al navegar. Solo si se publica un aviso nuevo.</p>"
+        + ("Cierra con la X para continuar al ingreso." if es_login else "Al cerrar con la X no volverá a mostrarse al navegar. Solo si se publica un aviso nuevo.")
+        + "</p>"
         "</div></div></div>"
         "<script>(function(){"
         'var ver="' + ver + '";'
         'var lsKey="' + ls_key + '";'
+        'var enLogin=' + ("true" if es_login else "false") + ';'
         'var el=document.getElementById("anuncio-global");'
         "if(!el)return;"
         "try{"
-        "if(window.localStorage&&localStorage.getItem(lsKey)==='1'){el.remove();return;}"
+        "if(!enLogin&&window.localStorage&&localStorage.getItem(lsKey)==='1'){el.remove();return;}"
         "}catch(e){}"
         'el.style.display="flex";'
         'function cerrarAnuncio(){'
         'el.style.display="none";'
+        # En login solo se oculta esta vista: al recargar o volver al login vuelve a salir.
+        "if(enLogin)return;"
         "try{if(window.localStorage)localStorage.setItem(lsKey,'1');}catch(e){}"
         'try{fetch("/anuncio/cerrar",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},'
         'body:"ver="+encodeURIComponent(ver),credentials:"same-origin"});}catch(e){}'
@@ -6269,6 +6281,9 @@ def plataforma():
         x.anuncio_version = "1"
         x.anuncio_img1 = ""
         x.anuncio_img2 = ""
+        # Textos PQR / kit legal (evita AttributeError en /gerencia/pqr-info si la BD falla)
+        x.pqr_presentacion = x.pqr_radicado = x.pqr_facturacion = x.pqr_plazo = ""
+        x.kit_habeas_data = x.kit_confirmacion_contrato = ""
         return x
 
 
@@ -23497,76 +23512,241 @@ def gerencia_login():
 
 
 
+_AUD_VISTAS = {
+    "acciones": "📋 Acciones del sistema",
+    "ubicaciones": "🌎 IP y ubicaciones",
+    "errores": "🛠️ Logs de error",
+    "sesiones": "🔐 Sesiones de personal",
+}
+
+
+def _aud_datos(vista, q="", desde="", hasta="", limite=300):
+    """Devuelve (titulo, columnas, filas, pesos_pdf) para la vista pedida. Nunca lanza excepción."""
+    like = f"%{q}%" if q else None
+    try:
+        if vista == "errores":
+            qry = LogErrorSistema.query
+            if like:
+                qry = qry.filter(db.or_(LogErrorSistema.mensaje.ilike(like), LogErrorSistema.ruta.ilike(like),
+                                        LogErrorSistema.usuario.ilike(like)))
+            if desde:
+                qry = qry.filter(func.substr(LogErrorSistema.ts, 1, 10) >= desde)
+            if hasta:
+                qry = qry.filter(func.substr(LogErrorSistema.ts, 1, 10) <= hasta)
+            rows = qry.order_by(LogErrorSistema.id.desc()).limit(limite).all()
+            cols = ["Fecha / hora", "Nivel", "Ruta", "Usuario", "Mensaje", "Resuelto"]
+            filas = [[(r.ts or "")[:19], r.nivel or "", r.ruta or "", r.usuario or "—",
+                      (r.mensaje or "")[:220], "Sí" if r.resuelto else "No"] for r in rows]
+            return "Auditoría global · Logs de error", cols, filas, [12, 7, 16, 11, 46, 6]
+
+        if vista == "sesiones":
+            qry = db.session.query(SesionEmpleado, Usuario).join(Usuario, Usuario.id == SesionEmpleado.usuario_id)
+            if like:
+                qry = qry.filter(db.or_(Usuario.usuario.ilike(like), Usuario.rol.ilike(like),
+                                        SesionEmpleado.ip.ilike(like)))
+            if desde:
+                qry = qry.filter(func.substr(SesionEmpleado.creada, 1, 10) >= desde)
+            if hasta:
+                qry = qry.filter(func.substr(SesionEmpleado.creada, 1, 10) <= hasta)
+            rows = qry.order_by(SesionEmpleado.id.desc()).limit(limite).all()
+            cols = ["Usuario", "Rol", "IP", "Navegador", "Inicio", "Último ping", "Estado"]
+            filas = [[u.usuario or "", u.rol or "", se.ip or "—", (se.user_agent or "")[:90],
+                      (se.creada or "")[:19], (se.ultimo_ping or "")[:19],
+                      "Activa" if se.activa else "Cerrada"] for se, u in rows]
+            return "Auditoría global · Sesiones de personal", cols, filas, [12, 10, 11, 31, 13, 13, 7]
+
+        qry = Auditoria.query
+        if vista == "ubicaciones":
+            qry = qry.filter(Auditoria.ip != "")
+        if like:
+            qry = qry.filter(db.or_(Auditoria.usuario.ilike(like), Auditoria.accion.ilike(like),
+                                    Auditoria.detalle.ilike(like), Auditoria.ip.ilike(like),
+                                    Auditoria.ubicacion.ilike(like)))
+        if desde:
+            qry = qry.filter(Auditoria.fecha >= desde)
+        if hasta:
+            qry = qry.filter(Auditoria.fecha <= hasta)
+        rows = qry.order_by(Auditoria.id.desc()).limit(limite).all()
+
+        def _isp(a):
+            isp = getattr(a, "proveedor_isp", None) or ""
+            if not isp and a.detalle and "ISP:" in (a.detalle or ""):
+                try:
+                    isp = (a.detalle.split("ISP:")[-1] or "").split("|")[0].strip()[:80]
+                except Exception:
+                    isp = ""
+            return isp
+
+        if vista == "ubicaciones":
+            cols = ["Fecha / hora", "Usuario", "Rol", "IP", "Ubicación", "Proveedor (ISP)", "Dispositivo"]
+            filas = [[f"{a.fecha} {a.hora}", a.usuario or "", a.rol or "", a.ip or "—",
+                      getattr(a, "ubicacion", "") or "—", _isp(a) or "—",
+                      " · ".join(x for x in (getattr(a, "dispositivo", ""), getattr(a, "navegador", ""),
+                                             getattr(a, "sistema_os", "")) if x) or "—"] for a in rows]
+            return "Auditoría global · IP y ubicaciones", cols, filas, [13, 11, 9, 11, 19, 15, 22]
+        cols = ["Fecha / hora", "Usuario", "Rol", "Acción", "Detalle", "IP"]
+        filas = [[f"{a.fecha} {a.hora}", a.usuario or "", a.rol or "", a.accion or "",
+                  (a.detalle or "")[:160], a.ip or "—"] for a in rows]
+        return "Auditoría global · Acciones del sistema", cols, filas, [13, 11, 9, 20, 35, 12]
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR _aud_datos:", repr(ex))
+        return "Auditoría global", ["Aviso"], [["No se pudo cargar esta vista en este momento. Intenta de nuevo."]], [100]
+
+
+def _pdf_informe_gerencia(titulo, subtitulo, columnas, filas, pesos=None):
+    """PDF horizontal con el diseño corporativo (banda azul #0B2D57, tabla con encabezado, pie con página)."""
+    from reportlab.platypus import SimpleDocTemplate, Spacer
+    from xml.sax.saxutils import escape as _xesc
+    buf = BytesIO()
+    pagesize = landscape(letter)
+    W, H = pagesize
+    try:
+        _p = plataforma()
+        empresa = (getattr(_p, "empresa", "") or "Procsis").strip()
+        producto = (getattr(_p, "nombre_producto", None) or "EduTrack").strip()
+    except Exception:
+        empresa, producto = "Procsis", "EduTrack"
+    generado = ahora().strftime("%Y-%m-%d %H:%M")
+    quien = session.get("usuario") or "Gerencia"
+
+    def _marco(cv, doc):
+        cv.saveState()
+        cv.setFillColor(colors.HexColor("#0B2D57"))
+        cv.rect(0, H - 62, W, 62, fill=1, stroke=0)
+        cv.setFillColor(colors.HexColor("#2563eb"))
+        cv.rect(0, H - 66, W, 4, fill=1, stroke=0)
+        cv.setFillColor(colors.white)
+        cv.setFont("Helvetica-Bold", 16)
+        cv.drawString(36, H - 30, f"{empresa} · {producto}")
+        cv.setFont("Helvetica", 10)
+        cv.drawString(36, H - 47, titulo)
+        cv.setFont("Helvetica", 9)
+        cv.drawRightString(W - 36, H - 30, "DOCUMENTO CONFIDENCIAL · USO INTERNO")
+        cv.drawRightString(W - 36, H - 47, f"Generado: {generado}")
+        cv.setFillColor(colors.HexColor("#64748b"))
+        cv.setFont("Helvetica", 8)
+        cv.drawString(36, 22, f"{empresa} · Informe generado por {quien}")
+        cv.drawRightString(W - 36, 22, f"Página {doc.page}")
+        cv.restoreState()
+
+    doc = SimpleDocTemplate(buf, pagesize=pagesize, leftMargin=36, rightMargin=36, topMargin=84,
+                            bottomMargin=40, title=titulo, author=empresa)
+    ss = getSampleStyleSheet()
+    st_sub = ParagraphStyle("sub", parent=ss["Normal"], fontSize=9, textColor=colors.HexColor("#475569"), leading=12)
+    st_h = ParagraphStyle("h", parent=ss["Normal"], fontSize=8, leading=10, textColor=colors.white, fontName="Helvetica-Bold")
+    st_c = ParagraphStyle("c", parent=ss["Normal"], fontSize=7.5, leading=9.5, textColor=colors.HexColor("#0f172a"))
+    ancho = W - 72
+    pesos = pesos if pesos and len(pesos) == len(columnas) else [1] * len(columnas)
+    tot = float(sum(pesos)) or 1.0
+    col_w = [ancho * (w / tot) for w in pesos]
+    data = [[Paragraph(_xesc(str(c)), st_h) for c in columnas]]
+    for f in filas:
+        data.append([Paragraph(_xesc(str(x if x is not None else "")), st_c) for x in f])
+    if len(data) == 1:
+        data.append([Paragraph("Sin registros para los filtros aplicados.", st_c)] + [""] * (len(columnas) - 1))
+    tabla = Table(data, colWidths=col_w, repeatRows=1)
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B2D57")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f1f5f9")]),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    doc.build([Paragraph(_xesc(subtitulo), st_sub), Spacer(1, 8), tabla], onFirstPage=_marco, onLaterPages=_marco)
+    buf.seek(0)
+    return buf
+
+
 @app.route("/gerencia/auditoria")
 def gerencia_auditoria():
-    """Visor de auditoría para Gerencia: IP, ubicación, ISP, usuario, acción."""
+    """Auditoría global para Gerencia: acciones, IP/ubicación, logs de error y sesiones. Solo lectura + PDF."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
-    q = (request.args.get("q") or "").strip()
-    qry = Auditoria.query
-    if q:
-        like = f"%{q}%"
-        qry = qry.filter(
-            db.or_(
-                Auditoria.usuario.ilike(like),
-                Auditoria.accion.ilike(like),
-                Auditoria.detalle.ilike(like),
-                Auditoria.ip.ilike(like),
-                Auditoria.ubicacion.ilike(like),
-            )
-        )
-    rows = qry.order_by(Auditoria.id.desc()).limit(200).all()
-    filas = ""
-    for a in rows:
-        isp = getattr(a, "proveedor_isp", None) or ""
-        ubic = getattr(a, "ubicacion", None) or ""
-        # extraer ISP del detalle si columna vacía
-        if not isp and a.detalle and "ISP:" in (a.detalle or ""):
-            try:
-                isp = (a.detalle.split("ISP:")[-1] or "").split("|")[0].strip()[:80]
-            except Exception:
-                pass
-        filas += (
-            f"<tr>"
-            f"<td style='font-size:12px;white-space:nowrap'>{_esc(a.fecha)} {_esc(a.hora)}</td>"
-            f"<td>{_esc(a.usuario)}<br><span style='font-size:11px;color:#64748b'>{_esc(a.rol)}</span></td>"
-            f"<td><b>{_esc(a.accion)}</b><br><span style='font-size:11px;color:#64748b'>{_esc((a.detalle or '')[:120])}</span></td>"
-            f"<td style='font-size:12px'><code>{_esc(a.ip or '—')}</code></td>"
-            f"<td style='font-size:12px'>{_esc(ubic or '—')}</td>"
-            f"<td style='font-size:12px'>{_esc(isp or '—')}</td>"
-            f"</tr>"
-        )
-    if not filas:
-        filas = "<tr><td colspan='6' style='text-align:center;padding:16px;color:#64748b'>Sin registros</td></tr>"
+    vista = (request.args.get("vista") or "acciones").strip().lower()
+    if vista not in _AUD_VISTAS:
+        vista = "acciones"
+    q = (request.args.get("q") or "").strip()[:80]
+    desde = (request.args.get("desde") or "").strip()[:10]
+    hasta = (request.args.get("hasta") or "").strip()[:10]
+    titulo, cols, filas, _pesos = _aud_datos(vista, q, desde, hasta, 300)
+    tabs = "".join(
+        f"<a href=\"/gerencia/auditoria?vista={k}&q={quote_plus(q)}&desde={_esc(desde)}&hasta={_esc(hasta)}\" "
+        f"style=\"padding:8px 14px;border-radius:999px;text-decoration:none;font-size:13px;font-weight:700;"
+        f"background:{'#0B2D57' if k == vista else '#e2e8f0'};color:{'#fff' if k == vista else '#0f172a'}\">{lab}</a>"
+        for k, lab in _AUD_VISTAS.items()
+    )
+    thead = "".join(f"<th style='padding:8px;text-align:left'>{_esc(c)}</th>" for c in cols)
+    if filas:
+        tbody = "".join(
+            "<tr style='border-bottom:1px solid #e2e8f0'>"
+            + "".join(f"<td style='padding:7px 8px;font-size:12px;vertical-align:top;white-space:normal;word-break:break-word'>{_esc(x)}</td>" for x in f)
+            + "</tr>" for f in filas)
+    else:
+        tbody = f"<tr><td colspan='{len(cols)}' style='text-align:center;padding:16px;color:#64748b'>Sin registros</td></tr>"
+    pdf_href = f"/gerencia/auditoria/pdf?vista={vista}&q={quote_plus(q)}&desde={_esc(desde)}&hasta={_esc(hasta)}"
     content = f"""
 <header class="role-hero"><div>
-  <h1>📋 Auditoría del sistema</h1>
-  <p>IP, ubicación y proveedor de internet capturados en cada inicio de sesión y acciones clave.</p>
+  <h1>📋 Auditoría global</h1>
+  <p>Logs, IP y ubicaciones, errores y sesiones. Solo lectura; el informe se descarga en PDF con el diseño de la empresa.</p>
 </div>
 <a class="btn" href="/gerencia/hq">← HQ</a></header>
 <section class="role-panel">
-  <form method="GET" style="margin-bottom:12px;display:flex;gap:8px">
-    <input name="q" value="{_esc(q)}" placeholder="Buscar usuario, IP, acción…" style="flex:1;padding:8px;border-radius:8px;border:1px solid #cbd5e1">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">{tabs}</div>
+  <form method="GET" style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <input type="hidden" name="vista" value="{vista}">
+    <input name="q" value="{_esc(q)}" placeholder="Buscar usuario, IP, acción…" style="flex:1;min-width:200px;padding:8px;border-radius:8px;border:1px solid #cbd5e1">
+    <label style="font-size:12px">Desde <input type="date" name="desde" value="{_esc(desde)}" style="padding:7px;border-radius:8px;border:1px solid #cbd5e1"></label>
+    <label style="font-size:12px">Hasta <input type="date" name="hasta" value="{_esc(hasta)}" style="padding:7px;border-radius:8px;border:1px solid #cbd5e1"></label>
     <button type="submit" class="btn">Filtrar</button>
+    <a class="btn" href="{pdf_href}" style="background:#b91c1c;color:#fff">📄 Descargar PDF</a>
   </form>
+  <p class="mini-text" style="margin:0 0 8px">{_esc(titulo)} · {len(filas)} registro(s) (máx. 300 en pantalla; el PDF incluye hasta 2.000).</p>
   <div style="overflow:auto">
   <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">
-      <th style="padding:8px;text-align:left">Fecha/hora</th>
-      <th style="padding:8px;text-align:left">Usuario</th>
-      <th style="padding:8px;text-align:left">Acción</th>
-      <th style="padding:8px;text-align:left">IP</th>
-      <th style="padding:8px;text-align:left">Ubicación</th>
-      <th style="padding:8px;text-align:left">Proveedor ISP</th>
-    </tr>
-    {filas}
+    <tr style="background:#0B2D57;color:#fff">{thead}</tr>
+    {tbody}
   </table>
   </div>
   <p class="mini-text" style="margin-top:10px">Fuente geo: ip-api.com · Los inicios de sesión y radicaciones de PQR quedan registrados automáticamente.</p>
 </section>
 """
     return page("Auditoría Gerencia", shell(content))
+
+
+@app.route("/gerencia/auditoria/pdf")
+def gerencia_auditoria_pdf():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    vista = (request.args.get("vista") or "acciones").strip().lower()
+    if vista not in _AUD_VISTAS:
+        vista = "acciones"
+    q = (request.args.get("q") or "").strip()[:80]
+    desde = (request.args.get("desde") or "").strip()[:10]
+    hasta = (request.args.get("hasta") or "").strip()[:10]
+    titulo, cols, filas, pesos = _aud_datos(vista, q, desde, hasta, 2000)
+    sub = (f"Vista: {_AUD_VISTAS[vista]} · Filtro: {q or 'ninguno'} · "
+           f"Rango: {desde or 'inicio'} → {hasta or 'hoy'} · {len(filas)} registro(s)")
+    try:
+        buf = _pdf_informe_gerencia(titulo, sub, cols, filas, pesos)
+    except Exception as ex:
+        print("ERROR gerencia_auditoria_pdf:", repr(ex))
+        return acceso_denegado("No se pudo generar el PDF en este momento. Intenta de nuevo.")
+    try:
+        registrar_auditoria("Descarga informe de auditoría (PDF)", f"{vista} · {len(filas)} registros")
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    nombre = f"auditoria_{vista}_{ahora().strftime('%Y%m%d_%H%M')}.pdf"
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=nombre)
 
 
 @app.route("/gerencia/verificaciones-pendientes", methods=["GET", "POST"])
@@ -26069,6 +26249,7 @@ def gerencia_hq():
         <a href="/gerencia/empresa">Datos de la empresa (alterno)</a>
         <a href="/gerencia/finanzas/promociones">Promociones financieras</a>
         <a href="/gerencia/dev-console">Consola de desarrollador</a>
+        <a href="/gerencia/sesiones-tecnicas">Sesiones técnicas (solo ver)</a>
         <a href="/gerencia/diseno-login">Diseño del login</a>
         <a href="/gerencia/backoffice-branding">Branding del backoffice</a>
         <a href="/gerencia/changelog">Historial de cambios</a>
@@ -37435,7 +37616,9 @@ def soporte_admin():
 @app.route("/soporte/marca", methods=["GET", "POST"])
 def soporte_marca():
     """Nombres globales (empresa + producto), logo y contactos de soporte."""
-    _g = _guard_soporte()
+    # Gerencia también administra la marca: antes _guard_soporte() lo redirigía a /gerencia/hq
+    # (por eso "Marca y contacto" recargaba y devolvía al principal).
+    _g = None if (requiere_login() and rol_actual() in ("Gerente", "Administrador")) else _guard_soporte()
     if _g is not None:
         return _g
     p = plataforma()
@@ -37509,12 +37692,12 @@ def soporte_marca():
   <label><b>Notas internas</b></label>
   <textarea name="notas" rows="3">{(p.notas or '').replace(chr(60),'').replace(chr(62),'')}</textarea>
   <button type="submit">Guardar marca global</button>
-  <a class="btn" href="/soporte_admin">← Panel soporte</a>
+  <a class="btn" href="{'/gerencia/hq' if rol_actual() in ('Gerente', 'Administrador') else '/soporte_admin'}">← Volver al panel</a>
   <a class="btn" href="/contacto" target="_blank">Ver contacto público</a>
 </form>
 </section>
 """
-    return page("Marca global", shell_soporte(content))
+    return page("Marca global", shell(content))
 
 
 @app.route("/soporte/institucion/<int:id>", methods=["GET", "POST"])
@@ -45686,38 +45869,51 @@ def gerencia_editar_pqr_info():
         return acceso_denegado()
     p = plataforma()
     mensaje = ""
+    error = ""
+    campos = ("pqr_presentacion", "pqr_radicado", "pqr_facturacion", "pqr_plazo",
+              "kit_habeas_data", "kit_confirmacion_contrato")
     if request.method == "POST":
-        p.pqr_presentacion = (request.form.get("pqr_presentacion") or "").strip()
-        p.pqr_radicado = (request.form.get("pqr_radicado") or "").strip()
-        p.pqr_facturacion = (request.form.get("pqr_facturacion") or "").strip()
-        p.pqr_plazo = (request.form.get("pqr_plazo") or "").strip()
-        p.kit_habeas_data = (request.form.get("kit_habeas_data") or "").strip()
-        p.kit_confirmacion_contrato = (request.form.get("kit_confirmacion_contrato") or "").strip()
-        db.session.commit()
-        registrar_auditoria("Textos PQR/kit legal actualizados", session.get("usuario") or "")
-        mensaje = "Guardado."
+        try:
+            for c in campos:
+                setattr(p, c, (request.form.get(c) or "").strip())
+            db.session.commit()
+            try:
+                registrar_auditoria("Textos PQR/kit legal actualizados", session.get("usuario") or "")
+            except Exception:
+                db.session.rollback()
+            mensaje = "Guardado."
+        except Exception as ex:
+            db.session.rollback()
+            print("ERROR gerencia/pqr-info guardar:", repr(ex))
+            error = "No se pudo guardar en este momento. Intenta de nuevo; si persiste, avisa a Desarrollo."
+    v = {c: (getattr(p, c, "") or "") for c in campos}
     volver = {"Comercial": "/ventas/kit-mensajes"}.get(rol_actual(), "/pqr-info")
+    aviso = ""
+    if mensaje:
+        aviso = "<div class='msg ok'>" + mensaje + "</div>"
+    elif error:
+        aviso = "<div class='msg' style='background:#fef2f2;color:#991b1b'>" + error + "</div>"
     content = f"""
 <header class="role-hero"><div>
   <h1>✏️ Editar textos de PQR y kit legal</h1>
   <p>Estos textos se ven en <a href="/pqr-info" target="_blank">/pqr-info</a> (público) y en el Kit de prospección de Ventas.</p>
 </div>
 <a class="btn" href="{volver}">Volver</a></header>
-{"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
+{aviso}
 <section class="role-panel">
   <form method="POST">
     <label><b>Presentación de la PQR</b></label>
-    <textarea name="pqr_presentacion" rows="3" placeholder="(vacío = usa el texto por defecto)">{_esc(p.pqr_presentacion)}</textarea>
+    <textarea name="pqr_presentacion" rows="3" placeholder="(vacío = usa el texto por defecto)">{_esc(v["pqr_presentacion"])}</textarea>
     <label style="margin-top:10px;display:block"><b>Radicado y seguimiento</b></label>
-    <textarea name="pqr_radicado" rows="3">{_esc(p.pqr_radicado)}</textarea>
+    <textarea name="pqr_radicado" rows="3">{_esc(v["pqr_radicado"])}</textarea>
     <label style="margin-top:10px;display:block"><b>PQR y facturación</b></label>
-    <textarea name="pqr_facturacion" rows="3">{_esc(p.pqr_facturacion)}</textarea>
+    <textarea name="pqr_facturacion" rows="3">{_esc(v["pqr_facturacion"])}</textarea>
     <label style="margin-top:10px;display:block"><b>Plazo de respuesta</b></label>
-    <textarea name="pqr_plazo" rows="4">{_esc(p.pqr_plazo)}</textarea>
+    <textarea name="pqr_plazo" rows="4">{_esc(v["pqr_plazo"])}</textarea>
     <label style="margin-top:16px;display:block"><b>Kit de prospección · guion de datos personales (Habeas Data)</b></label>
-    <textarea name="kit_habeas_data" rows="5" placeholder="(vacío = usa el texto por defecto)">{_esc(p.kit_habeas_data)}</textarea>
+    <textarea name="kit_habeas_data" rows="5" placeholder="(vacío = usa el texto por defecto)">{_esc(v["kit_habeas_data"])}</textarea>
     <label style="margin-top:10px;display:block"><b>Kit de prospección · confirmación de contrato</b></label>
-    <textarea name="kit_confirmacion_contrato" rows="5">{_esc(p.kit_confirmacion_contrato)}</textarea>
+    <textarea name="kit_confirmacion_contrato" rows="5">{_esc(v["kit_confirmacion_contrato"])}</textarea>
     <button type="submit" style="margin-top:14px">Guardar</button>
   </form>
 </section>
@@ -46163,37 +46359,183 @@ def soporte_actualizaciones():
     return page("Actualizaciones / FAQ / Ayuda", shell(content))
 
 
+_ROLES_TECNICOS = ("Soporte", "Desarrollador", "Developer", "Superadmin")
+
+
+@app.before_request
+def _track_sesiones_tecnicas():
+    """Registra en memoria la actividad de Soporte/Desarrollo para que Gerencia la vea en vivo (solo lectura)."""
+    try:
+        path = request.path or ""
+        if path.startswith("/static") or not session.get("usuario"):
+            return None
+        if rol_actual() in _ROLES_TECNICOS and path.startswith(("/soporte", "/dev-console", "/gerencia/dev-console")):
+            _dev_track_session(path[:100])
+    except Exception:
+        pass
+    return None
+
+
+@app.route("/gerencia/sesiones-tecnicas")
+def gerencia_sesiones_tecnicas():
+    """Gerencia: SOLO VISUALIZACIÓN de sesiones activas de Desarrollo y Soporte."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    filas_bd = ""
+    filas_act = ""
+    try:
+        limite = (ahora() - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+        rows = (db.session.query(SesionEmpleado, Usuario)
+                .join(Usuario, Usuario.id == SesionEmpleado.usuario_id)
+                .filter(SesionEmpleado.activa == True, Usuario.rol.in_(_ROLES_TECNICOS),  # noqa: E712
+                        SesionEmpleado.ultimo_ping >= limite)
+                .order_by(SesionEmpleado.ultimo_ping.desc()).limit(100).all())
+        for se, u in rows:
+            filas_bd += (
+                "<tr style='border-bottom:1px solid #e2e8f0'>"
+                f"<td style='padding:7px 8px;font-size:12px'><b>{_esc(u.usuario)}</b><br><span style='color:#64748b'>{_esc(u.rol)}</span></td>"
+                f"<td style='padding:7px 8px;font-size:12px;font-family:monospace'>{_esc(se.ip or '—')}</td>"
+                f"<td style='padding:7px 8px;font-size:11px;color:#475569;word-break:break-word'>{_esc((se.user_agent or '')[:120])}</td>"
+                f"<td style='padding:7px 8px;font-size:12px'>{_esc((se.creada or '')[:19])}</td>"
+                f"<td style='padding:7px 8px;font-size:12px'>{_esc((se.ultimo_ping or '')[:19])}</td></tr>")
+        arows = (Auditoria.query.filter(Auditoria.rol.in_(_ROLES_TECNICOS))
+                 .order_by(Auditoria.id.desc()).limit(40).all())
+        for a in arows:
+            filas_act += (
+                "<tr style='border-bottom:1px solid #e2e8f0'>"
+                f"<td style='padding:6px 8px;font-size:12px;white-space:nowrap'>{_esc(a.fecha)} {_esc(a.hora)}</td>"
+                f"<td style='padding:6px 8px;font-size:12px'>{_esc(a.usuario)}<br><span style='color:#64748b'>{_esc(a.rol)}</span></td>"
+                f"<td style='padding:6px 8px;font-size:12px'><b>{_esc(a.accion)}</b><br><span style='color:#64748b'>{_esc((a.detalle or '')[:110])}</span></td>"
+                f"<td style='padding:6px 8px;font-size:12px;font-family:monospace'>{_esc(a.ip or '—')}</td></tr>")
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR sesiones-tecnicas:", repr(ex))
+    vacio = "<tr><td colspan='5' style='padding:14px;text-align:center;color:#64748b;font-size:12px'>Sin sesiones activas en los últimos 30 minutos.</td></tr>"
+    vacio_a = "<tr><td colspan='4' style='padding:14px;text-align:center;color:#64748b;font-size:12px'>Sin actividad registrada.</td></tr>"
+    th = "padding:7px 8px;text-align:left;font-size:11px"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>🖥️ Sesiones técnicas activas</h1>
+  <p>Solo visualización de lo que hay activo en Desarrollo y Soporte. Se actualiza sola cada 30 segundos.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+<section class="role-panel">
+  <h2 style="color:#0B2D57;font-size:16px;margin-top:0">Consola técnica (Desarrollo y Soporte · últimos 15 min)</h2>
+  {_dev_sessions_html()}
+</section>
+<section class="role-panel" style="margin-top:14px">
+  <h2 style="color:#0B2D57;font-size:16px;margin-top:0">Personal técnico con sesión abierta (últimos 30 min)</h2>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+    <tr style="background:#f8fafc"><th style="{th}">Usuario / Rol</th><th style="{th}">IP</th><th style="{th}">Navegador</th><th style="{th}">Inicio</th><th style="{th}">Último ping</th></tr>
+    {filas_bd or vacio}
+  </table></div>
+</section>
+<section class="role-panel" style="margin-top:14px">
+  <h2 style="color:#0B2D57;font-size:16px;margin-top:0">Últimas acciones de Soporte y Desarrollo</h2>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+    <tr style="background:#f8fafc"><th style="{th}">Fecha / hora</th><th style="{th}">Usuario / Rol</th><th style="{th}">Acción</th><th style="{th}">IP</th></tr>
+    {filas_act or vacio_a}
+  </table></div>
+  <p class="mini-text" style="margin-top:10px">Vista de solo lectura: desde aquí no se puede cerrar ni modificar ninguna sesión.</p>
+</section>
+<script>setTimeout(function(){{location.reload();}},30000);</script>
+"""
+    return page("Sesiones técnicas (Gerencia · solo ver)", shell(content))
+
+
+_KW_SEGURIDAD = ("seguridad", "parche", "security", "vulnerab", "cve", "hotfix", "cifrad", "xss", "inyecci", "inyecc")
+_FLAGS_EN_PRUEBAS = (
+    ("sandbox_mode", "Entorno Sandbox / Pruebas (maestro)"),
+    ("whatsapp_api", "Módulo de Conexión WhatsApp API"),
+    ("carnetizacion_masiva_pdf", "Módulo de Carnetización Masiva PDF"),
+    ("liquidacion_prestaciones", "Módulo de Liquidación con Prestaciones"),
+    ("anti_suplantacion_qr", "Bloqueo anti-suplantación QR (15 min)"),
+)
+
+
+def _upd_badge(txt, bg, fg="#fff"):
+    return (f"<span style='display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;"
+            f"font-weight:800;background:{bg};color:{fg}'>{_esc(txt)}</span>")
+
+
 @app.route("/gerencia/actualizaciones")
 def gerencia_actualizaciones():
-    """Vista de SOLO SUPERVISIÓN para Gerencia: novedades, FAQ y ayuda que publican
-    Desarrollador y Soporte. Gerencia no edita este contenido desde aquí (para eso
-    existe el carrusel de fotos del login, que sí administra en /gerencia/diseno-login)."""
+    """Gerencia (SOLO LECTURA): actualizaciones en progreso, procesadas y parches de seguridad."""
     g = _guard_gerencia()
     if g:
         return g
     p = plataforma()
-    novedades_html = _txt_a_html_lista(getattr(p, "novedades", None) or "") or "<p class='mini-text'>Desarrollador aún no ha publicado novedades.</p>"
-    faq_html = _txt_a_html_lista(getattr(p, "faq", None) or "") or "<p class='mini-text'>Soporte aún no ha publicado preguntas frecuentes.</p>"
-    mant = _esc(getattr(p, "mantenimiento_programado", None) or "Sin mantenimiento programado.")
+    versiones = []
+    try:
+        versiones = ChangelogVersion.query.order_by(ChangelogVersion.id.desc()).limit(60).all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    seg, proc = [], []
+    for v in versiones:
+        txt = f"{v.version or ''} {v.resumen or ''}".lower()
+        (seg if any(k in txt for k in _KW_SEGURIDAD) else proc).append(v)
+
+    def _card(v, etiqueta, color):
+        resumen = _esc((v.resumen or "").strip()[:600]).replace("\n", "<br>") or "<i>Sin detalle.</i>"
+        return (
+            "<div style='border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff'>"
+            f"<div style='display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap'>"
+            f"<b style='color:#0B2D57'>v{_esc(v.version)}</b>{_upd_badge(etiqueta, color)}</div>"
+            f"<div style='font-size:12px;color:#64748b;margin:2px 0 6px'>{_esc(v.fecha)} · {_esc(v.creado_por or '')}</div>"
+            f"<div style='font-size:13px;color:#1e293b;white-space:normal;word-break:break-word'>{resumen}</div></div>")
+
+    # ── En progreso: funciones aún en pruebas, mantenimiento y avisos técnicos activos ──
+    prog = ""
+    for clave, label in _FLAGS_EN_PRUEBAS:
+        try:
+            on = feature_enabled(clave, False)
+        except Exception:
+            on = False
+        if clave == "sandbox_mode":
+            est = _upd_badge("Sandbox activo", "#d97706") if on else _upd_badge("Sandbox apagado", "#64748b")
+        else:
+            est = _upd_badge("Liberada", "#15803d") if on else _upd_badge("En pruebas", "#d97706")
+        prog += (f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;"
+                 f"border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;background:#fff'>"
+                 f"<span style='font-size:13px;font-weight:700;color:#0f172a'>{_esc(label)}</span>{est}</div>")
+    mant_prog = (getattr(p, "mantenimiento_programado", None) or "").strip()
+    if mant_prog:
+        prog += (f"<div style='padding:9px 12px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;margin-bottom:8px;font-size:13px'>"
+                 f"{_upd_badge('Mantenimiento programado', '#d97706')} {_esc(mant_prog)}</div>")
+    if getattr(p, "modo_mantenimiento", False):
+        prog += f"<div style='margin-bottom:8px'>{_upd_badge('Modo mantenimiento ACTIVO ahora', '#b91c1c')}</div>"
+    if getattr(p, "anuncio_tecnico_activo", False) and (getattr(p, "anuncio_tecnico", None) or "").strip():
+        prog += (f"<div style='padding:9px 12px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:8px;font-size:13px'>"
+                 f"{_upd_badge('Aviso técnico publicado', '#1e40af')} {_esc((p.anuncio_tecnico or '')[:400])}</div>")
+
+    proc_html = "".join(_card(v, "Procesada", "#15803d") for v in proc) or "<p class='mini-text'>Aún no hay actualizaciones procesadas registradas.</p>"
+    seg_html = "".join(_card(v, "Parche de seguridad", "#b91c1c") for v in seg) or "<p class='mini-text'>No hay parches de seguridad registrados.</p>"
     content = f"""
 <header class="role-hero"><div>
-  <h1>Actualizaciones · FAQ · Ayuda (solo supervisión)</h1>
-  <p>Gerencia visualiza este contenido, pero no lo edita. La edición corresponde a Soporte (FAQ / Ayuda)
-  y a Desarrollador (últimas actualizaciones y mejoras). Para las fotos del carrusel del login, use
-  <a href="/gerencia/diseno-login">Diseño de login</a>.</p>
+  <h1>Actualizaciones (solo supervisión)</h1>
+  <p>Lo que está en progreso, lo ya procesado y los parches de seguridad. Gerencia solo visualiza:
+  la edición corresponde a Desarrollo y Soporte.</p>
 </div>
 <a class="btn" href="/gerencia/hq">← HQ</a></header>
 <section class="role-panel">
-  <h2 style="color:#0B2D57">Últimas actualizaciones y mejoras (Desarrollador)</h2>
-  {novedades_html}
+  <h2 style="color:#0B2D57;margin-top:0">⏳ En progreso</h2>
+  {prog or "<p class='mini-text'>Nada en progreso por ahora.</p>"}
 </section>
 <section class="role-panel" style="margin-top:14px">
-  <h2 style="color:#0B2D57">Preguntas frecuentes / Ayuda (Soporte)</h2>
-  {faq_html}
+  <h2 style="color:#0B2D57;margin-top:0">✅ Procesadas</h2>
+  {proc_html}
 </section>
 <section class="role-panel" style="margin-top:14px">
-  <h2 style="color:#0B2D57">Mantenimiento programado (Soporte)</h2>
-  <p>{mant}</p>
+  <h2 style="color:#b91c1c;margin-top:0">🛡️ Parches de seguridad</h2>
+  {seg_html}
+  <p class="mini-text">Se clasifican como parche de seguridad las versiones cuyo texto menciona «seguridad», «parche» o «vulnerabilidad».</p>
 </section>
 """
     return page("Actualizaciones (Gerencia · solo ver)", shell(content))
@@ -64205,13 +64547,15 @@ def dev_console():
     """Consola de Desarrollo — solo técnica. Sin empresa/NIT/nómina/contratos/ventas."""
     if not requiere_login():
         return redirect("/dev-console-login")
-    g = _guard_dev_console()
-    if g:
-        return g
-    try:
-        _dev_track_session("abre_consola")
-    except Exception:
-        pass
+    solo_lectura = (rol_actual() or "").strip() in ("Gerente", "Administrador")
+    if not solo_lectura:
+        g = _guard_dev_console()
+        if g:
+            return g
+        try:
+            _dev_track_session("abre_consola")
+        except Exception:
+            pass
     _ensure_dev_version_cols()
     msg = err = ""
     tab = (request.args.get("tab") or request.form.get("tab") or "sistema").strip().lower()
@@ -64222,7 +64566,9 @@ def dev_console():
     except Exception:
         p = None
 
-    if request.method == "POST":
+    if request.method == "POST" and solo_lectura:
+        err = "Modo solo lectura: Gerencia puede visualizar la consola técnica, no aplicar cambios."
+    elif request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
         ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
         try:
@@ -64725,6 +65071,18 @@ def dev_console():
   <div class="dev-panel">{panel}</div>
 </div>
 """
+    if solo_lectura:
+        # Gerencia: se ve todo, pero ningún control aplica cambios.
+        body = re.sub(r'<(button|textarea|select)\b', r'<\1 disabled', body)
+        body = re.sub(r'<input\b(?![^>]*type=["\']hidden["\'])', '<input disabled', body)
+        body = re.sub(r'(?<!gerencia)/dev-console\?tab=', '/gerencia/dev-console?tab=', body)
+        body = body.replace('href="/login">← Portal de acceso', 'href="/gerencia/hq">← Volver a Gerencia')
+        body = (
+            "<div style='background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 14px;border-radius:8px;"
+            "margin:0 0 12px;font-size:13px;font-weight:700'>👁️ Modo solo lectura (Gerencia): puedes abrir y revisar "
+            "todo, pero los botones de aplicar están desactivados.</div>"
+            "<style>.dev-panel button,.dev-panel input,.dev-panel textarea,.dev-panel select{opacity:.55;cursor:not-allowed}</style>"
+        ) + body
     # Dev console usa layout staff (sidebar) sin shell clásico doble
     return page("Consola Desarrollo", body)
 
