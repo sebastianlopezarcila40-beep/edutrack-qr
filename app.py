@@ -238,6 +238,37 @@ def _esc(valor):
     return _html_mod.escape(str(valor), quote=True)
 
 
+def _parse_cop(valor):
+    """Convierte un precio escrito en formato colombiano a float.
+    BUG que corrige: float("900.000") en Python da 900.0 (el punto se lee como
+    decimal), así que un plan de $900.000 se guardaba como $900. Aquí el punto
+    se trata como separador de miles cuando corresponde (ej. 900.000 -> 900000.0,
+    1.250.000,50 -> 1250000.5), igual que se escribe el dinero en Colombia."""
+    if valor is None:
+        return 0.0
+    s = str(valor).strip().replace("$", "").replace(" ", "")
+    if not s:
+        return 0.0
+    try:
+        if "," in s and "." in s:
+            s = s.replace(".", "").replace(",", ".")
+        elif "," in s:
+            partes = s.split(",")
+            s = s.replace(",", ".") if len(partes[-1]) <= 2 else s.replace(",", "")
+        elif s.count(".") > 1:
+            s = s.replace(".", "")
+        elif "." in s:
+            entero, dec = s.split(".")
+            if len(dec) == 3:
+                s = entero + dec
+        return float(s)
+    except (ValueError, IndexError):
+        try:
+            return float(str(valor).strip().replace(",", "").replace("$", "").replace(" ", "") or 0)
+        except Exception:
+            return 0.0
+
+
 @app.after_request
 def _security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
@@ -278,9 +309,13 @@ def _security_before():
     # Evitar métodos raros
     if request.method not in ("GET", "POST", "HEAD", "OPTIONS", "PATCH", "PUT", "DELETE"):
         return "Method Not Allowed", 405
-    # Sesión permanente corta
+    # Sesión persistente con renovación deslizante (20 min desde la última actividad).
+    # ANTES esto decía `session.permanent = False` en cada petición, lo cual anulaba
+    # la sesión persistente a cada rato y cerraba sesión sola en módulos que tardan
+    # en cargar o hacen varias peticiones seguidas (ej. consola de Desarrollo).
     if session.get("usuario"):
-        session.permanent = False
+        session.permanent = True
+        session.modified = True
 
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///edutrack.db")
@@ -7891,7 +7926,10 @@ def _asegurar_token_pqr(t):
     if not (t.token_notificacion or "").strip():
         import secrets
         t.token_notificacion = secrets.token_urlsafe(24)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
     return t.token_notificacion
 
 
@@ -28504,21 +28542,35 @@ def ventas_verificacion_rector():
                     motivo_gerencia=motivo_g if requiere_ger else "",
                 )
                 db.session.add(v)
-                db.session.commit()
                 try:
-                    registrar_auditoria("Verificación rector iniciada", f"{nombre} / CC {cedula} / colegio {colegio}")
-                except Exception:
-                    pass
-                if alerta_ofac or (v.estado_validacion == "ESPERANDO_CONFIRMACION"):
+                    db.session.commit()
+                except Exception as ex_v:
                     try:
-                        _notificar_gerencia_verificacion(
-                            "Validación requiere visto de Gerencia",
-                            (v.motivo_gerencia or "El asesor elevó el caso a Gerencia.") + " | OFAC=" + str(bool(alerta_ofac)),
-                            v,
-                        )
-                    except Exception as ex:
-                        print("notificar OFAC:", ex)
-                resultado = v
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    print("verificacion rector commit:", ex_v)
+                    resultado = type("R", (), {
+                        "error_motivo": False,
+                        "error_guardado": True,
+                        "nombre_rector": nombre,
+                    })()
+                    v = None
+                if v is not None:
+                    try:
+                        registrar_auditoria("Verificación rector iniciada", f"{nombre} / CC {cedula} / colegio {colegio}")
+                    except Exception:
+                        pass
+                    if alerta_ofac or (v.estado_validacion == "ESPERANDO_CONFIRMACION"):
+                        try:
+                            _notificar_gerencia_verificacion(
+                                "Validación requiere visto de Gerencia",
+                                (v.motivo_gerencia or "El asesor elevó el caso a Gerencia.") + " | OFAC=" + str(bool(alerta_ofac)),
+                                v,
+                            )
+                        except Exception as ex:
+                            print("notificar OFAC:", ex)
+                    resultado = v
         elif accion == "marcar_pep":
             vid = request.form.get("vid")
             v = VerificacionRector.query.get(int(vid)) if vid else None
@@ -28549,12 +28601,25 @@ def ventas_verificacion_rector():
             resultado = v
 
     historial = VerificacionRector.query.order_by(VerificacionRector.id.desc()).limit(15).all()
+    _etiquetas_estado_val = {
+        "ESPERANDO_CONFIRMACION": ("Esperando confirmación", "#c2410c", "#ffedd5"),
+        "LIBRE": ("Libre", "#15803d", "#dcfce7"),
+        "APROBADO_POR_GERENCIA": ("Aprobado por Gerencia", "#15803d", "#dcfce7"),
+        "APROBADO": ("Aprobado", "#15803d", "#dcfce7"),
+        "RECHAZADO_NO_VENDER": ("Rechazado — no vender", "#b91c1c", "#fee2e2"),
+        "RECHAZADO": ("Rechazado", "#b91c1c", "#fee2e2"),
+    }
     filas_hist = ""
     for h in historial:
         estado_ofac = "Alerta OFAC" if h.ofac_alerta else "Sin alerta"
         est_v = getattr(h, "estado_validacion", None) or h.gerencia_decision or "—"
-        color = "#b91c1c" if est_v in ("RECHAZADO_NO_VENDER", "RECHAZADO") else ("#16a34a" if est_v in ("APROBADO_POR_GERENCIA", "APROBADO", "LIBRE") else "#c2410c")
-        motivo = (getattr(h, "motivo_gerencia", None) or h.gerencia_motivo or "")[:120]
+        # Si el asesor no marcó la validación como exitosa o dejó un motivo para
+        # Gerencia, el badge debe reflejar eso — no solo el resultado crudo de OFAC.
+        motivo = (getattr(h, "motivo_gerencia", None) or h.gerencia_motivo or "").strip()
+        if motivo and est_v in ("LIBRE", "—") and not getattr(h, "val_exitosa", True):
+            est_v = "ESPERANDO_CONFIRMACION"
+        etiqueta, color, bg = _etiquetas_estado_val.get(est_v, (est_v.replace("_", " ").capitalize(), "#475569", "#f1f5f9"))
+        badge = f"<span style='background:{bg};color:{color};font-weight:700;font-size:11px;padding:4px 10px;border-radius:980px;white-space:nowrap'>{_esc(etiqueta)}</span>"
         checks = []
         if getattr(h, "val_policia", False):
             checks.append("Policía")
@@ -28565,23 +28630,32 @@ def ventas_verificacion_rector():
         if getattr(h, "val_exitosa", False):
             checks.append("Exitosa")
         filas_hist += (
-            "<tr><td>%s %s</td><td>%s<br><span class='mini-text'>CC %s</span></td><td>%s</td>"
-            "<td>%s</td><td style='color:%s;font-weight:700'>%s</td><td style='font-size:12px'>%s</td>"
-            "<td style='font-size:11px;color:#64748b'>%s</td><td>%s</td></tr>"
+            "<tr style='vertical-align:top'>"
+            "<td style='padding:10px 8px'>%s %s</td>"
+            "<td style='padding:10px 8px'>%s<br><span class='mini-text'>CC %s</span></td>"
+            "<td style='padding:10px 8px'>%s</td>"
+            "<td style='padding:10px 8px;text-align:center'>%s</td>"
+            "<td style='padding:10px 8px;text-align:center'>%s</td>"
+            "<td style='padding:10px 8px;font-size:12px'>%s</td>"
+            "<td style='padding:10px 8px;font-size:12px;max-width:260px;white-space:normal;word-break:break-word;line-height:1.4'>%s</td>"
+            "<td style='padding:10px 8px;font-size:11px;color:#64748b;text-align:center'>%s</td></tr>"
         ) % (
             h.fecha or "", h.hora or "",
             _esc(h.nombre_rector), _esc(h.cedula_rector),
             _esc(h.nombre_colegio or ""),
             estado_ofac,
-            color, _esc(est_v),
+            badge,
             _esc(" · ".join(checks) or "—"),
-            _esc(motivo),
+            _esc(motivo[:500]),
             _esc(h.consultado_por),
         )
+
 
     r_html = ""
     if resultado and getattr(resultado, "error_motivo", False):
         r_html = """<div class="msg danger" style="margin-top:12px">Debe escribir el <b>motivo para Gerencia</b> cuando la validación no es exitosa o hay alerta en lista negra/OFAC.</div>"""
+    elif resultado and getattr(resultado, "error_guardado", False):
+        r_html = """<div class="msg danger" style="margin-top:12px">No se pudo guardar la validación en este momento (fallo temporal de conexión con la base de datos). Vuelva a darle clic en "Verificar y registrar" — sus datos escritos arriba no se perdieron.</div>"""
     elif resultado:
         v = resultado
         cc = _esc(v.cedula_rector)
@@ -34447,7 +34521,7 @@ def _aplicar_campos_plan(p, form, crear=False):
         p.codigo = cod
     mod = (form.get("modalidad") or "presencial").strip().lower()
     p.modalidad = "online" if mod == "online" else "presencial"
-    precio_base = float(form.get("precio") or 0)
+    precio_base = _parse_cop(form.get("precio") or 0)
     descuento_pct = max(0.0, min(100.0, float(form.get("descuento_pct") or 0)))
     p.precio_lista = precio_base
     p.descuento_pct = descuento_pct
@@ -34456,7 +34530,7 @@ def _aplicar_campos_plan(p, form, crear=False):
         p.precio_mensual = round(precio_base * (1 - descuento_pct / 100.0), 2)
     else:
         p.precio_mensual = precio_base
-    p.fee_implementacion = float(form.get("fee") or 0)
+    p.fee_implementacion = _parse_cop(form.get("fee") or 0)
     p.max_estudiantes = int(form.get("max_e") or 100)
     p.max_sedes = int(form.get("max_s") or 1)
     p.max_admin = int(form.get("max_admin") or 10)
@@ -45341,7 +45415,11 @@ def pqr_colegio():
                     pass
                 mensaje = f"PQR {t.radicado} respondida y cerrada. Ya no se puede modificar."
         except Exception as ex:
-            mensaje = str(ex)[:150]
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            mensaje = "No se pudo cerrar el PQR. Intente de nuevo en unos segundos."
 
     q = TicketPQR.query
     if rol_actual() != "Soporte" and iid is not None:
@@ -48433,6 +48511,10 @@ def soporte_pqr_detalle(id):
                             except Exception:
                                 mail_ok = False
                     except Exception as ex:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
                         print("mail respuesta:", ex)
                 if resp and t.email and enviar_mail:
                     mensaje = "Respuesta guardada. " + (
@@ -48443,8 +48525,12 @@ def soporte_pqr_detalle(id):
                 else:
                     mensaje = "Respuesta y estado guardados correctamente."
             except Exception as ex:
-                db.session.rollback()
-                mensaje = f"Error al guardar: {ex}"
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                print("soporte_pqr_detalle guardar:", ex)
+                mensaje = "No se pudo guardar el cambio. Intente de nuevo en unos segundos."
     try:
         hist = HistorialPQR.query.filter_by(ticket_id=t.id).order_by(HistorialPQR.id.desc()).limit(40).all()
     except Exception:
