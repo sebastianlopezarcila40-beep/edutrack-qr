@@ -5399,7 +5399,7 @@ def _autoreparar_columnas_faltantes():
                 except Exception as ex:
                     print("autoreparar columna omitida:", tabla.name, col.name, str(ex)[:120])
         if agregadas:
-            print("autoreparar columnas agregadas:", ", ".join(agregadas))
+            print("autoreparar columnas agregadas:", ", ".join(agregadas), flush=True)
     except Exception as ex:
         print("autoreparar columnas:", str(ex)[:200])
     try:
@@ -30258,6 +30258,33 @@ def soporte_logs_errores():
     return page("Logs de error", body)
 
 
+@app.before_request
+def _diag_marca_tiempo():
+    try:
+        import time as _tm
+        request._t0_diag = _tm.time()
+    except Exception:
+        pass
+    return None
+
+
+@app.after_request
+def _diag_log_rastreo(resp):
+    """Deja en los logs de Railway (con flush) toda respuesta 5xx y toda visita de Googlebot,
+    con ruta, estado y duración. Sirve para saber por qué Search Console reporta 5xx."""
+    try:
+        import time as _tm
+        ua = (request.headers.get("User-Agent") or "")
+        es_bot = "googlebot" in ua.lower() or "google-inspectiontool" in ua.lower()
+        if es_bot or resp.status_code >= 500:
+            ms = int((_tm.time() - getattr(request, "_t0_diag", _tm.time())) * 1000)
+            print("[RASTREO] %s %s -> %s en %d ms | bot=%s | ua=%s" % (
+                request.method, request.path, resp.status_code, ms, "si" if es_bot else "no", ua[:90]), flush=True)
+    except Exception:
+        pass
+    return resp
+
+
 @app.errorhandler(Exception)
 def _capturar_error_sistema(e):
     """Registra excepciones no controladas en logs_errores y muestra una pantalla con
@@ -30292,7 +30319,7 @@ def _capturar_error_sistema(e):
             pass
     # Log visible en Railway
     try:
-        print("ERROR RUTA", getattr(request, "path", "?"), ":", repr(e))
+        print("ERROR RUTA", getattr(request, "path", "?"), ":", repr(e), flush=True)
         import traceback as _tb
         _tb.print_exc()
     except Exception:
