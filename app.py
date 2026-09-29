@@ -3815,11 +3815,11 @@ def _is_staff_path(path):
         return False
     skip = (
         "/logout", "/login", "/gerencia-login", "/ventas-login",
-        "/soporte-login", "/cobranza-login",
+        "/soporte-login", "/cobranza-login", "/contabilidad-login",
     )
     if path in skip:
         return False
-    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/dev-console", "/cerrar-turno")
+    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/contabilidad", "/dev-console", "/cerrar-turno")
     return any(path == k or path.startswith(k + "/") or (k != "/gerencia" and path.startswith(k)) or path.startswith("/gerencia") for k in keys)
 
 
@@ -3834,6 +3834,8 @@ def _staff_module_title(path, rol=""):
         return "<strong>SOPORTE</strong> · Mesa tecnica"
     if path.startswith("/cobranza") or rol == "Cobranza":
         return "<strong>COBRANZA</strong> · Cartera"
+    if path.startswith("/contabilidad") or rol == "Contabilidad":
+        return "<strong>CONTABILIDAD</strong> · Libros y estados financieros"
     if "dev" in path or rol in ("Desarrollador", "Developer"):
         return "<strong>PROCSIS</strong> · Consola técnica"
     return "<strong>PROCSIS</strong> · Backoffice"
@@ -3897,6 +3899,8 @@ def _staff_nav_items(path, rol=""):
             ("/cobranza/panel", "Cartera"),
             ("/logout", "Salir"),
         ]
+    elif rol == "Contabilidad" or (path or "").startswith("/contabilidad"):
+        items = _cta_menu_items()
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/hq", "Dashboard"),
@@ -3930,6 +3934,8 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/hub", "Tablero maestro (todos los módulos)"),
             ("/logout", "Salir"),
         ]
+    elif rol == "Contabilidad":
+        items = _cta_menu_items()
     else:
         # Fallback mínimo
         items = [("/login", "Portal de acceso"), ("/logout", "Salir")]
@@ -4224,6 +4230,8 @@ def menu_items_por_rol():
     Notas: solo Docente edita; Rectoría/Coordinación/Secretaría solo ven e imprimen.
     """
     rol = rol_actual()
+    if rol == "Contabilidad":
+        return _cta_menu_items()
     items = [("/dashboard", "Inicio")]
 
     if rol == "Soporte":
@@ -4371,7 +4379,7 @@ def menu_items_por_rol():
     # Filtrar menú según módulos del plan del colegio (100% alineado con checks del plan)
     try:
         rol = rol_actual() or ""
-        if rol not in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador", "Desarrollador", "Developer", "Cobranza"):
+        if rol not in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador", "Desarrollador", "Developer", "Cobranza", "Contabilidad"):
             mods = set(modulos_plan_actual())
             if "notas_completo" in mods:
                 mods.update({"notas_basico", "portal_docente"})
@@ -5342,6 +5350,64 @@ _migracion_bd_lista = False  # candado: ejecutar migrar_columnas() una sola vez 
 _ultimo_dia_cron_facturacion = None  # candado: correr el ciclo de facturación automática una vez por día
 
 
+
+def _autoreparar_columnas_faltantes():
+    """Compara los modelos con la BD real (1 sola consulta a information_schema) y agrega SOLO las
+    columnas que falten. Corrige el caso 'column plataforma.login_mostrar_marca does not exist':
+    las migraciones pesadas solo corren con RUN_DB_MIGRATE=1, así que una columna nueva del
+    modelo tumbaba la página hasta que alguien corriera la migración a mano. Es idempotente,
+    rápida (no revisa filas) y nunca borra ni modifica datos."""
+    if getattr(_autoreparar_columnas_faltantes, "_ok", False):
+        return
+    _autoreparar_columnas_faltantes._ok = True
+    try:
+        if "postgres" not in (db.engine.dialect.name or "").lower():
+            return
+        with db.engine.connect() as conn:
+            filas = conn.execute(text(
+                "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema()"
+            )).fetchall()
+        en_bd = {}
+        for t, c in filas:
+            en_bd.setdefault(t, set()).add(c)
+        dialecto = db.engine.dialect
+        q = dialecto.identifier_preparer.quote
+        agregadas = []
+        for tabla in db.metadata.sorted_tables:
+            if tabla.name not in en_bd:
+                continue  # tabla inexistente: la crea create_all / su propio ensure, no este parche
+            for col in tabla.columns:
+                if col.name in en_bd[tabla.name] or col.primary_key:
+                    continue
+                try:
+                    tipo = col.type.compile(dialect=dialecto)
+                except Exception:
+                    continue
+                default = ""
+                d = getattr(col.default, "arg", None) if col.default is not None else None
+                if isinstance(d, bool):
+                    default = " DEFAULT TRUE" if d else " DEFAULT FALSE"
+                elif isinstance(d, (int, float)):
+                    default = f" DEFAULT {d}"
+                elif isinstance(d, str):
+                    default = " DEFAULT '" + d.replace("'", "''") + "'"
+                ddl = f"ALTER TABLE {q(tabla.name)} ADD COLUMN IF NOT EXISTS {q(col.name)} {tipo}{default}"
+                try:
+                    with db.engine.begin() as conn:
+                        conn.execute(text(ddl))
+                    agregadas.append(f"{tabla.name}.{col.name}")
+                except Exception as ex:
+                    print("autoreparar columna omitida:", tabla.name, col.name, str(ex)[:120])
+        if agregadas:
+            print("autoreparar columnas agregadas:", ", ".join(agregadas))
+    except Exception as ex:
+        print("autoreparar columnas:", str(ex)[:200])
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+
+
 def inicializar_bd():
     try:
         _ensure_scale_indexes()
@@ -5359,6 +5425,11 @@ def inicializar_bd():
         _ensure_inst_promo_columns()
     except Exception as _ep:
         print("ensure promo cols:", _ep)
+    # Columnas nuevas de los modelos que falten en la BD (evita "column ... does not exist" sin migrar a mano)
+    try:
+        _autoreparar_columnas_faltantes()
+    except Exception as _er:
+        print("autoreparar:", _er)
     # create_all + migraciones pesadas: SOLO si se fuerza con env (evita timeout)
     if (os.environ.get("RUN_DB_MIGRATE") or "").strip() in ("1", "true", "TRUE", "yes"):
         try:
@@ -7460,7 +7531,7 @@ def qr_texto(e):
 
 
 # ===== Seguridad de empleados =====
-ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Desarrollador")
+ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Desarrollador")
 # Cuota de almacenamiento por colegio (GB)
 ALMACENAMIENTO_GB_POR_COLEGIO = 10
 ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza")
@@ -9214,7 +9285,7 @@ _ROLES_COLEGIO = frozenset({
     "Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador",
 })
 _ROLES_GLOBAL = frozenset({
-    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Desarrollador", "Developer",
+    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Developer",
 })
 # Quién puede EJECUTAR (no solo ver) cada capacidad crítica
 _CAPACIDAD_ROLES = {
@@ -9293,7 +9364,6 @@ def _ensure_scale_indexes():
         "CREATE INDEX IF NOT EXISTS ix_usuarios_inst ON usuarios (institucion_id)",
         "CREATE INDEX IF NOT EXISTS ix_sedes_inst ON sedes_institucion (institucion_id)",
         "CREATE INDEX IF NOT EXISTS ix_novedades_est_fecha ON novedades (estudiante_id, fecha)",
-        "CREATE INDEX IF NOT EXISTS ix_ingreso_inst_fecha ON ingresos (institucion_id, fecha)",
         "CREATE INDEX IF NOT EXISTS ix_usuarios_usuario ON usuarios (usuario)",
         "CREATE INDEX IF NOT EXISTS ix_inst_estado ON instituciones (estado)",
         "CREATE INDEX IF NOT EXISTS ix_inst_plan ON instituciones (plan)",
@@ -11443,7 +11513,7 @@ def login():
             roles_staff_login = (
                 "Gerente", "Gerencia", "Superadmin", "Administrador",
                 "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                "Cobranza", "Soporte", "Desarrollador", "Developer",
+                "Cobranza", "Contabilidad", "Soporte", "Desarrollador", "Developer",
             )
             staff_user = None
             try:
@@ -11489,6 +11559,8 @@ def login():
                         return redirect("/ventas/panel")
                     if rol_staff == "Cobranza":
                         return redirect("/cobranza/panel")
+                    if rol_staff == "Contabilidad":
+                        return redirect("/contabilidad")
                     if rol_staff == "Soporte":
                         return redirect("/soporte_admin")
                     if rol_staff in ("Desarrollador", "Developer"):
@@ -12187,7 +12259,7 @@ def cambiar_password():
     if not requiere_login(): return redirect("/login")
     mensaje = ""
     rol = rol_actual()
-    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza")
+    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza", "Contabilidad")
     if request.method == "POST":
         nueva = request.form.get("password", "").strip()
         confirmar = request.form.get("confirmar", "").strip()
@@ -19982,6 +20054,7 @@ def interno_buscar_colegio_ui():
         "Comercial": "/ventas/panel",
         "Gerente": "/gerencia/hq",
         "Cobranza": "/cobranza/panel",
+        "Contabilidad": "/contabilidad",
         "Administrador": "/gerencia/hq",
         "Superadmin": "/gerencia/hq",
     }.get(rol_actual(), "/")
@@ -20011,6 +20084,7 @@ def _home_portal(rol=None):
         "Administrador": "/gerencia/hq",
         "Superadmin": "/gerencia/hq",
         "Cobranza": "/cobranza/panel",
+        "Contabilidad": "/contabilidad",
         "Desarrollador": "/dev-console",
         "Developer": "/dev-console",
     }.get(r, "/login")
@@ -20025,6 +20099,7 @@ def _login_portal(rol=None):
         "Administrador": "/login",
         "Superadmin": "/login",
         "Cobranza": "/login",
+        "Contabilidad": "/login",
         "Desarrollador": "/login",
         "Developer": "/login",
     }.get(r, "/login")
@@ -20048,6 +20123,7 @@ def _aislar_paneles_internos():
         "/soporte-login": "Soporte",
         "/gerencia-login": ("Gerente", "Superadmin", "Administrador"),
         "/cobranza-login": "Cobranza",
+        "/contabilidad-login": "Contabilidad",
         "/dev-console-login": ("Desarrollador", "Developer", "Superadmin"),
     }
     if path in login_map and request.method == "GET":
@@ -20120,12 +20196,24 @@ def _aislar_paneles_internos():
             return redirect(_login_del_portal(path))
         if path.startswith("/gerencia") or path.startswith("/soporte_admin") or path.startswith("/cobranza"):
             return redirect(_login_del_portal(path))
+        if path.startswith("/contabilidad"):
+            return redirect(_login_del_portal(path))
 
     elif rol == "Soporte":
         if (path.startswith("/ventas/panel") or path.startswith("/ventas/comisiones")
-                or path.startswith("/cobranza") or path.startswith("/gerencia/")
+                or path.startswith("/cobranza") or path.startswith("/contabilidad") or path.startswith("/gerencia/")
                 or path == "/gerencia" or path == "/gerencia/hq"):
             return redirect(_login_del_portal(path))
+
+    elif rol == "Contabilidad":
+        ok_cta = (
+            path.startswith("/contabilidad")
+            or path.startswith("/mi-perfil")
+            or path.startswith("/cambiar_password")
+            or path.startswith("/interno/buscar")
+        )
+        if not ok_cta:
+            return redirect("/contabilidad")
 
     elif rol == "Cobranza":
         ok_cob = (
@@ -20146,7 +20234,7 @@ def _aislar_paneles_internos():
         # Cobranza NUNCA debe caer en portal de soporte por error de ruta
         if path.startswith("/soporte") and not path.startswith("/soporte/reinicio-acceso"):
             return redirect("/cobranza/panel")
-        if path.startswith("/soporte_admin") or path.startswith("/ventas"):
+        if path.startswith("/soporte_admin") or path.startswith("/ventas") or path.startswith("/contabilidad"):
             return redirect("/cobranza/panel")
         if path.startswith("/gerencia/") and not path.startswith("/gerencia/facturacion"):
             return redirect("/cobranza/panel")
@@ -22332,6 +22420,8 @@ def _destino_por_rol_staff(rol):
         return "/ventas/panel"
     if r in ("Cobranza",):
         return "/cobranza/panel"
+    if r in ("Contabilidad",):
+        return "/contabilidad"
     if r in ("Soporte",):
         return "/soporte_admin"
     if r in ("Desarrollador", "Developer"):
@@ -22492,7 +22582,7 @@ def _DEPRECATED_portal_backoffice_sin_ruta():
                         roles_staff = (
                             "Gerente", "Gerencia", "Superadmin", "Administrador",
                             "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                            "Cobranza", "Soporte", "Desarrollador", "Developer",
+                            "Cobranza", "Contabilidad", "Soporte", "Desarrollador", "Developer",
                         )
                         if rol not in roles_staff:
                             error = "Este acceso es solo para personal PROCSIS. Use el portal de instituciones (/login)."
@@ -22525,6 +22615,8 @@ def _DEPRECATED_portal_backoffice_sin_ruta():
                                 return redirect("/ventas/panel")
                             if rol == "Cobranza":
                                 return redirect("/cobranza/panel")
+                            if rol == "Contabilidad":
+                                return redirect("/contabilidad")
                             if rol == "Soporte":
                                 return redirect("/soporte")
                             if rol in ("Desarrollador", "Developer"):
@@ -32142,7 +32234,7 @@ def gerencia_usuarios():
             usuario = (request.form.get("usuario") or "").strip().lower()
             password = (request.form.get("password") or "").strip()
             rol = (request.form.get("rol") or "Comercial").strip()
-            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Superadmin", "Desarrollador"):
+            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif not usuario or len(password) < 8:
                 error = "Usuario obligatorio y contraseña de al menos 8 caracteres."
@@ -32160,7 +32252,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo = (request.form.get("nuevo_usuario") or "").strip().lower()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Desarrollador"):
                 error = "Usuario no válido."
             elif not nuevo or len(nuevo) < 3:
                 error = "Nuevo nombre de usuario inválido."
@@ -32181,9 +32273,9 @@ def gerencia_usuarios():
             u = Usuario.query.get(uid) if uid else None
             if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
                 error = "Solo Gerencia puede cambiar roles de usuarios."
-            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Desarrollador"):
+            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Desarrollador"):
                 error = "Usuario no válido."
-            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Superadmin", "Desarrollador"):
+            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif session.get("uid") == u.id and nuevo_rol != u.rol:
                 error = "No puede cambiarse el rol a usted mismo — pídaselo a otro Gerente/Superadmin."
@@ -32197,7 +32289,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nueva_clave = (request.form.get("nueva_clave") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Desarrollador"):
                 error = "Usuario no válido."
             elif len(nueva_clave) < 8:
                 error = "La contraseña debe tener mínimo 8 caracteres."
@@ -32213,7 +32305,7 @@ def gerencia_usuarios():
         elif accion == "toggle_activo":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Desarrollador"):
                 error = "Usuario no válido."
             elif session.get("uid") == u.id:
                 error = "No puede desactivarse a sí mismo."
@@ -32228,7 +32320,7 @@ def gerencia_usuarios():
         elif accion == "eliminar":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad"):
                 error = "Usuario no válido o no se puede eliminar (protegido)."
             elif session.get("uid") == u.id:
                 error = "No puede eliminarse a sí mismo."
@@ -32250,7 +32342,7 @@ def gerencia_usuarios():
                 except Exception as ex:
                     db.session.rollback()
                     error = f"No se pudo eliminar: {ex}"
-    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza"])).order_by(Usuario.id.desc()).limit(80).all()
+    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad"])).order_by(Usuario.id.desc()).limit(80).all()
     filas = ""
     for u in lista:
         activo = getattr(u, "activo", True)
@@ -32279,6 +32371,7 @@ def gerencia_usuarios():
                 <option value="Comercial" {"selected" if u.rol=="Comercial" else ""}>Comercial</option>
                 <option value="Soporte" {"selected" if u.rol=="Soporte" else ""}>Soporte</option>
                 <option value="Cobranza" {"selected" if u.rol=="Cobranza" else ""}>Cobranza</option>
+                <option value="Contabilidad" {"selected" if u.rol=="Contabilidad" else ""}>Contabilidad</option>
                 <option value="Gerente" {"selected" if u.rol=="Gerente" else ""}>Gerente</option>
                 <option value="Superadmin" {"selected" if u.rol=="Superadmin" else ""}>Superadmin</option>
                 <option value="Desarrollador" {"selected" if u.rol=="Desarrollador" else ""}>Desarrollador</option>
@@ -32322,6 +32415,7 @@ def gerencia_usuarios():
       <option value="Comercial">Comercial (Ventas)</option>
       <option value="Soporte">Soporte técnico</option>
       <option value="Cobranza">Cobranza / Facturación</option>
+      <option value="Contabilidad">Contabilidad</option>
       <option value="Gerente">Gerente</option>
       <option value="Superadmin">Superadmin</option>
       <option value="Desarrollador">Desarrollador</option>
@@ -46357,6 +46451,1040 @@ def soporte_actualizaciones():
 </div>
 """
     return page("Actualizaciones / FAQ / Ayuda", shell(content))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ROL CONTABILIDAD (portal propio, independiente de Gerencia)
+#  Libro contable con partida doble, plan de cuentas, centros de costo, cuentas
+#  por cobrar (lee Facturación), estados financieros, auditoría y exportaciones.
+#  Nunca se borra un movimiento: se ANULA y queda el historial.
+# ═══════════════════════════════════════════════════════════════════════════
+from decimal import Decimal as _D, ROUND_HALF_UP as _RHU
+
+
+class CtaCuenta(db.Model):
+    __tablename__ = "cta_cuentas"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    nombre = db.Column(db.String(160), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False, index=True)  # ACTIVO|PASIVO|PATRIMONIO|INGRESO|COSTO|GASTO
+    naturaleza = db.Column(db.String(1), default="D")  # D | C
+    activa = db.Column(db.Boolean, default=True)
+    creado_por = db.Column(db.String(80), default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
+class CtaCentroCosto(db.Model):
+    __tablename__ = "cta_centros_costo"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), nullable=False, unique=True)
+    activo = db.Column(db.Boolean, default=True)
+
+
+class CtaAsiento(db.Model):
+    __tablename__ = "cta_asientos"
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.String(30), index=True)
+    fecha = db.Column(db.String(10), index=True)
+    tipo = db.Column(db.String(30), default="Nota contable")
+    tercero = db.Column(db.String(200), default="")
+    descripcion = db.Column(db.Text, default="")
+    centro_costo = db.Column(db.String(120), default="")
+    documento = db.Column(db.String(120), default="")
+    estado = db.Column(db.String(20), default="REGISTRADO", index=True)  # REGISTRADO | ANULADO
+    total_debito = db.Column(db.Numeric(16, 2), default=0)
+    total_credito = db.Column(db.Numeric(16, 2), default=0)
+    creado_por = db.Column(db.String(80), default="")
+    creado_en = db.Column(db.String(30), default="")
+    modificado_en = db.Column(db.String(30), default="")
+    anulado_por = db.Column(db.String(80), default="")
+    anulado_en = db.Column(db.String(30), default="")
+    motivo_anulacion = db.Column(db.Text, default="")
+    ip = db.Column(db.String(80), default="")
+
+
+class CtaAsientoLinea(db.Model):
+    __tablename__ = "cta_asiento_lineas"
+    id = db.Column(db.Integer, primary_key=True)
+    asiento_id = db.Column(db.Integer, index=True, nullable=False)
+    cuenta_id = db.Column(db.Integer, index=True, nullable=False)
+    cuenta_codigo = db.Column(db.String(20), default="")
+    cuenta_nombre = db.Column(db.String(160), default="")
+    descripcion = db.Column(db.String(300), default="")
+    debito = db.Column(db.Numeric(16, 2), default=0)
+    credito = db.Column(db.Numeric(16, 2), default=0)
+
+
+class CtaAuditoria(db.Model):
+    __tablename__ = "cta_auditoria"
+    id = db.Column(db.Integer, primary_key=True)
+    ts = db.Column(db.String(30), default="", index=True)
+    usuario = db.Column(db.String(80), default="")
+    rol = db.Column(db.String(40), default="")
+    accion = db.Column(db.String(80), default="")
+    detalle = db.Column(db.Text, default="")
+    valor_anterior = db.Column(db.Text, default="")
+    valor_nuevo = db.Column(db.Text, default="")
+    ip = db.Column(db.String(80), default="")
+
+
+_CTA_LISTO = {"ok": False}
+_CTA_TIPOS = ("ACTIVO", "PASIVO", "PATRIMONIO", "INGRESO", "COSTO", "GASTO")
+_CTA_TIPOS_ASIENTO = ("Nota contable", "Ingreso", "Egreso", "Ajuste", "Apertura", "Nómina", "Depreciación")
+# Plan inicial SUGERIDO y editable. Debe validarlo un contador según el marco contable aplicable a Procsis.
+_CTA_PLAN_INICIAL = (
+    ("1105", "Caja", "ACTIVO"), ("1110", "Bancos", "ACTIVO"),
+    ("1305", "Cuentas por cobrar · Instituciones", "ACTIVO"),
+    ("1524", "Equipo de oficina", "ACTIVO"), ("1528", "Equipo de cómputo", "ACTIVO"),
+    ("2205", "Proveedores", "PASIVO"), ("2408", "Impuestos por pagar", "PASIVO"),
+    ("2505", "Obligaciones laborales", "PASIVO"), ("2105", "Obligaciones financieras", "PASIVO"),
+    ("3115", "Capital", "PATRIMONIO"), ("3705", "Resultados acumulados", "PATRIMONIO"),
+    ("4101", "Ingresos · Suscripciones EduTrack", "INGRESO"),
+    ("4102", "Ingresos · Implementaciones", "INGRESO"),
+    ("4103", "Ingresos · Servicios adicionales", "INGRESO"),
+    ("6101", "Costos · Servidores e infraestructura", "COSTO"),
+    ("5105", "Gastos · Nómina", "GASTO"), ("5110", "Gastos · Honorarios", "GASTO"),
+    ("5120", "Gastos · Software", "GASTO"), ("5130", "Gastos · Servicios", "GASTO"),
+    ("5140", "Gastos · Marketing", "GASTO"),
+)
+_CTA_CENTROS_INICIAL = ("Desarrollo", "Soporte", "Ventas", "Marketing", "Administración", "Infraestructura")
+
+
+def _cta_menu_items():
+    return [
+        ("/contabilidad", "Dashboard"),
+        ("/contabilidad/libro", "Libro contable"),
+        ("/contabilidad/asiento/nuevo", "Nuevo asiento"),
+        ("/contabilidad/plan", "Plan de cuentas"),
+        ("/contabilidad/centros", "Centros de costo"),
+        ("/contabilidad/cuentas-por-cobrar", "Cuentas por cobrar"),
+        ("/contabilidad/estados", "Estados financieros"),
+        ("/contabilidad/auditoria", "Auditoría"),
+        ("/logout", "Salir"),
+    ]
+
+
+def _cta_ensure():
+    if _CTA_LISTO["ok"]:
+        return
+    try:
+        for m in (CtaCuenta, CtaCentroCosto, CtaAsiento, CtaAsientoLinea, CtaAuditoria):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        _CTA_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR contabilidad ensure:", repr(ex))
+
+
+def _cta_guard(escritura=False):
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol == "Contabilidad":
+        return None
+    if rol in ("Gerente", "Superadmin", "Administrador"):
+        if escritura:
+            return acceso_denegado("Solo el rol Contabilidad registra, anula o configura. Gerencia solo visualiza.")
+        return None
+    return redirect("/login")
+
+
+def _cta_ruta(escritura=False):
+    import functools
+
+    def deco(fn):
+        @functools.wraps(fn)
+        def w(*a, **k):
+            g = _cta_guard(escritura)
+            if g is not None:
+                return g
+            _cta_ensure()
+            try:
+                return fn(*a, **k)
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                print("ERROR contabilidad", request.path, repr(ex))
+                try:
+                    _dev_log_error("Contabilidad %s: %s" % (request.path, ex))
+                except Exception:
+                    pass
+                cuerpo = ("<section class='role-panel'><h2>No se pudo cargar esta pantalla</h2>"
+                          "<p>Ocurrió un problema al procesar la solicitud. Intenta de nuevo; si persiste, avisa a Soporte.</p>"
+                          "<a class='btn' href='/contabilidad'>Volver al dashboard</a></section>")
+                return page("Contabilidad", shell(cuerpo)), 500
+        return w
+    return deco
+
+
+def _cta_puede_escribir():
+    return rol_actual() == "Contabilidad"
+
+
+def _cta_dec(v):
+    try:
+        return _D(str(round(float(_parse_cop(v)), 2))).quantize(_D("0.01"), rounding=_RHU)
+    except Exception:
+        return _D("0.00")
+
+
+def _cta_fmt(v):
+    try:
+        s = f"{float(v or 0):,.2f}"
+    except Exception:
+        s = "0.00"
+    return "$ " + s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _cta_log(accion, detalle="", anterior="", nuevo=""):
+    try:
+        db.session.add(CtaAuditoria(
+            ts=f"{fecha_hoy()} {hora_actual()}", usuario=session.get("usuario") or "", rol=rol_actual() or "",
+            accion=accion[:80], detalle=detalle, valor_anterior=anterior, valor_nuevo=nuevo,
+            ip=(_client_ip_audit() or "")[:80]))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    try:
+        registrar_auditoria("Contabilidad · " + accion, detalle[:300])
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _cta_rango(periodo, desde="", hasta=""):
+    import calendar
+    from datetime import date as _date
+    hoy = ahora().date()
+    p = (periodo or "mes").strip().lower()
+    if p == "hoy":
+        d, h, et = hoy, hoy, "Hoy"
+    elif p == "semana":
+        d = hoy - timedelta(days=hoy.weekday())
+        h, et = d + timedelta(days=6), "Semana"
+    elif p == "trimestre":
+        m = 3 * ((hoy.month - 1) // 3) + 1
+        d = _date(hoy.year, m, 1)
+        h = _date(hoy.year, m + 2, calendar.monthrange(hoy.year, m + 2)[1])
+        et = "Trimestre"
+    elif p == "anio":
+        d, h, et = _date(hoy.year, 1, 1), _date(hoy.year, 12, 31), "Año"
+    elif p == "personalizado":
+        try:
+            d = datetime.strptime(desde, "%Y-%m-%d").date()
+            h = datetime.strptime(hasta, "%Y-%m-%d").date()
+            if h < d:
+                d, h = h, d
+            et = "Personalizado"
+        except Exception:
+            p = "mes"
+    if p not in ("hoy", "semana", "trimestre", "anio", "personalizado"):
+        d = _date(hoy.year, hoy.month, 1)
+        h = _date(hoy.year, hoy.month, calendar.monthrange(hoy.year, hoy.month)[1])
+        et, p = "Mes", "mes"
+    return p, d.strftime("%Y-%m-%d"), h.strftime("%Y-%m-%d"), et
+
+
+def _cta_saldos(desde=None, hasta=None):
+    q = (db.session.query(CtaAsientoLinea.cuenta_id,
+                          func.coalesce(func.sum(CtaAsientoLinea.debito), 0),
+                          func.coalesce(func.sum(CtaAsientoLinea.credito), 0))
+         .join(CtaAsiento, CtaAsiento.id == CtaAsientoLinea.asiento_id)
+         .filter(CtaAsiento.estado == "REGISTRADO"))
+    if desde:
+        q = q.filter(CtaAsiento.fecha >= desde)
+    if hasta:
+        q = q.filter(CtaAsiento.fecha <= hasta)
+    agg = {cid: (_D(str(d)), _D(str(c))) for cid, d, c in q.group_by(CtaAsientoLinea.cuenta_id).all()}
+    out = []
+    for c in CtaCuenta.query.order_by(CtaCuenta.codigo).all():
+        d, cr = agg.get(c.id, (_D("0"), _D("0")))
+        out.append({"cuenta": c, "debito": d, "credito": cr,
+                    "saldo": (d - cr) if c.naturaleza == "D" else (cr - d)})
+    return out
+
+
+def _cta_suma(filas, tipo=None, prefijo=None):
+    t = _D("0")
+    for f in filas:
+        c = f["cuenta"]
+        if tipo and c.tipo != tipo:
+            continue
+        if prefijo and not (c.codigo or "").startswith(prefijo):
+            continue
+        t += f["saldo"]
+    return t
+
+
+def _cta_nav(activo=""):
+    pills = ""
+    for url, lab in _cta_menu_items():
+        if url == "/logout":
+            continue
+        on = (url == activo)
+        pills += (f"<a href='{url}' style='padding:7px 13px;border-radius:999px;text-decoration:none;font-size:12.5px;"
+                  f"font-weight:700;background:{'#0B2D57' if on else '#e2e8f0'};color:{'#fff' if on else '#0f172a'}'>{lab}</a>")
+    return f"<div style='display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px'>{pills}</div>"
+
+
+def _cta_page(titulo, activo, cuerpo, subtitulo="", msg="", err=""):
+    aviso = ""
+    if msg:
+        aviso += f"<div class='msg ok'>{_esc(msg)}</div>"
+    if err:
+        aviso += f"<div class='msg' style='background:#fef2f2;color:#991b1b;padding:12px;border-radius:10px;margin-bottom:12px'>{_esc(err)}</div>"
+    solo = ""
+    if not _cta_puede_escribir():
+        solo = ("<div style='background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:9px 14px;border-radius:8px;"
+                "margin-bottom:12px;font-size:13px;font-weight:700'>👁️ Vista de solo lectura</div>")
+    content = (f"<header class='role-hero'><div><h1>{titulo}</h1><p>{subtitulo}</p></div></header>"
+               f"{_cta_nav(activo)}{solo}{aviso}{cuerpo}")
+    return page(titulo, shell(content))
+
+
+def _cta_filtro_periodo(base, periodo, desde, hasta):
+    opts = "".join(f"<option value='{k}' {'selected' if k == periodo else ''}>{v}</option>" for k, v in
+                   (("hoy", "Hoy"), ("semana", "Semana"), ("mes", "Mes"), ("trimestre", "Trimestre"),
+                    ("anio", "Año"), ("personalizado", "Personalizado")))
+    return (f"<form method='GET' action='{base}' style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px'>"
+            f"<select name='periodo' style='padding:8px;border-radius:8px;border:1px solid #cbd5e1'>{opts}</select>"
+            f"<label style='font-size:12px'>Desde <input type='date' name='desde' value='{_esc(desde)}' style='padding:7px;border-radius:8px;border:1px solid #cbd5e1'></label>"
+            f"<label style='font-size:12px'>Hasta <input type='date' name='hasta' value='{_esc(hasta)}' style='padding:7px;border-radius:8px;border:1px solid #cbd5e1'></label>"
+            f"<button class='btn' type='submit'>Aplicar</button></form>")
+
+
+def _cta_card(titulo, valor, color="#0B2D57", sub=""):
+    return (f"<div style='background:#fff;border:1px solid #e2e8f0;border-left:5px solid {color};border-radius:12px;padding:12px 14px'>"
+            f"<div style='font-size:11px;font-weight:800;color:#64748b;letter-spacing:.04em'>{titulo}</div>"
+            f"<div style='font-size:19px;font-weight:800;color:{color};margin-top:4px'>{valor}</div>"
+            f"<div style='font-size:11px;color:#94a3b8;margin-top:2px'>{sub}</div></div>")
+
+
+@app.route("/contabilidad-login", methods=["GET", "POST"])
+def contabilidad_login():
+    if session.get("usuario") and rol_actual() == "Contabilidad":
+        return redirect("/contabilidad")
+    return redirect("/login")
+
+
+@app.route("/contabilidad")
+@_cta_ruta()
+def contabilidad_dashboard():
+    periodo, d, h, et = _cta_rango(request.args.get("periodo"), request.args.get("desde") or "", request.args.get("hasta") or "")
+    per = _cta_saldos(d, h)
+    acum = _cta_saldos(None, h)
+    ing = _cta_suma(per, "INGRESO")
+    cos = _cta_suma(per, "COSTO")
+    gas = _cta_suma(per, "GASTO")
+    util = ing - cos - gas
+    act = _cta_suma(acum, "ACTIVO")
+    pas = _cta_suma(acum, "PASIVO")
+    res_acum = _cta_suma(acum, "INGRESO") - _cta_suma(acum, "COSTO") - _cta_suma(acum, "GASTO")
+    pat = _cta_suma(acum, "PATRIMONIO") + res_acum
+    bancos = _cta_suma(acum, "ACTIVO", "11")
+    cxp = _cta_suma(acum, "PASIVO", "2205")
+    imp = _cta_suma(acum, "PASIVO", "24")
+    nom = _cta_suma(acum, "PASIVO", "25")
+    flujo = sum((f["debito"] - f["credito"]) for f in per if f["cuenta"].tipo == "ACTIVO" and (f["cuenta"].codigo or "").startswith("11"))
+    cxc_pend = cxc_venc = 0.0
+    n_venc = 0
+    try:
+        for f in FacturaCobro.query.filter(FacturaCobro.estado.in_(("PENDIENTE", "VENCIDO"))).all():
+            cxc_pend += float(f.valor or 0)
+            if f.estado == "VENCIDO":
+                cxc_venc += float(f.valor or 0)
+                n_venc += 1
+    except Exception:
+        db.session.rollback()
+    alertas = []
+    if CtaCuenta.query.count() == 0:
+        alertas.append("Aún no hay plan de cuentas: cárgalo desde «Plan de cuentas» antes de registrar asientos.")
+    if n_venc:
+        alertas.append(f"{n_venc} factura(s) vencida(s) por {_cta_fmt(cxc_venc)} (las gestiona Cobranza).")
+    n_anul = CtaAsiento.query.filter(CtaAsiento.estado == "ANULADO", CtaAsiento.fecha >= d, CtaAsiento.fecha <= h).count()
+    if n_anul:
+        alertas.append(f"{n_anul} asiento(s) anulado(s) en el período: revisa el motivo en Auditoría.")
+    if act - pas - pat != 0:
+        alertas.append(f"La ecuación contable no cuadra por {_cta_fmt(act - pas - pat)}: revisa asientos de apertura.")
+    al_html = "".join(f"<li style='margin:4px 0'>{_esc(a)}</li>" for a in alertas) or "<li>Sin alertas contables.</li>"
+    ok = "#15803d"
+    warn = "#b45309"
+    cards = "".join([
+        _cta_card("INGRESOS DEL PERÍODO", _cta_fmt(ing), ok), _cta_card("GASTOS", _cta_fmt(gas), warn),
+        _cta_card("COSTOS", _cta_fmt(cos), warn),
+        _cta_card("UTILIDAD / PÉRDIDA", _cta_fmt(util), ok if util >= 0 else "#b91c1c"),
+        _cta_card("ACTIVOS", _cta_fmt(act)), _cta_card("PASIVOS", _cta_fmt(pas)), _cta_card("PATRIMONIO", _cta_fmt(pat)),
+        _cta_card("CUENTAS POR COBRAR", _cta_fmt(cxc_pend), "#0B2D57", "Facturas pendientes y vencidas"),
+        _cta_card("CUENTAS POR PAGAR", _cta_fmt(cxp), warn), _cta_card("BANCOS", _cta_fmt(bancos)),
+        _cta_card("IMPUESTOS PENDIENTES", _cta_fmt(imp), warn), _cta_card("NÓMINA PENDIENTE", _cta_fmt(nom), warn),
+        _cta_card("FLUJO DE CAJA (PERÍODO)", _cta_fmt(flujo), ok if flujo >= 0 else "#b91c1c"),
+    ])
+    cuerpo = (_cta_filtro_periodo("/contabilidad", periodo, d, h)
+              + f"<p class='mini-text'>{et}: {d} → {h}. Activos, pasivos y patrimonio son acumulados al {h}.</p>"
+              + f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px'>{cards}</div>"
+              + f"<section class='role-panel'><h2 style='margin-top:0;color:#0B2D57'>🔔 Alertas contables</h2><ul style='margin:0;padding-left:18px'>{al_html}</ul></section>")
+    return _cta_page("Dashboard contable", "/contabilidad", cuerpo, "Portada del área contable de Procsis")
+
+
+def _cta_libro_filas(args, limite):
+    desde = (args.get("desde") or "").strip()[:10]
+    hasta = (args.get("hasta") or "").strip()[:10]
+    estado = (args.get("estado") or "").strip().upper()
+    cuenta = args.get("cuenta", type=int)
+    centro = (args.get("centro") or "").strip()[:120]
+    q = (args.get("q") or "").strip()[:80]
+    qry = (db.session.query(CtaAsientoLinea, CtaAsiento)
+           .join(CtaAsiento, CtaAsiento.id == CtaAsientoLinea.asiento_id))
+    if desde:
+        qry = qry.filter(CtaAsiento.fecha >= desde)
+    if hasta:
+        qry = qry.filter(CtaAsiento.fecha <= hasta)
+    if estado in ("REGISTRADO", "ANULADO"):
+        qry = qry.filter(CtaAsiento.estado == estado)
+    if cuenta:
+        qry = qry.filter(CtaAsientoLinea.cuenta_id == cuenta)
+    if centro:
+        qry = qry.filter(CtaAsiento.centro_costo == centro)
+    if q:
+        like = f"%{q}%"
+        qry = qry.filter(db.or_(CtaAsiento.tercero.ilike(like), CtaAsiento.descripcion.ilike(like),
+                                CtaAsiento.numero.ilike(like), CtaAsiento.documento.ilike(like),
+                                CtaAsientoLinea.descripcion.ilike(like)))
+    rows = qry.order_by(CtaAsiento.fecha.desc(), CtaAsiento.id.desc(), CtaAsientoLinea.id).limit(limite).all()
+    return rows
+
+
+_LIBRO_COLS = ["Fecha", "N.º comprobante", "Tipo", "Cuenta contable", "Tercero", "Descripción", "Débito", "Crédito",
+               "Centro de costo", "Documento", "Estado", "Registró", "Creado", "Modificado"]
+
+
+def _cta_libro_export_rows(rows):
+    out = []
+    for ln, a in rows:
+        out.append([a.fecha, a.numero, a.tipo, f"{ln.cuenta_codigo} {ln.cuenta_nombre}", a.tercero or "",
+                    ln.descripcion or a.descripcion or "", float(ln.debito or 0), float(ln.credito or 0),
+                    a.centro_costo or "", a.documento or "", a.estado, a.creado_por or "",
+                    (a.creado_en or "")[:19], (a.modificado_en or "")[:19]])
+    return out
+
+
+@app.route("/contabilidad/libro")
+@_cta_ruta()
+def contabilidad_libro():
+    rows = _cta_libro_filas(request.args, 500)
+    args = request.args
+    cuentas = CtaCuenta.query.order_by(CtaCuenta.codigo).all()
+    centros = CtaCentroCosto.query.order_by(CtaCentroCosto.nombre).all()
+    sel_c = args.get("cuenta", type=int)
+    opt_c = "<option value=''>Todas las cuentas</option>" + "".join(
+        f"<option value='{c.id}' {'selected' if c.id == sel_c else ''}>{_esc(c.codigo)} · {_esc(c.nombre)}</option>" for c in cuentas)
+    opt_cc = "<option value=''>Todos los centros</option>" + "".join(
+        f"<option {'selected' if (args.get('centro') or '') == x.nombre else ''}>{_esc(x.nombre)}</option>" for x in centros)
+    est = (args.get("estado") or "").upper()
+    opt_e = "".join(f"<option value='{k}' {'selected' if est == k else ''}>{v}</option>" for k, v in
+                    (("", "Todos los estados"), ("REGISTRADO", "Registrados"), ("ANULADO", "Anulados")))
+    qs = "&".join(f"{k}={quote_plus(str(v))}" for k, v in args.items() if v)
+    tot_d = tot_c = _D("0")
+    tr = ""
+    for ln, a in rows:
+        anulado = a.estado == "ANULADO"
+        if not anulado:
+            tot_d += _D(str(ln.debito or 0))
+            tot_c += _D(str(ln.credito or 0))
+        st = ("text-decoration:line-through;color:#94a3b8;" if anulado else "")
+        badge = ("<span style='background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800'>ANULADO</span>"
+                 if anulado else "<span style='background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800'>Registrado</span>")
+        cell = "padding:7px 8px;font-size:12px;vertical-align:top;white-space:normal;word-break:break-word;" + st
+        tr += (f"<tr style='border-bottom:1px solid #e2e8f0'>"
+               f"<td style='{cell}white-space:nowrap'>{_esc(a.fecha)}</td>"
+               f"<td style='{cell}'><a href='/contabilidad/asiento/{a.id}'>{_esc(a.numero)}</a><br><span style='color:#64748b'>{_esc(a.tipo)}</span></td>"
+               f"<td style='{cell}'><b>{_esc(ln.cuenta_codigo)}</b> {_esc(ln.cuenta_nombre)}</td>"
+               f"<td style='{cell}'>{_esc(a.tercero or '—')}</td>"
+               f"<td style='{cell}'>{_esc(ln.descripcion or a.descripcion or '')}</td>"
+               f"<td style='{cell}text-align:right'>{_cta_fmt(ln.debito) if ln.debito else ''}</td>"
+               f"<td style='{cell}text-align:right'>{_cta_fmt(ln.credito) if ln.credito else ''}</td>"
+               f"<td style='{cell}'>{_esc(a.centro_costo or '—')}</td>"
+               f"<td style='{cell}'>{badge}<br><span style='color:#64748b;font-size:11px'>{_esc(a.creado_por)}</span></td></tr>")
+    if not tr:
+        tr = "<tr><td colspan='9' style='padding:16px;text-align:center;color:#64748b'>Sin movimientos para estos filtros.</td></tr>"
+    th = "padding:8px;text-align:left;font-size:12px"
+    exp = ""
+    for fmt_, lab, col in (("xlsx", "📊 Excel", "#15803d"), ("pdf", "📄 PDF", "#b91c1c"), ("csv", "🧾 CSV", "#334155")):
+        exp += f"<a class='btn' style='background:{col};color:#fff' href='/contabilidad/libro/export/{fmt_}?{qs}'>{lab}</a>"
+    nuevo = "<a class='btn' href='/contabilidad/asiento/nuevo'>➕ Nuevo asiento</a>" if _cta_puede_escribir() else ""
+    cuerpo = f"""
+<section class="role-panel">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <input name="q" value="{_esc(args.get('q') or '')}" placeholder="Tercero, descripción, comprobante…" style="flex:1;min-width:190px;padding:8px;border-radius:8px;border:1px solid #cbd5e1">
+    <select name="cuenta" style="padding:8px;border-radius:8px;border:1px solid #cbd5e1">{opt_c}</select>
+    <select name="centro" style="padding:8px;border-radius:8px;border:1px solid #cbd5e1">{opt_cc}</select>
+    <select name="estado" style="padding:8px;border-radius:8px;border:1px solid #cbd5e1">{opt_e}</select>
+    <label style="font-size:12px">Desde <input type="date" name="desde" value="{_esc(args.get('desde') or '')}" style="padding:7px;border-radius:8px;border:1px solid #cbd5e1"></label>
+    <label style="font-size:12px">Hasta <input type="date" name="hasta" value="{_esc(args.get('hasta') or '')}" style="padding:7px;border-radius:8px;border:1px solid #cbd5e1"></label>
+    <button class="btn" type="submit">Filtrar</button>
+  </form>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">{nuevo}{exp}</div>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+    <tr style="background:#0B2D57;color:#fff"><th style="{th}">Fecha</th><th style="{th}">Comprobante</th><th style="{th}">Cuenta</th><th style="{th}">Tercero</th><th style="{th}">Descripción</th><th style="{th};text-align:right">Débito</th><th style="{th};text-align:right">Crédito</th><th style="{th}">Centro</th><th style="{th}">Estado / registró</th></tr>
+    {tr}
+    <tr style="background:#f1f5f9;font-weight:800"><td colspan="5" style="padding:8px;text-align:right">Totales (sin anulados)</td><td style="padding:8px;text-align:right">{_cta_fmt(tot_d)}</td><td style="padding:8px;text-align:right">{_cta_fmt(tot_c)}</td><td colspan="2" style="padding:8px">{'✅ Equilibrado' if tot_d == tot_c else '⚠️ Diferencia ' + _cta_fmt(tot_d - tot_c)}</td></tr>
+  </table></div>
+  <p class="mini-text" style="margin-top:8px">En pantalla máx. 500 líneas; las exportaciones incluyen hasta 20.000. Un movimiento no se borra: se anula desde su detalle.</p>
+</section>"""
+    return _cta_page("Libro contable", "/contabilidad/libro", cuerpo, "Movimientos con débito y crédito")
+
+
+@app.route("/contabilidad/libro/export/<fmt>")
+@_cta_ruta()
+def contabilidad_libro_export(fmt):
+    fmt = (fmt or "").lower()
+    if fmt not in ("xlsx", "csv", "pdf"):
+        return acceso_denegado("Formato no válido.")
+    filas = _cta_libro_export_rows(_cta_libro_filas(request.args, 20000))
+    sello = ahora().strftime("%Y%m%d_%H%M")
+    _cta_log("Exportó libro contable", f"{fmt} · {len(filas)} líneas")
+    if fmt == "csv":
+        import io as _io
+        buf = _io.StringIO()
+        w = csv.writer(buf, delimiter=";")
+        w.writerow(_LIBRO_COLS)
+        w.writerows(filas)
+        return Response("\ufeff" + buf.getvalue(), mimetype="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f"attachment; filename=libro_contable_{sello}.csv"})
+    if fmt == "xlsx":
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Libro contable"
+        ws.append(_LIBRO_COLS)
+        for c in ws[1]:
+            c.font = Font(bold=True, color="FFFFFF")
+            c.fill = PatternFill("solid", fgColor="0B2D57")
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        for f in filas:
+            ws.append(f)
+        for row in ws.iter_rows(min_row=2):
+            row[6].number_format = "#,##0.00"
+            row[7].number_format = "#,##0.00"
+            for c in row:
+                c.alignment = Alignment(vertical="top", wrap_text=True)
+        for i, wd in enumerate((11, 16, 14, 30, 24, 40, 15, 15, 18, 16, 12, 14, 18, 18), start=1):
+            ws.column_dimensions[get_column_letter(i)].width = wd
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = ws.dimensions
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return send_file(buf, as_attachment=True, download_name=f"libro_contable_{sello}.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    cols = ["Fecha", "Comprobante", "Tipo", "Cuenta", "Tercero", "Descripción", "Débito", "Crédito", "Centro", "Estado"]
+    pf = [[f[0], f[1], f[2], f[3], f[4], f[5], _cta_fmt(f[6]) if f[6] else "", _cta_fmt(f[7]) if f[7] else "", f[8], f[10]] for f in filas]
+    buf = _pdf_informe_gerencia("Contabilidad · Libro contable", f"{len(pf)} línea(s) · exportado por {session.get('usuario')}",
+                                cols, pf, [8, 10, 8, 15, 12, 20, 9, 9, 8, 7])
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=f"libro_contable_{sello}.pdf")
+
+
+@app.route("/contabilidad/asiento/nuevo", methods=["GET", "POST"])
+@_cta_ruta(escritura=True)
+def contabilidad_asiento_nuevo():
+    err = ""
+    pre = []
+    f = request.form
+    if request.method == "POST":
+        fecha = (f.get("fecha") or "").strip()
+        tipo = (f.get("tipo") or "Nota contable").strip()
+        tercero = (f.get("tercero") or "").strip()[:200]
+        desc = (f.get("descripcion") or "").strip()[:1500]
+        centro = (f.get("centro") or "").strip()[:120]
+        doc = (f.get("documento") or "").strip()[:120]
+        ids = f.getlist("cuenta_id")
+        descs = f.getlist("linea_desc")
+        debs = f.getlist("debito")
+        cres = f.getlist("credito")
+        lineas = []
+        for i in range(len(ids)):
+            de = _cta_dec(debs[i]) if i < len(debs) else _D("0")
+            cr = _cta_dec(cres[i]) if i < len(cres) else _D("0")
+            pre.append({"c": ids[i], "d": descs[i] if i < len(descs) else "", "deb": debs[i] if i < len(debs) else "",
+                        "cre": cres[i] if i < len(cres) else ""})
+            if not ids[i] and de == 0 and cr == 0:
+                continue
+            lineas.append((ids[i], (descs[i] if i < len(descs) else "")[:300], de, cr))
+        try:
+            datetime.strptime(fecha, "%Y-%m-%d")
+        except Exception:
+            err = "La fecha no es válida."
+        if not err and tipo not in _CTA_TIPOS_ASIENTO:
+            err = "Tipo de operación no válido."
+        if not err and not desc:
+            err = "La descripción es obligatoria."
+        if not err and len(lineas) < 2:
+            err = "El asiento necesita al menos dos líneas."
+        cuentas_map = {}
+        if not err:
+            try:
+                cuentas_map = {c.id: c for c in CtaCuenta.query.filter(CtaCuenta.activa == True).all()}  # noqa: E712
+            except Exception:
+                db.session.rollback()
+            for cid, _d_, de, cr in lineas:
+                if not str(cid).isdigit() or int(cid) not in cuentas_map:
+                    err = "Cada línea debe tener una cuenta activa del plan."
+                    break
+                if (de > 0) == (cr > 0):
+                    err = "Cada línea debe tener valor en débito o en crédito, no en ambos ni en ninguno."
+                    break
+        td = sum((x[2] for x in lineas), _D("0"))
+        tc = sum((x[3] for x in lineas), _D("0"))
+        if not err and td != tc:
+            err = f"El asiento no está equilibrado: débitos {_cta_fmt(td)} · créditos {_cta_fmt(tc)}."
+        if not err and td <= 0:
+            err = "El valor del asiento debe ser mayor a cero."
+        if not err:
+            anio = fecha[:4]
+            n = CtaAsiento.query.filter(CtaAsiento.numero.like(f"CMP-{anio}-%")).count() + 1
+            a = CtaAsiento(numero=f"CMP-{anio}-{n:04d}", fecha=fecha, tipo=tipo, tercero=tercero, descripcion=desc,
+                           centro_costo=centro, documento=doc, estado="REGISTRADO", total_debito=td, total_credito=tc,
+                           creado_por=session.get("usuario") or "", creado_en=f"{fecha_hoy()} {hora_actual()}",
+                           modificado_en=f"{fecha_hoy()} {hora_actual()}", ip=(_client_ip_audit() or "")[:80])
+            db.session.add(a)
+            db.session.flush()
+            for cid, ld, de, cr in lineas:
+                c = cuentas_map[int(cid)]
+                db.session.add(CtaAsientoLinea(asiento_id=a.id, cuenta_id=c.id, cuenta_codigo=c.codigo,
+                                               cuenta_nombre=c.nombre, descripcion=ld, debito=de, credito=cr))
+            db.session.commit()
+            _cta_log("Registró asiento", f"{a.numero} · {tipo} · {_cta_fmt(td)}", "", f"{a.numero}: {desc[:200]}")
+            return redirect(f"/contabilidad/asiento/{a.id}")
+    cuentas = CtaCuenta.query.filter(CtaCuenta.activa == True).order_by(CtaCuenta.codigo).all()  # noqa: E712
+    centros = CtaCentroCosto.query.filter(CtaCentroCosto.activo == True).order_by(CtaCentroCosto.nombre).all()  # noqa: E712
+    if not cuentas:
+        return _cta_page("Nuevo asiento", "/contabilidad/asiento/nuevo",
+                         "<section class='role-panel'><p>Primero carga o crea el plan de cuentas.</p>"
+                         "<a class='btn' href='/contabilidad/plan'>Ir al plan de cuentas</a></section>")
+    opt_c = "<option value=''>— Cuenta —</option>" + "".join(
+        f"<option value='{c.id}'>{_esc(c.codigo)} · {_esc(c.nombre)}</option>" for c in cuentas)
+    opt_cc = "<option value=''>— Sin centro —</option>" + "".join(f"<option>{_esc(x.nombre)}</option>" for x in centros)
+    opt_t = "".join(f"<option {'selected' if (f.get('tipo') or '') == t else ''}>{t}</option>" for t in _CTA_TIPOS_ASIENTO)
+    inp = "width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"
+    pre_json = json.dumps(pre).replace("</", "<\\/")
+    js = """
+<script>
+(function(){
+var PRE=__PRE__;
+var body=document.getElementById('lineas');var tpl=document.getElementById('tpl-linea');
+function parse(v){v=(v||'').toString().trim().replace(/\\$/g,'').replace(/\\s/g,'');if(!v)return 0;
+ if(v.indexOf(',')>-1&&v.indexOf('.')>-1){v=v.replace(/\\./g,'').replace(',','.');}
+ else if(v.indexOf(',')>-1){var p=v.split(',');v=(p[p.length-1].length<=2)?v.replace(',','.'):v.replace(/,/g,'');}
+ else if((v.match(/\\./g)||[]).length>1){v=v.replace(/\\./g,'');}
+ else if(v.indexOf('.')>-1){var q=v.split('.');if(q[1].length===3)v=q[0]+q[1];}
+ var n=parseFloat(v);return isNaN(n)?0:n;}
+function fmt(n){return n.toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function calc(){var d=0,c=0;body.querySelectorAll('tr').forEach(function(tr){d+=parse(tr.querySelector('.deb').value);c+=parse(tr.querySelector('.cre').value);});
+ var dif=Math.round((d-c)*100)/100;
+ document.getElementById('t-deb').textContent=fmt(d);document.getElementById('t-cre').textContent=fmt(c);
+ var est=document.getElementById('t-est');var ok=(d>0&&dif===0);
+ est.textContent=ok?'✅ Equilibrado':'⚠️ Diferencia: '+fmt(Math.abs(dif));est.style.color=ok?'#15803d':'#b45309';
+ document.getElementById('btn-guardar').disabled=!ok;}
+function wire(tr){tr.querySelectorAll('input').forEach(function(i){i.addEventListener('input',calc);});
+ tr.querySelector('.quitar').addEventListener('click',function(){if(body.querySelectorAll('tr').length>2){tr.remove();calc();}});}
+function add(d){var tr=document.createElement('tr');tr.innerHTML=tpl.innerHTML;body.appendChild(tr);
+ if(d){tr.querySelector('select').value=d.c||'';tr.querySelector('.ld').value=d.d||'';tr.querySelector('.deb').value=d.deb||'';tr.querySelector('.cre').value=d.cre||'';}
+ wire(tr);}
+document.getElementById('add-linea').addEventListener('click',function(){add();});
+if(PRE.length){PRE.forEach(function(d){add(d);});}else{add();add();}
+while(body.querySelectorAll('tr').length<2){add();}
+calc();})();
+</script>""".replace("__PRE__", pre_json)
+    cuerpo = f"""
+<section class="role-panel">
+<form method="POST" autocomplete="off">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
+    <div><label><b>Fecha *</b></label><input type="date" name="fecha" value="{_esc(f.get('fecha') or fecha_hoy())}" required style="{inp}"></div>
+    <div><label><b>Tipo de operación *</b></label><select name="tipo" style="{inp}">{opt_t}</select></div>
+    <div><label><b>Tercero</b></label><input name="tercero" value="{_esc(f.get('tercero') or '')}" placeholder="Cliente, proveedor, empleado…" style="{inp}"></div>
+    <div><label><b>Centro de costo</b></label><select name="centro" style="{inp}">{opt_cc}</select></div>
+    <div><label><b>Documento relacionado</b></label><input name="documento" value="{_esc(f.get('documento') or '')}" placeholder="Factura, recibo, soporte…" style="{inp}"></div>
+  </div>
+  <label style="display:block;margin-top:10px"><b>Descripción *</b></label>
+  <textarea name="descripcion" rows="2" required style="{inp}">{_esc(f.get('descripcion') or '')}</textarea>
+  <div style="overflow:auto;margin-top:12px"><table style="width:100%;border-collapse:collapse">
+    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Cuenta</th><th style="padding:8px;text-align:left">Detalle</th><th style="padding:8px;text-align:right">Débito</th><th style="padding:8px;text-align:right">Crédito</th><th></th></tr>
+    <tbody id="lineas"></tbody>
+    <tr style="background:#f1f5f9;font-weight:800"><td colspan="2" style="padding:8px;text-align:right">Totales</td><td style="padding:8px;text-align:right" id="t-deb">0,00</td><td style="padding:8px;text-align:right" id="t-cre">0,00</td><td></td></tr>
+  </table></div>
+  <template id="tpl-linea">
+    <td style="padding:5px"><select name="cuenta_id" style="{inp}">{opt_c}</select></td>
+    <td style="padding:5px"><input name="linea_desc" class="ld" style="{inp}"></td>
+    <td style="padding:5px"><input name="debito" class="deb" inputmode="decimal" placeholder="0,00" style="{inp};text-align:right"></td>
+    <td style="padding:5px"><input name="credito" class="cre" inputmode="decimal" placeholder="0,00" style="{inp};text-align:right"></td>
+    <td style="padding:5px"><button type="button" class="quitar" title="Quitar línea" style="border:0;background:#fee2e2;color:#991b1b;border-radius:8px;padding:6px 9px;cursor:pointer">✕</button></td>
+  </template>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
+    <button type="button" id="add-linea" class="btn">➕ Agregar línea</button>
+    <b id="t-est" style="font-size:14px"></b>
+    <button type="submit" id="btn-guardar" class="btn" style="background:#15803d;color:#fff;margin-left:auto" disabled>Registrar asiento</button>
+  </div>
+  <p class="mini-text">Se acepta el formato colombiano (1.250.000,50). El asiento solo se puede registrar si débitos = créditos.</p>
+</form></section>{js}"""
+    return _cta_page("Nuevo asiento contable", "/contabilidad/asiento/nuevo", cuerpo, "Partida doble: débitos = créditos", err=err)
+
+
+@app.route("/contabilidad/asiento/<int:aid>")
+@_cta_ruta()
+def contabilidad_asiento_ver(aid):
+    a = CtaAsiento.query.get(aid)
+    if not a:
+        return _cta_page("Asiento no encontrado", "/contabilidad/libro", "<a class='btn' href='/contabilidad/libro'>Volver al libro</a>")
+    lns = CtaAsientoLinea.query.filter_by(asiento_id=a.id).order_by(CtaAsientoLinea.id).all()
+    filas = "".join(
+        f"<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:7px 8px'><b>{_esc(l.cuenta_codigo)}</b> {_esc(l.cuenta_nombre)}</td>"
+        f"<td style='padding:7px 8px'>{_esc(l.descripcion)}</td>"
+        f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(l.debito) if l.debito else ''}</td>"
+        f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(l.credito) if l.credito else ''}</td></tr>" for l in lns)
+    anul = ""
+    if a.estado == "ANULADO":
+        anul = (f"<div style='background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:10px 14px;border-radius:10px;margin-bottom:12px'>"
+                f"<b>ANULADO</b> por {_esc(a.anulado_por)} el {_esc(a.anulado_en)}<br>Motivo: {_esc(a.motivo_anulacion)}</div>")
+    form_anular = ""
+    if a.estado == "REGISTRADO" and _cta_puede_escribir():
+        form_anular = (f"<form method='POST' action='/contabilidad/asiento/{a.id}/anular' style='margin-top:14px;display:flex;gap:8px;flex-wrap:wrap'"
+                       f" onsubmit=\"return confirm('¿Anular este asiento? Quedará en el historial y dejará de sumar en los saldos.')\">"
+                       f"<input name='motivo' required minlength='10' placeholder='Motivo de la anulación (mín. 10 caracteres)' style='flex:1;min-width:240px;padding:9px;border:1px solid #cbd5e1;border-radius:8px'>"
+                       f"<button class='btn' style='background:#b91c1c;color:#fff'>Anular asiento</button></form>")
+    cuerpo = f"""{anul}
+<section class="role-panel">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:13px">
+    <div><b>Comprobante</b><br>{_esc(a.numero)}</div><div><b>Fecha</b><br>{_esc(a.fecha)}</div><div><b>Tipo</b><br>{_esc(a.tipo)}</div>
+    <div><b>Tercero</b><br>{_esc(a.tercero or '—')}</div><div><b>Centro de costo</b><br>{_esc(a.centro_costo or '—')}</div>
+    <div><b>Documento</b><br>{_esc(a.documento or '—')}</div><div><b>Registró</b><br>{_esc(a.creado_por)} · {_esc((a.creado_en or '')[:19])}</div>
+  </div>
+  <p style="margin:12px 0 8px"><b>Descripción:</b> {_esc(a.descripcion)}</p>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Cuenta</th><th style="padding:8px;text-align:left">Detalle</th><th style="padding:8px;text-align:right">Débito</th><th style="padding:8px;text-align:right">Crédito</th></tr>
+    {filas}
+    <tr style="background:#f1f5f9;font-weight:800"><td colspan="2" style="padding:8px;text-align:right">Totales</td><td style="padding:8px;text-align:right">{_cta_fmt(a.total_debito)}</td><td style="padding:8px;text-align:right">{_cta_fmt(a.total_credito)}</td></tr>
+  </table></div>
+  {form_anular}
+  <p style="margin-top:12px"><a class="btn" href="/contabilidad/libro">← Libro contable</a></p>
+</section>"""
+    return _cta_page(f"Asiento {a.numero}", "/contabilidad/libro", cuerpo, "Detalle del comprobante")
+
+
+@app.route("/contabilidad/asiento/<int:aid>/anular", methods=["POST"])
+@_cta_ruta(escritura=True)
+def contabilidad_asiento_anular(aid):
+    a = CtaAsiento.query.get(aid)
+    motivo = (request.form.get("motivo") or "").strip()[:500]
+    if not a or a.estado != "REGISTRADO":
+        return redirect("/contabilidad/libro")
+    if len(motivo) < 10:
+        return _cta_page("Anular asiento", "/contabilidad/libro",
+                         f"<a class='btn' href='/contabilidad/asiento/{aid}'>Volver</a>", err="El motivo debe tener al menos 10 caracteres.")
+    anterior = f"{a.numero} · {a.estado} · {_cta_fmt(a.total_debito)}"
+    a.estado = "ANULADO"
+    a.anulado_por = session.get("usuario") or ""
+    a.anulado_en = f"{fecha_hoy()} {hora_actual()}"
+    a.motivo_anulacion = motivo
+    a.modificado_en = a.anulado_en
+    db.session.commit()
+    _cta_log("Anuló asiento", f"{a.numero} · {motivo}", anterior, f"{a.numero} · ANULADO")
+    return redirect(f"/contabilidad/asiento/{aid}")
+
+
+@app.route("/contabilidad/plan", methods=["GET", "POST"])
+@_cta_ruta()
+def contabilidad_plan():
+    msg = err = ""
+    if request.method == "POST":
+        if not _cta_puede_escribir():
+            return acceso_denegado("Solo el rol Contabilidad configura el plan de cuentas.")
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "cargar_inicial":
+            n = 0
+            for cod, nom, tipo in _CTA_PLAN_INICIAL:
+                if not CtaCuenta.query.filter_by(codigo=cod).first():
+                    db.session.add(CtaCuenta(codigo=cod, nombre=nom, tipo=tipo, naturaleza="D" if tipo in ("ACTIVO", "COSTO", "GASTO") else "C",
+                                             creado_por=session.get("usuario") or "", creado_en=f"{fecha_hoy()} {hora_actual()}"))
+                    n += 1
+            db.session.commit()
+            _cta_log("Cargó plan inicial", f"{n} cuentas nuevas")
+            msg = f"Plan inicial cargado ({n} cuentas nuevas)."
+        elif accion == "crear":
+            cod = re.sub(r"\D", "", request.form.get("codigo") or "")[:12]
+            nom = (request.form.get("nombre") or "").strip()[:160]
+            tipo = (request.form.get("tipo") or "").strip().upper()
+            if not cod or not nom or tipo not in _CTA_TIPOS:
+                err = "Código (solo números), nombre y tipo son obligatorios."
+            elif CtaCuenta.query.filter_by(codigo=cod).first():
+                err = "Ya existe una cuenta con ese código."
+            else:
+                db.session.add(CtaCuenta(codigo=cod, nombre=nom, tipo=tipo, naturaleza="D" if tipo in ("ACTIVO", "COSTO", "GASTO") else "C",
+                                         creado_por=session.get("usuario") or "", creado_en=f"{fecha_hoy()} {hora_actual()}"))
+                db.session.commit()
+                _cta_log("Creó cuenta", f"{cod} {nom} ({tipo})")
+                msg = "Cuenta creada."
+        elif accion == "toggle":
+            c = CtaCuenta.query.get(request.form.get("id", type=int) or 0)
+            if c:
+                c.activa = not bool(c.activa)
+                db.session.commit()
+                _cta_log("Cambió estado de cuenta", f"{c.codigo} → {'activa' if c.activa else 'inactiva'}")
+                msg = "Estado de la cuenta actualizado."
+    saldos = _cta_saldos(None, None)
+    filas = ""
+    for f in saldos:
+        c = f["cuenta"]
+        btn = ""
+        if _cta_puede_escribir():
+            btn = (f"<form method='POST' style='margin:0'><input type='hidden' name='accion' value='toggle'><input type='hidden' name='id' value='{c.id}'>"
+                   f"<button class='btn' style='padding:4px 10px;font-size:12px'>{'Desactivar' if c.activa else 'Activar'}</button></form>")
+        filas += (f"<tr style='border-bottom:1px solid #e2e8f0;{'' if c.activa else 'opacity:.5'}'>"
+                  f"<td style='padding:7px 8px'><b>{_esc(c.codigo)}</b></td><td style='padding:7px 8px'>{_esc(c.nombre)}</td>"
+                  f"<td style='padding:7px 8px'>{_esc(c.tipo)}</td><td style='padding:7px 8px'>{'Débito' if c.naturaleza == 'D' else 'Crédito'}</td>"
+                  f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(f['saldo'])}</td><td style='padding:7px 8px'>{btn}</td></tr>")
+    if not filas:
+        filas = "<tr><td colspan='6' style='padding:16px;text-align:center;color:#64748b'>Aún no hay cuentas.</td></tr>"
+    formularios = ""
+    if _cta_puede_escribir():
+        opt = "".join(f"<option>{t}</option>" for t in _CTA_TIPOS)
+        formularios = f"""
+<section class="role-panel">
+  <h2 style="margin-top:0;color:#0B2D57">Nueva cuenta</h2>
+  <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap">
+    <input type="hidden" name="accion" value="crear">
+    <input name="codigo" placeholder="Código (números)" required style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:150px">
+    <input name="nombre" placeholder="Nombre de la cuenta" required style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;flex:1;min-width:220px">
+    <select name="tipo" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px">{opt}</select>
+    <button class="btn">Crear cuenta</button>
+  </form>
+  <form method="POST" style="margin-top:10px"><input type="hidden" name="accion" value="cargar_inicial">
+    <button class="btn" style="background:#334155;color:#fff">Cargar plan inicial sugerido</button></form>
+</section>"""
+    th = "padding:8px;text-align:left;font-size:12px"
+    cuerpo = f"""{formularios}
+<section class="role-panel" style="margin-top:14px">
+  <div style="background:#fffbeb;border:1px solid #fde68a;padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:10px">
+  ⚠️ El plan inicial es solo una <b>base editable</b>. En Colombia debe ajustarse al marco contable aplicable a Procsis: valídalo con un contador antes de usarlo en firme.</div>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+    <tr style="background:#0B2D57;color:#fff"><th style="{th}">Código</th><th style="{th}">Cuenta</th><th style="{th}">Tipo</th><th style="{th}">Naturaleza</th><th style="{th};text-align:right">Saldo</th><th style="{th}"></th></tr>
+    {filas}
+  </table></div>
+</section>"""
+    return _cta_page("Plan de cuentas", "/contabilidad/plan", cuerpo, "Cuentas contables que usa Procsis", msg=msg, err=err)
+
+
+@app.route("/contabilidad/centros", methods=["GET", "POST"])
+@_cta_ruta()
+def contabilidad_centros():
+    msg = err = ""
+    if request.method == "POST":
+        if not _cta_puede_escribir():
+            return acceso_denegado("Solo el rol Contabilidad configura los centros de costo.")
+        accion = (request.form.get("accion") or "").strip()
+        if accion == "cargar_inicial":
+            n = 0
+            for nom in _CTA_CENTROS_INICIAL:
+                if not CtaCentroCosto.query.filter_by(nombre=nom).first():
+                    db.session.add(CtaCentroCosto(nombre=nom))
+                    n += 1
+            db.session.commit()
+            _cta_log("Cargó centros de costo", f"{n} nuevos")
+            msg = f"Centros cargados ({n} nuevos)."
+        elif accion == "crear":
+            nom = (request.form.get("nombre") or "").strip()[:120]
+            if not nom:
+                err = "El nombre es obligatorio."
+            elif CtaCentroCosto.query.filter_by(nombre=nom).first():
+                err = "Ese centro ya existe."
+            else:
+                db.session.add(CtaCentroCosto(nombre=nom))
+                db.session.commit()
+                _cta_log("Creó centro de costo", nom)
+                msg = "Centro creado."
+        elif accion == "toggle":
+            c = CtaCentroCosto.query.get(request.form.get("id", type=int) or 0)
+            if c:
+                c.activo = not bool(c.activo)
+                db.session.commit()
+                _cta_log("Cambió estado de centro", f"{c.nombre} → {'activo' if c.activo else 'inactivo'}")
+    gastos = {}
+    try:
+        for cc, d, cr in (db.session.query(CtaAsiento.centro_costo, func.coalesce(func.sum(CtaAsientoLinea.debito), 0), func.coalesce(func.sum(CtaAsientoLinea.credito), 0))
+                          .join(CtaAsientoLinea, CtaAsientoLinea.asiento_id == CtaAsiento.id)
+                          .join(CtaCuenta, CtaCuenta.id == CtaAsientoLinea.cuenta_id)
+                          .filter(CtaAsiento.estado == "REGISTRADO", CtaCuenta.tipo.in_(("GASTO", "COSTO")))
+                          .group_by(CtaAsiento.centro_costo).all()):
+            gastos[cc or ""] = _D(str(d)) - _D(str(cr))
+    except Exception:
+        db.session.rollback()
+    filas = ""
+    for c in CtaCentroCosto.query.order_by(CtaCentroCosto.nombre).all():
+        btn = ""
+        if _cta_puede_escribir():
+            btn = (f"<form method='POST' style='margin:0'><input type='hidden' name='accion' value='toggle'><input type='hidden' name='id' value='{c.id}'>"
+                   f"<button class='btn' style='padding:4px 10px;font-size:12px'>{'Desactivar' if c.activo else 'Activar'}</button></form>")
+        filas += (f"<tr style='border-bottom:1px solid #e2e8f0;{'' if c.activo else 'opacity:.5'}'><td style='padding:7px 8px'><b>{_esc(c.nombre)}</b></td>"
+                  f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(gastos.get(c.nombre, 0))}</td><td style='padding:7px 8px'>{btn}</td></tr>")
+    if not filas:
+        filas = "<tr><td colspan='3' style='padding:16px;text-align:center;color:#64748b'>Aún no hay centros de costo.</td></tr>"
+    form = ""
+    if _cta_puede_escribir():
+        form = """<form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+  <input type="hidden" name="accion" value="crear"><input name="nombre" placeholder="Nuevo centro de costo" required style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;flex:1;min-width:220px">
+  <button class="btn">Crear</button></form>
+  <form method="POST"><input type="hidden" name="accion" value="cargar_inicial"><button class="btn" style="background:#334155;color:#fff">Cargar centros sugeridos</button></form>"""
+    cuerpo = f"""<section class="role-panel">{form}
+  <table style="width:100%;border-collapse:collapse;margin-top:10px"><tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Centro</th><th style="padding:8px;text-align:right">Gastos y costos acumulados</th><th></th></tr>{filas}</table>
+  <p class="mini-text">Los asientos sin centro no se atribuyen a ningún área.</p></section>"""
+    return _cta_page("Centros de costo", "/contabilidad/centros", cuerpo, "Qué área consumió cada peso", msg=msg, err=err)
+
+
+@app.route("/contabilidad/cuentas-por-cobrar")
+@_cta_ruta()
+def contabilidad_cxc():
+    datos = {}
+    for f in FacturaCobro.query.filter(FacturaCobro.estado != "ANULADO").all():
+        k = f.institucion_id or 0
+        e = datos.setdefault(k, {"n": (f.colegio_snapshot or "").strip() or f"Institución #{k}", "fact": 0.0, "pag": 0.0, "pen": 0.0, "venc": 0.0})
+        v = float(f.valor or 0)
+        e["fact"] += v
+        if f.estado == "PAGADO":
+            e["pag"] += v
+        else:
+            e["pen"] += v
+            if f.estado == "VENCIDO":
+                e["venc"] += v
+    tr = ""
+    tf = tp = tn = 0.0
+    for k, e in sorted(datos.items(), key=lambda x: -x[1]["pen"]):
+        tf += e["fact"]
+        tp += e["pag"]
+        tn += e["pen"]
+        col = "#b91c1c" if e["venc"] else ("#b45309" if e["pen"] else "#15803d")
+        tr += (f"<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:7px 8px'>{_esc(e['n'])}</td>"
+               f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(e['fact'])}</td><td style='padding:7px 8px;text-align:right'>{_cta_fmt(e['pag'])}</td>"
+               f"<td style='padding:7px 8px;text-align:right;font-weight:800;color:{col}'>{_cta_fmt(e['pen'])}</td>"
+               f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(e['venc']) if e['venc'] else '—'}</td></tr>")
+    if not tr:
+        tr = "<tr><td colspan='5' style='padding:16px;text-align:center;color:#64748b'>Sin facturas registradas.</td></tr>"
+    th = "padding:8px;text-align:left;font-size:12px"
+    cuerpo = f"""<section class="role-panel">
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+  <tr style="background:#0B2D57;color:#fff"><th style="{th}">Institución</th><th style="{th};text-align:right">Facturado</th><th style="{th};text-align:right">Pagado</th><th style="{th};text-align:right">Pendiente</th><th style="{th};text-align:right">Vencido</th></tr>
+  {tr}
+  <tr style="background:#f1f5f9;font-weight:800"><td style="padding:8px">Total</td><td style="padding:8px;text-align:right">{_cta_fmt(tf)}</td><td style="padding:8px;text-align:right">{_cta_fmt(tp)}</td><td style="padding:8px;text-align:right">{_cta_fmt(tn)}</td><td></td></tr>
+  </table></div>
+  <p class="mini-text">Fuente: facturación interna. Contabilidad la consulta; la recuperación de cartera la trabaja Cobranza.</p></section>"""
+    return _cta_page("Cuentas por cobrar", "/contabilidad/cuentas-por-cobrar", cuerpo, "Facturado, pagado y pendiente por institución")
+
+
+def _cta_estados_datos(d, h):
+    per = _cta_saldos(d, h)
+    acum = _cta_saldos(None, h)
+    ing, cos, gas = _cta_suma(per, "INGRESO"), _cta_suma(per, "COSTO"), _cta_suma(per, "GASTO")
+    res_acum = _cta_suma(acum, "INGRESO") - _cta_suma(acum, "COSTO") - _cta_suma(acum, "GASTO")
+    entradas = sum((f["debito"] for f in per if f["cuenta"].tipo == "ACTIVO" and f["cuenta"].codigo.startswith("11")), _D("0"))
+    salidas = sum((f["credito"] for f in per if f["cuenta"].tipo == "ACTIVO" and f["cuenta"].codigo.startswith("11")), _D("0"))
+    return {"per": per, "acum": acum, "ing": ing, "cos": cos, "gas": gas, "res": ing - cos - gas, "res_acum": res_acum,
+            "act": _cta_suma(acum, "ACTIVO"), "pas": _cta_suma(acum, "PASIVO"),
+            "pat": _cta_suma(acum, "PATRIMONIO") + res_acum, "ent": entradas, "sal": salidas}
+
+
+@app.route("/contabilidad/estados")
+@_cta_ruta()
+def contabilidad_estados():
+    periodo, d, h, et = _cta_rango(request.args.get("periodo"), request.args.get("desde") or "", request.args.get("hasta") or "")
+    x = _cta_estados_datos(d, h)
+
+    def bloque(titulo, filas_, tipo):
+        li = "".join(f"<tr><td style='padding:5px 8px'>{_esc(f['cuenta'].codigo)} · {_esc(f['cuenta'].nombre)}</td><td style='padding:5px 8px;text-align:right'>{_cta_fmt(f['saldo'])}</td></tr>"
+                     for f in filas_ if f["cuenta"].tipo == tipo and (f["saldo"] != 0))
+        tot = _cta_suma(filas_, tipo)
+        return (f"<tr style='background:#f1f5f9'><td colspan='2' style='padding:6px 8px;font-weight:800'>{titulo}</td></tr>{li}"
+                f"<tr><td style='padding:6px 8px;text-align:right;font-weight:800'>Total {titulo.lower()}</td><td style='padding:6px 8px;text-align:right;font-weight:800'>{_cta_fmt(tot)}</td></tr>")
+
+    dif = x["act"] - x["pas"] - x["pat"]
+    resultados = (bloque("Ingresos", x["per"], "INGRESO") + bloque("Costos", x["per"], "COSTO") + bloque("Gastos", x["per"], "GASTO")
+                  + f"<tr style='background:#0B2D57;color:#fff'><td style='padding:8px;font-weight:800'>Resultado del período</td><td style='padding:8px;text-align:right;font-weight:800'>{_cta_fmt(x['res'])}</td></tr>")
+    situacion = (bloque("Activo", x["acum"], "ACTIVO") + bloque("Pasivo", x["acum"], "PASIVO") + bloque("Patrimonio", x["acum"], "PATRIMONIO")
+                 + f"<tr><td style='padding:5px 8px'>Resultado acumulado del ejercicio</td><td style='padding:5px 8px;text-align:right'>{_cta_fmt(x['res_acum'])}</td></tr>"
+                 + f"<tr style='background:#0B2D57;color:#fff'><td style='padding:8px;font-weight:800'>{'✅ Activo = Pasivo + Patrimonio' if dif == 0 else '⚠️ No cuadra por ' + _cta_fmt(dif)}</td><td></td></tr>")
+    flujo = (f"<tr><td style='padding:6px 8px'>Entradas de efectivo (débitos a caja y bancos)</td><td style='padding:6px 8px;text-align:right'>{_cta_fmt(x['ent'])}</td></tr>"
+             f"<tr><td style='padding:6px 8px'>− Salidas de efectivo (créditos)</td><td style='padding:6px 8px;text-align:right'>{_cta_fmt(x['sal'])}</td></tr>"
+             f"<tr style='background:#0B2D57;color:#fff'><td style='padding:8px;font-weight:800'>Variación del efectivo</td><td style='padding:8px;text-align:right;font-weight:800'>{_cta_fmt(x['ent'] - x['sal'])}</td></tr>")
+    bp = ""
+    td = tc = _D("0")
+    for f in x["acum"]:
+        if f["debito"] or f["credito"]:
+            td += f["debito"]
+            tc += f["credito"]
+            bp += (f"<tr><td style='padding:5px 8px'>{_esc(f['cuenta'].codigo)} · {_esc(f['cuenta'].nombre)}</td><td style='padding:5px 8px;text-align:right'>{_cta_fmt(f['debito'])}</td>"
+                   f"<td style='padding:5px 8px;text-align:right'>{_cta_fmt(f['credito'])}</td><td style='padding:5px 8px;text-align:right'>{_cta_fmt(f['saldo'])}</td></tr>")
+    bp += (f"<tr style='background:#f1f5f9;font-weight:800'><td style='padding:6px 8px'>Sumas {'✅' if td == tc else '⚠️'}</td><td style='padding:6px 8px;text-align:right'>{_cta_fmt(td)}</td><td style='padding:6px 8px;text-align:right'>{_cta_fmt(tc)}</td><td></td></tr>")
+    pdf = f"/contabilidad/estados/pdf?periodo={periodo}&desde={_esc(d)}&hasta={_esc(h)}"
+    caja = lambda t, c: f"<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0B2D57'>{t}</h2><table style='width:100%;border-collapse:collapse;font-size:13px'>{c}</table></section>"  # noqa: E731
+    cuerpo = (_cta_filtro_periodo("/contabilidad/estados", periodo, d, h)
+              + f"<a class='btn' style='background:#b91c1c;color:#fff' href='{pdf}'>📄 Descargar PDF</a>"
+              + f"<p class='mini-text'>Resultados y flujo: {d} → {h}. Situación financiera y balance de prueba: acumulado al {h}.</p>"
+              + caja("Estado de resultados", resultados) + caja("Estado de situación financiera", situacion)
+              + caja("Flujo de efectivo", flujo)
+              + caja("Balance de prueba", "<tr style='background:#0B2D57;color:#fff'><th style='padding:6px 8px;text-align:left'>Cuenta</th><th style='padding:6px 8px;text-align:right'>Débitos</th><th style='padding:6px 8px;text-align:right'>Créditos</th><th style='padding:6px 8px;text-align:right'>Saldo</th></tr>" + bp))
+    return _cta_page("Estados financieros", "/contabilidad/estados", cuerpo, "Generados automáticamente desde el libro")
+
+
+@app.route("/contabilidad/estados/pdf")
+@_cta_ruta()
+def contabilidad_estados_pdf():
+    periodo, d, h, et = _cta_rango(request.args.get("periodo"), request.args.get("desde") or "", request.args.get("hasta") or "")
+    x = _cta_estados_datos(d, h)
+    filas = [["Estado de resultados", "Ingresos", _cta_fmt(x["ing"])], ["Estado de resultados", "Costos", _cta_fmt(x["cos"])],
+             ["Estado de resultados", "Gastos", _cta_fmt(x["gas"])], ["Estado de resultados", "Resultado del período", _cta_fmt(x["res"])],
+             ["Situación financiera", "Activo", _cta_fmt(x["act"])], ["Situación financiera", "Pasivo", _cta_fmt(x["pas"])],
+             ["Situación financiera", "Patrimonio (incl. resultado)", _cta_fmt(x["pat"])],
+             ["Flujo de efectivo", "Entradas", _cta_fmt(x["ent"])], ["Flujo de efectivo", "Salidas", _cta_fmt(x["sal"])],
+             ["Flujo de efectivo", "Variación del efectivo", _cta_fmt(x["ent"] - x["sal"])]]
+    for f in x["acum"]:
+        if f["debito"] or f["credito"]:
+            filas.append(["Balance de prueba", f"{f['cuenta'].codigo} · {f['cuenta'].nombre}", f"D {_cta_fmt(f['debito'])} · C {_cta_fmt(f['credito'])} · Saldo {_cta_fmt(f['saldo'])}"])
+    buf = _pdf_informe_gerencia("Contabilidad · Estados financieros", f"Período {d} → {h} · exportado por {session.get('usuario')}",
+                                ["Estado", "Concepto", "Valor"], filas, [22, 40, 38])
+    _cta_log("Exportó estados financieros", f"{d} → {h}")
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=f"estados_financieros_{ahora().strftime('%Y%m%d_%H%M')}.pdf")
+
+
+@app.route("/contabilidad/auditoria")
+@_cta_ruta()
+def contabilidad_auditoria():
+    q = (request.args.get("q") or "").strip()[:80]
+    qry = CtaAuditoria.query
+    if q:
+        like = f"%{q}%"
+        qry = qry.filter(db.or_(CtaAuditoria.usuario.ilike(like), CtaAuditoria.accion.ilike(like), CtaAuditoria.detalle.ilike(like)))
+    rows = qry.order_by(CtaAuditoria.id.desc()).limit(300).all()
+    tr = "".join(
+        f"<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:6px 8px;font-size:12px;white-space:nowrap'>{_esc(r.ts)}</td>"
+        f"<td style='padding:6px 8px;font-size:12px'>{_esc(r.usuario)}<br><span style='color:#64748b'>{_esc(r.rol)}</span></td>"
+        f"<td style='padding:6px 8px;font-size:12px'><b>{_esc(r.accion)}</b><br>{_esc((r.detalle or '')[:200])}</td>"
+        f"<td style='padding:6px 8px;font-size:11px;color:#475569'>{_esc((r.valor_anterior or '')[:120])}</td>"
+        f"<td style='padding:6px 8px;font-size:11px;color:#475569'>{_esc((r.valor_nuevo or '')[:120])}</td>"
+        f"<td style='padding:6px 8px;font-size:12px;font-family:monospace'>{_esc(r.ip)}</td></tr>" for r in rows)
+    if not tr:
+        tr = "<tr><td colspan='6' style='padding:16px;text-align:center;color:#64748b'>Sin registros.</td></tr>"
+    th = "padding:8px;text-align:left;font-size:12px"
+    cuerpo = f"""<section class="role-panel">
+  <form method="GET" style="display:flex;gap:8px;margin-bottom:10px"><input name="q" value="{_esc(q)}" placeholder="Usuario o acción…" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:8px"><button class="btn">Filtrar</button></form>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+  <tr style="background:#0B2D57;color:#fff"><th style="{th}">Fecha / hora</th><th style="{th}">Usuario</th><th style="{th}">Acción</th><th style="{th}">Valor anterior</th><th style="{th}">Valor nuevo</th><th style="{th}">IP</th></tr>{tr}</table></div>
+  <p class="mini-text">Quién creó, anuló o configuró cada cosa. Los movimientos no se borran: se anulan y quedan aquí.</p></section>"""
+    return _cta_page("Auditoría contable", "/contabilidad/auditoria", cuerpo, "Trazabilidad de cada operación")
+
+
 
 
 _ROLES_TECNICOS = ("Soporte", "Desarrollador", "Developer", "Superadmin")
