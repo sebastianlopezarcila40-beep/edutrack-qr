@@ -6320,8 +6320,15 @@ def plataforma():
             db.session.rollback()
         except Exception:
             pass
-        class _P: pass
+        class _P:
+            # Cualquier atributo de Plataforma que no esté definido abajo devuelve "" en vez de
+            # lanzar AttributeError (que convertía un fallo de BD en un error 5xx en toda la web).
+            def __getattr__(self, nombre):
+                if nombre.startswith("__"):
+                    raise AttributeError(nombre)
+                return ""
         x = _P()
+        x.login_mostrar_marca = True
         x.empresa = DESARROLLADOR
         x.slogan = SLOGAN
         x.logo_path = "/static/img/logo-procsis.png"
