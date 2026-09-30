@@ -4169,21 +4169,29 @@ window.addEventListener('pageshow', function (event) {
     window.location.reload();
   }
 });
-// Movimiento estilo Apple: fundido de salida al navegar a otro enlace interno,
-// para que el cambio de página no se sienta "brusco". Respeta prefers-reduced-motion.
+// Movimiento estilo Apple: fundido de salida SOLO al navegar a otra página interna.
+// Nunca deja la página en blanco: se restaura siempre (descargas, tel:, mailto:, botón atrás).
 (function(){
   try{
+    function visible(){ try{ document.body.style.opacity = ''; document.body.style.transition = ''; }catch(_x){} }
+    window.addEventListener('pageshow', visible);
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) visible(); });
     if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia && matchMedia('(pointer: coarse)').matches) return;   // móviles/tablets: sin fundido
     document.addEventListener('click', function(e){
+      if (e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       var a = e.target.closest && e.target.closest('a[href]');
       if(!a) return;
       var href = a.getAttribute('href') || '';
-      if(!href || href.startsWith('#') || href.startsWith('javascript:') || a.target === '_blank' || e.metaKey || e.ctrlKey) return;
-      if(href.startsWith('http') && href.indexOf(location.host) === -1) return;
+      if(!href || href.charAt(0) === '#' || /^(javascript:|mailto:|tel:|sms:|whatsapp:|data:|blob:)/i.test(href)) return;
+      if(a.target === '_blank' || a.hasAttribute('download')) return;
+      if(/^https?:/i.test(href) && href.indexOf(location.host) === -1) return;
+      if(/(descargar|download|export|[.]pdf|[.]xlsx|[.]docx|[.]csv|[/]pdf)/i.test(href)) return;
       e.preventDefault();
       document.body.style.transition = 'opacity .16s ease';
       document.body.style.opacity = '0';
       setTimeout(function(){ window.location.href = href; }, 140);
+      setTimeout(visible, 2500);
     }, true);
   }catch(_e){}
 })();
@@ -4210,7 +4218,7 @@ window.addEventListener('pageshow', function (event) {
     else:
         _tab = f"EduTrack | {title}"
         _icon = "/static/img/favicon.png?v=7"
-    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0B2D57"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}</body></html>"""
+    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0B2D57"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}</body></html>"""
 
 
 
@@ -12930,18 +12938,20 @@ def carne_digital_qr(id):
 
 _PORTAL_CSS = r'''
 <style>
-#qr-stage{position:fixed;inset:0;z-index:2147483000;overflow:auto;display:flex;padding:20px;box-sizing:border-box;
+#qr-stage{min-height:100vh;min-height:100dvh;display:flex;padding:20px;box-sizing:border-box;width:100%;
  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",system-ui,sans-serif;color:#fff;
  background:radial-gradient(circle at 18% 8%,rgba(10,132,255,.38),transparent 46%),radial-gradient(circle at 85% 90%,rgba(0,51,153,.55),transparent 50%),linear-gradient(160deg,#003399 0%,#0B192C 100%)}
 .qr-card{width:min(440px,100%);margin:auto;padding:28px 24px 22px;border-radius:28px;text-align:center;
- background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+ background:rgba(255,255,255,.12);
  border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 32px rgba(0,0,0,.37),inset 0 1px 0 rgba(255,255,255,.16)}
+@media (min-width:700px){@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+ .qr-card{background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%)}}}
 .qr-logo{width:84px;height:84px;margin:0 auto 14px;border-radius:24px;background:rgba(255,255,255,.94);display:flex;align-items:center;justify-content:center;
  box-shadow:0 6px 20px rgba(0,0,0,.28),0 0 0 6px rgba(255,255,255,.10)}
 .qr-logo img{max-width:70%;max-height:70%;object-fit:contain}
 #qr-stage h1{margin:0 0 6px;font-size:26px;font-weight:700;letter-spacing:-.02em;color:#fff}
 .qr-sub{margin:0 0 16px;font-size:14.5px;color:rgba(255,255,255,.78)}
-.qr-reader-box{width:100%;aspect-ratio:1/1;max-width:340px;margin:0 auto 14px;border-radius:22px;overflow:hidden;background:rgba(6,14,28,.75);
+.qr-reader-box{width:340px;max-width:100%;height:340px;height:min(340px,calc(100vw - 92px));margin:0 auto 14px;border-radius:22px;overflow:hidden;background:rgba(6,14,28,.75);
  border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
 #reader video{width:100%!important;height:100%!important;object-fit:cover!important}
 .qr-status{min-height:20px;margin:0 0 10px;font-size:13.5px;color:rgba(255,255,255,.85)}
@@ -12955,8 +12965,8 @@ _PORTAL_CSS = r'''
  display:inline-flex;align-items:center;justify-content:center;font-style:italic;margin-top:1px}
 .qr-admin{display:inline-block;margin-top:14px;font-size:12.5px;color:rgba(255,255,255,.55);text-decoration:none}
 .qr-admin:hover{color:#fff}
-.qr-laser{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0}
-.qr-overlay{position:fixed;inset:0;z-index:2147483600;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;color:#fff}
+.qr-laser{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;font-size:16px}
+.qr-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483600;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;color:#fff}
 .qr-overlay.on{display:flex;animation:qrpop .18s ease-out}
 .qr-overlay.ok{background:linear-gradient(160deg,#22c55e 0%,#15803d 100%)}
 .qr-overlay.warn{background:linear-gradient(160deg,#f59e0b 0%,#b45309 100%)}
@@ -12983,6 +12993,7 @@ _PORTAL_HTML = r'''
       <button type="button" id="btn-stop" class="qr-btn qr-btn-stop" style="display:none">Detener</button>
     </div>
     <p class="qr-info"><span class="qr-i">i</span><span>Usa Google Chrome normal, sin VPN ni navegador con escudo. Si el lector queda negro, toca Detener y luego Iniciar otra vez.</span></p>
+    <noscript><p class="qr-sub">Activa JavaScript en tu navegador para usar el lector.</p></noscript>
     <a class="qr-admin" href="/login">Administración</a>
   </section>
   <div id="qr-overlay" class="qr-overlay"><div class="qr-big">
@@ -12991,7 +13002,6 @@ _PORTAL_HTML = r'''
   </div></div>
   <input id="laser" class="qr-laser" type="text" autocomplete="off" inputmode="none" aria-label="Lector láser">
 </div>
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (function(){
 var scanner=null,registrando=false,ultimo='',ultimoT=0,camOn=false,ovT=null;
@@ -13021,10 +13031,15 @@ async function registrar(raw){
   }catch(e){beep(false);overlay('err','📡','Sin conexión','','Revisa el internet e intenta de nuevo.','',3500);}
   finally{setTimeout(function(){registrando=false;},600);}
 }
-function cargarLib(cb){
+var CDNS=['https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js',
+  'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'];
+function cargarLib(cb,i){
   if(window.Html5Qrcode)return cb(true);
-  var s=document.createElement('script');s.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
-  s.onload=function(){cb(!!window.Html5Qrcode);};s.onerror=function(){cb(false);};document.head.appendChild(s);}
+  i=i||0;if(i>=CDNS.length)return cb(false);
+  var s=document.createElement('script');s.src=CDNS[i];s.async=true;
+  s.onload=function(){if(window.Html5Qrcode)cb(true);else cargarLib(cb,i+1);};
+  s.onerror=function(){cargarLib(cb,i+1);};document.head.appendChild(s);}
 async function iniciar(auto){
   cargarLib(async function(ok){
     if(!ok){estado('No cargó el lector QR. Revisa internet y recarga.');$('btn-camera').style.display='inline-block';return;}
@@ -13050,7 +13065,7 @@ las.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefau
 document.addEventListener('click',function(ev){if(ev.target.tagName!=='BUTTON'&&ev.target.tagName!=='A')las.focus();});
 las.focus();
 try{if(navigator.wakeLock)navigator.wakeLock.request('screen').catch(function(){});}catch(e){}
-window.addEventListener('load',function(){iniciar(true);});
+if(document.readyState==='complete')iniciar(true);else window.addEventListener('load',function(){iniciar(true);});
 })();
 </script>'''
 
