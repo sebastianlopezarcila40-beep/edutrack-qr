@@ -280,8 +280,11 @@ def _security_headers(resp):
     if not request.path.startswith("/static"):
         resp.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'self'",
+            "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; "
+            "worker-src 'self' blob:; media-src 'self' blob: data:; "
+            "connect-src 'self'; frame-ancestors 'self'",
         )
     return resp
 
@@ -9168,7 +9171,7 @@ def _guard_plan_qr_rutas():
         if not session.get("usuario"):
             return None
         path = (request.path or "").split("?")[0]
-        if path.startswith(("/static", "/api/", "/logout", "/login", "/anuncio", "/gerencia", "/ventas", "/soporte", "/cobranza", "/dev-console")):
+        if path == "/" or path.startswith(("/static", "/api/", "/logout", "/login", "/anuncio", "/gerencia", "/ventas", "/soporte", "/cobranza", "/dev-console")):
             return None
         rol = rol_actual()
         if rol in _ROLES_GLOBAL or session.get("soporte"):
@@ -9580,13 +9583,16 @@ def estado_badge(estado):
     return f'<span class="estado {clase}">{estado}</span>'
 
 
-def registrar_ingreso(codigo, estado, registrado_por=None):
-    codigo = limpiar_codigo(codigo)
-    e = q_estudiantes().filter_by(codigo=codigo).first()
-    if not e:
-        e = Estudiante.query.filter_by(codigo=codigo).first()
+def registrar_ingreso(codigo, estado, registrado_por=None, est=None):
+    e = est
+    if e is None:
+        codigo = limpiar_codigo(codigo)
+        e = q_estudiantes().filter_by(codigo=codigo).first()
+        if not e:
+            e = Estudiante.query.filter_by(codigo=codigo).first()
     if not e:
         return "Estudiante no registrado", "No registrado"
+    codigo = e.codigo
     if not registrado_por:
         registrado_por = f"{session.get('usuario', 'Portería')} ({session.get('rol', 'Portal móvil')})" if requiere_login() else "Portería / Portal móvil"
     alerta_med = (getattr(e, "alerta_medica", None) or "").strip()
@@ -9642,10 +9648,15 @@ def registrar_ingreso(codigo, estado, registrado_por=None):
     ultimo = IngresoPorteria.query.filter_by(estudiante_id=e.id, fecha=fecha_hoy()).order_by(IngresoPorteria.id.desc()).first()
     if ultimo:
         return f"Entrada bloqueada: {e.nombre} {e.apellido} ya fue registrado hoy a las {ultimo.hora} por {ultimo.registrado_por}.", "Duplicado"
-    # Estado automático por hora de corte (07:00)
+    # Estado automático: Temprano/Tarde según la hora de entrada del grado (Coordinación) y la hora del servidor
     hora = hora_actual()
     try:
-        st_auto, mins = _estado_ingreso_por_hora(hora, _hora_corte_tarde())
+        _corte = _corte_ingreso_estudiante(e)
+        st_auto, mins = _estado_ingreso_por_hora(hora, _corte)
+        if st_auto == "RETARDO" and _corte.endswith(":59"):
+            # corte = hora de entrada + tolerancia + 59 s: los minutos de retraso se cuentan desde la hora de entrada
+            _p = lambda x: sum(int(v) * m for v, m in zip((x + ":0:0").split(":")[:3], (3600, 60, 1)))
+            mins = max(1, (_p(hora[:8]) - _p(_corte[:5])) // 60)
         if st_auto == "RETARDO":
             estado = "Tarde"
         elif (estado or "").strip() in ("", "Temprano", "A tiempo", "A_TIEMPO"):
@@ -9682,7 +9693,10 @@ def enviar_pin(correo_destino, pin):
 
 
 @app.route("/")
-def inicio(): return redirect("/login")
+def inicio():
+    # Antes redirigía a /login; Google no indexa una URL que redirige. Ahora responde 200 con la
+    # misma página de ingreso y declara "/" como versión canónica (ver _seo_canonical).
+    return login()
 
 
 
@@ -12629,6 +12643,7 @@ def dashboard():
             <a class='btn' href='/panel_convivencia'>Panel convivencia</a>
             <a class='btn btn-green' href='/convivencia/nueva'>Registrar anotación</a>
             <a class='btn' href='/alertas'>Alertas</a>
+            <a class='btn' href='/horarios-ingreso'>🕖 Horarios de ingreso</a>
             <a class='btn' href='/excusas'>Excusas</a>
             <a class='btn' href='/reportes'>Reportes</a>
           </div>
@@ -12651,182 +12666,436 @@ def dashboard():
 
 
 
+# ═══════════ INGRESO POR QR: horarios por grado, token dinámico, carné digital ═══════════
+class HorarioIngresoGrado(db.Model):
+    """Hora de entrada por grado, editable por Coordinación. grado='*' = regla por defecto del colegio."""
+    __tablename__ = "horarios_ingreso_grado"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True, nullable=False)
+    grado = db.Column(db.String(40), nullable=False)
+    hora_entrada = db.Column(db.String(5), default="07:00")
+    tolerancia_min = db.Column(db.Integer, default=0)
+    actualizado_por = db.Column(db.String(80), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
+class IngresoQRConfig(db.Model):
+    __tablename__ = "ingreso_qr_config"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    token_obligatorio = db.Column(db.Boolean, default=False)
+
+
+_INGRESO_LISTO = {"ok": False}
+
+
+def _ingreso_ensure():
+    if _INGRESO_LISTO["ok"]:
+        return
+    try:
+        for m in (HorarioIngresoGrado, IngresoQRConfig):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        _INGRESO_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR ingreso ensure:", repr(ex), flush=True)
+
+
+def _norm_grado(g):
+    return re.sub(r"\s+", "", (g or "")).lower()
+
+
+def _corte_ingreso_estudiante(e):
+    """Hora límite (HH:MM:SS) para el grado del estudiante: regla del grado → regla '*' del colegio →
+    hora_ingreso_corte de la institución → 07:00:00. Incluye la tolerancia en minutos."""
+    try:
+        iid = getattr(e, "institucion_id", None)
+        if iid:
+            _ingreso_ensure()
+            reglas = HorarioIngresoGrado.query.filter_by(institucion_id=iid).all()
+            g = _norm_grado(getattr(e, "grado", ""))
+            reg = next((r for r in reglas if _norm_grado(r.grado) == g), None) or next((r for r in reglas if r.grado == "*"), None)
+            if reg and reg.hora_entrada and re.match(r"^\d{1,2}:\d{2}$", reg.hora_entrada):
+                hh, mm = [int(x) for x in reg.hora_entrada.split(":")]
+                tot = hh * 60 + mm + int(reg.tolerancia_min or 0)
+                return "%02d:%02d:59" % (min(tot // 60, 23), tot % 60)  # 7:00 → 7:01:00 ya es Tarde
+            try:
+                return _hora_corte_tarde(Institucion.query.get(iid))
+            except Exception:
+                pass
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return _hora_corte_tarde()
+
+
+def _ingreso_token_obligatorio(inst_id):
+    try:
+        if not inst_id:
+            return False
+        _ingreso_ensure()
+        c = IngresoQRConfig.query.filter_by(institucion_id=inst_id).first()
+        return bool(c and c.token_obligatorio)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return False
+
+
+_QR_VENTANA_SEG = 30  # el código del carné digital cambia cada 30 s
+
+
+def _qr_firma(inst, codigo, bucket):
+    import hmac, hashlib
+    msg = ("%s.%s.%s" % (inst or 0, codigo, bucket)).encode("utf-8")
+    return hmac.new(str(app.secret_key).encode("utf-8"), msg, hashlib.sha256).hexdigest()[:12]
+
+
+def qr_token_payload(e):
+    import time as _tm
+    bucket = int(_tm.time() // _QR_VENTANA_SEG)
+    return "EDT1.%s.%s.%s.%s" % (e.institucion_id or 0, bucket, _qr_firma(e.institucion_id, e.codigo, bucket), e.codigo)
+
+
+def _qr_parse(raw):
+    """Clasifica lo leído: token dinámico válido, vencido, inválido, o QR fijo (carné impreso)."""
+    import hmac, time as _tm
+    t = (raw or "").strip()
+    if t.startswith("EDT1."):
+        p = t.split(".", 4)
+        if len(p) != 5:
+            return {"tipo": "invalido"}
+        try:
+            inst = int(p[1])
+            bucket = int(p[2])
+        except Exception:
+            return {"tipo": "invalido"}
+        sig, codigo = p[3], p[4]
+        if not codigo or not hmac.compare_digest(sig, _qr_firma(inst, codigo, bucket)):
+            return {"tipo": "invalido"}
+        ahora_b = int(_tm.time() // _QR_VENTANA_SEG)
+        if bucket > ahora_b + 1 or ahora_b - bucket > 2:  # vigencia ≈ 60–90 s
+            return {"tipo": "expirado"}
+        return {"tipo": "token", "inst": inst or None, "codigo": codigo}
+    return {"tipo": "fijo", "codigo": limpiar_codigo(t)}
+
+
+@app.route("/horarios-ingreso", methods=["GET", "POST"])
+def horarios_ingreso():
+    if not requiere_login() or rol_actual() not in ("Coordinación", "Rectoría"):
+        return acceso_denegado("Solo Coordinación o Rectoría configuran los horarios de ingreso.")
+    iid = institucion_id_actual()
+    if not iid:
+        return acceso_denegado("No se pudo identificar el colegio de tu sesión.")
+    _ingreso_ensure()
+    msg = err = ""
+    grados = sorted({(g or "").strip() for (g,) in q_estudiantes().with_entities(Estudiante.grado).distinct().all() if (g or "").strip()},
+                    key=lambda x: (len(x), x))
+    filas_def = ["*"] + grados
+    if request.method == "POST":
+        try:
+            quien = session.get("usuario") or ""
+            ts = "%s %s" % (fecha_hoy(), hora_actual())
+            existentes = {r.grado: r for r in HorarioIngresoGrado.query.filter_by(institucion_id=iid).all()}
+            for i, g in enumerate(filas_def):
+                h = (request.form.get("hora_%d" % i) or "").strip()
+                tol = request.form.get("tol_%d" % i, type=int) or 0
+                tol = max(0, min(tol, 120))
+                r = existentes.get(g)
+                if not h:
+                    if r:
+                        db.session.delete(r)
+                    continue
+                if not re.match(r"^\d{1,2}:\d{2}$", h):
+                    raise ValueError("Hora inválida para %s" % ("todos los grados" if g == "*" else g))
+                if r:
+                    r.hora_entrada, r.tolerancia_min, r.actualizado_por, r.actualizado_en = h, tol, quien, ts
+                else:
+                    db.session.add(HorarioIngresoGrado(institucion_id=iid, grado=g, hora_entrada=h, tolerancia_min=tol,
+                                                       actualizado_por=quien, actualizado_en=ts))
+            cfg = IngresoQRConfig.query.filter_by(institucion_id=iid).first()
+            if not cfg:
+                cfg = IngresoQRConfig(institucion_id=iid)
+                db.session.add(cfg)
+            cfg.token_obligatorio = bool(request.form.get("token_obligatorio"))
+            db.session.commit()
+            try:
+                registrar_auditoria("Horarios de ingreso actualizados", "Coordinación/Rectoría")
+            except Exception:
+                db.session.rollback()
+            msg = "Horarios guardados."
+        except Exception as ex:
+            db.session.rollback()
+            err = "No se pudo guardar: %s" % ex
+    reglas = {r.grado: r for r in HorarioIngresoGrado.query.filter_by(institucion_id=iid).all()}
+    cfg = IngresoQRConfig.query.filter_by(institucion_id=iid).first()
+    tok = bool(cfg and cfg.token_obligatorio)
+    inp = "padding:8px;border:1px solid #cbd5e1;border-radius:8px"
+    trs = ""
+    for i, g in enumerate(filas_def):
+        r = reglas.get(g)
+        etiqueta = "<b>Todos los grados</b> <span style='color:#64748b'>(por defecto)</span>" if g == "*" else "<b>%s</b>" % _esc(g)
+        trs += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:8px'>%s</td>"
+                "<td style='padding:8px'><input type='time' name='hora_%d' value='%s' style='%s'></td>"
+                "<td style='padding:8px'><input type='number' min='0' max='120' name='tol_%d' value='%s' style='%s;width:90px'></td></tr>") % (
+            etiqueta, i, _esc(r.hora_entrada if r else ""), inp, i, _esc(r.tolerancia_min if r else 0), inp)
+    aviso = ""
+    if msg:
+        aviso = "<div class='msg ok'>%s</div>" % _esc(msg)
+    if err:
+        aviso = "<div class='msg danger'>%s</div>" % _esc(err)
+    content = """
+<header class="role-hero"><div><h1>🕖 Horarios de ingreso por grado</h1>
+<p>El portal QR marca <b>Temprano</b> o <b>Tarde</b> solo, comparando la hora del servidor con la hora de entrada del grado.</p></div></header>
+%s
+<section class="role-panel">
+<form method="POST">
+  <table style="width:100%%;border-collapse:collapse">
+    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Grado</th><th style="padding:8px;text-align:left">Hora de entrada</th><th style="padding:8px;text-align:left">Tolerancia (min)</th></tr>
+    %s
+  </table>
+  <p class="mini-text">Déjalo vacío para que el grado use la regla «Todos los grados». Si tampoco hay regla general, se usa la hora de corte del colegio (07:00 por defecto). Con entrada 7:00 y tolerancia 0, las 7:01 cuentan como Tarde.</p>
+  <label style="display:flex;gap:8px;align-items:flex-start;margin:12px 0"><input type="checkbox" name="token_obligatorio" %s style="margin-top:3px">
+  <span><b>Exigir carné digital con código dinámico.</b> Si se activa, el portal rechaza los QR fijos y las capturas de pantalla (incluidos los carnés impresos). Déjalo apagado mientras los estudiantes usen carné impreso.</span></label>
+  <button type="submit" class="btn">Guardar horarios</button>
+</form></section>""" % (aviso, trs, "checked" if tok else "")
+    return page("Horarios de ingreso", shell(content))
+
+
+def _carne_digital_ok(e):
+    if not requiere_login():
+        return False
+    try:
+        if session.get("familia") and str(e.id) in [str(x) for x in (session.get("familia_est_ids") or [])]:
+            return True
+    except Exception:
+        pass
+    rol = rol_actual()
+    if rol == "Soporte":
+        return True
+    return rol in ("Secretaría", "Coordinación", "Rectoría") and e.institucion_id == institucion_id_actual()
+
+
+@app.route("/carne-digital/<int:id>")
+def carne_digital(id):
+    e = Estudiante.query.get_or_404(id)
+    if not _carne_digital_ok(e):
+        return acceso_denegado("No tienes acceso a este carné.")
+    nombre = _esc("%s %s" % (e.nombre, e.apellido))
+    html = """
+<div style="max-width:380px;margin:24px auto;padding:26px;border-radius:26px;text-align:center;color:#fff;
+ background:linear-gradient(160deg,#003399,#0B192C);box-shadow:0 8px 32px rgba(0,0,0,.37);
+ font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,'Segoe UI',sans-serif">
+  <div style="font-size:13px;opacity:.75;letter-spacing:.08em">CARNÉ DIGITAL</div>
+  <h2 style="margin:6px 0 2px;font-size:22px">__NOMBRE__</h2>
+  <div style="opacity:.8;font-size:14px">Grado __GRADO__ · Código __CODIGO__</div>
+  <div style="background:#fff;border-radius:20px;padding:14px;margin:18px auto;width:260px;height:260px;box-sizing:border-box">
+    <img id="qrimg" src="/carne-digital/__ID__/qr.png" alt="QR" style="width:100%;height:100%">
+  </div>
+  <div style="height:6px;border-radius:99px;background:rgba(255,255,255,.2);overflow:hidden"><div id="barra" style="height:100%;width:100%;background:#0A84FF;transition:width 1s linear"></div></div>
+  <p style="font-size:12.5px;opacity:.8;margin:10px 0 0">El código se renueva solo cada 30 segundos. Muéstralo en la entrada directamente desde esta pantalla: una captura no sirve.</p>
+</div>
+<script>
+(function(){
+  var img=document.getElementById('qrimg'),barra=document.getElementById('barra'),seg=30,rest=seg;
+  function tick(){rest--;barra.style.width=Math.max(0,rest/seg*100)+'%';
+    if(rest<=0){img.src='/carne-digital/__ID__/qr.png?t='+Date.now();rest=seg;barra.style.width='100%';}}
+  setInterval(tick,1000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden){img.src='/carne-digital/__ID__/qr.png?t='+Date.now();rest=seg;}});
+})();
+</script>""".replace("__NOMBRE__", nombre).replace("__GRADO__", _esc(e.grado)).replace("__CODIGO__", _esc(e.codigo)).replace("__ID__", str(e.id))
+    return page("Carné digital", html)
+
+
+@app.route("/carne-digital/<int:id>/qr.png")
+def carne_digital_qr(id):
+    e = Estudiante.query.get_or_404(id)
+    if not _carne_digital_ok(e):
+        return ("", 403)
+    img = qrcode.make(qr_token_payload(e))
+    b = BytesIO()
+    img.save(b, format="PNG")
+    b.seek(0)
+    r = send_file(b, mimetype="image/png")
+    r.headers["Cache-Control"] = "no-store, max-age=0"
+    return r
+
+
+_PORTAL_CSS = r'''
+<style>
+#qr-stage{position:fixed;inset:0;z-index:2147483000;overflow:auto;display:flex;padding:20px;box-sizing:border-box;
+ font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",system-ui,sans-serif;color:#fff;
+ background:radial-gradient(circle at 18% 8%,rgba(10,132,255,.38),transparent 46%),radial-gradient(circle at 85% 90%,rgba(0,51,153,.55),transparent 50%),linear-gradient(160deg,#003399 0%,#0B192C 100%)}
+.qr-card{width:min(440px,100%);margin:auto;padding:28px 24px 22px;border-radius:28px;text-align:center;
+ background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+ border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 32px rgba(0,0,0,.37),inset 0 1px 0 rgba(255,255,255,.16)}
+.qr-logo{width:84px;height:84px;margin:0 auto 14px;border-radius:24px;background:rgba(255,255,255,.94);display:flex;align-items:center;justify-content:center;
+ box-shadow:0 6px 20px rgba(0,0,0,.28),0 0 0 6px rgba(255,255,255,.10)}
+.qr-logo img{max-width:70%;max-height:70%;object-fit:contain}
+#qr-stage h1{margin:0 0 6px;font-size:26px;font-weight:700;letter-spacing:-.02em;color:#fff}
+.qr-sub{margin:0 0 16px;font-size:14.5px;color:rgba(255,255,255,.78)}
+.qr-reader-box{width:100%;aspect-ratio:1/1;max-width:340px;margin:0 auto 14px;border-radius:22px;overflow:hidden;background:rgba(6,14,28,.75);
+ border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+#reader video{width:100%!important;height:100%!important;object-fit:cover!important}
+.qr-status{min-height:20px;margin:0 0 10px;font-size:13.5px;color:rgba(255,255,255,.85)}
+.qr-btn{border:0;cursor:pointer;padding:13px 26px;border-radius:12px;font-size:15.5px;font-weight:600;color:#fff;background:#0A84FF;
+ box-shadow:0 6px 18px rgba(10,132,255,.45);transition:transform .15s ease,filter .15s ease,box-shadow .15s ease;font-family:inherit}
+.qr-btn:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 10px 24px rgba(10,132,255,.5)}
+.qr-btn:active{transform:scale(.98)}
+.qr-btn-stop{background:rgba(255,255,255,.16);box-shadow:none;margin-left:8px}
+.qr-info{margin:16px auto 0;max-width:340px;display:flex;gap:8px;align-items:flex-start;text-align:left;font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.66)}
+.qr-i{flex:0 0 auto;width:17px;height:17px;border-radius:50%;border:1.5px solid rgba(255,255,255,.7);font-size:11px;font-weight:700;
+ display:inline-flex;align-items:center;justify-content:center;font-style:italic;margin-top:1px}
+.qr-admin{display:inline-block;margin-top:14px;font-size:12.5px;color:rgba(255,255,255,.55);text-decoration:none}
+.qr-admin:hover{color:#fff}
+.qr-laser{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0}
+.qr-overlay{position:fixed;inset:0;z-index:2147483600;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;color:#fff}
+.qr-overlay.on{display:flex;animation:qrpop .18s ease-out}
+.qr-overlay.ok{background:linear-gradient(160deg,#22c55e 0%,#15803d 100%)}
+.qr-overlay.warn{background:linear-gradient(160deg,#f59e0b 0%,#b45309 100%)}
+.qr-overlay.err{background:linear-gradient(160deg,#ef4444 0%,#991b1b 100%)}
+.qr-big{max-width:900px}
+.qr-ico{font-size:clamp(70px,16vw,140px);line-height:1}
+.qr-tit{font-size:clamp(28px,6.2vw,56px);font-weight:800;letter-spacing:-.02em;margin:10px 0}
+.qr-nom{font-size:clamp(26px,6vw,50px);font-weight:700;margin:6px 0}
+.qr-det{font-size:clamp(17px,3.2vw,26px);opacity:.95;margin-top:8px}
+.qr-badge{display:inline-block;margin-top:12px;padding:6px 16px;border-radius:999px;background:rgba(255,255,255,.22);font-weight:700;font-size:clamp(15px,2.6vw,22px)}
+@keyframes qrpop{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
+</style>'''
+
+_PORTAL_HTML = r'''
+<div id="qr-stage">
+  <section class="qr-card">
+    <div class="qr-logo"><img src="__LOGO__" alt="Logo"></div>
+    <h1>Portal de Ingreso</h1>
+    <p class="qr-sub">Acerca el carné al lector. El ingreso se registra solo.</p>
+    <div id="reader" class="qr-reader-box"></div>
+    <div id="qr-status" class="qr-status"></div>
+    <div>
+      <button type="button" id="btn-camera" class="qr-btn">Iniciar lector QR</button>
+      <button type="button" id="btn-stop" class="qr-btn qr-btn-stop" style="display:none">Detener</button>
+    </div>
+    <p class="qr-info"><span class="qr-i">i</span><span>Usa Google Chrome normal, sin VPN ni navegador con escudo. Si el lector queda negro, toca Detener y luego Iniciar otra vez.</span></p>
+    <a class="qr-admin" href="/login">Administración</a>
+  </section>
+  <div id="qr-overlay" class="qr-overlay"><div class="qr-big">
+    <div id="qr-ico" class="qr-ico"></div><div id="qr-tit" class="qr-tit"></div>
+    <div id="qr-nom" class="qr-nom"></div><div id="qr-det" class="qr-det"></div><div id="qr-badge"></div>
+  </div></div>
+  <input id="laser" class="qr-laser" type="text" autocomplete="off" inputmode="none" aria-label="Lector láser">
+</div>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+(function(){
+var scanner=null,registrando=false,ultimo='',ultimoT=0,camOn=false,ovT=null;
+var $=function(i){return document.getElementById(i);};
+function estado(t){$('qr-status').textContent=t||'';}
+function beep(ok){try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return;var c=new C(),o=c.createOscillator(),g=c.createGain();
+  o.frequency.value=ok?880:220;g.gain.value=.08;o.connect(g);g.connect(c.destination);o.start();setTimeout(function(){o.stop();c.close();},ok?130:320);}catch(e){}}
+function overlay(tipo,ico,tit,nom,det,badge,ms){
+  var ov=$('qr-overlay');ov.className='qr-overlay on '+tipo;
+  $('qr-ico').textContent=ico;$('qr-tit').textContent=tit;$('qr-nom').textContent=nom||'';$('qr-det').textContent=det||'';
+  $('qr-badge').innerHTML=badge?'<span class="qr-badge"></span>':'';if(badge)$('qr-badge').firstChild.textContent=badge;
+  clearTimeout(ovT);ovT=setTimeout(function(){ov.className='qr-overlay';$('laser').focus();},ms);}
+async function registrar(raw){
+  raw=(raw||'').trim();if(!raw||registrando)return;
+  var ahora=Date.now();if(raw===ultimo&&ahora-ultimoT<4000)return;
+  ultimo=raw;ultimoT=ahora;registrando=true;
+  try{
+    var f=new FormData();f.append('codigo',raw);
+    var r=await fetch('/portal_registrar_ajax',{method:'POST',body:f,cache:'no-store'});
+    var d=await r.json();
+    if(d.ok&&d.estado==='Salida autorizada'){beep(true);overlay('warn','⚠️','Salida autorizada',d.nombre||'',d.mensaje,'',6000);}
+    else if(d.ok){beep(true);try{navigator.vibrate&&navigator.vibrate(120);}catch(e){}
+      var tarde=d.estado==='Tarde';
+      overlay('ok','✅','¡Estudiante ingresado exitosamente!',d.nombre||'',(d.grado?('Grado '+d.grado+' · '):'')+(d.hora||''),
+        tarde?('Llegada tarde'+(d.minutos?(' · '+d.minutos+' min'):'')):'A tiempo',2000);}
+    else{beep(false);overlay('err','⛔','No se pudo registrar',d.nombre||'',d.mensaje||'Intenta de nuevo.','',3500);}
+  }catch(e){beep(false);overlay('err','📡','Sin conexión','','Revisa el internet e intenta de nuevo.','',3500);}
+  finally{setTimeout(function(){registrando=false;},600);}
+}
+function cargarLib(cb){
+  if(window.Html5Qrcode)return cb(true);
+  var s=document.createElement('script');s.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+  s.onload=function(){cb(!!window.Html5Qrcode);};s.onerror=function(){cb(false);};document.head.appendChild(s);}
+async function iniciar(auto){
+  cargarLib(async function(ok){
+    if(!ok){estado('No cargó el lector QR. Revisa internet y recarga.');$('btn-camera').style.display='inline-block';return;}
+    try{
+      scanner=new Html5Qrcode('reader');
+      $('btn-camera').style.display='none';$('btn-stop').style.display='inline-block';estado('Solicitando cámara… acepta el permiso.');
+      var cfg={fps:12,qrbox:{width:230,height:230},aspectRatio:1.0};
+      try{await scanner.start({facingMode:'environment'},cfg,registrar);}
+      catch(e1){var cams=await Html5Qrcode.getCameras();if(!cams||!cams.length)throw new Error('sin cámaras');
+        var b=cams.find(function(c){return /back|rear|environment|trasera|posterior/i.test(c.label||'');})||cams[cams.length-1];
+        await scanner.start(b.id,cfg,registrar);}
+      camOn=true;estado('Cámara activa · listo para escanear');
+    }catch(e){camOn=false;$('btn-camera').style.display='inline-block';$('btn-stop').style.display='none';
+      estado(auto?'Toca «Iniciar lector QR» y permite la cámara.':'No se pudo abrir la cámara. Revisa el permiso del sitio en Chrome.');}
+  });}
+async function detener(){try{if(scanner){await scanner.stop();await scanner.clear();scanner=null;}}catch(e){}
+  camOn=false;$('btn-camera').style.display='inline-block';$('btn-stop').style.display='none';estado('Lector detenido.');}
+$('btn-camera').addEventListener('click',function(){iniciar(false);});
+$('btn-stop').addEventListener('click',detener);
+// Lector láser / USB: escribe el código como teclado y termina con Enter
+var las=$('laser');
+las.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();var v=las.value;las.value='';registrar(v);}});
+document.addEventListener('click',function(ev){if(ev.target.tagName!=='BUTTON'&&ev.target.tagName!=='A')las.focus();});
+las.focus();
+try{if(navigator.wakeLock)navigator.wakeLock.request('screen').catch(function(){});}catch(e){}
+window.addEventListener('load',function(){iniciar(true);});
+})();
+</script>'''
+
+
 @app.route("/portal", methods=["GET", "POST"])
 def portal():
     if requiere_login() and rol_actual() == "Secretaría":
         return acceso_denegado("Secretaría no gestiona el portal de ingreso ni el lector QR.")
-    mensaje = ""; estado = ""
     if request.method == "POST":
-        quien = f"{session.get('usuario')} ({rol_actual()})" if requiere_login() else "Portería / Portal móvil"
-        mensaje, estado = registrar_ingreso(request.form.get("codigo"), request.form.get("estado", "Temprano"), quien)
-    return page("Portal móvil", f"""
-<div class="center portal-bg">
-  <section class="card portal portal-fast">
-    <img class="logo" src="{logo_actual()}">
-    <h1>Portal de Ingreso</h1>
-    <p>Escaneo continuo. Acepta la cámara una sola vez y deja esta pantalla abierta.</p>
+        return redirect("/portal")  # el ingreso manual se eliminó: solo cámara o lector láser
+    html = _PORTAL_CSS + _PORTAL_HTML.replace("__LOGO__", _esc(logo_actual()))
+    return page("Portal de ingreso", html)
 
-    <div class="msg warn">
-      Usa Google Chrome normal, sin VPN ni navegador con escudo. Si el lector queda negro, toca Detener y luego Iniciar otra vez.
-    </div>
-
-    <button type="button" id="btn-camera">Iniciar lector QR</button>
-    <button type="button" id="btn-stop" style="display:none;background:#dc2626;margin-left:6px">Detener</button>
-
-    <div id="camera-status" class="msg warn" style="display:none"></div>
-    <div id="scan-result" class="msg" style="display:none"></div>
-    <div id="reader" class="qr-reader-box"></div>
-
-    <form method="POST" id="portal-form" autocomplete="off">
-      <input name="codigo" id="codigo" placeholder="Código del estudiante" required autocomplete="off" inputmode="numeric">
-      <select name="estado" id="estado"><option>Temprano</option><option>Tarde</option><option>No llegó</option></select>
-      <button>Guardar ingreso manual</button>
-    </form>
-
-    {'<div class="msg ok">'+mensaje+'</div>' if mensaje and estado not in ['No registrado','Duplicado'] else ''}
-    {'<div class="msg danger">'+mensaje+'</div>' if mensaje and estado in ['No registrado','Duplicado'] else ''}
-    <p><a href="/login">Administración</a></p>
-    {footer()}
-  </section>
-</div>
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-<script>
-let scanner = null;
-let ultimoCodigo = "";
-let ultimoTiempo = 0;
-let registrando = false;
-
-function limpiarCodigoQR(texto){{
-  texto = (texto || '').trim().replace(/\\r/g, '\\n');
-  const m = texto.match(/(?:Codigo|Código|CODIGO|codigo)\\s*:\\s*([^\\n]+)/);
-  if(m && m[1]) return m[1].trim().split(/\\s+/)[0];
-  const n = texto.match(/\\b\\d{{4,20}}\\b/);
-  if(n) return n[0].trim();
-  return texto.split('\\n')[0].replace(/^#/, '').trim();
-}}
-
-function mostrarEstado(txt, tipo='warn'){{
-  const box = document.getElementById('camera-status');
-  box.style.display = 'block';
-  box.className = 'msg ' + tipo;
-  box.innerHTML = txt;
-}}
-
-function mostrarResultado(txt, tipo='ok'){{
-  const box = document.getElementById('scan-result');
-  box.style.display = 'block';
-  box.className = 'msg ' + tipo;
-  box.innerText = txt;
-}}
-
-async function registrarCodigo(codigo){{
-  codigo = limpiarCodigoQR(codigo);
-  if(!codigo) return;
-
-  const ahora = Date.now();
-  if(registrando) return;
-  if(codigo === ultimoCodigo && (ahora - ultimoTiempo) < 6000) return;
-
-  ultimoCodigo = codigo;
-  ultimoTiempo = ahora;
-  registrando = true;
-  document.getElementById('codigo').value = codigo;
-  mostrarResultado('Registrando ' + codigo + '...', 'warn');
-
-  try {{
-    const form = new FormData();
-    form.append('codigo', codigo);
-    form.append('estado', document.getElementById('estado').value || 'Temprano');
-
-    const resp = await fetch('/portal_registrar_ajax', {{method:'POST', body:form, cache:'no-store'}});
-    const data = await resp.json();
-
-    if(data.ok){{
-      mostrarResultado('✅ ' + data.mensaje, 'ok');
-      try{{ navigator.vibrate && navigator.vibrate(120); }}catch(e){{}}
-    }} else {{
-      mostrarResultado('⚠️ ' + data.mensaje, 'danger');
-    }}
-  }} catch(e) {{
-    console.error(e);
-    mostrarResultado('Error de conexión. Registra manualmente.', 'danger');
-  }} finally {{
-    setTimeout(() => registrando = false, 800);
-  }}
-}}
-
-async function iniciarLector(){{
-  try {{
-    if(!window.Html5Qrcode){{
-      mostrarEstado('No cargó el lector QR. Revisa internet y recarga.', 'danger');
-      return;
-    }}
-    scanner = new Html5Qrcode("reader");
-    document.getElementById('btn-camera').style.display = 'none';
-    document.getElementById('btn-stop').style.display = 'inline-block';
-    mostrarEstado('Solicitando cámara... acepta el permiso.', 'warn');
-
-    const config = {{ fps: 12, qrbox: {{ width: 250, height: 250 }}, aspectRatio: 1.0 }};
-
-    try {{
-      await scanner.start({{ facingMode: "environment" }}, config, decodedText => registrarCodigo(decodedText));
-    }} catch(e1) {{
-      console.warn(e1);
-      const cams = await Html5Qrcode.getCameras();
-      if(!cams || !cams.length) throw new Error('No se encontraron cámaras.');
-      const back = cams.find(c => /back|rear|environment|trasera|posterior/i.test(c.label || '')) || cams[cams.length - 1];
-      await scanner.start(back.id, config, decodedText => registrarCodigo(decodedText));
-    }}
-
-    mostrarEstado('✅ Cámara activa. Pasa los carnés uno por uno sin cerrar esta pantalla.', 'ok');
-  }} catch(e) {{
-    console.error(e);
-    document.getElementById('btn-camera').style.display = 'inline-block';
-    document.getElementById('btn-stop').style.display = 'none';
-    mostrarEstado('No se pudo abrir la cámara. Usa Chrome normal, permite cámara en Configuración del sitio y desactiva VPN/escudo. También puedes ingresar el código manual.', 'danger');
-  }}
-}}
-
-async function detenerLector(){{
-  try {{
-    if(scanner) {{
-      await scanner.stop();
-      await scanner.clear();
-      scanner = null;
-    }}
-  }} catch(e) {{ console.warn(e); }}
-  document.getElementById('btn-camera').style.display = 'inline-block';
-  document.getElementById('btn-stop').style.display = 'none';
-  mostrarEstado('Lector detenido.', 'warn');
-}}
-
-document.getElementById('btn-camera').addEventListener('click', iniciarLector);
-document.getElementById('btn-stop').addEventListener('click', detenerLector);
-document.getElementById('portal-form').addEventListener('submit', function(ev){{
-  ev.preventDefault();
-  registrarCodigo(document.getElementById('codigo').value);
-}});
-document.getElementById('codigo').addEventListener('keydown', function(ev){{
-  if(ev.key === 'Enter'){{ ev.preventDefault(); registrarCodigo(this.value); }}
-}});
-</script>
-
-<style>
-.qr-reader-box{{width:100%;max-width:420px;min-height:330px;margin:14px auto;border-radius:20px;overflow:hidden;background:#0f172a;display:flex;align-items:center;justify-content:center}}
-#reader video{{width:100%!important;height:100%!important;object-fit:cover!important}}
-.portal-fast button{{margin-top:8px}}
-.portal-fast .msg{{font-size:14px}}
-</style>
-""")
 
 @app.route("/portal_registrar_ajax", methods=["POST"])
 def portal_registrar_ajax():
-    codigo = request.form.get("codigo", "")
-    estado = request.form.get("estado", "Temprano")
+    raw = request.form.get("codigo", "")
     quien = f"{session.get('usuario')} ({rol_actual()})" if requiere_login() else "Portería / Portal móvil"
-    mensaje, estado_res = registrar_ingreso(codigo, estado, quien)
-    return jsonify({"ok": estado_res not in ["No registrado", "Duplicado"], "mensaje": mensaje, "estado": estado_res})
+
+    def _resp(ok, msg, estado="", e=None, mins=0):
+        return jsonify({"ok": ok, "mensaje": msg, "estado": estado,
+                        "nombre": ("%s %s" % (e.nombre, e.apellido)).strip() if e else "",
+                        "grado": (e.grado if e else ""), "hora": hora_actual()[:5], "minutos": mins})
+    info = _qr_parse(raw)
+    if info["tipo"] == "invalido":
+        return _resp(False, "Código QR no válido.", "Invalido")
+    if info["tipo"] == "expirado":
+        return _resp(False, "Código vencido. Pide al estudiante que abra de nuevo su carné digital.", "Expirado")
+    codigo = info["codigo"]
+    e = None
+    if info["tipo"] == "token" and info.get("inst"):
+        e = Estudiante.query.filter_by(institucion_id=info["inst"], codigo=codigo).first()
+    if e is None:
+        e = q_estudiantes().filter_by(codigo=codigo).first() or Estudiante.query.filter_by(codigo=codigo).first()
+    if e is None:
+        return _resp(False, "Estudiante no registrado.", "No registrado")
+    if info["tipo"] == "fijo" and _ingreso_token_obligatorio(e.institucion_id):
+        return _resp(False, "Este colegio exige el carné digital con código dinámico. No se aceptan QR fijos ni capturas.", "Invalido", e)
+    mensaje, estado_res = registrar_ingreso(e.codigo, "Temprano", quien, est=e)
+    ok = estado_res in ("Temprano", "Tarde", "Salida autorizada")
+    mins = 0
+    m = re.search(r"\((\d+) min", mensaje or "")
+    if m:
+        mins = int(m.group(1))
+    return _resp(ok, mensaje, estado_res, e, mins)
 
 
 @app.route("/docente-login", methods=["GET", "POST"])
@@ -15249,6 +15518,7 @@ body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:
 <div class="toolbar no-print">
   <button type="button" onclick="window.print()">Imprimir carné</button>
   <a href="/carnet_descargar/{e.id}">Descargar carné PDF</a>
+  <a href="/carne-digital/{e.id}">Carné digital (QR dinámico)</a>
   <a class="sec" href="/estudiantes">Volver</a>
 </div>
 <div class="stage">
@@ -20527,7 +20797,7 @@ def _robots_txt():
 @app.route("/sitemap.xml")
 def _sitemap_xml():
     paginas = [
-        "/", "/login", "/ventas", "/procsis", "/tecnologia", "/soluciones",
+        "/", "/procsis", "/tecnologia", "/soluciones",
         "/politicas", "/politicas/seguridad-informacion", "/politicas/ciberseguridad",
         "/politicas/cookies", "/politicas/datos-personales", "/politicas/aviso-privacidad",
         "/politicas/habeas", "/pqr", "/whatsapp",
@@ -30256,6 +30526,40 @@ def soporte_logs_errores():
 </div>
 """
     return page("Logs de error", body)
+
+
+_SEO_BASE = "https://procsishq.com"
+_SEO_CANONICAL = {
+    "/": "/", "/login": "/",  # /login y / son la misma página: la canónica es la raíz
+    "/procsis": "/procsis", "/tecnologia": "/tecnologia", "/soluciones": "/soluciones",
+    "/politicas": "/politicas", "/pqr": "/pqr", "/whatsapp": "/whatsapp",
+}
+
+
+@app.after_request
+def _seo_canonical(resp):
+    """Agrega <link rel="canonical"> a las páginas públicas indexables. Sin esto Google reportaba
+    'Duplicada: el usuario no ha indicado ninguna versión canónica' (/, /login, http/https)."""
+    try:
+        if request.method != "GET" or resp.status_code != 200 or resp.direct_passthrough:
+            return resp
+        if (resp.mimetype or "") != "text/html":
+            return resp
+        ruta = (request.path or "").rstrip("/") or "/"
+        destino = _SEO_CANONICAL.get(ruta)
+        if destino is None and ruta.startswith("/politicas/"):
+            destino = ruta
+        if destino is None:
+            return resp
+        html = resp.get_data(as_text=True)
+        if 'rel="canonical"' in html or "rel='canonical'" in html or "</head>" not in html:
+            return resp
+        url = _SEO_BASE + (destino if destino != "/" else "/")
+        html = html.replace("</head>", '<link rel="canonical" href="%s"></head>' % url, 1)
+        resp.set_data(html)
+    except Exception:
+        pass
+    return resp
 
 
 @app.before_request
