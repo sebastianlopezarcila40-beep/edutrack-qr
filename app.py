@@ -674,9 +674,135 @@ def modulos_plan_actual(inst=None):
     return mods
 
 
+# ── Planes comerciales (demo/básico/estándar/pro/premium): las funciones salen de "incluidos" del plan ──
+_RUTA_MODULO_COMERCIAL = {
+    "/horarios": "horarios",
+    "/pqr-colegio": "pqr_institucional",
+    "/admisiones": "prematricula",
+    "/exportar_simat": "simat",
+    "/migracion-historica": "simat",
+    "/paz-y-salvo": "certificados",
+}
+_MODULO_COMERCIAL_ETIQUETA = {
+    "horarios": "Horarios", "pqr_institucional": "PQR institucional", "prematricula": "Pre-matrícula",
+    "simat": "SIMAT / migración histórica", "certificados": "Certificados + paz y salvo",
+    "notas_basico": "Notas (planilla)",
+}
+_KW_FUNCION_PLAN = (
+    ("horario", "horarios"), ("pqr", "pqr_institucional"), ("pre-matr", "prematricula"), ("prematr", "prematricula"),
+    ("admision", "prematricula"), ("simat", "simat"), ("migraci", "simat"), ("certificad", "certificados"),
+    ("paz y salvo", "certificados"), ("notas b", "notas_basico"), ("planilla", "notas_basico"), ("siee", "siee"),
+    ("boletin", "boletines_pdf"), ("padres", "portal_padres"), ("auditor", "auditoria_notas"),
+    ("observaciones", "ia_observaciones"), ("import", "import_excel"), ("convivencia", "convivencia"),
+    ("novedades", "novedades"), ("portal docente", "portal_docente"), ("estudiantes", "estudiantes"),
+    ("multi-sede", "multi_sede"), ("multisede", "multi_sede"),
+)
+_ALIAS_MODULO_EXPLICITO = {"admisiones": "prematricula", "eduaura": "ia_observaciones", "notas_completo": "siee", "pqr": "pqr_institucional"}
+
+
+def _plan_comercial_de(inst=None):
+    cod = _codigo_plan_inst(inst)
+    if not cod:
+        return None
+    try:
+        pc = PlanComercial.query.filter_by(codigo=cod).first() or PlanComercial.query.filter(PlanComercial.codigo.ilike(cod)).first()
+        if not pc:
+            c2 = {"basico": "basico", "básico": "basico", "demo": "demo", "piloto": "demo", "estandar": "estandar",
+                  "estándar": "estandar", "institucional": "estandar", "pro": "pro", "premium": "premium"}.get(str(cod).lower())
+            if c2:
+                pc = PlanComercial.query.filter_by(codigo=c2).first()
+        return pc
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _mods_de_plan_row(pc):
+    """Conjunto de funciones que incluye un PlanComercial (None = sin datos: no se bloquea nada)."""
+    try:
+        import json as _j
+        feats = _j.loads(pc.features_json or "{}") if pc is not None else None
+        if isinstance(feats, list):
+            feats = {"incluidos": feats}
+        if not isinstance(feats, dict):
+            return None
+        mods = set()
+        for it in (feats.get("incluidos") or []):
+            low = str(it).lower()
+            for kw, m in _KW_FUNCION_PLAN:
+                if kw in low:
+                    mods.add(m)
+        for m in (feats.get("modulos") or []):
+            m = str(m).strip()
+            if m:
+                mods.add(_ALIAS_MODULO_EXPLICITO.get(m, m))
+        return mods or None
+    except Exception:
+        return None
+
+
+def plan_incluye(modulo, inst=None):
+    """¿El plan activo del colegio incluye esta función? Si no hay datos del plan, se permite."""
+    try:
+        if es_plan_solo_qr(inst):
+            return modulo in set(modulos_plan_actual(inst))
+        mods = _mods_de_plan_row(_plan_comercial_de(inst))
+        return True if not mods else (modulo in mods)
+    except Exception:
+        return True
+
+
+def plan_minimo_con(modulo):
+    """Nombre del plan comercial más económico (activo, no QR) que incluye la función."""
+    try:
+        for pc in PlanComercial.query.filter_by(activo=True).order_by(PlanComercial.orden, PlanComercial.precio_mensual).all():
+            if str(pc.codigo or "").startswith("qr"):
+                continue
+            mods = _mods_de_plan_row(pc)
+            if mods and modulo in mods:
+                return pc.nombre or pc.codigo
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return ""
+
+
+def mensaje_plan_no_incluye(path):
+    mod = ""
+    for pref, m in _RUTA_MODULO_COMERCIAL.items():
+        if path == pref or path.startswith(pref + "/"):
+            mod = m
+            break
+    etiqueta = _MODULO_COMERCIAL_ETIQUETA.get(mod, "Esta función")
+    minimo = plan_minimo_con(mod) if mod else ""
+    try:
+        actual = (_plan_comercial_de().nombre if _plan_comercial_de() else "") or plan_institucion()
+    except Exception:
+        actual = ""
+    return (
+        "<div class='msg danger' style='max-width:640px;margin:24px auto;padding:18px;border-radius:12px'>"
+        "<b>Función no incluida en su plan</b><br>"
+        f"<b>{etiqueta}</b> no está incluida en el plan actual del colegio" + (f" (<b>{_esc(actual)}</b>)" if actual else "") + "."
+        + (f" Disponible desde el plan <b>{_esc(minimo)}</b>." if minimo else " Consulta con el equipo comercial de PROCSIS.")
+        + "<br><br><a href='/dashboard'>← Volver al inicio</a> · <a href='/mi_licencia'>Ver mi licencia</a></div>"
+    )
+
+
 def plan_permite_ruta(path=None, inst=None):
-    """False si la ruta exige un módulo que el plan Solo QR no incluye."""
+    """False si la ruta exige una función que el plan del colegio no incluye."""
     if not es_plan_solo_qr(inst):
+        try:
+            p = (path or (request.path if request else "") or "").split("?")[0]
+            for pref, mod in _RUTA_MODULO_COMERCIAL.items():
+                if p == pref or p.startswith(pref + "/"):
+                    return plan_incluye(mod, inst)
+        except Exception:
+            pass
         return True
     path = (path or (request.path if request else "") or "").split("?")[0]
     mods = set(modulos_plan_actual(inst))
@@ -4515,9 +4641,17 @@ def shell(content):
     """Layout ejecutivo: barra superior + iconos horizontales (sin menú lateral)."""
     if rol_actual() == "Soporte":
         return shell_soporte(content)
-    logo = logo_plataforma()  # panel administrativo = marca Procsis, nunca el logo del colegio
-    usuario = (session.get("usuario") or "").upper()
     rol = rol_actual() or "Sin rol"
+    # Roles de colegio (Rectoría, Coordinación, Secretaría, Docente, Administrador): logo DEL COLEGIO.
+    # Roles de la empresa (Gerencia, Ventas, Cobranza, Contabilidad, Desarrollo): marca Procsis.
+    logo = logo_plataforma()
+    if rol in ("Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador"):
+        try:
+            if institucion_id_actual():
+                logo = logo_actual()
+        except Exception:
+            logo = logo_plataforma()
+    usuario = (session.get("usuario") or "").upper()
     items = menu_items_por_rol()
     icons = []
     for url, nombre in items:
@@ -7416,14 +7550,77 @@ def asegurar_institucion_default():
     return Institucion.query.order_by(Institucion.id.asc()).first()
 
 
+NIVELES_EDUCATIVOS = (
+    ("guarderia", "Guardería / Sala cuna", ["Sala cuna", "Caminadores", "Párvulos"]),
+    ("preescolar", "Preescolar", ["Prejardín", "Jardín", "Transición"]),
+    ("primaria", "Básica primaria", ["1", "2", "3", "4", "5"]),
+    ("secundaria", "Básica secundaria", ["6", "7", "8", "9"]),
+    ("media", "Media", ["10", "11"]),
+    ("adultos", "Adultos (CLEI)", ["CLEI 1", "CLEI 2", "CLEI 3", "CLEI 4", "CLEI 5", "CLEI 6"]),
+    ("superior", "Técnica / Universidad", ["Semestre %d" % i for i in range(1, 11)]),
+)
+_ORDEN_GRADOS = {g: i for i, g in enumerate(g for _k, _n, gs in NIVELES_EDUCATIVOS for g in gs)}
+
+
+def niveles_de_institucion(inst=None):
+    """Claves de nivel que atiende el colegio, leídas del campo 'Niveles que atiende' (texto libre)."""
+    import unicodedata
+    try:
+        if inst is None:
+            iid = institucion_id_actual()
+            inst = Institucion.query.get(iid) if iid else None
+        raw = (getattr(inst, "niveles", "") or "") if inst else ""
+    except Exception:
+        raw = ""
+    t = unicodedata.normalize("NFKD", raw.lower()).encode("ascii", "ignore").decode()
+    out = []
+
+    def _add(k):
+        if k not in out:
+            out.append(k)
+    if re.search(r"guarder|sala cuna|maternal|caminador|parvul", t):
+        _add("guarderia")
+    if re.search(r"preescolar|transicion|prejardin|jardin|kinder", t):
+        _add("preescolar")
+    if "primaria" in t:
+        _add("primaria")
+    if re.search(r"secundaria|bachillerato", t):
+        _add("secundaria")
+    if re.search(r"\bmedia\b|\b10\b|\b11\b", t):
+        _add("media")
+    if re.search(r"\bbasica\b", t) and "primaria" not in t and "secundaria" not in t:
+        _add("primaria")
+        _add("secundaria")
+    if re.search(r"adulto|clei|ciclo", t):
+        _add("adultos")
+    if re.search(r"universidad|superior|tecnic|tecnolog|profesional|semestre", t):
+        _add("superior")
+    return out or ["preescolar", "primaria", "secundaria", "media"]
+
+
+def grados_base_institucion(inst=None):
+    claves = set(niveles_de_institucion(inst))
+    return [g for k, _n, gs in NIVELES_EDUCATIVOS if k in claves for g in gs]
+
+
+def _orden_grado(g):
+    t = str(g).strip()
+    if t.replace("°", "") in _ORDEN_GRADOS:
+        return _ORDEN_GRADOS[t.replace("°", "")]
+    m = re.match(r"^(\d+)", t)
+    if m and m.group(1) in _ORDEN_GRADOS:
+        return _ORDEN_GRADOS[m.group(1)] + 0.5
+    return 900
+
+
 def grados_disponibles():
-    base = {"6", "7", "8", "9", "10", "11"}
+    try:
+        base = set(grados_base_institucion())
+    except Exception:
+        base = {"6", "7", "8", "9", "10", "11"}
     de_bd = {str(e.grado).strip() for e in q_estudiantes().all() if e.grado}
     todos = base | de_bd
-    def key_g(x):
-        n = str(x).replace("°", "").split("-")[0].strip()
-        return int(n) if n.isdigit() else 999
-    return sorted(todos, key=key_g)
+    return sorted(todos, key=lambda x: (_orden_grado(x), str(x)))
 
 
 def normalizar_lista_grados(texto):
@@ -9189,14 +9386,7 @@ def _guard_plan_qr_rutas():
         if not plan_permite_ruta(path):
             if es_plan_solo_qr():
                 return page("Plan Solo QR", mensaje_plan_qr_limitado())
-            return page(
-                "Módulo no incluido",
-                "<div class='msg danger' style='max-width:640px;margin:24px auto;padding:18px;border-radius:12px'>"
-                "<b>Función no incluida en su plan</b><br>"
-                "Esta pantalla no está activa para el plan contratado por el colegio. "
-                "Contacte a comercial PROCSIS o revise el plan en Gerencia."
-                "<br><br><a href='/dashboard'>← Volver</a> · <a href='/mi_licencia'>Mi licencia</a></div>",
-            )
+            return page("Módulo no incluido", mensaje_plan_no_incluye(path))
         return None
     except Exception as ex:
         print("guard plan:", ex)
@@ -17989,7 +18179,7 @@ def sedes_colegios():
       </div>
       <div class="row">
         <div><label>Código DANE (sede)</label><input name="codigo_dane" id="f_codigo_dane"></div>
-        <div><label>Niveles que atiende</label><input name="niveles" id="f_niveles" placeholder="Preescolar, Básica, Media"></div>
+        <div><label>Niveles que atiende</label><input name="niveles" id="f_niveles" placeholder="Guardería, Preescolar, Básica primaria, Básica secundaria, Media, Universidad" title="Define los grados que ofrece el sistema (Sala cuna → Semestres)"></div>
       </div>
       <label>Observaciones</label>
       <textarea name="observaciones" id="f_observaciones" rows="2"></textarea>
@@ -40925,10 +41115,12 @@ def notas_hub():
     # Docente: ir directo a la planilla (menos clics)
     if rol_actual() == "Docente":
         return redirect("/notas/planilla")
-    plan = plan_institucion()
-    if plan == "Basico" and rol_actual() != "Soporte":
-        return page("Notas", shell("""
-        <div class='msg danger'>Notas disponibles desde plan <b>Institucional</b>.</div>
+    if rol_actual() != "Soporte" and not plan_incluye("notas_basico"):
+        _min = plan_minimo_con("notas_basico")
+        _txt = "Notas no está incluido en el plan actual del colegio." + (
+            f" Disponible desde el plan <b>{_esc(_min)}</b>." if _min else " Consulta con el equipo comercial de PROCSIS.")
+        return page("Notas", shell(f"""
+        <div class='msg danger'>{_txt}</div>
         <p><a class='btn' href='/mi_licencia'>Ver mi plan</a></p>
         """))
     rol = rol_actual()
@@ -45246,7 +45438,10 @@ body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0B2
         return page("Matrícula", body)
 
     # Formulario por pasos (todo en una página con wizard JS)
-    grados = ["Transición","1","2","3","4","5","6","7","8","9","10","11"]
+    try:
+        grados = grados_base_institucion(inst)
+    except Exception:
+        grados = ["Transición", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]
     gopts = "".join(f'<option value="{g}">{g}</option>' for g in grados)
     try:
         from colombia_divipola import COLOMBIA_DEPARTAMENTOS, options_departamentos
