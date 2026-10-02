@@ -28577,6 +28577,38 @@ def gerencia_matriz_epp():
 
 
 
+# (clave, etiqueta, icono, color de acento, palabras para clasificar automático)
+DOC_CATEGORIAS = (
+    ("legal", "Legal", "⚖️", "#1e3a8a", ("legal", "ley ", "decreto", "cumplimiento", "terminos", "términos", "condiciones", "politica", "política", "reglamento")),
+    ("datos", "Datos personales · Habeas Data", "🔐", "#6d28d9", ("habeas", "datos personales", "tratamiento de datos", "menores de edad", "privacidad", "1581", "transferencia internacional", "consentimiento")),
+    ("societario", "Societario y acciones", "🏛️", "#0f766e", ("acciones", "accionistas", "constitución", "constitucion", "estatutos", "junta", "acta oficial", "nombramiento")),
+    ("contratos", "Contratos y comercial", "📑", "#b45309", ("contrato", "convenio", "propuesta", "cotización", "cotizacion", "anexo comercial", "licencia")),
+    ("contingencia", "Contingencia y continuidad", "🛟", "#b91c1c", ("contingencia", "drp", "recuperación ante desastres", "recuperacion ante desastres", "continuidad", "respaldo", "backup")),
+    ("ops", "Operaciones y logística", "📦", "#475569", ("acta de entrega", "carné", "carnes", "carnés", "logística", "logistica", "operación", "sg-sst", "epp", "manual")),
+    ("interno", "Interno", "🗂️", "#334155", ()),
+    ("publico", "Público (web)", "🌐", "#15803d", ()),
+)
+_DOC_CAT = {c[0]: c for c in DOC_CATEGORIAS}
+
+
+def _doc_cat_info(clave_cat):
+    c = _DOC_CAT.get((clave_cat or "").strip().lower())
+    if c:
+        return c
+    return ((clave_cat or "otros"), (clave_cat or "Otros").strip().title() or "Otros", "📄", "#64748b", ())
+
+
+def _doc_sugerir_categoria(titulo, clave):
+    t = ("%s %s" % (titulo or "", clave or "")).lower()
+    for k, _lab, _ic, _col, kws in DOC_CATEGORIAS:
+        # prioridad: datos > societario > contingencia > ops > contratos > legal
+        pass
+    for k in ("datos", "societario", "contingencia", "ops", "contratos", "legal"):
+        if any(w in t for w in _DOC_CAT[k][4]):
+            return k
+    return ""
+
+
 @app.route("/gerencia/documentos")
 def gerencia_documentos_lista():
     _g = _guard_gerencia()
@@ -28586,46 +28618,187 @@ def gerencia_documentos_lista():
         _seed_documentos_corp()
     except Exception:
         pass
-    rows = DocumentoCorp.query.order_by(DocumentoCorp.categoria.asc(), DocumentoCorp.titulo.asc()).all()
-    filas = ""
+    q = (request.args.get("q") or "").strip()[:80]
+    cat = (request.args.get("cat") or "").strip().lower()[:40]
+    vis = (request.args.get("vis") or "").strip().lower()
+    msg = request.args.get("msg") or ""
+    todos = DocumentoCorp.query.order_by(DocumentoCorp.titulo.asc()).all()
+    cuentas = {}
+    for r in todos:
+        k = (r.categoria or "interno").strip().lower()
+        cuentas[k] = cuentas.get(k, 0) + 1
+
+    def _norm(x):
+        import unicodedata
+        return unicodedata.normalize("NFKD", (x or "").lower()).encode("ascii", "ignore").decode()
+    nq = _norm(q)
+    rows = []
+    for r in todos:
+        k = (r.categoria or "interno").strip().lower()
+        if cat and k != cat:
+            continue
+        if vis == "publico" and not r.publico:
+            continue
+        if vis == "interno" and r.publico:
+            continue
+        if nq and nq not in _norm("%s %s %s" % (r.titulo, r.clave, r.categoria)):
+            continue
+        rows.append(r)
+    orden = [c[0] for c in DOC_CATEGORIAS]
+    grupos = {}
     for r in rows:
-        pub = (
-            '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">Público</span>'
-            if r.publico else
-            '<span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">Interno</span>'
-        )
-        filas += f"""<tr>
-          <td><b>{r.titulo}</b><br><span style="font-size:11px;color:#64748b">{r.clave} · {r.categoria}</span></td>
+        grupos.setdefault((r.categoria or "interno").strip().lower(), []).append(r)
+    claves_orden = [k for k in orden if k in grupos] + sorted(k for k in grupos if k not in orden)
+
+    def _qs(**kw):
+        d = {"q": q, "cat": cat, "vis": vis}
+        d.update(kw)
+        return "/gerencia/documentos?" + "&".join("%s=%s" % (a, quote_plus(str(b))) for a, b in d.items() if b)
+
+    chips = ('<a href="%s" class="chip%s">Todas <b>%d</b></a>' % (_qs(cat=""), " on" if not cat else "", len(todos)))
+    for k in orden + sorted(x for x in cuentas if x not in orden):
+        if k not in cuentas:
+            continue
+        _k, lab, ic, col, _kw = _doc_cat_info(k)
+        chips += '<a href="%s" class="chip%s" style="--c:%s">%s %s <b>%d</b></a>' % (
+            _qs(cat=k), " on" if cat == k else "", col, ic, _esc(lab), cuentas[k])
+
+    opts_cat = "".join('<option value="%s" %s>%s %s</option>' % (c[0], "selected" if c[0] == cat else "", c[2], _esc(c[1])) for c in DOC_CATEGORIAS)
+    opts_vis = "".join('<option value="%s" %s>%s</option>' % (v, "selected" if v == vis else "", l)
+                       for v, l in (("", "Cualquier visibilidad"), ("interno", "Solo internos"), ("publico", "Solo públicos")))
+
+    def _fila(r):
+        pub = ('<span class="bd pub">Público</span>' if r.publico else '<span class="bd int">Interno</span>')
+        k = (r.categoria or "interno").strip().lower()
+        sel = "".join('<option value="%s" %s>%s</option>' % (c[0], "selected" if c[0] == k else "", _esc(c[1])) for c in DOC_CATEGORIAS)
+        if k not in _DOC_CAT:
+            sel = '<option value="%s" selected>%s</option>' % (_esc(k), _esc(k.title())) + sel
+        sug = _doc_sugerir_categoria(r.titulo, r.clave)
+        pista = ""
+        if k == "interno" and sug and sug != k:
+            pista = '<div class="sug">Sugerida: %s</div>' % _esc(_DOC_CAT[sug][1])
+        ver = (" · <a href='/docs/%s' target='_blank'>Ver público</a>" % _esc(r.clave)) if r.publico else ""
+        return f"""<tr>
+          <td><b>{_esc(r.titulo)}</b><br><span class="sm">{_esc(r.clave)}</span></td>
           <td>{pub}</td>
-          <td style="font-size:12px">{r.actualizado_en or '—'}<br>{r.actualizado_por or ''}</td>
-          <td>
-            <a href="/gerencia/documentos/{r.clave}" style="font-weight:700">Editar</a> ·
-            <a href="/gerencia/documentos/{r.clave}/pdf">PDF</a> ·
-            <a href="/gerencia/documentos/{r.clave}/word">Word</a> ·
-            <a href="/gerencia/documentos/{r.clave}/imagen.png">PNG</a>
-            {" · <a href='/docs/"+r.clave+"' target='_blank'>Ver público</a>" if r.publico else ""}
-          </td>
+          <td><form method="POST" action="/gerencia/documentos/{_esc(r.clave)}/categoria" style="margin:0">
+              <select name="categoria" onchange="this.form.submit()" class="sel">{sel}</select></form>{pista}</td>
+          <td class="sm">{_esc((r.actualizado_en or '—')[:16])}<br>{_esc(r.actualizado_por or '')}</td>
+          <td class="ac"><a href="/gerencia/documentos/{_esc(r.clave)}" style="font-weight:700">Editar</a> ·
+            <a href="/gerencia/documentos/{_esc(r.clave)}/pdf">PDF</a> ·
+            <a href="/gerencia/documentos/{_esc(r.clave)}/word">Word</a> ·
+            <a href="/gerencia/documentos/{_esc(r.clave)}/imagen.png">PNG</a>{ver}</td>
         </tr>"""
+
+    secciones = ""
+    for k in claves_orden:
+        _k, lab, ic, col, _kw = _doc_cat_info(k)
+        filas = "".join(_fila(r) for r in grupos[k])
+        secciones += f"""<details open class="grp" style="--c:{col}">
+          <summary><span>{ic} {_esc(lab)}</span><b>{len(grupos[k])}</b></summary>
+          <div style="overflow:auto"><table>
+            <tr><th>Documento</th><th>Visibilidad</th><th>Categoría</th><th>Última edición</th><th>Acciones</th></tr>
+            {filas}
+          </table></div></details>"""
+    if not secciones:
+        secciones = '<div class="vacio">No hay documentos con esos filtros. <a href="/gerencia/documentos">Ver todos</a></div>'
+    sin_clasif = sum(1 for r in todos if (r.categoria or "interno").strip().lower() == "interno" and _doc_sugerir_categoria(r.titulo, r.clave))
+    boton_auto = ""
+    if sin_clasif:
+        boton_auto = (f'<form method="POST" action="/gerencia/documentos/clasificar-auto" style="display:inline" '
+                      f'onsubmit="return confirm(\'Se moverán {sin_clasif} documento(s) de «Interno» a la categoría sugerida según su título. ¿Continuar?\')">'
+                      f'<button class="btn2">✨ Clasificar {sin_clasif} automáticamente</button></form>')
+    aviso = ('<div class="ok">%s</div>' % _esc(msg)) if msg else ""
     body = f"""
 <style>
-.dl{{max-width:960px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif}}
-.dl h1{{color:#0B2D57;font-size:22px;margin:0 0 8px}}
-.dl table{{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(15,23,42,.06)}}
-.dl th,.dl td{{padding:12px 14px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:13px}}
-.dl th{{background:#0B2D57;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.04em}}
+.dl{{max-width:1040px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif}}
+.dl h1{{color:#0B2D57;font-size:22px;margin:0 0 6px}}
+.dl .sm{{font-size:11px;color:#64748b}}
+.dl .bar{{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}}
+.dl .bar input,.dl .bar select{{padding:10px;border:1px solid #cbd5e1;border-radius:10px;font-size:13px;background:#fff}}
+.dl .bar input[type=search]{{flex:1;min-width:220px}}
+.dl .btn1{{background:#0B2D57;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;border:0;cursor:pointer}}
+.dl .btn2{{background:#fff;color:#0B2D57;padding:9px 14px;border-radius:10px;font-weight:700;font-size:13px;border:1px solid #0B2D57;cursor:pointer}}
+.dl .chips{{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}}
+.dl .chip{{--c:#0B2D57;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid #cbd5e1;color:#0f172a;text-decoration:none;font-size:12.5px;font-weight:600}}
+.dl .chip b{{margin-left:4px;color:var(--c)}}
+.dl .chip.on{{background:var(--c);border-color:var(--c);color:#fff}}.dl .chip.on b{{color:#fff}}
+.dl details.grp{{--c:#334155;background:#fff;border-radius:14px;margin-bottom:12px;box-shadow:0 4px 16px rgba(15,23,42,.06);border-left:5px solid var(--c);overflow:hidden}}
+.dl details.grp summary{{cursor:pointer;list-style:none;padding:13px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:800;color:var(--c);font-size:15px}}
+.dl details.grp summary::-webkit-details-marker{{display:none}}
+.dl details.grp summary b{{background:var(--c);color:#fff;border-radius:999px;padding:1px 10px;font-size:12px}}
+.dl table{{width:100%;border-collapse:collapse}}
+.dl th,.dl td{{padding:10px 12px;text-align:left;border-top:1px solid #e2e8f0;font-size:13px;vertical-align:top;white-space:normal;word-break:break-word}}
+.dl th{{background:#f8fafc;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.04em}}
+.dl .bd{{padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}}
+.dl .bd.pub{{background:#dcfce7;color:#166534}}.dl .bd.int{{background:#f1f5f9;color:#475569}}
+.dl .sel{{padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px;max-width:190px;background:#fff}}
+.dl .sug{{font-size:11px;color:#b45309;margin-top:3px;font-weight:600}}
+.dl .ac{{white-space:normal;line-height:1.9}}
+.dl .vacio{{background:#fff;border-radius:12px;padding:22px;text-align:center;color:#64748b}}
+.dl .ok{{background:#dcfce7;color:#166534;padding:10px 14px;border-radius:10px;margin:10px 0;font-weight:700}}
 </style>
 <div class="dl">
   <p><a href="/gerencia/hq">← Gerencia HQ</a></p>
-  <h1>Biblioteca documental · Contingencia y legal</h1>
-  <p style="color:#64748b;font-size:13px">Editor corporativo. Guarde y descargue PDF. Públicos en <code>/docs/…</code>.</p>
-  <p><a href="/gerencia/documentos/nuevo" style="display:inline-block;background:#0B2D57;color:#fff;padding:10px 18px;border-radius:8px;font-weight:700;text-decoration:none;font-size:13px">+ Nuevo documento</a></p>
-  <table>
-    <tr><th>Documento</th><th>Visibilidad</th><th>Última edición</th><th>Acciones</th></tr>
-    {filas or "<tr><td colspan=4>Sin documentos</td></tr>"}
-  </table>
+  <h1>Biblioteca documental</h1>
+  <p class="sm" style="font-size:13px">Documentos corporativos por categoría. Editor, PDF, Word y PNG. Los públicos se ven en <code>/docs/…</code>.</p>
+  {aviso}
+  <form method="GET" class="bar">
+    <input type="search" name="q" value="{_esc(q)}" placeholder="Buscar por nombre o clave…">
+    <select name="cat"><option value="">Todas las categorías</option>{opts_cat}</select>
+    <select name="vis">{opts_vis}</select>
+    <button class="btn1" type="submit">Buscar</button>
+    <a href="/gerencia/documentos" class="btn2" style="text-decoration:none">Limpiar</a>
+  </form>
+  <div class="bar" style="margin-top:0"><a href="/gerencia/documentos/nuevo" class="btn1">+ Nuevo documento</a>{boton_auto}
+    <span class="sm">{len(rows)} de {len(todos)} documento(s)</span></div>
+  <div class="chips">{chips}</div>
+  {secciones}
 </div>
 """
     return page("Documentos Gerencia", body)
+
+
+@app.route("/gerencia/documentos/<clave>/categoria", methods=["POST"])
+def gerencia_documento_categoria(clave):
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    row = DocumentoCorp.query.filter_by(clave=clave).first()
+    nueva = (request.form.get("categoria") or "").strip().lower()
+    if not row or (nueva not in _DOC_CAT and nueva != (row.categoria or "").strip().lower()):
+        return redirect("/gerencia/documentos")
+    anterior = row.categoria
+    row.categoria = nueva
+    try:
+        db.session.commit()
+        registrar_auditoria("Documento corp", "Categoría de %s: %s → %s" % (clave, anterior, nueva))
+    except Exception:
+        db.session.rollback()
+    return redirect("/gerencia/documentos?msg=" + quote_plus("«%s» movido a %s." % (row.titulo, _doc_cat_info(nueva)[1])))
+
+
+@app.route("/gerencia/documentos/clasificar-auto", methods=["POST"])
+def gerencia_documentos_clasificar_auto():
+    """Mueve los documentos que están en «Interno» a la categoría que sugiere su título. Solo toca los de «Interno»."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    n = 0
+    for r in DocumentoCorp.query.all():
+        if (r.categoria or "interno").strip().lower() != "interno":
+            continue
+        sug = _doc_sugerir_categoria(r.titulo, r.clave)
+        if sug and sug != "interno":
+            r.categoria = sug
+            n += 1
+    try:
+        db.session.commit()
+        registrar_auditoria("Documento corp", "Clasificación automática: %d documento(s)" % n)
+    except Exception:
+        db.session.rollback()
+        n = 0
+    return redirect("/gerencia/documentos?msg=" + quote_plus("Se clasificaron %d documento(s) automáticamente." % n))
 
 
 @app.route("/gerencia/documentos/nuevo", methods=["GET", "POST"])
@@ -28639,7 +28812,9 @@ def gerencia_documento_nuevo():
     if request.method == "POST":
         import re as _re
         titulo = (request.form.get("titulo") or "").strip()[:220]
-        categoria = (request.form.get("categoria") or "interno").strip()[:80]
+        categoria = (request.form.get("categoria") or "interno").strip().lower()[:80]
+        if categoria not in _DOC_CAT:
+            categoria = "interno"
         publico = request.form.get("publico") == "1"
         clave_in = (request.form.get("clave") or "").strip().lower()
         if not clave_in:
@@ -28683,10 +28858,13 @@ def gerencia_documento_nuevo():
     <label style="font-size:13px;font-weight:700;color:#334155">Categoría
       <select name="categoria" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-top:4px">
         <option value="interno">Interno</option>
-        <option value="contingencia">Contingencia / DRP</option>
         <option value="legal">Legal</option>
-        <option value="publico">Público</option>
-        <option value="ops">Operaciones</option>
+        <option value="datos">Datos personales · Habeas Data</option>
+        <option value="societario">Societario y acciones</option>
+        <option value="contratos">Contratos y comercial</option>
+        <option value="contingencia">Contingencia y continuidad</option>
+        <option value="ops">Operaciones y logística</option>
+        <option value="publico">Público (web)</option>
       </select>
     </label>
     <label style="font-size:13px;display:flex;align-items:center;gap:8px">
@@ -28726,6 +28904,9 @@ def gerencia_documento_editar(clave):
         row.titulo = (request.form.get("titulo") or row.titulo or "").strip()[:220]
         row.cuerpo_html = request.form.get("cuerpo_html") or ""
         row.publico = request.form.get("publico") == "1"
+        _cat_in = (request.form.get("categoria") or "").strip().lower()
+        if _cat_in in _DOC_CAT:
+            row.categoria = _cat_in
         row.actualizado_en = f"{fecha_hoy()} {hora_actual()}"
         row.actualizado_por = session.get("usuario") or "gerencia"
         try:
@@ -28772,8 +28953,10 @@ input[type=text]{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius
   <form method="POST" id="fdoc" onsubmit="document.getElementById('cuerpo_html').value=document.getElementById('editor').innerHTML">
     <label style="font-size:12px;font-weight:700;color:#475569">Título del documento</label>
     <input type="text" name="titulo" value="{(row.titulo or '').replace(chr(34), '&quot;')}" required>
+    <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-top:10px">Categoría</label>
+    <select name="categoria" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-size:14px;background:#fff">{"".join('<option value="%s" %s>%s %s</option>' % (c[0], "selected" if c[0] == (row.categoria or "interno").strip().lower() else "", c[2], c[1]) for c in DOC_CATEGORIAS)}</select>
     <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;font-weight:600">
-      <input type="checkbox" name="publico" value="1" {"checked" if row.publico else ""}> Visible en opinión pública (/docs/{clave})
+      <input type="checkbox" name="publico" value="1" {"checked" if row.publico else ""}> Visible en la web pública (/docs/{clave})
     </label>
     <div class="tb">
       <button type="button" onclick="document.execCommand('bold')">Negrita</button>
