@@ -3944,11 +3944,11 @@ def _is_staff_path(path):
         return False
     skip = (
         "/logout", "/login", "/gerencia-login", "/ventas-login",
-        "/soporte-login", "/cobranza-login", "/contabilidad-login",
+        "/soporte-login", "/cobranza-login", "/contabilidad-login", "/proveedor-login",
     )
     if path in skip:
         return False
-    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/contabilidad", "/dev-console", "/cerrar-turno")
+    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/contabilidad", "/proveedor-carnes", "/dev-console", "/cerrar-turno")
     return any(path == k or path.startswith(k + "/") or (k != "/gerencia" and path.startswith(k)) or path.startswith("/gerencia") for k in keys)
 
 
@@ -3965,6 +3965,8 @@ def _staff_module_title(path, rol=""):
         return "<strong>COBRANZA</strong> · Cartera"
     if path.startswith("/contabilidad") or rol == "Contabilidad":
         return "<strong>CONTABILIDAD</strong> · Libros y estados financieros"
+    if path.startswith("/proveedor-carnes") or rol == "Proveedor":
+        return "<strong>PROVEEDOR DE CARNÉS</strong> · Producción física"
     if "dev" in path or rol in ("Desarrollador", "Developer"):
         return "<strong>PROCSIS</strong> · Consola técnica"
     return "<strong>PROCSIS</strong> · Backoffice"
@@ -4030,6 +4032,8 @@ def _staff_nav_items(path, rol=""):
         ]
     elif rol == "Contabilidad" or (path or "").startswith("/contabilidad"):
         items = _cta_menu_items()
+    elif rol == "Proveedor" or (path or "").startswith("/proveedor-carnes"):
+        items = _prov_menu_items()
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/hq", "Dashboard"),
@@ -4065,6 +4069,8 @@ def _staff_nav_items(path, rol=""):
         ]
     elif rol == "Contabilidad":
         items = _cta_menu_items()
+    elif rol == "Proveedor":
+        items = _prov_menu_items()
     else:
         # Fallback mínimo
         items = [("/login", "Portal de acceso"), ("/logout", "Salir")]
@@ -4369,6 +4375,8 @@ def menu_items_por_rol():
     rol = rol_actual()
     if rol == "Contabilidad":
         return _cta_menu_items()
+    if rol == "Proveedor":
+        return _prov_menu_items()
     items = [("/dashboard", "Inicio")]
 
     if rol == "Soporte":
@@ -4516,7 +4524,7 @@ def menu_items_por_rol():
     # Filtrar menú según módulos del plan del colegio (100% alineado con checks del plan)
     try:
         rol = rol_actual() or ""
-        if rol not in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador", "Desarrollador", "Developer", "Cobranza", "Contabilidad"):
+        if rol not in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador", "Desarrollador", "Developer", "Cobranza", "Contabilidad", "Proveedor"):
             mods = set(modulos_plan_actual())
             if "notas_completo" in mods:
                 mods.update({"notas_basico", "portal_docente"})
@@ -7746,7 +7754,7 @@ def qr_texto(e):
 
 
 # ===== Seguridad de empleados =====
-ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Desarrollador")
+ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador")
 # Cuota de almacenamiento por colegio (GB)
 ALMACENAMIENTO_GB_POR_COLEGIO = 10
 ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza")
@@ -9493,7 +9501,7 @@ _ROLES_COLEGIO = frozenset({
     "Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador",
 })
 _ROLES_GLOBAL = frozenset({
-    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Developer",
+    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Developer",
 })
 # Quién puede EJECUTAR (no solo ver) cada capacidad crítica
 _CAPACIDAD_ROLES = {
@@ -11732,7 +11740,7 @@ def login():
             roles_staff_login = (
                 "Gerente", "Gerencia", "Superadmin", "Administrador",
                 "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                "Cobranza", "Contabilidad", "Soporte", "Desarrollador", "Developer",
+                "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer",
             )
             staff_user = None
             try:
@@ -11780,6 +11788,8 @@ def login():
                         return redirect("/cobranza/panel")
                     if rol_staff == "Contabilidad":
                         return redirect("/contabilidad")
+                    if rol_staff == "Proveedor":
+                        return redirect("/proveedor-carnes")
                     if rol_staff == "Soporte":
                         return redirect("/soporte_admin")
                     if rol_staff in ("Desarrollador", "Developer"):
@@ -12478,7 +12488,7 @@ def cambiar_password():
     if not requiere_login(): return redirect("/login")
     mensaje = ""
     rol = rol_actual()
-    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza", "Contabilidad")
+    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza", "Contabilidad", "Proveedor")
     if request.method == "POST":
         nueva = request.form.get("password", "").strip()
         confirmar = request.form.get("confirmar", "").strip()
@@ -20537,6 +20547,7 @@ def interno_buscar_colegio_ui():
         "Gerente": "/gerencia/hq",
         "Cobranza": "/cobranza/panel",
         "Contabilidad": "/contabilidad",
+        "Proveedor": "/proveedor-carnes",
         "Administrador": "/gerencia/hq",
         "Superadmin": "/gerencia/hq",
     }.get(rol_actual(), "/")
@@ -20567,6 +20578,7 @@ def _home_portal(rol=None):
         "Superadmin": "/gerencia/hq",
         "Cobranza": "/cobranza/panel",
         "Contabilidad": "/contabilidad",
+        "Proveedor": "/proveedor-carnes",
         "Desarrollador": "/dev-console",
         "Developer": "/dev-console",
     }.get(r, "/login")
@@ -20582,6 +20594,7 @@ def _login_portal(rol=None):
         "Superadmin": "/login",
         "Cobranza": "/login",
         "Contabilidad": "/login",
+        "Proveedor": "/login",
         "Desarrollador": "/login",
         "Developer": "/login",
     }.get(r, "/login")
@@ -20606,6 +20619,7 @@ def _aislar_paneles_internos():
         "/gerencia-login": ("Gerente", "Superadmin", "Administrador"),
         "/cobranza-login": "Cobranza",
         "/contabilidad-login": "Contabilidad",
+        "/proveedor-login": "Proveedor",
         "/dev-console-login": ("Desarrollador", "Developer", "Superadmin"),
     }
     if path in login_map and request.method == "GET":
@@ -20678,7 +20692,7 @@ def _aislar_paneles_internos():
             return redirect(_login_del_portal(path))
         if path.startswith("/gerencia") or path.startswith("/soporte_admin") or path.startswith("/cobranza"):
             return redirect(_login_del_portal(path))
-        if path.startswith("/contabilidad"):
+        if path.startswith("/contabilidad") or path.startswith("/proveedor-carnes"):
             return redirect(_login_del_portal(path))
 
     elif rol == "Soporte":
@@ -20686,6 +20700,15 @@ def _aislar_paneles_internos():
                 or path.startswith("/cobranza") or path.startswith("/contabilidad") or path.startswith("/gerencia/")
                 or path == "/gerencia" or path == "/gerencia/hq"):
             return redirect(_login_del_portal(path))
+
+    elif rol == "Proveedor":
+        ok_prov = (
+            path.startswith("/proveedor-carnes")
+            or path.startswith("/mi-perfil")
+            or path.startswith("/cambiar_password")
+        )
+        if not ok_prov:
+            return redirect("/proveedor-carnes")
 
     elif rol == "Contabilidad":
         ok_cta = (
@@ -22904,6 +22927,8 @@ def _destino_por_rol_staff(rol):
         return "/cobranza/panel"
     if r in ("Contabilidad",):
         return "/contabilidad"
+    if r in ("Proveedor",):
+        return "/proveedor-carnes"
     if r in ("Soporte",):
         return "/soporte_admin"
     if r in ("Desarrollador", "Developer"):
@@ -23064,7 +23089,7 @@ def _DEPRECATED_portal_backoffice_sin_ruta():
                         roles_staff = (
                             "Gerente", "Gerencia", "Superadmin", "Administrador",
                             "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                            "Cobranza", "Contabilidad", "Soporte", "Desarrollador", "Developer",
+                            "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer",
                         )
                         if rol not in roles_staff:
                             error = "Este acceso es solo para personal PROCSIS. Use el portal de instituciones (/login)."
@@ -23099,6 +23124,8 @@ def _DEPRECATED_portal_backoffice_sin_ruta():
                                 return redirect("/cobranza/panel")
                             if rol == "Contabilidad":
                                 return redirect("/contabilidad")
+                            if rol == "Proveedor":
+                                return redirect("/proveedor-carnes")
                             if rol == "Soporte":
                                 return redirect("/soporte")
                             if rol in ("Desarrollador", "Developer"):
@@ -26824,6 +26851,7 @@ def gerencia_hq():
         <a href="/gerencia/finanzas/promociones">Promociones financieras</a>
         <a href="/gerencia/dev-console">Consola de desarrollador</a>
         <a href="/gerencia/sesiones-tecnicas">Sesiones técnicas (solo ver)</a>
+        <a href="/gerencia/carnes">Carnés · proveedor</a>
         <a href="/gerencia/diseno-login">Diseño del login</a>
         <a href="/gerencia/backoffice-branding">Branding del backoffice</a>
         <a href="/gerencia/changelog">Historial de cambios</a>
@@ -32777,7 +32805,7 @@ def gerencia_usuarios():
             usuario = (request.form.get("usuario") or "").strip().lower()
             password = (request.form.get("password") or "").strip()
             rol = (request.form.get("rol") or "Comercial").strip()
-            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Superadmin", "Desarrollador"):
+            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif not usuario or len(password) < 8:
                 error = "Usuario obligatorio y contraseña de al menos 8 caracteres."
@@ -32795,7 +32823,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo = (request.form.get("nuevo_usuario") or "").strip().lower()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador"):
                 error = "Usuario no válido."
             elif not nuevo or len(nuevo) < 3:
                 error = "Nuevo nombre de usuario inválido."
@@ -32816,9 +32844,9 @@ def gerencia_usuarios():
             u = Usuario.query.get(uid) if uid else None
             if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
                 error = "Solo Gerencia puede cambiar roles de usuarios."
-            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Desarrollador"):
+            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador"):
                 error = "Usuario no válido."
-            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Superadmin", "Desarrollador"):
+            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif session.get("uid") == u.id and nuevo_rol != u.rol:
                 error = "No puede cambiarse el rol a usted mismo — pídaselo a otro Gerente/Superadmin."
@@ -32832,7 +32860,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nueva_clave = (request.form.get("nueva_clave") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador"):
                 error = "Usuario no válido."
             elif len(nueva_clave) < 8:
                 error = "La contraseña debe tener mínimo 8 caracteres."
@@ -32848,7 +32876,7 @@ def gerencia_usuarios():
         elif accion == "toggle_activo":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador"):
                 error = "Usuario no válido."
             elif session.get("uid") == u.id:
                 error = "No puede desactivarse a sí mismo."
@@ -32863,7 +32891,7 @@ def gerencia_usuarios():
         elif accion == "eliminar":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor"):
                 error = "Usuario no válido o no se puede eliminar (protegido)."
             elif session.get("uid") == u.id:
                 error = "No puede eliminarse a sí mismo."
@@ -32885,7 +32913,7 @@ def gerencia_usuarios():
                 except Exception as ex:
                     db.session.rollback()
                     error = f"No se pudo eliminar: {ex}"
-    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad"])).order_by(Usuario.id.desc()).limit(80).all()
+    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor"])).order_by(Usuario.id.desc()).limit(80).all()
     filas = ""
     for u in lista:
         activo = getattr(u, "activo", True)
@@ -32915,6 +32943,7 @@ def gerencia_usuarios():
                 <option value="Soporte" {"selected" if u.rol=="Soporte" else ""}>Soporte</option>
                 <option value="Cobranza" {"selected" if u.rol=="Cobranza" else ""}>Cobranza</option>
                 <option value="Contabilidad" {"selected" if u.rol=="Contabilidad" else ""}>Contabilidad</option>
+                <option value="Proveedor" {"selected" if u.rol=="Proveedor" else ""}>Proveedor de carnés</option>
                 <option value="Gerente" {"selected" if u.rol=="Gerente" else ""}>Gerente</option>
                 <option value="Superadmin" {"selected" if u.rol=="Superadmin" else ""}>Superadmin</option>
                 <option value="Desarrollador" {"selected" if u.rol=="Desarrollador" else ""}>Desarrollador</option>
@@ -32959,6 +32988,7 @@ def gerencia_usuarios():
       <option value="Soporte">Soporte técnico</option>
       <option value="Cobranza">Cobranza / Facturación</option>
       <option value="Contabilidad">Contabilidad</option>
+      <option value="Proveedor">Proveedor de carnés</option>
       <option value="Gerente">Gerente</option>
       <option value="Superadmin">Superadmin</option>
       <option value="Desarrollador">Desarrollador</option>
@@ -48031,6 +48061,905 @@ def contabilidad_auditoria():
   <tr style="background:#0B2D57;color:#fff"><th style="{th}">Fecha / hora</th><th style="{th}">Usuario</th><th style="{th}">Acción</th><th style="{th}">Valor anterior</th><th style="{th}">Valor nuevo</th><th style="{th}">IP</th></tr>{tr}</table></div>
   <p class="mini-text">Quién creó, anuló o configuró cada cosa. Los movimientos no se borran: se anulan y quedan aquí.</p></section>"""
     return _cta_page("Auditoría contable", "/contabilidad/auditoria", cuerpo, "Trazabilidad de cada operación")
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ROL PROVEEDOR DE CARNÉS (externo): descarga de lotes + cierre de tanda
+#  y control en Gerencia (contadores, auditoría de descargas, validación de entregas).
+# ═══════════════════════════════════════════════════════════════════════════
+class CarneProduccion(db.Model):
+    """Estado de producción de cada carné. Sin fila = PENDIENTE."""
+    __tablename__ = "carnes_produccion"
+    id = db.Column(db.Integer, primary_key=True)
+    estudiante_id = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    institucion_id = db.Column(db.Integer, index=True)
+    estado = db.Column(db.String(20), default="DESCARGADO", index=True)  # DESCARGADO | IMPRESO
+    descargas = db.Column(db.Integer, default=0)
+    descargado_por = db.Column(db.String(80), default="")
+    descargado_en = db.Column(db.String(30), default="")
+    impreso_por = db.Column(db.String(80), default="")
+    impreso_en = db.Column(db.String(30), default="")
+    lote_id = db.Column(db.Integer, index=True)
+
+
+class CarneDescargaLog(db.Model):
+    """Auditoría estricta de cada descarga de PDF de carnés (Ley 1581 / Habeas Data)."""
+    __tablename__ = "carnes_descargas_log"
+    id = db.Column(db.Integer, primary_key=True)
+    ts = db.Column(db.String(30), index=True)
+    usuario = db.Column(db.String(80), default="")
+    rol = db.Column(db.String(40), default="")
+    institucion_id = db.Column(db.Integer, index=True)
+    institucion_nombre = db.Column(db.String(220), default="")
+    grado = db.Column(db.String(120), default="")
+    sede = db.Column(db.String(120), default="")
+    alcance = db.Column(db.String(20), default="")  # LOTE | SELECCION | INDIVIDUAL
+    n_carnes = db.Column(db.Integer, default=0)
+    codigos = db.Column(db.Text, default="")
+    ip = db.Column(db.String(80), default="")
+    user_agent = db.Column(db.String(300), default="")
+    sha256 = db.Column(db.String(64), default="")
+
+
+class CarneLote(db.Model):
+    """Tanda cerrada por el proveedor, con evidencia fotográfica y fecha estimada de entrega."""
+    __tablename__ = "carnes_lotes"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    institucion_nombre = db.Column(db.String(220), default="")
+    grado = db.Column(db.String(60), default="")
+    sede = db.Column(db.String(120), default="")
+    n_carnes = db.Column(db.Integer, default=0)
+    operario = db.Column(db.String(80), default="")
+    fecha_estimada = db.Column(db.String(10), default="")
+    cerrado_en = db.Column(db.String(30), default="")
+    foto_bytes = db.Column(db.LargeBinary)
+    foto_mime = db.Column(db.String(40), default="image/jpeg")
+    nota = db.Column(db.Text, default="")
+    validada_por = db.Column(db.String(80), default="")
+    validada_en = db.Column(db.String(30), default="")
+    recibido_por = db.Column(db.String(80), default="")
+    recibido_en = db.Column(db.String(30), default="")
+
+
+class CarneColegioAutorizado(db.Model):
+    """Colegios cuyos estudiantes puede ver el proveedor (mínimo dato necesario · Ley 1581). Lo decide Gerencia."""
+    __tablename__ = "carnes_colegios_autorizados"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    autorizado_por = db.Column(db.String(80), default="")
+    autorizado_en = db.Column(db.String(30), default="")
+
+
+_PROV_LISTO = {"ok": False}
+_PROV_MAX_PDF = 300
+_PROV_ESTADOS = (("PENDIENTE", "Pendiente"), ("DESCARGADO", "Descargado"), ("IMPRESO", "Impreso / En camino"))
+
+
+def _prov_menu_items():
+    return [("/proveedor-carnes", "Carnés"), ("/proveedor-carnes/cierre", "Cierre de tanda"),
+            ("/proveedor-carnes/entregas", "Mis entregas"), ("/logout", "Salir")]
+
+
+def _prov_ensure():
+    if _PROV_LISTO["ok"]:
+        return
+    try:
+        for m in (CarneProduccion, CarneDescargaLog, CarneLote, CarneColegioAutorizado):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        _PROV_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR proveedor ensure:", repr(ex), flush=True)
+
+
+def _prov_guard(gerencia=False):
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if gerencia:
+        return _guard_gerencia()
+    if rol == "Proveedor":
+        return None
+    return redirect("/login")
+
+
+def _prov_ruta(gerencia=False):
+    import functools
+
+    def deco(fn):
+        @functools.wraps(fn)
+        def w(*a, **k):
+            g = _prov_guard(gerencia)
+            if g is not None:
+                return g
+            _prov_ensure()
+            try:
+                return fn(*a, **k)
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                print("ERROR proveedor-carnes", request.path, repr(ex), flush=True)
+                try:
+                    _dev_log_error("Carnés %s: %s" % (request.path, ex))
+                except Exception:
+                    pass
+                volver = "/gerencia/hq" if gerencia else "/proveedor-carnes"
+                cuerpo = ("<section class='role-panel'><h2>No se pudo cargar esta pantalla</h2>"
+                          "<p>Ocurrió un problema. Intenta de nuevo; si persiste, avisa a Soporte.</p>"
+                          "<a class='btn' href='%s'>Volver</a></section>" % volver)
+                return page("Carnés", shell(cuerpo)), 500
+        return w
+    return deco
+
+
+def _prov_foto_ok(e):
+    p = (getattr(e, "foto_path", None) or "").strip()
+    if not p:
+        return False
+    for c in (p, os.path.join(app.root_path, p.lstrip("/")), p.lstrip("/")):
+        try:
+            if c and os.path.isfile(c):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _prov_faltantes(e):
+    f = []
+    if not (e.nombre or "").strip() or not (e.apellido or "").strip():
+        f.append("nombre")
+    if not (e.grado or "").strip():
+        f.append("grado")
+    if not (e.codigo or "").strip():
+        f.append("código")
+    if not (getattr(e, "documento", "") or "").strip():
+        f.append("documento")
+    if not _prov_foto_ok(e):
+        f.append("foto")
+    return f
+
+
+def _prov_autorizados():
+    try:
+        return {r.institucion_id for r in CarneColegioAutorizado.query.all()}
+    except Exception:
+        db.session.rollback()
+        return set()
+
+
+def _prov_activos():
+    aut = _prov_autorizados()
+    q = Estudiante.query.filter(db.or_(Estudiante.estado == "ACTIVO", Estudiante.estado == "", Estudiante.estado.is_(None)))
+    return q.filter(Estudiante.institucion_id.in_(list(aut))) if aut else q.filter(Estudiante.id == -1)
+
+
+def _prov_query(args):
+    q = _prov_activos()  # ya limitado a colegios autorizados por Gerencia
+    cole = args.get("colegio", type=int)
+    sede = (args.get("sede") or "").strip()
+    grado = (args.get("grado") or "").strip()
+    estado = (args.get("estado") or "").strip().upper()
+    if cole:
+        q = q.filter(Estudiante.institucion_id == cole)
+    if sede:
+        q = q.filter(Estudiante.sede == sede)
+    if grado:
+        q = q.filter(Estudiante.grado == grado)
+    if estado in ("PENDIENTE", "DESCARGADO", "IMPRESO"):
+        q = q.outerjoin(CarneProduccion, CarneProduccion.estudiante_id == Estudiante.id)
+        q = q.filter(CarneProduccion.id.is_(None)) if estado == "PENDIENTE" else q.filter(CarneProduccion.estado == estado)
+    return q.order_by(Estudiante.institucion_id, Estudiante.grado, Estudiante.apellido, Estudiante.nombre)
+
+
+def _prov_estado_de(ids):
+    if not ids:
+        return {}
+    return {r.estudiante_id: r for r in CarneProduccion.query.filter(CarneProduccion.estudiante_id.in_(list(ids))).all()}
+
+
+def _prov_badge(est):
+    col = {"PENDIENTE": ("#fef3c7", "#92400e", "Pendiente"), "DESCARGADO": ("#dbeafe", "#1e40af", "Descargado"),
+           "IMPRESO": ("#dcfce7", "#166534", "Impreso / En camino")}.get(est, ("#e2e8f0", "#334155", est))
+    return "<span style='background:%s;color:%s;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap'>%s</span>" % col
+
+
+def _prov_fmt_ts(ts):
+    try:
+        d = datetime.strptime((ts or "")[:19], "%Y-%m-%d %H:%M:%S")
+        h = d.strftime("%I:%M %p").lstrip("0").replace("AM", "AM").replace("PM", "PM")
+        return d.strftime("%d/%m/%Y"), h
+    except Exception:
+        return (ts or "")[:10], (ts or "")[11:16]
+
+
+def _prov_pdf(estudiantes):
+    """PDF tamaño tarjeta CR80 (85,6 × 54 mm): página 1 anverso, página 2 reverso, por cada estudiante."""
+    from reportlab.lib.utils import ImageReader
+    W, H = 242.6, 153.0
+    b = BytesIO()
+    pdf = canvas.Canvas(b, pagesize=(W, H))
+    pdf.setTitle("Carnés EduTrack")
+    insts = {}
+    anio = (fecha_hoy() or "2026")[:4]
+
+    def inst_de(e):
+        if e.institucion_id not in insts:
+            insts[e.institucion_id] = Institucion.query.get(e.institucion_id) if e.institucion_id else None
+        return insts[e.institucion_id]
+
+    def logo_img(inst):
+        try:
+            if not inst:
+                return None
+            ruta = logo_actual(inst.id)
+            if ruta.startswith("/static/"):
+                fs = os.path.join(app.root_path, ruta.lstrip("/"))
+                if os.path.isfile(fs):
+                    return ImageReader(fs)
+        except Exception:
+            pass
+        return None
+
+    def barra(titulo):
+        pdf.setFillColor(colors.HexColor("#0B2D57"))
+        pdf.rect(0, H - 24, W, 24, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawString(30, H - 15, titulo[:38])
+
+    for e in estudiantes:
+        inst = inst_de(e)
+        nom_inst = ((inst.nombre if inst else "") or "Institución educativa").strip()
+        sede = (e.sede or (inst.sede if inst else "") or "").strip()
+        nombre = ("%s %s" % (e.nombre or "", e.apellido or "")).strip()
+        # ── anverso
+        pdf.setFillColor(colors.white)
+        pdf.rect(0, 0, W, H, fill=1, stroke=0)
+        barra(nom_inst)
+        li = logo_img(inst)
+        if li:
+            try:
+                pdf.drawImage(li, 5, H - 22, width=20, height=20, preserveAspectRatio=True, mask="auto")
+            except Exception:
+                pass
+        fx, fy, fw, fh = 10, 28, 66, 88
+        pdf.setFillColor(colors.HexColor("#f1f5f9"))
+        pdf.setStrokeColor(colors.HexColor("#cbd5e1"))
+        pdf.rect(fx, fy, fw, fh, fill=1, stroke=1)
+        fp = (e.foto_path or "").strip()
+        for c in (fp, os.path.join(app.root_path, fp.lstrip("/")), fp.lstrip("/")):
+            try:
+                if c and os.path.isfile(c):
+                    pdf.drawImage(c, fx, fy, width=fw, height=fh, preserveAspectRatio=True, mask="auto")
+                    break
+            except Exception:
+                continue
+        tx = fx + fw + 9
+        pdf.setFillColor(colors.HexColor("#0B2D57"))
+        pdf.setFont("Helvetica-Bold", 9.5)
+        y = H - 42
+        # nombre en hasta 3 líneas, cortando por palabras (nunca a mitad de una palabra)
+        _ancho = W - tx - 8
+        _lineas, _act = [], ""
+        for _p in nombre.split():
+            _prueba = (_act + " " + _p).strip()
+            if pdf.stringWidth(_prueba, "Helvetica-Bold", 9.5) <= _ancho or not _act:
+                _act = _prueba
+            else:
+                _lineas.append(_act)
+                _act = _p
+        if _act:
+            _lineas.append(_act)
+        for tramo in _lineas[:3]:
+            pdf.drawString(tx, y, tramo)
+            y -= 12
+        pdf.setFillColor(colors.HexColor("#334155"))
+        pdf.setFont("Helvetica", 7.8)
+        for linea in ("Grado %s" % (e.grado or ""), "Doc.: %s" % (e.documento or "—"), "RH: %s" % (e.rh or "—"),
+                      "Sede: %s" % (sede or "—")):
+            pdf.drawString(tx, y - 3, linea[:30])
+            y -= 11
+        pdf.setFillColor(colors.HexColor("#0B2D57"))
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawString(tx, y - 6, "Cód. %s" % (e.codigo or ""))
+        pdf.setFillColor(colors.HexColor("#0B2D57"))
+        pdf.rect(0, 0, W, 14, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica", 6.5)
+        pdf.drawCentredString(W / 2, 5, "Año lectivo %s · EduTrack" % anio)
+        pdf.showPage()
+        # ── reverso
+        pdf.setFillColor(colors.white)
+        pdf.rect(0, 0, W, H, fill=1, stroke=0)
+        barra("CONTROL DE ACCESO")
+        try:
+            qb = BytesIO()
+            qrcode.make(qr_texto(e)).save(qb, format="PNG")
+            qb.seek(0)
+            pdf.drawImage(ImageReader(qb), 8, 24, width=92, height=92, preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
+        pdf.setFillColor(colors.HexColor("#1e293b"))
+        pdf.setFont("Helvetica-Bold", 7)
+        pdf.drawString(108, H - 40, "PROPIEDAD INSTITUCIONAL")
+        pdf.setFont("Helvetica", 6.3)
+        y = H - 51
+        for t in ("Documento personal e intransferible.", "Escanéalo en la portería del colegio.",
+                  "Pérdida o hurto: avisa en secretaría", "para bloquear el código.", "",
+                  "Si el QR no lee, digita:", "%s" % (e.codigo or ""), "", nom_inst[:34],
+                  ((inst.direccion if inst else "") or "")[:34]):
+            pdf.drawString(108, y, t)
+            y -= 8.6
+        pdf.setFillColor(colors.HexColor("#0B2D57"))
+        pdf.rect(0, 0, W, 14, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica", 6.3)
+        pdf.drawCentredString(W / 2, 5, "Tecnología de control de acceso · PROCSIS © %s" % anio)
+        pdf.showPage()
+    pdf.save()
+    b.seek(0)
+    return b
+
+
+@app.route("/proveedor-login", methods=["GET", "POST"])
+def proveedor_login():
+    return redirect("/login")
+
+
+@app.route("/proveedor-carnes")
+@_prov_ruta()
+def proveedor_carnes():
+    args = request.args
+    cole = args.get("colegio", type=int)
+    sede_f = (args.get("sede") or "").strip()
+    grado_f = (args.get("grado") or "").strip()
+    est_f = (args.get("estado") or "").strip().upper()
+    _aut = _prov_autorizados()
+    insts = [i for i in Institucion.query.filter(Institucion.estado == "ACTIVA").order_by(Institucion.nombre).all() if i.id in _aut]
+    base = _prov_activos()
+    if cole:
+        base = base.filter(Estudiante.institucion_id == cole)
+    sedes = sorted({(s or "").strip() for (s,) in base.with_entities(Estudiante.sede).distinct().all() if (s or "").strip()}) if cole else []
+    gq = base
+    if sede_f:
+        gq = gq.filter(Estudiante.sede == sede_f)
+    grados = sorted({(g or "").strip() for (g,) in gq.with_entities(Estudiante.grado).distinct().all() if (g or "").strip()},
+                    key=lambda x: (_orden_grado(x), x)) if cole else []
+    q = _prov_query(args)
+    total = q.count()
+    filas = q.limit(300).all()
+    est_map = _prov_estado_de([e.id for e in filas])
+    nombres = {i.id: i.nombre for i in insts}
+    opt_c = "<option value=''>— Elige un colegio —</option>" + "".join(
+        "<option value='%d' %s>%s</option>" % (i.id, "selected" if i.id == cole else "", _esc(i.nombre)) for i in insts)
+    opt_s = "<option value=''>Todas las sedes</option>" + "".join(
+        "<option %s>%s</option>" % ("selected" if x == sede_f else "", _esc(x)) for x in sedes)
+    opt_g = "<option value=''>Todos los grados</option>" + "".join(
+        "<option %s>%s</option>" % ("selected" if x == grado_f else "", _esc(x)) for x in grados)
+    opt_e = "<option value=''>Todos los estados</option>" + "".join(
+        "<option value='%s' %s>%s</option>" % (k, "selected" if k == est_f else "", v) for k, v in _PROV_ESTADOS)
+    sel = "padding:9px;border:1px solid #cbd5e1;border-radius:10px;min-width:150px"
+    tr = ""
+    n_listos = 0
+    for e in filas:
+        row = est_map.get(e.id)
+        est = row.estado if row else "PENDIENTE"
+        falta = _prov_faltantes(e)
+        listo = not falta
+        if listo:
+            n_listos += 1
+        foto = ("<img src='%s' alt='' style='width:44px;height:56px;object-fit:cover;border-radius:8px;background:#e2e8f0' onerror=\"this.style.visibility='hidden'\">"
+                % _esc(e.foto_path)) if (e.foto_path or "").strip() else "<div style='width:44px;height:56px;border-radius:8px;background:#fee2e2'></div>"
+        if listo:
+            accion = ("<form method='POST' action='/proveedor-carnes/descargar' style='margin:0'><input type='hidden' name='alcance' value='INDIVIDUAL'>"
+                      "<input type='hidden' name='ids' value='%d'><button class='btn' style='padding:6px 12px;font-size:12px'>⬇ PDF</button></form>" % e.id)
+        else:
+            accion = "<span style='color:#b91c1c;font-size:11.5px;font-weight:700'>Falta: %s</span>" % _esc(", ".join(falta))
+        chk = "<input type='checkbox' name='ids' value='%d' form='f-sel' class='chk'>" % e.id if listo else "<input type='checkbox' disabled>"
+        tr += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:7px 8px'>%s</td><td style='padding:7px 8px'>%s</td>"
+               "<td style='padding:7px 8px;font-size:13px'><b>%s %s</b><br><span style='color:#64748b;font-size:11.5px'>%s</span></td>"
+               "<td style='padding:7px 8px;font-size:13px'>%s<br><span style='color:#64748b;font-size:11.5px'>%s</span></td>"
+               "<td style='padding:7px 8px;font-size:12.5px'>%s · RH %s<br><span style='color:#64748b'>Cód. %s</span></td>"
+               "<td style='padding:7px 8px'>%s</td><td style='padding:7px 8px'>%s</td></tr>") % (
+            chk, foto, _esc(e.nombre), _esc(e.apellido), _esc(nombres.get(e.institucion_id, "")), _esc(e.grado),
+            _esc(e.sede or "—"), _esc(e.documento or "—"), _esc(e.rh or "—"), _esc(e.codigo), _prov_badge(est), accion)
+    if not tr:
+        tr = "<tr><td colspan='7' style='padding:18px;text-align:center;color:#64748b'>%s</td></tr>" % (
+            "Elige un colegio para ver los carnés." if not cole else "Sin estudiantes con estos filtros.")
+    hidden = "".join("<input type='hidden' name='%s' value='%s'>" % (k, _esc(v)) for k, v in
+                     (("colegio", cole or ""), ("sede", sede_f), ("grado", grado_f), ("estado", est_f)))
+    botones = ""
+    if cole:
+        botones = ("<div style='display:flex;gap:8px;flex-wrap:wrap;margin:12px 0'>"
+                   "<form id='f-sel' method='POST' action='/proveedor-carnes/descargar' style='margin:0'><input type='hidden' name='alcance' value='SELECCION'>"
+                   "<button class='btn'>⬇ Descargar seleccionados</button></form>"
+                   "<form method='POST' action='/proveedor-carnes/descargar' style='margin:0'><input type='hidden' name='alcance' value='LOTE'>%s"
+                   "<button class='btn' style='background:#15803d;color:#fff'>⬇ Descargar lote completo</button></form>"
+                   "<label style='font-size:12.5px;align-self:center'><input type='checkbox' id='chk-all'> Marcar todos los listos</label></div>" % hidden)
+    aviso_tope = ""
+    if total > 300:
+        aviso_tope = "<p class='mini-text'>Hay %d estudiantes con este filtro; se muestran los primeros 300. Filtra por grado para ver el resto.</p>" % total
+    msg = request.args.get("msg") or ""
+    err = request.args.get("err") or ""
+    aviso = ("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else ""
+    aviso += ("<div class='msg danger'>%s</div>" % _esc(err)) if err else ""
+    cuerpo = f"""
+<header class="role-hero"><div><h1>🪪 Carnés para producción</h1>
+<p>Filtra, revisa foto y datos, y descarga el PDF listo para imprimir (tarjeta 85,6 × 54 mm, anverso y reverso).</p></div></header>
+{aviso}
+<section class="role-panel">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select name="colegio" style="{sel}" onchange="this.form.sede.value='';this.form.grado.value='';this.form.submit()">{opt_c}</select>
+    <select name="sede" style="{sel}" onchange="this.form.submit()">{opt_s}</select>
+    <select name="grado" style="{sel}" onchange="this.form.submit()">{opt_g}</select>
+    <select name="estado" style="{sel}" onchange="this.form.submit()">{opt_e}</select>
+    <button class="btn" type="submit">Filtrar</button>
+  </form>
+  {botones}
+  <p class="mini-text">{total} estudiante(s) · {n_listos} con información completa en pantalla. Solo se descargan los carnés con foto, documento, nombre, grado y código. Cada descarga queda registrada con fecha, hora y usuario.</p>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+    <tr style="background:#0B2D57;color:#fff;font-size:12px"><th style="padding:8px"></th><th style="padding:8px;text-align:left">Foto</th><th style="padding:8px;text-align:left">Estudiante</th><th style="padding:8px;text-align:left">Grado / sede</th><th style="padding:8px;text-align:left">Datos del carné</th><th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Acción</th></tr>
+    {tr}
+  </table></div>{aviso_tope}
+</section>
+<script>(function(){{var a=document.getElementById('chk-all');if(!a)return;a.addEventListener('change',function(){{document.querySelectorAll('.chk').forEach(function(c){{c.checked=a.checked;}});}});}})();</script>"""
+    return page("Carnés · Proveedor", shell(cuerpo))
+
+
+@app.route("/proveedor-carnes/descargar", methods=["POST"])
+@_prov_ruta()
+def proveedor_carnes_descargar():
+    alcance = (request.form.get("alcance") or "SELECCION").upper()
+    if alcance not in ("LOTE", "SELECCION", "INDIVIDUAL"):
+        alcance = "SELECCION"
+    if alcance == "LOTE":
+        if not request.form.get("colegio", type=int):
+            return redirect("/proveedor-carnes?err=" + quote_plus("Elige un colegio para descargar el lote."))
+        candidatos = _prov_query(request.form).all()
+    else:
+        ids = [int(x) for x in request.form.getlist("ids") if str(x).isdigit()][:_PROV_MAX_PDF]
+        if not ids:
+            return redirect("/proveedor-carnes?err=" + quote_plus("Selecciona al menos un carné."))
+        candidatos = _prov_activos().filter(Estudiante.id.in_(ids)).order_by(
+            Estudiante.institucion_id, Estudiante.grado, Estudiante.apellido, Estudiante.nombre).all()
+    listos = [e for e in candidatos if not _prov_faltantes(e)]
+    omitidos = len(candidatos) - len(listos)
+    if not listos:
+        return redirect("/proveedor-carnes?err=" + quote_plus("Ninguno de los carnés tiene la información completa."))
+    recortado = len(listos) > _PROV_MAX_PDF
+    listos = listos[:_PROV_MAX_PDF]
+    buf = _prov_pdf(listos)
+    datos = buf.getvalue()
+    import hashlib
+    huella = hashlib.sha256(datos).hexdigest()
+    ts = "%s %s" % (fecha_hoy(), hora_actual())
+    quien = session.get("usuario") or ""
+    ip = (_client_ip_audit() or "")[:80]
+    ua = (request.headers.get("User-Agent") or "")[:300]
+    por_cole = {}
+    for e in listos:
+        por_cole.setdefault(e.institucion_id, []).append(e)
+    for iid, lista in por_cole.items():
+        inst = Institucion.query.get(iid) if iid else None
+        grados = sorted({(x.grado or "").strip() for x in lista})
+        sedes = sorted({(x.sede or "").strip() for x in lista if (x.sede or "").strip()})
+        db.session.add(CarneDescargaLog(
+            ts=ts, usuario=quien, rol=rol_actual() or "", institucion_id=iid, institucion_nombre=(inst.nombre if inst else ""),
+            grado=", ".join(grados)[:120], sede=", ".join(sedes)[:120], alcance=alcance, n_carnes=len(lista),
+            codigos=",".join((x.codigo or "") for x in lista)[:4000], ip=ip, user_agent=ua, sha256=huella))
+        existentes = _prov_estado_de([x.id for x in lista])
+        for x in lista:
+            r = existentes.get(x.id)
+            if r is None:
+                db.session.add(CarneProduccion(estudiante_id=x.id, institucion_id=iid, estado="DESCARGADO", descargas=1,
+                                               descargado_por=quien, descargado_en=ts))
+            else:
+                r.descargas = int(r.descargas or 0) + 1
+                r.descargado_por, r.descargado_en = quien, ts
+                if r.estado not in ("IMPRESO",):
+                    r.estado = "DESCARGADO"
+    db.session.commit()
+    try:
+        registrar_auditoria("Descarga de carnés (proveedor)", "%s · %d carnés" % (alcance, len(listos)))
+    except Exception:
+        db.session.rollback()
+    nombre = "carnes_%s_%d.pdf" % (ahora().strftime("%Y%m%d_%H%M"), len(listos))
+    resp = send_file(BytesIO(datos), mimetype="application/pdf", as_attachment=True, download_name=nombre)
+    notas = []
+    if omitidos:
+        notas.append("%d omitidos por información incompleta" % omitidos)
+    if recortado:
+        notas.append("lote recortado a %d; descarga el resto filtrando por grado" % _PROV_MAX_PDF)
+    if notas:
+        resp.headers["X-Carnes-Aviso"] = "; ".join(notas)
+    return resp
+
+
+def _prov_grupos_cierre():
+    """Grupos (colegio · sede · grado) con carnés DESCARGADOS por cerrar, y cuántos faltan por descargar."""
+    grupos = {}
+    _aut = list(_prov_autorizados()) or [-1]
+    filas = (db.session.query(Estudiante, CarneProduccion)
+             .join(CarneProduccion, CarneProduccion.estudiante_id == Estudiante.id)
+             .filter(CarneProduccion.estado == "DESCARGADO", Estudiante.institucion_id.in_(_aut)).all())
+    for e, r in filas:
+        k = (e.institucion_id, (e.sede or "").strip(), (e.grado or "").strip())
+        g = grupos.setdefault(k, {"desc": 0, "pend": 0})
+        g["desc"] += 1
+    if grupos:
+        pend = (db.session.query(Estudiante)
+                .outerjoin(CarneProduccion, CarneProduccion.estudiante_id == Estudiante.id)
+                .filter(db.or_(Estudiante.estado == "ACTIVO", Estudiante.estado == "", Estudiante.estado.is_(None)),
+                        CarneProduccion.id.is_(None),
+                        Estudiante.institucion_id.in_({k[0] for k in grupos})).all())
+        for e in pend:
+            k = (e.institucion_id, (e.sede or "").strip(), (e.grado or "").strip())
+            if k in grupos and not _prov_faltantes(e):
+                grupos[k]["pend"] += 1
+    return grupos
+
+
+@app.route("/proveedor-carnes/cierre", methods=["GET", "POST"])
+@_prov_ruta()
+def proveedor_carnes_cierre():
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            iid = request.form.get("inst", type=int)
+            sede = (request.form.get("sede") or "").strip()
+            grado = (request.form.get("grado") or "").strip()
+            fecha_est = (request.form.get("fecha_estimada") or "").strip()
+            nota = (request.form.get("nota") or "").strip()[:500]
+            foto = request.files.get("evidencia")
+            if not request.form.get("confirmo"):
+                raise ValueError("Marca la casilla de confirmación.")
+            try:
+                f_est = datetime.strptime(fecha_est, "%Y-%m-%d").date()
+            except Exception:
+                raise ValueError("Indica la fecha estimada de entrega.")
+            if f_est < ahora().date():
+                raise ValueError("La fecha estimada no puede ser anterior a hoy.")
+            if not foto or not getattr(foto, "filename", ""):
+                raise ValueError("Debes subir la foto de evidencia de los carnés impresos y empacados.")
+            raw = foto.read()
+            if not raw or len(raw) > 12 * 1024 * 1024:
+                raise ValueError("La foto debe pesar menos de 12 MB.")
+            try:
+                from PIL import Image
+                im = Image.open(BytesIO(raw))
+                im.load()
+                im = im.convert("RGB")
+                im.thumbnail((1600, 1600))
+                out = BytesIO()
+                im.save(out, format="JPEG", quality=80, optimize=True)
+                jpg = out.getvalue()
+            except Exception:
+                raise ValueError("El archivo no es una imagen válida (usa JPG o PNG).")
+            if iid not in _prov_autorizados():
+                raise ValueError("Ese colegio no está autorizado para el proveedor.")
+            grupos = _prov_grupos_cierre()
+            g = grupos.get((iid, sede, grado))
+            if not g or g["desc"] <= 0:
+                raise ValueError("Esa tanda no tiene carnés descargados por cerrar.")
+            if g["pend"] > 0:
+                raise ValueError("Aún faltan %d carné(s) por descargar en esta tanda." % g["pend"])
+            inst = Institucion.query.get(iid) if iid else None
+            ts = "%s %s" % (fecha_hoy(), hora_actual())
+            quien = session.get("usuario") or ""
+            lote = CarneLote(institucion_id=iid, institucion_nombre=(inst.nombre if inst else ""), grado=grado, sede=sede,
+                             n_carnes=g["desc"], operario=quien, fecha_estimada=fecha_est, cerrado_en=ts,
+                             foto_bytes=jpg, foto_mime="image/jpeg", nota=nota)
+            db.session.add(lote)
+            db.session.flush()
+            filas = (db.session.query(Estudiante, CarneProduccion)
+                     .join(CarneProduccion, CarneProduccion.estudiante_id == Estudiante.id)
+                     .filter(CarneProduccion.estado == "DESCARGADO", Estudiante.institucion_id == iid,
+                             Estudiante.grado == grado).all())
+            n = 0
+            for e, r in filas:
+                if (e.sede or "").strip() != sede:
+                    continue
+                r.estado, r.impreso_por, r.impreso_en, r.lote_id = "IMPRESO", quien, ts, lote.id
+                n += 1
+            lote.n_carnes = n
+            db.session.commit()
+            try:
+                registrar_auditoria("Cierre de tanda de carnés", "%s · %s · %d carnés · entrega %s" % (lote.institucion_nombre, grado, n, fecha_est))
+            except Exception:
+                db.session.rollback()
+            msg = "Tanda cerrada: %d carné(s) quedaron como «Carné impreso / En camino»." % n
+        except ValueError as ve:
+            db.session.rollback()
+            err = str(ve)
+    grupos = _prov_grupos_cierre()
+    nombres = {i.id: i.nombre for i in Institucion.query.all()}
+    hoy = fecha_hoy()
+    tarjetas = ""
+    for (iid, sede, grado), g in sorted(grupos.items(), key=lambda kv: (nombres.get(kv[0][0], ""), kv[0][1], _orden_grado(kv[0][2]))):
+        bloq = g["pend"] > 0
+        inp = "padding:8px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box"
+        if bloq:
+            cuerpo_f = "<p style='color:#b45309;font-weight:700;margin:6px 0 0'>Faltan %d carné(s) por descargar para poder cerrar esta tanda.</p>" % g["pend"]
+        else:
+            cuerpo_f = f"""
+<form method="POST" enctype="multipart/form-data" style="margin-top:10px">
+  <input type="hidden" name="inst" value="{iid}"><input type="hidden" name="sede" value="{_esc(sede)}"><input type="hidden" name="grado" value="{_esc(grado)}">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">
+    <div><label><b>Foto de evidencia *</b><br><span style="font-size:11.5px;color:#64748b">Carnés impresos y empacados</span></label><input type="file" name="evidencia" accept="image/*" capture="environment" required style="{inp}"></div>
+    <div><label><b>Operario que cierra</b></label><input value="{_esc(session.get('usuario') or '')}" readonly style="{inp};background:#f1f5f9"></div>
+    <div><label><b>Fecha estimada de entrega *</b></label><input type="date" name="fecha_estimada" min="{hoy}" required style="{inp}"></div>
+  </div>
+  <label style="display:block;margin-top:8px"><b>Nota (opcional)</b></label><input name="nota" maxlength="500" style="{inp}">
+  <label style="display:flex;gap:8px;margin:10px 0;font-size:13px"><input type="checkbox" name="confirmo" value="1" required> Confirmo que imprimí y empaqué los {g['desc']} carnés de esta tanda.</label>
+  <button class="btn" style="background:#15803d;color:#fff">✅ Marcar como «Carné impreso / En camino»</button>
+</form>"""
+        tarjetas += ("<section class='role-panel' style='margin-bottom:12px'><h3 style='margin:0;color:#0B2D57'>%s</h3>"
+                     "<p class='mini-text' style='margin:2px 0'>Sede: %s · Grado: <b>%s</b> · %d carné(s) descargados por cerrar</p>%s</section>") % (
+            _esc(nombres.get(iid, "")), _esc(sede or "—"), _esc(grado), g["desc"], cuerpo_f)
+    if not tarjetas:
+        tarjetas = "<section class='role-panel'><p>No hay tandas pendientes de cierre. Descarga primero los carnés de un grado completo.</p></section>"
+    aviso = ("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else ""
+    aviso += ("<div class='msg danger'>%s</div>" % _esc(err)) if err else ""
+    cuerpo = ("<header class='role-hero'><div><h1>📦 Cierre de tanda</h1><p>Cuando termines de imprimir y empacar un grado, "
+              "súbela aquí: foto de evidencia, fecha estimada de entrega y confirmación.</p></div></header>" + aviso + tarjetas)
+    return page("Cierre de tanda", shell(cuerpo))
+
+
+def _prov_estado_entrega(l):
+    hoy = fecha_hoy()
+    if l.recibido_en:
+        tarde = (l.recibido_en[:10] > (l.fecha_estimada or "9999"))
+        return ("Entregada con retraso", "#b45309", "#fef3c7") if tarde else ("Entregada a tiempo", "#166534", "#dcfce7")
+    if (l.fecha_estimada or "") < hoy:
+        try:
+            d = (datetime.strptime(hoy, "%Y-%m-%d") - datetime.strptime(l.fecha_estimada, "%Y-%m-%d")).days
+        except Exception:
+            d = 0
+        return ("Vencida (%d d)" % d, "#991b1b", "#fee2e2")
+    if (l.fecha_estimada or "") == hoy:
+        return ("Vence hoy", "#92400e", "#fef3c7")
+    return ("En camino · en plazo", "#1e40af", "#dbeafe")
+
+
+@app.route("/proveedor-carnes/entregas")
+@_prov_ruta()
+def proveedor_carnes_entregas():
+    lotes = CarneLote.query.order_by(CarneLote.id.desc()).limit(100).all()
+    tr = ""
+    for l in lotes:
+        est, fg, bg = _prov_estado_entrega(l)
+        d, h = _prov_fmt_ts(l.cerrado_en)
+        tr += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:7px 8px;font-size:12.5px'>%s<br><span style='color:#64748b'>%s</span></td>"
+               "<td style='padding:7px 8px;font-size:13px'><b>%s</b><br>Grado %s · %d carnés</td><td style='padding:7px 8px;font-size:12.5px'>%s</td>"
+               "<td style='padding:7px 8px;font-size:12.5px'>%s</td><td style='padding:7px 8px'><span style='background:%s;color:%s;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800'>%s</span></td></tr>") % (
+            d, h, _esc(l.institucion_nombre), _esc(l.grado), l.n_carnes or 0, _esc(l.operario), _esc(l.fecha_estimada), bg, fg, est)
+    if not tr:
+        tr = "<tr><td colspan='5' style='padding:16px;text-align:center;color:#64748b'>Aún no has cerrado tandas.</td></tr>"
+    cuerpo = ("<header class='role-hero'><div><h1>🚚 Mis entregas</h1><p>Historial de tandas cerradas y su fecha estimada de llegada.</p></div></header>"
+              "<section class='role-panel'><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse'>"
+              "<tr style='background:#0B2D57;color:#fff;font-size:12px'><th style='padding:8px;text-align:left'>Cierre</th><th style='padding:8px;text-align:left'>Colegio / grado</th>"
+              "<th style='padding:8px;text-align:left'>Operario</th><th style='padding:8px;text-align:left'>Entrega estimada</th><th style='padding:8px;text-align:left'>Estado</th></tr>%s</table></div></section>") % tr
+    return page("Mis entregas", shell(cuerpo))
+
+
+@app.route("/proveedor-carnes/evidencia/<int:lote_id>")
+def proveedor_carnes_evidencia(lote_id):
+    if not requiere_login() or rol_actual() not in ("Proveedor", "Gerente", "Superadmin", "Administrador"):
+        return ("", 403)
+    _prov_ensure()
+    l = CarneLote.query.get_or_404(lote_id)
+    if not l.foto_bytes:
+        return ("", 404)
+    r = send_file(BytesIO(l.foto_bytes), mimetype=l.foto_mime or "image/jpeg")
+    r.headers["Cache-Control"] = "private, max-age=300"
+    return r
+
+
+@app.route("/gerencia/carnes")
+@_prov_ruta(gerencia=True)
+def gerencia_carnes():
+    q = (request.args.get("q") or "").strip()[:80]
+    desde = (request.args.get("desde") or "").strip()[:10]
+    hasta = (request.args.get("hasta") or "").strip()[:10]
+    msg = request.args.get("msg") or ""
+    total_est = _prov_activos().count()
+    completos = 0
+    por_cole = {}
+    nombres = {i.id: i.nombre for i in Institucion.query.all()}
+    _aut = _prov_autorizados()
+    _chk = "".join(
+        "<label style='display:flex;gap:8px;align-items:center;padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;font-size:13px'>"
+        "<input type='checkbox' name='colegio' value='%d' %s> %s</label>" % (i.id, "checked" if i.id in _aut else "", _esc(i.nombre))
+        for i in Institucion.query.filter(Institucion.estado == "ACTIVA").order_by(Institucion.nombre).all())
+    panel_aut = (
+        "<section class='role-panel' style='margin-bottom:14px'><h2 style='margin-top:0;color:#0B2D57;font-size:16px'>🔐 Colegios autorizados para el proveedor</h2>"
+        "<p class='mini-text'>El proveedor solo ve estudiantes de los colegios marcados aquí (principio de mínimo dato · Ley 1581 de 2012). "
+        "Sin ninguno marcado no ve nada. Conviene firmar con el proveedor un contrato de transmisión de datos.</p>"
+        "<form method='POST' action='/gerencia/carnes/autorizar'><div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin:10px 0'>%s</div>"
+        "<button class='btn'>Guardar autorización</button></form></section>") % (_chk or "<p class='mini-text'>No hay colegios activos.</p>")
+    estados = {r.estudiante_id: r.estado for r in CarneProduccion.query.all()}
+    for e in _prov_activos().all():
+        c = por_cole.setdefault(e.institucion_id, {"tot": 0, "listos": 0, "desc": 0, "imp": 0})
+        c["tot"] += 1
+        if not _prov_faltantes(e):
+            c["listos"] += 1
+            completos += 1
+        est = estados.get(e.id)
+        if est == "DESCARGADO":
+            c["desc"] += 1
+        elif est == "IMPRESO":
+            c["desc"] += 1
+            c["imp"] += 1
+    descargados = sum(v["desc"] for v in por_cole.values())
+    impresos = sum(v["imp"] for v in por_cole.values())
+    faltan = max(completos - impresos, 0)
+
+    def tarjeta(t, v, col):
+        return ("<div style='background:#fff;border:1px solid #e2e8f0;border-left:5px solid %s;border-radius:12px;padding:12px 14px'>"
+                "<div style='font-size:11px;font-weight:800;color:#64748b'>%s</div><div style='font-size:26px;font-weight:800;color:%s'>%s</div></div>") % (col, t, col, v)
+    pct = int(round(100.0 * impresos / completos)) if completos else 0
+    cards = (tarjeta("CARNÉS LISTOS EN EL SISTEMA", completos, "#0B2D57") + tarjeta("DESCARGADOS POR EL PROVEEDOR", descargados, "#1e40af")
+             + tarjeta("IMPRESOS / EN CAMINO", impresos, "#15803d") + tarjeta("FALTAN POR IMPRIMIR", faltan, "#b45309"))
+    filas_c = ""
+    for iid, v in sorted(por_cole.items(), key=lambda kv: nombres.get(kv[0], "")):
+        p = int(round(100.0 * v["imp"] / v["listos"])) if v["listos"] else 0
+        filas_c += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:7px 8px;font-size:13px'><b>%s</b></td><td style='padding:7px 8px;text-align:right'>%d</td>"
+                    "<td style='padding:7px 8px;text-align:right'>%d</td><td style='padding:7px 8px;text-align:right'>%d</td><td style='padding:7px 8px;text-align:right'>%d</td>"
+                    "<td style='padding:7px 8px;min-width:130px'><div style='background:#e2e8f0;border-radius:99px;height:9px'><div style='background:#15803d;height:9px;border-radius:99px;width:%d%%'></div></div></td></tr>") % (
+            _esc(nombres.get(iid, "Sin colegio")), v["tot"], v["listos"], v["desc"], v["imp"], p)
+    # historial de descargas
+    lq = CarneDescargaLog.query
+    if q:
+        like = "%" + q + "%"
+        lq = lq.filter(db.or_(CarneDescargaLog.usuario.ilike(like), CarneDescargaLog.institucion_nombre.ilike(like),
+                              CarneDescargaLog.grado.ilike(like)))
+    if desde:
+        lq = lq.filter(func.substr(CarneDescargaLog.ts, 1, 10) >= desde)
+    if hasta:
+        lq = lq.filter(func.substr(CarneDescargaLog.ts, 1, 10) <= hasta)
+    logs = lq.order_by(CarneDescargaLog.id.desc()).limit(200).all()
+    tr_log = ""
+    for L in logs:
+        d, h = _prov_fmt_ts(L.ts)
+        frase = "El proveedor (%s) descargó el PDF de carnés del grado %s del colegio %s el %s a las %s (%d carné(s), alcance %s)." % (
+            L.usuario, L.grado or "—", L.institucion_nombre or "—", d, h, L.n_carnes or 0, (L.alcance or "").lower())
+        tr_log += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:7px 8px;font-size:12.5px'>%s<br><b>%s</b></td>"
+                   "<td style='padding:7px 8px;font-size:12.5px;white-space:normal;word-break:break-word'>%s<br><span style='color:#94a3b8;font-size:11px'>IP %s · huella %s…</span></td></tr>") % (
+            d, h, _esc(frase), _esc(L.ip or "—"), _esc((L.sha256 or "")[:10]))
+    if not tr_log:
+        tr_log = "<tr><td colspan='2' style='padding:16px;text-align:center;color:#64748b'>Sin descargas registradas.</td></tr>"
+    pdf_href = "/gerencia/carnes/descargas.pdf?q=%s&desde=%s&hasta=%s" % (quote_plus(q), _esc(desde), _esc(hasta))
+    # entregas
+    lotes = CarneLote.query.order_by(CarneLote.id.desc()).limit(60).all()
+    tr_lot = ""
+    for l in lotes:
+        est, fg, bg = _prov_estado_entrega(l)
+        d, h = _prov_fmt_ts(l.cerrado_en)
+        val = ("<span style='color:#166534;font-weight:700'>✔ Foto validada por %s</span>" % _esc(l.validada_por)) if l.validada_en else (
+            "<form method='POST' action='/gerencia/carnes/lote/%d/validar' style='margin:0'><button class='btn' style='padding:5px 10px;font-size:12px'>Validar foto</button></form>" % l.id)
+        rec = ("<span style='color:#166534;font-weight:700'>📬 Recibida %s</span>" % _esc((l.recibido_en or "")[:10])) if l.recibido_en else (
+            "<form method='POST' action='/gerencia/carnes/lote/%d/recibido' style='margin:0'><button class='btn' style='padding:5px 10px;font-size:12px;background:#334155;color:#fff'>Confirmar recibido</button></form>" % l.id)
+        tr_lot += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:7px 8px'><a href='/proveedor-carnes/evidencia/%d' target='_blank'>"
+                   "<img src='/proveedor-carnes/evidencia/%d' alt='evidencia' style='width:70px;height:52px;object-fit:cover;border-radius:8px'></a></td>"
+                   "<td style='padding:7px 8px;font-size:12.5px'><b>%s</b><br>Grado %s · %d carnés<br><span style='color:#64748b'>Cerró: %s · %s %s</span></td>"
+                   "<td style='padding:7px 8px;font-size:12.5px'>Estimada: <b>%s</b><br><span style='background:%s;color:%s;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:800'>%s</span></td>"
+                   "<td style='padding:7px 8px'>%s<div style='height:6px'></div>%s</td></tr>") % (
+            l.id, l.id, _esc(l.institucion_nombre), _esc(l.grado), l.n_carnes or 0, _esc(l.operario), d, h,
+            _esc(l.fecha_estimada), bg, fg, est, val, rec)
+    if not tr_lot:
+        tr_lot = "<tr><td colspan='4' style='padding:16px;text-align:center;color:#64748b'>El proveedor aún no ha cerrado tandas.</td></tr>"
+    th = "padding:8px;text-align:left;font-size:12px"
+    aviso = ("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else ""
+    cuerpo = f"""
+<header class="role-hero"><div><h1>🪪 Carnés · control del proveedor</h1>
+<p>Rendimiento, auditoría de descargas y validación de entregas. Vista de supervisión.</p></div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+{aviso}
+{panel_aut}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">{cards}</div>
+<section class="role-panel"><h2 style="margin-top:0;color:#0B2D57">Avance por colegio <span style="font-size:13px;color:#64748b">· {pct}% impreso en total</span></h2>
+<div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+<tr style="background:#0B2D57;color:#fff"><th style="{th}">Colegio</th><th style="{th};text-align:right">Estudiantes</th><th style="{th};text-align:right">Listos</th><th style="{th};text-align:right">Descargados</th><th style="{th};text-align:right">Impresos</th><th style="{th}">Avance</th></tr>
+{filas_c or "<tr><td colspan='6' style='padding:14px;text-align:center;color:#64748b'>Sin estudiantes.</td></tr>"}</table></div></section>
+<section class="role-panel" style="margin-top:14px"><h2 style="margin-top:0;color:#0B2D57">🔐 Historial de descargas (auditoría)</h2>
+<form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+  <input name="q" value="{_esc(q)}" placeholder="Usuario, colegio o grado…" style="flex:1;min-width:190px;padding:8px;border:1px solid #cbd5e1;border-radius:8px">
+  <label style="font-size:12px">Desde <input type="date" name="desde" value="{_esc(desde)}" style="padding:7px;border-radius:8px;border:1px solid #cbd5e1"></label>
+  <label style="font-size:12px">Hasta <input type="date" name="hasta" value="{_esc(hasta)}" style="padding:7px;border-radius:8px;border:1px solid #cbd5e1"></label>
+  <button class="btn" type="submit">Filtrar</button>
+  <a class="btn" href="{pdf_href}" style="background:#b91c1c;color:#fff">📄 Descargar PDF</a>
+</form>
+<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><tr style="background:#0B2D57;color:#fff"><th style="{th}">Fecha y hora exactas</th><th style="{th}">Evento</th></tr>{tr_log}</table></div>
+<p class="mini-text">Cada descarga guarda usuario, IP, navegador, lista de códigos y una huella SHA-256 del PDF: evidencia ante Habeas Data (Ley 1581 de 2012).</p></section>
+<section class="role-panel" style="margin-top:14px"><h2 style="margin-top:0;color:#0B2D57">📦 Validación de entregas</h2>
+<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><tr style="background:#0B2D57;color:#fff"><th style="{th}">Evidencia</th><th style="{th}">Tanda</th><th style="{th}">Fecha estimada</th><th style="{th}">Validación</th></tr>{tr_lot}</table></div></section>"""
+    return page("Carnés · Gerencia", shell(cuerpo))
+
+
+@app.route("/gerencia/carnes/descargas.pdf")
+@_prov_ruta(gerencia=True)
+def gerencia_carnes_descargas_pdf():
+    q = (request.args.get("q") or "").strip()[:80]
+    desde = (request.args.get("desde") or "").strip()[:10]
+    hasta = (request.args.get("hasta") or "").strip()[:10]
+    lq = CarneDescargaLog.query
+    if q:
+        like = "%" + q + "%"
+        lq = lq.filter(db.or_(CarneDescargaLog.usuario.ilike(like), CarneDescargaLog.institucion_nombre.ilike(like), CarneDescargaLog.grado.ilike(like)))
+    if desde:
+        lq = lq.filter(func.substr(CarneDescargaLog.ts, 1, 10) >= desde)
+    if hasta:
+        lq = lq.filter(func.substr(CarneDescargaLog.ts, 1, 10) <= hasta)
+    logs = lq.order_by(CarneDescargaLog.id.desc()).limit(3000).all()
+    filas = []
+    for L in logs:
+        d, h = _prov_fmt_ts(L.ts)
+        filas.append([d, h, L.usuario, L.institucion_nombre, L.grado, L.alcance, str(L.n_carnes or 0), L.ip or "—", (L.sha256 or "")[:12]])
+    buf = _pdf_informe_gerencia("Auditoría · Descargas de carnés del proveedor",
+                                "Filtro: %s · Rango: %s → %s · %d registro(s)" % (q or "ninguno", desde or "inicio", hasta or "hoy", len(filas)),
+                                ["Fecha", "Hora", "Usuario", "Colegio", "Grado", "Alcance", "Carnés", "IP", "Huella PDF"], filas,
+                                [8, 7, 11, 22, 10, 9, 6, 11, 12])
+    try:
+        registrar_auditoria("Descarga informe de carnés (PDF)", "%d registros" % len(filas))
+    except Exception:
+        db.session.rollback()
+    return send_file(buf, mimetype="application/pdf", as_attachment=True,
+                     download_name="auditoria_carnes_%s.pdf" % ahora().strftime("%Y%m%d_%H%M"))
+
+
+@app.route("/gerencia/carnes/lote/<int:lid>/<accion>", methods=["POST"])
+@_prov_ruta(gerencia=True)
+def gerencia_carnes_lote_accion(lid, accion):
+    l = CarneLote.query.get_or_404(lid)
+    ts = "%s %s" % (fecha_hoy(), hora_actual())
+    quien = session.get("usuario") or ""
+    if accion == "validar" and not l.validada_en:
+        l.validada_por, l.validada_en = quien, ts
+        texto = "Foto validada."
+    elif accion == "recibido" and not l.recibido_en:
+        l.recibido_por, l.recibido_en = quien, ts
+        texto = "Entrega confirmada como recibida."
+    else:
+        return redirect("/gerencia/carnes")
+    db.session.commit()
+    try:
+        registrar_auditoria("Carnés · " + accion, "tanda %d · %s · %s" % (l.id, l.institucion_nombre, l.grado))
+    except Exception:
+        db.session.rollback()
+    return redirect("/gerencia/carnes?msg=" + quote_plus(texto))
+
+
+@app.route("/gerencia/carnes/autorizar", methods=["POST"])
+@_prov_ruta(gerencia=True)
+def gerencia_carnes_autorizar():
+    """Gerencia decide qué colegios puede ver el proveedor de carnés."""
+    ids = {int(x) for x in request.form.getlist("colegio") if str(x).isdigit()}
+    validos = {i.id for i in Institucion.query.filter(Institucion.estado == "ACTIVA").all()}
+    ids &= validos
+    actuales = {r.institucion_id: r for r in CarneColegioAutorizado.query.all()}
+    ts = "%s %s" % (fecha_hoy(), hora_actual())
+    quien = session.get("usuario") or ""
+    for iid, r in actuales.items():
+        if iid not in ids:
+            db.session.delete(r)
+    for iid in ids:
+        if iid not in actuales:
+            db.session.add(CarneColegioAutorizado(institucion_id=iid, autorizado_por=quien, autorizado_en=ts))
+    db.session.commit()
+    try:
+        registrar_auditoria("Carnés · autorización de colegios", "%d colegio(s) autorizados para el proveedor" % len(ids))
+    except Exception:
+        db.session.rollback()
+    return redirect("/gerencia/carnes?msg=" + quote_plus("Autorización guardada: %d colegio(s)." % len(ids)))
 
 
 
