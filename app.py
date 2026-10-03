@@ -4382,6 +4382,8 @@ def menu_items_por_rol():
     if rol == "Soporte":
         items += [
             ("/soporte_admin", "Panel Soporte"),
+            ("/soporte/bloqueo-carne", "Bloqueo de carné"),
+            ("/tickets-doc", "Tickets documentales"),
             ("/usuarios", "Usuarios (reset / altas)"),
             ("/soporte/equipo", "Equipo Procsis"),
             ("/tenants", "Instituciones"),
@@ -7747,9 +7749,11 @@ def limpiar_codigo(texto):
 
 
 def qr_texto(e):
-    # IMPORTANTE: El QR ahora guarda SOLO el código del estudiante.
-    # Así el lector no recibe nombres, grado ni otros datos y registra más rápido.
-    return f"Codigo: {e.codigo}"
+    # El QR guarda SOLO el código (sin nombres ni datos). Tras un bloqueo de carné lleva versión firmada.
+    try:
+        return _qr_texto_v(e)
+    except Exception:
+        return f"Codigo: {e.codigo}"
 
 
 
@@ -12976,6 +12980,8 @@ def _qr_parse(raw):
     """Clasifica lo leído: token dinámico válido, vencido, inválido, o QR fijo (carné impreso)."""
     import hmac, time as _tm
     t = (raw or "").strip()
+    if t.startswith("EDT2."):
+        return _qr_parse_cv(t) or {"tipo": "invalido"}
     if t.startswith("EDT1."):
         p = t.split(".", 4)
         if len(p) != 5:
@@ -13227,6 +13233,8 @@ async function registrar(raw){
       var tarde=d.estado==='Tarde';
       overlay('ok','✅','¡Estudiante ingresado exitosamente!',d.nombre||'',(d.grado?('Grado '+d.grado+' · '):'')+(d.hora||''),
         tarde?('Llegada tarde'+(d.minutos?(' · '+d.minutos+' min'):'')):'A tiempo',2000);}
+    else if(d.estado==='Anulado'){beep(false);setTimeout(function(){beep(false);},400);try{navigator.vibrate&&navigator.vibrate([300,100,300]);}catch(e){}
+      overlay('err','🚨','¡CÓDIGO ANULADO / FRAUDE!',d.nombre||'','Retén el carné y avisa a coordinación.','',8000);}
     else{beep(false);overlay('err','⛔','No se pudo registrar',d.nombre||'',d.mensaje||'Intenta de nuevo.','',3500);}
   }catch(e){beep(false);overlay('err','📡','Sin conexión','','Revisa el internet e intenta de nuevo.','',3500);}
   finally{setTimeout(function(){registrando=false;},600);}
@@ -13296,13 +13304,23 @@ def portal_registrar_ajax():
         return _resp(False, "Código vencido. Pide al estudiante que abra de nuevo su carné digital.", "Expirado")
     codigo = info["codigo"]
     e = None
-    if info["tipo"] == "token" and info.get("inst"):
+    if info["tipo"] in ("token", "cv") and info.get("inst"):
         e = Estudiante.query.filter_by(institucion_id=info["inst"], codigo=codigo).first()
     if e is None:
         e = q_estudiantes().filter_by(codigo=codigo).first() or Estudiante.query.filter_by(codigo=codigo).first()
     if e is None:
         return _resp(False, "Estudiante no registrado.", "No registrado")
-    if info["tipo"] == "fijo" and _ingreso_token_obligatorio(e.institucion_id):
+    if not _carne_lectura_valida(e, info):
+        try:
+            db.session.add(CarneFraude(estudiante_id=e.id, institucion_id=e.institucion_id, ts=_ts(), detalle="Lectura de carné anulado (%s)" % info.get("tipo"), ip=_ip()))
+            db.session.commit()
+            registrar_auditoria("¡CÓDIGO ANULADO / FRAUDE!", "Intento con carné anulado · %s" % e.codigo)
+        except Exception:
+            db.session.rollback()
+        _notif_crear(_ROLES_GERENCIA + ("Rectoría", "Coordinación"), "¡Código anulado / fraude!",
+                     "Se intentó usar un carné anulado: %s %s (%s)." % (e.nombre, e.apellido, e.grado), "/dashboard", e.institucion_id, "alerta")
+        return _resp(False, "¡CÓDIGO ANULADO / FRAUDE!", "Anulado", e)
+    if info["tipo"] in ("fijo", "cv") and _ingreso_token_obligatorio(e.institucion_id):
         return _resp(False, "Este colegio exige el carné digital con código dinámico. No se aceptan QR fijos ni capturas.", "Invalido", e)
     mensaje, estado_res = registrar_ingreso(e.codigo, "Temprano", quien, est=e)
     ok = estado_res in ("Temprano", "Tarde", "Salida autorizada")
@@ -20606,6 +20624,8 @@ def _aislar_paneles_internos():
     path = request.path or ""
     if path.startswith("/static") or path.startswith("/api/webhooks"):
         return None
+    if path.startswith(("/tickets-doc", "/notificaciones", "/api/v1")):
+        return None  # cada ruta valida su propio acceso
     # Login y panel de desarrollo: no mezclar con login de colegios
     if path in ("/dev-console-login",) or (path.startswith("/dev-console") and not session.get("usuario")):
         if path.startswith("/dev-console") and path != "/dev-console-login" and not session.get("usuario"):
@@ -26852,6 +26872,10 @@ def gerencia_hq():
         <a href="/gerencia/dev-console">Consola de desarrollador</a>
         <a href="/gerencia/sesiones-tecnicas">Sesiones técnicas (solo ver)</a>
         <a href="/gerencia/carnes">Carnés · proveedor</a>
+        <a href="/gerencia/proveedores">Proveedores · actividad y cobros</a>
+        <a href="/tickets-doc">Tickets documentales</a>
+        <a href="/gerencia/mi-token">Mi token de autorización (CEO)</a>
+        <a href="/gerencia/api-conexiones">Conexión API · QGIS</a>
         <a href="/gerencia/diseno-login">Diseño del login</a>
         <a href="/gerencia/backoffice-branding">Branding del backoffice</a>
         <a href="/gerencia/changelog">Historial de cambios</a>
@@ -48318,7 +48342,7 @@ class CarneColegioAutorizado(db.Model):
 
 _PROV_LISTO = {"ok": False}
 _PROV_MAX_PDF = 300
-_PROV_ESTADOS = (("PENDIENTE", "Pendiente"), ("DESCARGADO", "Descargado"), ("IMPRESO", "Impreso / En camino"))
+_PROV_ESTADOS = (("PENDIENTE", "Pendiente"), ("REIMPRESION", "Pendiente por reimpresión"), ("DESCARGADO", "Descargado"), ("IMPRESO", "Impreso / En camino"))
 
 
 def _prov_menu_items():
@@ -48437,7 +48461,7 @@ def _prov_query(args):
         q = q.filter(Estudiante.sede == sede)
     if grado:
         q = q.filter(Estudiante.grado == grado)
-    if estado in ("PENDIENTE", "DESCARGADO", "IMPRESO"):
+    if estado in ("PENDIENTE", "DESCARGADO", "IMPRESO", "REIMPRESION"):
         q = q.outerjoin(CarneProduccion, CarneProduccion.estudiante_id == Estudiante.id)
         q = q.filter(CarneProduccion.id.is_(None)) if estado == "PENDIENTE" else q.filter(CarneProduccion.estado == estado)
     return q.order_by(Estudiante.institucion_id, Estudiante.grado, Estudiante.apellido, Estudiante.nombre)
@@ -48451,7 +48475,7 @@ def _prov_estado_de(ids):
 
 def _prov_badge(est):
     col = {"PENDIENTE": ("#fef3c7", "#92400e", "Pendiente"), "DESCARGADO": ("#dbeafe", "#1e40af", "Descargado"),
-           "IMPRESO": ("#dcfce7", "#166534", "Impreso / En camino")}.get(est, ("#e2e8f0", "#334155", est))
+           "IMPRESO": ("#dcfce7", "#166534", "Impreso / En camino"), "REIMPRESION": ("#fee2e2", "#991b1b", "PENDIENTE POR REIMPRESIÓN")}.get(est, ("#e2e8f0", "#334155", est))
     return "<span style='background:%s;color:%s;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap'>%s</span>" % col
 
 
@@ -48848,13 +48872,19 @@ def proveedor_carnes_cierre():
                      .filter(CarneProduccion.estado == "DESCARGADO", Estudiante.institucion_id == iid,
                              Estudiante.grado == grado).all())
             n = 0
+            ids_imp = []
             for e, r in filas:
                 if (e.sede or "").strip() != sede:
                     continue
                 r.estado, r.impreso_por, r.impreso_en, r.lote_id = "IMPRESO", quien, ts, lote.id
+                ids_imp.append(e.id)
                 n += 1
             lote.n_carnes = n
             db.session.commit()
+            _bloqueo_marcar_reimpreso(ids_imp)
+            _notif_crear(("Rectoría", "Coordinación", "Secretaría"), "🚚 Tus carnés van en camino",
+                         "%d carné(s) de %s (sede %s) fueron impresos. Entrega estimada: %s." % (n, grado, sede or "principal", "/".join(reversed(fecha_est.split("-")))),
+                         "/dashboard", iid, "info")
             try:
                 registrar_auditoria("Cierre de tanda de carnés", "%s · %s · %d carnés · entrega %s" % (lote.institucion_nombre, grado, n, fecha_est))
             except Exception:
@@ -49145,6 +49175,1238 @@ def gerencia_carnes_autorizar():
     return redirect("/gerencia/carnes?msg=" + quote_plus("Autorización guardada: %d colegio(s)." % len(ids)))
 
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SEGURIDAD OPERATIVA: notificaciones web · step-up · bloqueo de carné (2 capas)
+#  · tickets documentales (Contabilidad → CEO con token) · actividad de proveedores
+#  · conexiones API / QGIS (Gerencia)
+# ═══════════════════════════════════════════════════════════════════════════════
+import unicodedata as _ud
+
+_SEG_LISTO = {"ok": False}
+_REIMPRESION_VALOR = 12000
+
+
+class NotifWeb(db.Model):
+    __tablename__ = "notif_web"
+    id = db.Column(db.Integer, primary_key=True)
+    roles = db.Column(db.String(200), default="")  # ",Rectoría,Coordinación,"
+    institucion_id = db.Column(db.Integer, index=True)
+    titulo = db.Column(db.String(200), default="")
+    texto = db.Column(db.Text, default="")
+    url = db.Column(db.String(200), default="")
+    nivel = db.Column(db.String(10), default="info")  # info | alerta
+    creada_en = db.Column(db.String(30), default="", index=True)
+    leida_por = db.Column(db.Text, default="")  # ",usuario1,usuario2,"
+
+
+class CarneVersion(db.Model):
+    """Versión vigente del QR impreso de cada estudiante. Al bloquear sube la versión: el plástico viejo queda anulado."""
+    __tablename__ = "carnes_version"
+    id = db.Column(db.Integer, primary_key=True)
+    estudiante_id = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    institucion_id = db.Column(db.Integer, index=True)
+    version = db.Column(db.Integer, default=1)
+    bloqueado = db.Column(db.Boolean, default=False)  # True hasta que la reimpresión se cierre
+    motivo = db.Column(db.String(200), default="")
+    bloqueado_por = db.Column(db.String(80), default="")
+    bloqueado_en = db.Column(db.String(30), default="")
+    via = db.Column(db.String(20), default="")  # ID | PREGUNTAS
+
+
+class CarneReimpresion(db.Model):
+    __tablename__ = "carnes_reimpresion"
+    id = db.Column(db.Integer, primary_key=True)
+    estudiante_id = db.Column(db.Integer, index=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    estudiante_nombre = db.Column(db.String(200), default="")
+    grado = db.Column(db.String(60), default="")
+    version_nueva = db.Column(db.Integer, default=2)
+    valor = db.Column(db.Integer, default=_REIMPRESION_VALOR)
+    cobro = db.Column(db.String(12), default="POR_COBRAR")  # POR_COBRAR | COBRADO
+    cobrado_por = db.Column(db.String(80), default="")
+    cobrado_en = db.Column(db.String(30), default="")
+    motivo = db.Column(db.String(200), default="")
+    via = db.Column(db.String(20), default="")
+    solicitado_por = db.Column(db.String(80), default="")
+    creada_en = db.Column(db.String(30), default="")
+    reimpreso_en = db.Column(db.String(30), default="")
+    ip = db.Column(db.String(80), default="")
+
+
+class SegIntento(db.Model):
+    """Intentos fallidos de validación (búsqueda en malla, preguntas, token CEO) para bloquear por fuerza bruta."""
+    __tablename__ = "seg_intentos"
+    id = db.Column(db.Integer, primary_key=True)
+    clave = db.Column(db.String(120), index=True)  # ej: malla:usuario | preg:est:12 | token:usuario
+    ts = db.Column(db.String(30), index=True)
+    ip = db.Column(db.String(80), default="")
+
+
+class CarneFraude(db.Model):
+    __tablename__ = "carnes_fraude"
+    id = db.Column(db.Integer, primary_key=True)
+    estudiante_id = db.Column(db.Integer, index=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    ts = db.Column(db.String(30), default="", index=True)
+    detalle = db.Column(db.String(200), default="")
+    ip = db.Column(db.String(80), default="")
+
+
+class TokenAutorizacion(db.Model):
+    """Token personal del CEO para 'Autorizar con Token'. Solo se guarda el hash."""
+    __tablename__ = "token_autorizacion"
+    id = db.Column(db.Integer, primary_key=True)
+    usuario = db.Column(db.String(80), unique=True, index=True)
+    hash = db.Column(db.String(255), default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
+class TicketDoc(db.Model):
+    __tablename__ = "tickets_doc"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(30), unique=True, index=True)
+    tipo = db.Column(db.String(40), default="")
+    titulo = db.Column(db.String(220), default="")
+    justificacion = db.Column(db.Text, default="")
+    institucion_id = db.Column(db.Integer, index=True)
+    institucion_codigo = db.Column(db.String(40), default="")
+    institucion_nombre = db.Column(db.String(220), default="")
+    valor_actual = db.Column(db.Numeric(14, 2), default=0)
+    valor_solicitado = db.Column(db.Numeric(14, 2), default=0)
+    porcentaje = db.Column(db.Float, default=0.0)
+    importancia = db.Column(db.String(8), default="NORMAL")  # NORMAL | ALTA
+    estado = db.Column(db.String(24), default="PEND_CONTABILIDAD", index=True)
+    # PEND_CONTABILIDAD | PEND_CEO | APROBADO | AUTORIZADO | APLICADO | RECHAZADO
+    creado_por = db.Column(db.String(80), default="")
+    creado_rol = db.Column(db.String(30), default="")
+    creado_en = db.Column(db.String(30), default="")
+    adjunto_nombre = db.Column(db.String(200), default="")
+    adjunto_mime = db.Column(db.String(80), default="")
+    adjunto_bytes = db.Column(db.LargeBinary)
+    cont_por = db.Column(db.String(80), default="")
+    cont_en = db.Column(db.String(30), default="")
+    cont_nota = db.Column(db.Text, default="")
+    ceo_por = db.Column(db.String(80), default="")
+    ceo_en = db.Column(db.String(30), default="")
+    ceo_nota = db.Column(db.Text, default="")
+    aplicado_por = db.Column(db.String(80), default="")
+    aplicado_en = db.Column(db.String(30), default="")
+    rechazado_por = db.Column(db.String(80), default="")
+    rechazado_en = db.Column(db.String(30), default="")
+    rechazo_motivo = db.Column(db.Text, default="")
+
+
+class TicketDocEvento(db.Model):
+    __tablename__ = "tickets_doc_eventos"
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, index=True)
+    ts = db.Column(db.String(30), default="")
+    usuario = db.Column(db.String(80), default="")
+    rol = db.Column(db.String(30), default="")
+    accion = db.Column(db.String(60), default="")
+    detalle = db.Column(db.Text, default="")
+    ip = db.Column(db.String(80), default="")
+
+
+class ApiClave(db.Model):
+    __tablename__ = "api_claves"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), default="")
+    prefijo = db.Column(db.String(12), index=True)
+    hash = db.Column(db.String(255), default="")
+    alcance = db.Column(db.String(80), default="geo,estadisticas")
+    activa = db.Column(db.Boolean, default=True)
+    creada_por = db.Column(db.String(80), default="")
+    creada_en = db.Column(db.String(30), default="")
+    ultimo_uso = db.Column(db.String(30), default="")
+    ultimo_ip = db.Column(db.String(80), default="")
+    usos = db.Column(db.Integer, default=0)
+
+
+class InstGeo(db.Model):
+    __tablename__ = "inst_geo"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    lat = db.Column(db.Float)
+    lon = db.Column(db.Float)
+    actualizado_por = db.Column(db.String(80), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
+def _seg_ensure():
+    if _SEG_LISTO["ok"]:
+        return
+    try:
+        for m in (NotifWeb, CarneVersion, CarneReimpresion, SegIntento, CarneFraude, TokenAutorizacion,
+                  TicketDoc, TicketDocEvento, ApiClave, InstGeo):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        _SEG_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR seguridad ensure:", repr(ex), flush=True)
+
+
+def _ts():
+    return "%s %s" % (fecha_hoy(), hora_actual())
+
+
+def _ip():
+    try:
+        return (_client_ip_audit() or "")[:80]
+    except Exception:
+        return ""
+
+
+def _norm_txt(x):
+    t = _ud.normalize("NFKD", str(x or "").lower()).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9 ]", " ", t)
+
+
+def _tokens(x):
+    return sorted(w for w in _norm_txt(x).split() if w)
+
+
+def _solo_digitos(x):
+    return re.sub(r"\D", "", str(x or ""))
+
+
+# ───────────────────────── intentos fallidos / bloqueo temporal ─────────────────────────
+def _seg_fallos(clave, minutos):
+    _seg_ensure()
+    desde = (ahora() - timedelta(minutes=minutos)).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        return SegIntento.query.filter(SegIntento.clave == clave, SegIntento.ts >= desde).count()
+    except Exception:
+        db.session.rollback()
+        return 0
+
+
+def _seg_registrar_fallo(clave):
+    try:
+        db.session.add(SegIntento(clave=clave, ts=_ts(), ip=_ip()))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _seg_limpiar(clave):
+    try:
+        SegIntento.query.filter_by(clave=clave).delete()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+# ───────────────────────── notificaciones web (campana en vivo) ─────────────────────────
+def _notif_crear(roles, titulo, texto="", url="", institucion_id=None, nivel="info"):
+    try:
+        _seg_ensure()
+        db.session.add(NotifWeb(roles="," + ",".join(roles) + ",", institucion_id=institucion_id, titulo=titulo[:200],
+                                texto=texto, url=url[:200], nivel=nivel, creada_en=_ts()))
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        print("ERROR notif:", repr(ex), flush=True)
+
+
+_ROLES_GERENCIA = ("Gerente", "Superadmin", "Administrador")
+_ROLES_TICKET = ("Soporte", "Cobranza", "Comercial", "Contabilidad", "Desarrollador", "Gerente", "Superadmin", "Administrador")
+
+
+@app.route("/notificaciones/pendientes.json")
+def notificaciones_pendientes():
+    if not requiere_login():
+        return jsonify({"items": []})
+    rol = rol_actual() or ""
+    usuario = session.get("usuario") or ""
+    try:
+        _seg_ensure()
+        desde = (ahora() - timedelta(days=14)).strftime("%Y-%m-%d")
+        q = NotifWeb.query.filter(NotifWeb.creada_en >= desde, NotifWeb.roles.like("%," + rol + ",%"))
+        if rol in ("Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador"):
+            iid = institucion_id_actual()
+            q = q.filter(NotifWeb.institucion_id == iid) if iid else q.filter(NotifWeb.id == -1)
+        items = []
+        for n in q.order_by(NotifWeb.id.desc()).limit(25).all():
+            if ("," + usuario + ",") in (n.leida_por or ""):
+                continue
+            items.append({"id": n.id, "titulo": n.titulo, "texto": n.texto, "url": n.url, "nivel": n.nivel})
+        # Gerencia: solicitudes que esperan al CEO (siempre visibles hasta resolverse)
+        if rol in _ROLES_GERENCIA:
+            for t in TicketDoc.query.filter_by(estado="PEND_CEO").order_by(TicketDoc.id.desc()).limit(10).all():
+                items.append({"id": "t%d" % t.id, "titulo": "Solicitud %s requiere aprobación del CEO" % (t.institucion_codigo or t.codigo),
+                              "texto": "%s · %s" % (t.codigo, t.titulo), "url": "/tickets-doc/%d" % t.id, "nivel": "alerta", "fijo": True})
+        return jsonify({"items": items[:12]})
+    except Exception:
+        db.session.rollback()
+        return jsonify({"items": []})
+
+
+@app.route("/notificaciones/leer/<int:nid>", methods=["POST"])
+def notificaciones_leer(nid):
+    if not requiere_login():
+        return jsonify({"ok": False}), 401
+    try:
+        n = NotifWeb.query.get(nid)
+        u = session.get("usuario") or ""
+        if n and ("," + u + ",") not in (n.leida_por or ""):
+            n.leida_por = (n.leida_por or ",") + u + ","
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return jsonify({"ok": True})
+
+
+_NOTIF_JS = """<style>
+#nw-box{position:fixed;right:14px;bottom:14px;z-index:2147483300;display:flex;flex-direction:column;gap:8px;max-width:min(360px,calc(100vw - 28px));font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif}
+.nw-it{background:#0B2D57;color:#fff;border-radius:14px;padding:11px 14px;box-shadow:0 8px 28px rgba(0,0,0,.3);font-size:13px;line-height:1.4}
+.nw-it.al{background:#b91c1c}.nw-it b{display:block;font-size:13.5px;margin-bottom:2px}
+.nw-it a{color:#fff;font-weight:700}.nw-x{float:right;border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:8px;cursor:pointer;margin-left:8px;padding:0 8px;min-height:0}
+#nw-tk{position:fixed;left:14px;bottom:14px;z-index:2147483200;background:#fff;border:1px solid #cbd5e1;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;color:#0B2D57;text-decoration:none;box-shadow:0 4px 14px rgba(15,23,42,.15)}
+</style><div id="nw-box"></div>__TK__<script>(function(){
+var box=document.getElementById('nw-box');if(!box)return;var vistos={};
+function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+function pintar(items){items.forEach(function(it){if(vistos[it.id])return;vistos[it.id]=1;
+ var d=document.createElement('div');d.className='nw-it'+(it.nivel==='alerta'?' al':'');
+ d.innerHTML='<button class="nw-x" title="Cerrar">×</button><b>'+esc(it.titulo)+'</b>'+esc(it.texto)+(it.url?'<br><a href="'+esc(it.url)+'">Abrir →</a>':'');
+ d.querySelector('.nw-x').onclick=function(){d.remove();if(!it.fijo&&typeof it.id==='number'){try{fetch('/notificaciones/leer/'+it.id,{method:'POST',credentials:'same-origin'});}catch(e){}}};
+ box.appendChild(d);});}
+function poll(){if(document.hidden)return;fetch('/notificaciones/pendientes.json',{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){pintar(d.items||[]);}).catch(function(){});}
+poll();setInterval(poll,20000);document.addEventListener('visibilitychange',function(){if(!document.hidden)poll();});
+})();</script>"""
+
+
+@app.after_request
+def _notif_inyectar(resp):
+    """Inyecta el aviso en vivo y el acceso a Tickets en las páginas HTML de usuarios con sesión."""
+    try:
+        if request.method != "GET" or resp.status_code != 200 or resp.direct_passthrough:
+            return resp
+        if (resp.mimetype or "") != "text/html":
+            return resp
+        p = request.path or ""
+        if p.startswith(("/static", "/notificaciones", "/api/", "/portal", "/login")) or p == "/":
+            return resp
+        if not session.get("usuario"):
+            return resp
+        html = resp.get_data(as_text=True)
+        if "</body>" not in html or 'id="nw-box"' in html:
+            return resp
+        rol = rol_actual() or ""
+        tk = ""
+        if rol in _ROLES_TICKET and not p.startswith("/tickets-doc"):
+            tk = '<a id="nw-tk" href="/tickets-doc">📄 Tickets documentales</a>'
+        html = html.replace("</body>", _NOTIF_JS.replace("__TK__", tk) + "</body>", 1)
+        resp.set_data(html)
+    except Exception:
+        pass
+    return resp
+
+
+# ───────────────────────── step-up: pedir datos de validación antes de acciones sensibles ─────────────────────────
+def _usuario_sesion():
+    """Usuario interno en sesión (por id; el nombre de usuario puede repetirse entre colegios)."""
+    try:
+        uid = session.get("uid") or session.get("user_id")
+        if uid:
+            u = Usuario.query.get(int(uid))
+            if u:
+                return u
+        return Usuario.query.filter_by(usuario=session.get("usuario") or "").order_by(Usuario.id).first()
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def _step_up_ok(password, token_mfa=""):
+    """Reconfirma la identidad del usuario en sesión: contraseña (+ código MFA si lo tiene)."""
+    try:
+        u = _usuario_sesion()
+        if not u:
+            return False
+        clave = "stepup:%s" % u.usuario
+        if _seg_fallos(clave, 15) >= 5:
+            return False
+        ok = verificar_password(u.password, password or "")
+        if ok and _mfa_requerido(u) and getattr(u, "mfa_secret", None):
+            ok = _mfa_verificar(u.mfa_secret, token_mfa)
+        if not ok:
+            _seg_registrar_fallo(clave)
+        else:
+            _seg_limpiar(clave)
+        return bool(ok)
+    except Exception:
+        db.session.rollback()
+        return False
+
+
+def _step_up_campos():
+    try:
+        u = _usuario_sesion()
+        mfa = bool(u and _mfa_requerido(u) and getattr(u, "mfa_secret", None))
+    except Exception:
+        mfa = False
+    inp = "padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box"
+    html = ("<div style='background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin:10px 0'>"
+            "<b>🔐 Validación de seguridad</b><div class='mini-text' style='margin:2px 0 8px'>Confirma tu identidad para continuar.</div>"
+            "<input type='password' name='su_password' placeholder='Tu contraseña actual' autocomplete='current-password' required style='%s'>" % inp)
+    if mfa:
+        html += "<input name='su_mfa' placeholder='Código de 6 dígitos de tu app autenticadora' inputmode='numeric' maxlength='8' required style='%s;margin-top:8px'>" % inp
+    return html + "</div>"
+
+
+def _step_up_form_ok():
+    return _step_up_ok(request.form.get("su_password", ""), request.form.get("su_mfa", ""))
+
+
+# ───────────────────────── BLOQUEO DE CARNÉ ─────────────────────────
+def _carne_version_de(est_id):
+    try:
+        _seg_ensure()
+        return CarneVersion.query.filter_by(estudiante_id=est_id).first()
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def _carne_firma(inst, codigo, ver):
+    import hmac, hashlib
+    return hmac.new(str(app.secret_key).encode("utf-8"), ("v.%s.%s.%s" % (inst or 0, codigo, ver)).encode("utf-8"),
+                    hashlib.sha256).hexdigest()[:12]
+
+
+def _qr_texto_v(e):
+    """QR del plástico: versión 1 = formato histórico; tras un bloqueo, versión firmada."""
+    r = _carne_version_de(getattr(e, "id", None))
+    if r and (r.version or 1) > 1:
+        return "EDT2.%s.%s.%s.%s" % (e.institucion_id or 0, r.version, _carne_firma(e.institucion_id, e.codigo, r.version), e.codigo)
+    return "Codigo: %s" % e.codigo
+
+
+def _qr_parse_cv(t):
+    p = (t or "").strip().split(".", 4)
+    if len(p) != 5 or p[0] != "EDT2":
+        return None
+    try:
+        inst, ver = int(p[1]), int(p[2])
+    except Exception:
+        return None
+    import hmac
+    if not hmac.compare_digest(p[3], _carne_firma(inst, p[4], ver)):
+        return {"tipo": "invalido"}
+    return {"tipo": "cv", "inst": inst or None, "ver": ver, "codigo": p[4]}
+
+
+def _carne_lectura_valida(e, info):
+    """False si el plástico leído está anulado (fraude). Los tokens dinámicos (carné digital) no se afectan."""
+    try:
+        if info.get("tipo") == "token":
+            return True
+        r = _carne_version_de(e.id)
+        if info.get("tipo") == "cv":
+            return bool(r and info.get("ver") == (r.version or 1) and not r.bloqueado)
+        if r and ((r.version or 1) > 1 or r.bloqueado):
+            return False
+    except Exception:
+        db.session.rollback()
+    return True
+
+
+def _bloqueo_guard():
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Soporte", "Superadmin"):
+        return acceso_denegado("Solo el equipo de Soporte puede bloquear carnés.")
+    _seg_ensure()
+    return None
+
+
+def _buscar_malla(f, con_id):
+    """Coincidencia EXACTA en malla. Devuelve el estudiante o None. Nunca revela qué campo falló."""
+    nom, cole, sede, grado, cod = (f.get("nombre") or "").strip(), f.get("colegio", type=int), (f.get("sede") or "").strip(), \
+        (f.get("grado") or "").strip(), (f.get("codigo") or "").strip()
+    if not nom or not cole or not sede or not grado or (con_id and not cod):
+        return None
+    if len(_tokens(nom)) < 2:
+        return None
+    q = Estudiante.query.filter(Estudiante.institucion_id == cole)
+    if con_id:
+        q = q.filter(Estudiante.codigo == cod)
+    cand = []
+    inst = Institucion.query.get(cole)
+    for e in q.all():
+        sede_e = (e.sede or (inst.sede if inst else "") or "").strip()
+        if (_norm_txt(sede_e).split() == _norm_txt(sede).split() and _norm_txt(e.grado).split() == _norm_txt(grado).split()
+                and _tokens("%s %s" % (e.nombre, e.apellido)) == _tokens(nom)):
+            cand.append(e)
+    return cand[0] if len(cand) == 1 else None
+
+
+def _ultimo_ingreso(e):
+    r = (IngresoPorteria.query.filter(IngresoPorteria.estudiante_id == e.id, IngresoPorteria.fecha < fecha_hoy())
+         .order_by(IngresoPorteria.fecha.desc(), IngresoPorteria.hora.desc()).first())
+    return r
+
+
+def _preguntas_disponibles(e):
+    """Pregunta → datos esperados (SOLO en el servidor). Devuelve lista de claves disponibles."""
+    disp = []
+    if (e.acudiente_doc or "").strip() and any((x or "").strip() for x in (e.acudiente, e.padre, e.madre)):
+        disp.append("familia")
+    if _ultimo_ingreso(e):
+        disp.append("historial")
+    pr = CarneProduccion.query.filter_by(estudiante_id=e.id).first()
+    if pr and pr.lote_id and CarneLote.query.get(pr.lote_id):
+        disp.append("logistica")
+    return disp
+
+
+def _validar_respuestas(e, f):
+    ok_all = True
+    disp = _preguntas_disponibles(e)
+    if "familia" in disp:
+        nom_ok = any(_tokens(f.get("fam_nombre")) == _tokens(x) for x in (e.acudiente, e.padre, e.madre) if (x or "").strip())
+        ced_ok = bool(_solo_digitos(f.get("fam_cedula"))) and _solo_digitos(f.get("fam_cedula")) == _solo_digitos(e.acudiente_doc)
+        ok_all = ok_all and nom_ok and ced_ok
+    if "historial" in disp:
+        r = _ultimo_ingreso(e)
+        ok_all = ok_all and (f.get("his_hora") or "").strip()[:5] == (r.hora or "")[:5]
+    if "logistica" in disp:
+        pr = CarneProduccion.query.filter_by(estudiante_id=e.id).first()
+        lote = CarneLote.query.get(pr.lote_id)
+        oper_ok = bool(_tokens(f.get("log_operario"))) and any(w in _tokens(lote.operario) for w in _tokens(f.get("log_operario")))
+        fecha_ok = False
+        try:
+            ref = datetime.strptime((lote.fecha_estimada or lote.cerrado_en[:10]), "%Y-%m-%d")
+            dado = datetime.strptime((f.get("log_fecha") or "").strip(), "%Y-%m-%d")
+            fecha_ok = abs((dado - ref).days) <= 7
+        except Exception:
+            fecha_ok = False
+        ok_all = ok_all and oper_ok and fecha_ok
+    return ok_all and len(disp) >= 2
+
+
+def _bloqueo_ejecutar(e, motivo, via):
+    ts = _ts()
+    quien = session.get("usuario") or ""
+    r = CarneVersion.query.filter_by(estudiante_id=e.id).first()
+    if not r:
+        r = CarneVersion(estudiante_id=e.id, institucion_id=e.institucion_id, version=1)
+        db.session.add(r)
+    r.version = (r.version or 1) + 1
+    r.bloqueado, r.motivo, r.bloqueado_por, r.bloqueado_en, r.via = True, motivo[:200], quien, ts, via
+    pr = CarneProduccion.query.filter_by(estudiante_id=e.id).first()
+    if pr:
+        pr.estado = "REIMPRESION"
+    else:
+        db.session.add(CarneProduccion(estudiante_id=e.id, institucion_id=e.institucion_id, estado="REIMPRESION", descargas=0))
+    db.session.add(CarneReimpresion(estudiante_id=e.id, institucion_id=e.institucion_id,
+                                    estudiante_nombre=("%s %s" % (e.nombre, e.apellido)).strip(), grado=e.grado or "",
+                                    version_nueva=r.version, valor=_REIMPRESION_VALOR, motivo=motivo[:200], via=via,
+                                    solicitado_por=quien, creada_en=ts, ip=_ip()))
+    db.session.commit()
+    try:
+        registrar_auditoria("Carné bloqueado", "%s · %s · vía %s · reimpresión $%s" % (e.codigo, motivo[:80], via, _REIMPRESION_VALOR))
+    except Exception:
+        db.session.rollback()
+    _notif_crear(_ROLES_GERENCIA, "Carné bloqueado · reimpresión por cobrar",
+                 "%s %s (%s) · $%s COP · vía %s" % (e.nombre, e.apellido, e.grado, "{:,}".format(_REIMPRESION_VALOR).replace(",", "."), via),
+                 "/gerencia/proveedores", None, "info")
+    _notif_crear(("Rectoría", "Coordinación", "Secretaría"), "Carné bloqueado",
+                 "El carné de %s %s (%s) fue bloqueado y quedó pendiente de reimpresión." % (e.nombre, e.apellido, e.grado),
+                 "/dashboard", e.institucion_id, "alerta")
+
+
+@app.route("/soporte/bloqueo-carne", methods=["GET", "POST"])
+def soporte_bloqueo_carne():
+    g = _bloqueo_guard()
+    if g is not None:
+        return g
+    usuario = session.get("usuario") or ""
+    modo = (request.values.get("modo") or "id").strip()
+    if modo not in ("id", "preguntas"):
+        modo = "id"
+    err = msg = ""
+    contexto = session.get("bloqueo_ctx") if isinstance(session.get("bloqueo_ctx"), dict) else None
+    ahora_s = int(__import__("time").time())
+    if contexto and (contexto.get("exp", 0) < ahora_s or contexto.get("u") != usuario):
+        session.pop("bloqueo_ctx", None)
+        contexto = None
+    accion = (request.form.get("accion") or "").strip() if request.method == "POST" else ""
+
+    if accion == "buscar":
+        clave = "malla:%s" % usuario
+        if _seg_fallos(clave, 30) >= 5:
+            err = "Demasiados intentos fallidos. Espera 30 minutos o pide apoyo a Gerencia."
+        else:
+            e = _buscar_malla(request.form, con_id=(modo == "id"))
+            if not e:
+                _seg_registrar_fallo(clave)
+                err = "No se encontró un único estudiante con esos datos exactos. Verifica los datos o usa la validación por preguntas."
+                if _seg_fallos(clave, 30) >= 5:
+                    _notif_crear(_ROLES_GERENCIA, "Intentos fallidos en bloqueo de carné", "El usuario %s superó 5 intentos de búsqueda." % usuario, "/gerencia/auditoria", None, "alerta")
+            else:
+                _seg_limpiar(clave)
+                if modo == "id":
+                    session["bloqueo_ctx"] = {"est": e.id, "nivel": "id", "u": usuario, "exp": ahora_s + 600}
+                    contexto = session["bloqueo_ctx"]
+                else:
+                    session["bloqueo_ctx"] = {"est": e.id, "nivel": "pend_preg", "u": usuario, "exp": ahora_s + 900}
+                    contexto = session["bloqueo_ctx"]
+    elif accion == "preguntas" and contexto and contexto.get("nivel") == "pend_preg":
+        e = Estudiante.query.get(contexto["est"])
+        clave = "preg:est:%s" % contexto["est"]
+        if _seg_fallos(clave, 60) >= 3:
+            err = "Validación bloqueada por 60 minutos (3 intentos fallidos). Se notificó a Gerencia."
+        elif e and _validar_respuestas(e, request.form):
+            _seg_limpiar(clave)
+            contexto["nivel"], contexto["exp"] = "preguntas", ahora_s + 600
+            session["bloqueo_ctx"] = contexto
+        else:
+            _seg_registrar_fallo(clave)
+            err = "Las respuestas no coinciden. No se permite continuar."
+            if _seg_fallos(clave, 60) >= 3:
+                _notif_crear(_ROLES_GERENCIA, "Validación de carné fallida (posible suplantación)",
+                             "3 intentos fallidos de preguntas por el usuario %s." % usuario, "/gerencia/auditoria", None, "alerta")
+                session.pop("bloqueo_ctx", None)
+                contexto = None
+    elif accion == "bloquear" and contexto and contexto.get("nivel") in ("id", "preguntas"):
+        e = Estudiante.query.get(contexto["est"])
+        motivo = (request.form.get("motivo") or "").strip()
+        det = (request.form.get("detalle") or "").strip()[:120]
+        if motivo not in ("Pérdida", "Hurto / robo", "Daño", "Sospecha de fraude", "Otro"):
+            err = "Selecciona el motivo."
+        elif not _step_up_form_ok():
+            err = "No se pudo validar tu identidad. Revisa tu contraseña / código."
+        elif e:
+            _bloqueo_ejecutar(e, ("%s %s" % (motivo, det)).strip(), "ID" if contexto["nivel"] == "id" else "PREGUNTAS")
+            session.pop("bloqueo_ctx", None)
+            contexto = None
+            msg = "Carné bloqueado. El plástico anterior quedó anulado y el estudiante pasó a «Pendiente por reimpresión»."
+
+    insts = Institucion.query.filter(Institucion.estado == "ACTIVA").order_by(Institucion.nombre).all()
+    opt_i = "<option value=''>— Colegio —</option>" + "".join("<option value='%d'>%s</option>" % (i.id, _esc(i.nombre)) for i in insts)
+    inp = "padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box"
+    aviso = ("<div class='msg ok'>%s</div>" % _esc(msg) if msg else "") + ("<div class='msg danger'>%s</div>" % _esc(err) if err else "")
+    _c1 = ("#0B2D57", "#fff") if modo == "id" else ("#e2e8f0", "#0f172a")
+    _c2 = ("#0B2D57", "#fff") if modo == "preguntas" else ("#e2e8f0", "#0f172a")
+    tabs = ("<div style='display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap'><a class='btn' style='background:%s;color:%s' href='?modo=id'>Capa 1 · Con ID del estudiante</a>"
+            "<a class='btn' style='background:%s;color:%s' href='?modo=preguntas'>Capa 2 · Sin ID (preguntas de validación)</a></div>") % (_c1[0], _c1[1], _c2[0], _c2[1])
+    cuerpo = ""
+    if contexto and contexto.get("nivel") == "pend_preg":
+        e = Estudiante.query.get(contexto["est"])
+        disp = _preguntas_disponibles(e) if e else []
+        if len(disp) < 2:
+            cuerpo = "<section class='role-panel'><p>No hay datos suficientes para validar por preguntas. Escala el caso a Gerencia.</p></section>"
+        else:
+            qs = ""
+            if "familia" in disp:
+                qs += ("<h3>1. Pregunta familiar</h3><p class='mini-text'>Pide el nombre completo y la cédula del padre, madre o acudiente registrado.</p>"
+                       "<input name='fam_nombre' placeholder='Nombre completo del acudiente' required style='%s'><input name='fam_cedula' placeholder='Cédula del acudiente' inputmode='numeric' required style='%s;margin-top:8px'>") % (inp, inp)
+            if "historial" in disp:
+                r = _ultimo_ingreso(e)
+                f_h = "/".join(reversed(r.fecha.split("-")))
+                qs += ("<h3>2. Pregunta de historial</h3><p class='mini-text'>¿A qué hora exacta ingresó el estudiante el día <b>%s</b>? (último día con registro)</p>"
+                       "<input type='time' name='his_hora' required style='%s'>") % (_esc(f_h), inp)
+            if "logistica" in disp:
+                qs += ("<h3>3. Pregunta de logística</h3><p class='mini-text'>¿Qué operario del proveedor imprimió la tanda y en qué fecha aproximada llegó el plástico al colegio?</p>"
+                       "<input name='log_operario' placeholder='Operario del proveedor' required style='%s'><input type='date' name='log_fecha' required style='%s;margin-top:8px'>") % (inp, inp)
+            cuerpo = ("<section class='role-panel'><h2 style='margin-top:0'>Validación por preguntas</h2>"
+                      "<p class='mini-text'>Estudiante localizado en malla. Las respuestas correctas no se muestran: el sistema las compara. Tras 3 fallos se bloquea 60 minutos y se avisa a Gerencia.</p>"
+                      "<form method='POST'><input type='hidden' name='accion' value='preguntas'><input type='hidden' name='modo' value='preguntas'>%s"
+                      "<button class='btn' style='margin-top:12px'>Validar respuestas</button></form></section>") % qs
+    elif contexto and contexto.get("nivel") in ("id", "preguntas"):
+        e = Estudiante.query.get(contexto["est"])
+        opts = "".join("<option>%s</option>" % m for m in ("Pérdida", "Hurto / robo", "Daño", "Sospecha de fraude", "Otro"))
+        cuerpo = ("<section class='role-panel'><h2 style='margin-top:0'>✅ Identidad validada</h2>"
+                  "<p><b>%s %s</b> · Grado %s</p>"
+                  "<div class='mini-text'>Al bloquear: el QR del plástico actual queda anulado («¡CÓDIGO ANULADO / FRAUDE!»), el estudiante pasa a «Pendiente por reimpresión» "
+                  "y queda un cobro de <b>$%s COP</b> en Gerencia.</div>"
+                  "<form method='POST' style='margin-top:10px'><input type='hidden' name='accion' value='bloquear'><input type='hidden' name='modo' value='%s'>"
+                  "<select name='motivo' required style='%s'><option value=''>— Motivo —</option>%s</select>"
+                  "<input name='detalle' placeholder='Detalle (opcional)' maxlength='120' style='%s;margin-top:8px'>%s"
+                  "<button class='btn' style='background:#b91c1c;color:#fff;margin-top:6px'>🚫 Bloqueo inmediato</button></form></section>") % (
+            _esc(e.nombre), _esc(e.apellido), _esc(e.grado), "{:,}".format(_REIMPRESION_VALOR).replace(",", "."), modo, inp, opts, inp, _step_up_campos())
+    else:
+        con_id = (modo == "id")
+        cuerpo = ("<section class='role-panel'><h2 style='margin-top:0'>%s</h2>"
+                  "<p class='mini-text'>Búsqueda <b>en malla</b>: se exigen todos los datos y deben coincidir exactamente. Si falta uno o no coincide, no se muestra nada.</p>"
+                  "<form method='POST'><input type='hidden' name='accion' value='buscar'><input type='hidden' name='modo' value='%s'>"
+                  "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px'>"
+                  "<input name='nombre' placeholder='1. Nombre y apellido completo' required style='%s'>"
+                  "<select name='colegio' required style='%s'>%s</select>"
+                  "<input name='sede' placeholder='3. Sede exacta' required style='%s'>"
+                  "<input name='grado' placeholder='4. Grado actual (ej. 9°A)' required style='%s'>%s</div>"
+                  "<button class='btn' style='margin-top:12px'>Buscar en malla</button></form></section>") % (
+            "Capa 1 · Datos exactos del estudiante" if con_id else "Capa 2 · Plan B sin ID", modo, inp, inp, opt_i, inp, inp,
+            ("<input name='codigo' placeholder='5. ID único / número de matrícula' required style='%s'>" % inp) if con_id else "")
+    hist = ""
+    try:
+        for r in CarneReimpresion.query.order_by(CarneReimpresion.id.desc()).limit(10).all():
+            hist += "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(r.creada_en[:16]), _esc(r.estudiante_nombre), _esc(r.motivo), _esc(r.via))
+    except Exception:
+        db.session.rollback()
+    hist_html = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>Últimos bloqueos</h3><div style='overflow:auto'>"
+                 "<table style='width:100%%;border-collapse:collapse;font-size:12.5px'><tr style='background:#f1f5f9'><th>Fecha</th><th>Estudiante</th><th>Motivo</th><th>Vía</th></tr>%s</table></div></section>") % (hist or "<tr><td colspan='4'>Sin bloqueos.</td></tr>")
+    content = ("<header class='role-hero'><div><h1>🚫 Bloqueo de carné</h1><p>Suspender un carné perdido, robado o comprometido. Requiere validación de identidad del estudiante.</p></div></header>"
+               + aviso + tabs + cuerpo + hist_html)
+    return page("Bloqueo de carné", shell(content))
+
+
+def _bloqueo_marcar_reimpreso(est_ids):
+    """Se llama al cerrar tanda: la reimpresión ya salió, el carné nuevo (versión firmada) queda vigente."""
+    try:
+        _seg_ensure()
+        ts = _ts()
+        for r in CarneVersion.query.filter(CarneVersion.estudiante_id.in_(list(est_ids) or [-1]), CarneVersion.bloqueado == True).all():  # noqa: E712
+            r.bloqueado = False
+        for r in CarneReimpresion.query.filter(CarneReimpresion.estudiante_id.in_(list(est_ids) or [-1]), CarneReimpresion.reimpreso_en == "").all():
+            r.reimpreso_en = ts
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+# ───────────────────────── TICKETS DOCUMENTALES ─────────────────────────
+_TD_TIPOS = (("ajuste_tarifa", "Ajuste de Tarifa SaaS"), ("validacion_precio", "Validación de Precio"),
+             ("descuento_especial", "Descuento especial"), ("prorroga_pago", "Prórroga de pago"),
+             ("cambio_contrato", "Cambio crítico de contrato"), ("otro", "Otro"))
+_TD_LIMITE_DESC = 15.0  # % de descuento sobre el cual el ticket salta al CEO
+_TD_ESTADOS = {"PEND_CONTABILIDAD": ("Pendiente Contabilidad", "#b45309"), "PEND_CEO": ("Pendiente CEO", "#b91c1c"),
+               "APROBADO": ("Aprobado", "#15803d"), "AUTORIZADO": ("Autorizado por el CEO", "#15803d"),
+               "APLICADO": ("Aplicado", "#334155"), "RECHAZADO": ("Rechazado", "#7f1d1d")}
+
+
+def _td_evento(t, accion, detalle=""):
+    db.session.add(TicketDocEvento(ticket_id=t.id, ts=_ts(), usuario=session.get("usuario") or "", rol=rol_actual() or "",
+                                   accion=accion, detalle=detalle, ip=_ip()))
+
+
+def _td_guard():
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in _ROLES_TICKET:
+        return acceso_denegado("Este módulo es para roles internos de PROCSIS.")
+    _seg_ensure()
+    return None
+
+
+def _td_badge(est):
+    lab, col = _TD_ESTADOS.get(est, (est, "#334155"))
+    return "<span style='background:%s;color:#fff;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700'>%s</span>" % (col, _esc(lab))
+
+
+def _td_cartera(inst_id):
+    """Estado de cartera del colegio para el filtro de Contabilidad."""
+    try:
+        if not inst_id:
+            return ("SIN COLEGIO", 0, 0.0)
+        venc, tot = 0, 0.0
+        for f in FacturaCobro.query.filter(FacturaCobro.institucion_id == inst_id, FacturaCobro.estado.in_(("PENDIENTE", "VENCIDO"))).all():
+            tot += float(f.valor or 0)
+            if f.estado == "VENCIDO":
+                venc += 1
+        return ("EN MORA" if venc else "AL DÍA", venc, tot)
+    except Exception:
+        db.session.rollback()
+        return ("SIN DATOS", 0, 0.0)
+
+
+@app.route("/tickets-doc")
+def tickets_doc_lista():
+    g = _td_guard()
+    if g is not None:
+        return g
+    rol, usuario = rol_actual(), session.get("usuario") or ""
+    q = TicketDoc.query
+    if rol not in ("Contabilidad",) + _ROLES_GERENCIA:
+        q = q.filter(TicketDoc.creado_por == usuario)
+    est = (request.args.get("estado") or "").strip()
+    if est in _TD_ESTADOS:
+        q = q.filter(TicketDoc.estado == est)
+    rows = q.order_by(TicketDoc.id.desc()).limit(200).all()
+    tr = "".join(
+        "<tr style='border-bottom:1px solid #e2e8f0'><td><a href='/tickets-doc/%d'><b>%s</b></a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            t.id, _esc(t.codigo), _esc(t.titulo), _esc(t.institucion_codigo or "—"),
+            "<b style='color:#b91c1c'>ALTA</b>" if t.importancia == "ALTA" else "Normal", _td_badge(t.estado), _esc((t.creado_en or "")[:16]))
+        for t in rows) or "<tr><td colspan='6' style='padding:16px;text-align:center;color:#64748b'>Sin tickets.</td></tr>"
+    chips = "".join("<a class='btn' style='padding:5px 12px;font-size:12px' href='?estado=%s'>%s</a>" % (k, v[0]) for k, v in _TD_ESTADOS.items())
+    content = ("<header class='role-hero'><div><h1>📄 Tickets documentales</h1><p>Solicitudes que requieren validación: Contabilidad revisa la cartera y, si es crítico, "
+               "el CEO autoriza con token. Hasta entonces Cobranza no puede aplicar el cambio.</p></div></header>"
+               "<section class='role-panel'><div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px'><a class='btn' href='/tickets-doc/nuevo'>➕ Nuevo ticket</a>%s</div>"
+               "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'><tr style='background:#0B2D57;color:#fff'>"
+               "<th style='padding:8px;text-align:left'>Ticket</th><th style='text-align:left'>Asunto</th><th style='text-align:left'>Colegio</th><th style='text-align:left'>Importancia</th><th style='text-align:left'>Estado</th><th style='text-align:left'>Creado</th></tr>%s</table></div></section>") % (chips, tr)
+    return page("Tickets documentales", shell(content))
+
+
+@app.route("/tickets-doc/nuevo", methods=["GET", "POST"])
+def tickets_doc_nuevo():
+    g = _td_guard()
+    if g is not None:
+        return g
+    err = ""
+    if request.method == "POST":
+        f = request.form
+        tipo = f.get("tipo", "")
+        titulo = (f.get("titulo") or "").strip()[:220]
+        just = (f.get("justificacion") or "").strip()
+        iid = f.get("institucion_id", type=int)
+        va, vs = _cta_dec(f.get("valor_actual")), _cta_dec(f.get("valor_solicitado"))
+        archivo = request.files.get("adjunto")
+        if tipo not in dict(_TD_TIPOS) or not titulo or len(just) < 20:
+            err = "Completa el tipo, el asunto y una justificación de al menos 20 caracteres."
+        elif not archivo or not archivo.filename:
+            err = "Adjunta el documento de soporte."
+        elif not _step_up_form_ok():
+            err = "No se pudo validar tu identidad. Revisa tu contraseña / código."
+        if not err:
+            data = archivo.read(5 * 1024 * 1024 + 1)
+            ext = (archivo.filename.rsplit(".", 1)[-1] if "." in archivo.filename else "").lower()
+            if len(data) > 5 * 1024 * 1024:
+                err = "El archivo supera 5 MB."
+            elif ext not in ("pdf", "png", "jpg", "jpeg", "docx", "xlsx"):
+                err = "Formato no permitido (PDF, imagen, Word o Excel)."
+        if not err:
+            inst = Institucion.query.get(iid) if iid else None
+            pct = 0.0
+            if va > 0 and vs >= 0 and vs < va:
+                pct = float((va - vs) / va * 100)
+            alta = (tipo == "cambio_contrato") or pct > _TD_LIMITE_DESC or bool(f.get("critico"))
+            n = TicketDoc.query.filter(TicketDoc.codigo.like("TD-%s-%%" % fecha_hoy()[:4])).count() + 1
+            t = TicketDoc(codigo="TD-%s-%04d" % (fecha_hoy()[:4], n), tipo=tipo, titulo=titulo, justificacion=just, institucion_id=iid,
+                          institucion_codigo=(inst.codigo if inst else ""), institucion_nombre=(inst.nombre if inst else ""),
+                          valor_actual=va, valor_solicitado=vs, porcentaje=round(pct, 2), importancia="ALTA" if alta else "NORMAL",
+                          estado="PEND_CONTABILIDAD", creado_por=session.get("usuario") or "", creado_rol=rol_actual() or "", creado_en=_ts(),
+                          adjunto_nombre=re.sub(r"[^\w.\- ]", "_", archivo.filename)[:200], adjunto_mime=(archivo.mimetype or "")[:80], adjunto_bytes=data)
+            db.session.add(t)
+            db.session.flush()
+            _td_evento(t, "Creó el ticket", "%s · importancia %s" % (dict(_TD_TIPOS)[tipo], t.importancia))
+            db.session.commit()
+            _notif_crear(("Contabilidad",), "Nuevo ticket documental %s" % t.codigo, "%s · %s" % (t.institucion_codigo or "sin colegio", titulo), "/tickets-doc/%d" % t.id)
+            return redirect("/tickets-doc/%d" % t.id)
+    insts = Institucion.query.order_by(Institucion.codigo).all()
+    opt_i = "<option value=''>— Sin colegio —</option>" + "".join("<option value='%d'>%s · %s</option>" % (i.id, _esc(i.codigo), _esc(i.nombre)) for i in insts)
+    opt_t = "".join("<option value='%s'>%s</option>" % (k, v) for k, v in _TD_TIPOS)
+    inp = "padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box"
+    aviso = ("<div class='msg danger'>%s</div>" % _esc(err)) if err else ""
+    content = ("<header class='role-hero'><div><h1>➕ Nuevo ticket documental</h1></div></header>%s<section class='role-panel'>"
+               "<form method='POST' enctype='multipart/form-data'><div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px'>"
+               "<div><label><b>Tipo *</b></label><select name='tipo' required style='%s'>%s</select></div>"
+               "<div><label><b>Colegio</b></label><select name='institucion_id' style='%s'>%s</select></div>"
+               "<div><label><b>Valor actual (COP)</b></label><input name='valor_actual' placeholder='900.000' style='%s'></div>"
+               "<div><label><b>Valor solicitado (COP)</b></label><input name='valor_solicitado' placeholder='750.000' style='%s'></div></div>"
+               "<label style='display:block;margin-top:10px'><b>Asunto *</b></label><input name='titulo' required maxlength='220' style='%s'>"
+               "<label style='display:block;margin-top:10px'><b>Justificación *</b></label><textarea name='justificacion' rows='4' required style='%s'></textarea>"
+               "<label style='display:block;margin-top:10px'><b>Documento de soporte * (PDF, imagen, Word o Excel · máx. 5 MB)</b></label><input type='file' name='adjunto' required style='%s'>"
+               "<label style='display:flex;gap:8px;margin-top:10px;font-size:13px'><input type='checkbox' name='critico' value='1'> Marcar como crítico (pasa directo al CEO tras Contabilidad)</label>"
+               "<p class='mini-text'>Se marca automáticamente como ALTA si el descuento supera el %s %% o si es un cambio de contrato.</p>%s"
+               "<button class='btn' style='margin-top:6px'>Enviar ticket</button></form></section>") % (aviso, inp, opt_t, inp, opt_i, inp, inp, inp, inp, inp, int(_TD_LIMITE_DESC), _step_up_campos())
+    return page("Nuevo ticket", shell(content))
+
+
+@app.route("/tickets-doc/<int:tid>", methods=["GET", "POST"])
+def tickets_doc_ver(tid):
+    g = _td_guard()
+    if g is not None:
+        return g
+    t = TicketDoc.query.get_or_404(tid)
+    rol, usuario = rol_actual(), session.get("usuario") or ""
+    if rol not in ("Contabilidad",) + _ROLES_GERENCIA and t.creado_por != usuario:
+        return acceso_denegado("Solo ves los tickets que creaste.")
+    err = msg = ""
+    if request.method == "POST":
+        acc = request.form.get("accion", "")
+        nota = (request.form.get("nota") or "").strip()
+        if not _step_up_form_ok():
+            err = "No se pudo validar tu identidad. Revisa tu contraseña / código."
+        elif acc == "aprobar_escalar" and rol == "Contabilidad" and t.estado == "PEND_CONTABILIDAD":
+            est_c, _nv, _tot = _td_cartera(t.institucion_id)
+            if est_c == "EN MORA" and len(nota) < 10:
+                err = "El colegio está EN MORA: escribe una nota (mín. 10 caracteres) para aprobar."
+            else:
+                t.cont_por, t.cont_en, t.cont_nota = usuario, _ts(), nota
+                t.estado = "PEND_CEO" if t.importancia == "ALTA" else "APROBADO"
+                _td_evento(t, "Aprobó y escaló" if t.estado == "PEND_CEO" else "Aprobó", "Cartera: %s. %s" % (est_c, nota))
+                db.session.commit()
+                if t.estado == "PEND_CEO":
+                    _notif_crear(_ROLES_GERENCIA, "Solicitud %s requiere aprobación del CEO" % (t.institucion_codigo or t.codigo), "%s · %s" % (t.codigo, t.titulo), "/tickets-doc/%d" % t.id, None, "alerta")
+                else:
+                    _notif_crear(("Cobranza",), "Ticket %s aprobado" % t.codigo, "Ya puede aplicarse el cambio.", "/tickets-doc/%d" % t.id)
+                msg = "Ticket aprobado" + (" y escalado al CEO." if t.estado == "PEND_CEO" else ".")
+        elif acc == "rechazar" and ((rol == "Contabilidad" and t.estado == "PEND_CONTABILIDAD") or (rol in _ROLES_GERENCIA and t.estado == "PEND_CEO")):
+            if len(nota) < 10:
+                err = "Escribe el motivo del rechazo (mín. 10 caracteres)."
+            else:
+                t.estado, t.rechazado_por, t.rechazado_en, t.rechazo_motivo = "RECHAZADO", usuario, _ts(), nota
+                _td_evento(t, "Rechazó", nota)
+                db.session.commit()
+                msg = "Ticket rechazado."
+        elif acc == "autorizar_token" and rol in _ROLES_GERENCIA and t.estado == "PEND_CEO":
+            tok = TokenAutorizacion.query.filter_by(usuario=usuario).first()
+            clave = "token:%s" % usuario
+            if not tok:
+                err = "Primero crea tu token de autorización en «Mi token» (Gerencia)."
+            elif _seg_fallos(clave, 15) >= 5:
+                err = "Token bloqueado 15 minutos por intentos fallidos."
+            elif not verificar_password(tok.hash, (request.form.get("token") or "").strip()):
+                _seg_registrar_fallo(clave)
+                err = "Token incorrecto."
+            else:
+                _seg_limpiar(clave)
+                t.estado, t.ceo_por, t.ceo_en, t.ceo_nota = "AUTORIZADO", usuario, _ts(), nota
+                _td_evento(t, "Autorizó con token (CEO)", nota)
+                db.session.commit()
+                _notif_crear(("Cobranza",), "Ticket %s autorizado por el CEO" % t.codigo, "Ya puede aplicarse el cambio.", "/tickets-doc/%d" % t.id)
+                msg = "Autorizado con token."
+        elif acc == "aplicar" and rol == "Cobranza" and t.estado in ("APROBADO", "AUTORIZADO"):
+            t.estado, t.aplicado_por, t.aplicado_en = "APLICADO", usuario, _ts()
+            _td_evento(t, "Aplicó el cambio", nota)
+            db.session.commit()
+            msg = "Cambio marcado como aplicado."
+        else:
+            err = "Acción no permitida en este estado."
+    est_c, nv, tot = _td_cartera(t.institucion_id)
+    col_c = "#b91c1c" if est_c == "EN MORA" else "#15803d"
+    ev = "".join("<tr><td style='white-space:nowrap'>%s</td><td>%s (%s)</td><td>%s</td><td>%s</td></tr>" % (_esc(e.ts[:16]), _esc(e.usuario), _esc(e.rol), _esc(e.accion), _esc(e.detalle or ""))
+                 for e in TicketDocEvento.query.filter_by(ticket_id=t.id).order_by(TicketDocEvento.id).all())
+    nota_in = "<input name='nota' placeholder='Nota / motivo' style='padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box;margin-top:8px'>"
+    acciones = ""
+    if t.estado == "PEND_CONTABILIDAD" and rol == "Contabilidad":
+        acciones = ("<form method='POST'><h3>Revisión de Contabilidad</h3>%s%s<div style='display:flex;gap:8px;margin-top:8px'>"
+                    "<button class='btn' name='accion' value='aprobar_escalar' style='background:#15803d;color:#fff'>Aprobar y escalar</button>"
+                    "<button class='btn' name='accion' value='rechazar' style='background:#b91c1c;color:#fff'>Rechazar</button></div></form>") % (nota_in, _step_up_campos())
+    elif t.estado == "PEND_CEO" and rol in _ROLES_GERENCIA:
+        acciones = ("<form method='POST'><h3>🔑 Autorización del CEO</h3>%s<input name='token' type='password' placeholder='Tu token de autorización' required autocomplete='off' "
+                    "style='padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%%;box-sizing:border-box;margin-top:8px'>%s<div style='display:flex;gap:8px;margin-top:8px'>"
+                    "<button class='btn' name='accion' value='autorizar_token' style='background:#15803d;color:#fff'>Autorizar con token</button>"
+                    "<button class='btn' name='accion' value='rechazar' style='background:#b91c1c;color:#fff'>Rechazar</button></div></form>") % (nota_in, _step_up_campos())
+    elif t.estado in ("APROBADO", "AUTORIZADO") and rol == "Cobranza":
+        acciones = ("<form method='POST'><h3>Aplicar el cambio</h3>%s%s<button class='btn' name='accion' value='aplicar' style='margin-top:8px'>Marcar como aplicado</button></form>") % (nota_in, _step_up_campos())
+    elif t.estado == "PEND_CEO":
+        acciones = "<div class='msg danger'>Bloqueado: Cobranza no puede aplicar este cambio hasta que el CEO lo autorice con token.</div>"
+    aviso = ("<div class='msg ok'>%s</div>" % _esc(msg) if msg else "") + ("<div class='msg danger'>%s</div>" % _esc(err) if err else "")
+    content = ("<header class='role-hero'><div><h1>%s</h1><p>%s %s</p></div><a class='btn' href='/tickets-doc'>← Tickets</a></header>%s"
+               "<section class='role-panel'><div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:13px'>"
+               "<div><b>Tipo</b><br>%s</div><div><b>Colegio</b><br>%s %s</div><div><b>Creado por</b><br>%s (%s)</div><div><b>Valor actual → solicitado</b><br>%s → %s</div>"
+               "<div><b>Descuento</b><br>%s %%</div><div><b>Importancia</b><br>%s</div></div>"
+               "<p><b>Asunto:</b> %s</p><p style='white-space:pre-wrap'>%s</p>"
+               "<p><b>Soporte:</b> <a href='/tickets-doc/%d/adjunto'>📎 %s</a></p>"
+               "<p><b>Cartera del colegio:</b> <b style='color:%s'>%s</b>%s</p>%s</section>"
+               "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>Trazabilidad</h3><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:12.5px'>"
+               "<tr style='background:#f1f5f9'><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr>%s</table></div></section>") % (
+        _esc(t.codigo), _td_badge(t.estado), "· Importancia ALTA" if t.importancia == "ALTA" else "", aviso,
+        _esc(dict(_TD_TIPOS).get(t.tipo, t.tipo)), _esc(t.institucion_codigo or "—"), _esc(t.institucion_nombre or ""), _esc(t.creado_por), _esc(t.creado_rol),
+        _cta_fmt(t.valor_actual), _cta_fmt(t.valor_solicitado), t.porcentaje, "<b style='color:#b91c1c'>ALTA</b>" if t.importancia == "ALTA" else "Normal",
+        _esc(t.titulo), _esc(t.justificacion), t.id, _esc(t.adjunto_nombre), col_c, est_c,
+        (" · %d factura(s) vencida(s) · pendiente %s" % (nv, _cta_fmt(tot))) if est_c != "SIN COLEGIO" else "", acciones, ev)
+    return page(t.codigo, shell(content))
+
+
+@app.route("/tickets-doc/<int:tid>/adjunto")
+def tickets_doc_adjunto(tid):
+    g = _td_guard()
+    if g is not None:
+        return g
+    t = TicketDoc.query.get_or_404(tid)
+    if rol_actual() not in ("Contabilidad",) + _ROLES_GERENCIA and t.creado_por != (session.get("usuario") or ""):
+        return acceso_denegado("Sin acceso.")
+    try:
+        registrar_auditoria("Ticket documental · descarga de adjunto", t.codigo)
+    except Exception:
+        db.session.rollback()
+    return send_file(BytesIO(t.adjunto_bytes or b""), mimetype=t.adjunto_mime or "application/octet-stream", as_attachment=True, download_name=t.adjunto_nombre or "adjunto")
+
+
+@app.route("/gerencia/mi-token", methods=["GET", "POST"])
+def gerencia_mi_token():
+    if not requiere_login() or rol_actual() not in _ROLES_GERENCIA:
+        return acceso_denegado("Solo Gerencia.")
+    _seg_ensure()
+    nuevo = err = ""
+    if request.method == "POST":
+        if not _step_up_form_ok():
+            err = "No se pudo validar tu identidad."
+        else:
+            import secrets
+            nuevo = secrets.token_urlsafe(9)
+            u = session.get("usuario") or ""
+            tok = TokenAutorizacion.query.filter_by(usuario=u).first() or TokenAutorizacion(usuario=u)
+            tok.hash, tok.creado_en = generate_password_hash(nuevo), _ts()
+            db.session.add(tok)
+            db.session.commit()
+            try:
+                registrar_auditoria("Token de autorización regenerado", u)
+            except Exception:
+                db.session.rollback()
+    existe = TokenAutorizacion.query.filter_by(usuario=session.get("usuario") or "").first()
+    aviso = ("<div class='msg danger'>%s</div>" % _esc(err) if err else "")
+    if nuevo:
+        aviso += ("<div class='msg ok' style='font-size:15px'>Tu nuevo token (<b>cópialo ahora, no se vuelve a mostrar</b>):<br>"
+                  "<code style='font-size:20px;letter-spacing:.05em'>%s</code></div>") % _esc(nuevo)
+    content = ("<header class='role-hero'><div><h1>🔑 Mi token de autorización</h1><p>Se pide al autorizar solicitudes críticas de los tickets documentales.</p></div>"
+               "<a class='btn' href='/gerencia/hq'>← HQ</a></header>%s<section class='role-panel'><p>Estado: <b>%s</b></p>"
+               "<form method='POST'>%s<button class='btn'>%s</button></form>"
+               "<p class='mini-text'>Guárdalo en un gestor de contraseñas. Solo se almacena su huella; si lo pierdes, genera uno nuevo (el anterior deja de servir).</p></section>") % (
+        aviso, "Token creado el " + _esc(existe.creado_en[:16]) if existe else "Aún no tienes token", _step_up_campos(),
+        "Regenerar token" if existe else "Crear mi token")
+    return page("Mi token", shell(content))
+
+
+# ───────────────────────── GERENCIA: actividad de proveedores y cobros de reimpresión ─────────────────────────
+def _prov_actividad(limite=400):
+    ev = []
+    try:
+        usuarios = [u.usuario for u in Usuario.query.filter(Usuario.rol == "Proveedor").all()]
+        if usuarios:
+            for a in Auditoria.query.filter(Auditoria.usuario.in_(usuarios)).order_by(Auditoria.id.desc()).limit(limite).all():
+                ev.append(("%s %s" % (a.fecha, a.hora), a.usuario, "Actividad", a.accion, (a.detalle or "")[:200], a.ip or ""))
+        for d in CarneDescargaLog.query.order_by(CarneDescargaLog.id.desc()).limit(limite).all():
+            ev.append((getattr(d, "ts", "") or "", getattr(d, "usuario", "") or "", "Descarga", "Descargó carnés", ("%s · %s · %s · %s carné(s) · %s" % (d.institucion_nombre, d.sede, d.grado, d.n_carnes, d.alcance))[:200], d.ip or ""))
+        for l in CarneLote.query.order_by(CarneLote.id.desc()).limit(200).all():
+            ev.append((l.cerrado_en, l.operario, "Cierre de tanda", "Cerró tanda", "%s · %s · %d carnés · entrega %s" % (l.institucion_nombre, l.grado, l.n_carnes or 0, l.fecha_estimada), ""))
+        for r in CarneReimpresion.query.order_by(CarneReimpresion.id.desc()).limit(200).all():
+            ev.append((r.creada_en, r.solicitado_por, "Bloqueo / reimpresión", "Carné bloqueado", "%s · %s · $%s · %s" % (r.estudiante_nombre, r.grado, r.valor, r.cobro), r.ip or ""))
+    except Exception as ex:
+        db.session.rollback()
+        print("ERROR _prov_actividad:", repr(ex), flush=True)
+    ev.sort(key=lambda x: x[0] or "", reverse=True)
+    return ev[:limite]
+
+
+@app.route("/gerencia/proveedores")
+def gerencia_proveedores():
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    _seg_ensure()
+    msg = request.args.get("msg") or ""
+    q = (request.args.get("q") or "").strip().lower()
+    ev = [e for e in _prov_actividad() if not q or q in (" ".join(str(x) for x in e)).lower()]
+    tr = "".join("<tr style='border-bottom:1px solid #e2e8f0'><td style='white-space:nowrap'>%s</td><td>%s</td><td>%s</td><td>%s</td><td style='word-break:break-word'>%s</td><td style='font-family:monospace'>%s</td></tr>" % tuple(_esc(x) for x in (e[0][:16], e[1], e[2], e[3], e[4], e[5])) for e in ev[:300]) \
+        or "<tr><td colspan='6' style='padding:16px;text-align:center;color:#64748b'>Sin actividad.</td></tr>"
+    cob = ""
+    pend = 0
+    for r in CarneReimpresion.query.order_by(CarneReimpresion.id.desc()).limit(100).all():
+        if r.cobro == "POR_COBRAR":
+            pend += r.valor or 0
+        btn = ("<form method='POST' action='/gerencia/proveedores/cobrado/%d' style='margin:0'><button class='btn' style='padding:3px 10px;font-size:12px'>Marcar cobrado</button></form>" % r.id) if r.cobro == "POR_COBRAR" else _esc("Cobrado " + (r.cobrado_en or "")[:10])
+        cob += "<tr><td>%s</td><td>%s</td><td>%s</td><td>$ %s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            _esc(r.creada_en[:16]), _esc(r.estudiante_nombre), _esc(r.grado), "{:,}".format(r.valor or 0).replace(",", "."), _esc(r.motivo), _esc(r.solicitado_por), btn)
+    pdf = "/gerencia/proveedores/pdf?q=" + quote_plus(q)
+    aviso = ("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else ""
+    content = ("<header class='role-hero'><div><h1>🕵️ Proveedores · todo lo que hacen</h1><p>Línea de tiempo de actividad del proveedor de carnés, tandas y reimpresiones por cobrar.</p></div>"
+               "<a class='btn' href='/gerencia/hq'>← HQ</a></header>%s"
+               "<section class='role-panel'><h2 style='margin-top:0;color:#0B2D57'>Reimpresiones por cobrar (<b>$ %s COP</b> pendientes)</h2><div style='overflow:auto'>"
+               "<table style='width:100%%;border-collapse:collapse;font-size:12.5px'><tr style='background:#f1f5f9'><th>Fecha</th><th>Estudiante</th><th>Grado</th><th>Valor</th><th>Motivo</th><th>Bloqueó</th><th></th></tr>%s</table></div></section>"
+               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0B2D57'>Actividad</h2>"
+               "<form method='GET' style='display:flex;gap:8px;margin-bottom:10px'><input name='q' value='%s' placeholder='Buscar…' style='flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:8px'>"
+               "<button class='btn'>Filtrar</button><a class='btn' style='background:#b91c1c;color:#fff' href='%s'>📄 PDF</a></form>"
+               "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:12.5px'><tr style='background:#0B2D57;color:#fff'><th style='padding:7px;text-align:left'>Fecha</th><th>Usuario</th><th>Tipo</th><th>Acción</th><th>Detalle</th><th>IP</th></tr>%s</table></div></section>") % (
+        aviso, "{:,}".format(pend).replace(",", "."), cob or "<tr><td colspan='7' style='padding:12px;color:#64748b'>Sin reimpresiones.</td></tr>", _esc(q), pdf, tr)
+    return page("Proveedores (Gerencia)", shell(content))
+
+
+@app.route("/gerencia/proveedores/cobrado/<int:rid>", methods=["POST"])
+def gerencia_proveedores_cobrado(rid):
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    r = CarneReimpresion.query.get(rid)
+    if r and r.cobro == "POR_COBRAR":
+        r.cobro, r.cobrado_por, r.cobrado_en = "COBRADO", session.get("usuario") or "", _ts()
+        db.session.commit()
+        try:
+            registrar_auditoria("Reimpresión cobrada", "%s · $%s" % (r.estudiante_nombre, r.valor))
+        except Exception:
+            db.session.rollback()
+    return redirect("/gerencia/proveedores?msg=" + quote_plus("Cobro registrado."))
+
+
+@app.route("/gerencia/proveedores/pdf")
+def gerencia_proveedores_pdf():
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    q = (request.args.get("q") or "").strip().lower()
+    ev = [e for e in _prov_actividad(2000) if not q or q in (" ".join(str(x) for x in e)).lower()]
+    buf = _pdf_informe_gerencia("Gerencia · Actividad del proveedor de carnés", "%d evento(s) · filtro: %s" % (len(ev), q or "ninguno"),
+                                ["Fecha", "Usuario", "Tipo", "Acción", "Detalle", "IP"], [[e[0][:16], e[1], e[2], e[3], e[4], e[5]] for e in ev], [12, 10, 12, 14, 42, 10])
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="actividad_proveedor_%s.pdf" % ahora().strftime("%Y%m%d_%H%M"))
+
+
+# ───────────────────────── GERENCIA: API EduTrack / QGIS ─────────────────────────
+_API_RATE = {}
+
+
+def _api_auth():
+    """Valida X-API-Key / Bearer. Devuelve (clave, error_response)."""
+    _seg_ensure()
+    tok = (request.headers.get("X-API-Key") or "").strip()
+    if not tok:
+        a = request.headers.get("Authorization", "")
+        if a.lower().startswith("bearer "):
+            tok = a[7:].strip()
+    if not tok or "." not in tok:
+        return None, (jsonify({"error": "API key requerida (cabecera X-API-Key)"}), 401)
+    prefijo = tok.split(".", 1)[0][:12]
+    c = ApiClave.query.filter_by(prefijo=prefijo, activa=True).first()
+    if not c or not check_password_hash(c.hash, tok):
+        return None, (jsonify({"error": "API key inválida"}), 401)
+    import time as _tm
+    ventana = int(_tm.time() // 60)
+    k = (c.id, ventana)
+    _API_RATE[k] = _API_RATE.get(k, 0) + 1
+    for kk in [x for x in _API_RATE if x[1] < ventana - 1]:
+        _API_RATE.pop(kk, None)
+    if _API_RATE[k] > 120:
+        return None, (jsonify({"error": "Límite: 120 solicitudes por minuto"}), 429)
+    try:
+        c.ultimo_uso, c.ultimo_ip, c.usos = _ts(), _ip(), (c.usos or 0) + 1
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return c, None
+
+
+def _api_instituciones():
+    geo = {g.institucion_id: g for g in InstGeo.query.all()}
+    cuenta = dict(db.session.query(Estudiante.institucion_id, func.count(Estudiante.id)).filter(
+        db.or_(Estudiante.estado == "ACTIVO", Estudiante.estado == "", Estudiante.estado.is_(None))).group_by(Estudiante.institucion_id).all())
+    out = []
+    for i in Institucion.query.order_by(Institucion.codigo).all():
+        g = geo.get(i.id)
+        out.append({"codigo": i.codigo, "nombre": i.nombre, "dane": i.dane or "", "municipio": i.municipio or "", "departamento": i.departamento or "",
+                    "estado": i.estado, "plan": i.plan, "estudiantes_activos": int(cuenta.get(i.id, 0)),
+                    "lat": g.lat if g else None, "lon": g.lon if g else None})
+    return out
+
+
+@app.route("/api/v1/health")
+def api_v1_health():
+    c, err = _api_auth()
+    if err:
+        return err
+    return jsonify({"ok": True, "servicio": "EduTrack API", "version": "1", "hora": _ts()})
+
+
+@app.route("/api/v1/instituciones")
+def api_v1_instituciones():
+    c, err = _api_auth()
+    if err:
+        return err
+    return jsonify({"instituciones": _api_instituciones()})
+
+
+@app.route("/api/v1/instituciones.geojson")
+def api_v1_instituciones_geojson():
+    c, err = _api_auth()
+    if err:
+        return err
+    feats = []
+    for d in _api_instituciones():
+        if d["lat"] is None or d["lon"] is None:
+            continue
+        props = {k: v for k, v in d.items() if k not in ("lat", "lon")}
+        feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [d["lon"], d["lat"]]}, "properties": props})
+    r = jsonify({"type": "FeatureCollection", "name": "instituciones_edutrack",
+                 "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}, "features": feats})
+    r.headers["Content-Type"] = "application/geo+json"
+    return r
+
+
+@app.route("/api/v1/estadisticas")
+def api_v1_estadisticas():
+    c, err = _api_auth()
+    if err:
+        return err
+    est = {}
+    for iid, e, n in db.session.query(CarneProduccion.institucion_id, CarneProduccion.estado, func.count(CarneProduccion.id)).group_by(CarneProduccion.institucion_id, CarneProduccion.estado).all():
+        est.setdefault(iid, {})[e] = n
+    nombres = {i.id: i.codigo for i in Institucion.query.all()}
+    return jsonify({"carnes_por_colegio": {nombres.get(k, str(k)): v for k, v in est.items()}})
+
+
+@app.route("/gerencia/api-conexiones", methods=["GET", "POST"])
+def gerencia_api_conexiones():
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    _seg_ensure()
+    msg = err = nueva = ""
+    if request.method == "POST":
+        acc = request.form.get("accion", "")
+        if not _step_up_form_ok():
+            err = "No se pudo validar tu identidad."
+        elif acc == "crear":
+            nombre = (request.form.get("nombre") or "").strip()[:120]
+            if not nombre:
+                err = "Pon un nombre (ej. QGIS oficina)."
+            else:
+                import secrets
+                pref = secrets.token_hex(4)
+                nueva = "%s.%s" % (pref, secrets.token_urlsafe(24))
+                db.session.add(ApiClave(nombre=nombre, prefijo=pref, hash=generate_password_hash(nueva), creada_por=session.get("usuario") or "", creada_en=_ts()))
+                db.session.commit()
+                registrar_auditoria("API · clave creada", nombre)
+        elif acc == "revocar":
+            c = ApiClave.query.get(request.form.get("id", type=int) or 0)
+            if c:
+                c.activa = False
+                db.session.commit()
+                registrar_auditoria("API · clave revocada", c.nombre)
+                msg = "Clave revocada."
+        elif acc == "geo":
+            n = 0
+            for i in Institucion.query.all():
+                la, lo = (request.form.get("lat_%d" % i.id) or "").strip().replace(",", "."), (request.form.get("lon_%d" % i.id) or "").strip().replace(",", ".")
+                if not la and not lo:
+                    continue
+                try:
+                    lat, lon = float(la), float(lo)
+                    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                        raise ValueError()
+                except Exception:
+                    err = "Coordenadas inválidas en %s." % i.codigo
+                    break
+                r = InstGeo.query.filter_by(institucion_id=i.id).first() or InstGeo(institucion_id=i.id)
+                r.lat, r.lon, r.actualizado_por, r.actualizado_en = lat, lon, session.get("usuario") or "", _ts()
+                db.session.add(r)
+                n += 1
+            if not err:
+                db.session.commit()
+                msg = "Coordenadas guardadas (%d)." % n
+    claves = ApiClave.query.order_by(ApiClave.id.desc()).all()
+    filas = "".join("<tr><td>%s</td><td><code>%s…</code></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+        _esc(c.nombre), _esc(c.prefijo), "Activa" if c.activa else "Revocada", _esc((c.ultimo_uso or "—")[:16]), c.usos or 0,
+        ("<form method='POST' style='margin:0'><input type='hidden' name='accion' value='revocar'><input type='hidden' name='id' value='%d'>%s<button class='btn' style='padding:3px 10px;font-size:12px'>Revocar</button></form>" % (c.id, _step_up_campos())) if c.activa else "") for c in claves) \
+        or "<tr><td colspan='6' style='color:#64748b;padding:10px'>Sin claves.</td></tr>"
+    geo = {x.institucion_id: x for x in InstGeo.query.all()}
+    gi = "".join("<tr><td>%s</td><td>%s</td><td><input name='lat_%d' value='%s' placeholder='5.5' style='width:110px;padding:5px'></td><td><input name='lon_%d' value='%s' placeholder='-74.6' style='width:110px;padding:5px'></td></tr>" % (
+        _esc(i.codigo), _esc(i.nombre), i.id, geo[i.id].lat if i.id in geo else "", i.id, geo[i.id].lon if i.id in geo else "") for i in Institucion.query.order_by(Institucion.codigo).all())
+    base = request.host_url.rstrip("/")
+    aviso = ("<div class='msg ok'>%s</div>" % _esc(msg) if msg else "") + ("<div class='msg danger'>%s</div>" % _esc(err) if err else "")
+    if nueva:
+        aviso += ("<div class='msg ok' style='font-size:14px'>Clave creada (<b>cópiala ahora, no se vuelve a mostrar</b>):<br><code style='font-size:15px;word-break:break-all'>%s</code></div>") % _esc(nueva)
+    content = ("<header class='role-hero'><div><h1>🔌 Conexión API · EduTrack ↔ QGIS</h1><p>Claves de lectura para conectar sistemas externos. Solo datos agregados por colegio: nunca expone estudiantes ni menores.</p></div>"
+               "<a class='btn' href='/gerencia/hq'>← HQ</a></header>%s"
+               "<section class='role-panel'><h2 style='margin-top:0;color:#0B2D57'>Claves</h2><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
+               "<tr style='background:#f1f5f9'><th>Nombre</th><th>Prefijo</th><th>Estado</th><th>Último uso</th><th>Usos</th><th></th></tr>%s</table></div>"
+               "<form method='POST' style='margin-top:12px'><input type='hidden' name='accion' value='crear'><input name='nombre' placeholder='Nombre de la conexión (ej. QGIS oficina)' required style='padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%%;box-sizing:border-box'>%s<button class='btn'>Crear clave</button></form></section>"
+               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0B2D57'>Cómo conectar</h2>"
+               "<p><b>Endpoints</b> (cabecera <code>X-API-Key: &lt;clave&gt;</code>, máx. 120 por minuto):</p><ul style='line-height:1.7'>"
+               "<li><code>%s/api/v1/health</code></li><li><code>%s/api/v1/instituciones</code> (JSON)</li><li><code>%s/api/v1/instituciones.geojson</code> (capa de puntos para QGIS)</li><li><code>%s/api/v1/estadisticas</code></li></ul>"
+               "<p><b>En QGIS:</b> Preferencias → Autenticación → «+» → tipo <i>HTTP Header</i> con nombre <code>X-API-Key</code> y tu clave. Luego Capa → Añadir capa vectorial → Protocolo HTTP(S) → URL del GeoJSON y elige esa configuración de autenticación.</p>"
+               "<p class='mini-text'>Todas las llamadas quedan contadas por clave. Revoca una clave si se expone.</p></section>"
+               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0B2D57'>Coordenadas de los colegios (latitud / longitud)</h2>"
+               "<form method='POST'><input type='hidden' name='accion' value='geo'><div style='overflow:auto;max-height:420px'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
+               "<tr style='background:#f1f5f9'><th>Código</th><th>Colegio</th><th>Latitud</th><th>Longitud</th></tr>%s</table></div>%s<button class='btn'>Guardar coordenadas</button></form></section>") % (
+        aviso, filas, _step_up_campos(), base, base, base, base, gi, _step_up_campos())
+    return page("API / QGIS", shell(content))
 
 
 _ROLES_TECNICOS = ("Soporte", "Desarrollador", "Developer", "Superadmin")
