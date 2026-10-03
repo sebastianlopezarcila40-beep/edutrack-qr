@@ -4002,6 +4002,8 @@ def _staff_nav_items(path, rol=""):
     elif rol == "Soporte":
         items = [
             ("/soporte_admin", "Panel principal"),
+            ("/soporte/bloqueo-carne", "Bloqueo de carné"),
+            ("/soporte/validacion-identidad", "Validación de identidad (enlace)"),
             ("/soporte/impersonar", "Suplantar usuario"),
             ("/soporte/reset-clave", "Resetear claves"),
             ("/soporte/periodos-colegio", "Periodos colegio"),
@@ -4039,6 +4041,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/usuarios", "Usuarios internos"),
             ("/gerencia/auditoria", "Auditoría IP"),
+            ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
             ("/gerencia/datos-empresa", "Datos de la empresa"),
             ("/gerencia/web-corporativa", "Web corporativa (textos/contacto)"),
             ("/gerencia/web-menu", "Menú público"),
@@ -4383,6 +4386,7 @@ def menu_items_por_rol():
         items += [
             ("/soporte_admin", "Panel Soporte"),
             ("/soporte/bloqueo-carne", "Bloqueo de carné"),
+            ("/soporte/validacion-identidad", "Validación de identidad (enlace)"),
             ("/tickets-doc", "Tickets documentales"),
             ("/usuarios", "Usuarios (reset / altas)"),
             ("/soporte/equipo", "Equipo Procsis"),
@@ -49775,7 +49779,7 @@ def soporte_bloqueo_carne():
                              "3 intentos fallidos de preguntas por el usuario %s." % usuario, "/gerencia/auditoria", None, "alerta")
                 session.pop("bloqueo_ctx", None)
                 contexto = None
-    elif accion == "bloquear" and contexto and contexto.get("nivel") in ("id", "preguntas"):
+    elif accion == "bloquear" and contexto and contexto.get("nivel") in ("id", "preguntas", "enlace"):
         e = Estudiante.query.get(contexto["est"])
         motivo = (request.form.get("motivo") or "").strip()
         det = (request.form.get("detalle") or "").strip()[:120]
@@ -49784,7 +49788,9 @@ def soporte_bloqueo_carne():
         elif not _step_up_form_ok():
             err = "No se pudo validar tu identidad. Revisa tu contraseña / código."
         elif e:
-            _bloqueo_ejecutar(e, ("%s %s" % (motivo, det)).strip(), "ID" if contexto["nivel"] == "id" else "PREGUNTAS")
+            _bloqueo_ejecutar(e, ("%s %s" % (motivo, det)).strip(), {"id": "ID", "enlace": "ENLACE"}.get(contexto["nivel"], "PREGUNTAS"))
+            if contexto.get("vi"):
+                _vi_marcar_aplicado(contexto["vi"], "Carné anulado: %s" % motivo)
             session.pop("bloqueo_ctx", None)
             contexto = None
             msg = "Carné bloqueado. El plástico anterior quedó anulado y el estudiante pasó a «Pendiente por reimpresión»."
@@ -49820,7 +49826,7 @@ def soporte_bloqueo_carne():
                       "<p class='mini-text'>Estudiante localizado en malla. Las respuestas correctas no se muestran: el sistema las compara. Tras 3 fallos se bloquea 60 minutos y se avisa a Gerencia.</p>"
                       "<form method='POST'><input type='hidden' name='accion' value='preguntas'><input type='hidden' name='modo' value='preguntas'>%s"
                       "<button class='btn' style='margin-top:12px'>Validar respuestas</button></form></section>") % qs
-    elif contexto and contexto.get("nivel") in ("id", "preguntas"):
+    elif contexto and contexto.get("nivel") in ("id", "preguntas", "enlace"):
         e = Estudiante.query.get(contexto["est"])
         opts = "".join("<option>%s</option>" % m for m in ("Pérdida", "Hurto / robo", "Daño", "Sospecha de fraude", "Otro"))
         cuerpo = ("<section class='role-panel'><h2 style='margin-top:0'>✅ Identidad validada</h2>"
@@ -74052,6 +74058,614 @@ def gerencia_solicitudes_plan():
         filas or '<tr><td colspan=6 style="padding:16px;color:#64748b">No hay solicitudes.</td></tr>',
     )
     return page("Solicitudes cambio de plan", body)
+
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# VALIDACIÓN DE IDENTIDAD POR ENLACE DINÁMICO + PIN ESPEJO
+#   · Soporte: genera el enlace, ve el PIN de activación, lo activa y aplica el cambio.
+#   · Usuario (rectora / acudiente): abre el enlace desde su celular y responde sus datos.
+#   · Gerencia: visualización de todos los casos; datos cifrados (Fernet) y solo se
+#     descifran con reconfirmación de contraseña.
+# ════════════════════════════════════════════════════════════════════════════
+import time as _vi_time
+import hashlib as _vi_hashlib
+
+_VI_LISTO = {"ok": False}
+_VI_VIGENCIA_ACTIVAR = 30 * 60   # enlace dormido: caduca si no se activa en 30 min
+_VI_VIGENCIA_USO = 15 * 60       # enlace activo: 15 min para que el usuario responda
+_VI_VIGENCIA_APLICAR = 30 * 60   # autorización aprobada: 30 min para aplicarla
+_VI_ESPERA_FALLO = 10            # segundos de congelamiento tras cada error
+_VI_MAX_FALLOS = 5               # fallos del usuario antes de bloquear el enlace
+_VI_TERMINOS_VERSION = "2026-01"
+
+
+class ValidacionIdentidad(db.Model):
+    __tablename__ = "validaciones_identidad"
+    id = db.Column(db.Integer, primary_key=True)
+    token_hash = db.Column(db.String(64), unique=True, index=True, nullable=False)  # solo el hash del token
+    tipo = db.Column(db.String(10), default="CARNE")  # RECTOR | CARNE
+    asunto = db.Column(db.String(200), default="")
+    institucion_id = db.Column(db.Integer, index=True)
+    estudiante_id = db.Column(db.Integer)
+    estado = db.Column(db.String(12), default="GENERADO", index=True)  # GENERADO|ACTIVO|APROBADO|APLICADO|BLOQUEADO|EXPIRADO|CANCELADO
+    pin_hash = db.Column(db.Text, default="")
+    pin_fallos = db.Column(db.Integer, default=0)
+    creado_por = db.Column(db.String(80), default="", index=True)
+    creado_en = db.Column(db.String(30), default="")
+    creado_ts = db.Column(db.Float, default=0)
+    activado_en = db.Column(db.String(30), default="")
+    activo_hasta_ts = db.Column(db.Float, default=0)
+    fallos = db.Column(db.Integer, default=0)
+    espera_hasta_ts = db.Column(db.Float, default=0)
+    aprobado_ts = db.Column(db.Float, default=0)
+    resuelto_en = db.Column(db.String(30), default="")
+    ip_usuario = db.Column(db.String(80), default="")
+    ua_usuario = db.Column(db.String(200), default="")
+    datos_cifrados = db.Column(db.Text, default="")
+    consentimiento_cifrado = db.Column(db.Text, default="")
+    aplicado_por = db.Column(db.String(80), default="")
+    aplicado_en = db.Column(db.String(30), default="")
+    nota_aplicado = db.Column(db.String(200), default="")
+
+
+def _vi_ensure():
+    if _VI_LISTO["ok"]:
+        return
+    try:
+        ValidacionIdentidad.__table__.create(bind=db.engine, checkfirst=True)
+        _VI_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR validacion identidad ensure:", repr(ex), flush=True)
+
+
+def _vi_fernet():
+    """Clave de cifrado: VI_ENC_KEY (Fernet) si existe; si no, derivada de SECRET_KEY."""
+    try:
+        from cryptography.fernet import Fernet
+        import base64
+        k = (os.environ.get("VI_ENC_KEY") or "").strip()
+        if k:
+            return Fernet(k.encode("utf-8"))
+        raw = ("vi|" + str(app.secret_key)).encode("utf-8")
+        return Fernet(base64.urlsafe_b64encode(_vi_hashlib.sha256(raw).digest()))
+    except Exception:
+        return None
+
+
+def _vi_cifrar(obj):
+    f = _vi_fernet()
+    if not f:
+        return None
+    return f.encrypt(json.dumps(obj, ensure_ascii=False).encode("utf-8")).decode("utf-8")
+
+
+def _vi_descifrar(txt):
+    f = _vi_fernet()
+    if not f or not txt:
+        return None
+    try:
+        return json.loads(f.decrypt(txt.encode("utf-8")).decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _vi_hash_token(token):
+    return _vi_hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+
+
+def _vi_refrescar(v):
+    """Aplica las caducidades automáticas del caso."""
+    if not v:
+        return v
+    now = _vi_time.time()
+    nuevo = None
+    if v.estado == "GENERADO" and now - (v.creado_ts or 0) > _VI_VIGENCIA_ACTIVAR:
+        nuevo = "EXPIRADO"
+    elif v.estado == "ACTIVO" and now > (v.activo_hasta_ts or 0):
+        nuevo = "EXPIRADO"
+    elif v.estado == "APROBADO" and now - (v.aprobado_ts or 0) > _VI_VIGENCIA_APLICAR:
+        nuevo = "EXPIRADO"
+    if nuevo:
+        v.estado = nuevo
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    return v
+
+
+def _vi_marcar_aplicado(vid, nota=""):
+    try:
+        v = ValidacionIdentidad.query.get(int(vid))
+        if v and v.estado == "APROBADO":
+            v.estado = "APLICADO"
+            v.aplicado_por = session.get("usuario") or ""
+            v.aplicado_en = _ts()
+            v.nota_aplicado = (nota or "")[:200]
+            db.session.commit()
+            try:
+                registrar_auditoria("Validación de identidad aplicada",
+                                    "#%s %s · %s" % (v.id, v.tipo, (nota or "")[:80]))
+            except Exception:
+                db.session.rollback()
+    except Exception:
+        db.session.rollback()
+
+
+_VI_COLORES = {"GENERADO": "#b45309", "ACTIVO": "#0369a1", "APROBADO": "#166534", "APLICADO": "#475569",
+               "BLOQUEADO": "#991b1b", "EXPIRADO": "#64748b", "CANCELADO": "#64748b"}
+_VI_ETIQ = {"GENERADO": "Dormido (falta PIN)", "ACTIVO": "Activo · esperando al usuario",
+            "APROBADO": "APROBADO POR EL USUARIO", "APLICADO": "Aplicado", "BLOQUEADO": "Bloqueado (fallos)",
+            "EXPIRADO": "Expirado", "CANCELADO": "Cancelado"}
+
+
+def _vi_badge(estado):
+    return "<span style='font-weight:800;color:%s'>%s</span>" % (_VI_COLORES.get(estado, "#334155"), _esc(_VI_ETIQ.get(estado, estado)))
+
+
+# ───────────────────────── SOPORTE ─────────────────────────
+@app.route("/soporte/validacion-identidad/estado.json")
+def soporte_vi_estado_json():
+    if not requiere_login() or rol_actual() not in ("Soporte", "Superadmin"):
+        return jsonify({})
+    _vi_ensure()
+    out = {}
+    try:
+        ids = [int(x) for x in (request.args.get("ids") or "").split(",") if x.strip().isdigit()][:50]
+        usuario = session.get("usuario") or ""
+        for v in ValidacionIdentidad.query.filter(ValidacionIdentidad.id.in_(ids)).all():
+            if rol_actual() != "Superadmin" and v.creado_por != usuario:
+                continue
+            out[str(v.id)] = _vi_refrescar(v).estado
+    except Exception:
+        db.session.rollback()
+    return jsonify(out)
+
+
+@app.route("/soporte/validacion-identidad", methods=["GET", "POST"])
+def soporte_validacion_identidad():
+    g = _bloqueo_guard()
+    if g is not None:
+        return g
+    _vi_ensure()
+    usuario = session.get("usuario") or ""
+    err = msg = ""
+    accion = (request.form.get("accion") or "").strip() if request.method == "POST" else ""
+
+    def _mio(vid):
+        try:
+            v = ValidacionIdentidad.query.get(int(vid or 0))
+        except Exception:
+            v = None
+        if v and rol_actual() != "Superadmin" and v.creado_por != usuario:
+            return None
+        return _vi_refrescar(v) if v else None
+
+    if accion == "generar":
+        tipo = (request.form.get("tipo") or "").strip()
+        inst = Institucion.query.get(request.form.get("colegio", type=int) or 0)
+        asunto = (request.form.get("asunto") or "").strip()[:200]
+        if tipo not in ("RECTOR", "CARNE") or not inst or not asunto:
+            err = "Completa tipo de trámite, colegio y asunto."
+        elif _vi_fernet() is None:
+            err = "El servicio de cifrado no está disponible (falta la librería 'cryptography'). No se genera el enlace."
+        else:
+            token = secrets.token_urlsafe(32)
+            pin = "%04d" % secrets.randbelow(10000)
+            v = ValidacionIdentidad(token_hash=_vi_hash_token(token), tipo=tipo, asunto=asunto, institucion_id=inst.id,
+                                    estado="GENERADO", pin_hash=generate_password_hash(pin), creado_por=usuario,
+                                    creado_en=_ts(), creado_ts=_vi_time.time())
+            db.session.add(v)
+            db.session.commit()
+            session["vi_nuevo"] = {"id": v.id, "pin": pin, "link": request.host_url.rstrip("/") + "/validar-identidad/" + token}
+            try:
+                registrar_auditoria("Enlace de validación generado", "#%s %s · %s" % (v.id, tipo, inst.nombre))
+            except Exception:
+                db.session.rollback()
+            return redirect("/soporte/validacion-identidad")
+    elif accion == "activar":
+        v = _mio(request.form.get("id"))
+        pin_in = re.sub(r"\D", "", request.form.get("pin") or "")
+        if not v or v.estado != "GENERADO":
+            err = "El caso no está esperando activación."
+        elif not check_password_hash(v.pin_hash or "", pin_in):
+            v.pin_fallos = (v.pin_fallos or 0) + 1
+            if v.pin_fallos >= 3:
+                v.estado = "CANCELADO"
+                err = "PIN incorrecto 3 veces: el enlace fue anulado. Genera uno nuevo."
+            else:
+                err = "PIN incorrecto."
+            db.session.commit()
+        else:
+            v.estado = "ACTIVO"
+            v.activado_en = _ts()
+            v.activo_hasta_ts = _vi_time.time() + _VI_VIGENCIA_USO
+            db.session.commit()
+            msg = "Enlace activado. El usuario tiene %d minutos para responder." % (_VI_VIGENCIA_USO // 60)
+    elif accion == "cancelar":
+        v = _mio(request.form.get("id"))
+        if v and v.estado in ("GENERADO", "ACTIVO", "APROBADO"):
+            v.estado = "CANCELADO"
+            db.session.commit()
+            msg = "Caso cancelado."
+    elif accion == "aplicar_carne":
+        v = _mio(request.form.get("id"))
+        if v and v.estado == "APROBADO" and v.tipo == "CARNE" and v.estudiante_id:
+            session["bloqueo_ctx"] = {"est": v.estudiante_id, "nivel": "enlace", "u": usuario,
+                                      "exp": int(_vi_time.time()) + 600, "vi": v.id}
+            return redirect("/soporte/bloqueo-carne")
+        err = "La autorización no está vigente."
+    elif accion == "aplicar_rector":
+        v = _mio(request.form.get("id"))
+        nota = (request.form.get("nota") or "").strip()
+        if not v or v.estado != "APROBADO" or v.tipo != "RECTOR":
+            err = "La autorización no está vigente."
+        elif not nota:
+            err = "Describe el cambio que se autorizó (ej. horario de entrada 7:00 → 7:15)."
+        else:
+            _vi_marcar_aplicado(v.id, nota)
+            try:
+                registrar_auditoria("Cambio autorizado por verificación de identidad del Rector", "#%s · %s" % (v.id, nota[:100]))
+            except Exception:
+                db.session.rollback()
+            msg = "Cambio registrado como autorizado por la rectoría. Aplícalo en el módulo correspondiente."
+
+    nuevo_html = ""
+    nv = session.pop("vi_nuevo", None)
+    if isinstance(nv, dict):
+        nuevo_html = (
+            "<section class='role-panel' style='border:2px solid #0369a1;margin-bottom:14px'>"
+            "<h2 style='margin-top:0'>🔗 Enlace generado · caso #%s</h2>"
+            "<p class='mini-text'>1) Copia el enlace y envíalo por SMS desde Inalambria Express. "
+            "2) Digita aquí el PIN de activación en el caso. <b>Esta pantalla muestra el enlace y el PIN una sola vez.</b></p>"
+            "<input id='vi-link' readonly value='%s' style='width:100%%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px'>"
+            "<button type='button' class='btn' style='margin-top:8px' onclick=\"var i=document.getElementById('vi-link');i.select();document.execCommand('copy');this.textContent='✅ Copiado'\">Copiar enlace</button>"
+            "<div style='margin-top:12px;font-size:13px'>PIN de activación:</div>"
+            "<div style='font-size:40px;font-weight:900;letter-spacing:10px;color:#0B2D57'>%s</div></section>"
+        ) % (nv.get("id"), _esc(nv.get("link", "")), _esc(nv.get("pin", "")))
+
+    insts = Institucion.query.filter(Institucion.estado == "ACTIVA").order_by(Institucion.nombre).all()
+    nombres = {i.id: i.nombre for i in insts}
+    opt_i = "<option value=''>— Colegio —</option>" + "".join("<option value='%d'>%s</option>" % (i.id, _esc(i.nombre)) for i in insts)
+    inp = "padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box"
+    aviso = (("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else "") + (("<div class='msg danger'>%s</div>" % _esc(err)) if err else "")
+
+    form_gen = (
+        "<section class='role-panel'><h2 style='margin-top:0'>Generar link de validación dinámica</h2>"
+        "<p class='mini-text'>Úsalo cuando una rectora pida un cambio crítico o un acudiente reporte la pérdida de un carné. "
+        "El usuario responde desde su celular; tú nunca ves su clave.</p>"
+        "<form method='POST'><input type='hidden' name='accion' value='generar'>"
+        "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px'>"
+        "<select name='tipo' required style='%s'><option value=''>— Trámite —</option>"
+        "<option value='RECTOR'>Rectoría · cambio crítico del colegio</option>"
+        "<option value='CARNE'>Carné · anular / bloquear</option></select>"
+        "<select name='colegio' required style='%s'>%s</select>"
+        "<input name='asunto' maxlength='200' placeholder='Asunto (ej. Cambiar horario de entrada)' required style='%s'></div>"
+        "<button class='btn' style='margin-top:12px'>Generar link de validación dinámica</button></form></section>"
+    ) % (inp, inp, opt_i, inp)
+
+    q = ValidacionIdentidad.query
+    if rol_actual() != "Superadmin":
+        q = q.filter(ValidacionIdentidad.creado_por == usuario)
+    filas = ""
+    for v in q.order_by(ValidacionIdentidad.id.desc()).limit(40).all():
+        _vi_refrescar(v)
+        if v.estado == "GENERADO":
+            acc = ("<form method='POST' style='display:inline-flex;gap:6px;align-items:center'><input type='hidden' name='accion' value='activar'>"
+                   "<input type='hidden' name='id' value='%d'><input name='pin' inputmode='numeric' maxlength='4' placeholder='PIN' required "
+                   "style='width:70px;padding:6px;border:1px solid #cbd5e1;border-radius:6px'><button class='btn'>Activar</button></form> ") % v.id
+        elif v.estado == "APROBADO" and v.tipo == "CARNE":
+            e = Estudiante.query.get(v.estudiante_id) if v.estudiante_id else None
+            quien = ("%s %s · %s" % (e.nombre, e.apellido, e.grado)) if e else "estudiante validado"
+            acc = ("<div style='color:#166534;font-weight:700;margin-bottom:4px'>✅ Identidad verificada · %s</div>"
+                   "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='aplicar_carne'><input type='hidden' name='id' value='%d'>"
+                   "<button class='btn' style='background:#16a34a;color:#fff'>🚫 Anular carné</button></form> ") % (_esc(quien), v.id)
+        elif v.estado == "APROBADO" and v.tipo == "RECTOR":
+            acc = ("<div style='color:#166534;font-weight:700;margin-bottom:4px'>✅ Rectoría verificada</div>"
+                   "<form method='POST' style='display:inline-flex;gap:6px;flex-wrap:wrap'><input type='hidden' name='accion' value='aplicar_rector'><input type='hidden' name='id' value='%d'>"
+                   "<input name='nota' maxlength='200' placeholder='Cambio autorizado' required style='padding:6px;border:1px solid #cbd5e1;border-radius:6px;min-width:180px'>"
+                   "<button class='btn' style='background:#16a34a;color:#fff'>Aplicar cambio</button></form> ") % v.id
+        else:
+            acc = ""
+        if v.estado in ("GENERADO", "ACTIVO", "APROBADO"):
+            acc += ("<form method='POST' style='display:inline'><input type='hidden' name='accion' value='cancelar'><input type='hidden' name='id' value='%d'>"
+                    "<button class='btn' style='background:#e2e8f0;color:#0f172a'>Cancelar</button></form>") % v.id
+        bg = "background:#f0fdf4;" if v.estado == "APROBADO" else ""
+        filas += ("<tr data-vi='%d' data-est='%s' style='border-bottom:1px solid #e2e8f0;%s'><td style='padding:8px'>#%d</td>"
+                  "<td style='padding:8px'>%s</td><td style='padding:8px'>%s<br><span class='mini-text'>%s</span></td>"
+                  "<td style='padding:8px'>%s<br><span class='mini-text'>%s</span></td><td style='padding:8px'>%s</td></tr>") % (
+            v.id, v.estado, bg, v.id, "Rectoría" if v.tipo == "RECTOR" else "Carné",
+            _esc(nombres.get(v.institucion_id, "—")), _esc(v.asunto), _vi_badge(v.estado), _esc((v.creado_en or "")[:16]), acc)
+    tabla = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>Mis casos de validación</h3><div style='overflow:auto'>"
+             "<table style='width:100%%;border-collapse:collapse;font-size:13px'><tr style='background:#f1f5f9;text-align:left'>"
+             "<th style='padding:8px'>Caso</th><th style='padding:8px'>Trámite</th><th style='padding:8px'>Colegio / asunto</th>"
+             "<th style='padding:8px'>Estado</th><th style='padding:8px'>Acción</th></tr>%s</table></div></section>") % (
+        filas or "<tr><td colspan='5' style='padding:12px;color:#64748b'>Aún no has generado enlaces.</td></tr>")
+    js = """<script>(function(){var rs=document.querySelectorAll('tr[data-vi]'),p=[];rs.forEach(function(r){var e=r.getAttribute('data-est');if(e==='GENERADO'||e==='ACTIVO')p.push(r);});
+if(!p.length)return;var ids=p.map(function(r){return r.getAttribute('data-vi');}).join(',');
+setInterval(function(){fetch('/soporte/validacion-identidad/estado.json?ids='+ids,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(j){
+p.forEach(function(r){var id=r.getAttribute('data-vi');if(j[id]&&j[id]!==r.getAttribute('data-est'))location.href='/soporte/validacion-identidad';});}).catch(function(){});},3000);})();</script>"""
+    flujo = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>Cómo funciona</h3>"
+             "<ol class='mini-text' style='line-height:1.7'><li>Generas el link: el sistema te muestra un <b>PIN de 4 dígitos</b> (solo tú lo ves).</li>"
+             "<li>Copias el link y lo envías por SMS desde Inalambria Express.</li>"
+             "<li>El link llega <b>dormido</b>: solo funciona cuando digitas el PIN en tu pantalla (botón «Activar»).</li>"
+             "<li>El usuario abre el link, acepta las 2 casillas legales y responde sus datos (sin pegar; 10 s de espera si falla).</li>"
+             "<li>Al validar, el caso pasa a <b>APROBADO POR EL USUARIO</b> y se enciende el botón verde para aplicar el cambio.</li></ol>"
+             "<p class='mini-text'>Lo que digita el usuario queda <b>cifrado</b> y solo Gerencia puede consultarlo.</p></section>")
+    content = ("<header class='role-hero'><div><h1>🔗 Validación de identidad por enlace</h1>"
+               "<p>Rectoras y acudientes confirman su identidad desde el celular, sin dictar claves por teléfono.</p></div></header>"
+               + aviso + nuevo_html + form_gen + tabla + flujo + js)
+    return page("Validación de identidad", shell(content))
+
+
+# ───────────────────────── USUARIO (enlace público) ─────────────────────────
+def _vi_pub(titulo, cuerpo, color="#0B2D57"):
+    html = ("<div style='max-width:460px;margin:0 auto;padding:22px 16px;font-family:Segoe UI,system-ui,sans-serif'>"
+            "<div style='text-align:center;font-weight:900;color:#0B2D57;font-size:22px;margin-bottom:14px'>PROCSIS</div>"
+            "<div style='background:#fff;border:1px solid #e2e8f0;border-top:5px solid %s;border-radius:14px;padding:20px'>%s</div>"
+            "<p style='text-align:center;color:#94a3b8;font-size:11px;margin-top:12px'>Conexión protegida · Este enlace es de un solo uso</p></div>") % (color, cuerpo)
+    return page(titulo, html)
+
+
+def _vi_ident_ok(inst, dato):
+    """DANE o NIT (con o sin dígito de verificación)."""
+    d = _solo_digitos(dato)
+    if not d or not inst:
+        return False
+    validos = set()
+    for campo in (inst.dane, inst.nit):
+        campo = (campo or "").strip()
+        if not campo:
+            continue
+        validos.add(_solo_digitos(campo))
+        validos.add(_solo_digitos(campo.split("-")[0]))
+    validos.discard("")
+    return d in validos
+
+
+def _vi_clave_rector_ok(inst, clave):
+    if not clave or not inst:
+        return False
+    try:
+        for u in Usuario.query.filter(Usuario.institucion_id == inst.id, Usuario.rol.in_(("Rectoría", "Rectoria"))).all():
+            if getattr(u, "activo", True) is False:
+                continue
+            if verificar_password(u.password, clave):
+                return True
+    except Exception:
+        db.session.rollback()
+    return False
+
+
+def _vi_estudiante_malla(inst, codigo, grado, sede):
+    codigo, grado, sede = (codigo or "").strip(), (grado or "").strip(), (sede or "").strip()
+    if not codigo or not grado or not sede or not inst:
+        return None
+    cand = []
+    for e in Estudiante.query.filter(Estudiante.institucion_id == inst.id, Estudiante.codigo == codigo).all():
+        sede_e = (e.sede or inst.sede or "").strip()
+        if (_norm_txt(sede_e).split() == _norm_txt(sede).split() and _norm_txt(e.grado).split() == _norm_txt(grado).split()):
+            cand.append(e)
+    return cand[0] if len(cand) == 1 else None
+
+
+@app.route("/validar-identidad/<token>", methods=["GET", "POST"])
+def validar_identidad_publico(token):
+    _vi_ensure()
+    ip = _ip()
+    clave_ip = "vi:ip:%s" % ip
+    if _seg_fallos(clave_ip, 15) >= 25:
+        return _vi_pub("Demasiados intentos", "<h2>Demasiados intentos</h2><p>Por seguridad esta conexión fue bloqueada temporalmente. Intente más tarde.</p>", "#991b1b")
+    v = ValidacionIdentidad.query.filter_by(token_hash=_vi_hash_token(token)).first()
+    if not v:
+        _seg_registrar_fallo(clave_ip)
+        return _vi_pub("Enlace no válido", "<h2>Enlace no válido</h2><p>Verifique el enlace recibido o comuníquese con su asesor de soporte PROCSIS.</p>", "#991b1b")
+    _vi_refrescar(v)
+    if v.estado == "GENERADO":
+        return _vi_pub("Enlace en espera", "<h2>⏳ Enlace en espera</h2><p>Su asesor de PROCSIS aún no lo ha habilitado. Espere su indicación y vuelva a abrir el enlace.</p>", "#b45309")
+    if v.estado in ("APROBADO", "APLICADO"):
+        return _vi_pub("Enlace utilizado", "<h2>Enlace ya utilizado</h2><p>Este proceso ya fue completado. Si necesita ayuda, comuníquese con su asesor.</p>")
+    if v.estado != "ACTIVO":
+        return _vi_pub("Enlace no disponible", "<h2>Enlace no disponible</h2><p>El enlace venció o fue anulado. Solicite uno nuevo a su asesor de soporte PROCSIS.</p>", "#991b1b")
+
+    now = _vi_time.time()
+    espera = max(0, int(-(-((v.espera_hasta_ts or 0) - now) // 1)))
+    error = ""
+    if request.method == "POST":
+        f = request.form
+        if espera > 0:
+            error = "Espere %d segundos para intentar de nuevo." % espera
+        elif not (f.get("acepto_habeas") and f.get("acepto_terminos")):
+            error = "Debe marcar las dos casillas de aceptación para continuar."
+        else:
+            inst = Institucion.query.get(v.institucion_id)
+            datos, est_id, ok = {}, None, False
+            if v.tipo == "RECTOR":
+                ok = _vi_ident_ok(inst, f.get("dane_nit")) and _vi_clave_rector_ok(inst, f.get("clave_admin"))
+                datos = {"dane_nit": _solo_digitos(f.get("dane_nit")), "clave_administrativa_validada": bool(ok)}
+            else:
+                e = _vi_estudiante_malla(inst, f.get("codigo"), f.get("grado"), f.get("sede"))
+                ok = e is not None
+                if ok:
+                    est_id = e.id
+                    datos = {"codigo_estudiante": (f.get("codigo") or "").strip(), "grado": (f.get("grado") or "").strip(),
+                             "sede": (f.get("sede") or "").strip(), "estudiante_id": e.id}
+            if not ok:
+                _seg_registrar_fallo(clave_ip)
+                v.fallos = (v.fallos or 0) + 1
+                v.espera_hasta_ts = now + _VI_ESPERA_FALLO
+                espera = _VI_ESPERA_FALLO
+                if v.fallos >= _VI_MAX_FALLOS:
+                    v.estado = "BLOQUEADO"
+                    db.session.commit()
+                    _notif_crear(_ROLES_GERENCIA + ("Soporte",), "Validación de identidad bloqueada",
+                                 "El caso #%s superó %d intentos fallidos (posible suplantación). IP %s" % (v.id, _VI_MAX_FALLOS, ip),
+                                 "/gerencia/validaciones-identidad", None, "alerta")
+                    return _vi_pub("Enlace bloqueado", "<h2>Enlace bloqueado</h2><p>Se superó el número de intentos permitidos. Comuníquese con su asesor de soporte PROCSIS.</p>", "#991b1b")
+                db.session.commit()
+                error = "Los datos no coinciden. Verifique e intente de nuevo."
+            else:
+                consent = {"habeas_data_ley_1581_2012": True, "terminos_y_privacidad_procsis": True,
+                           "version_textos": _VI_TERMINOS_VERSION, "fecha": _ts(), "ip": ip,
+                           "agente": (request.headers.get("User-Agent") or "")[:200]}
+                c_datos, c_cons = _vi_cifrar(datos), _vi_cifrar(consent)
+                if not c_datos or not c_cons:
+                    error = "No fue posible proteger sus datos en este momento. Intente de nuevo o contacte a su asesor."
+                else:
+                    v.datos_cifrados, v.consentimiento_cifrado = c_datos, c_cons
+                    v.estudiante_id = est_id
+                    v.estado = "APROBADO"
+                    v.aprobado_ts = now
+                    v.resuelto_en = _ts()
+                    v.ip_usuario = ip[:80]
+                    v.ua_usuario = (request.headers.get("User-Agent") or "")[:200]
+                    db.session.commit()
+                    _seg_limpiar(clave_ip)
+                    try:
+                        registrar_auditoria("Validación de identidad aprobada por el usuario", "#%s %s · IP %s" % (v.id, v.tipo, ip))
+                    except Exception:
+                        db.session.rollback()
+                    _notif_crear(("Soporte",), "Validación aprobada por el usuario",
+                                 "Caso #%s: %s" % (v.id, v.asunto), "/soporte/validacion-identidad", None, "info")
+                    return _vi_pub("Validación exitosa",
+                                   "<h2 style='color:#166534;margin-top:0'>✅ Validación Exitosa</h2>"
+                                   "<p>El proceso de seguridad ha sido completado con éxito. Si se encuentra en línea con un asesor de soporte de PROCSIS, "
+                                   "infórmele que ya realizó el proceso. El sistema ha liberado la autorización de forma segura.</p>", "#16a34a")
+
+    st = "width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;margin:4px 0 12px"
+    if v.tipo == "RECTOR":
+        titulo_f = "Confirme su identidad como rectoría"
+        campos = ("<label style='font-size:13px;font-weight:700'>Código oficial del colegio (DANE o NIT)</label>"
+                  "<input class='nopaste' name='dane_nit' autocomplete='off' required style='%s'>"
+                  "<label style='font-size:13px;font-weight:700'>Clave administrativa</label>"
+                  "<input class='nopaste' type='password' name='clave_admin' autocomplete='new-password' required style='%s'>") % (st, st)
+    else:
+        titulo_f = "Confirme los datos del estudiante"
+        campos = ("<label style='font-size:13px;font-weight:700'>ID del estudiante</label>"
+                  "<input class='nopaste' name='codigo' autocomplete='off' required style='%s'>"
+                  "<label style='font-size:13px;font-weight:700'>Grado</label>"
+                  "<input class='nopaste' name='grado' autocomplete='off' placeholder='Ej. 10°B' required style='%s'>"
+                  "<label style='font-size:13px;font-weight:700'>Nombre de la sede</label>"
+                  "<input class='nopaste' name='sede' autocomplete='off' required style='%s'>") % (st, st, st)
+    chk = ("<label style='display:flex;gap:8px;font-size:13px;margin:6px 0;align-items:flex-start'><input type='checkbox' name='acepto_habeas' id='c1' value='1' style='margin-top:3px'>"
+           "<span>Acepto la Política de Tratamiento de Datos Personales (Habeas Data - Ley 1581 de 2012).</span></label>"
+           "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0 14px;align-items:flex-start'><input type='checkbox' name='acepto_terminos' id='c2' value='1' style='margin-top:3px'>"
+           "<span>Acepto los Términos, Condiciones y Políticas de Privacidad de la Empresa PROCSIS.</span></label>")
+    aviso_e = ("<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-size:14px'>%s</div>" % _esc(error)) if error else ""
+    js = """<script>(function(){var espera=__ESPERA__,bt=document.getElementById('bt'),c1=document.getElementById('c1'),c2=document.getElementById('c2'),lbl=bt.getAttribute('data-lbl');
+function upd(){bt.disabled=!(c1.checked&&c2.checked)||espera>0;}
+if(espera>0){bt.textContent='Espere '+espera+' s…';var t=setInterval(function(){espera--;if(espera<=0){clearInterval(t);bt.textContent=lbl;}else{bt.textContent='Espere '+espera+' s…';}upd();},1000);}
+c1.onchange=c2.onchange=upd;upd();
+document.querySelectorAll('input.nopaste').forEach(function(el){
+['paste','drop','dragover','contextmenu','copy','cut'].forEach(function(ev){el.addEventListener(ev,function(e){e.preventDefault();});});
+el.addEventListener('keydown',function(e){if(((e.ctrlKey||e.metaKey)&&(e.key==='v'||e.key==='V'))||(e.shiftKey&&e.key==='Insert'))e.preventDefault();});
+el.addEventListener('beforeinput',function(e){if(e.inputType==='insertFromPaste'||e.inputType==='insertFromDrop'||e.inputType==='insertFromPasteAsQuotation')e.preventDefault();});});})();</script>""".replace("__ESPERA__", str(espera))
+    cuerpo = ("<h2 style='margin-top:0;color:#0B2D57'>%s</h2><p style='font-size:13px;color:#64748b'>Escriba cada dato con el teclado. No se permite pegar.</p>%s"
+              "<form method='POST' autocomplete='off'>%s%s<button id='bt' data-lbl='Aceptar y validar' disabled "
+              "style='width:100%%;padding:14px;border:0;border-radius:12px;background:#005BEA;color:#fff;font-weight:800;font-size:16px;cursor:pointer'>Aceptar y validar</button></form>%s") % (
+        titulo_f, aviso_e, campos, chk, js)
+    return _vi_pub("Validación de identidad", cuerpo)
+
+
+# ───────────────────────── GERENCIA (visualización cifrada) ─────────────────────────
+@app.route("/gerencia/validaciones-identidad", methods=["GET"])
+def gerencia_validaciones_identidad():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _vi_ensure()
+    nombres = {}
+    try:
+        nombres = {i.id: i.nombre for i in Institucion.query.all()}
+    except Exception:
+        db.session.rollback()
+    filas = ""
+    for v in ValidacionIdentidad.query.order_by(ValidacionIdentidad.id.desc()).limit(100).all():
+        _vi_refrescar(v)
+        cif = "🔒 Cifrado" if v.datos_cifrados else "—"
+        filas += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:8px'>#%d</td><td style='padding:8px'>%s</td>"
+                  "<td style='padding:8px'>%s<br><span style='font-size:11px;color:#64748b'>%s</span></td><td style='padding:8px'>%s</td>"
+                  "<td style='padding:8px;font-size:12px'>%s<br>%s</td><td style='padding:8px;font-size:12px'>%s</td>"
+                  "<td style='padding:8px'>%s %s</td></tr>") % (
+            v.id, "Rectoría" if v.tipo == "RECTOR" else "Carné", _esc(nombres.get(v.institucion_id, "—")), _esc(v.asunto),
+            _vi_badge(v.estado), _esc(v.creado_por), _esc((v.creado_en or "")[:16]), _esc(v.ip_usuario or "—"), cif,
+            ("<a href='/gerencia/validaciones-identidad/%d' style='font-weight:700;color:#005BEA'>Ver detalle</a>" % v.id) if v.datos_cifrados else "")
+    rep = ""
+    try:
+        for r in CarneReimpresion.query.order_by(CarneReimpresion.id.desc()).limit(30).all():
+            rep += "<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td></tr>" % (
+                _esc((r.creada_en or "")[:16]), _esc(r.estudiante_nombre), _esc(r.motivo), _esc(r.via), _esc(r.solicitado_por))
+    except Exception:
+        db.session.rollback()
+    fra = ""
+    try:
+        for r in CarneFraude.query.order_by(CarneFraude.id.desc()).limit(30).all():
+            fra += "<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td></tr>" % (
+                _esc((r.ts or "")[:16]), _esc(r.detalle), _esc(r.ip))
+    except Exception:
+        db.session.rollback()
+    th = "style='padding:8px;text-align:left'"
+    body = (
+        "<div style='max-width:1100px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
+        "<p><a href='/gerencia/hq' style='color:#0B2D57;font-weight:700'>&larr; HQ</a></p>"
+        "<h1 style='color:#0B2D57'>Validaciones de identidad</h1>"
+        "<p style='color:#64748b;font-size:14px'>Solo visualización. Lo que digitó el usuario se guarda <b>cifrado</b>; para verlo se pide tu contraseña y queda en auditoría.</p>"
+        "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;background:#fff;font-size:13px'>"
+        "<tr style='background:#0B2D57;color:#fff'><th " + th + ">Caso</th><th " + th + ">Trámite</th><th " + th + ">Colegio / asunto</th>"
+        "<th " + th + ">Estado</th><th " + th + ">Operador</th><th " + th + ">IP usuario</th><th " + th + ">Datos</th></tr>%s</table></div>"
+        "<h2 style='color:#0B2D57;font-size:16px;margin-top:26px'>Bloqueos de carné (reimpresiones)</h2>"
+        "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;background:#fff;font-size:12.5px'>"
+        "<tr style='background:#f1f5f9'><th " + th + ">Fecha</th><th " + th + ">Estudiante</th><th " + th + ">Motivo</th><th " + th + ">Vía</th><th " + th + ">Operador</th></tr>%s</table></div>"
+        "<h2 style='color:#0B2D57;font-size:16px;margin-top:26px'>Intentos con carné anulado (alertas de fraude)</h2>"
+        "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;background:#fff;font-size:12.5px'>"
+        "<tr style='background:#f1f5f9'><th " + th + ">Fecha</th><th " + th + ">Detalle</th><th " + th + ">IP</th></tr>%s</table></div></div>"
+    ) % (filas or "<tr><td colspan='7' style='padding:14px;color:#64748b'>Sin casos.</td></tr>",
+         rep or "<tr><td colspan='5' style='padding:10px;color:#64748b'>Sin bloqueos.</td></tr>",
+         fra or "<tr><td colspan='3' style='padding:10px;color:#64748b'>Sin intentos.</td></tr>")
+    return page("Validaciones de identidad", body)
+
+
+@app.route("/gerencia/validaciones-identidad/<int:vid>", methods=["GET", "POST"])
+def gerencia_validacion_identidad_detalle(vid):
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _vi_ensure()
+    v = ValidacionIdentidad.query.get(vid)
+    if not v:
+        return redirect("/gerencia/validaciones-identidad")
+    revelado, err = "", ""
+    if request.method == "POST":
+        if not _step_up_form_ok():
+            err = "No se pudo validar tu identidad. Revisa tu contraseña / código."
+        else:
+            datos, cons = _vi_descifrar(v.datos_cifrados), _vi_descifrar(v.consentimiento_cifrado)
+            if datos is None:
+                err = "No fue posible descifrar (¿cambió la SECRET_KEY o VI_ENC_KEY?)."
+            else:
+                try:
+                    registrar_auditoria("Gerencia consultó datos cifrados de validación", "#%s" % v.id)
+                except Exception:
+                    db.session.rollback()
+                li = "".join("<li><b>%s:</b> %s</li>" % (_esc(k), _esc(val)) for k, val in (datos or {}).items())
+                lc = "".join("<li><b>%s:</b> %s</li>" % (_esc(k), _esc(val)) for k, val in (cons or {}).items())
+                revelado = ("<h3>Datos entregados por el usuario</h3><ul>%s</ul><h3>Consentimiento legal</h3><ul>%s</ul>") % (li, lc)
+    aviso = ("<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0'>%s</div>" % _esc(err)) if err else ""
+    form = ("<form method='POST' style='max-width:420px'>%s<button style='background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer'>"
+            "🔓 Descifrar y ver</button></form>") % _step_up_campos()
+    body = ("<div style='max-width:760px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
+            "<p><a href='/gerencia/validaciones-identidad' style='color:#0B2D57;font-weight:700'>&larr; Validaciones</a></p>"
+            "<h1 style='color:#0B2D57'>Caso #%d · %s</h1><p>Estado: %s · Resuelto: %s · IP: %s</p>"
+            "<p style='font-size:12px;color:#64748b'>Agente: %s</p>%s%s</div>") % (
+        v.id, "Rectoría" if v.tipo == "RECTOR" else "Carné", _vi_badge(v.estado), _esc(v.resuelto_en or "—"),
+        _esc(v.ip_usuario or "—"), _esc(v.ua_usuario or "—"), aviso, revelado or form)
+    return page("Detalle validación", body)
 
 
 
