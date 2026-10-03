@@ -8,3 +8,5 @@ openpyxl
 reportlab
 python-docx
 
+
+   cryptography
