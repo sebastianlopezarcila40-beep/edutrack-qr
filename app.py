@@ -6529,19 +6529,35 @@ def plataforma():
         return x
 
 
+def _con_https(u):
+    u = (u or "").strip().rstrip("/")
+    if u and not u.lower().startswith(("http://", "https://")):
+        u = "https://" + u
+    return u
+
+
 def _base_publica():
-    """URL pública del sistema para armar enlaces (correos, SMS, QR, PDF).
-    Si en Railway existe APP_BASE_URL (ej. https://app.tudominio.com) se usa SIEMPRE ese dominio,
-    así los enlaces no salen con la dirección *.up.railway.app. Sin la variable, usa el host de la petición."""
-    b = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
+    """URL pública del sistema para armar enlaces (correos, SMS, QR, PDF, respuestas de PQR).
+
+    Orden:
+      1) Variable APP_BASE_URL (si existe), con el dominio que quieras.
+      2) Si no existe y la petición llega por una dirección de Railway (*.railway.app),
+         se usa el dominio propio: DOMINIO_PUBLICO o, por defecto, https://procsishq.com
+      3) En local/pruebas (localhost) se respeta el host de la petición.
+      4) Fuera de una petición (tareas en segundo plano) se usa el dominio propio.
+    Así NUNCA se generan enlaces con la dirección de Railway."""
+    dominio = _con_https(os.environ.get("DOMINIO_PUBLICO")) or "https://procsishq.com"
+    b = _con_https(os.environ.get("APP_BASE_URL"))
     if b:
-        if not b.lower().startswith(("http://", "https://")):
-            b = "https://" + b
         return b
     try:
-        return request.host_url.rstrip("/")
+        host = request.host_url.rstrip("/")
     except Exception:
-        return ""
+        return dominio
+    h = host.lower()
+    if "railway.app" in h or "railway.internal" in h or not h:
+        return dominio
+    return host
 
 
 def _credenciales_smtp(uso="soporte"):
@@ -8388,15 +8404,8 @@ def _asegurar_token_csat(t):
 
 
 def _url_encuesta_csat(t):
-    base = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
-    try:
-        if not base and request:
-            base = (request.url_root or "").rstrip("/")
-    except Exception:
-        pass
+    base = _base_publica()
     tok = _asegurar_token_csat(t)
-    if not base:
-        base = ""
     return f"{base}/encuesta/{tok}"
 
 
@@ -20344,7 +20353,7 @@ def whatsapp_mensaje_legal():
     try:
         base = _base_publica()
     except Exception:
-        base = "https://tu-dominio.up.railway.app"
+        base = "https://procsishq.com"
     terminos = base + "/legal"
     datos = base + "/tratamiento-datos"
     priv = base + "/privacidad"
