@@ -4042,6 +4042,11 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/usuarios", "Usuarios internos"),
             ("/gerencia/auditoria", "Auditoría IP"),
             ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
+            ("/gerencia/correo-soporte", "Gmail · Soporte"),
+            ("/gerencia/correo-notificaciones", "Gmail · Notificaciones"),
+            ("/gerencia/correo-extra/1", "Gmail · Adicional 1"),
+            ("/gerencia/correo-extra/2", "Gmail · Adicional 2"),
+            ("/gerencia/correo-extra/3", "Gmail · Adicional 3"),
             ("/gerencia/datos-empresa", "Datos de la empresa"),
             ("/gerencia/web-corporativa", "Web corporativa (textos/contacto)"),
             ("/gerencia/web-menu", "Menú público"),
@@ -6531,6 +6536,13 @@ def _credenciales_smtp(uso="soporte"):
     conectado ahí, cae a las variables de entorno SOPORTE_EMAIL/SOPORTE_PASSWORD de
     Railway como respaldo. uso: "soporte" (correos generales) | "notificaciones"
     (avisos automáticos masivos de PQR resueltas)."""
+    if str(uso).startswith("extra"):
+        try:
+            _c, _p = _ce_creds(int(str(uso)[5:]))
+            if _c and _p:
+                return _c, _p
+        except Exception:
+            pass
     try:
         p = plataforma()
         if uso == "notificaciones" and (p.smtp_notif_correo or "").strip() and (p.smtp_notif_password or "").strip():
@@ -6542,7 +6554,7 @@ def _credenciales_smtp(uso="soporte"):
     return SOPORTE_EMAIL, (os.getenv("SOPORTE_PASSWORD") or os.getenv("SMTP_PASS_SOPORTE") or "")
 
 
-def _smtp_enviar(msg, correo_envio, password):
+def _smtp_enviar(msg, correo_envio, password, solo_smtp=False):
     """Envía un EmailMessage.
 
     En Railway (plan Hobby/Trial/Free) el SMTP saliente está BLOQUEADO
@@ -6568,7 +6580,7 @@ def _smtp_enviar(msg, correo_envio, password):
 
     # ── 1) Resend por HTTPS (funciona aunque SMTP esté bloqueado) ─────────────
     resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
-    if resend_key:
+    if resend_key and not solo_smtp:
         try:
             from email.utils import getaddresses as _getaddr
 
@@ -26735,6 +26747,9 @@ def gerencia_hq():
               <a class="hq-pill-primary" href="/gerencia/login-banners">Banners Login / Salida segura</a>
               <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
               <a class="hq-pill-more" href="/gerencia/correo-notificaciones">Gmail Notif.</a>
+              <a class="hq-pill-more" href="/gerencia/correo-extra/1">Gmail adicional 1</a>
+              <a class="hq-pill-more" href="/gerencia/correo-extra/2">Gmail adicional 2</a>
+              <a class="hq-pill-more" href="/gerencia/correo-extra/3">Gmail adicional 3</a>
               <a class="hq-pill-more" href="/gerencia/web-menu">Menú público</a>
               <a class="hq-pill-more" href="/gerencia/web-corporativa">Web corporativa (textos y contacto)</a>
               <a class="hq-pill-more" href="/gerencia/casos-exito">Casos de éxito</a>
@@ -37817,6 +37832,9 @@ def _modulos_por_rol(rol):
         ("💳 Facturación y Cobranza", "/gerencia/facturacion-cobranza", "#b45309"),
         ("📧 Correo de Soporte", "/gerencia/correo-soporte", "#0f766e"),
         ("📧 Correo de Notificaciones", "/gerencia/correo-notificaciones", "#0f766e"),
+        ("📧 Correo adicional 1", "/gerencia/correo-extra/1", "#0f766e"),
+        ("📧 Correo adicional 2", "/gerencia/correo-extra/2", "#0f766e"),
+        ("📧 Correo adicional 3", "/gerencia/correo-extra/3", "#0f766e"),
         ("🔌 Mesa de Conexión API (WATI)", "/gerencia/wati-conexion", "#25D366"),
         ("🧠 Conectores IA (EduAura)", "/gerencia/eduaura-ia", "#7c3aed"),
         ("🏢 Datos de la empresa", "/gerencia/datos-empresa", "#0B2D57"),
@@ -74695,6 +74713,177 @@ def gerencia_validacion_identidad_detalle(vid):
         v.id, "Rectoría" if v.tipo == "RECTOR" else "Carné", _vi_badge(v.estado), _esc(v.resuelto_en or "—"),
         _esc(v.ip_usuario or "—"), _esc(v.ua_usuario or "—"), aviso, revelado or form)
     return page("Detalle validación", body)
+
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CORREOS GMAIL ADICIONALES (3 espacios libres en Gerencia para conectar cuentas a futuro)
+#   · Cada espacio tiene nombre editable, correo y contraseña de aplicación.
+#   · La contraseña se guarda CIFRADA (no en texto plano) y nunca se muestra de vuelta.
+#   · Otros módulos pueden usarlos con _credenciales_smtp("extra1" | "extra2" | "extra3").
+# ════════════════════════════════════════════════════════════════════════════
+_CE_LISTO = {"ok": False}
+_CE_SLOTS = (1, 2, 3)
+
+
+class CorreoExtra(db.Model):
+    __tablename__ = "correos_extra"
+    slot = db.Column(db.Integer, primary_key=True)  # 1..3
+    etiqueta = db.Column(db.String(80), default="")
+    correo = db.Column(db.String(160), default="")
+    password_cifrada = db.Column(db.Text, default="")
+    conectado_por = db.Column(db.String(120), default="")
+    conectado_en = db.Column(db.String(20), default="")
+    probado_en = db.Column(db.String(20), default="")
+    probado_resultado = db.Column(db.String(300), default="")
+
+
+def _ce_ensure():
+    if _CE_LISTO["ok"]:
+        return
+    try:
+        CorreoExtra.__table__.create(bind=db.engine, checkfirst=True)
+        _CE_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR correos extra ensure:", repr(ex), flush=True)
+
+
+def _ce_get(n):
+    _ce_ensure()
+    try:
+        return CorreoExtra.query.get(int(n))
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def _ce_creds(n):
+    """(correo, contraseña) del espacio n, o ("", "") si no está conectado."""
+    r = _ce_get(n)
+    if not r or not (r.correo or "").strip() or not (r.password_cifrada or "").strip():
+        return "", ""
+    d = _vi_descifrar(r.password_cifrada)
+    pwd = (d or {}).get("p") if isinstance(d, dict) else ""
+    return (r.correo or "").strip(), (pwd or "").strip()
+
+
+@app.route("/gerencia/correo-extra/<int:n>", methods=["GET", "POST"])
+def gerencia_correo_extra(n):
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    if n not in _CE_SLOTS:
+        return redirect("/gerencia/hq")
+    _ce_ensure()
+    err = msg = ""
+    r = _ce_get(n)
+    accion = (request.form.get("accion") or "guardar").strip() if request.method == "POST" else ""
+    usuario = session.get("usuario", "")
+
+    if accion == "guardar":
+        correo = (request.form.get("correo") or "").strip()[:160]
+        etiqueta = (request.form.get("etiqueta") or "").strip()[:80]
+        nueva = re.sub(r"\s+", "", request.form.get("password") or "")
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
+            err = "Escribe un correo válido."
+        elif not nueva and not (r and r.password_cifrada):
+            err = "Falta la contraseña de aplicación de Gmail."
+        elif nueva and _vi_fernet() is None:
+            err = "El cifrado no está disponible (falta la librería 'cryptography'); no se guarda la contraseña sin cifrar."
+        else:
+            if not r:
+                r = CorreoExtra(slot=n)
+                db.session.add(r)
+            r.etiqueta, r.correo = etiqueta, correo
+            if nueva:
+                r.password_cifrada = _vi_cifrar({"p": nueva})
+                r.probado_en, r.probado_resultado = "", ""
+            r.conectado_por, r.conectado_en = usuario, "%s %s" % (fecha_hoy(), hora_actual())
+            db.session.commit()
+            try:
+                registrar_auditoria("Correo adicional %d conectado" % n, "%s · %s" % (etiqueta or "sin nombre", correo))
+            except Exception:
+                db.session.rollback()
+            msg = "Conexión guardada. Pruébala con el botón de abajo."
+    elif accion == "desconectar":
+        if r:
+            r.correo, r.password_cifrada, r.probado_en, r.probado_resultado = "", "", "", ""
+            r.conectado_por, r.conectado_en = usuario, "%s %s" % (fecha_hoy(), hora_actual())
+            db.session.commit()
+            try:
+                registrar_auditoria("Correo adicional %d desconectado" % n, "")
+            except Exception:
+                db.session.rollback()
+            msg = "Cuenta desconectada y contraseña borrada."
+    elif accion == "probar":
+        correo, pwd = _ce_creds(n)
+        destino = (request.form.get("destino") or "").strip()
+        if not correo or not pwd:
+            err = "Primero guarda la cuenta."
+        elif not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", destino):
+            err = "Escribe un correo de destino válido."
+        else:
+            try:
+                m = EmailMessage()
+                m["Subject"] = "EduTrack · Prueba de correo adicional %d" % n
+                m["From"], m["To"] = correo, destino
+                m.set_content("Prueba de conexión Gmail (correo adicional %d).\nRemitente: %s\n" % (n, correo))
+                _smtp_enviar(m, correo, pwd, solo_smtp=True)
+                r.probado_en, r.probado_resultado = "%s %s" % (fecha_hoy(), hora_actual()), "OK: enviado a %s" % destino
+                msg = "✅ Correo de prueba enviado a %s desde %s." % (destino, correo)
+            except Exception as ex:
+                r.probado_en, r.probado_resultado = "%s %s" % (fecha_hoy(), hora_actual()), ("ERROR: %s" % ex)[:300]
+                err = "No se pudo enviar: %s" % str(ex)[:300]
+            db.session.commit()
+        r = _ce_get(n)
+
+    r = r or _ce_get(n)
+    correo_act = (r.correo if r else "") or ""
+    conectado = bool(r and r.correo and r.password_cifrada)
+    estado = (
+        "<div style='background:#ecfdf5;border:1px solid #6ee7b7;padding:12px;border-radius:10px;margin-bottom:14px'>🟢 Conectado: <b>%s</b><br>"
+        "<span style='font-size:12px;color:#166534'>Por %s el %s</span>%s</div>" % (
+            _esc(correo_act), _esc(r.conectado_por), _esc(r.conectado_en),
+            ("<br><span style='font-size:12px;color:#334155'>Última prueba %s: %s</span>" % (_esc(r.probado_en), _esc(r.probado_resultado))) if r.probado_en else "")
+        if conectado else
+        "<div style='background:#fee2e2;border:1px solid #fca5a5;padding:12px;border-radius:10px;margin-bottom:14px;color:#991b1b'>🔴 Espacio libre — conecta una cuenta Gmail cuando la necesites.</div>")
+    aviso = (("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else "") + (("<div class='msg danger'>%s</div>" % _esc(err)) if err else "")
+    inp = "width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"
+    tabs = "".join("<a class='btn' style='background:%s;color:%s' href='/gerencia/correo-extra/%d'>Correo adicional %d</a> " % (
+        (("#0B2D57", "#fff") if k == n else ("#e2e8f0", "#0f172a")) + (k, k)) for k in _CE_SLOTS)
+    probar = ""
+    if conectado:
+        probar = ("<div class='role-panel' style='max-width:520px;margin-top:12px'><form method='POST'><input type='hidden' name='accion' value='probar'>"
+                  "<label style='font-size:12px;font-weight:700;display:block;margin-bottom:4px'>Enviar correo de prueba a</label>"
+                  "<input type='email' name='destino' required placeholder='tucorreo@ejemplo.com' style='%s'>"
+                  "<button class='btn' style='background:#0f766e'>📧 Probar este correo</button>"
+                  "<p class='mini-text'>La prueba se envía directo por Gmail (SMTP), sin pasar por Resend, para comprobar la cuenta. "
+                  "Si Railway bloquea SMTP en tu plan, la prueba fallará aunque los datos estén bien.</p></form>"
+                  "<form method='POST' style='margin-top:10px' onsubmit=\"return confirm('¿Desconectar y borrar la contraseña guardada?')\">"
+                  "<input type='hidden' name='accion' value='desconectar'><button class='btn' style='background:#b91c1c;color:#fff'>Desconectar</button></form></div>") % inp
+    content = (
+        "<header class='role-hero'><div><h1>📧 Correo adicional %d%s</h1><p>Espacio para conectar una cuenta Gmail adicional. "
+        "La contraseña se guarda cifrada y no se vuelve a mostrar.</p></div><a class='btn' href='/gerencia/hq'>← Volver</a></header>"
+        "<div style='margin-bottom:12px'>%s</div>%s%s"
+        "<div class='role-panel' style='max-width:520px'><form method='POST' autocomplete='off'><input type='hidden' name='accion' value='guardar'>"
+        "<label style='font-size:12px;font-weight:700;display:block;margin-bottom:4px'>Nombre / para qué se usará</label>"
+        "<input name='etiqueta' maxlength='80' value='%s' placeholder='Ej. Facturación, Ventas, Seguridad' style='%s'>"
+        "<label style='font-size:12px;font-weight:700;display:block;margin-bottom:4px'>Correo Gmail</label>"
+        "<input type='email' name='correo' value='%s' required placeholder='ejemplo@gmail.com' style='%s'>"
+        "<label style='font-size:12px;font-weight:700;display:block;margin-bottom:4px'>Contraseña de aplicación de Gmail</label>"
+        "<input type='password' name='password' autocomplete='new-password' placeholder='%s' style='%s'>"
+        "<p style='font-size:11.5px;color:#64748b;margin:0 0 14px'>No es la contraseña normal de la cuenta. Se genera en Google: Cuenta → Seguridad → "
+        "Verificación en 2 pasos (debe estar activada) → Contraseñas de aplicaciones.</p>"
+        "<button style='background:#0B2D57;color:#fff;padding:10px 20px;border:0;border-radius:8px;font-weight:700'>Guardar conexión</button></form></div>%s"
+    ) % (n, (" · " + _esc(r.etiqueta)) if (r and r.etiqueta) else "", tabs, aviso, estado,
+         _esc(r.etiqueta if r else ""), inp, _esc(correo_act), inp,
+         "Dejar en blanco para no cambiarla" if conectado else "xxxx xxxx xxxx xxxx", inp, probar)
+    return page("Correo adicional %d" % n, shell(content))
 
 
 
