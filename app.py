@@ -6529,6 +6529,21 @@ def plataforma():
         return x
 
 
+def _base_publica():
+    """URL pública del sistema para armar enlaces (correos, SMS, QR, PDF).
+    Si en Railway existe APP_BASE_URL (ej. https://app.tudominio.com) se usa SIEMPRE ese dominio,
+    así los enlaces no salen con la dirección *.up.railway.app. Sin la variable, usa el host de la petición."""
+    b = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
+    if b:
+        if not b.lower().startswith(("http://", "https://")):
+            b = "https://" + b
+        return b
+    try:
+        return request.host_url.rstrip("/")
+    except Exception:
+        return ""
+
+
 def _credenciales_smtp(uso="soporte"):
     """Resuelve (correo, password) para enviar correo por Gmail. Primero mira la
     conexión guardada en el panel (Plataforma, editable desde /gerencia/correo-soporte
@@ -8578,7 +8593,7 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     if not correo_envio:
         correo_envio = from_addr
     token = _asegurar_token_pqr(t)
-    base_url = (os.environ.get("APP_BASE_URL") or request.url_root or "").rstrip("/")
+    base_url = _base_publica()
     link = f"{base_url}/pqr/notificacion/{token}"
     nombre = _nombre_destinatario_pqr(t)
     empresa = nombre_empresa()
@@ -11235,7 +11250,7 @@ def _datos_proveedor():
                     out["logo_url"] = logo
                 elif logo.startswith("/"):
                     try:
-                        out["logo_url"] = (request.url_root or "").rstrip("/") + logo
+                        out["logo_url"] = _base_publica() + logo
                     except Exception:
                         out["logo_url"] = logo
                 else:
@@ -13763,7 +13778,7 @@ def familia_certificado():
     pdf.drawString(2 * cm, y, f"Emitido: {cert.emitido_en}")
     y -= 14
     try:
-        base = request.host_url.rstrip("/")
+        base = _base_publica()
     except Exception:
         base = ""
     pdf.drawString(2 * cm, y, f"Verifique autenticidad en: {base}/verificar-certificado/{codigo}")
@@ -14439,7 +14454,7 @@ def secretaria_certificado_pdf(id):
     pdf.drawString(2 * cm, y, "Secretaría académica")
     # QR real de verificación en la esquina inferior
     try:
-        base = request.host_url.rstrip("/")
+        base = _base_publica()
     except Exception:
         base = ""
     qr_url = f"{base}/verificar-certificado/{codigo}"
@@ -14606,7 +14621,7 @@ def secretaria_acta_grado_generar():
         pdf.drawString(2 * cm, y, "Rector(a)")
         pdf.drawString(11 * cm, y, "Secretario(a) académico(a)")
         try:
-            base = request.host_url.rstrip("/")
+            base = _base_publica()
         except Exception:
             base = ""
         qr_url = f"{base}/verificar-certificado/{codigo}"
@@ -20327,7 +20342,7 @@ def whatsapp_mensaje_legal():
     if not requiere_login():
         return redirect("/login")
     try:
-        base = request.host_url.rstrip("/")
+        base = _base_publica()
     except Exception:
         base = "https://tu-dominio.up.railway.app"
     terminos = base + "/legal"
@@ -21306,7 +21321,7 @@ def ventas_panel():
             db.session.add(inv)
             db.session.commit()
             try:
-                base = request.host_url.rstrip("/")
+                base = _base_publica()
             except Exception:
                 base = ""
             link = f"{base}/demo/invitar/{tok}"
@@ -31781,7 +31796,7 @@ def gerencia_tesoreria():
     <label>Events Secret Wompi (opcional)</label>
     <input name="wompi_events_secret" value="{data.get('wompi_events_secret','')}" placeholder="Secret del dashboard Wompi · Eventos" style="width:100%;padding:10px;margin:6px 0">
     <p style="font-size:11px;color:#0B2D57;margin:0 0 8px;background:#eff6ff;padding:8px;border-radius:8px">
-      <b>Webhook URL para Wompi:</b> <code>{request.host_url.rstrip('/')}/api/webhooks/wompi</code><br>
+      <b>Webhook URL para Wompi:</b> <code>{_base_publica()}/api/webhooks/wompi</code><br>
       Al pagar, Wompi notifica APPROVED → el recibo pasa a PAGADO y el colegio se reactiva al día (datos intactos).
     </p>
     <label>Notas</label><textarea name="notas" rows="2" style="width:100%;padding:10px;margin:6px 0">{data.get('notas','')}</textarea>
@@ -36064,7 +36079,7 @@ def biometria_esperar(token):
     if not ch:
         return page("Validación", "<div class='center'><p>Solicitud no encontrada.</p><a href='/login'>Portal de acceso</a></div>")
     u = Usuario.query.get(ch.usuario_id)
-    base = request.url_root.rstrip("/")
+    base = _base_publica()
     link = f"{base}/biometria/validar/{token}"
     pin = ch.pin
     nombre = (u.usuario if u else "colaborador")
@@ -46449,7 +46464,7 @@ def enlaces_publicos():
         return page("Enlaces", shell("<div class='msg danger'>Sin institución en sesión.</div>"))
     cod = (inst.codigo if inst else "") or (str(iid) if iid else "")
     try:
-        base = request.host_url.rstrip("/")
+        base = _base_publica()
     except Exception:
         base = ""
     hub = f"{base}/colegio/{cod}"
@@ -50441,7 +50456,7 @@ def gerencia_api_conexiones():
     geo = {x.institucion_id: x for x in InstGeo.query.all()}
     gi = "".join("<tr><td>%s</td><td>%s</td><td><input name='lat_%d' value='%s' placeholder='5.5' style='width:110px;padding:5px'></td><td><input name='lon_%d' value='%s' placeholder='-74.6' style='width:110px;padding:5px'></td></tr>" % (
         _esc(i.codigo), _esc(i.nombre), i.id, geo[i.id].lat if i.id in geo else "", i.id, geo[i.id].lon if i.id in geo else "") for i in Institucion.query.order_by(Institucion.codigo).all())
-    base = request.host_url.rstrip("/")
+    base = _base_publica()
     aviso = ("<div class='msg ok'>%s</div>" % _esc(msg) if msg else "") + ("<div class='msg danger'>%s</div>" % _esc(err) if err else "")
     if nueva:
         aviso += ("<div class='msg ok' style='font-size:14px'>Clave creada (<b>cópiala ahora, no se vuelve a mostrar</b>):<br><code style='font-size:15px;word-break:break-all'>%s</code></div>") % _esc(nueva)
@@ -52631,7 +52646,7 @@ def _panel_fidelizacion_csat_inner():
                     try:
                         db.session.add(enc)
                         db.session.commit()
-                        base = (os.environ.get("APP_BASE_URL") or request.url_root or "").rstrip("/")
+                        base = _base_publica()
                         encuesta_url_nueva = f"{base}/encuesta/{tok}"
                         mensaje = f"Encuesta generada para {nombre or (inst.nombre if inst else '')}."
                         try:
@@ -53236,7 +53251,7 @@ def admisiones():
     link_path = f"/matricula/{cod_pub}" if cod_pub else "/matricula"
     # URL absoluta para compartir con padres
     try:
-        base = request.host_url.rstrip("/")
+        base = _base_publica()
     except Exception:
         base = ""
     link_pub = f"{base}{link_path}"
@@ -58308,7 +58323,7 @@ def gerencia_wati_conexion():
   </form>
   <p class="mini-text" style="margin-top:14px">
     Última verificación: {_esc(cfg.ultimo_check or "—")} · Por: {_esc(cfg.actualizado_por or "—")}<br>
-    Webhook de entrada (WATI → EduTrack): <code>{_esc((os.environ.get("APP_BASE_URL") or request.host_url.rstrip("/")))}/api/webhooks/wati</code>
+    Webhook de entrada (WATI → EduTrack): <code>{_esc(_base_publica())}/api/webhooks/wati</code>
   </p>
 </div>
 """
@@ -74310,7 +74325,7 @@ def soporte_validacion_identidad():
                                     creado_en=_ts(), creado_ts=_vi_time.time())
             db.session.add(v)
             db.session.commit()
-            session["vi_nuevo"] = {"id": v.id, "pin": pin, "link": request.host_url.rstrip("/") + "/validar-identidad/" + token}
+            session["vi_nuevo"] = {"id": v.id, "pin": pin, "link": _base_publica() + "/validar-identidad/" + token}
             try:
                 registrar_auditoria("Enlace de validación generado", "#%s %s · %s" % (v.id, tipo, inst.nombre))
             except Exception:
