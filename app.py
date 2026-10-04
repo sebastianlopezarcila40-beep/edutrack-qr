@@ -4047,6 +4047,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/correo-extra/1", "Gmail · Adicional 1"),
             ("/gerencia/correo-extra/2", "Gmail · Adicional 2"),
             ("/gerencia/correo-extra/3", "Gmail · Adicional 3"),
+            ("/gerencia/notificaciones", "📨 Notificaciones"),
             ("/gerencia/datos-empresa", "Datos de la empresa"),
             ("/gerencia/web-corporativa", "Web corporativa (textos/contacto)"),
             ("/gerencia/web-menu", "Menú público"),
@@ -6587,6 +6588,10 @@ def _credenciales_smtp(uso="soporte"):
     return SOPORTE_EMAIL, (os.getenv("SOPORTE_PASSWORD") or os.getenv("SMTP_PASS_SOPORTE") or "")
 
 
+import threading as _th_envio
+_ENVIO_LOCAL = _th_envio.local()   # guarda la última respuesta del proveedor de envío (Resend/Gmail) para el historial
+
+
 def _smtp_enviar(msg, correo_envio, password, solo_smtp=False):
     """Envía un EmailMessage.
 
@@ -6710,10 +6715,12 @@ def _smtp_enviar(msg, correo_envio, password, solo_smtp=False):
                 with urllib.request.urlopen(req, timeout=25) as resp:
                     body = resp.read().decode("utf-8", errors="replace")
                     print("Resend OK (%d to, %d cc, %d bcc):" % (len(pl.get("to", [])), len(pl.get("cc", [])), len(pl.get("bcc", []))), body[:200])
+                    _ENVIO_LOCAL.info = ("Resend: " + body[:200]).strip()
             return True
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", errors="replace") if e.fp else str(e)
             print("Resend HTTP error:", e.code, detail)
+            _ENVIO_LOCAL.info = ("Resend HTTP %s: %s" % (e.code, detail[:300]))
             raise RuntimeError(
                 f"Resend rechazó el envío (HTTP {e.code}): {detail[:400]}. "
                 "Verifique RESEND_API_KEY y que RESEND_FROM sea onboarding@resend.dev "
@@ -6742,6 +6749,7 @@ def _smtp_enviar(msg, correo_envio, password, solo_smtp=False):
             smtp.ehlo()
             smtp.login(correo_envio, password)
             smtp.send_message(msg)
+        _ENVIO_LOCAL.info = "Enviado por Gmail SMTP (%s)" % correo_envio
         return True
     except Exception as e:
         errores.append(f"587 STARTTLS: {type(e).__name__}: {e}")
@@ -6750,6 +6758,7 @@ def _smtp_enviar(msg, correo_envio, password, solo_smtp=False):
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=12) as smtp:
             smtp.login(correo_envio, password)
             smtp.send_message(msg)
+        _ENVIO_LOCAL.info = "Enviado por Gmail SMTP (%s)" % correo_envio
         return True
     except Exception as e:
         errores.append(f"465 SSL: {type(e).__name__}: {e}")
@@ -8616,6 +8625,16 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
     except Exception:
         wa_num, email_ayuda = "", SOPORTE_EMAIL
     wa_link = f"https://wa.me/{wa_num}" if wa_num else f"mailto:{email_ayuda}"
+    # Centro de Notificaciones: si la automatización «pqr_respondida» está activa, se envía la plantilla configurada
+    try:
+        if _nt_auto("pqr_respondida", destino, {
+            "nombre": nombre, "radicado": formatear_radicado(t.radicado or t.nro_cun), "estado": (t.estado or ""),
+            "tipo_pqr": (getattr(t, "subtipo", "") or getattr(t, "tipo_pqr", "") or ""), "ticket": (getattr(t, "ticket", "") or ""),
+            "institucion": (getattr(t, "nombre_colegio", "") or getattr(t, "razon_social", "") or ""), "correo": destino, "enlace_pqr": link,
+        }):
+            return True
+    except Exception as _e_nt:
+        print("notif auto pqr_respondida:", _e_nt)
     # Foto hero PROCSIS como CID (Resend attachment content_id). Gmail bloquea data-URI.
     hero_img = "cid:hero_procsis"
     _hero_bytes, _hero_mime, _hero_fname = _cargar_hero_pqr()
@@ -9126,6 +9145,15 @@ def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO
         return f or "—"
     fecha_rad_v = _fmt_fecha(fecha_rad)
     fecha_lim_v = _fmt_fecha(fecha_limite)
+    # Centro de Notificaciones: si la automatización «pqr_creada» está activa, se envía la plantilla configurada
+    try:
+        if _nt_auto("pqr_creada", destino, {
+            "radicado": radicado_fmt, "fecha": fecha_rad_v, "fecha_limite": fecha_lim_v, "tipo_pqr": (subtipo or "PQR"),
+            "ticket": ticket or "", "estado": "Radicada", "correo": destino, "enlace_pqr": _base_publica() + "/pqr/consulta",
+        }):
+            return True
+    except Exception as _e_nt:
+        print("notif auto pqr_creada:", _e_nt)
     html = f"""
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
   <div style="position:relative;background:#dbeafe;padding:24px 26px 32px">
@@ -11789,6 +11817,10 @@ def _html_login_pie_colegios():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = ""
+    _motivo_ret = (request.args.get("error") or "").strip().lower() if request.method == "GET" else ""
+    if _motivo_ret == "horario":
+        error = ("Tu usuario está fuera de sus días u horario laboral, por eso no pudo entrar. "
+                 "Pide a Gerencia que ajuste tu horario (Seguridad de empleados) o que te habilite un acceso extraordinario.")
     rate_blocked = False
     if request.method == "POST":
         ok_rl, wait_m = _rate_limit_login(portal="colegios")
@@ -26776,6 +26808,7 @@ def gerencia_hq():
               <a class="hq-pill-more" href="/gerencia/correo-extra/1">Gmail adicional 1</a>
               <a class="hq-pill-more" href="/gerencia/correo-extra/2">Gmail adicional 2</a>
               <a class="hq-pill-more" href="/gerencia/correo-extra/3">Gmail adicional 3</a>
+              <a class="hq-pill-primary" href="/gerencia/notificaciones">📨 Notificaciones</a>
               <a class="hq-pill-more" href="/gerencia/web-menu">Menú público</a>
               <a class="hq-pill-more" href="/gerencia/web-corporativa">Web corporativa (textos y contacto)</a>
               <a class="hq-pill-more" href="/gerencia/casos-exito">Casos de éxito</a>
@@ -37861,6 +37894,7 @@ def _modulos_por_rol(rol):
         ("📧 Correo adicional 1", "/gerencia/correo-extra/1", "#0f766e"),
         ("📧 Correo adicional 2", "/gerencia/correo-extra/2", "#0f766e"),
         ("📧 Correo adicional 3", "/gerencia/correo-extra/3", "#0f766e"),
+        ("📨 Notificaciones", "/gerencia/notificaciones", "#005BEA"),
         ("🔌 Mesa de Conexión API (WATI)", "/gerencia/wati-conexion", "#25D366"),
         ("🧠 Conectores IA (EduAura)", "/gerencia/eduaura-ia", "#7c3aed"),
         ("🏢 Datos de la empresa", "/gerencia/datos-empresa", "#0B2D57"),
@@ -74962,6 +74996,618 @@ def _reescribir_enlaces_railway(resp):
     except Exception:
         pass
     return resp
+
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CENTRO DE NOTIFICACIONES (Gerencia)
+#   · Plantillas de correo con variables {{nombre}}, {{radicado}}, ... y vista previa real.
+#   · Envío manual (un correo individual por destinatario) y correo de prueba.
+#   · Automatización por evento (PQR creada / PQR respondida). Apagada por defecto: mientras esté
+#     apagada, el sistema sigue usando el diseño original de cada correo.
+#   · Historial con el contenido enviado y la respuesta del proveedor (Resend / Gmail).
+#   · Permisos: ver historial, enviar y probar = Gerencia; administrar plantillas y
+#     automatizaciones = administrador principal (Superadmin o usuarios de NOTIF_ADMINS).
+# ════════════════════════════════════════════════════════════════════════════
+import html as _nt_html
+
+_NT_LISTO = {"ok": False}
+_NT_VARS = ("nombre", "radicado", "fecha", "fecha_limite", "tipo_pqr", "ticket", "estado", "correo", "institucion",
+            "enlace_pqr", "enlace", "usuario", "valor", "fecha_vencimiento", "mensaje")
+_NT_MUESTRA = {
+    "nombre": "Juan Pérez", "radicado": "2026-22-000009", "fecha": "04/10/2026", "fecha_limite": "26/10/2026",
+    "tipo_pqr": "Petición", "ticket": "TK-000123", "estado": "En trámite", "correo": "usuario@ejemplo.com",
+    "institucion": "Colegio Ejemplo", "enlace_pqr": "https://procsishq.com/pqr/consulta", "enlace": "https://procsishq.com/login",
+    "usuario": "jperez", "valor": "$ 350.000", "fecha_vencimiento": "15/10/2026",
+    "mensaje": "Este es un mensaje de ejemplo para la vista previa.",
+}
+_NT_RE = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}")
+_NT_EMAIL_RE = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
+
+
+class NotifPlantilla(db.Model):
+    __tablename__ = "notif_plantillas"
+    clave = db.Column(db.String(40), primary_key=True)
+    nombre = db.Column(db.String(80), default="")
+    icono = db.Column(db.String(8), default="")
+    orden = db.Column(db.Integer, default=0)
+    asunto = db.Column(db.String(200), default="")
+    titulo = db.Column(db.String(160), default="")
+    cuerpo = db.Column(db.Text, default="")
+    boton_texto = db.Column(db.String(60), default="")
+    boton_url = db.Column(db.String(300), default="")
+    actualizado_por = db.Column(db.String(80), default="")
+    actualizado_en = db.Column(db.String(20), default="")
+
+
+class NotifAuto(db.Model):
+    __tablename__ = "notif_automatizacion"
+    evento = db.Column(db.String(40), primary_key=True)
+    descripcion = db.Column(db.String(200), default="")
+    plantilla = db.Column(db.String(40), default="")
+    activa = db.Column(db.Boolean, default=False)
+    actualizado_por = db.Column(db.String(80), default="")
+    actualizado_en = db.Column(db.String(20), default="")
+
+
+class NotifLog(db.Model):
+    __tablename__ = "notif_historial"
+    id = db.Column(db.Integer, primary_key=True)
+    creado_en = db.Column(db.String(20), default="", index=True)
+    tipo = db.Column(db.String(40), default="")
+    asunto = db.Column(db.String(300), default="")
+    destinatario = db.Column(db.String(200), default="", index=True)
+    estado = db.Column(db.String(10), default="", index=True)  # ENVIADO | ERROR
+    detalle = db.Column(db.String(400), default="")
+    respuesta = db.Column(db.Text, default="")
+    origen = db.Column(db.String(10), default="")  # manual | prueba | auto
+    enviado_por = db.Column(db.String(80), default="")
+    contenido = db.Column(db.Text, default="")
+
+
+_NT_DEFAULTS = [
+    dict(clave="pqr_confirmacion", icono="📥", nombre="Confirmación de PQR", orden=1,
+         asunto="📥 Hemos recibido tu solicitud · Radicado No. {{radicado}}", titulo="Hemos recibido su solicitud",
+         cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Su solicitud fue recibida correctamente por PROCSIS y quedó registrada con el siguiente radicado:</p>"
+                 "<div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;margin:14px 0\">"
+                 "<div style=\"font-size:11px;font-weight:800;color:#1e40af;letter-spacing:.05em\">RADICADO</div>"
+                 "<div style=\"font-size:20px;font-weight:800;color:#0B2D57\">{{radicado}}</div></div>"
+                 "<p><b>Fecha:</b> {{fecha}}<br><b>Tipo:</b> {{tipo_pqr}}<br><b>Fecha máxima de respuesta:</b> {{fecha_limite}}</p>"
+                 "<p>Su solicitud será revisada por nuestro equipo.</p>"),
+         boton_texto="Consultar solicitud", boton_url="{{enlace_pqr}}"),
+    dict(clave="pqr_actualizacion", icono="🔄", nombre="Actualización de PQR", orden=2,
+         asunto="🔄 Actualización de su solicitud · Radicado No. {{radicado}}", titulo="Su solicitud tiene una actualización",
+         cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Le informamos que su solicitud con radicado <b>{{radicado}}</b> cambió de estado.</p>"
+                 "<p><b>Estado actual:</b> {{estado}}<br><b>Fecha:</b> {{fecha}}</p><p>{{mensaje}}</p>"),
+         boton_texto="Consultar solicitud", boton_url="{{enlace_pqr}}"),
+    dict(clave="pqr_respuesta", icono="✅", nombre="Respuesta de PQR", orden=3,
+         asunto="✅ Respuesta a su solicitud · Radicado No. {{radicado}}", titulo="Ya tenemos respuesta a su solicitud",
+         cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Por medio de este correo le compartimos la respuesta a la solicitud con radicado <b>{{radicado}}</b>. "
+                 "Para verla, haga clic en el botón.</p><p style=\"font-size:12px;color:#475569\">Con la recepción de este correo se entiende que ha sido notificado, "
+                 "según los artículos 12 y 20 de la Ley 527 de 1999.</p>"),
+         boton_texto="VER RESPUESTA", boton_url="{{enlace_pqr}}"),
+    dict(clave="usuario_creado", icono="👤", nombre="Creación de usuario", orden=4,
+         asunto="👤 Su usuario fue creado en EduTrack", titulo="Bienvenido(a) a EduTrack",
+         cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Se creó su acceso a EduTrack para <b>{{institucion}}</b>.</p>"
+                 "<p><b>Usuario:</b> {{usuario}}</p><p>Por seguridad, la contraseña le será entregada por un canal distinto y deberá cambiarla en su primer ingreso.</p>"),
+         boton_texto="Ingresar a EduTrack", boton_url="{{enlace}}"),
+    dict(clave="recuperacion_clave", icono="🔑", nombre="Recuperación de contraseña", orden=5,
+         asunto="🔑 Recuperación de contraseña · EduTrack", titulo="Recuperación de contraseña",
+         cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Recibimos una solicitud para recuperar el acceso de su cuenta <b>{{usuario}}</b>.</p>"
+                 "<p>{{mensaje}}</p><p>Si usted no la hizo, ignore este correo y avise a soporte.</p>"),
+         boton_texto="Ir a EduTrack", boton_url="{{enlace}}"),
+    dict(clave="institucion", icono="🏫", nombre="Notificación a institución", orden=6,
+         asunto="🏫 Información para {{institucion}}", titulo="Información para su institución",
+         cuerpo="<p>Estimado(a) {{nombre}}:</p><p>{{mensaje}}</p><p>Cordialmente,<br>Equipo PROCSIS</p>",
+         boton_texto="", boton_url=""),
+    dict(clave="facturacion", icono="💳", nombre="Facturación / cobro", orden=7,
+         asunto="💳 Facturación EduTrack · {{institucion}}", titulo="Información de facturación",
+         cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Le compartimos la información de facturación de <b>{{institucion}}</b>.</p>"
+                 "<p><b>Valor:</b> {{valor}}<br><b>Fecha de vencimiento:</b> {{fecha_vencimiento}}</p><p>{{mensaje}}</p>"),
+         boton_texto="", boton_url=""),
+    dict(clave="comunicado", icono="📢", nombre="Comunicado general", orden=8,
+         asunto="📢 Comunicado de PROCSIS", titulo="Comunicado",
+         cuerpo="<p>Estimado(a) {{nombre}}:</p><p>{{mensaje}}</p><p>Cordialmente,<br>Equipo PROCSIS</p>",
+         boton_texto="", boton_url=""),
+    dict(clave="prueba", icono="🧪", nombre="Correo de prueba", orden=9,
+         asunto="🧪 Correo de prueba · EduTrack", titulo="Correo de prueba",
+         cuerpo="<p>Este es un correo de prueba enviado desde el Centro de Notificaciones de EduTrack el {{fecha}}.</p><p>Si lo recibe, la conexión de envío funciona.</p>",
+         boton_texto="", boton_url=""),
+    dict(clave="personalizado", icono="✉️", nombre="Personalizado", orden=10,
+         asunto="", titulo="", cuerpo="{{mensaje}}", boton_texto="", boton_url=""),
+]
+_NT_EVENTOS = [
+    ("pqr_creada", "Cuando se radica una PQR (correo de confirmación)", "pqr_confirmacion"),
+    ("pqr_respondida", "Cuando se responde o resuelve una PQR (aviso con botón «Ver respuesta»)", "pqr_respuesta"),
+]
+
+
+def _nt_ensure():
+    if _NT_LISTO["ok"]:
+        return
+    try:
+        for m in (NotifPlantilla, NotifAuto, NotifLog):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        for d in _NT_DEFAULTS:
+            if not NotifPlantilla.query.get(d["clave"]):
+                db.session.add(NotifPlantilla(**d))
+        for ev, desc, pl in _NT_EVENTOS:
+            if not NotifAuto.query.get(ev):
+                db.session.add(NotifAuto(evento=ev, descripcion=desc, plantilla=pl, activa=False))
+        db.session.commit()
+        _NT_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR notificaciones ensure:", repr(ex), flush=True)
+
+
+def _nt_puede_admin():
+    """Administrar plantillas y automatizaciones: administrador principal."""
+    try:
+        usr = (session.get("usuario") or "").strip().lower()
+        extra = {x.strip().lower() for x in (os.environ.get("NOTIF_ADMINS") or "").split(",") if x.strip()}
+        if usr and usr in extra:
+            return True
+        rol = rol_actual()
+        if rol == "Superadmin":
+            return True
+        if rol in ("Gerente", "Gerencia", "Administrador"):
+            # Si la empresa no tiene ningún Superadmin interno, Gerencia administra (para no quedar bloqueada)
+            hay_super = Usuario.query.filter(Usuario.rol == "Superadmin", Usuario.institucion_id.is_(None)).first()
+            return hay_super is None
+    except Exception:
+        db.session.rollback()
+    return False
+
+
+def _nt_valores(vars_, destino=""):
+    v = {k: "" for k in _NT_VARS}
+    for k, val in (vars_ or {}).items():
+        if k in v:
+            v[k] = str(val if val is not None else "").strip()
+    if not v["fecha"]:
+        v["fecha"] = ahora().strftime("%d/%m/%Y")
+    if not v["nombre"]:
+        v["nombre"] = "usuario(a)"
+    if destino:
+        v["correo"] = destino
+    if not v["enlace"]:
+        v["enlace"] = v["enlace_pqr"]
+    if not v["enlace_pqr"]:
+        v["enlace_pqr"] = v["enlace"]
+    return v
+
+
+def _nt_sub(texto, v, escapar=True):
+    def f(m):
+        val = v.get(m.group(1))
+        if val is None:
+            return ""
+        return _nt_html.escape(val, quote=True) if escapar else val
+    return _NT_RE.sub(f, texto or "")
+
+
+def _nt_limpiar_html(h):
+    h = re.sub(r"(?is)<(script|iframe|object|embed|form|style)\b.*?(</\1\s*>|$)", "", h or "")
+    h = re.sub(r"(?is)<(link|meta|base)\b[^>]*>", "", h)
+    h = re.sub(r"(?i)\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", h)
+    h = re.sub(r"(?i)javascript\s*:", "", h)
+    return h
+
+
+def _nt_cuerpo_a_html(t):
+    t = t or ""
+    if "<" in t:
+        return t
+    t = _nt_html.escape(t, quote=False).strip()
+    return "".join('<p style="margin:0 0 12px">%s</p>' % p.replace("\n", "<br>") for p in re.split(r"\n\s*\n", t) if p.strip())
+
+
+def _nt_url_ok(u):
+    u = (u or "").strip()
+    return u if u.lower().startswith(("http://", "https://", "mailto:")) else ""
+
+
+def _nt_envolver(titulo, cuerpo, btn_texto="", btn_url=""):
+    boton = ""
+    if btn_texto and btn_url:
+        boton = ('<div style="text-align:center;margin:26px 0 8px"><a href="' + btn_url + '" style="background:#005BEA;color:#fff;text-decoration:none;'
+                 'font-weight:800;padding:13px 34px;border-radius:999px;display:inline-block;font-size:15px">' + btn_texto + '</a></div>')
+    tit = ('<div style="padding:22px 26px 4px;color:#0B2D57"><p style="margin:0;font-size:20px;font-weight:800;line-height:1.3">' + titulo + '</p></div>') if titulo else ""
+    return ('<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">'
+            '<div style="background:#0B2D57;color:#fff;padding:20px 26px"><div style="font-weight:900;font-size:20px;letter-spacing:1.5px;font-family:Georgia,Times New Roman,serif">PROCSIS</div>'
+            '<div style="font-size:12px;opacity:.85">EduTrack</div></div>' + tit +
+            '<div style="padding:10px 26px 18px;color:#0f172a;font-size:14px;line-height:1.65">' + cuerpo + boton + '</div>'
+            '<div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 26px;font-size:11px;color:#64748b;text-align:center">'
+            'Procsis · EduTrack<br>Este correo fue generado automáticamente. Por favor no responda a este mensaje.</div></div>')
+
+
+def _nt_armar(p, vars_, destino=""):
+    """(asunto, html, texto, variables_sin_valor) a partir de una plantilla (dict) y sus variables."""
+    v = _nt_valores(vars_, destino)
+    asunto = re.sub(r"[\r\n]+", " ", _nt_sub(p.get("asunto"), v, escapar=False)).strip()[:200] or "Notificación PROCSIS"
+    titulo = _nt_sub(p.get("titulo"), v)
+    cuerpo = _nt_sub(_nt_limpiar_html(_nt_cuerpo_a_html(p.get("cuerpo"))), v)
+    bt = _nt_sub(p.get("boton_texto"), v)
+    bu = _nt_url_ok(_nt_sub(p.get("boton_url"), v, escapar=False))
+    html = _nt_envolver(titulo, cuerpo, bt, _nt_html.escape(bu, quote=True) if bu else "")
+    texto = re.sub(r"(?i)<br\s*/?>|</p>|</div>", "\n", cuerpo)
+    texto = _nt_html.unescape(re.sub(r"<[^>]+>", "", texto)).strip()
+    if titulo:
+        texto = _nt_html.unescape(titulo) + "\n\n" + texto
+    if bt and bu:
+        texto += "\n\n%s: %s" % (_nt_html.unescape(bt), bu)
+    usadas = set(_NT_RE.findall(" ".join(str(p.get(k) or "") for k in ("asunto", "titulo", "cuerpo", "boton_texto", "boton_url"))))
+    faltan = sorted(k for k in usadas if k in _NT_VARS and not v.get(k))
+    return asunto, html, texto, faltan
+
+
+def _nt_remitente():
+    correo_envio, password = _credenciales_smtp("notificaciones")
+    from_addr = (os.environ.get("RESEND_FROM") or "").strip() or correo_envio or "EduTrack <onboarding@resend.dev>"
+    return correo_envio, password, from_addr
+
+
+def _nt_log(**k):
+    try:
+        k["creado_en"] = "%s %s" % (fecha_hoy(), hora_actual()[:5])
+        k["contenido"] = (k.get("contenido") or "")[:60000]
+        db.session.add(NotifLog(**k))
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        print("ERROR notif log:", repr(ex), flush=True)
+
+
+def _nt_enviar(p, destinos, vars_, origen, usuario, clave=""):
+    """Envía UN correo individual por destinatario (nadie ve las direcciones de los demás).
+    Devuelve (enviados, errores, mensajes_de_error)."""
+    _nt_ensure()
+    correo_envio, password, from_addr = _nt_remitente()
+    hay_resend = bool((os.environ.get("RESEND_API_KEY") or "").strip())
+    ok = err = 0
+    msgs = []
+    if not hay_resend and (not correo_envio or not password):
+        txt = "Falta configurar el envío: define RESEND_API_KEY en Railway (o conecta un Gmail en Gerencia)."
+        for d in destinos:
+            a, h, _t, _f = _nt_armar(p, vars_, d)
+            _nt_log(tipo=clave, asunto=a, destinatario=d, estado="ERROR", detalle=txt, origen=origen, enviado_por=usuario, contenido=h)
+        return 0, len(destinos), [txt]
+    for d in destinos:
+        asunto, html, texto, _f = _nt_armar(p, vars_, d)
+        estado, detalle = "ENVIADO", ""
+        _ENVIO_LOCAL.info = ""
+        try:
+            m = EmailMessage()
+            m["Subject"], m["From"], m["To"] = asunto, from_addr, d
+            m.set_content(texto)
+            m.add_alternative(html, subtype="html")
+            _smtp_enviar(m, correo_envio or from_addr, password)
+            ok += 1
+        except Exception as ex:
+            estado, detalle = "ERROR", str(ex)[:390]
+            err += 1
+            msgs.append("%s: %s" % (d, str(ex)[:160]))
+        _nt_log(tipo=clave, asunto=asunto, destinatario=d, estado=estado, detalle=detalle,
+                respuesta=getattr(_ENVIO_LOCAL, "info", "") or "", origen=origen, enviado_por=usuario, contenido=html)
+    return ok, err, msgs
+
+
+def _nt_auto(evento, destino, vars_):
+    """Gancho para los correos automáticos del sistema. True = ya se envió con la plantilla configurada;
+    False = automatización apagada o falló: el llamador usa su diseño original."""
+    try:
+        _nt_ensure()
+        a = NotifAuto.query.get(evento)
+        if not a or not a.activa:
+            return False
+        pl = NotifPlantilla.query.get(a.plantilla)
+        if not pl:
+            return False
+        d = {k: getattr(pl, k) for k in ("asunto", "titulo", "cuerpo", "boton_texto", "boton_url")}
+        ok, _err, _m = _nt_enviar(d, [destino], vars_, "auto", "sistema", pl.clave)
+        return ok > 0
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR notif auto:", repr(ex), flush=True)
+        return False
+
+
+def _nt_parse_destinos(txt, max_n=100):
+    vistos, out, malos = set(), [], []
+    for x in re.split(r"[\s,;]+", txt or ""):
+        x = x.strip().strip("<>")
+        if not x:
+            continue
+        if not _NT_EMAIL_RE.match(x):
+            malos.append(x)
+        elif x.lower() not in vistos:
+            vistos.add(x.lower())
+            out.append(x)
+    return out[:max_n], malos, len(out) > max_n
+
+
+def _nt_plantilla_form(f):
+    return {"asunto": (f.get("asunto") or "")[:200], "titulo": (f.get("titulo") or "")[:160],
+            "cuerpo": (f.get("cuerpo") or "")[:20000], "boton_texto": (f.get("boton_texto") or "")[:60],
+            "boton_url": (f.get("boton_url") or "")[:300]}
+
+
+def _nt_vars_form(f, muestra=False):
+    v = {k: (f.get("v_" + k) or "").strip() for k in _NT_VARS}
+    if muestra:
+        for k in _NT_VARS:
+            if not v[k]:
+                v[k] = _NT_MUESTRA[k]
+    return v
+
+
+@app.route("/gerencia/notificaciones/preview", methods=["POST"])
+def gerencia_notificaciones_preview():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    a, h, _t, falt = _nt_armar(_nt_plantilla_form(request.form), _nt_vars_form(request.form, muestra=True), _NT_MUESTRA["correo"])
+    return Response("<!doctype html><meta charset='utf-8'><body style='margin:0;padding:14px;background:#f1f5f9'>" + h, mimetype="text/html")
+
+
+@app.route("/gerencia/notificaciones/log/<int:lid>")
+def gerencia_notificaciones_log(lid):
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _nt_ensure()
+    r = NotifLog.query.get(lid)
+    if not r:
+        return redirect("/gerencia/notificaciones?tab=historial")
+    color = "#166534" if r.estado == "ENVIADO" else "#991b1b"
+    marco = ("<iframe sandbox='' srcdoc=\"%s\" style='width:100%%;height:560px;border:1px solid #e2e8f0;border-radius:10px;background:#f1f5f9'></iframe>"
+             % _nt_html.escape("<body style='margin:0;padding:14px;background:#f1f5f9'>" + (r.contenido or ""), quote=True))
+    body = ("<div style='max-width:860px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
+            "<p><a href='/gerencia/notificaciones?tab=historial' style='color:#0B2D57;font-weight:700'>&larr; Historial</a></p>"
+            "<h1 style='color:#0B2D57;font-size:22px'>Notificación #%d</h1>"
+            "<table style='font-size:14px;line-height:1.8'><tr><td><b>Fecha</b></td><td>%s</td></tr><tr><td><b>Tipo</b></td><td>%s · %s</td></tr>"
+            "<tr><td><b>Destinatario</b></td><td>%s</td></tr><tr><td><b>Asunto</b></td><td>%s</td></tr>"
+            "<tr><td><b>Estado</b></td><td style='color:%s;font-weight:800'>%s</td></tr><tr><td><b>Enviado por</b></td><td>%s</td></tr>"
+            "<tr><td style='vertical-align:top'><b>Respuesta del proveedor</b></td><td><code style='word-break:break-all'>%s</code></td></tr>%s</table>"
+            "<h3 style='color:#0B2D57'>Contenido enviado</h3>%s</div>") % (
+        r.id, _esc(r.creado_en), _esc(r.tipo), _esc(r.origen), _esc(r.destinatario), _esc(r.asunto), color, _esc(r.estado), _esc(r.enviado_por),
+        _esc(r.respuesta or "—"), ("<tr><td><b>Error</b></td><td style='color:#991b1b'>%s</td></tr>" % _esc(r.detalle)) if r.detalle else "", marco)
+    return page("Notificación #%d" % r.id, body)
+
+
+@app.route("/gerencia/notificaciones", methods=["GET", "POST"])
+def gerencia_notificaciones():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _nt_ensure()
+    admin = _nt_puede_admin()
+    usuario = session.get("usuario", "")
+    tab = (request.values.get("tab") or "enviar").strip()
+    if tab not in ("enviar", "plantillas", "auto", "historial"):
+        tab = "enviar"
+    msg = err = ""
+    accion = (request.form.get("accion") or "").strip() if request.method == "POST" else ""
+    ahora_s = "%s %s" % (fecha_hoy(), hora_actual()[:5])
+
+    if accion in ("enviar", "probar"):
+        tab = "enviar"
+        clave = (request.form.get("clave") or "personalizado").strip()
+        txt_dest = request.form.get("destino_prueba" if accion == "probar" else "destinos")
+        destinos, malos, recortado = _nt_parse_destinos(txt_dest)
+        if malos:
+            err = "Correo(s) con formato inválido: " + ", ".join(malos[:5])
+        elif not destinos:
+            err = "Escribe al menos un destinatario."
+        else:
+            pl = _nt_plantilla_form(request.form)
+            if not (pl["asunto"].strip() and (pl["cuerpo"] or "").strip()):
+                err = "El asunto y el mensaje no pueden estar vacíos."
+            else:
+                vars_ = _nt_vars_form(request.form, muestra=(accion == "probar"))
+                ok, ner, msgs = _nt_enviar(pl, destinos, vars_, "prueba" if accion == "probar" else "manual", usuario, clave)
+                _, _, de = _nt_remitente()
+                if ok:
+                    msg = "✓ %s enviado%s correctamente. Remitente: %s" % (ok, "s" if ok != 1 else "", de)
+                    if recortado:
+                        msg += " (se enviaron los primeros 100 destinatarios)"
+                if ner:
+                    err = "No se pudo enviar %d correo(s): %s" % (ner, " | ".join(msgs)[:500])
+                try:
+                    registrar_auditoria("Notificación %s" % ("de prueba" if accion == "probar" else "enviada"),
+                                        "%s · %d destinatario(s) · ok=%d err=%d" % (clave, len(destinos), ok, ner))
+                except Exception:
+                    db.session.rollback()
+    elif accion == "guardar_plantilla":
+        tab = "plantillas"
+        pl = NotifPlantilla.query.get(request.form.get("clave") or "")
+        if not admin:
+            err = "Solo el administrador principal puede editar plantillas."
+        elif not pl:
+            err = "Plantilla no encontrada."
+        else:
+            d = _nt_plantilla_form(request.form)
+            if pl.clave != "personalizado" and not (d["asunto"].strip() and d["cuerpo"].strip()):
+                err = "El asunto y el mensaje no pueden estar vacíos."
+            else:
+                pl.asunto, pl.titulo, pl.boton_texto, pl.boton_url = d["asunto"], d["titulo"], d["boton_texto"], d["boton_url"]
+                pl.cuerpo = _nt_limpiar_html(d["cuerpo"])
+                pl.actualizado_por, pl.actualizado_en = usuario, ahora_s
+                db.session.commit()
+                msg = "Plantilla «%s» guardada." % pl.nombre
+                try:
+                    registrar_auditoria("Plantilla de notificación editada", pl.clave)
+                except Exception:
+                    db.session.rollback()
+    elif accion == "restaurar_plantilla":
+        tab = "plantillas"
+        pl = NotifPlantilla.query.get(request.form.get("clave") or "")
+        base = next((x for x in _NT_DEFAULTS if pl and x["clave"] == pl.clave), None)
+        if not admin:
+            err = "Solo el administrador principal puede editar plantillas."
+        elif pl and base:
+            for k in ("asunto", "titulo", "cuerpo", "boton_texto", "boton_url"):
+                setattr(pl, k, base[k])
+            pl.actualizado_por, pl.actualizado_en = usuario, ahora_s
+            db.session.commit()
+            msg = "Plantilla «%s» restaurada al diseño original." % pl.nombre
+    elif accion == "guardar_auto":
+        tab = "auto"
+        if not admin:
+            err = "Solo el administrador principal puede configurar automatizaciones."
+        else:
+            for ev, _d, _p in _NT_EVENTOS:
+                a = NotifAuto.query.get(ev)
+                pl_k = (request.form.get("pl_" + ev) or "").strip()
+                if a and NotifPlantilla.query.get(pl_k):
+                    a.plantilla = pl_k
+                    a.activa = request.form.get("act_" + ev) == "1"
+                    a.actualizado_por, a.actualizado_en = usuario, ahora_s
+            db.session.commit()
+            msg = "Automatizaciones guardadas."
+            try:
+                registrar_auditoria("Automatizaciones de notificación", ",".join("%s=%s" % (e, request.form.get("act_" + e) == "1") for e, _, _ in _NT_EVENTOS))
+            except Exception:
+                db.session.rollback()
+
+    plantillas = NotifPlantilla.query.order_by(NotifPlantilla.orden).all()
+    aviso = (("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else "") + (("<div class='msg danger'>%s</div>" % _esc(err)) if err else "")
+    _tabs = (("enviar", "📤 Enviar"), ("plantillas", "🎨 Plantillas"), ("auto", "🔔 Automatización"), ("historial", "🧠 Historial"))
+    tabs_html = "".join("<a class='btn' style='background:%s;color:%s' href='?tab=%s'>%s</a> " % (
+        (("#0B2D57", "#fff") if k == tab else ("#e2e8f0", "#0f172a")) + (k, t)) for k, t in _tabs)
+    inp = "width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:10px;font-family:inherit"
+    lbl = "font-size:12px;font-weight:700;display:block;margin-bottom:3px"
+    _, _, de = _nt_remitente()
+    hay_envio = bool((os.environ.get("RESEND_API_KEY") or "").strip()) or all(_credenciales_smtp("notificaciones"))
+    alerta_envio = "" if hay_envio else ("<div class='msg danger'>No hay un método de envío configurado: define <b>RESEND_API_KEY</b> en Railway "
+                                         "o conecta un Gmail en Gerencia. Mientras tanto los envíos quedarán en el historial con error.</div>")
+    cuerpo = ""
+
+    if tab == "enviar":
+        data = {p.clave: {"asunto": p.asunto, "titulo": p.titulo, "cuerpo": p.cuerpo, "boton_texto": p.boton_texto, "boton_url": p.boton_url} for p in plantillas}
+        f = request.form if accion in ("enviar", "probar") else {}
+        sel_k = (f.get("clave") if f else "") or "pqr_confirmacion"
+        if sel_k not in data:
+            sel_k = "pqr_confirmacion"
+        cur = {k: (f.get(k) if f and f.get(k) is not None else data[sel_k].get(k, "")) for k in ("asunto", "titulo", "cuerpo", "boton_texto", "boton_url")}
+        opts = "".join("<option value='%s' %s>%s %s</option>" % (p.clave, "selected" if p.clave == sel_k else "", p.icono, _esc(p.nombre)) for p in plantillas)
+
+        def vi(k, ph=""):
+            return "<label style='%s'>{{%s}}</label><input name='v_%s' value='%s' placeholder='%s' style='%s'>" % (
+                lbl, k, k, _esc(f.get("v_" + k, "") if f else ""), _esc(ph), inp)
+        principales = "".join(vi(k, ph) for k, ph in (("nombre", "Juan Pérez"), ("radicado", "2026-22-000009"), ("tipo_pqr", "Petición"),
+                                                      ("estado", "En trámite"), ("institucion", "Colegio…"), ("enlace_pqr", "https://procsishq.com/pqr/consulta")))
+        otras = "".join(vi(k) for k in ("ticket", "fecha", "fecha_limite", "usuario", "valor", "fecha_vencimiento", "enlace"))
+        msg_v = "<label style='%s'>{{mensaje}}</label><textarea name='v_mensaje' rows='3' style='%s'>%s</textarea>" % (lbl, inp, _esc(f.get("v_mensaje", "") if f else ""))
+        form = (
+            "<form method='POST' id='nt-form'><input type='hidden' name='tab' value='enviar'>"
+            "<label style='%(l)s'>1. ¿Qué deseas enviar?</label><select name='clave' id='nt-clave' style='%(i)s'>%(o)s</select>"
+            "<label style='%(l)s'>Destinatarios (separados por coma, espacio o salto de línea; máx. 100)</label>"
+            "<textarea name='destinos' rows='2' placeholder='correo1@ejemplo.com, correo2@ejemplo.com' style='%(i)s'>%(d)s</textarea>"
+            "<p class='mini-text' style='margin-top:-4px'>Se envía un correo individual a cada uno: nadie ve las direcciones de los demás.</p>"
+            "<label style='%(l)s'>Asunto</label><input name='asunto' id='nt-asunto' value='%(a)s' style='%(i)s'>"
+            "<label style='%(l)s'>Título dentro del correo</label><input name='titulo' id='nt-titulo' value='%(t)s' style='%(i)s'>"
+            "<label style='%(l)s'>Mensaje (texto simple o HTML; puedes usar variables)</label>"
+            "<textarea name='cuerpo' id='nt-cuerpo' rows='9' style='%(i)s;font-family:ui-monospace,Consolas,monospace;font-size:12.5px'>%(c)s</textarea>"
+            "<div style='display:grid;grid-template-columns:1fr 1fr;gap:10px'><div><label style='%(l)s'>Texto del botón</label>"
+            "<input name='boton_texto' id='nt-bt' value='%(bt)s' style='%(i)s'></div><div><label style='%(l)s'>Enlace del botón</label>"
+            "<input name='boton_url' id='nt-bu' value='%(bu)s' style='%(i)s'></div></div>"
+            "<div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px'>"
+            "<b style='font-size:13px'>⚙️ Datos dinámicos</b><div class='mini-text'>Lo que dejes vacío se completa solo cuando se puede (fecha de hoy, correo del destinatario).</div>"
+            "%(p)s%(m)s<details><summary style='cursor:pointer;font-size:12px;font-weight:700'>Más variables</summary>%(x)s</details></div>"
+            "<button class='btn' name='accion' value='enviar' onclick=\"return confirm('¿Enviar este correo a los destinatarios indicados?')\">📤 Enviar</button>"
+            "<div style='background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-top:12px'>"
+            "<b style='font-size:13px'>🧪 Probar antes de enviar</b><input name='destino_prueba' placeholder='Destinatario de prueba' value='%(dp)s' style='%(i)s;margin-top:6px'>"
+            "<button class='btn' name='accion' value='probar' style='background:#0f766e'>🧪 Enviar correo de prueba</button>"
+            "<div class='mini-text'>La prueba usa datos de ejemplo en las variables vacías. Remitente: <b>%(de)s</b></div></div></form>"
+        ) % dict(l=lbl, i=inp, o=opts, d=_esc(f.get("destinos", "") if f else ""), a=_esc(cur["asunto"]), t=_esc(cur["titulo"]), c=_esc(cur["cuerpo"]),
+                 bt=_esc(cur["boton_texto"]), bu=_esc(cur["boton_url"]), p=principales, m=msg_v, x=otras, dp=_esc(f.get("destino_prueba", "") if f else ""), de=_esc(de))
+        js = """<script>(function(){var D=__DATA__,sel=document.getElementById('nt-clave'),fr=document.getElementById('nt-prev'),form=document.getElementById('nt-form'),t=null;
+function ids(){return {asunto:'nt-asunto',titulo:'nt-titulo',cuerpo:'nt-cuerpo',boton_texto:'nt-bt',boton_url:'nt-bu'};}
+sel.addEventListener('change',function(){var d=D[sel.value]||{},m=ids();for(var k in m){document.getElementById(m[k]).value=d[k]||'';}prev();});
+function prev(){var fd=new FormData(form);fetch('/gerencia/notificaciones/preview',{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.text();}).then(function(h){fr.srcdoc=h;}).catch(function(){});}
+form.addEventListener('input',function(){clearTimeout(t);t=setTimeout(prev,350);});prev();})();</script>""".replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
+        cuerpo = ("<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start'>"
+                  "<section class='role-panel'><h2 style='margin-top:0'>Redactar</h2>" + form + "</section>"
+                  "<section class='role-panel'><h2 style='margin-top:0'>🎨 Vista previa</h2>"
+                  "<iframe id='nt-prev' sandbox='' style='width:100%;height:640px;border:1px solid #e2e8f0;border-radius:10px;background:#f1f5f9'></iframe>"
+                  "<div class='mini-text'>Así lo verá el destinatario (con datos de ejemplo donde falte información).</div></section></div>" + js)
+
+    elif tab == "plantillas":
+        filas = ""
+        for p in plantillas:
+            if admin:
+                filas += (
+                    "<details class='role-panel' style='margin-bottom:10px'><summary style='cursor:pointer;font-weight:800'>%s %s <span class='mini-text'>· %s</span></summary>"
+                    "<form method='POST' style='margin-top:10px'><input type='hidden' name='tab' value='plantillas'><input type='hidden' name='clave' value='%s'>"
+                    "<label style='%s'>Asunto</label><input name='asunto' value='%s' style='%s'>"
+                    "<label style='%s'>Título</label><input name='titulo' value='%s' style='%s'>"
+                    "<label style='%s'>Mensaje (HTML permitido)</label><textarea name='cuerpo' rows='9' style='%s;font-family:ui-monospace,Consolas,monospace;font-size:12.5px'>%s</textarea>"
+                    "<div style='display:grid;grid-template-columns:1fr 1fr;gap:10px'><div><label style='%s'>Texto del botón</label><input name='boton_texto' value='%s' style='%s'></div>"
+                    "<div><label style='%s'>Enlace del botón</label><input name='boton_url' value='%s' style='%s'></div></div>"
+                    "<button class='btn' name='accion' value='guardar_plantilla'>Guardar</button> "
+                    "<button class='btn' style='background:#0f766e' formaction='/gerencia/notificaciones/preview' formtarget='_blank'>Vista previa</button> "
+                    "<button class='btn' style='background:#e2e8f0;color:#0f172a' name='accion' value='restaurar_plantilla' onclick=\"return confirm('¿Restaurar el diseño original?')\">Restaurar original</button>"
+                    "</form></details>") % (
+                    p.icono, _esc(p.nombre), _esc(("editada por %s el %s" % (p.actualizado_por, p.actualizado_en)) if p.actualizado_por else "diseño original"),
+                    _esc(p.clave), lbl, _esc(p.asunto), inp, lbl, _esc(p.titulo), inp, lbl, inp, _esc(p.cuerpo), lbl, _esc(p.boton_texto), inp, lbl, _esc(p.boton_url), inp)
+            else:
+                filas += "<div class='role-panel' style='margin-bottom:8px'><b>%s %s</b><div class='mini-text'>%s</div></div>" % (p.icono, _esc(p.nombre), _esc(p.asunto))
+        nota = ("<p class='mini-text'>Variables disponibles: " + " ".join("<code>{{%s}}</code>" % k for k in _NT_VARS) + "</p>")
+        cuerpo = (("" if admin else "<div class='msg danger'>Solo el administrador principal puede modificar las plantillas oficiales. Tú puedes ver y usar las plantillas.</div>") + nota + filas)
+
+    elif tab == "auto":
+        filas = ""
+        for ev, desc, _p in _NT_EVENTOS:
+            a = NotifAuto.query.get(ev)
+            op = "".join("<option value='%s' %s>%s %s</option>" % (p.clave, "selected" if a and a.plantilla == p.clave else "", p.icono, _esc(p.nombre)) for p in plantillas)
+            filas += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:10px'><b>%s</b><br><span class='mini-text'>%s</span></td>"
+                      "<td style='padding:10px'><select name='pl_%s' %s style='%s'>%s</select></td>"
+                      "<td style='padding:10px;text-align:center'><input type='checkbox' name='act_%s' value='1' %s %s></td></tr>") % (
+                _esc(ev), _esc(desc), ev, "" if admin else "disabled", inp, op, ev, "checked" if a and a.activa else "", "" if admin else "disabled")
+        cuerpo = ("<section class='role-panel'><h2 style='margin-top:0'>Envío automático</h2>"
+                  "<p class='mini-text'>Cuando ocurre el evento, EduTrack envía la plantilla elegida (Resend es solo el proveedor de envío). "
+                  "<b>Si el interruptor está apagado, el sistema sigue usando el diseño original de ese correo.</b> Si la plantilla falla, se usa el diseño original como respaldo.</p>"
+                  "<form method='POST'><input type='hidden' name='tab' value='auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
+                  "<tr style='background:#f1f5f9;text-align:left'><th style='padding:8px'>Evento</th><th style='padding:8px'>Plantilla</th><th style='padding:8px;text-align:center'>Activa</th></tr>%s</table>%s</form></section>") % (
+            filas, ("<button class='btn' name='accion' value='guardar_auto' style='margin-top:12px'>Guardar automatizaciones</button>" if admin
+                    else "<div class='msg danger' style='margin-top:10px'>Solo el administrador principal puede configurar automatizaciones.</div>"))
+
+    else:  # historial
+        est = (request.args.get("estado") or "").strip().upper()
+        q = (request.args.get("q") or "").strip()
+        qq = NotifLog.query
+        if est in ("ENVIADO", "ERROR"):
+            qq = qq.filter(NotifLog.estado == est)
+        if q:
+            qq = qq.filter(or_(NotifLog.destinatario.ilike("%" + q + "%"), NotifLog.asunto.ilike("%" + q + "%")))
+        filas = ""
+        for r in qq.order_by(NotifLog.id.desc()).limit(100).all():
+            filas += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:8px;white-space:nowrap'>%s</td><td style='padding:8px'>%s<br><span class='mini-text'>%s</span></td>"
+                      "<td style='padding:8px'>%s</td><td style='padding:8px;font-weight:800;color:%s'>%s</td><td style='padding:8px'><a href='/gerencia/notificaciones/log/%d' style='color:#005BEA;font-weight:700'>Ver</a></td></tr>") % (
+                _esc(r.creado_en), _esc(r.tipo), _esc(r.origen), _esc(r.destinatario), "#166534" if r.estado == "ENVIADO" else "#991b1b",
+                "✅ Enviado" if r.estado == "ENVIADO" else "❌ Error", r.id)
+        cuerpo = ("<section class='role-panel'><h2 style='margin-top:0'>Historial de notificaciones</h2>"
+                  "<form method='GET' style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'><input type='hidden' name='tab' value='historial'>"
+                  "<input name='q' value='%s' placeholder='Buscar destinatario o asunto' style='padding:8px;border:1px solid #cbd5e1;border-radius:8px;flex:1;min-width:200px'>"
+                  "<select name='estado' style='padding:8px;border:1px solid #cbd5e1;border-radius:8px'><option value=''>Todos</option><option value='ENVIADO' %s>Enviados</option><option value='ERROR' %s>Con error</option></select>"
+                  "<button class='btn'>Filtrar</button></form><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
+                  "<tr style='background:#f1f5f9;text-align:left'><th style='padding:8px'>Fecha</th><th style='padding:8px'>Tipo</th><th style='padding:8px'>Destinatario</th><th style='padding:8px'>Estado</th><th style='padding:8px'></th></tr>%s</table></div>"
+                  "<p class='mini-text'>Se muestran los últimos 100. «Ver» abre el contenido enviado y la respuesta del proveedor.</p></section>") % (
+            _esc(q), "selected" if est == "ENVIADO" else "", "selected" if est == "ERROR" else "",
+            filas or "<tr><td colspan='5' style='padding:14px;color:#64748b'>Sin notificaciones.</td></tr>")
+
+    content = ("<header class='role-hero'><div><h1>📨 Centro de Notificaciones</h1><p>Administra y envía comunicaciones oficiales de Procsis/EduTrack.</p></div>"
+               "<a class='btn' href='/gerencia/hq'>← HQ</a></header><div style='margin-bottom:12px'>" + tabs_html + "</div>" + alerta_envio + aviso + cuerpo)
+    return page("Notificaciones", shell(content))
 
 
 
