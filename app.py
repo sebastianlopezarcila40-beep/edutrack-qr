@@ -6570,12 +6570,26 @@ def _smtp_enviar(msg, correo_envio, password):
     resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
     if resend_key:
         try:
-            to_addrs = []
-            for hdr in ("To", "Cc", "Bcc"):
-                if msg.get(hdr):
-                    to_addrs.extend([a.strip() for a in str(msg.get(hdr)).split(",") if a.strip()])
-            if not to_addrs:
+            from email.utils import getaddresses as _getaddr
+
+            def _lista_dir(hdr):
+                """Direcciones válidas de un encabezado, sin repetir (acepta 'Nombre <a@b.com>' y varias separadas por coma)."""
+                vistos, out = set(), []
+                for _n, a in _getaddr([str(x) for x in msg.get_all(hdr, [])]):
+                    a = (a or "").strip()
+                    if a and "@" in a and a.lower() not in vistos:
+                        vistos.add(a.lower())
+                        out.append(a)
+                return out
+
+            to_addrs = _lista_dir("To")
+            cc_addrs = [a for a in _lista_dir("Cc") if a.lower() not in {x.lower() for x in to_addrs}]
+            bcc_addrs = [a for a in _lista_dir("Bcc") if a.lower() not in {x.lower() for x in to_addrs + cc_addrs}]
+            if not to_addrs and not cc_addrs and not bcc_addrs:
                 raise RuntimeError("El mensaje no tiene destinatario (To).")
+            if not to_addrs:
+                # Resend exige al menos un 'to': el primer oculto pasa a ser el destinatario visible
+                to_addrs, bcc_addrs = bcc_addrs[:1], bcc_addrs[1:]
             subject = str(msg.get("Subject") or "EduTrack")
             # Extraer texto / html del EmailMessage
             text_body, html_body = "", ""
@@ -6607,6 +6621,12 @@ def _smtp_enviar(msg, correo_envio, password):
                 "to": to_addrs[:50],
                 "subject": subject,
             }
+            if cc_addrs:
+                payload["cc"] = cc_addrs[:50]
+            if bcc_addrs:
+                payload["bcc"] = bcc_addrs[:50]
+            if msg.get("Reply-To"):
+                payload["reply_to"] = str(msg.get("Reply-To"))
             if html_body:
                 payload["html"] = html_body
             if text_body:
@@ -6624,19 +6644,27 @@ def _smtp_enviar(msg, correo_envio, password):
                         "content": _b64.b64encode(att["content"]).decode("ascii"),
                         "content_id": att.get("content_id") or "inline",
                     })
-            req = urllib.request.Request(
-                "https://api.resend.com/emails",
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {resend_key}",
-                    "Content-Type": "application/json",
-                    "User-Agent": "EduTrack/1.0",
-                },
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                body = resp.read().decode("utf-8", errors="replace")
-                print("Resend OK:", body[:200])
+            # Resend admite hasta 50 destinatarios por correo: si hay más, se envía por lotes
+            # (los lotes extra van solo a 'to'; Cc y Bcc salen en el primer lote).
+            lotes = [payload]
+            for i in range(50, len(to_addrs), 50):
+                extra = {k: v for k, v in payload.items() if k not in ("cc", "bcc")}
+                extra["to"] = to_addrs[i:i + 50]
+                lotes.append(extra)
+            for pl in lotes:
+                req = urllib.request.Request(
+                    "https://api.resend.com/emails",
+                    data=json.dumps(pl).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {resend_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "EduTrack/1.0",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    body = resp.read().decode("utf-8", errors="replace")
+                    print("Resend OK (%d to, %d cc, %d bcc):" % (len(pl.get("to", [])), len(pl.get("cc", [])), len(pl.get("bcc", []))), body[:200])
             return True
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", errors="replace") if e.fp else str(e)
@@ -9896,7 +9924,7 @@ def registrar_ingreso(codigo, estado, registrado_por=None, est=None):
     return msg_ok, estado
 
 def enviar_pin(correo_destino, pin):
-    if not SOPORTE_EMAIL or not SOPORTE_PASSWORD: return False
+    if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not SOPORTE_EMAIL or not SOPORTE_PASSWORD): return False
     msg = EmailMessage(); msg["Subject"] = "PIN de recuperación - EduTrack"; msg["From"] = SOPORTE_EMAIL; msg["To"] = correo_destino
     msg.set_content(f"Tu PIN de recuperación es: {pin}\nEste PIN vence en 2 minutos.\n{APP_NAME}")
     try:
@@ -29444,8 +29472,9 @@ def _notificar_gerencia_verificacion(asunto, motivo, v):
     tengan correo registrado, cuando Ventas marca un caso que necesita revisión
     (alerta OFAC o PEP). Usa la cuenta de correo de Soporte ya conectada."""
     correo_envio, password = _credenciales_smtp("soporte")
-    if not correo_envio or not password:
-        print("Notificación a Gerencia: falta conectar el correo de Soporte")
+    _hay_resend = bool((os.environ.get("RESEND_API_KEY") or "").strip())
+    if not _hay_resend and (not correo_envio or not password):
+        print("Notificación a Gerencia: falta RESEND_API_KEY o conectar el correo de Soporte")
         return False
     destinatarios = [
         u.correo.strip() for u in Usuario.query.filter(
@@ -51313,7 +51342,7 @@ def soporte_pqr_probar_correo():
         else:
             try:
                 correo_envio, password = _credenciales_smtp("notificaciones")
-                if not correo_envio or not password:
+                if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not correo_envio or not password):
                     ok = False
                     mensaje = (
                         "❌ Faltan credenciales. Conecte Gmail en /gerencia/correo-soporte "
@@ -51325,8 +51354,8 @@ def soporte_pqr_probar_correo():
                     from email.message import EmailMessage as _EM
                     _m = _EM()
                     _m["Subject"] = "EduTrack · Prueba de correo OK"
-                    _m["From"] = correo_envio
-                    _m["To"] = destino
+                    _m["From"] = correo_envio or "EduTrack <onboarding@resend.dev>"
+                    _m["To"] = ", ".join(x.strip() for x in re.split(r"[;,\s]+", destino) if "@" in x) or destino
                     _m.set_content(
                         "Este es un correo de prueba de EduTrack.\n"
                         "Si lo recibes, la conexión SMTP (Gmail) está bien configurada.\n"
