@@ -6547,9 +6547,11 @@ def _base_publica():
       4) Fuera de una petición (tareas en segundo plano) se usa el dominio propio.
     Así NUNCA se generan enlaces con la dirección de Railway."""
     dominio = _con_https(os.environ.get("DOMINIO_PUBLICO")) or "https://procsishq.com"
+    if "railway" in dominio.lower():
+        dominio = "https://procsishq.com"
     b = _con_https(os.environ.get("APP_BASE_URL"))
-    if b:
-        return b
+    if b and "railway" not in b.lower():
+        return b   # una APP_BASE_URL con dirección de Railway se ignora: los enlaces usan el dominio propio
     try:
         host = request.host_url.rstrip("/")
     except Exception:
@@ -51430,7 +51432,9 @@ def soporte_pqr_probar_correo():
   <p>Correo de Soporte: {"<span style='color:#16a34a;font-weight:700'>🟢 conectado (" + _esc(p.smtp_correo) + ")</span>" if soporte_conectado else "<span style='color:#b91c1c;font-weight:700'>🔴 sin conectar</span>"} — <a href="/gerencia/correo-soporte">configurar</a></p>
   <p>Correo de Notificaciones automáticas: {"<span style='color:#16a34a;font-weight:700'>🟢 conectado (" + _esc(p.smtp_notif_correo) + ")</span>" if notif_conectado else "<span style='color:#b45309;font-weight:700'>⚠ sin conectar (usará el de Soporte o la variable de Railway)</span>"} — <a href="/gerencia/correo-notificaciones">configurar</a></p>
   <p>Variable SOPORTE_PASSWORD en Railway (respaldo si no conectas nada arriba): {"<span style='color:#16a34a;font-weight:700'>✅ configurada</span>" if os.getenv("SOPORTE_PASSWORD","").strip() else "<span style='color:#94a3b8'>no configurada</span>"}</p>
-  <p>APP_BASE_URL (dominio para que el link del correo apunte a tu sitio real): {"<span style='color:#16a34a;font-weight:700'>✅ configurada</span>" if base_url_configurada else "<span style='color:#b45309;font-weight:700'>⚠ no configurada — usará la URL de esta petición, puede quedar mal en algunos casos</span>"}</p>
+  <p>APP_BASE_URL (dominio para que el link del correo apunte a tu sitio real): {"<span style='color:#16a34a;font-weight:700'>✅ configurada</span>" if base_url_configurada else "<span style='color:#b45309;font-weight:700'>⚠ no configurada — se usará https://procsishq.com</span>"}</p>
+  <p><b>Los enlaces de los correos se generan con:</b> <code>{_esc(_base_publica())}</code> <span style="color:#64748b;font-size:12px">(si aquí ves una dirección de Railway, el servidor aún tiene la versión anterior del código)</span></p>
+  <p style="font-size:12px;color:#64748b">APP_BASE_URL actual en Railway: <code>{_esc(os.environ.get("APP_BASE_URL","") or "— vacía —")}</code></p>
 </div>
 {"<div class='msg " + ("ok" if ok else "danger") + "' style='margin-top:12px'>" + mensaje + "</div>" if mensaje else ""}
 <div class="role-panel" style="margin-top:12px">
@@ -74908,6 +74912,56 @@ def gerencia_correo_extra(n):
          _esc(r.etiqueta if r else ""), inp, _esc(correo_act), inp,
          "Dejar en blanco para no cambiarla" if conectado else "xxxx xxxx xxxx xxxx", inp, probar)
     return page("Correo adicional %d" % n, shell(content))
+
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# ENLACES VIEJOS DE RAILWAY → DOMINIO PROPIO
+#   · Si alguien abre un enlace público viejo (*.up.railway.app/encuesta/..., /pqr/notificacion/...),
+#     se redirige a la misma ruta en el dominio propio (siempre que la dirección de Railway siga activa).
+#   · Cualquier enlace de Railway que quede escrito en el HTML (textos guardados en la base de datos,
+#     plantillas, mensajes) se muestra ya con el dominio propio.
+# ════════════════════════════════════════════════════════════════════════════
+import re as _re_rw
+_RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
+_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/verificar-certificado/", "/demo/invitar/",
+                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal")
+
+
+@app.before_request
+def _redirigir_railway_a_dominio():
+    try:
+        if request.method != "GET":
+            return None
+        host = (request.host or "").lower().split(":")[0]
+        if not host.endswith(".railway.app"):
+            return None
+        if not (request.path or "").startswith(_RW_RUTAS_PUBLICAS):
+            return None
+        destino = _base_publica()
+        if not destino or "railway.app" in destino.lower():
+            return None
+        return redirect(destino + request.full_path.rstrip("?"), code=301)
+    except Exception:
+        return None
+
+
+@app.after_request
+def _reescribir_enlaces_railway(resp):
+    try:
+        if resp.mimetype != "text/html" or resp.direct_passthrough or resp.status_code >= 500:
+            return resp
+        data = resp.get_data()
+        if b".up.railway.app" not in data:
+            return resp
+        dominio = _base_publica()
+        if not dominio or "railway.app" in dominio.lower():
+            return resp
+        resp.set_data(_RW_PATRON.sub(dominio.encode("utf-8"), data))
+    except Exception:
+        pass
+    return resp
 
 
 
