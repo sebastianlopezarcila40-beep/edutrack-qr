@@ -4003,6 +4003,7 @@ def _staff_nav_items(path, rol=""):
         items = [
             ("/soporte_admin", "Panel principal"),
             ("/soporte/bloqueo-carne", "Bloqueo de carné"),
+            ("/soporte/instituciones", "Instituciones y validación"),
             ("/soporte/validacion-identidad", "Validación de identidad (enlace)"),
             ("/soporte/impersonar", "Suplantar usuario"),
             ("/soporte/reset-clave", "Resetear claves"),
@@ -4042,6 +4043,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/usuarios", "Usuarios internos"),
             ("/gerencia/auditoria", "Auditoría IP"),
             ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
+            ("/gerencia/auditoria-instituciones", "Auditoría de instituciones"),
             ("/gerencia/correo-soporte", "Gmail · Soporte"),
             ("/gerencia/correo-notificaciones", "Gmail · Notificaciones"),
             ("/gerencia/correo-extra/1", "Gmail · Adicional 1"),
@@ -4392,6 +4394,7 @@ def menu_items_por_rol():
         items += [
             ("/soporte_admin", "Panel Soporte"),
             ("/soporte/bloqueo-carne", "Bloqueo de carné"),
+            ("/soporte/instituciones", "Instituciones y validación"),
             ("/soporte/validacion-identidad", "Validación de identidad (enlace)"),
             ("/tickets-doc", "Tickets documentales"),
             ("/usuarios", "Usuarios (reset / altas)"),
@@ -24871,6 +24874,32 @@ def gerencia_autorizar_soporte_rectores():
     return redirect("/gerencia/rectores")
 
 
+def _rect_idx_verif():
+    """Índice de verificaciones de Ventas que tienen cédula: por institución, por NIT y por nombre del colegio."""
+    idx = {"id": {}, "nit": {}, "nom": {}}
+    try:
+        for v in VerificacionRector.query.filter(VerificacionRector.cedula_rector != "").order_by(VerificacionRector.id.asc()).limit(5000).all():
+            if v.institucion_id:
+                idx["id"][v.institucion_id] = v
+            n = re.sub(r"\D", "", v.nit_colegio or "")[:9]
+            if n:
+                idx["nit"][n] = v
+            nm = _norm_txt(v.nombre_colegio or "")
+            if nm:
+                idx["nom"][nm] = v
+    except Exception:
+        db.session.rollback()
+    return idx
+
+
+def _rect_buscar_verif(idx, inst):
+    """Última verificación de Ventas (con cédula) que corresponde a esa institución, o None."""
+    if not inst:
+        return None
+    n = re.sub(r"\D", "", inst.nit or "")[:9]
+    return idx["id"].get(inst.id) or (idx["nit"].get(n) if n else None) or idx["nom"].get(_norm_txt(inst.nombre or "") or "\0")
+
+
 @app.route("/gerencia/rectores", methods=["GET", "POST"])
 def modulo_rectores():
     """CRM de rectores: lista desde BD (colegios + ficha rector) y descarga auditada."""
@@ -24941,7 +24970,38 @@ def modulo_rectores():
 
     if request.method == "POST":
         accion = (request.form.get("accion") or "guardar").strip()
-        if accion == "descargar":
+        if accion == "completar":
+            idx_v = _rect_idx_verif()
+            n_ok = 0
+            try:
+                for inst_c in Institucion.query.order_by(Institucion.id.asc()).limit(2000).all():
+                    v_c = _rect_buscar_verif(idx_v, inst_c)
+                    if not v_c:
+                        continue
+                    r_c = RectorInstitucion.query.filter_by(institucion_id=inst_c.id).first()
+                    if r_c and (r_c.numero_id or "").strip():
+                        continue
+                    partes_c = (v_c.nombre_rector or "").strip().split(None, 1)
+                    if not r_c:
+                        r_c = RectorInstitucion(institucion_id=inst_c.id, creado_en=fecha_hoy() + " " + hora_actual(), creado_por="verificacion-ventas")
+                        db.session.add(r_c)
+                    if not (r_c.nombres or "").strip() and partes_c:
+                        r_c.nombres = partes_c[0][:160]
+                        r_c.apellidos = partes_c[1][:160] if len(partes_c) > 1 else ""
+                    r_c.numero_id = (v_c.cedula_rector or "").strip()[:40]
+                    r_c.tipo_id = r_c.tipo_id or "C.C."
+                    r_c.actualizado_en = fecha_hoy() + " " + hora_actual()
+                    n_ok += 1
+                db.session.commit()
+                msg = "Fichas completadas con la cédula de las verificaciones de Ventas: %d." % n_ok
+                try:
+                    registrar_auditoria("Rectores CRM: completar desde verificaciones", "fichas=%d por %s" % (n_ok, session.get("usuario") or ""))
+                except Exception:
+                    pass
+            except Exception as _ec:
+                db.session.rollback()
+                err = "No se pudo completar: %s" % str(_ec)[:120]
+        elif accion == "descargar":
             motivo = (request.form.get("motivo") or "").strip()
             para_quien = (request.form.get("para_quien") or "").strip()
             if not motivo or not para_quien:
@@ -25089,18 +25149,31 @@ def modulo_rectores():
     except Exception:
         pass
 
+    idx_v = _rect_idx_verif()
     filas = []
+    sin_cedula = 0
     for r in lista:
         inst = Institucion.query.get(r.institucion_id)
+        v_fb = _rect_buscar_verif(idx_v, inst)
         col = (inst.nombre if inst else str(r.institucion_id)) or ""
         est = (inst.estado if inst else "") or ""
+        nombre_txt = ((r.nombres or "") + " " + (r.apellidos or "")).strip() or ((v_fb.nombre_rector if v_fb else "") or "")
+        if (r.numero_id or "").strip():
+            ident = _esc((r.tipo_id or "") + " " + (r.numero_id or ""))
+        elif v_fb:
+            ident = _esc("C.C. " + (v_fb.cedula_rector or "")) + "<br><span class='mini-text'>(tomada de la verificación de Ventas)</span>"
+        else:
+            ident = "<span style='color:#b91c1c;font-weight:700'>Sin cédula</span>"
+            sin_cedula += 1
         filas.append(
             "<tr>"
             "<td>" + _esc(col) + "<br><span class='mini-text'>" + _esc(est) + "</span></td>"
-            "<td>" + _esc((r.nombres or "") + " " + (r.apellidos or "")) + "</td>"
-            "<td>" + _esc((r.tipo_id or "") + " " + (r.numero_id or "")) + "</td>"
-            "<td>" + _esc(r.telefono or "") + "</td>"
-            "<td>" + _esc(r.correo or "") + "</td>"
+            "<td>" + _esc(nombre_txt or "—") + "</td>"
+            "<td>" + ident + "</td>"
+            "<td>" + _esc(r.telefono or "—") + "</td>"
+            "<td>" + _esc(r.correo or "—") + "</td>"
+            "<td style='font-size:12px'>NIT " + _esc((inst.nit if inst else "") or "—") + "<br>DANE " + _esc((inst.dane if inst else "") or "—")
+            + "<br>" + _esc((inst.municipio if inst else "") or "") + "</td>"
             "<td style='font-size:12px'>" + _esc(r.actualizado_en or r.creado_en or "") + "</td>"
             "<td style='white-space:nowrap;font-size:12px'>"
             "<a href='/gerencia/rectores/" + str(r.id) + "/pdf'>PDF</a> · "
@@ -25109,10 +25182,16 @@ def modulo_rectores():
         )
     if not filas:
         filas = [
-            "<tr><td colspan='6' style='text-align:center;color:#94a3b8;padding:16px'>"
+            "<tr><td colspan='8' style='text-align:center;color:#94a3b8;padding:16px'>"
             "Sin fichas de rector aún. Al activar un colegio o completar el formulario, aparecen aquí."
             "</td></tr>"
         ]
+    panel_completar = (
+        '<section class="role-panel"><h2 style="margin-top:0">Datos faltantes</h2>'
+        "<p class='mini-text'>La cédula que el asesor captura en <b>Ventas → Verificación del rector</b> se guarda aparte de esta ficha. "
+        "Este botón copia esa cédula (y el nombre, si falta) a las fichas que no la tienen. Fichas listadas sin cédula: <b>" + str(sin_cedula) + "</b>.</p>"
+        '<form method="POST"><button type="submit" name="accion" value="completar">Completar fichas con las verificaciones de Ventas</button></form></section>'
+    )
 
     msg_html = ("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else ""
     err_html = ("<div class='msg danger'>" + _esc(err) + "</div>") if err else ""
@@ -25125,7 +25204,8 @@ def modulo_rectores():
         '<a class="btn" href="/gerencia/autorizar-soporte-rectores?activar=1">Autorizar Soporte</a></header>'
         + msg_html
         + err_html
-        + '<section class="role-panel">'
+        + panel_completar
+        + '<section class="role-panel" style="margin-top:14px">'
         '<h2 style="margin-top:0">Registrar / actualizar rector</h2>'
         '<form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:820px">'
         '<div style="grid-column:1/-1"><label><b>Institución *</b></label>'
@@ -25161,7 +25241,7 @@ def modulo_rectores():
         '<table style="width:100%;border-collapse:collapse;font-size:13px">'
         '<tr style="background:#0B2D57;color:#fff">'
         "<th>Colegio</th><th>Rector</th><th>Identificación</th><th>Teléfono</th>"
-        "<th>Correo</th><th>Actualizado</th><th>Descarga</th></tr>"
+        "<th>Correo</th><th>NIT / DANE</th><th>Actualizado</th><th>Descarga</th></tr>"
         + "".join(filas)
         + "</table></section>"
     )
@@ -74595,7 +74675,10 @@ def validar_identidad_publico(token):
         else:
             inst = Institucion.query.get(v.institucion_id)
             datos, est_id, ok = {}, None, False
-            if v.tipo == "RECTOR":
+            if v.tipo == "RECTOR" and (v.asunto or "").startswith("[VIN-"):
+                ok = _vin_cedula_ok(inst, f.get("cedula"))
+                datos = {"cedula_validada": bool(ok)}
+            elif v.tipo == "RECTOR":
                 ok = _vi_ident_ok(inst, f.get("dane_nit")) and _vi_clave_rector_ok(inst, f.get("clave_admin"))
                 datos = {"dane_nit": _solo_digitos(f.get("dane_nit")), "clave_administrativa_validada": bool(ok)}
             else:
@@ -74648,7 +74731,11 @@ def validar_identidad_publico(token):
                                    "infórmele que ya realizó el proceso. El sistema ha liberado la autorización de forma segura.</p>", "#16a34a")
 
     st = "width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;margin:4px 0 12px"
-    if v.tipo == "RECTOR":
+    if v.tipo == "RECTOR" and (v.asunto or "").startswith("[VIN-"):
+        titulo_f = "Confirme su identidad como representante"
+        campos = ("<label style='font-size:13px;font-weight:700'>Número de cédula del rector</label>"
+                  "<input class='nopaste' name='cedula' inputmode='numeric' autocomplete='off' required style='%s'>") % st
+    elif v.tipo == "RECTOR":
         titulo_f = "Confirme su identidad como rectoría"
         campos = ("<label style='font-size:13px;font-weight:700'>Código oficial del colegio (DANE o NIT)</label>"
                   "<input class='nopaste' name='dane_nit' autocomplete='off' required style='%s'>"
@@ -75609,6 +75696,830 @@ form.addEventListener('input',function(){clearTimeout(t);t=setTimeout(prev,350);
                "<a class='btn' href='/gerencia/hq'>← HQ</a></header><div style='margin-bottom:12px'>" + tabs_html + "</div>" + alerta_envio + aviso + cuerpo)
     return page("Notificaciones", shell(content))
 
+
+
+# ───────────────────────── SOPORTE · INSTITUCIONES (validación por llamada + niveles + auditoría) ─────────────────────────
+import hmac
+import json as _vin_json
+import random as _vin_random
+
+_VIN_VIGENCIA = 20 * 60          # una validación superada dura 20 minutos
+_VIN_BLOQUEO = 24 * 3600         # si ambas validaciones fallan, la institución queda bloqueada para Soporte 24 h (o hasta que Gerencia libere)
+_VIN_CADUCA_PROCESO = 45 * 60    # un proceso sin terminar caduca a los 45 minutos
+_VIN_LISTO = {"ok": False}
+_VIN_PERSONAL = ("Gerente", "Superadmin", "Administrador", "Soporte")
+
+
+class ValidacionInst(db.Model):
+    """Proceso de validación de identidad de una institución (llamada → PIN/enlace/cédula → preguntas por llamada)."""
+    __tablename__ = "validaciones_inst"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True, nullable=False)
+    creado_por = db.Column(db.String(80), default="", index=True)
+    creado_en = db.Column(db.String(30), default="")
+    creado_ts = db.Column(db.Float, default=0)
+    estado = db.Column(db.String(14), default="LLAMADA", index=True)  # LLAMADA|PIN|VALIDADA|SECUNDARIA|BLOQUEADA|EXPIRADA|CERRADA
+    caso = db.Column(db.String(40), default="")
+    motivo = db.Column(db.String(200), default="")
+    llamada_ok = db.Column(db.Boolean, default=False)
+    vi_id = db.Column(db.Integer, default=0)
+    primaria_ok = db.Column(db.Boolean, default=False)
+    secundaria_ok = db.Column(db.Boolean, default=False)
+    sec_intentada = db.Column(db.Boolean, default=False)
+    preguntas = db.Column(db.Text, default="")   # JSON con la respuesta correcta; NUNCA se envía al navegador
+    nivel = db.Column(db.Integer, default=0)
+    metodo = db.Column(db.String(120), default="")
+    valida_hasta_ts = db.Column(db.Float, default=0)
+
+
+class InstAuditoria(db.Model):
+    __tablename__ = "auditoria_instituciones"
+    id = db.Column(db.Integer, primary_key=True)
+    fecha = db.Column(db.String(30), default="")
+    ts = db.Column(db.Float, default=0)
+    usuario = db.Column(db.String(80), default="")
+    rol = db.Column(db.String(30), default="")
+    institucion_id = db.Column(db.Integer, index=True)
+    accion = db.Column(db.String(120), default="")
+    campo = db.Column(db.String(80), default="")
+    antes = db.Column(db.Text, default="")
+    despues = db.Column(db.Text, default="")
+    resultado = db.Column(db.String(20), default="OK")
+    validacion_id = db.Column(db.Integer, default=0)
+    caso = db.Column(db.String(40), default="")
+    nivel = db.Column(db.Integer, default=0)
+
+
+class InstSesionEpoch(db.Model):
+    __tablename__ = "inst_sesion_epoch"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, unique=True, index=True)
+    epoch_ts = db.Column(db.Float, default=0)
+
+
+def _vin_ensure():
+    if _VIN_LISTO["ok"]:
+        return
+    try:
+        for m in (ValidacionInst, InstAuditoria, InstSesionEpoch):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        _VIN_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR instituciones ensure:", repr(ex), flush=True)
+
+
+def _vin_guard():
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in _VIN_PERSONAL:
+        return acceso_denegado("Solo Soporte y Gerencia pueden gestionar instituciones.")
+    _vin_ensure()
+    _vi_ensure()
+    return None
+
+
+# ── enmascarado ──
+def _vin_m_doc(s):
+    d = re.sub(r"\D", "", s or "")
+    if not d:
+        return "No registrado"
+    return "•" * max(len(d) - 3, 3) + d[-3:]
+
+
+def _vin_m_tel(s):
+    d = re.sub(r"\D", "", s or "")
+    return ("••••" + d[-4:]) if len(d) >= 4 else "No registrado"
+
+
+def _vin_m_mail(s):
+    s = (s or "").strip()
+    return ("••••" + s[s.index("@"):]) if "@" in s else "No registrado"
+
+
+def _vin_rector(inst):
+    """Datos del representante: ficha del CRM y, si falta la cédula, la verificación de Ventas."""
+    d = {"nombre": "", "cedula": "", "tel": "", "correo": "", "ficha": None}
+    try:
+        r = RectorInstitucion.query.filter_by(institucion_id=inst.id).first()
+    except Exception:
+        db.session.rollback()
+        r = None
+    d["ficha"] = r
+    if r:
+        d["nombre"] = ("%s %s" % (r.nombres or "", r.apellidos or "")).strip()
+        d["cedula"] = re.sub(r"\D", "", r.numero_id or "")
+        d["tel"] = r.telefono or ""
+        d["correo"] = r.correo or ""
+    if not d["nombre"]:
+        d["nombre"] = (inst.rector or "").strip()
+    if not d["cedula"]:
+        try:
+            v = _rect_buscar_verif(_rect_idx_verif(), inst)
+            if v:
+                d["cedula"] = re.sub(r"\D", "", v.cedula_rector or "")
+                d["nombre"] = d["nombre"] or (v.nombre_rector or "")
+        except Exception:
+            db.session.rollback()
+    return d
+
+
+def _vin_cedula_ok(inst, dato):
+    esperado = _vin_rector(inst)["cedula"]
+    d = re.sub(r"\D", "", dato or "")
+    return bool(esperado) and bool(d) and hmac.compare_digest(esperado, d)
+
+
+def _vin_audit(inst_id, accion, campo="", antes="", despues="", resultado="OK", v=None, nivel=None):
+    try:
+        db.session.add(InstAuditoria(
+            fecha=_ts(), ts=_vi_time.time(), usuario=session.get("usuario") or "", rol=rol_actual() or "",
+            institucion_id=inst_id, accion=accion[:120], campo=campo[:80], antes=(antes or "")[:500], despues=(despues or "")[:500],
+            resultado=resultado[:20], validacion_id=(v.id if v else 0), caso=((v.caso if v else "") or "")[:40],
+            nivel=(nivel if nivel is not None else (v.nivel if v else 0)) or 0))
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        print("vin audit:", repr(ex), flush=True)
+    try:
+        registrar_auditoria("Instituciones: " + accion, "inst=%s %s %s" % (inst_id, campo, resultado))
+    except Exception:
+        db.session.rollback()
+
+
+def _vin_refrescar(v):
+    if not v:
+        return v
+    now = _vi_time.time()
+    nuevo = None
+    if v.estado == "VALIDADA" and now > (v.valida_hasta_ts or 0):
+        nuevo = "EXPIRADA"
+    elif v.estado in ("LLAMADA", "PIN", "SECUNDARIA") and now - (v.creado_ts or 0) > _VIN_CADUCA_PROCESO:
+        nuevo = "EXPIRADA"
+    if nuevo:
+        v.estado = nuevo
+        v.nivel = 0
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    return v
+
+
+def _vin_vi(v):
+    if not v or not v.vi_id:
+        return None
+    try:
+        return _vi_refrescar(ValidacionIdentidad.query.get(v.vi_id))
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def _vin_sync(v):
+    """Si el rector superó PIN + cédula + enlace, la validación primaria queda cumplida."""
+    _vin_refrescar(v)
+    if not v or v.estado != "PIN" or v.primaria_ok:
+        return v
+    vi = _vin_vi(v)
+    if vi and vi.estado in ("APROBADO", "APLICADO"):
+        v.primaria_ok = True
+        v.estado = "VALIDADA"
+        v.nivel = 1
+        v.metodo = "Llamada + PIN + cédula + enlace"
+        v.valida_hasta_ts = _vi_time.time() + _VIN_VIGENCIA
+        db.session.commit()
+        _vin_audit(v.institucion_id, "Validación primaria superada", "", "", v.metodo, "OK", v)
+    return v
+
+
+def _vin_primaria_fallida(v):
+    vi = _vin_vi(v)
+    return bool(vi and vi.estado in ("BLOQUEADO", "EXPIRADO", "CANCELADO"))
+
+
+def _vin_actual(inst_id):
+    usuario = session.get("usuario") or ""
+    q = ValidacionInst.query.filter_by(institucion_id=inst_id)
+    if rol_actual() != "Superadmin":
+        q = q.filter_by(creado_por=usuario)
+    v = q.order_by(ValidacionInst.id.desc()).first()
+    return _vin_sync(v) if v else None
+
+
+def _vin_nivel(inst_id):
+    if rol_actual() in _ROLES_GERENCIA:
+        return 3
+    try:
+        v = _vin_actual(inst_id)
+    except Exception:
+        db.session.rollback()
+        return 0
+    return (v.nivel or 0) if v and v.estado == "VALIDADA" else 0
+
+
+def _vin_bloqueada(inst_id):
+    try:
+        b = ValidacionInst.query.filter_by(institucion_id=inst_id, estado="BLOQUEADA").order_by(ValidacionInst.id.desc()).first()
+    except Exception:
+        db.session.rollback()
+        return None
+    if b and _vi_time.time() - (b.creado_ts or 0) < _VIN_BLOQUEO:
+        return b
+    return None
+
+
+def _vin_generar_preguntas(inst):
+    """Preguntas con 4 opciones sobre datos registrados que NO se muestran en la ficha. Devuelve [] si faltan datos."""
+    todas = []
+    try:
+        todas = Institucion.query.limit(400).all()
+    except Exception:
+        db.session.rollback()
+
+    def _opciones(correcta, pool, relleno):
+        c = str(correcta)
+        otros = [str(x) for x in dict.fromkeys(pool) if x and str(x) != c]
+        _vin_random.shuffle(otros)
+        otros = otros[:3]
+        for r in relleno:
+            if len(otros) >= 3:
+                break
+            if str(r) != c and str(r) not in otros:
+                otros.append(str(r))
+        ops = otros[:3] + [c]
+        _vin_random.shuffle(ops)
+        return ops, ops.index(c)
+
+    cand = []
+    if (inst.municipio or "").strip():
+        cand.append(("¿En qué municipio está registrada la institución?", inst.municipio.strip(),
+                     [i.municipio for i in todas], ["Medellín", "Bogotá", "Cali", "Barranquilla", "Bucaramanga", "Cartagena"]))
+    if (inst.departamento or "").strip():
+        cand.append(("¿En qué departamento está registrada la institución?", inst.departamento.strip(),
+                     [i.departamento for i in todas], ["Antioquia", "Cundinamarca", "Valle del Cauca", "Atlántico", "Santander", "Bolívar"]))
+    if (inst.plan or "").strip():
+        cand.append(("¿Qué plan de EduTrack tiene contratado la institución?", inst.plan.strip(),
+                     ["Basico", "Institucional", "Premium"], ["Ninguno de los anteriores"]))
+    anio = re.sub(r"\D", "", (inst.fecha_creacion or ""))[:4] if re.match(r"\s*\d{4}", inst.fecha_creacion or "") else ""
+    if len(anio) == 4:
+        a = int(anio)
+        cand.append(("¿En qué año se activó la institución en EduTrack?", anio, [], [str(a - 2), str(a - 1), str(a + 1), str(a + 2)]))
+    dane = re.sub(r"\D", "", inst.dane or "")
+    if len(dane) >= 4:
+        fin = dane[-4:]
+        cand.append(("¿Cuáles son los últimos 4 dígitos del código DANE registrado?", fin, [],
+                     ["%04d" % _vin_random.randrange(10000) for _ in range(8)]))
+    nit = re.sub(r"\D", "", (inst.nit or "").split("-")[0])
+    if len(nit) >= 4:
+        fin = nit[-4:]
+        cand.append(("¿Cuáles son los últimos 4 dígitos del NIT registrado?", fin, [],
+                     ["%04d" % _vin_random.randrange(10000) for _ in range(8)]))
+    _vin_random.shuffle(cand)
+    out = []
+    for q, correcta, pool, relleno in cand[:3]:
+        ops, idx = _opciones(correcta, pool, relleno)
+        out.append({"q": q, "o": ops, "c": idx})
+    return out if len(out) >= 3 else []
+
+
+def _vin_formatear_cierre(v, motivo):
+    v.estado = "CERRADA"
+    v.nivel = 0
+    db.session.commit()
+    _vin_audit(v.institucion_id, "Validación cerrada", "", "", motivo, "OK", v)
+
+
+def _vin_epochs():
+    now = _vi_time.time()
+    if now - _VIN_EPOCH["t"] > 10:
+        d = {}
+        try:
+            for r in InstSesionEpoch.query.all():
+                d[int(r.institucion_id)] = float(r.epoch_ts or 0)
+        except Exception:
+            db.session.rollback()
+        _VIN_EPOCH["t"], _VIN_EPOCH["d"] = now, d
+    return _VIN_EPOCH["d"]
+
+
+_VIN_EPOCH = {"t": 0, "d": {}}
+
+
+@app.before_request
+def _vin_before_request():
+    """Cierre de sesiones por institución: las sesiones anteriores a la marca quedan inválidas."""
+    try:
+        if not _VIN_LISTO["ok"] or request.path.startswith("/static"):
+            return None
+        iid = session.get("institucion_id")
+        if not iid or not session.get("usuario") or rol_actual() in _VIN_PERSONAL:
+            return None
+        ep = _vin_epochs().get(int(iid))
+        if not ep:
+            return None
+        t = session.get("_vin_t")
+        if t is None or float(t) < ep:
+            session.clear()
+            return redirect("/login")
+    except Exception:
+        return None
+    return None
+
+
+@app.after_request
+def _vin_after_request(resp):
+    try:
+        if session.get("usuario") and session.get("institucion_id") and "_vin_t" not in session:
+            session["_vin_t"] = _vi_time.time()
+    except Exception:
+        pass
+    return resp
+
+
+_VIN_INP = "padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box"
+_VIN_NIV_TXT = {0: ("🔴", "Nivel 0 · Sin validar"), 1: ("🟢", "Nivel 1 · Institución validada"),
+                2: ("🛡️", "Nivel 2 · Validación reforzada"), 3: ("🏛️", "Nivel 3 · Gerencia")}
+
+
+@app.route("/soporte/instituciones", methods=["GET"])
+def soporte_instituciones():
+    g = _vin_guard()
+    if g is not None:
+        return g
+    q = (request.args.get("q") or "").strip()
+    filas = ""
+    if q:
+        like = "%" + q.replace("%", "").replace("_", "") + "%"
+        d = re.sub(r"\D", "", q)
+        cond = [Institucion.nombre.ilike(like), Institucion.codigo.ilike(like)]
+        if d:
+            def _lim(col):
+                return db.func.replace(db.func.replace(db.func.replace(db.func.replace(col, ".", ""), "-", ""), " ", ""), ",", "")
+            cond += [_lim(Institucion.nit).like("%" + d + "%"), _lim(Institucion.dane).like("%" + d + "%")]
+        try:
+            res = Institucion.query.filter(db.or_(*cond)).order_by(Institucion.nombre).limit(25).all()
+        except Exception:
+            db.session.rollback()
+            res = []
+        for i in res:
+            n = _vin_nivel(i.id)
+            filas += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:8px'><b>" + _esc(i.nombre) + "</b><br><span class='mini-text'>"
+                      + _esc(i.codigo or "") + " · " + _esc(i.municipio or "") + "</span></td><td style='padding:8px'>" + _esc(i.estado or "") +
+                      "</td><td style='padding:8px'>" + _VIN_NIV_TXT[n][0] + " " + _esc(_VIN_NIV_TXT[n][1]) +
+                      "</td><td style='padding:8px'><a class='btn' href='/soporte/instituciones/" + str(i.id) + "'>Abrir ficha</a></td></tr>")
+        if not filas:
+            filas = "<tr><td colspan='4' style='padding:12px;color:#64748b'>Sin resultados.</td></tr>"
+    tabla = ("<section class='role-panel' style='margin-top:14px'><div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'>"
+             "<tr style='background:#f1f5f9;text-align:left'><th style='padding:8px'>Institución</th><th style='padding:8px'>Estado</th>"
+             "<th style='padding:8px'>Validación</th><th style='padding:8px'></th></tr>" + filas + "</table></div></section>") if q else ""
+    contenido = ("<header class='role-hero'><div><h1>🏫 Instituciones</h1><p>Busca por NIT, DANE, nombre o código interno. "
+                 "Ver la ficha no autoriza a entregar ni modificar datos: eso depende del nivel de validación.</p></div></header>"
+                 "<section class='role-panel'><form method='GET' style='display:flex;gap:8px;flex-wrap:wrap'>"
+                 "<input name='q' value='" + _esc(q) + "' placeholder='NIT, DANE, nombre o código Procsis' autofocus style='" + _VIN_INP + ";flex:1;min-width:220px'>"
+                 "<button class='btn'>Buscar</button></form></section>" + tabla)
+    return page("Instituciones", shell(contenido))
+
+
+def _vin_pop_nuevo():
+    return session.pop("vin_nuevo", None)
+
+
+@app.route("/soporte/instituciones/<int:iid>", methods=["GET", "POST"])
+def soporte_institucion_ficha(iid):
+    g = _vin_guard()
+    if g is not None:
+        return g
+    inst = Institucion.query.get(iid)
+    if not inst:
+        return redirect("/soporte/instituciones")
+    usuario = session.get("usuario") or ""
+    es_ger = rol_actual() in _ROLES_GERENCIA
+    msg = err = ""
+    tel_visible = ""
+    base = "/soporte/instituciones/" + str(iid)
+    v = _vin_actual(iid)
+    accion = (request.form.get("accion") or "").strip() if request.method == "POST" else ""
+    now = _vi_time.time()
+    bloq = _vin_bloqueada(iid)
+
+    if accion:
+        if accion == "ver_tel":
+            r = _vin_rector(inst)
+            tel_visible = r["tel"] or ""
+            _vin_audit(iid, "Consulta del número oficial para llamada", "", "", "", "OK", v, 0)
+            if not tel_visible:
+                err = "La institución no tiene teléfono del rector registrado. Escala a Gerencia."
+        elif accion == "iniciar":
+            motivo = (request.form.get("motivo") or "").strip()[:200]
+            caso = (request.form.get("caso") or "").strip()[:40]
+            if bloq and not es_ger:
+                err = "Validación no superada: la institución está bloqueada. Escala el caso a Gerencia."
+            elif not motivo:
+                err = "Describe el motivo de la validación."
+            elif v and v.estado in ("LLAMADA", "PIN", "SECUNDARIA", "VALIDADA"):
+                err = "Ya tienes una validación en curso para esta institución."
+            else:
+                nv = ValidacionInst(institucion_id=iid, creado_por=usuario, creado_en=_ts(), creado_ts=now, estado="LLAMADA",
+                                    caso=caso, motivo=motivo)
+                db.session.add(nv)
+                db.session.commit()
+                _vin_audit(iid, "Solicitud de validación", "", "", motivo, "OK", nv, 0)
+                return redirect(base)
+        elif v and accion == "llamada":
+            if v.estado != "LLAMADA":
+                err = "La llamada ya fue registrada."
+            elif not (request.form.get("c1") and request.form.get("c2")):
+                err = "Confirma las dos casillas de la llamada."
+            else:
+                v.llamada_ok = True
+                v.estado = "PIN"
+                db.session.commit()
+                _vin_audit(iid, "Primera validación: llamada realizada", "", "", "Número oficial + datos básicos confirmados", "OK", v, 0)
+                return redirect(base)
+        elif v and accion == "gen_enlace":
+            if v.estado != "PIN" or not v.llamada_ok:
+                err = "Primero registra la llamada."
+            elif _vi_fernet() is None:
+                err = "El servicio de cifrado no está disponible (falta la librería 'cryptography')."
+            elif not _vin_rector(inst)["cedula"]:
+                err = "La institución no tiene la cédula del rector registrada: no se puede validar. Escala a Gerencia."
+            else:
+                vi_prev = _vin_vi(v)
+                if vi_prev and vi_prev.estado in ("GENERADO", "ACTIVO"):
+                    vi_prev.estado = "CANCELADO"
+                token = secrets.token_urlsafe(32)
+                pin = "%06d" % secrets.randbelow(1000000)
+                vi = ValidacionIdentidad(token_hash=_vi_hash_token(token), tipo="RECTOR", asunto="[VIN-%d] %s" % (v.id, (v.motivo or "Validación institucional")[:150]),
+                                         institucion_id=iid, estado="GENERADO", pin_hash=generate_password_hash(pin), creado_por=usuario,
+                                         creado_en=_ts(), creado_ts=now)
+                db.session.add(vi)
+                db.session.commit()
+                v.vi_id = vi.id
+                db.session.commit()
+                session["vin_nuevo"] = {"pin": pin, "link": _base_publica() + "/validar-identidad/" + token}
+                _vin_audit(iid, "PIN y enlace generados", "", "", "Enlace #%d" % vi.id, "OK", v, 0)
+                return redirect(base)
+        elif v and accion == "activar_enlace":
+            vi = _vin_vi(v)
+            pin_in = re.sub(r"\D", "", request.form.get("pin") or "")
+            if not vi or vi.estado != "GENERADO":
+                err = "El enlace no está esperando activación."
+            elif not check_password_hash(vi.pin_hash or "", pin_in):
+                vi.pin_fallos = (vi.pin_fallos or 0) + 1
+                if vi.pin_fallos >= 3:
+                    vi.estado = "CANCELADO"
+                    err = "PIN incorrecto 3 veces: el enlace fue anulado."
+                else:
+                    err = "PIN incorrecto."
+                db.session.commit()
+                _vin_audit(iid, "PIN incorrecto", "", "", "", "FALLO", v, 0)
+            else:
+                vi.estado = "ACTIVO"
+                vi.activado_en = _ts()
+                vi.activo_hasta_ts = now + _VI_VIGENCIA_USO
+                db.session.commit()
+                msg = "Enlace activado: el rector tiene %d minutos para ingresar su cédula." % (_VI_VIGENCIA_USO // 60)
+        elif v and accion == "iniciar_sec":
+            sec_ok = v.estado == "PIN" and _vin_primaria_fallida(v)
+            refuerzo = v.estado == "VALIDADA" and v.nivel == 1 and v.primaria_ok and not v.sec_intentada
+            if not (sec_ok or refuerzo) or v.sec_intentada:
+                err = "La segunda validación no está disponible en este momento."
+            else:
+                pq = _vin_generar_preguntas(inst)
+                if not pq:
+                    err = "No hay datos suficientes para generar preguntas. Escala el caso a Gerencia."
+                else:
+                    v.preguntas = _vin_json.dumps(pq, ensure_ascii=False)
+                    v.sec_intentada = True
+                    v.estado = "SECUNDARIA"
+                    db.session.commit()
+                    _vin_audit(iid, "Segunda validación iniciada (preguntas por llamada)", "", "", "Refuerzo" if refuerzo else "Primaria fallida", "OK", v, v.nivel)
+                    return redirect(base)
+        elif v and accion == "responder_sec":
+            if v.estado != "SECUNDARIA":
+                err = "No hay preguntas pendientes."
+            else:
+                try:
+                    pq = _vin_json.loads(v.preguntas or "[]")
+                except Exception:
+                    pq = []
+                aciertos = 0
+                for k, p in enumerate(pq):
+                    try:
+                        if int(request.form.get("r%d" % k, "-1")) == int(p.get("c")):
+                            aciertos += 1
+                    except Exception:
+                        pass
+                v.preguntas = ""   # una sola oportunidad: se descartan preguntas y respuestas
+                if pq and aciertos == len(pq):
+                    v.secundaria_ok = True
+                    v.estado = "VALIDADA"
+                    v.nivel = 2 if v.primaria_ok else 1
+                    v.metodo = ("Llamada + PIN + cédula + enlace + preguntas por llamada" if v.primaria_ok else "Llamada + preguntas por llamada")
+                    v.valida_hasta_ts = now + _VIN_VIGENCIA
+                    db.session.commit()
+                    _vin_audit(iid, "Segunda validación superada", "", "", v.metodo, "OK", v)
+                    return redirect(base)
+                if v.primaria_ok:
+                    v.estado = "VALIDADA"      # el refuerzo falló, pero la primaria sigue vigente
+                    v.valida_hasta_ts = max(v.valida_hasta_ts or 0, now) if (v.valida_hasta_ts or 0) > now else now + 60
+                    db.session.commit()
+                    _vin_audit(iid, "Segunda validación NO superada (refuerzo)", "", "", "", "FALLO", v)
+                    err = "Refuerzo no superado. Sigues en Nivel 1."
+                else:
+                    v.estado = "BLOQUEADA"
+                    v.nivel = 0
+                    db.session.commit()
+                    _vin_audit(iid, "Validación no superada: institución bloqueada", "", "", "Primaria y secundaria fallidas", "FALLO", v)
+                    _notif_crear(_ROLES_GERENCIA, "Validación de institución no superada",
+                                 "%s: fallaron las dos validaciones (caso de %s). Requiere decisión de Gerencia." % (inst.nombre, usuario),
+                                 "/gerencia/auditoria-instituciones", iid, "alerta")
+                    return redirect(base)
+        elif v and accion == "cerrar_validacion":
+            if v.estado in ("LLAMADA", "PIN", "VALIDADA", "SECUNDARIA"):
+                vi = _vin_vi(v)
+                if vi and vi.estado in ("GENERADO", "ACTIVO"):
+                    vi.estado = "CANCELADO"
+                _vin_formatear_cierre(v, "Cerrada por " + usuario)
+                return redirect(base)
+        elif accion == "escalar":
+            nota = (request.form.get("nota") or "").strip()[:300]
+            if not nota:
+                err = "Escribe el motivo de la escalación."
+            else:
+                _vin_audit(iid, "Escalado a Gerencia", "", "", nota, "OK", v)
+                _notif_crear(_ROLES_GERENCIA, "Escalación de Soporte: " + inst.nombre, nota, "/gerencia/auditoria-instituciones", iid, "alerta")
+                msg = "Caso escalado a Gerencia."
+        elif accion in ("editar", "cerrar_sesiones", "refrescar_config"):
+            nivel = _vin_nivel(iid)
+            if nivel < 1:
+                err = "Necesitas una validación vigente (Nivel 1 o superior)."
+                _vin_audit(iid, "Intento sin validación: " + accion, "", "", "", "RECHAZADO", v, 0)
+            elif accion == "editar":
+                r = _vin_rector(inst)
+                ficha = r["ficha"]
+                nuevos = {
+                    "Nombres del rector": ("nombres", (request.form.get("nombres") or "").strip()[:160]),
+                    "Apellidos del rector": ("apellidos", (request.form.get("apellidos") or "").strip()[:160]),
+                    "Teléfono": ("telefono", re.sub(r"[^\d+ ]", "", request.form.get("telefono") or "")[:40]),
+                    "Correo": ("correo", (request.form.get("correo") or "").strip()[:160]),
+                    "Dirección": ("direccion", (request.form.get("direccion") or "").strip()[:255]),
+                }
+                if nivel >= 2:
+                    nuevos["Cédula del rector"] = ("numero_id", re.sub(r"\D", "", request.form.get("cedula") or "")[:20])
+                if nuevos["Correo"][1] and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", nuevos["Correo"][1]):
+                    err = "El correo no tiene un formato válido."
+                else:
+                    if not ficha:
+                        ficha = RectorInstitucion(institucion_id=iid, creado_en=_ts(), creado_por=usuario)
+                        db.session.add(ficha)
+                    cambios = 0
+                    for etiqueta, (campo, nuevo) in nuevos.items():
+                        if campo == "direccion":
+                            viejo = inst.direccion or ""
+                        else:
+                            viejo = getattr(ficha, campo, "") or ""
+                        if not nuevo or nuevo == viejo:
+                            continue
+                        if campo == "direccion":
+                            inst.direccion = nuevo
+                        else:
+                            setattr(ficha, campo, nuevo)
+                        cambios += 1
+                        mostrar = (lambda x: _vin_m_doc(x)) if campo == "numero_id" else (lambda x: x)
+                        _vin_audit(iid, "Modificó información institucional", etiqueta, mostrar(viejo), mostrar(nuevo), "OK", v, nivel)
+                    ficha.actualizado_en = _ts()
+                    inst.rector = ("%s %s" % (ficha.nombres or "", ficha.apellidos or "")).strip() or inst.rector
+                    db.session.commit()
+                    msg = ("Se guardaron %d cambio(s) y quedaron auditados." % cambios) if cambios else "No hubo cambios."
+            elif nivel < 2 and not es_ger:
+                err = "Esta operación requiere Nivel 2 (validación reforzada)."
+                _vin_audit(iid, "Intento con nivel insuficiente: " + accion, "", "", "", "RECHAZADO", v, nivel)
+            elif accion == "cerrar_sesiones":
+                if (request.form.get("confirmar") or "").strip().upper() != "CERRAR":
+                    err = "Escribe CERRAR para confirmar."
+                else:
+                    ep = InstSesionEpoch.query.filter_by(institucion_id=iid).first()
+                    if not ep:
+                        ep = InstSesionEpoch(institucion_id=iid)
+                        db.session.add(ep)
+                    ep.epoch_ts = now
+                    db.session.commit()
+                    _VIN_EPOCH["d"][iid] = now
+                    _vin_audit(iid, "Cerró las sesiones de todos los usuarios", "", "", "", "OK", v, nivel)
+                    msg = "Se cerraron las sesiones de los usuarios de la institución."
+            elif accion == "refrescar_config":
+                try:
+                    _seg_invalidar_cache()
+                except Exception:
+                    pass
+                _VIN_EPOCH["t"] = 0
+                _vin_audit(iid, "Refrescó la configuración (cachés)", "", "", "", "OK", v, nivel)
+                msg = "Configuración refrescada."
+        v = _vin_actual(iid)
+        bloq = _vin_bloqueada(iid)
+
+    nivel = _vin_nivel(iid)
+    r = _vin_rector(inst)
+    ic, nt = _VIN_NIV_TXT[nivel]
+    abierto = nivel >= 1
+    aviso = (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "") + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
+
+    # ficha: enmascarada hasta validar
+    if abierto:
+        ced = r["cedula"] if nivel >= 2 else _vin_m_doc(r["cedula"])
+        ficha = [("Institución", inst.nombre), ("DANE", inst.dane or "—"), ("NIT", inst.nit or "—"), ("Representante", r["nombre"] or "—"),
+                 ("Cédula", ced + ("" if nivel >= 2 else "  (completa en Nivel 2)")), ("Correo", r["correo"] or "—"),
+                 ("Teléfono", r["tel"] or "—"), ("Municipio", inst.municipio or "—"), ("Plan", inst.plan or "—")]
+    else:
+        ficha = [("Institución", inst.nombre), ("Representante legal registrado", r["nombre"] or "No registrado"),
+                 ("Documento registrado", _vin_m_doc(r["cedula"])), ("Teléfono registrado", _vin_m_tel(r["tel"])),
+                 ("Correo registrado", _vin_m_mail(r["correo"]))]
+    filas_f = "".join("<tr><td style='padding:6px 10px;color:#64748b;width:42%'>" + _esc(a) + "</td><td style='padding:6px 10px;font-weight:700'>" + _esc(b) + "</td></tr>" for a, b in ficha)
+    vig = ""
+    if v and v.estado == "VALIDADA":
+        vig = "<div class='mini-text'>Método: " + _esc(v.metodo) + " · vence en " + str(max(int(((v.valida_hasta_ts or 0) - _vi_time.time()) // 60), 0)) + " min</div>"
+    cabecera = ("<section class='role-panel'><h2 style='margin-top:0'>" + _esc(inst.nombre) + "</h2>"
+                "<div>Institución: <b>" + _esc(inst.estado or "") + "</b> · Validación: <b>" + ic + " " + _esc(nt) + "</b></div>" + vig +
+                "<table style='margin-top:10px;border-collapse:collapse;font-size:14px'>" + filas_f + "</table>"
+                "<p class='mini-text'>Esta ficha sirve para identificar a quién atiendes. No autoriza a entregar ni modificar datos, ni a consultar estudiantes.</p></section>")
+
+    # ── panel de validación ──
+    nv = _vin_pop_nuevo()
+    panel = ""
+    if es_ger:
+        panel = "<section class='role-panel' style='margin-top:14px'><b>🏛️ Gerencia</b> — operaciones habilitadas sin validación telefónica.</section>"
+    elif bloq:
+        panel = ("<section class='role-panel' style='margin-top:14px;border:2px solid #dc2626'><h3 style='margin-top:0'>🔴 Validación no superada</h3>"
+                 "<p>No es posible modificar información, entregar información ni acceder a datos restringidos de esta institución. No existe opción de continuar de todas formas.</p></section>")
+    elif not v or v.estado in ("EXPIRADA", "CERRADA", "BLOQUEADA"):
+        panel = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>🔐 Solicitar validación</h3>"
+                 "<form method='POST'><input type='hidden' name='accion' value='iniciar'>"
+                 "<input name='motivo' maxlength='200' placeholder='Motivo (ej. cambiar el correo del rector)' required style='" + _VIN_INP + ";margin-bottom:8px'>"
+                 "<input name='caso' maxlength='40' placeholder='N.º de caso de soporte (opcional)' style='" + _VIN_INP + ";margin-bottom:8px'>"
+                 "<button class='btn'>Iniciar validación</button></form></section>")
+    elif v.estado == "LLAMADA":
+        t = ""
+        if tel_visible:
+            t = "<div style='font-size:22px;font-weight:900;margin:8px 0'>📞 " + _esc(tel_visible) + "</div><div class='mini-text'>Consulta registrada en la auditoría.</div>"
+        panel = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>📞 1. Primera validación: llamada</h3>"
+                 "<p class='mini-text'>Llama al número oficial registrado. No preguntes «¿usted es el rector?»: confirma datos básicos que solo el representante autorizado sabría.</p>"
+                 "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='ver_tel'><button class='btn' style='background:#e2e8f0;color:#0f172a'>Ver número oficial para llamar</button></form>" + t +
+                 "<form method='POST' style='margin-top:10px'><input type='hidden' name='accion' value='llamada'>"
+                 "<label style='display:flex;gap:8px;margin:6px 0'><input type='checkbox' name='c1' value='1'> Llamé al número oficial registrado (no a uno que me dio quien escribió).</label>"
+                 "<label style='display:flex;gap:8px;margin:6px 0'><input type='checkbox' name='c2' value='1'> La persona confirmó correctamente los datos básicos.</label>"
+                 "<button class='btn'>Continuar a PIN y enlace</button></form></section>")
+    elif v.estado == "PIN":
+        vi = _vin_vi(v)
+        estado_vi = vi.estado if vi else ""
+        cuerpo = ""
+        if nv:
+            cuerpo += ("<div style='background:#eff6ff;border:2px solid #0369a1;border-radius:10px;padding:12px;margin:8px 0'>"
+                       "<div class='mini-text'>Se muestra una sola vez. Envía el enlace por SMS (Inalambria) y tú conserva el PIN.</div>"
+                       "<input id='vin-link' readonly value='" + _esc(nv.get("link", "")) + "' style='" + _VIN_INP + "'>"
+                       "<button type='button' class='btn' style='margin-top:6px' onclick=\"var i=document.getElementById('vin-link');i.select();document.execCommand('copy');this.textContent='✅ Copiado'\">Copiar enlace</button>"
+                       "<div style='font-size:36px;font-weight:900;letter-spacing:8px;color:#0B2D57'>" + _esc(nv.get("pin", "")) + "</div></div>")
+        if not vi:
+            cuerpo += ("<form method='POST'><input type='hidden' name='accion' value='gen_enlace'><button class='btn'>Generar PIN y enlace</button></form>")
+        elif estado_vi == "GENERADO":
+            cuerpo += ("<form method='POST' style='display:flex;gap:6px;flex-wrap:wrap;align-items:center'><input type='hidden' name='accion' value='activar_enlace'>"
+                       "<input name='pin' inputmode='numeric' maxlength='6' placeholder='PIN de 6 dígitos' required style='" + _VIN_INP + ";max-width:200px'>"
+                       "<button class='btn'>Activar enlace</button></form><div class='mini-text'>El enlace está dormido hasta que lo actives.</div>")
+        elif estado_vi == "ACTIVO":
+            cuerpo += "<div class='msg ok'>⏳ Esperando que el rector ingrese su cédula en el enlace… (recarga para ver el resultado)</div><a class='btn' href='" + base + "'>Actualizar</a>"
+        else:
+            cuerpo += ("<div class='msg danger'>La validación primaria no se superó (" + _esc(estado_vi or "sin enlace") + ").</div>"
+                       "<form method='POST' style='margin-top:8px'><input type='hidden' name='accion' value='iniciar_sec'><button class='btn'>2. Segunda validación: preguntas por llamada</button></form>")
+        panel = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>🔢 2. PIN + enlace + cédula</h3>"
+                 "<p class='mini-text'>El rector abre el enlace, escribe su cédula (no se puede pegar) y acepta los términos. Si coincide con la registrada, se supera la primera validación.</p>" + cuerpo + "</section>")
+    elif v.estado == "SECUNDARIA":
+        try:
+            pq = _vin_json.loads(v.preguntas or "[]")
+        except Exception:
+            pq = []
+        bloques = ""
+        for k, p in enumerate(pq):
+            ops = "".join("<label style='display:flex;gap:8px;margin:4px 0'><input type='radio' name='r" + str(k) + "' value='" + str(j) + "' required> " + _esc(o) + "</label>" for j, o in enumerate(p.get("o", [])))
+            bloques += "<div style='margin:10px 0;padding:10px;background:#f8fafc;border-radius:8px'><b>Pregunta " + str(k + 1) + ".</b> " + _esc(p.get("q", "")) + ops + "</div>"
+        panel = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>🧩 Segunda validación · por llamada</h3>"
+                 "<p class='mini-text'>Lee cada pregunta al rector por teléfono y marca lo que responda. Una sola oportunidad; deben ser correctas las tres. Las respuestas correctas no se muestran.</p>"
+                 "<form method='POST'><input type='hidden' name='accion' value='responder_sec'>" + bloques + "<button class='btn'>Verificar respuestas</button></form></section>")
+    elif v.estado == "VALIDADA":
+        extra = ""
+        if v.nivel == 1 and v.primaria_ok and not v.sec_intentada:
+            extra = ("<form method='POST' style='display:inline'><input type='hidden' name='accion' value='iniciar_sec'>"
+                     "<button class='btn' style='background:#7c3aed;color:#fff'>🛡️ Reforzar a Nivel 2 (preguntas por llamada)</button></form> ")
+        panel = ("<section class='role-panel' style='margin-top:14px;border:2px solid #16a34a'><h3 style='margin-top:0'>🟢 Identidad validada</h3>"
+                 + extra + "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='cerrar_validacion'>"
+                 "<button class='btn' style='background:#e2e8f0;color:#0f172a'>Terminar validación</button></form></section>")
+
+    # ── operaciones (solo con validación vigente) ──
+    ops = ""
+    if nivel >= 1:
+        f_in = lambda n, val, ph, lbl: ("<label style='font-size:12px;font-weight:700'>" + lbl + "</label><input name='" + n + "' value='" + _esc(val) + "' placeholder='" + ph + "' style='" + _VIN_INP + ";margin:3px 0 8px'>")
+        fr = r["ficha"]
+        form = ("<form method='POST'><input type='hidden' name='accion' value='editar'>"
+                "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 10px'>"
+                + f_in("nombres", (fr.nombres if fr else "") or "", "", "Nombres del rector")
+                + f_in("apellidos", (fr.apellidos if fr else "") or "", "", "Apellidos del rector")
+                + f_in("telefono", r["tel"], "", "Teléfono")
+                + f_in("correo", r["correo"], "", "Correo")
+                + f_in("direccion", inst.direccion or "", "", "Dirección")
+                + (f_in("cedula", r["cedula"], "", "Cédula del rector (Nivel 2)") if nivel >= 2 else "")
+                + "</div><button class='btn'>Guardar cambios (queda auditado)</button></form>")
+        tec = ""
+        if nivel >= 2:
+            tec = ("<div style='margin-top:14px;padding-top:10px;border-top:1px solid #e2e8f0'><b>♻️ Administración técnica</b>"
+                   "<form method='POST' style='margin-top:8px'><input type='hidden' name='accion' value='refrescar_config'>"
+                   "<button class='btn' style='background:#e2e8f0;color:#0f172a'>Refrescar configuración (limpia cachés)</button></form>"
+                   "<form method='POST' style='margin-top:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px'>"
+                   "<input type='hidden' name='accion' value='cerrar_sesiones'><b>⚠️ Cerrar todas las sesiones</b>"
+                   "<div class='mini-text'>Desconectará a todos los usuarios de " + _esc(inst.nombre) + ". Escribe CERRAR para confirmar.</div>"
+                   "<input name='confirmar' autocomplete='off' placeholder='CERRAR' style='" + _VIN_INP + ";max-width:200px;margin:6px 0'>"
+                   "<button class='btn' style='background:#dc2626;color:#fff'>Confirmar</button></form></div>")
+        else:
+            tec = "<p class='mini-text' style='margin-top:12px'>🔒 Cédula, cierre de sesiones y reinicio de configuración requieren Nivel 2 (validación reforzada).</p>"
+        qr = "<div style='margin-top:12px'><b>📱 QR / carnés:</b> <a href='/soporte/bloqueo-carne' style='color:#005BEA;font-weight:700'>Ir a Bloqueo de carné</a></div>"
+        ops = "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>✅ Operaciones autorizadas</h3>" + form + tec + qr + "</section>"
+    else:
+        ops = ("<section class='role-panel' style='margin-top:14px;opacity:.85'><h3 style='margin-top:0'>🔒 Operaciones bloqueadas (Nivel 0)</h3>"
+               "<p class='mini-text'>Sin validación solo puedes buscar la institución, crear un caso y consultar el estado general. "
+               "No puedes modificar datos, entregar información, consultar estudiantes ni gestionar QR.</p></section>")
+
+    esc = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>🚨 Escalar a Gerencia</h3>"
+           "<form method='POST' style='display:flex;gap:6px;flex-wrap:wrap'><input type='hidden' name='accion' value='escalar'>"
+           "<input name='nota' maxlength='300' placeholder='Motivo de la escalación' required style='" + _VIN_INP + ";flex:1;min-width:220px'>"
+           "<button class='btn'>Escalar</button></form></section>")
+
+    # ── auditoría de la institución ──
+    filas_a = ""
+    try:
+        for a in InstAuditoria.query.filter_by(institucion_id=iid).order_by(InstAuditoria.id.desc()).limit(30).all():
+            det = ""
+            if a.campo:
+                det = _esc(a.campo) + ": " + _esc(a.antes or "—") + " → " + _esc(a.despues or "—")
+            elif a.despues:
+                det = _esc(a.despues)
+            col = "#166534" if a.resultado == "OK" else "#b91c1c"
+            filas_a += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:6px'>" + _esc((a.fecha or "")[:16]) + "</td><td style='padding:6px'>" + _esc(a.usuario) +
+                        "</td><td style='padding:6px'>" + _esc(a.accion) + "<br><span class='mini-text'>" + det + "</span></td><td style='padding:6px;color:" + col + ";font-weight:700'>" + _esc(a.resultado) + "</td></tr>")
+    except Exception:
+        db.session.rollback()
+    aud = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>🧾 Auditoría de la institución</h3><div style='overflow:auto'>"
+           "<table style='width:100%;border-collapse:collapse;font-size:12px'><tr style='background:#f1f5f9;text-align:left'><th style='padding:6px'>Fecha</th><th style='padding:6px'>Usuario</th><th style='padding:6px'>Acción</th><th style='padding:6px'>Resultado</th></tr>"
+           + (filas_a or "<tr><td colspan='4' style='padding:10px;color:#64748b'>Sin registros.</td></tr>") + "</table></div></section>")
+
+    contenido = ("<p><a href='/soporte/instituciones' style='color:#0B2D57;font-weight:700'>&larr; Instituciones</a></p>" + aviso + cabecera + panel + ops + esc + aud)
+    return page("Ficha de institución", shell(contenido))
+
+
+@app.route("/gerencia/auditoria-instituciones", methods=["GET", "POST"])
+def gerencia_auditoria_instituciones():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _vin_ensure()
+    msg = err = ""
+    if request.method == "POST" and request.form.get("accion") == "liberar":
+        if not _step_up_form_ok():
+            err = "Contraseña o código incorrectos."
+        else:
+            vid = request.form.get("id", type=int) or 0
+            b = ValidacionInst.query.get(vid)
+            if b and b.estado == "BLOQUEADA":
+                b.estado = "CERRADA"
+                db.session.commit()
+                _vin_audit(b.institucion_id, "Gerencia liberó el bloqueo de validación", "", "", "caso #%d" % b.id, "OK", b, 3)
+                msg = "Bloqueo liberado."
+    nombres = {}
+    try:
+        nombres = {i.id: i.nombre for i in Institucion.query.all()}
+    except Exception:
+        db.session.rollback()
+    bl = ""
+    for b in ValidacionInst.query.filter_by(estado="BLOQUEADA").order_by(ValidacionInst.id.desc()).limit(50).all():
+        bl += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:8px'>#" + str(b.id) + "</td><td style='padding:8px'>" + _esc(nombres.get(b.institucion_id, "—")) +
+               "</td><td style='padding:8px'>" + _esc(b.creado_por) + "<br><span class='mini-text'>" + _esc(b.creado_en[:16]) + "</span></td><td style='padding:8px'>"
+               "<form method='POST'><input type='hidden' name='accion' value='liberar'><input type='hidden' name='id' value='" + str(b.id) + "'>" + _step_up_campos() +
+               "<button class='btn'>Liberar bloqueo</button></form></td></tr>")
+    au = ""
+    for a in InstAuditoria.query.order_by(InstAuditoria.id.desc()).limit(200).all():
+        det = (_esc(a.campo) + ": " + _esc(a.antes or "—") + " → " + _esc(a.despues or "—")) if a.campo else _esc(a.despues or "")
+        au += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:6px'>" + _esc((a.fecha or "")[:16]) + "</td><td style='padding:6px'>" + _esc(nombres.get(a.institucion_id, "—")) +
+               "</td><td style='padding:6px'>" + _esc(a.usuario) + " <span class='mini-text'>(" + _esc(a.rol) + ")</span></td><td style='padding:6px'>" + _esc(a.accion) +
+               "<br><span class='mini-text'>" + det + "</span></td><td style='padding:6px'>N" + str(a.nivel or 0) + "</td><td style='padding:6px'>" + _esc(a.resultado) + "</td></tr>")
+    aviso = (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "") + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
+    contenido = ("<header class='role-hero'><div><h1>🧾 Auditoría de instituciones</h1><p>Validaciones, cambios antes/después y bloqueos.</p></div></header>" + aviso +
+                 "<section class='role-panel'><h3 style='margin-top:0'>🔴 Validaciones bloqueadas</h3><div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'>"
+                 + (bl or "<tr><td style='padding:10px;color:#64748b'>Ninguna.</td></tr>") + "</table></div></section>"
+                 "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>Registro</h3><div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:12px'>"
+                 "<tr style='background:#f1f5f9;text-align:left'><th style='padding:6px'>Fecha</th><th style='padding:6px'>Institución</th><th style='padding:6px'>Usuario</th><th style='padding:6px'>Acción</th><th style='padding:6px'>Nivel</th><th style='padding:6px'>Resultado</th></tr>"
+                 + (au or "<tr><td colspan='6' style='padding:10px;color:#64748b'>Sin registros.</td></tr>") + "</table></div></section>")
+    return page("Auditoría de instituciones", shell(contenido))
 
 
 if __name__ == "__main__":
