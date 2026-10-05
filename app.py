@@ -10017,7 +10017,7 @@ def security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(self)"
     if request.is_secure:
         resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return resp
@@ -75123,7 +75123,7 @@ def gerencia_correo_extra(n):
 # ════════════════════════════════════════════════════════════════════════════
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
-_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/verificar-certificado/", "/demo/invitar/",
+_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/verificar-certificado/", "/demo/invitar/",
                       "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal")
 
 
@@ -75838,6 +75838,7 @@ def _vin_ensure():
     if _VIN_LISTO["ok"]:
         return
     try:
+        _bio_ensure()
         for m in (ValidacionInst, InstAuditoria, InstSesionEpoch):
             m.__table__.create(bind=db.engine, checkfirst=True)
         _VIN_LISTO["ok"] = True
@@ -76323,6 +76324,30 @@ def soporte_institucion_ficha(iid):
                     vi.estado = "CANCELADO"
                 _vin_formatear_cierre(v, "Cerrada por " + usuario)
                 return redirect(base)
+        elif accion == "bio_generar":
+            op = request.form.get("operacion") or ""
+            _bio_ensure()
+            if es_ger:
+                err = "Gerencia no necesita validación biométrica."
+            elif not v or not v.llamada_ok or v.estado not in ("PIN", "VALIDADA"):
+                err = "Primero inicia la validación y registra la llamada."
+            elif op not in _BIO_OPS:
+                err = "Elige la operación que se autorizará."
+            elif _vi_fernet() is None:
+                err = "El servicio de cifrado no está disponible (falta la librería 'cryptography')."
+            elif not _vin_rector(inst)["cedula"]:
+                err = "La institución no tiene la cédula del rector registrada. Escala a Gerencia."
+            else:
+                for _old in BioValidacion.query.filter_by(institucion_id=iid, creado_por=usuario, estado="GENERADA").all():
+                    _old.estado = "EXPIRADA"      # un solo enlace biométrico activo por asesor e institución
+                token = secrets.token_urlsafe(32)
+                nb = BioValidacion(codigo="BIO-" + secrets.token_hex(4).upper(), institucion_id=iid, vin_id=v.id, operacion=op,
+                                   creado_por=usuario, creado_en=_ts(), creado_ts=now, token_hash=_vi_hash_token(token), estado="GENERADA")
+                db.session.add(nb)
+                db.session.commit()
+                session["bio_nuevo"] = {"codigo": nb.codigo, "link": _base_publica() + "/validar-biometria/" + token}
+                _vin_audit(iid, "Validación biométrica solicitada", "", "", "%s · %s" % (nb.codigo, _BIO_OPS[op]), "OK", v, 0)
+                return redirect(base)
         elif accion == "escalar":
             nota = (request.form.get("nota") or "").strip()[:300]
             if not nota:
@@ -76333,8 +76358,13 @@ def soporte_institucion_ficha(iid):
                 msg = "Caso escalado a Gerencia."
         elif accion in ("editar", "cerrar_sesiones", "refrescar_config"):
             nivel = _vin_nivel(iid)
-            if nivel < 1:
-                err = "Necesitas una validación vigente (Nivel 1 o superior)."
+            bio = _bio_grant(iid)
+            bop = bio.operacion if bio else ""
+            p_edit = nivel >= 1 or bop in ("editar_info", "editar_cedula")
+            p_ced = nivel >= 2 or bop == "editar_cedula"
+            p_tec = nivel >= 2 or bop == "cerrar_sesiones"
+            if (accion == "editar" and not p_edit) or (accion == "cerrar_sesiones" and not (p_tec or nivel >= 1)) or (accion == "refrescar_config" and nivel < 1):
+                err = "Necesitas una validación vigente (Nivel 1 o superior) o una autorización biométrica para esta operación."
                 _vin_audit(iid, "Intento sin validación: " + accion, "", "", "", "RECHAZADO", v, 0)
             elif accion == "editar":
                 r = _vin_rector(inst)
@@ -76346,7 +76376,7 @@ def soporte_institucion_ficha(iid):
                     "Correo": ("correo", (request.form.get("correo") or "").strip()[:160]),
                     "Dirección": ("direccion", (request.form.get("direccion") or "").strip()[:255]),
                 }
-                if nivel >= 2:
+                if p_ced:
                     nuevos["Cédula del rector"] = ("numero_id", re.sub(r"\D", "", request.form.get("cedula") or "")[:20])
                 if nuevos["Correo"][1] and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", nuevos["Correo"][1]):
                     err = "El correo no tiene un formato válido."
@@ -76373,7 +76403,9 @@ def soporte_institucion_ficha(iid):
                     inst.rector = ("%s %s" % (ficha.nombres or "", ficha.apellidos or "")).strip() or inst.rector
                     db.session.commit()
                     msg = ("Se guardaron %d cambio(s) y quedaron auditados." % cambios) if cambios else "No hubo cambios."
-            elif nivel < 2 and not es_ger:
+                    if cambios and bop in ("editar_info", "editar_cedula") and nivel < 1:
+                        _bio_consumir(bio, iid, "editar")
+            elif not p_tec and not es_ger:
                 err = "Esta operación requiere Nivel 2 (validación reforzada)."
                 _vin_audit(iid, "Intento con nivel insuficiente: " + accion, "", "", "", "RECHAZADO", v, nivel)
             elif accion == "cerrar_sesiones":
@@ -76389,6 +76421,10 @@ def soporte_institucion_ficha(iid):
                     _VIN_EPOCH["d"][iid] = now
                     _vin_audit(iid, "Cerró las sesiones de todos los usuarios", "", "", "", "OK", v, nivel)
                     msg = "Se cerraron las sesiones de los usuarios de la institución."
+                    if bop == "cerrar_sesiones" and nivel < 2:
+                        _bio_consumir(bio, iid, "cerrar_sesiones")
+            elif accion == "refrescar_config" and nivel < 2 and not es_ger:
+                err = "Esta operación requiere Nivel 2 (validación reforzada)."
             elif accion == "refrescar_config":
                 try:
                     _seg_invalidar_cache()
@@ -76494,33 +76530,71 @@ def soporte_institucion_ficha(iid):
                  + extra + "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='cerrar_validacion'>"
                  "<button class='btn' style='background:#e2e8f0;color:#0f172a'>Terminar validación</button></form></section>")
 
-    # ── operaciones (solo con validación vigente) ──
+    # ── validación biométrica (alternativa para UNA operación) ──
+    bio_panel = ""
+    if not es_ger and not bloq and v and v.llamada_ok and v.estado in ("PIN", "VALIDADA"):
+        _bio_ensure()
+        _bio_purgar()
+        nb = BioValidacion.query.filter_by(institucion_id=iid, creado_por=usuario).order_by(BioValidacion.id.desc()).first()
+        bnv = session.pop("bio_nuevo", None)
+        cuerpo_b = ""
+        if isinstance(bnv, dict):
+            cuerpo_b += ("<div style='background:#eff6ff;border:2px solid #0369a1;border-radius:10px;padding:12px;margin:8px 0'>"
+                         "<div class='mini-text'>Envía este enlace al rector por SMS. Se muestra una sola vez y vence en 30 minutos.</div>"
+                         "<input id='bio-link' readonly value='" + _esc(bnv.get("link", "")) + "' style='" + _VIN_INP + "'>"
+                         "<button type='button' class='btn' style='margin-top:6px' onclick=\"var i=document.getElementById('bio-link');i.select();document.execCommand('copy');this.textContent='✅ Copiado'\">Copiar enlace</button>"
+                         "<div class='mini-text'>Código: <b>" + _esc(bnv.get("codigo", "")) + "</b></div></div>")
+        if nb and nb.estado == "GENERADA":
+            cuerpo_b += "<div class='msg ok'>⏳ " + _esc(nb.codigo) + ": esperando que el rector complete la verificación en su celular. <a href='" + base + "'>Actualizar</a></div>"
+        elif nb and nb.estado == "CAPTURADA":
+            cuerpo_b += "<div class='msg ok'>📥 " + _esc(nb.codigo) + ": captura recibida. <a class='btn' href='/soporte/biometria/" + str(nb.id) + "'>Revisar y decidir</a></div>"
+        elif nb and nb.estado == "APROBADA" and not nb.usada and _vi_time.time() <= (nb.valida_hasta_ts or 0):
+            cuerpo_b += ("<div class='msg ok'>✅ " + _esc(nb.codigo) + ": verificación confirmada. Autorizada <b>solo</b> esta operación: " + _esc(_BIO_OPS.get(nb.operacion, "")) +
+                         " · vence en " + str(max(int(((nb.valida_hasta_ts or 0) - _vi_time.time()) // 60), 0)) + " min · un solo uso.</div>")
+        elif nb and nb.estado in ("RECHAZADA", "FALLIDA"):
+            cuerpo_b += "<div class='msg danger'>" + _esc(nb.codigo) + ": verificación no superada (" + _esc(nb.estado.lower()) + ").</div>"
+        opts_b = "".join("<option value='" + k + "'>" + _esc(t) + "</option>" for k, t in _BIO_OPS.items())
+        bio_panel = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>🧬 Validación biométrica (opcional)</h3>"
+                     "<p class='mini-text'>El rector fotografía su cédula y hace una prueba facial en su celular. Tú revisas la comparación y decides. "
+                     "Autoriza <b>una sola operación</b> (no equivale a Nivel 1 ni 2). Las imágenes se eliminan al decidir o, como máximo, a las 4 horas.</p>" + cuerpo_b +
+                     "<form method='POST' style='display:flex;gap:6px;flex-wrap:wrap'><input type='hidden' name='accion' value='bio_generar'>"
+                     "<select name='operacion' required style='" + _VIN_INP + ";flex:1;min-width:240px'><option value=''>— Operación a autorizar —</option>" + opts_b + "</select>"
+                     "<button class='btn'>Generar enlace biométrico</button></form></section>")
+
+    # ── operaciones (validación vigente o autorización biométrica de una operación) ──
     ops = ""
-    if nivel >= 1:
+    bgr = _bio_grant(iid) if not es_ger else None
+    bop = bgr.operacion if bgr else ""
+    p_edit = nivel >= 1 or bop in ("editar_info", "editar_cedula")
+    p_ced = nivel >= 2 or bop == "editar_cedula"
+    p_ses = nivel >= 2 or bop == "cerrar_sesiones"
+    if p_edit or p_ses:
         f_in = lambda n, val, ph, lbl: ("<label style='font-size:12px;font-weight:700'>" + lbl + "</label><input name='" + n + "' value='" + _esc(val) + "' placeholder='" + ph + "' style='" + _VIN_INP + ";margin:3px 0 8px'>")
         fr = r["ficha"]
-        form = ("<form method='POST'><input type='hidden' name='accion' value='editar'>"
-                "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 10px'>"
-                + f_in("nombres", (fr.nombres if fr else "") or "", "", "Nombres del rector")
-                + f_in("apellidos", (fr.apellidos if fr else "") or "", "", "Apellidos del rector")
-                + f_in("telefono", r["tel"], "", "Teléfono")
-                + f_in("correo", r["correo"], "", "Correo")
-                + f_in("direccion", inst.direccion or "", "", "Dirección")
-                + (f_in("cedula", r["cedula"], "", "Cédula del rector (Nivel 2)") if nivel >= 2 else "")
-                + "</div><button class='btn'>Guardar cambios (queda auditado)</button></form>")
+        form = ""
+        if p_edit:
+            form = ("<form method='POST'><input type='hidden' name='accion' value='editar'>"
+                    "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 10px'>"
+                    + f_in("nombres", (fr.nombres if fr else "") or "", "", "Nombres del rector")
+                    + f_in("apellidos", (fr.apellidos if fr else "") or "", "", "Apellidos del rector")
+                    + f_in("telefono", r["tel"], "", "Teléfono")
+                    + f_in("correo", r["correo"], "", "Correo")
+                    + f_in("direccion", inst.direccion or "", "", "Dirección")
+                    + (f_in("cedula", r["cedula"], "", "Cédula del rector") if p_ced else "")
+                    + "</div><button class='btn'>Guardar cambios (queda auditado)</button></form>")
         tec = ""
-        if nivel >= 2:
+        if p_ses:
             tec = ("<div style='margin-top:14px;padding-top:10px;border-top:1px solid #e2e8f0'><b>♻️ Administración técnica</b>"
-                   "<form method='POST' style='margin-top:8px'><input type='hidden' name='accion' value='refrescar_config'>"
-                   "<button class='btn' style='background:#e2e8f0;color:#0f172a'>Refrescar configuración (limpia cachés)</button></form>"
+                   + ("<form method='POST' style='margin-top:8px'><input type='hidden' name='accion' value='refrescar_config'>"
+                      "<button class='btn' style='background:#e2e8f0;color:#0f172a'>Refrescar configuración (limpia cachés)</button></form>" if nivel >= 2 else "") +
                    "<form method='POST' style='margin-top:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px'>"
                    "<input type='hidden' name='accion' value='cerrar_sesiones'><b>⚠️ Cerrar todas las sesiones</b>"
                    "<div class='mini-text'>Desconectará a todos los usuarios de " + _esc(inst.nombre) + ". Escribe CERRAR para confirmar.</div>"
                    "<input name='confirmar' autocomplete='off' placeholder='CERRAR' style='" + _VIN_INP + ";max-width:200px;margin:6px 0'>"
                    "<button class='btn' style='background:#dc2626;color:#fff'>Confirmar</button></form></div>")
-        else:
+        elif nivel >= 1:
             tec = "<p class='mini-text' style='margin-top:12px'>🔒 Cédula, cierre de sesiones y reinicio de configuración requieren Nivel 2 (validación reforzada).</p>"
-        qr = "<div style='margin-top:12px'><b>📱 QR / carnés:</b> <a href='/soporte/bloqueo-carne' style='color:#005BEA;font-weight:700'>Ir a Bloqueo de carné</a></div>"
+        qr = ("<div style='margin-top:12px'><b>📱 QR / carnés:</b> <a href='/soporte/bloqueo-carne' style='color:#005BEA;font-weight:700'>Ir a Bloqueo de carné</a></div>" if nivel >= 1 else "")
         ops = "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>✅ Operaciones autorizadas</h3>" + form + tec + qr + "</section>"
     else:
         ops = ("<section class='role-panel' style='margin-top:14px;opacity:.85'><h3 style='margin-top:0'>🔒 Operaciones bloqueadas (Nivel 0)</h3>"
@@ -76550,7 +76624,7 @@ def soporte_institucion_ficha(iid):
            "<table style='width:100%;border-collapse:collapse;font-size:12px'><tr style='background:#f1f5f9;text-align:left'><th style='padding:6px'>Fecha</th><th style='padding:6px'>Usuario</th><th style='padding:6px'>Acción</th><th style='padding:6px'>Resultado</th></tr>"
            + (filas_a or "<tr><td colspan='4' style='padding:10px;color:#64748b'>Sin registros.</td></tr>") + "</table></div></section>")
 
-    contenido = ("<p><a href='/soporte/instituciones' style='color:#0B2D57;font-weight:700'>&larr; Instituciones</a></p>" + aviso + cabecera + panel + ops + esc + aud)
+    contenido = ("<p><a href='/soporte/instituciones' style='color:#0B2D57;font-weight:700'>&larr; Instituciones</a></p>" + aviso + cabecera + panel + bio_panel + ops + esc + aud)
     return page("Ficha de institución", shell(contenido))
 
 
@@ -76589,14 +76663,377 @@ def gerencia_auditoria_instituciones():
         au += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:6px'>" + _esc((a.fecha or "")[:16]) + "</td><td style='padding:6px'>" + _esc(nombres.get(a.institucion_id, "—")) +
                "</td><td style='padding:6px'>" + _esc(a.usuario) + " <span class='mini-text'>(" + _esc(a.rol) + ")</span></td><td style='padding:6px'>" + _esc(a.accion) +
                "<br><span class='mini-text'>" + det + "</span></td><td style='padding:6px'>N" + str(a.nivel or 0) + "</td><td style='padding:6px'>" + _esc(a.resultado) + "</td></tr>")
+    bio_html = ""
+    try:
+        _bio_ensure()
+        _bio_purgar(True)
+        filas_b = ""
+        for bb in BioValidacion.query.order_by(BioValidacion.id.desc()).limit(100).all():
+            res = bb.resultado or {"CAPTURADA": "Pendiente de revisión", "GENERADA": "Esperando captura"}.get(bb.estado, bb.estado)
+            filas_b += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:6px'>" + _esc(bb.codigo) + "</td><td style='padding:6px'>" + _esc(nombres.get(bb.institucion_id, "—")) +
+                        "</td><td style='padding:6px'>" + _esc(res) + "</td><td style='padding:6px'>" + _esc(bb.metodo) + "</td><td style='padding:6px'>" + _esc((bb.revisado_en or bb.creado_en or "")[:16]) +
+                        "</td><td style='padding:6px'>" + _esc(_BIO_OPS.get(bb.operacion, bb.operacion)) + "</td><td style='padding:6px'>" + ("Eliminadas" if bb.imagenes_borradas else "En custodia (máx. 4 h)") + "</td></tr>")
+        bio_html = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>🧬 Validaciones biométricas</h3>"
+                    "<p class='mini-text'>Solo metadatos: no se conservan imágenes ni plantillas faciales.</p><div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:12px'>"
+                    "<tr style='background:#f1f5f9;text-align:left'><th style='padding:6px'>ID</th><th style='padding:6px'>Institución</th><th style='padding:6px'>Resultado</th><th style='padding:6px'>Método</th>"
+                    "<th style='padding:6px'>Fecha</th><th style='padding:6px'>Operación</th><th style='padding:6px'>Imágenes</th></tr>"
+                    + (filas_b or "<tr><td colspan='7' style='padding:10px;color:#64748b'>Sin registros.</td></tr>") + "</table></div></section>")
+    except Exception:
+        db.session.rollback()
     aviso = (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "") + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
     contenido = ("<header class='role-hero'><div><h1>🧾 Auditoría de instituciones</h1><p>Validaciones, cambios antes/después y bloqueos.</p></div></header>" + aviso +
                  "<section class='role-panel'><h3 style='margin-top:0'>🔴 Validaciones bloqueadas</h3><div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'>"
                  + (bl or "<tr><td style='padding:10px;color:#64748b'>Ninguna.</td></tr>") + "</table></div></section>"
-                 "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>Registro</h3><div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:12px'>"
+                 + bio_html + "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>Registro</h3><div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:12px'>"
                  "<tr style='background:#f1f5f9;text-align:left'><th style='padding:6px'>Fecha</th><th style='padding:6px'>Institución</th><th style='padding:6px'>Usuario</th><th style='padding:6px'>Acción</th><th style='padding:6px'>Nivel</th><th style='padding:6px'>Resultado</th></tr>"
                  + (au or "<tr><td colspan='6' style='padding:10px;color:#64748b'>Sin registros.</td></tr>") + "</table></div></section>")
     return page("Auditoría de instituciones", shell(contenido))
+
+
+# ───────────────────────── VALIDACIÓN BIOMÉTRICA PROCSIS (documento + prueba facial, con revisión humana) ─────────────────────────
+import math as _bio_math
+
+_BIO_RETENCION = 4 * 3600        # las imágenes se borran como máximo a las 4 horas
+_BIO_VIG_ENLACE = 30 * 60        # el enlace de captura vive 30 minutos
+_BIO_VIG_GRANT = 20 * 60         # la autorización de la operación vive 20 minutos y es de un solo uso
+_BIO_MAX_INTENTOS = 3
+_BIO_LISTO = {"ok": False}
+_BIO_PURGA = {"t": 0}
+_BIO_OPS = {
+    "editar_info": "Actualizar información del rector (nombre, teléfono, correo, dirección)",
+    "editar_cedula": "Actualizar la cédula del rector",
+    "cerrar_sesiones": "Cerrar las sesiones de los usuarios de la institución",
+}
+_BIO_FA = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/"
+
+
+class BioValidacion(db.Model):
+    """Registro de validación biométrica. Tras la decisión solo quedan metadatos: nunca imágenes ni plantillas faciales."""
+    __tablename__ = "bio_validaciones"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(20), unique=True, index=True)          # BIO-XXXXXXXX
+    institucion_id = db.Column(db.Integer, index=True)
+    vin_id = db.Column(db.Integer, index=True, default=0)
+    operacion = db.Column(db.String(30), default="")
+    creado_por = db.Column(db.String(80), default="")
+    creado_en = db.Column(db.String(30), default="")
+    creado_ts = db.Column(db.Float, default=0)
+    token_hash = db.Column(db.String(64), unique=True, index=True)
+    estado = db.Column(db.String(12), default="GENERADA", index=True)   # GENERADA|CAPTURADA|APROBADA|RECHAZADA|FALLIDA|EXPIRADA
+    intentos = db.Column(db.Integer, default=0)
+    consentimiento_ts = db.Column(db.Float, default=0)
+    ip = db.Column(db.String(80), default="")
+    ua = db.Column(db.String(200), default="")
+    auto = db.Column(db.String(12), default="")                         # COINCIDE|REVISAR|NO_COINCIDE (se borra al decidir)
+    distancia = db.Column(db.Float)                                     # se borra al decidir
+    vivacidad_ok = db.Column(db.Boolean, default=False)
+    imagenes_enc = db.Column(db.Text, default="")
+    imagenes_hasta_ts = db.Column(db.Float, default=0)
+    imagenes_borradas = db.Column(db.Boolean, default=False)
+    revisado_por = db.Column(db.String(80), default="")
+    revisado_en = db.Column(db.String(30), default="")
+    resultado = db.Column(db.String(16), default="")                    # CONFIRMADA|NO_CONFIRMADA|""
+    metodo = db.Column(db.String(80), default="Documento + prueba facial")
+    valida_hasta_ts = db.Column(db.Float, default=0)
+    usada = db.Column(db.Boolean, default=False)
+
+
+def _bio_ensure():
+    if _BIO_LISTO["ok"]:
+        return
+    try:
+        BioValidacion.__table__.create(bind=db.engine, checkfirst=True)
+        _BIO_LISTO["ok"] = True
+    except Exception as ex:
+        db.session.rollback()
+        print("ERROR bio ensure:", repr(ex), flush=True)
+
+
+def _bio_purgar(forzar=False):
+    """Borra imágenes vencidas (4 h) y caduca enlaces sin usar. Seguro de llamar muchas veces."""
+    now = _vi_time.time()
+    if not forzar and now - _BIO_PURGA["t"] < 120:
+        return
+    _BIO_PURGA["t"] = now
+    try:
+        for b in BioValidacion.query.filter(BioValidacion.imagenes_borradas == False, BioValidacion.imagenes_enc != "").all():  # noqa: E712
+            if now > (b.imagenes_hasta_ts or 0):
+                b.imagenes_enc = ""
+                b.imagenes_borradas = True
+                b.distancia = None
+                if b.estado == "CAPTURADA":
+                    b.estado = "EXPIRADA"
+                    b.auto = ""
+        for b in BioValidacion.query.filter(BioValidacion.estado == "GENERADA").all():
+            if now - (b.creado_ts or 0) > _BIO_VIG_ENLACE:
+                b.estado = "EXPIRADA"
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _bio_grant(iid):
+    """Autorización biométrica vigente (de un solo uso) del usuario actual para esta institución."""
+    try:
+        q = BioValidacion.query.filter_by(institucion_id=iid, estado="APROBADA", usada=False)
+        if rol_actual() != "Superadmin":
+            q = q.filter_by(creado_por=session.get("usuario") or "")
+        b = q.order_by(BioValidacion.id.desc()).first()
+    except Exception:
+        db.session.rollback()
+        return None
+    if b and _vi_time.time() <= (b.valida_hasta_ts or 0):
+        return b
+    return None
+
+
+def _bio_consumir(b, iid, detalle=""):
+    if b:
+        b.usada = True
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        _vin_audit(iid, "Autorización biométrica utilizada", "", "", "%s · %s" % (b.codigo, detalle), "OK", None, 0)
+
+
+def _bio_dist(a, b):
+    return _bio_math.sqrt(sum((float(x) - float(y)) ** 2 for x, y in zip(a, b)))
+
+
+def _bio_desc_ok(d):
+    try:
+        return isinstance(d, list) and len(d) == 128 and all(isinstance(x, (int, float)) and abs(x) < 5 and x == x for x in d)
+    except Exception:
+        return False
+
+
+def _bio_img_ok(s):
+    """data:image/jpeg;base64,... pequeño y con cabecera JPEG real."""
+    import base64 as _b64
+    if not isinstance(s, str) or not s.startswith("data:image/jpeg;base64,") or len(s) > 700000:
+        return False
+    try:
+        raw = _b64.b64decode(s.split(",", 1)[1], validate=True)
+    except Exception:
+        return False
+    return raw[:3] == b"\xff\xd8\xff"
+
+
+def _bio_nocache(resp):
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
+# ── Soporte: revisión humana de la comparación ──
+@app.route("/soporte/biometria/<int:bid>", methods=["GET", "POST"])
+def soporte_biometria_revisar(bid):
+    g = _vin_guard()
+    if g is not None:
+        return g
+    _bio_ensure()
+    _bio_purgar(True)
+    b = BioValidacion.query.get(bid)
+    if not b:
+        return redirect("/soporte/instituciones")
+    es_ger = rol_actual() in _ROLES_GERENCIA
+    if not es_ger and b.creado_por != (session.get("usuario") or ""):
+        return acceso_denegado("Esta verificación pertenece a otro asesor.")
+    inst = Institucion.query.get(b.institucion_id)
+    base = "/soporte/instituciones/%d" % b.institucion_id
+    msg = err = ""
+    if request.method == "POST" and b.estado == "CAPTURADA":
+        dec = request.form.get("decision")
+        if dec == "confirmar":
+            if not request.form.get("comparado"):
+                err = "Marca que comparaste visualmente las dos imágenes."
+            elif not b.vivacidad_ok or b.auto not in ("COINCIDE", "REVISAR"):
+                err = "Con este resultado automático solo es posible rechazar."
+            else:
+                b.estado, b.resultado = "APROBADA", "CONFIRMADA"
+                b.valida_hasta_ts = _vi_time.time() + _BIO_VIG_GRANT
+        elif dec == "rechazar":
+            b.estado, b.resultado = "RECHAZADA", "NO_CONFIRMADA"
+        if b.estado in ("APROBADA", "RECHAZADA"):
+            b.revisado_por = session.get("usuario") or ""
+            b.revisado_en = _ts()
+            b.imagenes_enc = ""            # borrado inmediato de las imágenes
+            b.imagenes_borradas = True
+            b.distancia = None
+            b.auto = ""
+            db.session.commit()
+            _vin_audit(b.institucion_id, "Validación biométrica " + ("confirmada" if b.estado == "APROBADA" else "no confirmada"), "", "",
+                       "%s · %s · operación: %s · imágenes eliminadas" % (b.codigo, b.resultado, _BIO_OPS.get(b.operacion, b.operacion)),
+                       "OK" if b.estado == "APROBADA" else "RECHAZADO", None, 0)
+            return redirect(base)
+    imgs = {}
+    if b.estado == "CAPTURADA" and b.imagenes_enc:
+        imgs = _vi_descifrar(b.imagenes_enc) or {}
+    auto_txt = {"COINCIDE": ("🟢", "La verificación determinó coincidencia entre el documento y la prueba facial."),
+                "REVISAR": ("🟡", "La verificación no es concluyente: decide tras comparar visualmente."),
+                "NO_COINCIDE": ("🔴", "La verificación no determinó coincidencia.")}.get(b.auto, ("⚪", "Sin resultado"))
+    if b.estado == "CAPTURADA" and imgs:
+        vista = ("<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px'>"
+                 "<div><b>Documento</b><img alt='documento' src='" + _esc(imgs.get("c", "")) + "' style='width:100%;border-radius:10px;border:1px solid #cbd5e1'></div>"
+                 "<div><b>Prueba facial</b><img alt='prueba facial' src='" + _esc(imgs.get("s", "")) + "' style='width:100%;border-radius:10px;border:1px solid #cbd5e1'></div></div>"
+                 "<p>" + auto_txt[0] + " " + auto_txt[1] + "</p>"
+                 + ("" if b.vivacidad_ok else "<div class='msg danger'>La prueba de movimiento no se superó: solo es posible rechazar.</div>") +
+                 "<form method='POST'><label style='display:flex;gap:8px;margin:8px 0'><input type='checkbox' name='comparado' value='1'> "
+                 "Comparé visualmente el documento con la prueba facial.</label>"
+                 "<button name='decision' value='confirmar' class='btn' style='background:#16a34a;color:#fff'>Confirmar coincidencia</button> "
+                 "<button name='decision' value='rechazar' class='btn' style='background:#dc2626;color:#fff'>No coincide</button></form>"
+                 "<p class='mini-text'>Al decidir, las imágenes se eliminan de inmediato. Si no decides, se eliminan automáticamente a las 4 horas.</p>")
+    else:
+        vista = "<p>Estado: <b>" + _esc(b.estado) + "</b>. " + ("Las imágenes ya fueron eliminadas." if b.imagenes_borradas else "Aún no hay captura del rector.") + "</p>"
+    aviso = (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "") + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
+    cont = ("<p><a href='" + base + "' style='color:#0B2D57;font-weight:700'>&larr; Ficha de la institución</a></p>" + aviso +
+            "<section class='role-panel'><h2 style='margin-top:0'>🧬 " + _esc(b.codigo) + " · " + _esc(inst.nombre if inst else "") + "</h2>"
+            "<div class='mini-text'>Operación a autorizar: " + _esc(_BIO_OPS.get(b.operacion, b.operacion)) + "</div>" + vista + "</section>")
+    return _bio_nocache(app.make_response(page("Revisión biométrica", shell(cont))))
+
+
+# ── Rector: captura en el celular (público, un solo uso) ──
+def _bio_pub(titulo, cuerpo, color="#0B2D57"):
+    return _bio_nocache(app.make_response(_vi_pub(titulo, cuerpo, color)))
+
+
+@app.route("/validar-biometria/<token>", methods=["GET"])
+def validar_biometria_publico(token):
+    _bio_ensure()
+    _bio_purgar()
+    b = BioValidacion.query.filter_by(token_hash=_vi_hash_token(token)).first()
+    if not b:
+        _seg_registrar_fallo("vi:ip:%s" % _ip())
+        return _bio_pub("Enlace no válido", "<h2>Enlace no válido</h2><p>Verifique el enlace o comuníquese con su asesor de soporte PROCSIS.</p>", "#991b1b")
+    if b.estado != "GENERADA":
+        return _bio_pub("Enlace no disponible", "<h2>Enlace no disponible</h2><p>Este enlace ya fue utilizado o venció. Solicite uno nuevo a su asesor.</p>", "#991b1b")
+    inst = Institucion.query.get(b.institucion_id)
+    st = "width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;margin:4px 0 12px"
+    btn = "width:100%;padding:14px;border:0;border-radius:12px;background:#005BEA;color:#fff;font-weight:800;font-size:16px;cursor:pointer;margin-top:8px"
+    html = (
+        "<h2 style='margin-top:0;color:#0B2D57'>Verificación de identidad</h2>"
+        "<p style='font-size:14px'>" + _esc(inst.nombre if inst else "") + "</p>"
+        "<div id='paso0'>"
+        "<p style='font-size:13px;color:#475569'>Para proteger su institución, necesitamos comparar su documento con una prueba facial hecha ahora. "
+        "<b>Los datos biométricos son datos sensibles</b>: su entrega es voluntaria. Si prefiere no hacerlo, puede validarse por llamada con su asesor.</p>"
+        "<p style='font-size:12px;color:#64748b'>Las imágenes se procesan para esta verificación, se eliminan al decidirse y, como máximo, a las 4 horas. "
+        "Procsis conserva solo el resultado, el método, la fecha, la operación autorizada y un código de verificación.</p>"
+        "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0'><input type='checkbox' id='k1'> Autorizo expresamente el tratamiento de mis datos biométricos para esta verificación (Ley 1581 de 2012).</label>"
+        "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0'><input type='checkbox' id='k2'> Acepto la Política de Tratamiento de Datos y los Términos de PROCSIS.</label>"
+        "<label style='font-size:13px;font-weight:700;margin-top:10px;display:block'>Número de cédula</label>"
+        "<input id='ced' class='nopaste' inputmode='numeric' autocomplete='off' style='" + st + "'>"
+        "<button id='b0' disabled style='" + btn + "'>Comenzar</button></div>"
+        "<div id='paso1' style='display:none'><h3>1. Foto de su cédula</h3><p style='font-size:13px'>Fotografíe la cara frontal, con buena luz y sin reflejos; que se vea su fotografía.</p>"
+        "<input id='fcd' type='file' accept='image/*' capture='environment' style='" + st + "'><div id='m1' class='msg' style='display:none'></div></div>"
+        "<div id='paso2' style='display:none'><h3>2. Prueba facial</h3><p id='ins' style='font-size:14px;font-weight:700'>Pulse iniciar y mire de frente a la cámara.</p>"
+        "<video id='vid' playsinline muted style='width:100%;border-radius:12px;background:#0f172a;transform:scaleX(-1)'></video>"
+        "<button id='b2' style='" + btn + "'>Iniciar cámara</button><div id='m2' class='msg' style='display:none'></div></div>"
+        "<div id='paso3' style='display:none'><button id='b3' style='" + btn + "'>Enviar verificación</button><div id='m3' class='msg' style='display:none'></div></div>"
+        "<div id='fin' style='display:none'><h2 style='color:#166534'>✅ Verificación recibida</h2><p>Un asesor de PROCSIS la revisará. Ya puede cerrar esta página.</p></div>"
+        "<div id='cargando' class='mini-text' style='display:none'>Preparando el verificador…</div>"
+        "<script src='" + _BIO_FA + "dist/face-api.js'></script>"
+        "<script>(function(){'use strict';var MB='" + _BIO_FA + "model/';"
+        "var $=function(i){return document.getElementById(i)};"
+        "var S={dc:null,ic:null,ds:null,is:null,yaws:[]};"
+        "function msg(id,t,ok){var e=$(id);e.textContent=t;e.className='msg '+(ok?'ok':'danger');e.style.display='block';}"
+        "function chk(){$('b0').disabled=!($('k1').checked&&$('k2').checked&&/^\\d{5,12}$/.test($('ced').value.replace(/\\D/g,'')));}"
+        "['k1','k2','ced'].forEach(function(i){$(i).addEventListener('input',chk);$(i).addEventListener('change',chk);});"
+        "['paste','drop','contextmenu'].forEach(function(ev){$('ced').addEventListener(ev,function(e){e.preventDefault();});});"
+        "var ok=false;async function cargar(){if(ok)return;var F=faceapi;await F.nets.tinyFaceDetector.loadFromUri(MB);await F.nets.faceLandmark68Net.loadFromUri(MB);await F.nets.faceRecognitionNet.loadFromUri(MB);ok=true;}"
+        "function opt(sz,th){return new faceapi.TinyFaceDetectorOptions({inputSize:sz,scoreThreshold:th});}"
+        "function yaw(lm){var p=lm.positions;return (p[30].x-p[0].x)/(p[16].x-p[0].x);}"
+        "function jpg(src,w,sw,sh){var c=document.createElement('canvas');var r=Math.min(1,w/sw);c.width=Math.round(sw*r);c.height=Math.round(sh*r);c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c.toDataURL('image/jpeg',0.72);}"
+        "$('b0').onclick=async function(){$('b0').disabled=true;$('cargando').style.display='block';"
+        "try{await cargar();}catch(e){$('cargando').style.display='none';$('b0').disabled=false;alert('No se pudo preparar el verificador. Revise su conexión e intente de nuevo.');return;}"
+        "$('cargando').style.display='none';$('paso0').style.display='none';$('paso1').style.display='block';};"
+        "$('fcd').onchange=function(){var f=this.files[0];if(!f)return;var im=new Image();im.onload=async function(){"
+        "try{var cv=document.createElement('canvas');var r=Math.min(1,1100/Math.max(im.naturalWidth,im.naturalHeight));cv.width=Math.round(im.naturalWidth*r);cv.height=Math.round(im.naturalHeight*r);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);"
+        "var d=await faceapi.detectSingleFace(cv,opt(608,0.3)).withFaceLandmarks().withFaceDescriptor();"
+        "if(!d){msg('m1','No se detecta la fotografía de la cédula. Acérquese, evite reflejos y repita la foto.',false);return;}"
+        "S.dc=Array.from(d.descriptor);S.ic=jpg(cv,900,cv.width,cv.height);msg('m1','Cédula recibida.',true);$('paso1').style.display='none';$('paso2').style.display='block';}"
+        "catch(e){msg('m1','No se pudo procesar la imagen. Intente de nuevo.',false);}URL.revokeObjectURL(im.src);};im.src=URL.createObjectURL(f);};"
+        "$('b2').onclick=async function(){var v=$('vid'),stream;$('b2').disabled=true;"
+        "try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});}catch(e){msg('m2','No se pudo abrir la cámara. Permita el acceso e intente de nuevo.',false);$('b2').disabled=false;return;}"
+        "v.srcObject=stream;await v.play();var fase=0,lado=0,estable=0,t0=Date.now(),busy=false;$('ins').textContent='Mire de frente y no se mueva.';"
+        "var iv=setInterval(async function(){if(busy)return;busy=true;try{"
+        "if(Date.now()-t0>60000){clearInterval(iv);stream.getTracks().forEach(function(t){t.stop();});msg('m2','Se agotó el tiempo. Pulse iniciar para repetir.',false);$('b2').disabled=false;return;}"
+        "var d=await faceapi.detectSingleFace(v,opt(320,0.5)).withFaceLandmarks();if(!d){estable=0;busy=false;return;}var y=yaw(d.landmarks);"
+        "if(fase===0){if(y>0.42&&y<0.58){estable++;}else{estable=0;}"
+        "if(estable>=3){var full=await faceapi.detectSingleFace(v,opt(320,0.5)).withFaceLandmarks().withFaceDescriptor();"
+        "if(full){S.ds=Array.from(full.descriptor);S.is=jpg(v,640,v.videoWidth,v.videoHeight);S.yaws=[yaw(full.landmarks)];fase=1;$('ins').textContent='Ahora gire lentamente la cabeza hacia un lado.';}}}"
+        "else if(fase===1){if(y<0.36||y>0.64){lado=y<0.5?-1:1;S.yaws.push(y);fase=2;$('ins').textContent='Bien. Ahora gire hacia el lado contrario.';}}"
+        "else if(fase===2){if((lado<0&&y>0.64)||(lado>0&&y<0.36)){S.yaws.push(y);clearInterval(iv);stream.getTracks().forEach(function(t){t.stop();});$('ins').textContent='Prueba completada.';$('paso3').style.display='block';}}"
+        "}catch(e){}busy=false;},300);};"
+        "$('b3').onclick=async function(){$('b3').disabled=true;"
+        "try{var r=await fetch(location.pathname+'/enviar',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({cedula:$('ced').value.replace(/\\D/g,''),consent:true,img_c:S.ic,img_s:S.is,d_c:S.dc,d_s:S.ds,yaws:S.yaws})});"
+        "var j=await r.json();if(j.ok){['paso1','paso2','paso3'].forEach(function(i){$(i).style.display='none'});$('fin').style.display='block';}else{msg('m3',j.msg||'No fue posible completar la verificación.',false);$('b3').disabled=!!j.final;}}"
+        "catch(e){msg('m3','Error de conexión. Intente de nuevo.',false);$('b3').disabled=false;}};"
+        "})();</script>"
+    )
+    resp = _bio_pub("Verificación de identidad", html)
+    resp.headers["Content-Security-Policy"] = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+                                               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net; "
+                                               "media-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'none'")
+    resp.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
+    return resp
+
+
+@app.route("/validar-biometria/<token>/enviar", methods=["POST"])
+def validar_biometria_enviar(token):
+    _bio_ensure()
+    b = BioValidacion.query.filter_by(token_hash=_vi_hash_token(token)).first()
+    if not b or b.estado != "GENERADA":
+        return jsonify(ok=False, msg="Enlace no disponible.", final=True)
+    if request.content_length and request.content_length > 2_000_000:
+        return jsonify(ok=False, msg="Datos demasiado grandes.", final=True)
+    d = request.get_json(silent=True) or {}
+    inst = Institucion.query.get(b.institucion_id)
+    if d.get("consent") is not True:
+        return jsonify(ok=False, msg="Falta la autorización.")
+    if not _vin_cedula_ok(inst, d.get("cedula")):
+        b.intentos = (b.intentos or 0) + 1
+        fin = b.intentos >= _BIO_MAX_INTENTOS
+        if fin:
+            b.estado = "FALLIDA"
+        db.session.commit()
+        _vin_audit(b.institucion_id, "Validación biométrica: cédula no coincide", "", "", b.codigo, "FALLO", None, 0)
+        return jsonify(ok=False, msg=("Se superó el número de intentos. Comuníquese con su asesor." if fin else "Los datos no coinciden. Verifique e intente de nuevo."), final=fin)
+    if not (_bio_img_ok(d.get("img_c")) and _bio_img_ok(d.get("img_s")) and _bio_desc_ok(d.get("d_c")) and _bio_desc_ok(d.get("d_s"))):
+        return jsonify(ok=False, msg="La captura no es válida. Repita el proceso.")
+    yaws = d.get("yaws")
+    viva = False
+    try:
+        yaws = [float(y) for y in yaws]
+        viva = len(yaws) == 3 and 0.38 <= yaws[0] <= 0.62 and min(yaws[1:]) < 0.40 and max(yaws[1:]) > 0.60
+    except Exception:
+        pass
+    dist = _bio_dist(d["d_c"], d["d_s"])
+    try:
+        u_ok, u_rev = float(os.environ.get("BIO_UMBRAL_OK", "0.55")), float(os.environ.get("BIO_UMBRAL_REV", "0.65"))
+    except Exception:
+        u_ok, u_rev = 0.55, 0.65
+    auto = "COINCIDE" if dist <= u_ok else ("REVISAR" if dist <= u_rev else "NO_COINCIDE")
+    cif = _vi_cifrar({"c": d["img_c"], "s": d["img_s"]})
+    if not cif:
+        return jsonify(ok=False, msg="No fue posible proteger sus datos en este momento. Intente más tarde.")
+    now = _vi_time.time()
+    b.imagenes_enc, b.imagenes_hasta_ts, b.imagenes_borradas = cif, now + _BIO_RETENCION, False
+    b.auto, b.distancia, b.vivacidad_ok = auto, dist, bool(viva)
+    b.consentimiento_ts, b.estado = now, "CAPTURADA"
+    b.ip, b.ua = _ip()[:80], (request.headers.get("User-Agent") or "")[:200]
+    db.session.commit()
+    _vin_audit(b.institucion_id, "Validación biométrica: captura recibida", "", "", b.codigo, "OK", None, 0)
+    _notif_crear(("Soporte",) + _ROLES_GERENCIA, "Verificación biométrica por revisar", "%s · %s" % (b.codigo, inst.nombre if inst else ""),
+                 "/soporte/biometria/%d" % b.id, b.institucion_id, "info")
+    return jsonify(ok=True)
+
+
+@app.before_request
+def _bio_before_request():
+    if _BIO_LISTO["ok"]:
+        _bio_purgar()
+    return None
 
 
 if __name__ == "__main__":
