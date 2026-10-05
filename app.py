@@ -4044,6 +4044,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/auditoria", "Auditoría IP"),
             ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
             ("/gerencia/auditoria-instituciones", "Auditoría de instituciones"),
+            ("/gerencia/rectores", "CRM Rectores (cédula e información)"),
             ("/gerencia/correo-soporte", "Gmail · Soporte"),
             ("/gerencia/correo-notificaciones", "Gmail · Notificaciones"),
             ("/gerencia/correo-extra/1", "Gmail · Adicional 1"),
@@ -25001,6 +25002,49 @@ def modulo_rectores():
             except Exception as _ec:
                 db.session.rollback()
                 err = "No se pudo completar: %s" % str(_ec)[:120]
+        elif accion == "editar_rector":
+            if rol not in ("Gerente", "Superadmin", "Administrador"):
+                err = "Solo Gerencia puede editar la información del rector."
+            elif not _step_up_form_ok():
+                err = "Contraseña o código de verificación incorrectos."
+            else:
+                try:
+                    _vin_ensure()
+                    iid_e = request.form.get("institucion_id", type=int) or 0
+                    inst_e = Institucion.query.get(iid_e)
+                    ced_e = re.sub(r"\D", "", request.form.get("numero_id") or "")
+                    if not inst_e:
+                        err = "Institución no válida."
+                    elif ced_e and not (5 <= len(ced_e) <= 12):
+                        err = "La cédula debe tener entre 5 y 12 dígitos."
+                    else:
+                        r_e = RectorInstitucion.query.filter_by(institucion_id=iid_e).first()
+                        if not r_e:
+                            r_e = RectorInstitucion(institucion_id=iid_e, creado_en=fecha_hoy() + " " + hora_actual(), creado_por=session.get("usuario") or "")
+                            db.session.add(r_e)
+                        nuevos_e = [("Nombres", "nombres", (request.form.get("nombres") or "").strip()[:160]),
+                                    ("Apellidos", "apellidos", (request.form.get("apellidos") or "").strip()[:160]),
+                                    ("Tipo de documento", "tipo_id", (request.form.get("tipo_id") or "C.C.").strip()[:20]),
+                                    ("Cédula", "numero_id", ced_e[:40]),
+                                    ("Teléfono", "telefono", (request.form.get("telefono") or "").strip()[:40]),
+                                    ("Correo", "correo", (request.form.get("correo") or "").strip()[:160]),
+                                    ("Dirección", "direccion", (request.form.get("direccion") or "").strip()[:255])]
+                        n_cambios = 0
+                        for etq, campo, nuevo in nuevos_e:
+                            viejo = getattr(r_e, campo, "") or ""
+                            if nuevo == viejo or (not nuevo and campo in ("numero_id",)):
+                                continue
+                            setattr(r_e, campo, nuevo)
+                            n_cambios += 1
+                            mk = (lambda x: _vin_m_doc(x)) if campo == "numero_id" else (lambda x: x)
+                            _vin_audit(iid_e, "Gerencia editó la ficha del rector", etq, mk(viejo), mk(nuevo), "OK", None, 3)
+                        r_e.actualizado_en = fecha_hoy() + " " + hora_actual()
+                        inst_e.rector = ((r_e.nombres or "") + " " + (r_e.apellidos or "")).strip()[:160]
+                        db.session.commit()
+                        msg = ("Ficha de %s actualizada (%d cambio(s), auditados)." % (inst_e.nombre, n_cambios)) if n_cambios else "No hubo cambios."
+                except Exception as _ee:
+                    db.session.rollback()
+                    err = "No se pudo guardar: %s" % str(_ee)[:120]
         elif accion == "descargar":
             motivo = (request.form.get("motivo") or "").strip()
             para_quien = (request.form.get("para_quien") or "").strip()
@@ -25150,34 +25194,74 @@ def modulo_rectores():
         pass
 
     idx_v = _rect_idx_verif()
+    es_ger = rol_actual() in ("Gerente", "Superadmin", "Administrador")
+    fichas = {}
+    try:
+        for _r in RectorInstitucion.query.all():
+            fichas[_r.institucion_id] = _r
+    except Exception:
+        db.session.rollback()
+    insts = []
+    try:
+        qi = Institucion.query
+        if q:
+            lk = "%" + q + "%"
+            ids_f = [k for k, rr in fichas.items() if any(q.lower() in (x or "").lower() for x in (rr.nombres, rr.apellidos, rr.numero_id, rr.correo))]
+            qi = qi.filter(db.or_(Institucion.nombre.ilike(lk), Institucion.nit.ilike(lk), Institucion.dane.ilike(lk), Institucion.id.in_(ids_f or [0])))
+        insts = qi.order_by(Institucion.nombre.asc()).limit(500).all()
+    except Exception:
+        db.session.rollback()
     filas = []
     sin_cedula = 0
-    for r in lista:
-        inst = Institucion.query.get(r.institucion_id)
+    inp_e = "padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:100%;box-sizing:border-box;margin:2px 0 6px"
+    for inst in insts:
+        r = fichas.get(inst.id)
         v_fb = _rect_buscar_verif(idx_v, inst)
-        col = (inst.nombre if inst else str(r.institucion_id)) or ""
-        est = (inst.estado if inst else "") or ""
-        nombre_txt = ((r.nombres or "") + " " + (r.apellidos or "")).strip() or ((v_fb.nombre_rector if v_fb else "") or "")
-        if (r.numero_id or "").strip():
-            ident = _esc((r.tipo_id or "") + " " + (r.numero_id or ""))
-        elif v_fb:
-            ident = _esc("C.C. " + (v_fb.cedula_rector or "")) + "<br><span class='mini-text'>(tomada de la verificación de Ventas)</span>"
+        nom_r = ((r.nombres or "") + " " + (r.apellidos or "")).strip() if r else ""
+        nombre_txt = nom_r or (inst.rector or "") or ((v_fb.nombre_rector if v_fb else "") or "")
+        ced_r = (r.numero_id or "").strip() if r else ""
+        if ced_r:
+            ident = _esc((r.tipo_id or "") + " " + ced_r)
+        elif v_fb and (v_fb.cedula_rector or "").strip():
+            ident = _esc("C.C. " + v_fb.cedula_rector) + "<br><span class='mini-text'>(de la verificación de Ventas; edítala para guardarla)</span>"
         else:
             ident = "<span style='color:#b91c1c;font-weight:700'>Sin cédula</span>"
             sin_cedula += 1
+        edit = ""
+        if es_ger:
+            pre_ced = ced_r or re.sub(r"\D", "", (v_fb.cedula_rector if v_fb else "") or "")
+            pre_nom = (r.nombres if r and r.nombres else "") or ((nombre_txt.split(None, 1)[0]) if nombre_txt else "")
+            pre_ape = (r.apellidos if r and r.apellidos else "") or ((nombre_txt.split(None, 1)[1]) if len(nombre_txt.split(None, 1)) > 1 else "")
+            tipo_sel = (r.tipo_id if r else "") or "C.C."
+            edit = (
+                "<details><summary style='cursor:pointer;color:#005BEA;font-weight:700'>✏️ Editar</summary>"
+                "<form method='POST' style='min-width:250px;padding:8px 0'>"
+                "<input type='hidden' name='accion' value='editar_rector'><input type='hidden' name='institucion_id' value='" + str(inst.id) + "'>"
+                "<label class='mini-text'>Nombres</label><input name='nombres' value='" + _esc(pre_nom) + "' style='" + inp_e + "'>"
+                "<label class='mini-text'>Apellidos</label><input name='apellidos' value='" + _esc(pre_ape) + "' style='" + inp_e + "'>"
+                "<label class='mini-text'>Tipo de documento</label><select name='tipo_id' style='" + inp_e + "'>"
+                + "".join("<option" + (" selected" if o == tipo_sel else "") + ">" + o + "</option>" for o in ("C.C.", "C.E.", "Pasaporte"))
+                + "</select>"
+                "<label class='mini-text'>Cédula</label><input name='numero_id' inputmode='numeric' value='" + _esc(pre_ced) + "' style='" + inp_e + "'>"
+                "<label class='mini-text'>Teléfono</label><input name='telefono' value='" + _esc((r.telefono if r else "") or "") + "' style='" + inp_e + "'>"
+                "<label class='mini-text'>Correo</label><input name='correo' value='" + _esc((r.correo if r else "") or "") + "' style='" + inp_e + "'>"
+                "<label class='mini-text'>Dirección</label><input name='direccion' value='" + _esc((r.direccion if r else "") or "") + "' style='" + inp_e + "'>"
+                + _step_up_campos() +
+                "<button class='btn'>Guardar (queda auditado)</button></form></details>")
+        links = ""
+        if r:
+            links = ("<a href='/gerencia/rectores/" + str(r.id) + "/pdf'>PDF</a> · "
+                     "<a href='/gerencia/rectores/" + str(r.id) + "/excel'>Excel</a>")
         filas.append(
-            "<tr>"
-            "<td>" + _esc(col) + "<br><span class='mini-text'>" + _esc(est) + "</span></td>"
+            "<tr style='border-bottom:1px solid #e2e8f0;vertical-align:top'>"
+            "<td>" + _esc(inst.nombre or inst.codigo or "") + "<br><span class='mini-text'>" + _esc(inst.estado or "") + "</span></td>"
             "<td>" + _esc(nombre_txt or "—") + "</td>"
             "<td>" + ident + "</td>"
-            "<td>" + _esc(r.telefono or "—") + "</td>"
-            "<td>" + _esc(r.correo or "—") + "</td>"
-            "<td style='font-size:12px'>NIT " + _esc((inst.nit if inst else "") or "—") + "<br>DANE " + _esc((inst.dane if inst else "") or "—")
-            + "<br>" + _esc((inst.municipio if inst else "") or "") + "</td>"
-            "<td style='font-size:12px'>" + _esc(r.actualizado_en or r.creado_en or "") + "</td>"
-            "<td style='white-space:nowrap;font-size:12px'>"
-            "<a href='/gerencia/rectores/" + str(r.id) + "/pdf'>PDF</a> · "
-            "<a href='/gerencia/rectores/" + str(r.id) + "/excel'>Excel</a></td>"
+            "<td>" + _esc((r.telefono if r else "") or "—") + "</td>"
+            "<td>" + _esc((r.correo if r else "") or "—") + "</td>"
+            "<td style='font-size:12px'>NIT " + _esc(inst.nit or "—") + "<br>DANE " + _esc(inst.dane or "—") + "<br>" + _esc(inst.municipio or "") + "</td>"
+            "<td style='font-size:12px'>" + _esc((r.actualizado_en or r.creado_en or "") if r else "") + "</td>"
+            "<td style='font-size:12px'>" + edit + links + "</td>"
             "</tr>"
         )
     if not filas:
@@ -25241,7 +25325,7 @@ def modulo_rectores():
         '<table style="width:100%;border-collapse:collapse;font-size:13px">'
         '<tr style="background:#0B2D57;color:#fff">'
         "<th>Colegio</th><th>Rector</th><th>Identificación</th><th>Teléfono</th>"
-        "<th>Correo</th><th>NIT / DANE</th><th>Actualizado</th><th>Descarga</th></tr>"
+        "<th>Correo</th><th>NIT / DANE</th><th>Actualizado</th><th>Acciones</th></tr>"
         + "".join(filas)
         + "</table></section>"
     )
@@ -74444,6 +74528,8 @@ def soporte_validacion_identidad():
             err = "Completa tipo de trámite, colegio y asunto."
         elif _vi_fernet() is None:
             err = "El servicio de cifrado no está disponible (falta la librería 'cryptography'). No se genera el enlace."
+        elif tipo == "RECTOR" and not _vin_rector(inst)["cedula"]:
+            err = "Este colegio no tiene la cédula del rector registrada. Pide a Gerencia que la registre en Gerencia → CRM Rectores."
         else:
             token = secrets.token_urlsafe(32)
             pin = "%04d" % secrets.randbelow(10000)
@@ -74675,12 +74761,9 @@ def validar_identidad_publico(token):
         else:
             inst = Institucion.query.get(v.institucion_id)
             datos, est_id, ok = {}, None, False
-            if v.tipo == "RECTOR" and (v.asunto or "").startswith("[VIN-"):
+            if v.tipo == "RECTOR":
                 ok = _vin_cedula_ok(inst, f.get("cedula"))
                 datos = {"cedula_validada": bool(ok)}
-            elif v.tipo == "RECTOR":
-                ok = _vi_ident_ok(inst, f.get("dane_nit")) and _vi_clave_rector_ok(inst, f.get("clave_admin"))
-                datos = {"dane_nit": _solo_digitos(f.get("dane_nit")), "clave_administrativa_validada": bool(ok)}
             else:
                 e = _vi_estudiante_malla(inst, f.get("codigo"), f.get("grado"), f.get("sede"))
                 ok = e is not None
@@ -74731,16 +74814,10 @@ def validar_identidad_publico(token):
                                    "infórmele que ya realizó el proceso. El sistema ha liberado la autorización de forma segura.</p>", "#16a34a")
 
     st = "width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;margin:4px 0 12px"
-    if v.tipo == "RECTOR" and (v.asunto or "").startswith("[VIN-"):
+    if v.tipo == "RECTOR":
         titulo_f = "Confirme su identidad como representante"
         campos = ("<label style='font-size:13px;font-weight:700'>Número de cédula del rector</label>"
                   "<input class='nopaste' name='cedula' inputmode='numeric' autocomplete='off' required style='%s'>") % st
-    elif v.tipo == "RECTOR":
-        titulo_f = "Confirme su identidad como rectoría"
-        campos = ("<label style='font-size:13px;font-weight:700'>Código oficial del colegio (DANE o NIT)</label>"
-                  "<input class='nopaste' name='dane_nit' autocomplete='off' required style='%s'>"
-                  "<label style='font-size:13px;font-weight:700'>Clave administrativa</label>"
-                  "<input class='nopaste' type='password' name='clave_admin' autocomplete='new-password' required style='%s'>") % (st, st)
     else:
         titulo_f = "Confirme los datos del estudiante"
         campos = ("<label style='font-size:13px;font-weight:700'>ID del estudiante</label>"
