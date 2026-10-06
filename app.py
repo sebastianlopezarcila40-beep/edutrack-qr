@@ -4044,6 +4044,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/auditoria", "Auditoría IP"),
             ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
             ("/gerencia/auditoria-instituciones", "Auditoría de instituciones"),
+            ("/gerencia/textos-legales", "Textos legales (Habeas Data)"),
             ("/gerencia/rectores", "CRM Rectores (cédula e información)"),
             ("/gerencia/correo-soporte", "Gmail · Soporte"),
             ("/gerencia/correo-notificaciones", "Gmail · Notificaciones"),
@@ -74615,10 +74616,10 @@ def soporte_validacion_identidad():
         "<section class='role-panel'><h2 style='margin-top:0'>Generar link de validación dinámica</h2>"
         "<p class='mini-text'>Úsalo cuando una rectora pida un cambio crítico o un acudiente reporte la pérdida de un carné. "
         "El usuario responde desde su celular; tú nunca ves su clave.</p>"
+        "<div class='msg ok'>Para validar a la <b>rectoría</b> usa <a href='/soporte/instituciones' style='font-weight:800'>Soporte → Instituciones</a>: ahí están la llamada, el PIN con cédula, la biometría, las preguntas y el panel del colegio.</div>"
         "<form method='POST'><input type='hidden' name='accion' value='generar'>"
         "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px'>"
         "<select name='tipo' required style='%s'><option value=''>— Trámite —</option>"
-        "<option value='RECTOR'>Rectoría · cambio crítico del colegio</option>"
         "<option value='CARNE'>Carné · anular / bloquear</option></select>"
         "<select name='colegio' required style='%s'>%s</select>"
         "<input name='asunto' maxlength='200' placeholder='Asunto (ej. Cambiar horario de entrada)' required style='%s'></div>"
@@ -74642,10 +74643,10 @@ def soporte_validacion_identidad():
                    "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='aplicar_carne'><input type='hidden' name='id' value='%d'>"
                    "<button class='btn' style='background:#16a34a;color:#fff'>🚫 Anular carné</button></form> ") % (_esc(quien), v.id)
         elif v.estado == "APROBADO" and v.tipo == "RECTOR":
-            acc = ("<div style='color:#166534;font-weight:700;margin-bottom:4px'>✅ Rectoría verificada</div>"
+            acc = ("<div style='color:#166534;font-weight:700;margin-bottom:4px'>✅ Rectoría verificada · <a href='/soporte/instituciones/%s' style='color:#005BEA'>Abrir panel de la institución</a></div>"
                    "<form method='POST' style='display:inline-flex;gap:6px;flex-wrap:wrap'><input type='hidden' name='accion' value='aplicar_rector'><input type='hidden' name='id' value='%d'>"
                    "<input name='nota' maxlength='200' placeholder='Cambio autorizado' required style='padding:6px;border:1px solid #cbd5e1;border-radius:6px;min-width:180px'>"
-                   "<button class='btn' style='background:#16a34a;color:#fff'>Aplicar cambio</button></form> ") % v.id
+                   "<button class='btn' style='background:#16a34a;color:#fff'>Aplicar cambio</button></form> ") % (v.institucion_id, v.id)
         else:
             acc = ""
         if v.estado in ("GENERADO", "ACTIVO", "APROBADO"):
@@ -74742,6 +74743,7 @@ def validar_identidad_publico(token):
         _seg_registrar_fallo(clave_ip)
         return _vi_pub("Enlace no válido", "<h2>Enlace no válido</h2><p>Verifique el enlace recibido o comuníquese con su asesor de soporte PROCSIS.</p>", "#991b1b")
     _vi_refrescar(v)
+    _vin_ensure()
     if v.estado == "GENERADO":
         return _vi_pub("Enlace en espera", "<h2>⏳ Enlace en espera</h2><p>Su asesor de PROCSIS aún no lo ha habilitado. Espere su indicación y vuelva a abrir el enlace.</p>", "#b45309")
     if v.estado in ("APROBADO", "APLICADO"):
@@ -74776,18 +74778,25 @@ def validar_identidad_publico(token):
                 v.fallos = (v.fallos or 0) + 1
                 v.espera_hasta_ts = now + _VI_ESPERA_FALLO
                 espera = _VI_ESPERA_FALLO
-                if v.fallos >= _VI_MAX_FALLOS:
+                _max = 3 if v.tipo == "RECTOR" else _VI_MAX_FALLOS
+                _vin_audit(v.institucion_id, "Rector: cédula incorrecta en el enlace", "", "", "intento %d de %d · IP %s" % (v.fallos, _max, ip), "FALLO", None, 0, actor="Rector (enlace)")
+                if v.fallos >= _max:
                     v.estado = "BLOQUEADO"
                     db.session.commit()
-                    _notif_crear(_ROLES_GERENCIA + ("Soporte",), "Validación de identidad bloqueada",
-                                 "El caso #%s superó %d intentos fallidos (posible suplantación). IP %s" % (v.id, _VI_MAX_FALLOS, ip),
-                                 "/gerencia/validaciones-identidad", None, "alerta")
-                    return _vi_pub("Enlace bloqueado", "<h2>Enlace bloqueado</h2><p>Se superó el número de intentos permitidos. Comuníquese con su asesor de soporte PROCSIS.</p>", "#991b1b")
+                    if v.tipo == "RECTOR":
+                        _vin_audit(v.institucion_id, "Enlace bloqueado por intentos: pasa a la siguiente validación", "", "", "caso #%s" % v.id, "FALLO", None, 0, actor="Rector (enlace)")
+                        _notif_crear(("Soporte",), "Enlace del rector bloqueado: continúa con la segunda validación",
+                                     "Se superaron %d intentos con la cédula." % _max, "/soporte/instituciones/%s" % v.institucion_id, v.institucion_id, "alerta")
+                    else:
+                        _notif_crear(_ROLES_GERENCIA + ("Soporte",), "Validación de identidad bloqueada",
+                                     "El caso #%s superó %d intentos fallidos (posible suplantación). IP %s" % (v.id, _max, ip),
+                                     "/gerencia/validaciones-identidad", None, "alerta")
+                    return _vi_pub("Enlace bloqueado", "<h2>Enlace bloqueado</h2><p>Se superó el número de intentos permitidos. Su asesor de soporte PROCSIS continuará con otra forma de validación.</p>", "#991b1b")
                 db.session.commit()
-                error = "Los datos no coinciden. Verifique e intente de nuevo."
+                error = "Los datos no coinciden (intento %d de %d). Verifique e intente de nuevo." % (v.fallos, _max)
             else:
                 consent = {"habeas_data_ley_1581_2012": True, "terminos_y_privacidad_procsis": True,
-                           "version_textos": _VI_TERMINOS_VERSION, "fecha": _ts(), "ip": ip,
+                           "version_textos": _legal_versiones(), "fecha": _ts(), "ip": ip,
                            "agente": (request.headers.get("User-Agent") or "")[:200]}
                 c_datos, c_cons = _vi_cifrar(datos), _vi_cifrar(consent)
                 if not c_datos or not c_cons:
@@ -74806,6 +74815,7 @@ def validar_identidad_publico(token):
                         registrar_auditoria("Validación de identidad aprobada por el usuario", "#%s %s · IP %s" % (v.id, v.tipo, ip))
                     except Exception:
                         db.session.rollback()
+                    _vin_audit(v.institucion_id, "Rector validó su cédula y aceptó los textos legales", "", "", "%s · IP %s" % (_legal_versiones(), ip), "OK", None, 0, actor="Rector (enlace)")
                     _notif_crear(("Soporte",), "Validación aprobada por el usuario",
                                  "Caso #%s: %s" % (v.id, v.asunto), "/soporte/validacion-identidad", None, "info")
                     return _vi_pub("Validación exitosa",
@@ -74827,9 +74837,9 @@ def validar_identidad_publico(token):
                   "<label style='font-size:13px;font-weight:700'>Nombre de la sede</label>"
                   "<input class='nopaste' name='sede' autocomplete='off' required style='%s'>") % (st, st, st)
     chk = ("<label style='display:flex;gap:8px;font-size:13px;margin:6px 0;align-items:flex-start'><input type='checkbox' name='acepto_habeas' id='c1' value='1' style='margin-top:3px'>"
-           "<span>Acepto la Política de Tratamiento de Datos Personales (Habeas Data - Ley 1581 de 2012).</span></label>"
+           "<span>Acepto la <a href='#' onclick=\"return procsisLegal('habeas')\" style='color:#005BEA;font-weight:700'>Política de Tratamiento de Datos Personales (Habeas Data - Ley 1581 de 2012)</a>. <i style='color:#64748b'>Toque para leerla completa.</i></span></label>"
            "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0 14px;align-items:flex-start'><input type='checkbox' name='acepto_terminos' id='c2' value='1' style='margin-top:3px'>"
-           "<span>Acepto los Términos, Condiciones y Políticas de Privacidad de la Empresa PROCSIS.</span></label>")
+           "<span>Acepto los <a href='#' onclick=\"return procsisLegal('terminos')\" style='color:#005BEA;font-weight:700'>Términos, Condiciones y Políticas de Privacidad de la Empresa PROCSIS</a>. <i style='color:#64748b'>Toque para leerlos completos.</i></span></label>")
     aviso_e = ("<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-size:14px'>%s</div>" % _esc(error)) if error else ""
     js = """<script>(function(){var espera=__ESPERA__,bt=document.getElementById('bt'),c1=document.getElementById('c1'),c2=document.getElementById('c2'),lbl=bt.getAttribute('data-lbl');
 function upd(){bt.disabled=!(c1.checked&&c2.checked)||espera>0;}
@@ -74843,7 +74853,7 @@ el.addEventListener('beforeinput',function(e){if(e.inputType==='insertFromPaste'
               "<form method='POST' autocomplete='off'>%s%s<button id='bt' data-lbl='Aceptar y validar' disabled "
               "style='width:100%%;padding:14px;border:0;border-radius:12px;background:#005BEA;color:#fff;font-weight:800;font-size:16px;cursor:pointer'>Aceptar y validar</button></form>%s") % (
         titulo_f, aviso_e, campos, chk, js)
-    return _vi_pub("Validación de identidad", cuerpo)
+    return _vi_pub("Validación de identidad", cuerpo + _legal_modal())
 
 
 # ───────────────────────── GERENCIA (visualización cifrada) ─────────────────────────
@@ -75123,7 +75133,7 @@ def gerencia_correo_extra(n):
 # ════════════════════════════════════════════════════════════════════════════
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
-_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/verificar-certificado/", "/demo/invitar/",
+_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/verificar-certificado/", "/demo/invitar/",
                       "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal")
 
 
@@ -75911,10 +75921,10 @@ def _vin_cedula_ok(inst, dato):
     return bool(esperado) and bool(d) and hmac.compare_digest(esperado, d)
 
 
-def _vin_audit(inst_id, accion, campo="", antes="", despues="", resultado="OK", v=None, nivel=None):
+def _vin_audit(inst_id, accion, campo="", antes="", despues="", resultado="OK", v=None, nivel=None, actor=None):
     try:
         db.session.add(InstAuditoria(
-            fecha=_ts(), ts=_vi_time.time(), usuario=session.get("usuario") or "", rol=rol_actual() or "",
+            fecha=_ts(), ts=_vi_time.time(), usuario=(actor or session.get("usuario") or ""), rol=("externo" if actor else (rol_actual() or "")),
             institucion_id=inst_id, accion=accion[:120], campo=campo[:80], antes=(antes or "")[:500], despues=(despues or "")[:500],
             resultado=resultado[:20], validacion_id=(v.id if v else 0), caso=((v.caso if v else "") or "")[:40],
             nivel=(nivel if nivel is not None else (v.nivel if v else 0)) or 0))
@@ -75976,7 +75986,14 @@ def _vin_sync(v):
 
 def _vin_primaria_fallida(v):
     vi = _vin_vi(v)
-    return bool(vi and vi.estado in ("BLOQUEADO", "EXPIRADO", "CANCELADO"))
+    if vi and vi.estado in ("BLOQUEADO", "EXPIRADO", "CANCELADO"):
+        return True
+    try:
+        nb = BioValidacion.query.filter_by(vin_id=v.id).order_by(BioValidacion.id.desc()).first()
+    except Exception:
+        db.session.rollback()
+        nb = None
+    return bool(nb and nb.estado in ("FALLIDA", "RECHAZADA") and not (vi and vi.estado in ("ACTIVO", "APROBADO", "APLICADO")))
 
 
 def _vin_actual(inst_id):
@@ -76238,8 +76255,18 @@ def soporte_institucion_ficha(iid):
                 db.session.commit()
                 v.vi_id = vi.id
                 db.session.commit()
-                session["vin_nuevo"] = {"pin": pin, "link": _base_publica() + "/validar-identidad/" + token}
-                _vin_audit(iid, "PIN y enlace generados", "", "", "Enlace #%d" % vi.id, "OK", v, 0)
+                link_n = _base_publica() + "/validar-identidad/" + token
+                canal = (request.form.get("canal") or "sms").strip()
+                if canal not in ("sms", "correo", "ambos"):
+                    canal = "sms"
+                nota_c, mostrar = "", canal in ("sms", "ambos")
+                if canal in ("correo", "ambos"):
+                    ok_c, nota_c = _vin_enviar_correo(inst, _vin_rector(inst)["correo"], link_n, usuario, "validacion")
+                    _vin_audit(iid, "Enlace enviado por correo" if ok_c else "Falló el envío del enlace por correo", "", "", nota_c, "OK" if ok_c else "FALLO", v, 0)
+                    if not ok_c:
+                        mostrar = True      # el asesor puede enviarlo por SMS
+                session["vin_nuevo"] = {"pin": pin, "link": link_n if mostrar else "", "nota": nota_c}
+                _vin_audit(iid, "PIN y enlace generados", "", "", "Enlace #%d · canal: %s" % (vi.id, canal), "OK", v, 0)
                 return redirect(base)
         elif v and accion == "activar_enlace":
             vi = _vin_vi(v)
@@ -76324,6 +76351,51 @@ def soporte_institucion_ficha(iid):
                     vi.estado = "CANCELADO"
                 _vin_formatear_cierre(v, "Cerrada por " + usuario)
                 return redirect(base)
+        elif accion in ("carne_bloquear", "carne_reactivar", "carne_editar"):
+            nivel_c = _vin_nivel(iid)
+            e_c = Estudiante.query.get(request.form.get("est", type=int) or 0)
+            if not e_c or e_c.institucion_id != iid:
+                err = "Estudiante no válido para esta institución."
+            elif nivel_c < 1 or (accion != "carne_bloquear" and nivel_c < 2):
+                err = "Necesitas una validación vigente " + ("(Nivel 1)" if accion == "carne_bloquear" else "de Nivel 2") + " para esta operación."
+                _vin_audit(iid, "Intento sin validación: " + accion, "", "", e_c.codigo if e_c else "", "RECHAZADO", v, nivel_c)
+            elif accion == "carne_bloquear":
+                motivo_c = request.form.get("motivo") or ""
+                cv_c = CarneVersion.query.filter_by(estudiante_id=e_c.id).first()
+                if motivo_c not in _VIN_MOTIVOS_CARNE:
+                    err = "Selecciona el motivo."
+                elif cv_c and cv_c.bloqueado:
+                    err = "El carné ya está bloqueado."
+                else:
+                    _bloqueo_ejecutar(e_c, motivo_c, "FICHA")
+                    _vin_audit(iid, "Bloqueó el carné", "Carné", "Activo", "Bloqueado · " + motivo_c, "OK", v, nivel_c)
+                    msg = "Carné de %s %s bloqueado: el QR anterior quedó anulado y pasó a reimpresión." % (e_c.nombre, e_c.apellido)
+            elif accion == "carne_reactivar":
+                cv_c = CarneVersion.query.filter_by(estudiante_id=e_c.id).first()
+                if not cv_c or not cv_c.bloqueado:
+                    err = "El carné no está bloqueado."
+                else:
+                    cv_c.version = max(1, (cv_c.version or 2) - 1)      # vuelve a ser válido el plástico anterior
+                    cv_c.bloqueado = False
+                    cv_c.motivo = ""
+                    for rr in CarneReimpresion.query.filter_by(estudiante_id=e_c.id, reimpreso_en="").all():
+                        rr.cobro = "ANULADO"
+                        rr.motivo = ((rr.motivo or "") + " · reactivado por " + usuario)[:200]
+                    pr_c = CarneProduccion.query.filter_by(estudiante_id=e_c.id).first()
+                    if pr_c and pr_c.estado == "REIMPRESION":
+                        pr_c.estado = "IMPRESO"
+                    db.session.commit()
+                    _vin_audit(iid, "Activó el carné", "Carné", "Bloqueado", "Activo (versión %d)" % cv_c.version, "OK", v, nivel_c)
+                    msg = "Carné de %s %s activado de nuevo; el cobro de reimpresión pendiente quedó anulado." % (e_c.nombre, e_c.apellido)
+            else:
+                for etq_c, att_c, n_c in (("Nombre", "nombre", 120), ("Apellido", "apellido", 120), ("Grado", "grado", 30)):
+                    nuevo_c = (request.form.get(att_c) or "").strip()[:n_c]
+                    viejo_c = getattr(e_c, att_c) or ""
+                    if nuevo_c and nuevo_c != viejo_c:
+                        setattr(e_c, att_c, nuevo_c)
+                        _vin_audit(iid, "Cambió datos del carné", etq_c + " · " + e_c.codigo, viejo_c, nuevo_c, "OK", v, nivel_c)
+                db.session.commit()
+                msg = "Datos del carné actualizados (auditados)."
         elif accion == "bio_generar":
             op = request.form.get("operacion") or ""
             _bio_ensure()
@@ -76345,8 +76417,16 @@ def soporte_institucion_ficha(iid):
                                    creado_por=usuario, creado_en=_ts(), creado_ts=now, token_hash=_vi_hash_token(token), estado="GENERADA")
                 db.session.add(nb)
                 db.session.commit()
-                session["bio_nuevo"] = {"codigo": nb.codigo, "link": _base_publica() + "/validar-biometria/" + token}
-                _vin_audit(iid, "Validación biométrica solicitada", "", "", "%s · %s" % (nb.codigo, _BIO_OPS[op]), "OK", v, 0)
+                link_b = _base_publica() + "/validar-biometria/" + token
+                canal = (request.form.get("canal") or "sms").strip()
+                nota_b, mostrar_b = "", canal != "correo"
+                if canal in ("correo", "ambos"):
+                    ok_b, nota_b = _vin_enviar_correo(inst, _vin_rector(inst)["correo"], link_b, usuario, "biometria")
+                    _vin_audit(iid, "Enlace biométrico enviado por correo" if ok_b else "Falló el envío del enlace biométrico", "", "", "%s · %s" % (nb.codigo, nota_b), "OK" if ok_b else "FALLO", v, 0)
+                    if not ok_b:
+                        mostrar_b = True
+                session["bio_nuevo"] = {"codigo": nb.codigo, "link": link_b if mostrar_b else "", "nota": nota_b}
+                _vin_audit(iid, "Validación biométrica solicitada", "", "", "%s · %s · canal: %s" % (nb.codigo, _BIO_OPS[op], canal), "OK", v, 0)
                 return redirect(base)
         elif accion == "escalar":
             nota = (request.form.get("nota") or "").strip()[:300]
@@ -76369,38 +76449,61 @@ def soporte_institucion_ficha(iid):
             elif accion == "editar":
                 r = _vin_rector(inst)
                 ficha = r["ficha"]
-                nuevos = {
-                    "Nombres del rector": ("nombres", (request.form.get("nombres") or "").strip()[:160]),
-                    "Apellidos del rector": ("apellidos", (request.form.get("apellidos") or "").strip()[:160]),
-                    "Teléfono": ("telefono", re.sub(r"[^\d+ ]", "", request.form.get("telefono") or "")[:40]),
-                    "Correo": ("correo", (request.form.get("correo") or "").strip()[:160]),
-                    "Dirección": ("direccion", (request.form.get("direccion") or "").strip()[:255]),
-                }
+                cfg = Configuracion.query.filter_by(institucion_id=iid).first()
+                f = request.form
+                limpio = lambda k, n: (f.get(k) or "").strip()[:n]
+                cand = [("Nombres del rector", "R", "nombres", limpio("nombres", 160), False),
+                        ("Apellidos del rector", "R", "apellidos", limpio("apellidos", 160), False),
+                        ("Teléfono", "R", "telefono", re.sub(r"[^\d+ ]", "", f.get("telefono") or "")[:40], False),
+                        ("Correo", "R", "correo", limpio("correo", 160), False),
+                        ("Dirección", "I", "direccion", limpio("direccion", 255), False),
+                        ("Municipio", "I", "municipio", limpio("municipio", 120), False),
+                        ("Periodo actual", "C", "periodo_actual", limpio("periodo", 30), False)]
                 if p_ced:
-                    nuevos["Cédula del rector"] = ("numero_id", re.sub(r"\D", "", request.form.get("cedula") or "")[:20])
-                if nuevos["Correo"][1] and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", nuevos["Correo"][1]):
-                    err = "El correo no tiene un formato válido."
+                    cand.append(("Cédula del rector", "R", "numero_id", re.sub(r"\D", "", f.get("cedula") or "")[:20], True))
+                if nivel >= 2:
+                    cand += [("Nombre de la institución", "I", "nombre", limpio("nombre_inst", 220), False),
+                             ("NIT", "I", "nit", re.sub(r"[^\d\-\. ]", "", f.get("nit") or "")[:40].strip(), False),
+                             ("DANE", "I", "dane", re.sub(r"[^\d\-\. ]", "", f.get("dane") or "")[:40].strip(), False),
+                             ("Logo (URL)", "I", "logo", limpio("logo", 300), False)]
+                err_v = ""
+                for etq, _o, att, nuevo_v, _m in cand:
+                    if att == "correo" and nuevo_v and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", nuevo_v):
+                        err_v = "El correo no tiene un formato válido."
+                    elif att == "numero_id" and nuevo_v and not (5 <= len(nuevo_v) <= 12):
+                        err_v = "La cédula debe tener entre 5 y 12 dígitos."
+                    elif att == "logo" and nuevo_v and not nuevo_v.startswith(("/static/", "https://")):
+                        err_v = "El logo debe ser una dirección https:// o /static/."
+                    elif att == "nombre" and nuevo_v and len(nuevo_v) < 3:
+                        err_v = "El nombre de la institución es muy corto."
+                    elif att == "periodo_actual" and nuevo_v and cfg and cfg.periodos_lista and nuevo_v not in [x.strip() for x in cfg.periodos_lista.split("|")]:
+                        err_v = "El periodo debe ser uno de: " + ", ".join(x.strip() for x in cfg.periodos_lista.split("|"))
+                    if err_v:
+                        break
+                if err_v:
+                    err = err_v
                 else:
-                    if not ficha:
-                        ficha = RectorInstitucion(institucion_id=iid, creado_en=_ts(), creado_por=usuario)
-                        db.session.add(ficha)
                     cambios = 0
-                    for etiqueta, (campo, nuevo) in nuevos.items():
-                        if campo == "direccion":
-                            viejo = inst.direccion or ""
-                        else:
-                            viejo = getattr(ficha, campo, "") or ""
-                        if not nuevo or nuevo == viejo:
+                    for etq, o, att, nuevo_v, mask in cand:
+                        obj = {"R": ficha, "I": inst, "C": cfg}[o]
+                        if not nuevo_v:
                             continue
-                        if campo == "direccion":
-                            inst.direccion = nuevo
-                        else:
-                            setattr(ficha, campo, nuevo)
+                        if o == "R" and obj is None:
+                            ficha = RectorInstitucion(institucion_id=iid, creado_en=_ts(), creado_por=usuario)
+                            db.session.add(ficha)
+                            obj = ficha
+                        if o == "C" and obj is None:
+                            continue
+                        viejo = getattr(obj, att, "") or ""
+                        if nuevo_v == viejo:
+                            continue
+                        setattr(obj, att, nuevo_v)
                         cambios += 1
-                        mostrar = (lambda x: _vin_m_doc(x)) if campo == "numero_id" else (lambda x: x)
-                        _vin_audit(iid, "Modificó información institucional", etiqueta, mostrar(viejo), mostrar(nuevo), "OK", v, nivel)
-                    ficha.actualizado_en = _ts()
-                    inst.rector = ("%s %s" % (ficha.nombres or "", ficha.apellidos or "")).strip() or inst.rector
+                        mk = (lambda x: _vin_m_doc(x)) if mask else (lambda x: x)
+                        _vin_audit(iid, "Modificó información institucional", etq, mk(viejo), mk(nuevo_v), "OK", v, nivel)
+                    if ficha:
+                        ficha.actualizado_en = _ts()
+                        inst.rector = ("%s %s" % (ficha.nombres or "", ficha.apellidos or "")).strip() or inst.rector
                     db.session.commit()
                     msg = ("Se guardaron %d cambio(s) y quedaron auditados." % cambios) if cambios else "No hubo cambios."
                     if cambios and bop in ("editar_info", "editar_cedula") and nivel < 1:
@@ -76442,24 +76545,35 @@ def soporte_institucion_ficha(iid):
     abierto = nivel >= 1
     aviso = (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "") + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
 
-    # ficha: enmascarada hasta validar
+    # ficha: enmascarada hasta validar; con validación vigente se abre el panel de la institución
+    cfg = None
+    try:
+        cfg = Configuracion.query.filter_by(institucion_id=iid).first()
+    except Exception:
+        db.session.rollback()
+    periodo = ((cfg.periodo_actual if cfg else "") or "—")
     if abierto:
-        ced = r["cedula"] if nivel >= 2 else _vin_m_doc(r["cedula"])
-        ficha = [("Institución", inst.nombre), ("DANE", inst.dane or "—"), ("NIT", inst.nit or "—"), ("Representante", r["nombre"] or "—"),
-                 ("Cédula", ced + ("" if nivel >= 2 else "  (completa en Nivel 2)")), ("Correo", r["correo"] or "—"),
-                 ("Teléfono", r["tel"] or "—"), ("Municipio", inst.municipio or "—"), ("Plan", inst.plan or "—")]
+        ficha = [("Institución", inst.nombre), ("Estado", inst.estado or "—"), ("Periodo actual", periodo), ("NIT", inst.nit or "—"), ("DANE", inst.dane or "—"),
+                 ("Municipio", inst.municipio or "—"), ("Plan", inst.plan or "—"), ("Representante", r["nombre"] or "—"), ("Cédula", r["cedula"] or "—"),
+                 ("Correo", r["correo"] or "—"), ("Teléfono", r["tel"] or "—"), ("Dirección", inst.direccion or "—")]
     else:
         ficha = [("Institución", inst.nombre), ("Representante legal registrado", r["nombre"] or "No registrado"),
                  ("Documento registrado", _vin_m_doc(r["cedula"])), ("Teléfono registrado", _vin_m_tel(r["tel"])),
                  ("Correo registrado", _vin_m_mail(r["correo"]))]
-    filas_f = "".join("<tr><td style='padding:6px 10px;color:#64748b;width:42%'>" + _esc(a) + "</td><td style='padding:6px 10px;font-weight:700'>" + _esc(b) + "</td></tr>" for a, b in ficha)
+    filas_f = "".join("<tr><td style='padding:5px 10px;color:#64748b;width:42%'>" + _esc(a_) + "</td><td style='padding:5px 10px;font-weight:700'>" + _esc(b_) + "</td></tr>" for a_, b_ in ficha)
+    logo = (inst.logo or "").strip()
+    logo_html = ""
+    if abierto and logo and (logo.startswith(("/static/", "https://", "data:image/"))):
+        logo_html = "<img src='" + _esc(logo) + "' alt='Logo' style='width:92px;height:92px;object-fit:contain;border:1px solid #e2e8f0;border-radius:14px;background:#fff;padding:4px'>"
     vig = ""
     if v and v.estado == "VALIDADA":
         vig = "<div class='mini-text'>Método: " + _esc(v.metodo) + " · vence en " + str(max(int(((v.valida_hasta_ts or 0) - _vi_time.time()) // 60), 0)) + " min</div>"
-    cabecera = ("<section class='role-panel'><h2 style='margin-top:0'>" + _esc(inst.nombre) + "</h2>"
-                "<div>Institución: <b>" + _esc(inst.estado or "") + "</b> · Validación: <b>" + ic + " " + _esc(nt) + "</b></div>" + vig +
+    cabecera = ("<section class='role-panel' style='" + ("border:2px solid #16a34a" if abierto else "") + "'><div style='display:flex;gap:14px;align-items:center;flex-wrap:wrap'>" + logo_html +
+                "<div><h2 style='margin:0'>" + ("✅ Panel de la institución · " if abierto else "") + _esc(inst.nombre) + "</h2>"
+                "<div>Validación: <b>" + ic + " " + _esc(nt) + "</b></div>" + vig + "</div></div>"
                 "<table style='margin-top:10px;border-collapse:collapse;font-size:14px'>" + filas_f + "</table>"
-                "<p class='mini-text'>Esta ficha sirve para identificar a quién atiendes. No autoriza a entregar ni modificar datos, ni a consultar estudiantes.</p></section>")
+                + ("" if abierto else "<p class='mini-text'>Esta ficha sirve para identificar a quién atiendes. No autoriza a entregar ni modificar datos, ni a consultar estudiantes. Valida la identidad para abrir el panel completo.</p>")
+                + "</section>")
 
     # ── panel de validación ──
     nv = _vin_pop_nuevo()
@@ -76492,20 +76606,27 @@ def soporte_institucion_ficha(iid):
         cuerpo = ""
         if nv:
             cuerpo += ("<div style='background:#eff6ff;border:2px solid #0369a1;border-radius:10px;padding:12px;margin:8px 0'>"
-                       "<div class='mini-text'>Se muestra una sola vez. Envía el enlace por SMS (Inalambria) y tú conserva el PIN.</div>"
-                       "<input id='vin-link' readonly value='" + _esc(nv.get("link", "")) + "' style='" + _VIN_INP + "'>"
+                       + (("<div class='msg ok'>📧 " + _esc(nv.get("nota", "")) + "</div>") if nv.get("nota") else "") +
+                       ("<div class='mini-text'>Se muestra una sola vez. Envía el enlace por SMS (Inalambria) y tú conserva el PIN.</div>"
+                        "<input id='vin-link' readonly value='" + _esc(nv.get("link", "")) + "' style='" + _VIN_INP + "'>" if nv.get("link") else "<div class='mini-text'>El enlace salió solo por correo. Conserva el PIN para activarlo.</div><input id='vin-link' type='hidden'>") + ""
                        "<button type='button' class='btn' style='margin-top:6px' onclick=\"var i=document.getElementById('vin-link');i.select();document.execCommand('copy');this.textContent='✅ Copiado'\">Copiar enlace</button>"
                        "<div style='font-size:36px;font-weight:900;letter-spacing:8px;color:#0B2D57'>" + _esc(nv.get("pin", "")) + "</div></div>")
         if not vi:
-            cuerpo += ("<form method='POST'><input type='hidden' name='accion' value='gen_enlace'><button class='btn'>Generar PIN y enlace</button></form>")
+            cuerpo += ("<form method='POST' style='display:flex;gap:6px;flex-wrap:wrap;align-items:center'><input type='hidden' name='accion' value='gen_enlace'>"
+                       "<select name='canal' style='" + _VIN_INP + ";max-width:330px'>"
+                       "<option value='sms'>Enviar por SMS (yo copio el enlace)</option>"
+                       "<option value='correo'>Enviar por correo a " + _esc(_vin_m_mail(r["correo"])) + "</option>"
+                       "<option value='ambos'>SMS y correo</option></select>"
+                       "<button class='btn'>Generar PIN y enlace</button></form>"
+                       "<div class='mini-text'>El correo va solo al correo registrado del rector; el PIN nunca viaja en él.</div>")
         elif estado_vi == "GENERADO":
             cuerpo += ("<form method='POST' style='display:flex;gap:6px;flex-wrap:wrap;align-items:center'><input type='hidden' name='accion' value='activar_enlace'>"
                        "<input name='pin' inputmode='numeric' maxlength='6' placeholder='PIN de 6 dígitos' required style='" + _VIN_INP + ";max-width:200px'>"
                        "<button class='btn'>Activar enlace</button></form><div class='mini-text'>El enlace está dormido hasta que lo actives.</div>")
         elif estado_vi == "ACTIVO":
-            cuerpo += "<div class='msg ok'>⏳ Esperando que el rector ingrese su cédula en el enlace… (recarga para ver el resultado)</div><a class='btn' href='" + base + "'>Actualizar</a>"
+            cuerpo += "<div class='msg ok'>⏳ Esperando que el rector ingrese su cédula en el enlace… (esta pantalla se actualiza sola)</div>"
         else:
-            cuerpo += ("<div class='msg danger'>La validación primaria no se superó (" + _esc(estado_vi or "sin enlace") + ").</div>"
+            cuerpo += ("<div class='msg danger'>El enlace no se superó (" + _esc(estado_vi or "sin enlace") + "). Se habilitó la segunda validación.</div>"
                        "<form method='POST' style='margin-top:8px'><input type='hidden' name='accion' value='iniciar_sec'><button class='btn'>2. Segunda validación: preguntas por llamada</button></form>")
         panel = ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>🔢 2. PIN + enlace + cédula</h3>"
                  "<p class='mini-text'>El rector abre el enlace, escribe su cédula (no se puede pegar) y acepta los términos. Si coincide con la registrada, se supera la primera validación.</p>" + cuerpo + "</section>")
@@ -76540,8 +76661,9 @@ def soporte_institucion_ficha(iid):
         cuerpo_b = ""
         if isinstance(bnv, dict):
             cuerpo_b += ("<div style='background:#eff6ff;border:2px solid #0369a1;border-radius:10px;padding:12px;margin:8px 0'>"
-                         "<div class='mini-text'>Envía este enlace al rector por SMS. Se muestra una sola vez y vence en 30 minutos.</div>"
-                         "<input id='bio-link' readonly value='" + _esc(bnv.get("link", "")) + "' style='" + _VIN_INP + "'>"
+                         + (("<div class='msg ok'>📧 " + _esc(bnv.get("nota", "")) + "</div>") if bnv.get("nota") else "") +
+                         ("<div class='mini-text'>Envía este enlace al rector por SMS. Se muestra una sola vez y vence en 30 minutos.</div>"
+                          "<input id='bio-link' readonly value='" + _esc(bnv.get("link", "")) + "' style='" + _VIN_INP + "'>" if bnv.get("link") else "<div class='mini-text'>El enlace salió solo por correo y vence en 30 minutos.</div><input id='bio-link' type='hidden'>") +
                          "<button type='button' class='btn' style='margin-top:6px' onclick=\"var i=document.getElementById('bio-link');i.select();document.execCommand('copy');this.textContent='✅ Copiado'\">Copiar enlace</button>"
                          "<div class='mini-text'>Código: <b>" + _esc(bnv.get("codigo", "")) + "</b></div></div>")
         if nb and nb.estado == "GENERADA":
@@ -76559,6 +76681,7 @@ def soporte_institucion_ficha(iid):
                      "Autoriza <b>una sola operación</b> (no equivale a Nivel 1 ni 2). Las imágenes se eliminan al decidir o, como máximo, a las 4 horas.</p>" + cuerpo_b +
                      "<form method='POST' style='display:flex;gap:6px;flex-wrap:wrap'><input type='hidden' name='accion' value='bio_generar'>"
                      "<select name='operacion' required style='" + _VIN_INP + ";flex:1;min-width:240px'><option value=''>— Operación a autorizar —</option>" + opts_b + "</select>"
+                     "<select name='canal' style='" + _VIN_INP + ";flex:1;min-width:200px'><option value='sms'>Por SMS (yo copio el enlace)</option><option value='correo'>Por correo a " + _esc(_vin_m_mail(_vin_rector(inst)["correo"])) + "</option><option value='ambos'>SMS y correo</option></select>"
                      "<button class='btn'>Generar enlace biométrico</button></form></section>")
 
     # ── operaciones (validación vigente o autorización biométrica de una operación) ──
@@ -76569,7 +76692,7 @@ def soporte_institucion_ficha(iid):
     p_ced = nivel >= 2 or bop == "editar_cedula"
     p_ses = nivel >= 2 or bop == "cerrar_sesiones"
     if p_edit or p_ses:
-        f_in = lambda n, val, ph, lbl: ("<label style='font-size:12px;font-weight:700'>" + lbl + "</label><input name='" + n + "' value='" + _esc(val) + "' placeholder='" + ph + "' style='" + _VIN_INP + ";margin:3px 0 8px'>")
+        f_in = lambda n, val, ph, lbl: ("<div><label style='font-size:12px;font-weight:700'>" + lbl + "</label><input name='" + n + "' value='" + _esc(val) + "' placeholder='" + ph + "' style='" + _VIN_INP + ";margin:3px 0 8px'></div>")
         fr = r["ficha"]
         form = ""
         if p_edit:
@@ -76580,7 +76703,11 @@ def soporte_institucion_ficha(iid):
                     + f_in("telefono", r["tel"], "", "Teléfono")
                     + f_in("correo", r["correo"], "", "Correo")
                     + f_in("direccion", inst.direccion or "", "", "Dirección")
+                    + f_in("municipio", inst.municipio or "", "", "Municipio")
+                    + f_in("periodo", periodo if periodo != "—" else "", "Ej. Periodo 2", "Periodo actual")
                     + (f_in("cedula", r["cedula"], "", "Cédula del rector") if p_ced else "")
+                    + (f_in("nombre_inst", inst.nombre or "", "", "Nombre de la institución (Nivel 2)") + f_in("nit", inst.nit or "", "", "NIT (Nivel 2)")
+                       + f_in("dane", inst.dane or "", "", "DANE (Nivel 2)") + f_in("logo", inst.logo if (inst.logo or "").startswith(("/static/", "https://")) else "", "https://…", "Logo, dirección de la imagen (Nivel 2)") if nivel >= 2 else "")
                     + "</div><button class='btn'>Guardar cambios (queda auditado)</button></form>")
         tec = ""
         if p_ses:
@@ -76624,7 +76751,12 @@ def soporte_institucion_ficha(iid):
            "<table style='width:100%;border-collapse:collapse;font-size:12px'><tr style='background:#f1f5f9;text-align:left'><th style='padding:6px'>Fecha</th><th style='padding:6px'>Usuario</th><th style='padding:6px'>Acción</th><th style='padding:6px'>Resultado</th></tr>"
            + (filas_a or "<tr><td colspan='4' style='padding:10px;color:#64748b'>Sin registros.</td></tr>") + "</table></div></section>")
 
-    contenido = ("<p><a href='/soporte/instituciones' style='color:#0B2D57;font-weight:700'>&larr; Instituciones</a></p>" + aviso + cabecera + panel + bio_panel + ops + esc + aud)
+    carne_html = _vin_html_carne(inst, nivel, base, (request.values.get("qe") or request.form.get("qe") or "").strip()[:60]) if nivel >= 1 else ""
+    ger_html = _vin_html_resumen_gerencia(inst) if es_ger else ""
+    sig = _vin_sig(iid)
+    poll = ("<script>(function(){var s=" + json.dumps(sig) + ";setInterval(function(){fetch('" + base + "/estado.json',{credentials:'same-origin'}).then(function(r){return r.json();})"
+            ".then(function(j){if(j.sig&&j.sig!==s){location.href='" + base + "';}}).catch(function(){});},4000);})();</script>") if (v and v.estado in ("LLAMADA", "PIN", "SECUNDARIA")) else ""
+    contenido = ("<p><a href='/soporte/instituciones' style='color:#0B2D57;font-weight:700'>&larr; Instituciones</a></p>" + aviso + cabecera + panel + bio_panel + ops + carne_html + ger_html + esc + aud + poll)
     return page("Ficha de institución", shell(contenido))
 
 
@@ -76919,8 +77051,8 @@ def validar_biometria_publico(token):
         "<b>Los datos biométricos son datos sensibles</b>: su entrega es voluntaria. Si prefiere no hacerlo, puede validarse por llamada con su asesor.</p>"
         "<p style='font-size:12px;color:#64748b'>Las imágenes se procesan para esta verificación, se eliminan al decidirse y, como máximo, a las 4 horas. "
         "Procsis conserva solo el resultado, el método, la fecha, la operación autorizada y un código de verificación.</p>"
-        "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0'><input type='checkbox' id='k1'> Autorizo expresamente el tratamiento de mis datos biométricos para esta verificación (Ley 1581 de 2012).</label>"
-        "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0'><input type='checkbox' id='k2'> Acepto la Política de Tratamiento de Datos y los Términos de PROCSIS.</label>"
+        "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0'><input type='checkbox' id='k1'> <span>Autorizo expresamente el tratamiento de mis datos biométricos para esta verificación (Ley 1581 de 2012). <a href='#' onclick=\"return procsisLegal('habeas')\" style='color:#005BEA;font-weight:700'>Leer política y mis derechos</a></span></label>"
+        "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0'><input type='checkbox' id='k2'> <span>Acepto la Política de Tratamiento de Datos y los <a href='#' onclick=\"return procsisLegal('terminos')\" style='color:#005BEA;font-weight:700'>Términos de PROCSIS</a>.</span></label>"
         "<label style='font-size:13px;font-weight:700;margin-top:10px;display:block'>Número de cédula</label>"
         "<input id='ced' class='nopaste' inputmode='numeric' autocomplete='off' style='" + st + "'>"
         "<button id='b0' disabled style='" + btn + "'>Comenzar</button></div>"
@@ -76970,6 +77102,7 @@ def validar_biometria_publico(token):
         "var j=await r.json();if(j.ok){['paso1','paso2','paso3'].forEach(function(i){$(i).style.display='none'});$('fin').style.display='block';}else{msg('m3',j.msg||'No fue posible completar la verificación.',false);$('b3').disabled=!!j.final;}}"
         "catch(e){msg('m3','Error de conexión. Intente de nuevo.',false);$('b3').disabled=false;}};"
         "})();</script>"
+        + _legal_modal()
     )
     resp = _bio_pub("Verificación de identidad", html)
     resp.headers["Content-Security-Policy"] = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
@@ -76997,7 +77130,7 @@ def validar_biometria_enviar(token):
         if fin:
             b.estado = "FALLIDA"
         db.session.commit()
-        _vin_audit(b.institucion_id, "Validación biométrica: cédula no coincide", "", "", b.codigo, "FALLO", None, 0)
+        _vin_audit(b.institucion_id, "Rector: cédula incorrecta en la verificación biométrica", "", "", "%s · intento %d de %d" % (b.codigo, b.intentos, _BIO_MAX_INTENTOS), "FALLO", None, 0, actor="Rector (enlace)")
         return jsonify(ok=False, msg=("Se superó el número de intentos. Comuníquese con su asesor." if fin else "Los datos no coinciden. Verifique e intente de nuevo."), final=fin)
     if not (_bio_img_ok(d.get("img_c")) and _bio_img_ok(d.get("img_s")) and _bio_desc_ok(d.get("d_c")) and _bio_desc_ok(d.get("d_s"))):
         return jsonify(ok=False, msg="La captura no es válida. Repita el proceso.")
@@ -77021,6 +77154,7 @@ def validar_biometria_enviar(token):
     b.imagenes_enc, b.imagenes_hasta_ts, b.imagenes_borradas = cif, now + _BIO_RETENCION, False
     b.auto, b.distancia, b.vivacidad_ok = auto, dist, bool(viva)
     b.consentimiento_ts, b.estado = now, "CAPTURADA"
+    _vin_audit(b.institucion_id, "Rector aceptó el consentimiento biométrico y los textos legales", "", "", "%s · %s" % (b.codigo, _legal_versiones()), "OK", None, 0, actor="Rector (enlace)")
     b.ip, b.ua = _ip()[:80], (request.headers.get("User-Agent") or "")[:200]
     db.session.commit()
     _vin_audit(b.institucion_id, "Validación biométrica: captura recibida", "", "", b.codigo, "OK", None, 0)
@@ -77034,6 +77168,351 @@ def _bio_before_request():
     if _BIO_LISTO["ok"]:
         _bio_purgar()
     return None
+
+
+# ───────────────────────── TEXTOS LEGALES EDITABLES (Habeas Data / Términos) ─────────────────────────
+_LEGAL_LISTO = {"ok": False}
+_LEGAL_DEFECTO = {
+    "habeas": ("Política de Tratamiento de Datos Personales (Habeas Data · Ley 1581 de 2012)",
+               "1. Responsable del tratamiento\n"
+               "PROCSIS es responsable del tratamiento de los datos que usted suministra en este proceso. Puede contactarnos por el canal de peticiones, quejas y reclamos en procsishq.com/pqr.\n\n"
+               "2. Finalidades\n"
+               "Verificar su identidad como representante autorizado de la institución, proteger la información de la institución y de sus estudiantes contra accesos no autorizados, "
+               "dejar trazabilidad (auditoría) de las operaciones que se autoricen y cumplir obligaciones legales.\n\n"
+               "3. Datos que tratamos\n"
+               "Nombre, número de cédula, datos de contacto registrados por la institución, fecha, hora y dirección IP de la conexión y el resultado de la verificación.\n\n"
+               "4. Datos biométricos (datos sensibles)\n"
+               "Si usted elige la verificación biométrica, se tratarán imágenes de su documento y de su rostro. Es voluntario: puede validarse por llamada con su asesor. "
+               "Las imágenes se usan solo para comparar el documento con la prueba facial, se eliminan en el momento en que el asesor decide y, como máximo, a las 4 horas. "
+               "PROCSIS conserva únicamente el resultado, el método, la fecha, la operación autorizada y un código de verificación; no conserva imágenes ni plantillas faciales.\n\n"
+               "5. Sus derechos como titular\n"
+               "• Conocer, actualizar y rectificar sus datos personales.\n"
+               "• Solicitar prueba de la autorización otorgada.\n"
+               "• Ser informado sobre el uso que se ha dado a sus datos.\n"
+               "• Presentar quejas ante la Superintendencia de Industria y Comercio por infracciones a la ley.\n"
+               "• Revocar la autorización y/o solicitar la supresión de sus datos cuando no se respeten los principios, derechos y garantías legales.\n"
+               "• Acceder de forma gratuita a sus datos personales.\n\n"
+               "6. Cómo ejercer sus derechos\n"
+               "Radique su solicitud en procsishq.com/pqr indicando su nombre, documento y lo que solicita. La atenderemos dentro de los plazos de la ley.\n\n"
+               "7. Seguridad\n"
+               "Aplicamos medidas técnicas, humanas y administrativas para evitar el acceso no autorizado, la pérdida o el uso fraudulento de sus datos."),
+    "terminos": ("Términos, Condiciones y Políticas de Privacidad de PROCSIS",
+                 "1. Uso del enlace\n"
+                 "El enlace que recibió es personal, intransferible y de un solo uso. No lo comparta con terceros.\n\n"
+                 "2. Veracidad\n"
+                 "Usted declara que los datos que ingresa son suyos y verdaderos y que actúa como representante autorizado de la institución.\n\n"
+                 "3. Prohibición de suplantación\n"
+                 "Intentar validarse como otra persona puede constituir un delito. PROCSIS registra y audita cada intento, incluyendo fecha, hora y dirección IP.\n\n"
+                 "4. Alcance de la validación\n"
+                 "Una validación exitosa autoriza únicamente la operación que su asesor solicitó y por un tiempo limitado. No otorga acceso general a la información de la institución.\n\n"
+                 "5. Intentos limitados\n"
+                 "Después de varios intentos fallidos el enlace se bloquea y su asesor continuará el proceso con otra forma de validación.\n\n"
+                 "6. Privacidad\n"
+                 "El tratamiento de sus datos se rige por la Política de Tratamiento de Datos Personales de PROCSIS, que usted también acepta.\n\n"
+                 "7. Cambios\n"
+                 "PROCSIS puede actualizar estos textos. La versión aceptada queda registrada junto con su validación.\n\n"
+                 "8. Contacto\n"
+                 "Peticiones, quejas y reclamos: procsishq.com/pqr."),
+}
+
+
+class TextoLegal(db.Model):
+    __tablename__ = "textos_legales"
+    clave = db.Column(db.String(20), primary_key=True)
+    titulo = db.Column(db.String(200), default="")
+    contenido = db.Column(db.Text, default="")
+    version = db.Column(db.Integer, default=1)
+    actualizado_por = db.Column(db.String(80), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
+def _legal_ensure():
+    if _LEGAL_LISTO["ok"]:
+        return
+    try:
+        TextoLegal.__table__.create(bind=db.engine, checkfirst=True)
+        for k, (t, c) in _LEGAL_DEFECTO.items():
+            if not TextoLegal.query.get(k):
+                db.session.add(TextoLegal(clave=k, titulo=t, contenido=c, version=1, actualizado_por="sistema", actualizado_en=_ts()))
+        db.session.commit()
+        _LEGAL_LISTO["ok"] = True
+    except Exception as ex:
+        db.session.rollback()
+        print("ERROR textos legales:", repr(ex), flush=True)
+
+
+def _legal_get(clave):
+    _legal_ensure()
+    try:
+        return TextoLegal.query.get(clave)
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def _legal_versiones():
+    h, t = _legal_get("habeas"), _legal_get("terminos")
+    return "habeas v%s · términos v%s" % (h.version if h else "?", t.version if t else "?")
+
+
+def _legal_modal():
+    return ("<div id='lg-ov' style='display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;align-items:center;justify-content:center;padding:12px'>"
+            "<div style='background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column'>"
+            "<div style='padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;gap:8px;align-items:flex-start'>"
+            "<b id='lg-t' style='color:#0B2D57'></b><button type='button' id='lg-x' aria-label='Cerrar' style='border:0;background:none;font-size:20px;cursor:pointer'>✕</button></div>"
+            "<div id='lg-b' style='padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55;color:#1e293b'></div>"
+            "<div style='padding:10px 16px;border-top:1px solid #e2e8f0;text-align:right'>"
+            "<button type='button' id='lg-ok' style='padding:10px 18px;border:0;border-radius:10px;background:#005BEA;color:#fff;font-weight:800;cursor:pointer'>Entendido</button></div></div></div>"
+            "<script>(function(){var o=document.getElementById('lg-ov');function c(){o.style.display='none';}"
+            "document.getElementById('lg-x').onclick=c;document.getElementById('lg-ok').onclick=c;o.addEventListener('click',function(e){if(e.target===o)c();});"
+            "window.procsisLegal=function(k){document.getElementById('lg-t').textContent='Cargando…';document.getElementById('lg-b').innerHTML='';o.style.display='flex';"
+            "fetch('/legal-texto/'+k,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(j){document.getElementById('lg-t').textContent=j.titulo+' (versión '+j.version+')';document.getElementById('lg-b').innerHTML=j.html;})"
+            ".catch(function(){document.getElementById('lg-t').textContent='No se pudo cargar el texto';});return false;};})();</script>")
+
+
+def _legal_html(txt):
+    """Texto plano → HTML seguro (se escapa todo; solo se crean párrafos y saltos)."""
+    out = []
+    for bloque in (txt or "").replace("\r", "").split("\n\n"):
+        b = _esc(bloque.strip()).replace("\n", "<br>")
+        if b:
+            primera = b.split("<br>")[0]
+            if re.match(r"^\d+\.\s", primera) and "<br>" in b:
+                cab, resto = b.split("<br>", 1)
+                out.append("<p><b>" + cab + "</b><br>" + resto + "</p>")
+            else:
+                out.append("<p>" + b + "</p>")
+    return "".join(out)
+
+
+@app.route("/legal-texto/<clave>", methods=["GET"])
+def legal_texto_publico(clave):
+    t = _legal_get(clave) if clave in _LEGAL_DEFECTO else None
+    if not t:
+        return jsonify(titulo="No disponible", html="<p>Texto no disponible.</p>", version=0), 404
+    resp = jsonify(titulo=t.titulo, html=_legal_html(t.contenido), version=t.version)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.route("/gerencia/textos-legales", methods=["GET", "POST"])
+def gerencia_textos_legales():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _legal_ensure()
+    msg = err = ""
+    if request.method == "POST":
+        clave = request.form.get("clave") or ""
+        t = TextoLegal.query.get(clave) if clave in _LEGAL_DEFECTO else None
+        if not t:
+            err = "Texto no válido."
+        elif not _step_up_form_ok():
+            err = "Contraseña o código de verificación incorrectos."
+        else:
+            if request.form.get("restaurar"):
+                nt, nc = _LEGAL_DEFECTO[clave]
+            else:
+                nt, nc = (request.form.get("titulo") or "").strip()[:200], (request.form.get("contenido") or "").replace("\r", "").strip()
+            if len(nc) < 50 or not nt:
+                err = "El título y el texto (mínimo 50 caracteres) son obligatorios."
+            elif nt == t.titulo and nc == t.contenido:
+                msg = "Sin cambios."
+            else:
+                antes = "v%s · %d caracteres" % (t.version, len(t.contenido or ""))
+                t.titulo, t.contenido, t.version = nt, nc, (t.version or 1) + 1
+                t.actualizado_por, t.actualizado_en = session.get("usuario") or "", _ts()
+                db.session.commit()
+                try:
+                    registrar_auditoria("Texto legal actualizado: " + clave, "%s → v%s · %d caracteres" % (antes, t.version, len(nc)))
+                except Exception:
+                    db.session.rollback()
+                _vin_audit(None, "Texto legal actualizado: " + clave, "versión", antes, "v%s" % t.version, "OK", None, 3)
+                msg = "Texto actualizado a la versión %s. Se mostrará de inmediato a quien abra el enlace." % t.version
+    bloques = ""
+    for clave in ("habeas", "terminos"):
+        t = TextoLegal.query.get(clave)
+        bloques += ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>" + _esc(_LEGAL_DEFECTO[clave][0]) + "</h3>"
+                    "<div class='mini-text'>Versión " + str(t.version) + " · actualizado " + _esc((t.actualizado_en or "")[:16]) + " por " + _esc(t.actualizado_por or "") + "</div>"
+                    "<form method='POST'><input type='hidden' name='clave' value='" + clave + "'>"
+                    "<label style='font-size:12px;font-weight:700'>Título</label><input name='titulo' value='" + _esc(t.titulo) + "' style='" + _VIN_INP + ";margin:3px 0 8px'>"
+                    "<label style='font-size:12px;font-weight:700'>Texto (los párrafos se separan con una línea en blanco)</label>"
+                    "<textarea name='contenido' rows='16' style='" + _VIN_INP + ";margin:3px 0 8px;font-family:inherit'>" + _esc(t.contenido) + "</textarea>"
+                    + _step_up_campos() +
+                    "<button class='btn'>Guardar nueva versión</button> "
+                    "<button class='btn' name='restaurar' value='1' style='background:#e2e8f0;color:#0f172a' onclick=\"return confirm('¿Restaurar el texto original del sistema?')\">Restaurar original</button></form></section>")
+    aviso = (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "") + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
+    cont = ("<header class='role-hero'><div><h1>📜 Textos legales</h1><p>Habeas Data y Términos que ve el rector al abrir sus enlaces de validación. "
+            "Cada cambio crea una versión nueva y queda auditado; la versión aceptada se guarda con cada validación. "
+            "Los textos iniciales son una plantilla: pide a tu abogado que los revise antes de usarlos.</p></div></header>" + aviso + bloques)
+    return page("Textos legales", shell(cont))
+
+
+# ───────────────────────── Envío del enlace por correo (el asesor elige SMS o correo) ─────────────────────────
+def _vin_enviar_correo(inst, destino, enlace, usuario, tipo="validacion"):
+    """Envía el enlace al correo REGISTRADO del rector. Devuelve (ok, mensaje). El PIN nunca viaja en el correo."""
+    if not destino or not _NT_EMAIL_RE.match(destino):
+        return False, "El rector no tiene un correo válido registrado."
+    es_bio = tipo == "biometria"
+    p = {"asunto": "PROCSIS · Verificación de identidad de " + (inst.nombre or "su institución"),
+         "titulo": "Verificación de identidad",
+         "cuerpo": ("<p>Un asesor de PROCSIS está atendiendo una solicitud de <b>{{institucion}}</b> y necesita confirmar que usted es el representante autorizado.</p>"
+                    + ("<p>Abra el enlace desde su celular, escriba su cédula, fotografíe su documento y haga una breve prueba facial. Es voluntario: también puede validarse por llamada.</p>"
+                       if es_bio else "<p>Abra el enlace y escriba su número de cédula. Solo tomará un minuto.</p>")
+                    + "<p>El enlace es personal, de un solo uso y vence pronto. Si usted no está en contacto con un asesor de PROCSIS, ignore este mensaje.</p>"),
+         "boton_texto": "Verificar mi identidad", "boton_url": "{{enlace}}"}
+    try:
+        ok, errn, msgs = _nt_enviar(p, [destino], {"enlace": enlace, "institucion": inst.nombre or ""}, "manual", usuario, "validacion_enlace")
+    except Exception as ex:
+        return False, "No se pudo enviar: %s" % str(ex)[:120]
+    return (ok > 0), ("Enviado a %s" % _vin_m_mail(destino)) if ok > 0 else ("No se pudo enviar el correo: %s" % ("; ".join(msgs)[:160] or "error desconocido"))
+
+
+def _vin_sig(iid):
+    """Firma del estado visible de la ficha: si cambia, la página se recarga sola."""
+    try:
+        v = _vin_actual(iid)
+        vi = _vin_vi(v) if v else None
+        nb = BioValidacion.query.filter_by(institucion_id=iid, creado_por=session.get("usuario") or "").order_by(BioValidacion.id.desc()).first() if _BIO_LISTO["ok"] else None
+        return "%s|%s|%s|%s" % (v.estado if v else "", vi.estado if vi else "", nb.estado if nb else "", _vin_nivel(iid))
+    except Exception:
+        db.session.rollback()
+        return ""
+
+
+@app.route("/soporte/instituciones/<int:iid>/estado.json", methods=["GET"])
+def soporte_institucion_estado(iid):
+    g = _vin_guard()
+    if g is not None:
+        return jsonify(sig="")
+    resp = jsonify(sig=_vin_sig(iid))
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+# ───────────────────────── Paneles de la ficha: carné / estudiantes y resumen de Gerencia ─────────────────────────
+_VIN_MOTIVOS_CARNE = ("Pérdida", "Hurto / robo", "Daño", "Sospecha de fraude", "Otro")
+
+
+def _vin_html_carne(inst, nivel, base, qe):
+    est_html = ""
+    ests = []
+    try:
+        q = Estudiante.query.filter(Estudiante.institucion_id == inst.id)
+        if qe:
+            lk = "%" + qe.replace("%", "").replace("_", "") + "%"
+            q = q.filter(db.or_(Estudiante.nombre.ilike(lk), Estudiante.apellido.ilike(lk), Estudiante.codigo.ilike(lk), Estudiante.documento.ilike(lk)))
+        ests = q.order_by(Estudiante.apellido, Estudiante.nombre).limit(15).all() if qe else []
+    except Exception:
+        db.session.rollback()
+    vers = {}
+    try:
+        for cv in CarneVersion.query.filter(CarneVersion.estudiante_id.in_([e.id for e in ests] or [-1])).all():
+            vers[cv.estudiante_id] = cv
+    except Exception:
+        db.session.rollback()
+    inp = _VIN_INP + ";margin:2px 0"
+    filas = ""
+    for e in ests:
+        cv = vers.get(e.id)
+        bloq = bool(cv and cv.bloqueado)
+        est_c = ("<span style='color:#b91c1c;font-weight:700'>🚫 Bloqueado · pendiente de reimpresión</span><br><span class='mini-text'>" + _esc(cv.motivo or "") + "</span>") if bloq else "<span style='color:#166534;font-weight:700'>🟢 Activo</span>"
+        acc = ""
+        if bloq:
+            if nivel >= 2:
+                acc += ("<form method='POST' style='margin:0 0 6px'><input type='hidden' name='accion' value='carne_reactivar'><input type='hidden' name='est' value='" + str(e.id) + "'><input type='hidden' name='qe' value='" + _esc(qe) + "'>"
+                        "<button class='btn' style='background:#16a34a;color:#fff'>✅ Activar carné</button></form>")
+            else:
+                acc += "<span class='mini-text'>Activar requiere Nivel 2</span>"
+        else:
+            acc += ("<form method='POST' style='margin:0 0 6px'><input type='hidden' name='accion' value='carne_bloquear'><input type='hidden' name='est' value='" + str(e.id) + "'><input type='hidden' name='qe' value='" + _esc(qe) + "'>"
+                    "<select name='motivo' required style='" + inp + "'><option value=''>— Motivo —</option>" + "".join("<option>" + m + "</option>" for m in _VIN_MOTIVOS_CARNE) + "</select>"
+                    "<button class='btn' style='background:#b91c1c;color:#fff'>🚫 Bloquear</button></form>")
+        if nivel >= 2:
+            acc += ("<details><summary style='cursor:pointer;color:#005BEA;font-weight:700'>✏️ Cambiar datos del carné</summary>"
+                    "<form method='POST' style='padding:6px 0'><input type='hidden' name='accion' value='carne_editar'><input type='hidden' name='est' value='" + str(e.id) + "'><input type='hidden' name='qe' value='" + _esc(qe) + "'>"
+                    "<input name='nombre' value='" + _esc(e.nombre) + "' style='" + inp + "'><input name='apellido' value='" + _esc(e.apellido) + "' style='" + inp + "'>"
+                    "<input name='grado' value='" + _esc(e.grado) + "' style='" + inp + "'><button class='btn'>Guardar (auditado)</button></form></details>")
+        filas += ("<tr style='border-bottom:1px solid #e2e8f0;vertical-align:top'><td style='padding:8px'><b>" + _esc(e.nombre + " " + e.apellido) + "</b><br><span class='mini-text'>" + _esc(e.codigo) +
+                  " · " + _esc(e.grado) + "</span></td><td style='padding:8px'>" + est_c + "<br><span class='mini-text'>Versión " + str((cv.version if cv else 1)) + "</span></td><td style='padding:8px'>" + acc + "</td></tr>")
+    if qe and not filas:
+        filas = "<tr><td colspan='3' style='padding:10px;color:#64748b'>Sin estudiantes con ese dato en esta institución.</td></tr>"
+    tabla = ("<div style='overflow:auto;margin-top:8px'><table style='width:100%;border-collapse:collapse;font-size:13px'><tr style='background:#f1f5f9;text-align:left'>"
+             "<th style='padding:8px'>Estudiante</th><th style='padding:8px'>Carné</th><th style='padding:8px'>Acciones</th></tr>" + filas + "</table></div>") if qe else ""
+    return ("<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>📱 Estudiantes y carné</h3>"
+            "<p class='mini-text'>Busca por nombre, código o documento. Bloquear anula el QR del plástico actual y genera el cobro de reimpresión; activar y cambiar datos requieren Nivel 2.</p>"
+            "<form method='GET' action='" + base + "' style='display:flex;gap:6px;flex-wrap:wrap'><input name='qe' value='" + _esc(qe) + "' placeholder='Nombre, código o documento del estudiante' style='" + _VIN_INP + ";flex:1;min-width:220px'>"
+            "<button class='btn'>Buscar</button></form>" + tabla + "</section>")
+
+
+def _vin_html_resumen_gerencia(inst):
+    """Vista de Gerencia: corte, pagos, PQR, sedes y estudiantes de la institución."""
+    iid = inst.id
+    cel = "padding:6px 8px"
+    box = "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>%s</h3>%s</section>"
+
+    def tabla(cab, filas, vacio):
+        if not filas:
+            return "<p class='mini-text'>" + vacio + "</p>"
+        return ("<div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:12.5px'><tr style='background:#f1f5f9;text-align:left'>"
+                + "".join("<th style='" + cel + "'>" + c + "</th>" for c in cab) + "</tr>"
+                + "".join("<tr style='border-bottom:1px solid #e2e8f0'>" + "".join("<td style='" + cel + "'>" + _esc(x) + "</td>" for x in f) + "</tr>" for f in filas) + "</table></div>")
+
+    def money(x):
+        try:
+            return "$ " + "{:,.0f}".format(float(x or 0)).replace(",", ".")
+        except Exception:
+            return str(x)
+
+    out = ""
+    lic = [("Plan", inst.plan), ("Estado", inst.estado), ("Inicio de licencia", inst.fecha_inicio_licencia), ("Fecha de corte / vencimiento", inst.fecha_vencimiento),
+           ("Aviso desde (días antes)", inst.dias_aviso), ("Suspensión", inst.fecha_suspension), ("Motivo de bloqueo", inst.motivo_bloqueo),
+           ("Valor mensual", money(inst.valor_mensual_con_descuento or inst.valor_mensual_pleno)), ("Cancelación solicitada", inst.fecha_solicitud_cancelacion)]
+    out += box % ("🗓️ Licencia y fechas de corte", "<table style='font-size:13px;border-collapse:collapse'>" + "".join(
+        "<tr><td style='" + cel + ";color:#64748b'>" + _esc(a) + "</td><td style='" + cel + ";font-weight:700'>" + _esc(b if b not in (None, "") else "—") + "</td></tr>" for a, b in lic) + "</table>")
+    try:
+        pagos = [(p.fecha_pago or (p.creado_en or "")[:10], p.tipo, money(p.valor), p.concepto or p.referencia or "", p.estado_despues or "") for p in
+                 PagoCuotaColegio.query.filter_by(institucion_id=iid).order_by(PagoCuotaColegio.id.desc()).limit(6).all()]
+        facs = [(f.consecutivo, f.concepto, money(f.valor), f.estado, f.vencimiento or "", f.pagada_en or "") for f in
+                FacturaCobro.query.filter_by(institucion_id=iid).order_by(FacturaCobro.id.desc()).limit(6).all()]
+    except Exception:
+        db.session.rollback()
+        pagos, facs = [], []
+    out += box % ("💳 Últimos pagos y cobros", "<b style='font-size:13px'>Pagos registrados</b>" + tabla(("Fecha", "Tipo", "Valor", "Concepto", "Estado después"), pagos, "Sin pagos registrados.")
+                  + "<b style='font-size:13px;display:block;margin-top:10px'>Facturas / cobros</b>" + tabla(("N.º", "Concepto", "Valor", "Estado", "Vence", "Pagada"), facs, "Sin facturas."))
+    try:
+        cond = [TicketPQR.institucion_id == iid]
+        nit = re.sub(r"\D", "", inst.nit or "")[:9]
+        if nit:
+            cond.append(TicketPQR.nit_colegio.ilike("%" + nit + "%"))
+        pq = [(t.radicado, (t.fecha or ""), t.tipo_pqr, (t.objeto or "")[:70], t.estado) for t in
+              TicketPQR.query.filter(db.or_(*cond)).order_by(TicketPQR.id.desc()).limit(6).all()]
+    except Exception:
+        db.session.rollback()
+        pq = []
+    out += box % ("📨 Últimas PQR", tabla(("Radicado", "Fecha", "Tipo", "Asunto", "Estado"), pq, "Sin PQR registradas."))
+    try:
+        sedes = [(s.nombre, s.tipo, s.municipio, s.jornada, s.codigo_dane, "Activa" if s.activa else "Inactiva") for s in
+                 SedeInstitucion.query.filter_by(institucion_id=iid).order_by(SedeInstitucion.id).limit(30).all()]
+    except Exception:
+        db.session.rollback()
+        sedes = []
+    out += box % ("🏫 Sedes (%d)" % len(sedes), tabla(("Sede", "Tipo", "Municipio", "Jornada", "DANE sede", "Estado"), sedes, "Sin sedes registradas."))
+    try:
+        tot = Estudiante.query.filter_by(institucion_id=iid).count()
+        act = Estudiante.query.filter_by(institucion_id=iid, estado="ACTIVO").count()
+        blq = CarneVersion.query.filter_by(institucion_id=iid, bloqueado=True).count()
+        por_grado = db.session.query(Estudiante.grado, db.func.count(Estudiante.id)).filter(Estudiante.institucion_id == iid).group_by(Estudiante.grado).order_by(Estudiante.grado).limit(40).all()
+        usr = db.session.query(Usuario.rol, db.func.count(Usuario.id)).filter(Usuario.institucion_id == iid).group_by(Usuario.rol).all()
+    except Exception:
+        db.session.rollback()
+        tot = act = blq = 0
+        por_grado, usr = [], []
+    out += box % ("🎓 Estudiantes y usuarios", "<div style='display:flex;gap:18px;flex-wrap:wrap;font-size:14px'><div><b>" + str(tot) + "</b><br><span class='mini-text'>estudiantes</span></div>"
+                  "<div><b>" + str(act) + "</b><br><span class='mini-text'>activos</span></div><div><b>" + str(blq) + "</b><br><span class='mini-text'>carnés bloqueados</span></div></div>"
+                  + "<b style='font-size:13px;display:block;margin-top:10px'>Por grado</b>" + tabla(("Grado", "Estudiantes"), [(g or "—", n) for g, n in por_grado], "Sin estudiantes.")
+                  + "<b style='font-size:13px;display:block;margin-top:10px'>Usuarios por rol</b>" + tabla(("Rol", "Usuarios"), [(r_ or "—", n) for r_, n in usr], "Sin usuarios."))
+    return out
 
 
 if __name__ == "__main__":
