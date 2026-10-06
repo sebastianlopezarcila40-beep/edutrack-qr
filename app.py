@@ -77030,6 +77030,170 @@ def _bio_pub(titulo, cuerpo, color="#0B2D57"):
     return _bio_nocache(app.make_response(_vi_pub(titulo, cuerpo, color)))
 
 
+_BIO_PAGE_TPL = r'''
+<style>
+body{margin:0;background:#eef3fa}
+.bx{max-width:440px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;font-family:Segoe UI,system-ui,-apple-system,sans-serif;color:#0f172a;background:#f7f9fd;position:relative}
+.bx-h{display:flex;align-items:center;justify-content:center;padding:14px 16px 6px}
+.bx-h img{height:34px;border-radius:6px}
+.bx-dots{display:flex;gap:8px;justify-content:center;padding:6px 0 10px}
+.bx-dots i{width:34px;height:5px;border-radius:5px;background:#d6e0f0;transition:background .3s}
+.bx-dots i.on{background:#005BEA}
+.bx-s{display:none;flex:1;flex-direction:column;padding:8px 22px 28px}
+.bx-s.act{display:flex}
+.bx h2{margin:6px 0 6px;font-size:24px;color:#0B2D57;line-height:1.2}
+.bx p{margin:0 0 10px;font-size:14px;line-height:1.5;color:#475569}
+.bx .mut{font-size:12px;color:#64748b}
+.bx label.k{display:flex;gap:10px;font-size:13px;margin:8px 0;line-height:1.45;color:#1e293b;align-items:flex-start}
+.bx label.k input{margin-top:3px;width:18px;height:18px;flex:none}
+.bx a{color:#005BEA;font-weight:700}
+.bx input.t{width:100%;box-sizing:border-box;padding:14px;border:1.5px solid #c9d6ea;border-radius:12px;font-size:18px;letter-spacing:1px;margin:6px 0 14px;background:#fff}
+.bx input.t:focus{outline:none;border-color:#005BEA;box-shadow:0 0 0 3px rgba(0,91,234,.15)}
+.bx .bt{display:block;width:100%;box-sizing:border-box;text-align:center;padding:16px;border:0;border-radius:999px;background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;font-weight:800;font-size:16px;cursor:pointer;margin-top:10px;box-shadow:0 8px 20px rgba(0,91,234,.28)}
+.bx .bt:disabled{opacity:.45;box-shadow:none;cursor:not-allowed}
+.bx .bt.sec{background:#fff;color:#0B2D57;border:1.5px solid #c9d6ea;box-shadow:none}
+.bx .mm{display:none;margin-top:10px;padding:10px 12px;border-radius:10px;font-size:13px}
+.bx .mm.ok{background:#dcfce7;color:#166534}.bx .mm.danger{background:#fee2e2;color:#991b1b}
+/* pantalla oscura "Identidad facial" */
+.bx-d{color:#fff}
+.bx.dk{background:radial-gradient(120% 90% at 50% 0%,#0f4aa8 0%,#0B2D57 55%,#071c38 100%)}
+.bx.dk .bx-dots i{background:rgba(255,255,255,.28)}.bx.dk .bx-dots i.on{background:#fff}.bx.dk .mut{color:#b7c9ea}
+.bx-d h2{color:#fff;text-align:center;font-size:28px;margin-top:22px}
+.bx-d p{color:#dbe7fb;text-align:center}
+.bx-av{width:230px;height:230px;margin:26px auto 22px;border-radius:50%;padding:9px;background:conic-gradient(from 200deg,#fff,#7fb2ff,#005BEA,#fff);box-sizing:border-box}
+.bx-av div{width:100%;height:100%;border-radius:50%;background:#e4efff;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.bx-d .bt{background:#fff;color:#0B2D57;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+/* cámara circular con silueta */
+.bx-cam{position:relative;width:min(78vw,320px);height:min(78vw,320px);margin:14px auto 18px;border-radius:50%;box-shadow:0 0 0 10px #e3ebf7;transition:box-shadow .3s}
+.bx-cam.ok{box-shadow:0 0 0 10px #005BEA}
+.bx-cam video{width:100%;height:100%;object-fit:cover;border-radius:50%;transform:scaleX(-1);background:#0f172a;display:block}
+.bx-cam svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.bx-ins{font-size:21px;font-weight:700;text-align:center;color:#0B2D57;line-height:1.3;margin:6px 4px 14px;min-height:56px}
+.bx-pil{display:flex;gap:8px;justify-content:center;margin-bottom:6px}
+.bx-pil span{font-size:12px;font-weight:700;padding:6px 10px;border-radius:999px;background:#e3ebf7;color:#64748b}
+.bx-pil span.ok{background:#005BEA;color:#fff}
+/* cédula */
+.bx-id{width:100%;max-width:330px;aspect-ratio:1.586;margin:14px auto;border:3px dashed #7fa8e8;border-radius:16px;background:#fff;display:flex;gap:14px;align-items:center;padding:16px;box-sizing:border-box}
+.bx-id .f{width:34%;aspect-ratio:.8;border-radius:10px;background:#dbe7fb}
+.bx-id .l{flex:1;display:flex;flex-direction:column;gap:10px}.bx-id .l i{height:9px;border-radius:5px;background:#dbe7fb}
+.bx-fin{text-align:center;padding-top:40px}
+.bx-ck{width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,#0B2D57,#005BEA);margin:0 auto 18px;display:flex;align-items:center;justify-content:center}
+</style>
+<div class="bx">
+ <div class="bx-h"><img src="/static/img/logo-procsis.svg" alt="PROCSIS" onerror="this.outerHTML='<b style=&quot;color:#0B2D57;font-size:22px&quot;>PROCSIS</b>'"></div>
+ <div class="bx-dots" id="dots"><i class="on"></i><i></i><i></i></div>
+
+ <section class="bx-s act" id="paso0">
+  <h2>Verificación de identidad</h2>
+  <p>__NOMBRE__</p>
+  <p>Para proteger su institución, necesitamos comparar su documento con una prueba facial hecha ahora. <b>Los datos biométricos son datos sensibles</b>: su entrega es voluntaria. Si prefiere no hacerlo, puede validarse por llamada con su asesor.</p>
+  <p class="mut">Las imágenes se procesan para esta verificación, se eliminan al decidirse y, como máximo, a las 4 horas. Procsis conserva solo el resultado, el método, la fecha, la operación autorizada y un código de verificación.</p>
+  <label class="k"><input type="checkbox" id="k1"> <span>Autorizo expresamente el tratamiento de mis datos biométricos para esta verificación (Ley 1581 de 2012). <a href="#" onclick="return procsisLegal('habeas')">Leer política y mis derechos</a></span></label>
+  <label class="k"><input type="checkbox" id="k2"> <span>Acepto la Política de Tratamiento de Datos y los <a href="#" onclick="return procsisLegal('terminos')">Términos de PROCSIS</a>.</span></label>
+  <label style="font-size:13px;font-weight:700;margin-top:10px;display:block">Número de cédula</label>
+  <input id="ced" class="t nopaste" inputmode="numeric" autocomplete="off" placeholder="Escríbalo con el teclado">
+  <button id="b0" class="bt" disabled>Comenzar</button>
+  <div id="cargando" class="mut" style="display:none;text-align:center;margin-top:8px">Preparando el verificador…</div>
+ </section>
+
+ <section class="bx-s" id="paso1">
+  <h2>Foto de su cédula</h2>
+  <p>Fotografíe la cara frontal con buena luz y sin reflejos. Debe verse su fotografía.</p>
+  <div class="bx-id"><div class="f"></div><div class="l"><i></i><i style="width:80%"></i><i style="width:60%"></i><i style="width:70%"></i></div></div>
+  <label class="bt" for="fcd" style="margin-top:6px">📷 Fotografiar mi cédula</label>
+  <input id="fcd" type="file" accept="image/*" capture="environment" style="display:none">
+  <div id="m1" class="mm"></div>
+ </section>
+
+ <section class="bx-s bx-d" id="paso2a">
+  <h2>Identidad Facial</h2>
+  <p>Confirma que eres tú para continuar.</p>
+  <div class="bx-av"><div><svg viewBox="0 0 200 200" width="190" height="190"><ellipse cx="100" cy="82" rx="42" ry="52" fill="#fff"/><path d="M28 200c4-40 34-58 72-58s68 18 72 58z" fill="#005BEA"/></svg></div></div>
+  <p style="margin-top:auto">Tomaremos la foto automáticamente una vez estés en posición. Después te pediremos girar la cabeza hacia cada lado.</p>
+  <button id="b2i" class="bt">Comenzar prueba facial</button>
+ </section>
+
+ <section class="bx-s" id="paso2">
+  <div class="bx-cam" id="cam"><video id="vid" playsinline muted></video>
+   <svg viewBox="0 0 200 200"><path d="M100 24c-25 0-41 21-41 47 0 19 8 33 19 41-26 8-49 23-55 48h154c-6-25-29-40-55-48 11-8 19-22 19-41 0-26-16-47-41-47z" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="4" stroke-linejoin="round"/></svg></div>
+  <div id="ins" class="bx-ins">Enmarca tu cara en la silueta y mira a la cámara.</div>
+  <div class="bx-pil" id="pil"><span>De frente</span><span>Lado 1</span><span>Lado 2</span></div>
+  <div id="m2" class="mm"></div>
+  <button id="b2" class="bt sec" style="margin-top:auto">Tomar foto ahora</button>
+ </section>
+
+ <section class="bx-s" id="paso3">
+  <div class="bx-fin"><div class="bx-ck"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+   <h2>Prueba completada</h2><p>Envíe la verificación para que su asesor la revise.</p></div>
+  <button id="b3" class="bt" style="margin-top:auto">Enviar verificación</button>
+  <div id="m3" class="mm"></div>
+ </section>
+
+ <section class="bx-s" id="fin">
+  <div class="bx-fin"><div class="bx-ck"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+   <h2>Verificación recibida</h2><p>Un asesor de PROCSIS la revisará. Ya puede cerrar esta página.</p></div>
+ </section>
+ <p class="mut" style="text-align:center;padding:0 22px 16px">Conexión protegida · Este enlace es de un solo uso</p>
+</div>
+<script src="__FA__dist/face-api.js"></script>
+<script>(function(){'use strict';
+var MB='__FA__model/';
+var $=function(i){return document.getElementById(i)};
+var S={dc:null,ic:null,ds:null,is:null,yaws:[]};
+var secs=['paso0','paso1','paso2a','paso2','paso3','fin'];
+var dotMap={paso0:0,paso1:1,paso2a:2,paso2:2,paso3:2,fin:2};
+function ver(id){document.querySelector('.bx').classList.toggle('dk',id==='paso2a');secs.forEach(function(s){$(s).classList.toggle('act',s===id);});var d=dotMap[id];Array.prototype.forEach.call($('dots').children,function(e,i){e.classList.toggle('on',i<=d);});window.scrollTo(0,0);}
+function msg(id,t,ok){var e=$(id);e.textContent=t;e.className='mm '+(ok?'ok':'danger');e.style.display='block';}
+function chk(){$('b0').disabled=!($('k1').checked&&$('k2').checked&&/^\d{5,12}$/.test($('ced').value.replace(/\D/g,'')));}
+['k1','k2','ced'].forEach(function(i){$(i).addEventListener('input',chk);$(i).addEventListener('change',chk);});
+['paste','drop','contextmenu'].forEach(function(ev){$('ced').addEventListener(ev,function(e){e.preventDefault();});});
+var listo=false,carga=null;
+function cargar(){if(carga)return carga;carga=(async function(){var F=faceapi;await F.nets.tinyFaceDetector.loadFromUri(MB);await F.nets.faceLandmark68Net.loadFromUri(MB);await F.nets.faceRecognitionNet.loadFromUri(MB);listo=true;})();carga.catch(function(){carga=null;});return carga;}
+try{cargar().catch(function(){});}catch(e){}
+function opt(sz,th){return new faceapi.TinyFaceDetectorOptions({inputSize:sz,scoreThreshold:th});}
+function yaw(lm){var p=lm.positions;return (p[30].x-p[0].x)/(p[16].x-p[0].x);}
+function jpg(src,w,sw,sh){var c=document.createElement('canvas');var r=Math.min(1,w/sw);c.width=Math.round(sw*r);c.height=Math.round(sh*r);c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c.toDataURL('image/jpeg',0.72);}
+$('b0').onclick=async function(){$('b0').disabled=true;$('cargando').style.display='block';
+ try{await cargar();}catch(e){$('cargando').style.display='none';$('b0').disabled=false;alert('No se pudo preparar el verificador. Revise su conexión e intente de nuevo.');return;}
+ $('cargando').style.display='none';ver('paso1');};
+$('fcd').onchange=function(){var f=this.files[0];if(!f)return;var im=new Image();im.onload=async function(){
+ try{var cv=document.createElement('canvas');var r=Math.min(1,1100/Math.max(im.naturalWidth,im.naturalHeight));cv.width=Math.round(im.naturalWidth*r);cv.height=Math.round(im.naturalHeight*r);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);
+ var d=await faceapi.detectSingleFace(cv,opt(608,0.3)).withFaceLandmarks().withFaceDescriptor();
+ if(!d){msg('m1','No se detecta la fotografía de la cédula. Acérquese, evite reflejos y repita la foto.',false);return;}
+ S.dc=Array.from(d.descriptor);S.ic=jpg(cv,900,cv.width,cv.height);ver('paso2a');}
+ catch(e){msg('m1','No se pudo procesar la imagen. Intente de nuevo.',false);}URL.revokeObjectURL(im.src);};im.src=URL.createObjectURL(f);};
+var stream=null,iv=null,forzar=false;
+function parar(){if(iv){clearInterval(iv);iv=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}}
+function pil(n){Array.prototype.forEach.call($('pil').children,function(e,i){e.classList.toggle('ok',i<n);});}
+async function arrancar(){
+ ver('paso2');forzar=false;pil(0);$('m2').style.display='none';$('cam').classList.remove('ok');$('ins').textContent='Enmarca tu cara en la silueta y mira a la cámara.';$('b2').disabled=false;$('b2').textContent='Tomar foto ahora';
+ var v=$('vid');
+ try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});}
+ catch(e){ver('paso2a');$('b2i').textContent='Reintentar';alert('No se pudo abrir la cámara. Permita el acceso e intente de nuevo.');return;}
+ v.srcObject=stream;await v.play();
+ var fase=0,lado=0,estable=0,t0=Date.now(),busy=false;
+ iv=setInterval(async function(){if(busy)return;busy=true;try{
+  if(Date.now()-t0>70000){parar();ver('paso2a');$('b2i').textContent='Reintentar';alert('Se agotó el tiempo. Intente de nuevo.');busy=false;return;}
+  var d=await faceapi.detectSingleFace(v,opt(320,0.5)).withFaceLandmarks();
+  if(!d){estable=0;$('cam').classList.remove('ok');busy=false;return;}
+  var y=yaw(d.landmarks);
+  if(fase===0){var c=(y>0.42&&y<0.58);$('cam').classList.toggle('ok',c);estable=c?estable+1:0;
+   if(estable>=3||(forzar&&y>0.38&&y<0.62)){
+    var full=await faceapi.detectSingleFace(v,opt(320,0.5)).withFaceLandmarks().withFaceDescriptor();
+    if(full){S.ds=Array.from(full.descriptor);S.is=jpg(v,640,v.videoWidth,v.videoHeight);S.yaws=[yaw(full.landmarks)];fase=1;pil(1);$('b2').disabled=true;$('ins').textContent='Ahora gira lentamente la cabeza hacia un lado.';}}}
+  else if(fase===1){if(y<0.36||y>0.64){lado=y<0.5?-1:1;S.yaws.push(y);fase=2;pil(2);$('ins').textContent='Bien. Ahora gira hacia el lado contrario.';}}
+  else if(fase===2){if((lado<0&&y>0.64)||(lado>0&&y<0.36)){S.yaws.push(y);pil(3);parar();ver('paso3');}}
+ }catch(e){}busy=false;},300);}
+$('b2i').onclick=arrancar;
+$('b2').onclick=function(){forzar=true;$('b2').textContent='Procesando…';};
+$('b3').onclick=async function(){$('b3').disabled=true;
+ try{var r=await fetch(location.pathname+'/enviar',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({cedula:$('ced').value.replace(/\D/g,''),consent:true,img_c:S.ic,img_s:S.is,d_c:S.dc,d_s:S.ds,yaws:S.yaws})});
+ var j=await r.json();if(j.ok){ver('fin');}else{msg('m3',j.msg||'No fue posible completar la verificación.',false);$('b3').disabled=!!j.final;}}
+ catch(e){msg('m3','Error de conexión. Intente de nuevo.',false);$('b3').disabled=false;}};
+})();</script>
+'''
+
+
 @app.route("/validar-biometria/<token>", methods=["GET"])
 def validar_biometria_publico(token):
     _bio_ensure()
@@ -77041,70 +77205,8 @@ def validar_biometria_publico(token):
     if b.estado != "GENERADA":
         return _bio_pub("Enlace no disponible", "<h2>Enlace no disponible</h2><p>Este enlace ya fue utilizado o venció. Solicite uno nuevo a su asesor.</p>", "#991b1b")
     inst = Institucion.query.get(b.institucion_id)
-    st = "width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;margin:4px 0 12px"
-    btn = "width:100%;padding:14px;border:0;border-radius:12px;background:#005BEA;color:#fff;font-weight:800;font-size:16px;cursor:pointer;margin-top:8px"
-    html = (
-        "<h2 style='margin-top:0;color:#0B2D57'>Verificación de identidad</h2>"
-        "<p style='font-size:14px'>" + _esc(inst.nombre if inst else "") + "</p>"
-        "<div id='paso0'>"
-        "<p style='font-size:13px;color:#475569'>Para proteger su institución, necesitamos comparar su documento con una prueba facial hecha ahora. "
-        "<b>Los datos biométricos son datos sensibles</b>: su entrega es voluntaria. Si prefiere no hacerlo, puede validarse por llamada con su asesor.</p>"
-        "<p style='font-size:12px;color:#64748b'>Las imágenes se procesan para esta verificación, se eliminan al decidirse y, como máximo, a las 4 horas. "
-        "Procsis conserva solo el resultado, el método, la fecha, la operación autorizada y un código de verificación.</p>"
-        "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0'><input type='checkbox' id='k1'> <span>Autorizo expresamente el tratamiento de mis datos biométricos para esta verificación (Ley 1581 de 2012). <a href='#' onclick=\"return procsisLegal('habeas')\" style='color:#005BEA;font-weight:700'>Leer política y mis derechos</a></span></label>"
-        "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0'><input type='checkbox' id='k2'> <span>Acepto la Política de Tratamiento de Datos y los <a href='#' onclick=\"return procsisLegal('terminos')\" style='color:#005BEA;font-weight:700'>Términos de PROCSIS</a>.</span></label>"
-        "<label style='font-size:13px;font-weight:700;margin-top:10px;display:block'>Número de cédula</label>"
-        "<input id='ced' class='nopaste' inputmode='numeric' autocomplete='off' style='" + st + "'>"
-        "<button id='b0' disabled style='" + btn + "'>Comenzar</button></div>"
-        "<div id='paso1' style='display:none'><h3>1. Foto de su cédula</h3><p style='font-size:13px'>Fotografíe la cara frontal, con buena luz y sin reflejos; que se vea su fotografía.</p>"
-        "<input id='fcd' type='file' accept='image/*' capture='environment' style='" + st + "'><div id='m1' class='msg' style='display:none'></div></div>"
-        "<div id='paso2' style='display:none'><h3>2. Prueba facial</h3><p id='ins' style='font-size:14px;font-weight:700'>Pulse iniciar y mire de frente a la cámara.</p>"
-        "<video id='vid' playsinline muted style='width:100%;border-radius:12px;background:#0f172a;transform:scaleX(-1)'></video>"
-        "<button id='b2' style='" + btn + "'>Iniciar cámara</button><div id='m2' class='msg' style='display:none'></div></div>"
-        "<div id='paso3' style='display:none'><button id='b3' style='" + btn + "'>Enviar verificación</button><div id='m3' class='msg' style='display:none'></div></div>"
-        "<div id='fin' style='display:none'><h2 style='color:#166534'>✅ Verificación recibida</h2><p>Un asesor de PROCSIS la revisará. Ya puede cerrar esta página.</p></div>"
-        "<div id='cargando' class='mini-text' style='display:none'>Preparando el verificador…</div>"
-        "<script src='" + _BIO_FA + "dist/face-api.js'></script>"
-        "<script>(function(){'use strict';var MB='" + _BIO_FA + "model/';"
-        "var $=function(i){return document.getElementById(i)};"
-        "var S={dc:null,ic:null,ds:null,is:null,yaws:[]};"
-        "function msg(id,t,ok){var e=$(id);e.textContent=t;e.className='msg '+(ok?'ok':'danger');e.style.display='block';}"
-        "function chk(){$('b0').disabled=!($('k1').checked&&$('k2').checked&&/^\\d{5,12}$/.test($('ced').value.replace(/\\D/g,'')));}"
-        "['k1','k2','ced'].forEach(function(i){$(i).addEventListener('input',chk);$(i).addEventListener('change',chk);});"
-        "['paste','drop','contextmenu'].forEach(function(ev){$('ced').addEventListener(ev,function(e){e.preventDefault();});});"
-        "var ok=false;async function cargar(){if(ok)return;var F=faceapi;await F.nets.tinyFaceDetector.loadFromUri(MB);await F.nets.faceLandmark68Net.loadFromUri(MB);await F.nets.faceRecognitionNet.loadFromUri(MB);ok=true;}"
-        "function opt(sz,th){return new faceapi.TinyFaceDetectorOptions({inputSize:sz,scoreThreshold:th});}"
-        "function yaw(lm){var p=lm.positions;return (p[30].x-p[0].x)/(p[16].x-p[0].x);}"
-        "function jpg(src,w,sw,sh){var c=document.createElement('canvas');var r=Math.min(1,w/sw);c.width=Math.round(sw*r);c.height=Math.round(sh*r);c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c.toDataURL('image/jpeg',0.72);}"
-        "$('b0').onclick=async function(){$('b0').disabled=true;$('cargando').style.display='block';"
-        "try{await cargar();}catch(e){$('cargando').style.display='none';$('b0').disabled=false;alert('No se pudo preparar el verificador. Revise su conexión e intente de nuevo.');return;}"
-        "$('cargando').style.display='none';$('paso0').style.display='none';$('paso1').style.display='block';};"
-        "$('fcd').onchange=function(){var f=this.files[0];if(!f)return;var im=new Image();im.onload=async function(){"
-        "try{var cv=document.createElement('canvas');var r=Math.min(1,1100/Math.max(im.naturalWidth,im.naturalHeight));cv.width=Math.round(im.naturalWidth*r);cv.height=Math.round(im.naturalHeight*r);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);"
-        "var d=await faceapi.detectSingleFace(cv,opt(608,0.3)).withFaceLandmarks().withFaceDescriptor();"
-        "if(!d){msg('m1','No se detecta la fotografía de la cédula. Acérquese, evite reflejos y repita la foto.',false);return;}"
-        "S.dc=Array.from(d.descriptor);S.ic=jpg(cv,900,cv.width,cv.height);msg('m1','Cédula recibida.',true);$('paso1').style.display='none';$('paso2').style.display='block';}"
-        "catch(e){msg('m1','No se pudo procesar la imagen. Intente de nuevo.',false);}URL.revokeObjectURL(im.src);};im.src=URL.createObjectURL(f);};"
-        "$('b2').onclick=async function(){var v=$('vid'),stream;$('b2').disabled=true;"
-        "try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});}catch(e){msg('m2','No se pudo abrir la cámara. Permita el acceso e intente de nuevo.',false);$('b2').disabled=false;return;}"
-        "v.srcObject=stream;await v.play();var fase=0,lado=0,estable=0,t0=Date.now(),busy=false;$('ins').textContent='Mire de frente y no se mueva.';"
-        "var iv=setInterval(async function(){if(busy)return;busy=true;try{"
-        "if(Date.now()-t0>60000){clearInterval(iv);stream.getTracks().forEach(function(t){t.stop();});msg('m2','Se agotó el tiempo. Pulse iniciar para repetir.',false);$('b2').disabled=false;return;}"
-        "var d=await faceapi.detectSingleFace(v,opt(320,0.5)).withFaceLandmarks();if(!d){estable=0;busy=false;return;}var y=yaw(d.landmarks);"
-        "if(fase===0){if(y>0.42&&y<0.58){estable++;}else{estable=0;}"
-        "if(estable>=3){var full=await faceapi.detectSingleFace(v,opt(320,0.5)).withFaceLandmarks().withFaceDescriptor();"
-        "if(full){S.ds=Array.from(full.descriptor);S.is=jpg(v,640,v.videoWidth,v.videoHeight);S.yaws=[yaw(full.landmarks)];fase=1;$('ins').textContent='Ahora gire lentamente la cabeza hacia un lado.';}}}"
-        "else if(fase===1){if(y<0.36||y>0.64){lado=y<0.5?-1:1;S.yaws.push(y);fase=2;$('ins').textContent='Bien. Ahora gire hacia el lado contrario.';}}"
-        "else if(fase===2){if((lado<0&&y>0.64)||(lado>0&&y<0.36)){S.yaws.push(y);clearInterval(iv);stream.getTracks().forEach(function(t){t.stop();});$('ins').textContent='Prueba completada.';$('paso3').style.display='block';}}"
-        "}catch(e){}busy=false;},300);};"
-        "$('b3').onclick=async function(){$('b3').disabled=true;"
-        "try{var r=await fetch(location.pathname+'/enviar',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({cedula:$('ced').value.replace(/\\D/g,''),consent:true,img_c:S.ic,img_s:S.is,d_c:S.dc,d_s:S.ds,yaws:S.yaws})});"
-        "var j=await r.json();if(j.ok){['paso1','paso2','paso3'].forEach(function(i){$(i).style.display='none'});$('fin').style.display='block';}else{msg('m3',j.msg||'No fue posible completar la verificación.',false);$('b3').disabled=!!j.final;}}"
-        "catch(e){msg('m3','Error de conexión. Intente de nuevo.',false);$('b3').disabled=false;}};"
-        "})();</script>"
-        + _legal_modal()
-    )
-    resp = _bio_pub("Verificación de identidad", html)
+    html = _BIO_PAGE_TPL.replace("__NOMBRE__", _esc(inst.nombre if inst else "")).replace("__FA__", _BIO_FA) + _legal_modal()
+    resp = _bio_nocache(app.make_response(page("Verificación de identidad", html)))
     resp.headers["Content-Security-Policy"] = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
                                                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net; "
                                                "media-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'none'")
