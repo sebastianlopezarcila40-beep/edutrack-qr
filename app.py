@@ -36405,25 +36405,23 @@ def biometria_validar_link(token):
             ok, msg = True, "Ya validado. Continúe en el computador."
         elif pin and pin != (ch.pin or ""):
             msg = "PIN incorrecto. Revise el número en la pantalla del computador."
-        elif not foto_b64.startswith("data:image"):
+        elif not foto_b64.startswith("data:image") or len(foto_b64) < 2000:
             msg = "Tome la foto del rostro para continuar."
         else:
             import base64, re as _re
             m = _re.match(r"data:image/\w+;base64,(.+)", foto_b64)
-            raw = base64.b64decode(m.group(1)) if m else b""
-            if len(raw) > 2_500_000:
-                # recorte de seguridad
-                raw = raw[:2_500_000]
-            folder = os.path.join(app.root_path, "static", "uploads", "biometria")
-            os.makedirs(folder, exist_ok=True)
-            fname = f"val_{ch.id}_{ch.usuario_id}.jpg"
             try:
-                raw = _comprimir_imagen_bytes(raw, max_side=320, max_kb=60)
+                raw = base64.b64decode(m.group(1))[:2_500_000] if m else b""
             except Exception:
-                pass
-            with open(os.path.join(folder, fname), "wb") as f:
-                f.write(raw)
-            ch.foto_validacion = f"/static/uploads/biometria/{fname}"
+                raw = b""
+            # La foto NO se guarda en ningún archivo ni carpeta pública: solo se verifica que sea una
+            # imagen real y se conserva una huella (hash) como evidencia de auditoría.
+            import hashlib as _hl
+            if len(raw) < 1500:
+                raw = b"x" * 0
+                return page("Validación", "<div class='center'><h1>Foto no válida</h1><p>Vuelva a abrir el enlace y tome la foto del rostro de nuevo.</p></div>")
+            ch.foto_validacion = "sin-imagen:sha256:" + _hl.sha256(raw).hexdigest()[:24]
+            raw = b""
             ch.estado = "aprobado"
             ch.aprobado_en = ahora().strftime("%Y-%m-%d %H:%M:%S") if hasattr(ahora(), "strftime") else ""
             ch.dispositivo = (request.headers.get("User-Agent") or "")[:200]
@@ -77853,6 +77851,55 @@ def _seo_meta_y_robots(resp):
         pass
     return resp
 
+
+
+
+# ----------------------------------------------------------------------
+# Privacidad: las fotos de biometría NO pueden quedar en el servidor.
+# Se borran las antiguas y se bloquea cualquier acceso a esa carpeta.
+# ----------------------------------------------------------------------
+_BIO_PURGA_HECHA = {"ok": False}
+
+
+def _bio_purgar_fotos_antiguas():
+    n = 0
+    try:
+        import shutil
+        for sub in ("biometria",):
+            d = os.path.join(app.root_path, "static", "uploads", sub)
+            if os.path.isdir(d):
+                for fn in os.listdir(d):
+                    fp = os.path.join(d, fn)
+                    try:
+                        if os.path.isfile(fp) or os.path.islink(fp):
+                            os.remove(fp); n += 1
+                        elif os.path.isdir(fp):
+                            shutil.rmtree(fp, ignore_errors=True)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    try:
+        db.session.execute(text("UPDATE login_challenges SET foto_validacion='' WHERE foto_validacion LIKE '/static/uploads/biometria/%'"))
+        db.session.execute(text("UPDATE usuarios SET biometria_path='' WHERE biometria_path LIKE '%uploads/biometria%'"))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return n
+
+
+@app.before_request
+def _bio_bloquear_y_purgar():
+    p = request.path or ""
+    if not _BIO_PURGA_HECHA["ok"]:
+        _BIO_PURGA_HECHA["ok"] = True
+        _bio_purgar_fotos_antiguas()
+    if "/uploads/biometria" in p:
+        return Response("No encontrado", status=404)
+    return None
 
 
 if __name__ == "__main__":
