@@ -21168,6 +21168,13 @@ def _robots_txt():
         "Disallow: /notas",
         "Disallow: /static/",
         "Disallow: /qr/",
+        "Disallow: /validar-identidad/",
+        "Disallow: /validar-biometria/",
+        "Disallow: /media/",
+        "Disallow: /soporte",
+        "Disallow: /ventas/",
+        "Disallow: /api/",
+        "Disallow: /login?",
         "Sitemap: https://procsishq.com/sitemap.xml",
     ]
     return Response("\n".join(lines), mimetype="text/plain")
@@ -21179,7 +21186,7 @@ def _sitemap_xml():
         "/", "/procsis", "/tecnologia", "/soluciones",
         "/politicas", "/politicas/seguridad-informacion", "/politicas/ciberseguridad",
         "/politicas/cookies", "/politicas/datos-personales", "/politicas/aviso-privacidad",
-        "/politicas/habeas", "/pqr", "/whatsapp",
+        "/politicas/habeas", "/pqr", "/whatsapp", "/contacto", "/ayuda",
     ]
     hoy = fecha_hoy()
     items = "".join(
@@ -31269,6 +31276,7 @@ _SEO_CANONICAL = {
     "/": "/", "/login": "/",  # /login y / son la misma página: la canónica es la raíz
     "/procsis": "/procsis", "/tecnologia": "/tecnologia", "/soluciones": "/soluciones",
     "/politicas": "/politicas", "/pqr": "/pqr", "/whatsapp": "/whatsapp",
+    "/contacto": "/contacto", "/ayuda": "/ayuda",
 }
 
 
@@ -77745,6 +77753,106 @@ def media_login(clave):
     if mime == "image/svg+xml":
         resp.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
     return resp
+
+
+# ======================================================================
+# SEO: metadatos para Google (descripción, Open Graph, datos estructurados)
+# y bloqueo de indexación para todo lo privado.
+# ======================================================================
+_SEO_META = {
+    "/": ("EduTrack by PROCSIS | Plataforma de gestión escolar para colegios en Colombia",
+          "EduTrack es la plataforma de gestión escolar de PROCSIS: notas, asistencia, carné digital, PQR, pagos y comunicación con familias en un solo acceso para rectoría, coordinación, secretaría y docentes."),
+    "/procsis": ("PROCSIS | Tecnología para una educación moderna y responsable",
+                 "Conozca PROCSIS, la empresa colombiana detrás de EduTrack: software educativo seguro, soporte cercano y acompañamiento a instituciones."),
+    "/tecnologia": ("Tecnología y seguridad de EduTrack | PROCSIS",
+                    "Arquitectura, seguridad de la información y buenas prácticas con las que PROCSIS protege los datos de colegios, estudiantes y familias en EduTrack."),
+    "/soluciones": ("Soluciones para instituciones educativas | EduTrack",
+                    "Módulos de EduTrack para colegios: académico, convivencia, carné digital, tesorería, PQR, comunicaciones y reportes para directivos."),
+    "/politicas": ("Políticas y tratamiento de datos | PROCSIS EduTrack",
+                   "Políticas de privacidad, Habeas Data, cookies, ciberseguridad y seguridad de la información de PROCSIS EduTrack."),
+    "/pqr": ("Peticiones, quejas y reclamos (PQR) | PROCSIS EduTrack",
+             "Radique peticiones, quejas, reclamos y sugerencias a PROCSIS y haga seguimiento a su solicitud."),
+    "/whatsapp": ("Soporte por WhatsApp | PROCSIS EduTrack",
+                  "Escriba al equipo de soporte de PROCSIS EduTrack por WhatsApp y resuelva sus dudas sobre la plataforma."),
+    "/contacto": ("Contacto | PROCSIS EduTrack",
+                  "Teléfono, correo y horarios de atención de PROCSIS para colegios que usan o quieren conocer EduTrack."),
+    "/ayuda": ("Centro de ayuda | PROCSIS EduTrack",
+               "Guías y respuestas para usar EduTrack: ingreso, carné digital, notas, PQR y más."),
+}
+_SEO_IMG = _SEO_BASE + "/static/img/logo-edutrack.png"
+
+
+def _seo_ruta_indexable():
+    ruta = (request.path or "").rstrip("/") or "/"
+    if ruta == "/login":
+        ruta = "/"
+    if ruta in _SEO_META:
+        return ruta
+    if ruta.startswith("/politicas/"):
+        return ruta
+    return None
+
+
+def _seo_jsonld():
+    import json as _j
+    org = {"@context": "https://schema.org", "@type": "Organization", "name": "PROCSIS",
+           "url": _SEO_BASE + "/", "logo": _SEO_IMG,
+           "description": "Empresa colombiana de software educativo, creadora de EduTrack."}
+    app_ = {"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "EduTrack",
+            "applicationCategory": "EducationalApplication", "operatingSystem": "Web",
+            "url": _SEO_BASE + "/", "inLanguage": "es-CO",
+            "publisher": {"@type": "Organization", "name": "PROCSIS"}}
+    site = {"@context": "https://schema.org", "@type": "WebSite", "name": "EduTrack by PROCSIS",
+            "url": _SEO_BASE + "/", "inLanguage": "es-CO"}
+    return "".join('<script type="application/ld+json">%s</script>' % _j.dumps(o, ensure_ascii=False).replace("</", "<\\/") for o in (org, app_, site))
+
+
+@app.after_request
+def _seo_meta_y_robots(resp):
+    """Páginas públicas: descripción + Open Graph + JSON-LD. Todo lo demás (paneles, enlaces con token,
+    validaciones, medios) sale con X-Robots-Tag: noindex para que Google no lo indexe nunca."""
+    try:
+        if request.method not in ("GET", "HEAD") or resp.direct_passthrough:
+            return resp
+        ruta = _seo_ruta_indexable()
+        if ruta is None:
+            if (resp.mimetype or "") in ("text/html", "application/json") or (request.path or "").startswith(("/media/", "/qr/")):
+                resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+            return resp
+        if resp.status_code != 200 or (resp.mimetype or "") != "text/html":
+            return resp
+        html = resp.get_data(as_text=True)
+        if "</head>" not in html or 'name="description"' in html:
+            return resp
+        titulo, desc = _SEO_META.get(ruta, (None, None))
+        if titulo is None:
+            titulo = "Políticas | PROCSIS EduTrack"
+            desc = "Documento de políticas y tratamiento de información de PROCSIS EduTrack."
+        url = _SEO_BASE + (ruta if ruta != "/" else "/")
+        e = lambda t: (t or "").replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+        tags = (
+            '<meta name="description" content="%s">'
+            '<meta name="robots" content="index,follow,max-image-preview:large">'
+            '<meta property="og:type" content="website"><meta property="og:site_name" content="EduTrack by PROCSIS">'
+            '<meta property="og:locale" content="es_CO"><meta property="og:title" content="%s">'
+            '<meta property="og:description" content="%s"><meta property="og:url" content="%s">'
+            '<meta property="og:image" content="%s"><meta name="twitter:card" content="summary_large_image">'
+            '<meta name="twitter:title" content="%s"><meta name="twitter:description" content="%s">'
+            % (e(desc), e(titulo), e(desc), url, _SEO_IMG, e(titulo), e(desc))
+        )
+        if ruta == "/":
+            tags += _seo_jsonld()
+        # título propio y descriptivo para Google en las páginas que no lo tienen bien armado
+        if ruta in _SEO_META:
+            import re as _re
+            if _re.search(r"<title>.*?</title>", html, flags=_re.S | _re.I):
+                html = _re.sub(r"<title>.*?</title>", "<title>%s</title>" % e(titulo), html, count=1, flags=_re.S | _re.I)
+        html = html.replace("</head>", tags + "</head>", 1)
+        resp.set_data(html)
+    except Exception:
+        pass
+    return resp
+
 
 
 if __name__ == "__main__":
