@@ -12085,15 +12085,13 @@ def login():
         # Sin fotos de carrusel cargadas todavía (Gerencia → /gerencia/diseno-login):
         # se muestran 3 paneles corporativos con degradados distintos, para que el
         # carrusel se vea "vivo" en vez de repetir la misma imagen sin cambios.
-        slides = [
-            ("#000000", "EduTrack. Una infraestructura que te dejará sin aliento."),
-            ("#002060", "Un solo acceso · Rectoría · Coordinación · Secretaría · Docente"),
-            ("#0a1628", "Tecnología educativa moderna y responsable"),
-        ]
+        _cc = _car_cfg()
+        slides = [(_CAR_FONDOS[k], _cc["slogans"][k]) for k in range(3)]
     slides_html = ""
     dots_html = ""
+    _cc = _car_cfg()
     for i, (img, cap) in enumerate(slides):
-        logo_src = datos.get("logo") or "/static/img/logo-edutrack.png"
+        logo_src = _car_url("logo") or datos.get("logo") or "/static/img/logo-edutrack.png"
         if slides_tienen_fotos:
             visual_html = (
                 f'<img src="{img}" alt="Slide {i+1}" loading="eager" class="sinai-slide-photo">'
@@ -12105,9 +12103,9 @@ def login():
             f'<div class="sinai-slide" data-i="{i}">'
             f'{visual_html}'
             f'<div class="sinai-slide-brand">'
-            f'<img src="{logo_src}" alt="EduTrack" class="sinai-brand-logo">'
-            f'<p class="sinai-brand-slogan">{cap}</p>'
-            f'<span class="sinai-brand-sub">EduTrack · PROCSIS</span>'
+            f'<div class="sinai-brand-tile{"" if _cc["fondo_logo"] else " sin-fondo"}"><img src="{logo_src}" alt="EduTrack" class="sinai-brand-logo"></div>'
+            f'<p class="sinai-brand-slogan">{_esc(cap)}</p>'
+            f'<span class="sinai-brand-sub">{_esc(_cc["sub"])}</span>'
             f'</div>'
             f"</div>"
         )
@@ -12148,30 +12146,36 @@ def login():
 .lp-topnav-links{{display:flex;gap:8px;flex-wrap:wrap}}
 .lp-topnav-links a{{color:#334155;text-decoration:none;font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px}}
 .lp-topnav-links a:hover{{background:#f1f5f9;color:#0B2D57}}
-.sinai-portal{{background:#f5f5f7;padding:28px 20px 36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
-.sinai-grid{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.15fr .95fr;gap:28px;align-items:stretch}}
+.sinai-portal{{background:radial-gradient(900px 520px at 15% 0%,#dbe8ff,transparent 60%),radial-gradient(700px 420px at 100% 8%,#e3eeff,transparent 60%),#f5f7fb;padding:28px 20px 36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.sinai-grid{{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:1.45fr .85fr;gap:30px;align-items:stretch}}
 @media(max-width:900px){{.sinai-grid{{grid-template-columns:1fr}}}}
-.sinai-carousel{{position:relative;border-radius:24px;overflow:hidden;height:460px;background:#000;box-shadow:0 20px 50px rgba(0,0,0,.18);border:0}}
+.sinai-carousel{{position:relative;border-radius:36px;overflow:hidden;height:600px;background:#071c38;box-shadow:0 30px 80px rgba(7,28,56,.35);border:1px solid rgba(255,255,255,.35);isolation:isolate}}
+.sinai-carousel::after{{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,0) 38%,rgba(255,255,255,0) 70%,rgba(255,255,255,.08) 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.12)}}
+@media(max-width:900px){{.sinai-carousel{{height:470px;border-radius:28px}}.sinai-brand-slogan{{font-size:19px!important}}}}
 .sinai-viewport{{width:100%;height:100%;overflow:hidden}}
 .sinai-track{{display:flex;height:100%;width:100%;transition:transform .6s cubic-bezier(.22,1,.36,1)}}
 .sinai-slide{{position:relative;min-width:100%;width:100%;height:100%;flex-shrink:0;overflow:hidden;background:#000}}
 .sinai-slide-photo{{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.55)}}
 .sinai-slide-veil{{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.55) 100%);pointer-events:none}}
-.sinai-slide-ph{{width:100%;height:100%;background:#000}}
-.sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 28px 48px;text-align:center;pointer-events:none}}
-.sinai-brand-logo{{width:128px;height:128px;object-fit:contain;border-radius:0;background:transparent;padding:0;box-shadow:none;margin-bottom:22px;filter:drop-shadow(0 8px 24px rgba(0,0,0,.45))}}
-.sinai-brand-slogan{{margin:0;font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.35;color:#ffffff;max-width:340px;text-shadow:0 2px 12px rgba(0,0,0,.35)}}
-.sinai-brand-sub{{margin-top:12px;font-size:12px;font-weight:500;color:rgba(255,255,255,.55);letter-spacing:.04em}}
+.sinai-slide-ph{{width:100%;height:100%;position:relative;overflow:hidden}}
+.sinai-slide-ph::before{{content:"";position:absolute;width:75%;height:75%;left:-15%;top:-20%;background:radial-gradient(circle,rgba(0,190,255,.5),rgba(0,190,255,0) 65%);filter:blur(12px)}}
+.sinai-slide-ph::after{{content:"";position:absolute;width:80%;height:80%;right:-20%;bottom:-30%;background:radial-gradient(circle,rgba(0,91,234,.7),rgba(0,91,234,0) 65%);filter:blur(12px)}}
+.sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:40px 28px 92px;text-align:center;pointer-events:none}}
+.sinai-brand-tile{{background:rgba(255,255,255,.88);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.8);border-radius:36px;padding:26px 34px;box-shadow:0 30px 70px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.95);width:min(var(--car-logo,440px),80%);box-sizing:border-box}}
+.sinai-brand-tile.sin-fondo{{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-color:transparent;box-shadow:none}}
+.sinai-brand-logo{{display:block;width:100%;height:auto;max-height:320px;object-fit:contain}}
+.sinai-brand-slogan{{margin:0;font-size:clamp(20px,2.3vw,30px);font-weight:600;letter-spacing:-.02em;line-height:1.3;color:#fff;max-width:600px;padding:14px 28px;border-radius:26px;background:rgba(255,255,255,.14);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.4);text-shadow:0 1px 8px rgba(0,0,0,.25)}}
+.sinai-brand-sub{{font-size:13px;font-weight:600;color:rgba(255,255,255,.78);letter-spacing:.1em;text-transform:uppercase}}
 @keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.06)}}}}
 .sinai-card{{animation:sinai-fade-in .5s ease}}
 @keyframes sinai-fade-in{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
 .sinai-visual-badge{{display:none}}
-.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);font-size:20px;line-height:34px;cursor:pointer;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:background .25s ease,color .25s ease}}
-.sinai-nav:hover{{background:rgba(255,255,255,.22);color:#fff}}
+.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:54px;height:54px;border-radius:50%;border:1px solid rgba(255,255,255,.42);background:rgba(255,255,255,.16);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);color:#fff;font-size:28px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.45);transition:background .2s;padding:0;display:flex;align-items:center;justify-content:center}}
+.sinai-nav:hover{{background:rgba(255,255,255,.3)}}
 .sinai-prev{{left:12px}}.sinai-next{{right:12px}}
-.sinai-dots{{position:absolute;bottom:18px;left:0;right:0;z-index:3;display:flex;justify-content:center;align-items:center;gap:7px}}
-.sinai-dot{{width:7px;height:7px;border-radius:980px;border:0;background:rgba(0,0,0,.22);cursor:pointer;padding:0;transition:width .35s cubic-bezier(.25,.1,.25,1),background .35s ease,opacity .35s ease;opacity:.55}}
-.sinai-dot.is-on{{width:22px;height:7px;border-radius:980px;background:#1d1d1f;opacity:1;transform:none}}
+.sinai-dots{{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.16);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 8px 24px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.4)}}
+.sinai-dot{{width:8px;height:8px;border-radius:999px;border:0;background:rgba(255,255,255,.5);cursor:pointer;padding:0;opacity:1;transition:width .35s cubic-bezier(.25,.1,.25,1),background .35s}}
+.sinai-dot.is-on{{width:26px;background:#fff}}
 .sinai-access h1{{margin:0 0 6px;color:#1d1d1f;font-size:26px;font-weight:700;letter-spacing:-.02em}}
 .sinai-sub{{margin:0 0 16px;color:#86868b;font-size:14px;line-height:1.45}}
 .sinai-card{{background:#fff;border-radius:16px;padding:26px 24px;box-shadow:0 4px 24px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.06)}}
@@ -12281,7 +12285,7 @@ def login():
 
   <section class="sinai-portal">
     <div class="sinai-grid">
-      <div class="sinai-carousel" id="sinai-carousel">
+      <div class="sinai-carousel" id="sinai-carousel" style="--car-logo:{_CAR_TAM[_cc['tam']]}px">
         <div class="sinai-viewport">
           <div class="sinai-track" id="sinai-track">{slides_html}</div>
         </div>
@@ -68597,23 +68601,32 @@ def gerencia_diseno_login():
                 except Exception:
                     pass
             # Carrusel de fotos del login de acceso institucional (hasta 5) — administrado por Gerencia
-            import os as _osc
-            _car_dir = _osc.path.join(app.root_path, "static", "img", "novedades")
-            _osc.makedirs(_car_dir, exist_ok=True)
             for _i in (1, 2, 3, 4, 5):
                 _cimg = request.files.get(f"carrusel_img{_i}")
                 if _cimg and (_cimg.filename or "").strip():
-                    _ext = (_cimg.filename.rsplit(".", 1)[-1] or "png").lower()
-                    if _ext not in ("png", "jpg", "jpeg", "webp", "gif"):
-                        _ext = "png"
-                    _fname = f"nov{_i}_{fecha_hoy().replace('-','')}.{_ext}"
-                    _cimg.save(_osc.path.join(_car_dir, _fname))
-                    setattr(p, f"novedad_img{_i}", f"/static/img/novedades/{_fname}")
+                    _e = _car_media_guardar("foto%d" % _i, _cimg, 1900)
+                    if _e:
+                        raise ValueError("Foto %d: %s" % (_i, _e))
+                    setattr(p, f"novedad_img{_i}", _car_url("foto%d" % _i))
                 _cap = (request.form.get(f"carrusel_img{_i}_cap") or "").strip()[:120]
                 if _cap:
                     setattr(p, f"novedad_img{_i}_cap", _cap)
                 if request.form.get(f"carrusel_img{_i}_clear"):
                     setattr(p, f"novedad_img{_i}", "")
+                    _car_media_borrar("foto%d" % _i)
+            # Logo y textos del carrusel estilo vidrio
+            _e = _car_media_guardar("logo", request.files.get("car_logo"), 1400, logo=True)
+            if _e:
+                raise ValueError("Logo del carrusel: " + _e)
+            if request.form.get("car_logo_clear"):
+                _car_media_borrar("logo")
+            _seg_ensure()
+            _t = (request.form.get("car_tam") or "XL").strip()
+            _seg_cfg_set("car_tam", _t if _t in _CAR_TAM else "XL")
+            _seg_cfg_set("car_fondo_logo", "1" if request.form.get("car_fondo_logo") else "0")
+            _seg_cfg_set("car_sub", (request.form.get("car_sub") or "").strip()[:80] or "EduTrack · PROCSIS")
+            for _k in (1, 2, 3):
+                _seg_cfg_set("car_s%d" % _k, (request.form.get("car_s%d" % _k) or "").strip()[:140])
             db.session.commit()
             try:
                 db.session.execute(text(
@@ -68642,6 +68655,27 @@ def gerencia_diseno_login():
     sub = str(_landing_get("login_subtitulo", "") or "")
     logo = str(_landing_get("login_logo_path", "") or "")
 
+    _cc = _car_cfg()
+    _lg = _car_url("logo")
+    _inp = "width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"
+    car_html = (
+        "<h3 style='margin:10px 0 0;color:#0B2D57;font-size:15px'>Carrusel del login · estilo vidrio</h3>"
+        "<p style='font-size:12px;color:#64748b;margin:0 0 6px'>El logo se muestra grande sobre un panel de vidrio. Sirve PNG con fondo transparente, JPG, WEBP o SVG (máx. 6 MB). "
+        "Se guarda en la base de datos, así que no se pierde al redesplegar.</p>"
+        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px'>"
+        "<div><label style='font-size:12px;font-weight:700'>Logo del carrusel</label>"
+        + (("<img src='" + _esc(_lg) + "' alt='' style='display:block;max-height:90px;max-width:100%;margin:6px 0;background:#f1f5f9;border-radius:10px;padding:6px'>"
+            "<label style='display:flex;gap:6px;align-items:center;font-size:11px;font-weight:400'><input type='checkbox' name='car_logo_clear' value='1' style='width:auto'> Quitar y usar el logo de EduTrack por defecto</label>") if _lg else "<div style='font-size:11px;color:#64748b;margin:4px 0'>Usando el logo de EduTrack por defecto.</div>")
+        + "<input type='file' name='car_logo' accept='image/*' style='width:100%;padding:6px 0'></div>"
+        "<div><label style='font-size:12px;font-weight:700'>Tamaño del logo</label>"
+        "<select name='car_tam' style='" + _inp + "'>"
+        + "".join("<option value='%s'%s>%s</option>" % (k, " selected" if _cc["tam"] == k else "", t) for k, t in (("M", "Mediano"), ("L", "Grande"), ("XL", "Extra grande")))
+        + "</select>"
+        "<label style='display:flex;gap:6px;align-items:center;font-size:12px;margin-top:10px'><input type='checkbox' name='car_fondo_logo' value='1' style='width:auto'" + (" checked" if _cc["fondo_logo"] else "") + "> Panel de vidrio blanco detrás del logo (desmárcalo si tu logo es transparente y claro)</label>"
+        "<label style='font-size:12px;font-weight:700;margin-top:10px;display:block'>Texto pequeño bajo la frase</label>"
+        "<input name='car_sub' value='" + _esc(_cc["sub"]) + "' maxlength='80' style='" + _inp + "'></div></div>"
+        "<div style='display:grid;gap:8px;margin-top:6px'><label style='font-size:12px;font-weight:700'>Frases de las 3 diapositivas (cuando no hay fotos cargadas)</label>"
+        + "".join("<input name='car_s%d' value='%s' maxlength='140' style='%s'>" % (k + 1, _esc(_cc["slogans"][k]), _inp) for k in range(3)) + "</div>")
     body = f"""
 <header class="role-hero"><div>
   <h1>Diseño de logins</h1>
@@ -68679,6 +68713,7 @@ def gerencia_diseno_login():
       <input type="file" name="logo" accept="image/*" style="width:100%;padding:8px">
       {('<img src="'+_esc(logo)+'" alt="" style="max-height:64px;margin-top:8px">') if logo else ''}
     </div>
+    {car_html}
     <h3 style="margin:10px 0 0;color:#0B2D57;font-size:15px">Carrusel de fotos · Acceso institucional (login)</h3>
     <p style="font-size:12px;color:#64748b;margin:0 0 6px">Hasta 5 fotos que rotan automáticamente en el login (colegio). Recomendado: fotos horizontales, mismo tamaño, imagen institucional/corporativa.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
@@ -75133,7 +75168,7 @@ def gerencia_correo_extra(n):
 # ════════════════════════════════════════════════════════════════════════════
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
-_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/verificar-certificado/", "/demo/invitar/",
+_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/verificar-certificado/", "/demo/invitar/",
                       "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal")
 
 
@@ -77615,6 +77650,116 @@ def _vin_html_resumen_gerencia(inst):
                   + "<b style='font-size:13px;display:block;margin-top:10px'>Por grado</b>" + tabla(("Grado", "Estudiantes"), [(g or "—", n) for g, n in por_grado], "Sin estudiantes.")
                   + "<b style='font-size:13px;display:block;margin-top:10px'>Usuarios por rol</b>" + tabla(("Rol", "Usuarios"), [(r_ or "—", n) for r_, n in usr], "Sin usuarios."))
     return out
+
+
+# ───────────────────────── CARRUSEL DEL LOGIN · estilo vidrio, editable desde Gerencia ─────────────────────────
+import base64 as _car_b64
+_CAR_CLAVES = ("logo", "foto1", "foto2", "foto3", "foto4", "foto5")
+_CAR_TAM = {"M": 280, "L": 360, "XL": 440}
+_CAR_SLOGANS = ("EduTrack. Una infraestructura que te dejará sin aliento.",
+                "Un solo acceso · Rectoría · Coordinación · Secretaría · Docente",
+                "Tecnología educativa moderna y responsable")
+_CAR_FONDOS = ("linear-gradient(135deg,#041226 0%,#0B2D57 55%,#0a58d6 100%)",
+               "linear-gradient(135deg,#06214a 0%,#0B2D57 45%,#005BEA 100%)",
+               "linear-gradient(135deg,#071c38 0%,#0f3b86 50%,#1f7bff 100%)")
+
+
+def _car_cfg():
+    try:
+        _seg_ensure()
+        tam = _seg_cfg("car_tam", "XL")
+        return {"tam": tam if tam in _CAR_TAM else "XL",
+                "slogans": [(_seg_cfg("car_s%d" % (i + 1), "") or _CAR_SLOGANS[i]) for i in range(3)],
+                "sub": _seg_cfg("car_sub", "EduTrack · PROCSIS"),
+                "fondo_logo": _seg_cfg("car_fondo_logo", "1") != "0"}
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return {"tam": "XL", "slogans": list(_CAR_SLOGANS), "sub": "EduTrack · PROCSIS", "fondo_logo": True}
+
+
+def _car_url(clave):
+    """URL pública de la imagen guardada en la base de datos, o '' si no hay."""
+    try:
+        v = _seg_cfg("media_%s_v" % clave, "")
+        return ("/media/login/%s?v=%s" % (clave, v)) if v and _seg_cfg("media_" + clave, "") else ""
+    except Exception:
+        return ""
+
+
+def _car_media_borrar(clave):
+    try:
+        for k in ("media_" + clave, "media_%s_mime" % clave, "media_%s_v" % clave):
+            r = SegConfig.query.get(k)
+            if r:
+                db.session.delete(r)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _car_media_guardar(clave, f, maxpx, logo=False):
+    """Guarda una imagen subida (PNG/JPG/WEBP/SVG) en la base de datos. Devuelve '' si salió bien o el mensaje de error."""
+    if clave not in _CAR_CLAVES or not f or not (getattr(f, "filename", "") or "").strip():
+        return ""
+    raw = f.read(6 * 1024 * 1024 + 1)
+    if len(raw) > 6 * 1024 * 1024:
+        return "La imagen supera 6 MB."
+    if not raw:
+        return "Archivo vacío."
+    head = raw[:300].lstrip().lower()
+    if head.startswith(b"<svg") or head.startswith(b"<?xml"):
+        low = raw.lower()
+        if any(x in low for x in (b"<script", b"onload=", b"onerror=", b"javascript:", b"<foreignobject", b"<iframe")):
+            return "El SVG contiene elementos no permitidos."
+        data, mime = raw, "image/svg+xml"
+    else:
+        try:
+            from PIL import Image
+            import io
+            im = Image.open(io.BytesIO(raw))
+            im.load()
+            if max(im.size) > maxpx:
+                im.thumbnail((maxpx, maxpx))
+            buf = io.BytesIO()
+            if logo or im.mode in ("RGBA", "LA", "P"):
+                im = im.convert("RGBA")
+                im.save(buf, "PNG", optimize=True)
+                mime = "image/png"
+            else:
+                im.convert("RGB").save(buf, "JPEG", quality=84, optimize=True)
+                mime = "image/jpeg"
+            data = buf.getvalue()
+        except Exception:
+            return "No se pudo leer la imagen. Usa PNG, JPG, WEBP o SVG."
+    _seg_ensure()
+    for k, v in (("media_" + clave, _car_b64.b64encode(data).decode("ascii")), ("media_%s_mime" % clave, mime), ("media_%s_v" % clave, str(int(_vi_time.time())))):
+        _seg_cfg_set(k, v)
+    return ""
+
+
+@app.route("/media/login/<clave>", methods=["GET"])
+def media_login(clave):
+    if clave not in _CAR_CLAVES:
+        return Response("No encontrado", status=404)
+    try:
+        b64 = _seg_cfg("media_" + clave, "")
+        mime = _seg_cfg("media_%s_mime" % clave, "image/png")
+        ver = _seg_cfg("media_%s_v" % clave, "0")
+    except Exception:
+        b64 = ""
+    if not b64 or mime not in ("image/png", "image/jpeg", "image/svg+xml", "image/webp"):
+        return Response("No encontrado", status=404)
+    if request.headers.get("If-None-Match") == '"%s"' % ver:
+        return Response(status=304)
+    resp = Response(_car_b64.b64decode(b64), mimetype=mime)
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    resp.headers["ETag"] = '"%s"' % ver
+    if mime == "image/svg+xml":
+        resp.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+    return resp
 
 
 if __name__ == "__main__":
