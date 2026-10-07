@@ -12080,23 +12080,43 @@ def login():
                 slides.append((img, cap_t))
     except Exception:
         slides = []
-    slides_tienen_fotos = bool(slides)
+    # Fuente principal: Gestor de Banners del Login (Gerencia → banners)
+    slides_banners = False
+    try:
+        _brs = db.session.execute(text(
+            "SELECT id, titulo, frase_eslogan FROM login_banners "
+            "WHERE estado='activo' AND url_imagen IS NOT NULL AND url_imagen <> '' "
+            "ORDER BY orden ASC, id ASC LIMIT 6"
+        )).fetchall()
+        if _brs:
+            slides = [("/media/login-banner/%d" % int(r[0]), (r[1] or "").strip(), (r[2] or "").strip()) for r in _brs]
+            slides_banners = True
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    if not slides_banners:
+        slides = [(x[0], x[1], "") for x in slides]
+    slides_tienen_fotos = bool(slides) and not slides_banners
     if not slides:
         # Sin fotos de carrusel cargadas todavía (Gerencia → /gerencia/diseno-login):
         # se muestran 3 paneles corporativos con degradados distintos, para que el
         # carrusel se vea "vivo" en vez de repetir la misma imagen sin cambios.
         _cc = _car_cfg()
-        slides = [(_CAR_FONDOS[k], _cc["slogans"][k]) for k in range(3)]
+        slides = [(_CAR_FONDOS[k], _cc["slogans"][k], "") for k in range(3)]
     slides_html = ""
     dots_html = ""
     _cc = _car_cfg()
-    for i, (img, cap) in enumerate(slides):
-        logo_src = _car_url("logo") or datos.get("logo") or "/static/img/logo-edutrack.png"
+    for i, (img, cap, cap2) in enumerate(slides):
+        logo_src = img if slides_banners else (datos.get("logo") or "/static/img/logo-edutrack.png")
         if slides_tienen_fotos:
             visual_html = (
                 f'<img src="{img}" alt="Slide {i+1}" loading="eager" class="sinai-slide-photo">'
                 f'<div class="sinai-slide-veil"></div>'
             )
+        elif slides_banners:
+            visual_html = f'<div class="sinai-slide-ph" style="background:{_CAR_FONDOS[i % 3]}"></div>'
         else:
             visual_html = f'<div class="sinai-slide-ph" style="background:{img}"></div>'
         slides_html += (
@@ -12105,7 +12125,7 @@ def login():
             f'<div class="sinai-slide-brand">'
             f'<div class="sinai-brand-tile{"" if _cc["fondo_logo"] else " sin-fondo"}"><img src="{logo_src}" alt="EduTrack" class="sinai-brand-logo"></div>'
             f'<p class="sinai-brand-slogan">{_esc(cap)}</p>'
-            f'<span class="sinai-brand-sub">{_esc(_cc["sub"])}</span>'
+            f'<span class="sinai-brand-sub">{_esc(cap2 or _cc["sub"])}</span>'
             f'</div>'
             f"</div>"
         )
@@ -12285,7 +12305,7 @@ def login():
 
   <section class="sinai-portal">
     <div class="sinai-grid">
-      <div class="sinai-carousel" id="sinai-carousel" style="--car-logo:{_CAR_TAM[_cc['tam']]}px">
+      <div class="sinai-carousel" id="sinai-carousel" style="--car-logo:440px">
         <div class="sinai-viewport">
           <div class="sinai-track" id="sinai-track">{slides_html}</div>
         </div>
@@ -68614,19 +68634,6 @@ def gerencia_diseno_login():
                 if request.form.get(f"carrusel_img{_i}_clear"):
                     setattr(p, f"novedad_img{_i}", "")
                     _car_media_borrar("foto%d" % _i)
-            # Logo y textos del carrusel estilo vidrio
-            _e = _car_media_guardar("logo", request.files.get("car_logo"), 1400, logo=True)
-            if _e:
-                raise ValueError("Logo del carrusel: " + _e)
-            if request.form.get("car_logo_clear"):
-                _car_media_borrar("logo")
-            _seg_ensure()
-            _t = (request.form.get("car_tam") or "XL").strip()
-            _seg_cfg_set("car_tam", _t if _t in _CAR_TAM else "XL")
-            _seg_cfg_set("car_fondo_logo", "1" if request.form.get("car_fondo_logo") else "0")
-            _seg_cfg_set("car_sub", (request.form.get("car_sub") or "").strip()[:80] or "EduTrack · PROCSIS")
-            for _k in (1, 2, 3):
-                _seg_cfg_set("car_s%d" % _k, (request.form.get("car_s%d" % _k) or "").strip()[:140])
             db.session.commit()
             try:
                 db.session.execute(text(
@@ -68655,27 +68662,6 @@ def gerencia_diseno_login():
     sub = str(_landing_get("login_subtitulo", "") or "")
     logo = str(_landing_get("login_logo_path", "") or "")
 
-    _cc = _car_cfg()
-    _lg = _car_url("logo")
-    _inp = "width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"
-    car_html = (
-        "<h3 style='margin:10px 0 0;color:#0B2D57;font-size:15px'>Carrusel del login · estilo vidrio</h3>"
-        "<p style='font-size:12px;color:#64748b;margin:0 0 6px'>El logo se muestra grande sobre un panel de vidrio. Sirve PNG con fondo transparente, JPG, WEBP o SVG (máx. 6 MB). "
-        "Se guarda en la base de datos, así que no se pierde al redesplegar.</p>"
-        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px'>"
-        "<div><label style='font-size:12px;font-weight:700'>Logo del carrusel</label>"
-        + (("<img src='" + _esc(_lg) + "' alt='' style='display:block;max-height:90px;max-width:100%;margin:6px 0;background:#f1f5f9;border-radius:10px;padding:6px'>"
-            "<label style='display:flex;gap:6px;align-items:center;font-size:11px;font-weight:400'><input type='checkbox' name='car_logo_clear' value='1' style='width:auto'> Quitar y usar el logo de EduTrack por defecto</label>") if _lg else "<div style='font-size:11px;color:#64748b;margin:4px 0'>Usando el logo de EduTrack por defecto.</div>")
-        + "<input type='file' name='car_logo' accept='image/*' style='width:100%;padding:6px 0'></div>"
-        "<div><label style='font-size:12px;font-weight:700'>Tamaño del logo</label>"
-        "<select name='car_tam' style='" + _inp + "'>"
-        + "".join("<option value='%s'%s>%s</option>" % (k, " selected" if _cc["tam"] == k else "", t) for k, t in (("M", "Mediano"), ("L", "Grande"), ("XL", "Extra grande")))
-        + "</select>"
-        "<label style='display:flex;gap:6px;align-items:center;font-size:12px;margin-top:10px'><input type='checkbox' name='car_fondo_logo' value='1' style='width:auto'" + (" checked" if _cc["fondo_logo"] else "") + "> Panel de vidrio blanco detrás del logo (desmárcalo si tu logo es transparente y claro)</label>"
-        "<label style='font-size:12px;font-weight:700;margin-top:10px;display:block'>Texto pequeño bajo la frase</label>"
-        "<input name='car_sub' value='" + _esc(_cc["sub"]) + "' maxlength='80' style='" + _inp + "'></div></div>"
-        "<div style='display:grid;gap:8px;margin-top:6px'><label style='font-size:12px;font-weight:700'>Frases de las 3 diapositivas (cuando no hay fotos cargadas)</label>"
-        + "".join("<input name='car_s%d' value='%s' maxlength='140' style='%s'>" % (k + 1, _esc(_cc["slogans"][k]), _inp) for k in range(3)) + "</div>")
     body = f"""
 <header class="role-hero"><div>
   <h1>Diseño de logins</h1>
@@ -68713,7 +68699,6 @@ def gerencia_diseno_login():
       <input type="file" name="logo" accept="image/*" style="width:100%;padding:8px">
       {('<img src="'+_esc(logo)+'" alt="" style="max-height:64px;margin-top:8px">') if logo else ''}
     </div>
-    {car_html}
     <h3 style="margin:10px 0 0;color:#0B2D57;font-size:15px">Carrusel de fotos · Acceso institucional (login)</h3>
     <p style="font-size:12px;color:#64748b;margin:0 0 6px">Hasta 5 fotos que rotan automáticamente en el login (colegio). Recomendado: fotos horizontales, mismo tamaño, imagen institucional/corporativa.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
@@ -75168,7 +75153,7 @@ def gerencia_correo_extra(n):
 # ════════════════════════════════════════════════════════════════════════════
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
-_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/verificar-certificado/", "/demo/invitar/",
+_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/media/login-banner/", "/verificar-certificado/", "/demo/invitar/",
                       "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal")
 
 
