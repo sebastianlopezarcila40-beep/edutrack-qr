@@ -3994,6 +3994,7 @@ def _staff_nav_items(path, rol=""):
         items = [
             ("/ventas/panel", "Dashboard"),
             ("/ventas/verificacion", "Verificación"),
+            ("/ventas/activaciones", "Activaciones en proceso"),
             ("/ventas/beneficios", "Beneficios / planes"),
             ("/ventas/planes-vendidos", "Planes vendidos"),
             ("/planes/buscar", "Buscar planes"),
@@ -4044,6 +4045,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/auditoria", "Auditoría IP"),
             ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
             ("/gerencia/auditoria-instituciones", "Auditoría de instituciones"),
+            ("/gerencia/activaciones", "Activaciones y verificación"),
             ("/gerencia/textos-legales", "Textos legales (Habeas Data)"),
             ("/gerencia/rectores", "CRM Rectores (cédula e información)"),
             ("/gerencia/correo-soporte", "Gmail · Soporte"),
@@ -20832,6 +20834,7 @@ def _aislar_paneles_internos():
             or path.startswith("/ventas/comprar")
             or path.startswith("/ventas/fidelizacion")
             or path.startswith("/ventas/verificacion")
+            or path.startswith("/ventas/activaci")
             or path.startswith("/api/ventas")
             or path == "/ventas"
             or path.startswith("/interno/buscar")
@@ -22346,6 +22349,19 @@ def ventas_comprar():
         elif len(clave_temporal) < 8:
             error = "La clave temporal debe tener al menos 8 caracteres."
         else:
+            # Activación con verificación: el colegio NO se crea aquí. Se abre un caso que debe pasar por
+            # antecedentes en entidades, contrato aceptado por el rector y 3 horas de configuración.
+            # (El plan demo/piloto no pasa por este filtro.)
+            if not request.environ.get("procsis_act_ok") and plan not in ("demo", "piloto"):
+                _ex_inst = Institucion.query.filter((Institucion.codigo == codigo) | (Institucion.nombre == nombre)).first()
+                if _ex_inst:
+                    error = f"Ya existe una institución con ese código/nombre (ID {_ex_inst.id})."
+                else:
+                    _cid, _cerr = _act_crear_caso(request.form, request.files, asesor)
+                    if _cid:
+                        return redirect("/ventas/activacion/%d" % _cid)
+                    error = _cerr or "No se pudo abrir el caso de verificación."
+        if not error and not (not request.environ.get("procsis_act_ok") and plan not in ("demo", "piloto")):
             try:
                 existe = Institucion.query.filter(
                     (Institucion.codigo == codigo) | (Institucion.nombre == nombre)
@@ -75159,7 +75175,7 @@ def gerencia_correo_extra(n):
 # ════════════════════════════════════════════════════════════════════════════
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
-_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/media/login-banner/", "/verificar-certificado/", "/demo/invitar/",
+_RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/media/login-banner/", "/contrato-activacion/", "/verificar-certificado/", "/demo/invitar/",
                       "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal")
 
 
@@ -77900,6 +77916,1187 @@ def _bio_bloquear_y_purgar():
     if "/uploads/biometria" in p:
         return Response("No encontrado", status=404)
     return None
+
+
+# ======================================================================
+# ACTIVACIÓN CON VERIFICACIÓN Y CONTRATO (no repudio)
+#   Ventas "Confirmar y activar" -> caso pendiente
+#   1) Antecedentes en entidades públicas (texto/PDF pegado, el sistema lo lee y lo guarda)
+#   2) Contrato generado solo con datos verificados -> enlace al rector (cédula + DANE)
+#   3) Aceptación con huella (fecha, hora, IP, equipo, hash del contrato)
+#   4) Activación programada 3 horas después
+#   Todo queda en una cadena de auditoría encadenada por hash + módulo en Gerencia.
+# ======================================================================
+import hashlib as _ahl
+import secrets as _asec
+import unicodedata as _aun
+import base64 as _ab64
+import io as _aio
+import threading as _ath
+import time as _atm
+import subprocess as _asub
+import tempfile as _atmp
+
+_ACT_LISTO = {"ok": False}
+_ACT_HORAS = 3
+_ACT_VIGENCIA_DIAS = 30          # un certificado de antecedentes con más de 30 días no sirve
+_ACT_ENLACE_DIAS = 7
+_ACT_MAX_INTENTOS = 5
+_ACT_ROLES_VENTAS = ("Comercial", "Ventas", "Supervisor de Ventas", "Gerente", "Superadmin", "Administrador")
+
+# (entidad, sujeto, etiqueta, portal)
+_ACT_SLOTS = (
+    ("POLICIA", "REPRESENTANTE", "Policía Nacional · Antecedentes judiciales del representante legal", "https://www.policia.gov.co"),
+    ("PROCURADURIA", "REPRESENTANTE", "Procuraduría · Antecedentes disciplinarios del representante legal", "https://www.procuraduria.gov.co"),
+    ("CONTRALORIA", "REPRESENTANTE", "Contraloría · Responsables fiscales (representante legal)", "https://www.contraloria.gov.co"),
+    ("CONTRALORIA", "COLEGIO", "Contraloría · Responsables fiscales (NIT del colegio)", "https://www.contraloria.gov.co"),
+    ("PROCURADURIA", "COLEGIO", "Procuraduría · Antecedentes (NIT del colegio)", "https://www.procuraduria.gov.co"),
+)
+_ACT_ENTIDADES = {"POLICIA": "Policía Nacional", "PROCURADURIA": "Procuraduría", "CONTRALORIA": "Contraloría",
+                  "OFAC": "Lista OFAC (automática)", "OTRA": "Otra entidad"}
+_ACT_ESTADOS = {
+    "VERIFICACION": ("Verificando en entidades", "#b45309", "#fef3c7"),
+    "REVISION_GERENCIA": ("Hallazgos · decide Gerencia", "#991b1b", "#fee2e2"),
+    "CONTRATO_LISTO": ("Contrato listo para enviar", "#0b5cd5", "#dbeafe"),
+    "CONTRATO_ENVIADO": ("Contrato enviado al rector", "#0b5cd5", "#dbeafe"),
+    "PROGRAMADA": ("Aceptado · activación programada", "#166534", "#dcfce7"),
+    "ACTIVANDO": ("Activando…", "#166534", "#dcfce7"),
+    "ACTIVADA": ("Colegio activo", "#166534", "#bbf7d0"),
+    "ERROR_ACTIVACION": ("Error al activar", "#991b1b", "#fee2e2"),
+    "RECHAZADA": ("Rechazada", "#475569", "#e2e8f0"),
+    "CANCELADA": ("Cancelada", "#475569", "#e2e8f0"),
+}
+
+
+class ActCaso(db.Model):
+    __tablename__ = "act_casos"
+    id = db.Column(db.Integer, primary_key=True)
+    estado = db.Column(db.String(30), default="VERIFICACION", index=True)
+    nombre = db.Column(db.String(220), default="")
+    codigo = db.Column(db.String(60), default="", index=True)
+    plan = db.Column(db.String(60), default="")
+    nit = db.Column(db.String(40), default="")
+    dane = db.Column(db.String(40), default="")
+    rector = db.Column(db.String(200), default="")
+    rector_doc = db.Column(db.String(40), default="")
+    correo = db.Column(db.String(160), default="")
+    telefono = db.Column(db.String(40), default="")
+    asesor = db.Column(db.String(120), default="")
+    datos_enc = db.Column(db.Text, default="")
+    logo_b64 = db.Column(db.Text, default="")
+    logo_mime = db.Column(db.String(40), default="")
+    creado_en = db.Column(db.String(30), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+    autoriza_consulta = db.Column(db.Boolean, default=False)
+    autoriza_por = db.Column(db.String(120), default="")
+    autoriza_en = db.Column(db.String(30), default="")
+    contrato_html = db.Column(db.Text, default="")
+    contrato_sha = db.Column(db.String(64), default="")
+    contrato_en = db.Column(db.String(30), default="")
+    token_hash = db.Column(db.String(64), default="", index=True)
+    token_exp = db.Column(db.String(30), default="")
+    canal = db.Column(db.String(20), default="")
+    enviado_en = db.Column(db.String(30), default="")
+    intentos = db.Column(db.Integer, default=0)
+    bloqueado = db.Column(db.Boolean, default=False)
+    aceptado_en = db.Column(db.String(30), default="")
+    aceptado_ip = db.Column(db.String(60), default="")
+    aceptado_ua = db.Column(db.String(300), default="")
+    aceptado_nombre = db.Column(db.String(200), default="")
+    activar_en = db.Column(db.String(30), default="")
+    activado_en = db.Column(db.String(30), default="")
+    institucion_id = db.Column(db.Integer, default=0)
+    error_txt = db.Column(db.Text, default="")
+    decision_nota = db.Column(db.Text, default="")
+
+
+class ActCert(db.Model):
+    __tablename__ = "act_certs"
+    id = db.Column(db.Integer, primary_key=True)
+    caso_id = db.Column(db.Integer, index=True)
+    entidad = db.Column(db.String(20), default="")
+    sujeto = db.Column(db.String(20), default="")
+    documento = db.Column(db.String(40), default="")
+    texto = db.Column(db.Text, default="")
+    archivo_b64 = db.Column(db.Text, default="")
+    archivo_mime = db.Column(db.String(60), default="")
+    archivo_nombre = db.Column(db.String(200), default="")
+    archivo_sha = db.Column(db.String(64), default="")
+    texto_sha = db.Column(db.String(64), default="")
+    resultado = db.Column(db.String(20), default="REVISAR")   # LIMPIO | HALLAZGO | REVISAR
+    motivos = db.Column(db.Text, default="")
+    fecha_cert = db.Column(db.String(20), default="")
+    vigente = db.Column(db.Boolean, default=True)
+    cargado_por = db.Column(db.String(120), default="")
+    cargado_en = db.Column(db.String(30), default="")
+    ip = db.Column(db.String(60), default="")
+    aprobado_por = db.Column(db.String(120), default="")
+    aprobado_en = db.Column(db.String(30), default="")
+    aprobado_nota = db.Column(db.Text, default="")
+
+
+class ActAud(db.Model):
+    """Cadena de auditoría de solo-agregar: cada fila incluye el hash de la anterior."""
+    __tablename__ = "act_aud"
+    id = db.Column(db.Integer, primary_key=True)
+    caso_id = db.Column(db.Integer, index=True)
+    accion = db.Column(db.String(60), default="")
+    detalle = db.Column(db.Text, default="")
+    actor = db.Column(db.String(120), default="")
+    ip = db.Column(db.String(60), default="")
+    ts = db.Column(db.String(30), default="")
+    hash_prev = db.Column(db.String(64), default="")
+    hash = db.Column(db.String(64), default="")
+
+
+def _act_ensure():
+    if _ACT_LISTO["ok"]:
+        return
+    try:
+        for m in (ActCaso, ActCert, ActAud):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        _ACT_LISTO["ok"] = True
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("ERROR activacion ensure:", repr(ex), flush=True)
+
+
+def _act_ts():
+    return ahora().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _act_ip():
+    try:
+        return ((request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip())[:60]
+    except Exception:
+        return ""
+
+
+def _act_actor():
+    try:
+        return (session.get("usuario") or "sistema")[:120]
+    except Exception:
+        return "sistema"
+
+
+def _act_sha(txt):
+    if isinstance(txt, str):
+        txt = txt.encode("utf-8")
+    return _ahl.sha256(txt or b"").hexdigest()
+
+
+def _act_aud(caso_id, accion, detalle="", actor=None, ip=None):
+    """Agrega un eslabón a la cadena. Nunca se edita ni se borra."""
+    try:
+        ult = ActAud.query.filter_by(caso_id=caso_id).order_by(ActAud.id.desc()).first()
+        prev = ult.hash if ult else ("0" * 64)
+        ts = _act_ts()
+        actor = (actor or _act_actor())[:120]
+        ip = (ip if ip is not None else _act_ip())[:60]
+        det = (detalle or "")[:4000]
+        h = _act_sha("|".join([prev, str(caso_id), accion, det, actor, ip, ts]))
+        db.session.add(ActAud(caso_id=caso_id, accion=accion[:60], detalle=det, actor=actor, ip=ip, ts=ts, hash_prev=prev, hash=h))
+        db.session.commit()
+        return h
+    except Exception as ex:
+        db.session.rollback()
+        print("ERROR act_aud:", repr(ex), flush=True)
+        return ""
+
+
+def _act_cadena_ok(caso_id):
+    """Recalcula la cadena. Devuelve (ok, total, primer_id_roto)."""
+    filas = ActAud.query.filter_by(caso_id=caso_id).order_by(ActAud.id.asc()).all()
+    prev = "0" * 64
+    for f in filas:
+        esperado = _act_sha("|".join([prev, str(f.caso_id), f.accion or "", f.detalle or "", f.actor or "", f.ip or "", f.ts or ""]))
+        if f.hash_prev != prev or f.hash != esperado:
+            return False, len(filas), f.id
+        prev = f.hash
+    return True, len(filas), 0
+
+
+# ---------------------------------------------------------------- lectura de certificados
+def _act_norm(t):
+    t = _aun.normalize("NFKD", t or "")
+    t = "".join(c for c in t if not _aun.combining(c)).upper()
+    return re.sub(r"\s+", " ", t).strip()
+
+
+_ACT_LIMPIO = {
+    "POLICIA": ("NO TIENE ASUNTOS PENDIENTES CON LAS AUTORIDADES JUDICIALES", "NO REGISTRA ANTECEDENTES", "NO REGISTRA REQUERIMIENTOS JUDICIALES"),
+    "PROCURADURIA": ("NO REGISTRA SANCIONES NI INHABILIDADES VIGENTES", "NO REGISTRA SANCIONES", "NO REGISTRA ANTECEDENTES DISCIPLINARIOS",
+                     "NO TIENE SANCIONES NI INHABILIDADES", "NO REGISTRA INHABILIDADES"),
+    "CONTRALORIA": ("NO SE ENCUENTRA REPORTADO COMO RESPONSABLE FISCAL", "NO SE ENCUENTRA REPORTADA COMO RESPONSABLE FISCAL",
+                    "NO APARECE REPORTADO COMO RESPONSABLE FISCAL", "NO REGISTRA RESPONSABILIDAD FISCAL",
+                    "NO SE ENCUENTRA REPORTADO", "NO ESTA REPORTADO"),
+}
+_ACT_HALLAZGO = {
+    "POLICIA": ("TIENE ASUNTOS PENDIENTES", "REGISTRA ANTECEDENTES", "REGISTRA REQUERIMIENTO", "ORDEN DE CAPTURA"),
+    "PROCURADURIA": ("REGISTRA SANCION", "REGISTRA INHABILIDAD", "SANCIONES VIGENTES", "INHABILIDADES VIGENTES", "REGISTRA ANTECEDENTES"),
+    "CONTRALORIA": ("REPORTADO COMO RESPONSABLE FISCAL", "SE ENCUENTRA REPORTADO", "REGISTRA RESPONSABILIDAD FISCAL"),
+}
+_ACT_MESES = {"ENERO": 1, "FEBRERO": 2, "MARZO": 3, "ABRIL": 4, "MAYO": 5, "JUNIO": 6, "JULIO": 7, "AGOSTO": 8,
+              "SEPTIEMBRE": 9, "SETIEMBRE": 9, "OCTUBRE": 10, "NOVIEMBRE": 11, "DICIEMBRE": 12}
+
+
+def _act_fechas(t):
+    """Fechas que aparecen en el texto (dd/mm/aaaa, aaaa-mm-dd, '12 de octubre de 2026')."""
+    out = []
+    for d, m, y in re.findall(r"\b(\d{1,2})[/\-.](\d{1,2})[/\-.](20\d{2})\b", t):
+        out.append((int(y), int(m), int(d)))
+    for y, m, d in re.findall(r"\b(20\d{2})[/\-.](\d{1,2})[/\-.](\d{1,2})\b", t):
+        out.append((int(y), int(m), int(d)))
+    for d, mes, y in re.findall(r"\b(\d{1,2}) DE ([A-Z]+) (?:DE |DEL )?(20\d{2})\b", t):
+        if mes in _ACT_MESES:
+            out.append((int(y), _ACT_MESES[mes], int(d)))
+    res = []
+    for y, m, d in out:
+        try:
+            res.append(datetime(y, m, d).date())
+        except Exception:
+            pass
+    return res
+
+
+def _act_analizar(entidad, documento, texto):
+    """Lee el texto que arrojó la entidad y decide: LIMPIO, HALLAZGO o REVISAR (con los motivos)."""
+    t = _act_norm(texto)
+    motivos = []
+    doc = re.sub(r"\D", "", documento or "")
+    res = {"resultado": "REVISAR", "motivos": motivos, "fecha": ""}
+    if entidad not in _ACT_LIMPIO:
+        motivos.append("Entidad sin lector automático: requiere aprobación manual de Gerencia.")
+        return res
+    if len(t) < 40:
+        motivos.append("El texto es demasiado corto o no se pudo leer. Pegue el texto completo del certificado.")
+        return res
+    # ¿el documento consultado aparece en el certificado?
+    nums = set()
+    for tok in re.findall(r"\d[\d\.\,\-\s]{4,}\d", t):
+        nums.add(re.sub(r"\D", "", tok))
+    cands = {doc} | ({doc[:-1]} if len(doc) >= 10 else set())      # NIT con o sin dígito de verificación
+    doc_ok = bool(doc) and any(d_ in nums or any(x.startswith(d_) and len(x) <= len(d_) + 1 for x in nums) for d_ in cands)
+    if not doc_ok:
+        motivos.append("El número %s no aparece en el certificado." % (documento or "—"))
+    # ¿limpio o con hallazgo?
+    resto = t
+    limpio = False
+    for frase in sorted(_ACT_LIMPIO[entidad], key=len, reverse=True):
+        if frase in resto:
+            limpio = True
+            resto = resto.replace(frase, " ")
+    hallazgo = any(h in resto for h in _ACT_HALLAZGO[entidad])
+    # fecha del certificado
+    hoy = ahora().date()
+    fechas = [f for f in _act_fechas(t) if f <= hoy + timedelta(days=1)]
+    fecha = max(fechas) if fechas else None
+    if fecha:
+        res["fecha"] = fecha.isoformat()
+        if (hoy - fecha).days > _ACT_VIGENCIA_DIAS:
+            motivos.append("El certificado es del %s: tiene más de %d días." % (fecha.isoformat(), _ACT_VIGENCIA_DIAS))
+    else:
+        motivos.append("No se encontró la fecha de expedición en el texto.")
+    if hallazgo:
+        res["resultado"] = "HALLAZGO"
+        motivos.insert(0, "El certificado reporta un hallazgo. Decide Gerencia.")
+        return res
+    if not limpio:
+        motivos.insert(0, "No se encontró la frase de que la persona/entidad esté libre de reportes.")
+        return res
+    if motivos:
+        return res          # limpio pero con dudas (documento/fecha) -> REVISAR
+    res["resultado"] = "LIMPIO"
+    motivos.append("Sin reportes · documento coincide · certificado vigente.")
+    return res
+
+
+def _act_texto_pdf(raw):
+    """Texto de un PDF (si es escaneado/imagen devuelve vacío: entonces se pega el texto)."""
+    txt = ""
+    try:
+        from pypdf import PdfReader
+        r = PdfReader(_aio.BytesIO(raw))
+        txt = "\n".join((p.extract_text() or "") for p in r.pages[:12])
+    except Exception:
+        txt = ""
+    if len(txt.strip()) < 40:
+        try:
+            with _atmp.NamedTemporaryFile(suffix=".pdf") as f:
+                f.write(raw)
+                f.flush()
+                out = _asub.run(["pdftotext", "-layout", f.name, "-"], capture_output=True, timeout=20)
+                txt = out.stdout.decode("utf-8", "ignore")
+        except Exception:
+            pass
+    return txt
+
+
+# ---------------------------------------------------------------- caso
+def _act_datos(caso):
+    return _vi_descifrar(caso.datos_enc) or {}
+
+
+def _act_crear_caso(form, files, asesor):
+    """Convierte el 'Confirmar y activar' en un caso pendiente. Devuelve (id, error)."""
+    _act_ensure()
+    data = {k: v for k, v in form.items()}
+    enc = _vi_cifrar(data)
+    if not enc:
+        return None, "No se pudo proteger la solicitud (falta la librería de cifrado 'cryptography' en el servidor)."
+    codigo = (data.get("codigo") or "").strip().upper()
+    nombre = (data.get("nombre") or "").strip()
+    abierto = ActCaso.query.filter(ActCaso.estado.notin_(("ACTIVADA", "RECHAZADA", "CANCELADA")),
+                                   (ActCaso.codigo == codigo) | (ActCaso.nombre == nombre)).first()
+    if abierto:
+        return abierto.id, ""      # ya existe un caso abierto: se retoma
+    logo_b64 = logo_mime = ""
+    f = files.get("logo_colegio")
+    if f and (getattr(f, "filename", "") or "").strip():
+        raw = f.read(3 * 1024 * 1024 + 1)
+        if len(raw) > 3 * 1024 * 1024:
+            return None, "El logo supera 3 MB."
+        logo_b64 = _ab64.b64encode(raw).decode("ascii")
+        logo_mime = (f.mimetype or "image/png")[:40]
+    ts = _act_ts()
+    c = ActCaso(estado="VERIFICACION", nombre=nombre[:220], codigo=codigo[:60], plan=(data.get("plan") or "")[:60],
+                nit=(data.get("nit") or "")[:40], dane=(data.get("dane") or "")[:40],
+                rector=(data.get("rector_nombre") or data.get("rector") or "")[:200],
+                rector_doc=re.sub(r"\D", "", data.get("rector_doc") or "")[:40],
+                correo=(data.get("correo") or "")[:160], telefono=(data.get("telefono") or "")[:40],
+                asesor=(asesor or "")[:120], datos_enc=enc, logo_b64=logo_b64, logo_mime=logo_mime,
+                creado_en=ts, actualizado_en=ts)
+    db.session.add(c)
+    db.session.commit()
+    _act_aud(c.id, "CASO_CREADO", "Solicitud de activación: %s (%s) plan %s · asesor %s" % (c.nombre, c.codigo, c.plan, c.asesor))
+    try:
+        _notif_crear(["Gerente", "Superadmin", "Administrador"], "Nueva activación en verificación",
+                     "%s · plan %s · asesor %s" % (c.nombre, c.plan, c.asesor), "/gerencia/activaciones/%d" % c.id)
+    except Exception:
+        pass
+    return c.id, ""
+
+
+def _act_slots(caso):
+    """[(entidad, sujeto, etiqueta, portal, cert_vigente, ok)] para cada certificado exigido."""
+    out = []
+    for ent, suj, et, portal in _ACT_SLOTS:
+        c = ActCert.query.filter_by(caso_id=caso.id, entidad=ent, sujeto=suj, vigente=True).order_by(ActCert.id.desc()).first()
+        ok = bool(c and (c.resultado == "LIMPIO" or c.aprobado_por))
+        out.append((ent, suj, et, portal, c, ok))
+    return out
+
+
+def _act_precio(plan):
+    plan = (plan or "").strip().lower()
+    nombre, precio = plan.title(), 0.0
+    try:
+        pc = PlanComercial.query.filter(PlanComercial.codigo.ilike(plan)).first()
+        if pc:
+            nombre = pc.nombre or nombre
+            precio = max(float(getattr(pc, "precio_lista", 0) or 0), float(pc.precio_mensual or 0))
+    except Exception:
+        pass
+    try:
+        pv = _calcular_promo_valores(precio, _promo_activa_global())
+    except Exception:
+        pv = {}
+    return nombre, pv
+
+
+def _act_cop(n):
+    return "$" + "{:,.0f}".format(int(float(n or 0))).replace(",", ".") + " COP"
+
+
+def _act_generar_contrato(caso, actor=None):
+    d = _act_datos(caso)
+    nombre_plan, pv = _act_precio(caso.plan)
+    ahora_ = ahora()
+    tok = {
+        "NOMBRE_COLEGIO": caso.nombre, "NIT_COLEGIO": caso.nit, "DANE_COLEGIO": caso.dane,
+        "NOMBRE_RECTOR": caso.rector, "DOC_RECTOR": caso.rector_doc, "PLAN": nombre_plan, "PLAN_NOMBRE": nombre_plan,
+        "FECHA": ahora_.strftime("%Y-%m-%d"), "HORA": ahora_.strftime("%H:%M:%S"),
+        "MODALIDAD": (d.get("modalidad") or "PRESENCIAL").upper(), "CIUDAD": d.get("ciudad") or "Colombia",
+        "IP": "", "ASESOR": caso.asesor, "CODIGO": caso.codigo,
+        "VALOR_MENSUAL_DESCUENTO": _act_cop((pv or {}).get("valor_descuento")),
+        "VALOR_MENSUAL_PLENO": _act_cop((pv or {}).get("valor_pleno")),
+        "TIEMPO_PROMO": (pv or {}).get("tiempo_promo") or "—",
+        "FECHA_FIN_DESCUENTO": (pv or {}).get("fecha_caducidad_texto") or "—",
+        "NOMBRE_PROMO": (pv or {}).get("nombre_promo") or "Sin promocion",
+        "PORCENTAJE_PROMO": str((pv or {}).get("porcentaje") or 0) + "%",
+    }
+    tok = {k: _esc(str(v)) for k, v in tok.items()}      # datos digitados: se escapan antes de entrar al contrato
+    caso.contrato_html = _fusion_contrato(tok)
+    caso.contrato_sha = _act_sha(caso.contrato_html)
+    caso.contrato_en = _act_ts()
+    caso.estado = "CONTRATO_LISTO"
+    caso.actualizado_en = _act_ts()
+    db.session.commit()
+    _act_aud(caso.id, "CONTRATO_GENERADO", "Generado desde la plantilla maestra con datos verificados · sha256 %s" % caso.contrato_sha, actor=actor)
+
+
+def _act_evaluar(caso, actor=None):
+    """Mueve el caso según el resultado de los certificados."""
+    if caso.estado not in ("VERIFICACION", "REVISION_GERENCIA"):
+        return
+    certs = ActCert.query.filter_by(caso_id=caso.id, vigente=True).all()
+    hall = [c for c in certs if c.resultado == "HALLAZGO" and not c.aprobado_por]
+    if hall:
+        if caso.estado != "REVISION_GERENCIA":
+            caso.estado = "REVISION_GERENCIA"
+            caso.actualizado_en = _act_ts()
+            db.session.commit()
+            _act_aud(caso.id, "ESCALADO_GERENCIA", "Hallazgo en: " + ", ".join("%s/%s" % (c.entidad, c.sujeto) for c in hall), actor=actor)
+            try:
+                _notif_crear(["Gerente", "Superadmin", "Administrador"], "Hallazgo en una activación",
+                             "%s: requiere decisión de Gerencia." % caso.nombre, "/gerencia/activaciones/%d" % caso.id, nivel="alerta")
+            except Exception:
+                pass
+        return
+    if all(s[5] for s in _act_slots(caso)):
+        _act_aud(caso.id, "VERIFICACION_COMPLETA", "Todos los certificados exigidos están limpios o aprobados por Gerencia.", actor=actor)
+        _act_generar_contrato(caso, actor=actor)
+        # si el rector tiene correo y hay servicio de correo, se envía solo
+        if caso.correo and _NT_EMAIL_RE.match(caso.correo):
+            try:
+                _act_enviar_contrato(caso, "correo", actor=actor or "sistema")
+            except Exception as ex:
+                print("auto envio contrato:", repr(ex), flush=True)
+    elif caso.estado == "REVISION_GERENCIA":
+        caso.estado = "VERIFICACION"
+        caso.actualizado_en = _act_ts()
+        db.session.commit()
+
+
+def _act_enviar_contrato(caso, canal, actor=None):
+    """Genera un enlace nuevo (el anterior deja de servir). Devuelve (mensaje, enlace)."""
+    if caso.estado not in ("CONTRATO_LISTO", "CONTRATO_ENVIADO"):
+        return "El caso no está listo para enviar el contrato.", ""
+    token = _asec.token_urlsafe(32)
+    enlace = _base_publica().rstrip("/") + "/contrato-activacion/" + token
+    caso.token_hash = _act_sha(token)
+    caso.token_exp = (ahora() + timedelta(days=_ACT_ENLACE_DIAS)).strftime("%Y-%m-%d %H:%M:%S")
+    caso.intentos = 0
+    caso.bloqueado = False
+    msg = "Enlace generado."
+    enviado = False
+    if canal in ("correo", "ambos"):
+        if caso.correo and _NT_EMAIL_RE.match(caso.correo):
+            p = {"asunto": "PROCSIS · Revise y acepte su contrato de EduTrack",
+                 "titulo": "Su contrato de EduTrack está listo",
+                 "cuerpo": ("<p>La verificación de <b>{{colegio}}</b> fue completada. Ya puede revisar y aceptar su contrato de servicio.</p>"
+                            "<p>Por seguridad, al abrir el enlace le pediremos el <b>número de cédula del representante legal</b> y el <b>código DANE</b> del colegio.</p>"
+                            "<p>El enlace es personal y vence en " + str(_ACT_ENLACE_DIAS) + " días. Si usted no esperaba este mensaje, ignórelo.</p>"),
+                 "boton_texto": "Revisar mi contrato", "boton_url": "{{enlace}}"}
+            try:
+                ok, errn, msgs = _nt_enviar(p, [caso.correo], {"enlace": enlace, "colegio": caso.nombre}, "manual", actor or _act_actor(), "contrato_activacion")
+                enviado = ok > 0
+                msg = ("Enviado por correo a %s." % _vin_m_mail(caso.correo)) if enviado else ("No se pudo enviar el correo: %s" % ("; ".join(msgs)[:140] or "error"))
+            except Exception as ex:
+                msg = "No se pudo enviar el correo: %s" % str(ex)[:100]
+        else:
+            msg = "El rector no tiene un correo válido registrado."
+    if canal in ("sms", "ambos") or (canal == "correo" and not enviado):
+        msg += " Copie el enlace y envíelo por SMS."
+        enviado = True if canal != "correo" else enviado
+    caso.canal = canal[:20]
+    caso.enviado_en = _act_ts()
+    if enviado or canal in ("sms", "ambos"):
+        caso.estado = "CONTRATO_ENVIADO"
+    caso.actualizado_en = _act_ts()
+    db.session.commit()
+    _act_aud(caso.id, "CONTRATO_ENVIADO", "Canal %s · %s · vence %s" % (canal, msg, caso.token_exp), actor=actor)
+    return msg, enlace
+
+
+def _act_por_token(token):
+    _act_ensure()
+    if not token or len(token) < 20:
+        return None
+    c = ActCaso.query.filter_by(token_hash=_act_sha(token)).first()
+    if not c or (c.token_exp and c.token_exp < _act_ts()):
+        return None
+    return c
+
+
+# ---------------------------------------------------------------- activación
+def _act_activar(caso_id, forzado_por=None):
+    """Crea el colegio de verdad reutilizando el mismo alta de Ventas. Devuelve (ok, mensaje)."""
+    c = ActCaso.query.get(caso_id)
+    if not c:
+        return False, "Caso no existe."
+    d = _act_datos(c)
+    if not d:
+        c.estado, c.error_txt = "ERROR_ACTIVACION", "No se pudieron leer los datos protegidos del caso."
+        db.session.commit()
+        return False, c.error_txt
+    d["plan"] = c.plan
+    d["firma_acepta"] = "1"
+    d["asesor"] = c.asesor
+    d["rector_doc"] = c.rector_doc
+    d["nit"] = c.nit
+    d["dane"] = c.dane
+    logo = None
+    if c.logo_b64:
+        try:
+            ext = "png" if "png" in (c.logo_mime or "") else ("webp" if "webp" in (c.logo_mime or "") else "jpg")
+            logo = (_aio.BytesIO(_ab64.b64decode(c.logo_b64)), "logo.%s" % ext)
+        except Exception:
+            logo = None
+    if logo:
+        d["logo_colegio"] = logo
+    html = ""
+    try:
+        with app.test_request_context("/ventas/comprar", method="POST", data=d, content_type="multipart/form-data",
+                                      environ_overrides={"REMOTE_ADDR": c.aceptado_ip or "127.0.0.1"},
+                                      headers={"User-Agent": c.aceptado_ua or "PROCSIS-activacion"}):
+            request.environ["procsis_act_ok"] = True
+            r = ventas_comprar()
+            html = r if isinstance(r, str) else (r.get_data(as_text=True) if hasattr(r, "get_data") else "")
+    except Exception as ex:
+        db.session.rollback()
+        html = "No se pudo registrar: %s" % ex
+    c = ActCaso.query.get(caso_id)
+    inst = Institucion.query.filter_by(codigo=c.codigo).first()
+    if not inst:
+        m = re.search(r"(No se pudo[^<]{0,220}|Ya existe[^<]{0,200}|Nombre y codigo[^<]{0,100}|Debe marcar[^<]{0,100})", html or "")
+        c.estado = "ERROR_ACTIVACION"
+        c.error_txt = (m.group(1) if m else "El alta no devolvió institución.")[:500]
+        c.actualizado_en = _act_ts()
+        db.session.commit()
+        _act_aud(c.id, "ERROR_ACTIVACION", c.error_txt, actor=forzado_por or "sistema")
+        try:
+            _notif_crear(["Gerente", "Superadmin", "Administrador"], "Error al activar un colegio", "%s: %s" % (c.nombre, c.error_txt),
+                         "/gerencia/activaciones/%d" % c.id, nivel="alerta")
+        except Exception:
+            pass
+        return False, c.error_txt
+    # queda el contrato EXACTO que aceptó el rector, con su fecha, hora e IP reales
+    try:
+        ci = ContratoInstitucion.query.filter_by(institucion_id=inst.id).order_by(ContratoInstitucion.id.desc()).first()
+        if ci:
+            ci.cuerpo_html = c.contrato_html
+            ci.fecha_firma = (c.aceptado_en or "")[:30]
+            ci.ip_firma = (c.aceptado_ip or "")[:60]
+            ci.rector_doc = c.rector_doc[:40]
+        # datos del rector para el CRM y la validación de Soporte
+        rec = RectorInstitucion.query.filter_by(institucion_id=inst.id).first()
+        if not rec:
+            partes = (c.rector or "").split()
+            rec = RectorInstitucion(institucion_id=inst.id, nombres=" ".join(partes[:max(1, len(partes) // 2)])[:160],
+                                    apellidos=" ".join(partes[max(1, len(partes) // 2):])[:160], tipo_id="C.C.",
+                                    numero_id=c.rector_doc[:40], telefono=c.telefono[:40], correo=c.correo[:160],
+                                    creado_en=_act_ts(), creado_por="activacion:%d" % c.id, actualizado_en=_act_ts())
+            db.session.add(rec)
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        print("act post-activacion:", repr(ex), flush=True)
+    c = ActCaso.query.get(caso_id)
+    c.estado, c.institucion_id, c.activado_en, c.logo_b64, c.error_txt = "ACTIVADA", inst.id, _act_ts(), "", ""
+    d.pop("clave_temporal", None)
+    d.pop("logo_colegio", None)
+    c.datos_enc = _vi_cifrar(d) or c.datos_enc
+    c.actualizado_en = _act_ts()
+    db.session.commit()
+    _act_aud(c.id, "COLEGIO_ACTIVADO", "Institución %d creada%s." % (inst.id, (" por orden de %s" % forzado_por) if forzado_por else " a la hora programada"), actor=forzado_por or "sistema")
+    try:
+        _notif_crear(["Gerente", "Superadmin", "Administrador", "Comercial"], "Colegio activado", "%s ya está activo." % c.nombre,
+                     "/gerencia/activaciones/%d" % c.id, institucion_id=inst.id)
+    except Exception:
+        pass
+    if c.correo and _NT_EMAIL_RE.match(c.correo):
+        try:
+            p = {"asunto": "PROCSIS · Su servicio EduTrack ya está activo", "titulo": "¡Su colegio está activo!",
+                 "cuerpo": ("<p>El servicio de <b>{{colegio}}</b> ya quedó configurado.</p>"
+                            "<p>Su usuario de rectoría es <b>{{usuario}}</b>. La clave temporal se la entregó su asesor comercial; "
+                            "el sistema le pedirá cambiarla al ingresar.</p>"),
+                 "boton_texto": "Ingresar a EduTrack", "boton_url": "{{enlace}}"}
+            _nt_enviar(p, [c.correo], {"colegio": c.nombre, "usuario": d.get("rector_usuario") or ("rector." + c.codigo.lower()),
+                                       "enlace": _base_publica().rstrip("/") + "/login"}, "manual", "sistema", "activacion_lista")
+        except Exception as ex:
+            print("correo activacion:", repr(ex), flush=True)
+    return True, "Colegio activado."
+
+
+def _act_procesar():
+    """Activa los casos cuya hora programada ya llegó (cada uno se 'reserva' para que dos procesos no lo repitan)."""
+    _act_ensure()
+    ahora_s = _act_ts()
+    ids = [r[0] for r in db.session.execute(text("SELECT id FROM act_casos WHERE estado='PROGRAMADA' AND activar_en<>'' AND activar_en<=:n"), {"n": ahora_s}).fetchall()]
+    for cid in ids:
+        r = db.session.execute(text("UPDATE act_casos SET estado='ACTIVANDO' WHERE id=:i AND estado='PROGRAMADA'"), {"i": cid})
+        db.session.commit()
+        if r.rowcount == 1:
+            try:
+                _act_activar(cid)
+            except Exception as ex:
+                db.session.rollback()
+                print("act_procesar:", repr(ex), flush=True)
+
+
+_ACT_HILO = {"t": None}
+
+
+def _act_loop():
+    while True:
+        _atm.sleep(60)
+        try:
+            with app.app_context():
+                _act_procesar()
+        except Exception as ex:
+            print("act_loop:", repr(ex), flush=True)
+
+
+@app.before_request
+def _act_arranque():
+    if _ACT_HILO["t"] is None:
+        _ACT_HILO["t"] = True
+        try:
+            t = _ath.Thread(target=_act_loop, daemon=True)
+            t.start()
+            _ACT_HILO["t"] = t
+        except Exception:
+            pass
+    return None
+
+
+# ---------------------------------------------------------------- vistas comunes
+_ACT_CSS = """<style>
+.ac{max-width:1080px;margin:0 auto;padding:6px 4px 40px;font-family:-apple-system,Segoe UI,system-ui,sans-serif;color:#0f172a}
+.ac h1{font-size:22px;color:#0B2D57;margin:0 0 4px}.ac h2{font-size:15px;color:#0B2D57;margin:0 0 10px}
+.ac .sub{color:#64748b;font-size:13px;margin:0 0 16px}
+.ac .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 4px 18px rgba(15,23,42,.04)}
+.ac .chip{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800}
+.ac .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ac label{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}
+.ac input,.ac select,.ac textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box;font:inherit}
+.ac textarea{min-height:110px}
+.ac .btn{display:inline-block;background:#005BEA;color:#fff;border:0;border-radius:980px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;width:auto}
+.ac .btn.sec{background:#e8eef9;color:#0B2D57}.ac .btn.rojo{background:#dc2626}.ac .btn.verde{background:#16a34a}
+.ac .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.ac .grid{grid-template-columns:1fr}}
+.ac table{width:100%;border-collapse:collapse;font-size:13px}.ac th{background:#0B2D57;color:#fff;text-align:left;padding:9px;font-size:12px}
+.ac td{padding:9px;border-bottom:1px solid #eef2f7;vertical-align:top}
+.ac .aviso{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:12px}
+.ac .ok{background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:12px}
+.ac code{background:#f1f5f9;padding:2px 6px;border-radius:6px;word-break:break-all}
+.ac .mono{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#475569;word-break:break-all}
+</style>"""
+
+
+def _act_chip(estado):
+    n, fg, bg = _ACT_ESTADOS.get(estado, (estado, "#334155", "#e2e8f0"))
+    return "<span class='chip' style='color:%s;background:%s'>%s</span>" % (fg, bg, _esc(n))
+
+
+def _act_res_chip(c):
+    if not c:
+        return "<span class='chip' style='color:#92400e;background:#fef3c7'>Pendiente</span>"
+    if c.aprobado_por:
+        return "<span class='chip' style='color:#166534;background:#dcfce7'>Aprobado por Gerencia</span>"
+    return {"LIMPIO": "<span class='chip' style='color:#166534;background:#dcfce7'>Limpio</span>",
+            "HALLAZGO": "<span class='chip' style='color:#991b1b;background:#fee2e2'>Hallazgo</span>"}.get(
+        c.resultado, "<span class='chip' style='color:#92400e;background:#fef3c7'>Revisar</span>")
+
+
+def _act_guard_ventas():
+    if not requiere_login():
+        return redirect("/ventas-login")
+    if rol_actual() not in _ACT_ROLES_VENTAS:
+        return redirect("/ventas-login")
+    return None
+
+
+def _act_es_gerencia():
+    return rol_actual() in ("Gerente", "Superadmin", "Administrador")
+
+
+def _act_subir_cert(caso, form, files):
+    """Guarda un certificado (texto pegado y/o archivo) y lo lee. Devuelve (ok, mensaje)."""
+    slot = (form.get("slot") or "").split("|")
+    if len(slot) != 2:
+        return False, "Elija el certificado."
+    ent, suj = slot[0], slot[1]
+    if ent not in _ACT_ENTIDADES or suj not in ("REPRESENTANTE", "COLEGIO"):
+        return False, "Certificado no válido."
+    if not caso.autoriza_consulta:
+        return False, "Primero confirme que cuenta con la autorización del representante legal para consultar sus antecedentes."
+    if not (caso.rector_doc and caso.dane and caso.nit):
+        return False, "Complete cédula del rector, NIT y DANE antes de cargar certificados."
+    documento = caso.rector_doc if suj == "REPRESENTANTE" else re.sub(r"\D", "", caso.nit or "")
+    texto = (form.get("texto") or "").strip()[:60000]
+    f = files.get("archivo")
+    raw, mime, nombre = b"", "", ""
+    if f and (getattr(f, "filename", "") or "").strip():
+        raw = f.read(5 * 1024 * 1024 + 1)
+        if len(raw) > 5 * 1024 * 1024:
+            return False, "El archivo supera 5 MB."
+        mime = (f.mimetype or "").lower()
+        nombre = f.filename[:200]
+        if raw[:4] == b"%PDF":
+            mime = "application/pdf"
+            if len(texto) < 40:
+                texto = (texto + "\n" + _act_texto_pdf(raw)).strip()
+        elif raw[:3] == b"\xff\xd8\xff":
+            mime = "image/jpeg"
+        elif raw[:8] == b"\x89PNG\r\n\x1a\n":
+            mime = "image/png"
+        else:
+            return False, "Suba un PDF, PNG o JPG (o pegue el texto)."
+    if not raw and len(texto) < 40:
+        return False, "Pegue el texto del certificado o suba el PDF."
+    a = _act_analizar(ent, documento, texto)
+    ActCert.query.filter_by(caso_id=caso.id, entidad=ent, sujeto=suj, vigente=True).update({"vigente": False})
+    cert = ActCert(caso_id=caso.id, entidad=ent, sujeto=suj, documento=documento, texto=texto,
+                   archivo_b64=_ab64.b64encode(raw).decode("ascii") if raw else "", archivo_mime=mime, archivo_nombre=nombre,
+                   archivo_sha=_act_sha(raw) if raw else "", texto_sha=_act_sha(texto), resultado=a["resultado"],
+                   motivos=json.dumps(a["motivos"], ensure_ascii=False), fecha_cert=a["fecha"], vigente=True,
+                   cargado_por=_act_actor(), cargado_en=_act_ts(), ip=_act_ip())
+    db.session.add(cert)
+    db.session.commit()
+    _act_aud(caso.id, "CERTIFICADO_CARGADO", "%s/%s · documento %s · resultado %s · fecha cert %s · sha texto %s%s" % (
+        ent, suj, documento, a["resultado"], a["fecha"] or "—", cert.texto_sha[:16], (" · sha archivo " + cert.archivo_sha[:16]) if raw else ""))
+    _act_evaluar(caso)
+    return True, "Certificado leído: %s. %s" % (a["resultado"], " ".join(a["motivos"]))
+
+
+def _act_consulta_ofac(caso):
+    """Cruce automático del nombre del rector con la lista OFAC (reutiliza el módulo de Verificación)."""
+    if ActCert.query.filter_by(caso_id=caso.id, entidad="OFAC", vigente=True).first():
+        return
+    try:
+        alerta, detalle = _consultar_ofac(caso.rector)
+    except Exception:
+        return
+    res = "HALLAZGO" if alerta else "LIMPIO"
+    cert = ActCert(caso_id=caso.id, entidad="OFAC", sujeto="REPRESENTANTE", documento=caso.rector_doc,
+                   texto=(detalle or "")[:4000], texto_sha=_act_sha(detalle or ""), resultado=res,
+                   motivos=json.dumps(["Cruce automático del nombre con la lista OFAC."], ensure_ascii=False),
+                   fecha_cert=ahora().date().isoformat(), vigente=True, cargado_por="sistema", cargado_en=_act_ts(), ip="")
+    db.session.add(cert)
+    db.session.commit()
+    _act_aud(caso.id, "OFAC_CRUCE", "Resultado %s" % res, actor="sistema")
+
+
+# ---------------------------------------------------------------- Ventas
+@app.route("/ventas/activaciones")
+def ventas_activaciones():
+    g = _act_guard_ventas()
+    if g is not None:
+        return g
+    _act_ensure()
+    q = ActCaso.query.order_by(ActCaso.id.desc())
+    if not _act_es_gerencia():
+        q = q.filter(ActCaso.asesor == (session.get("usuario") or ""))
+    filas = "".join("<tr><td><a href='/ventas/activacion/%d'>%s</a><br><span class='mono'>%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+        c.id, _esc(c.nombre), _esc(c.codigo), _esc(c.plan), _act_chip(c.estado), _esc(c.actualizado_en)) for c in q.limit(200).all())
+    cuerpo = (_ACT_CSS + "<div class='ac'><h1>Activaciones en proceso</h1><p class='sub'>Cada colegio pasa por verificación en entidades, contrato y aceptación antes de activarse.</p>"
+              "<div class='card'><table><tr><th>Colegio</th><th>Plan</th><th>Estado</th><th>Actualizado</th></tr>" +
+              (filas or "<tr><td colspan='4' style='color:#64748b'>Aún no hay activaciones.</td></tr>") + "</table></div></div>")
+    return page("Activaciones", shell(cuerpo))
+
+
+@app.route("/ventas/activacion/<int:cid>", methods=["GET", "POST"])
+def ventas_activacion(cid):
+    g = _act_guard_ventas()
+    if g is not None:
+        return g
+    _act_ensure()
+    c = ActCaso.query.get_or_404(cid)
+    if not _act_es_gerencia() and c.asesor != (session.get("usuario") or ""):
+        return acceso_denegado("Este caso pertenece a otro asesor.")
+    msg = err = enlace = ""
+    if request.method == "POST":
+        accion = request.form.get("accion") or ""
+        try:
+            if accion == "datos" and c.estado in ("VERIFICACION", "REVISION_GERENCIA", "CONTRATO_LISTO"):
+                antes = "doc=%s nit=%s dane=%s correo=%s tel=%s" % (c.rector_doc, c.nit, c.dane, c.correo, c.telefono)
+                c.rector_doc = re.sub(r"\D", "", request.form.get("rector_doc") or "")[:40]
+                c.nit = (request.form.get("nit") or "").strip()[:40]
+                c.dane = re.sub(r"\D", "", request.form.get("dane") or "")[:40]
+                c.correo = (request.form.get("correo") or "").strip()[:160]
+                c.telefono = (request.form.get("telefono") or "").strip()[:40]
+                c.actualizado_en = _act_ts()
+                db.session.commit()
+                _act_aud(c.id, "DATOS_ACTUALIZADOS", "Antes: %s | Después: doc=%s nit=%s dane=%s correo=%s tel=%s" % (antes, c.rector_doc, c.nit, c.dane, c.correo, c.telefono))
+                msg = "Datos guardados."
+            elif accion == "autorizar":
+                if request.form.get("autoriza") == "1" and not c.autoriza_consulta:
+                    c.autoriza_consulta, c.autoriza_por, c.autoriza_en = True, _act_actor(), _act_ts()
+                    db.session.commit()
+                    _act_aud(c.id, "AUTORIZACION_CONSULTA", "El asesor declara contar con la autorización del representante legal (Ley 1581) para consultar sus antecedentes.")
+                    _act_consulta_ofac(c)
+                    _act_evaluar(c)
+                    msg = "Autorización registrada."
+                else:
+                    err = "Marque la casilla para continuar."
+            elif accion == "cert":
+                if c.estado not in ("VERIFICACION", "REVISION_GERENCIA"):
+                    err = "En este estado ya no se cargan certificados."
+                else:
+                    ok, m = _act_subir_cert(c, request.form, request.files)
+                    msg, err = (m, "") if ok else ("", m)
+            elif accion == "enviar":
+                canal = request.form.get("canal") or "sms"
+                if canal not in ("sms", "correo", "ambos"):
+                    canal = "sms"
+                m, enlace = _act_enviar_contrato(c, canal)
+                msg = m
+            elif accion == "desbloquear" and c.bloqueado:
+                c.bloqueado, c.intentos = False, 0
+                db.session.commit()
+                _act_aud(c.id, "ENLACE_DESBLOQUEADO", "Se restablecieron los intentos del enlace.")
+                msg = "Enlace desbloqueado."
+        except Exception as ex:
+            db.session.rollback()
+            err = "No se pudo completar: %s" % str(ex)[:140]
+        c = ActCaso.query.get(cid)
+    # ---- armado de la página
+    slots = _act_slots(c)
+    paso_ok = lambda b: "✅" if b else "⬜"
+    datos_ok = bool(c.rector_doc and c.nit and c.dane)
+    ver_ok = all(s[5] for s in slots)
+    contrato_ok = c.estado in ("CONTRATO_ENVIADO", "PROGRAMADA", "ACTIVANDO", "ACTIVADA")
+    acepto = bool(c.aceptado_en)
+    tl = ("<div class='row' style='font-size:13px;font-weight:700;color:#0B2D57;gap:18px'>"
+          "<span>%s Datos</span><span>%s Entidades</span><span>%s Contrato enviado</span><span>%s Aceptado</span><span>%s Activo</span></div>" % (
+              paso_ok(datos_ok), paso_ok(ver_ok), paso_ok(contrato_ok), paso_ok(acepto), paso_ok(c.estado == "ACTIVADA")))
+    bloques = ""
+    if msg:
+        bloques += "<div class='ok'>%s</div>" % _esc(msg)
+    if err:
+        bloques += "<div class='aviso'>%s</div>" % _esc(err)
+    if enlace:
+        sms = "PROCSIS: revise y acepte su contrato de EduTrack aquí: %s . Tenga a la mano la cédula del rector y el DANE del colegio." % enlace
+        bloques += ("<div class='card' style='border-color:#93c5fd'><h2>Mensaje para enviar por SMS</h2><p class='sub'>Cópielo y envíelo al celular del rector. Este enlace solo se muestra ahora.</p>"
+                    "<textarea readonly onclick='this.select()' style='min-height:90px'>%s</textarea></div>" % _esc(sms))
+    abierto = c.estado in ("VERIFICACION", "REVISION_GERENCIA", "CONTRATO_LISTO")
+    f_datos = (
+        "<form method='POST' class='card'><input type='hidden' name='accion' value='datos'><h2>1 · Datos para verificar</h2>"
+        "<div class='grid'><div><label>Cédula del representante legal *</label><input name='rector_doc' value='%s' inputmode='numeric'></div>"
+        "<div><label>NIT del colegio *</label><input name='nit' value='%s'></div>"
+        "<div><label>Código DANE *</label><input name='dane' value='%s' inputmode='numeric'></div>"
+        "<div><label>Correo del rector</label><input name='correo' type='email' value='%s'></div>"
+        "<div><label>Celular del rector</label><input name='telefono' value='%s'></div></div>%s</form>" % (
+            _esc(c.rector_doc), _esc(c.nit), _esc(c.dane), _esc(c.correo), _esc(c.telefono),
+            "<button class='btn' style='margin-top:12px'>Guardar datos</button>" if abierto else ""))
+    f_auto = ""
+    if not c.autoriza_consulta and abierto:
+        f_auto = ("<form method='POST' class='card'><input type='hidden' name='accion' value='autorizar'><h2>2 · Autorización del representante</h2>"
+                  "<label style='display:flex;gap:8px;align-items:flex-start;font-weight:400'><input type='checkbox' name='autoriza' value='1' style='width:auto;margin-top:3px'>"
+                  "Declaro que el representante legal autorizó expresamente la consulta de sus antecedentes en entidades públicas (Habeas Data, Ley 1581).</label>"
+                  "<button class='btn' style='margin-top:10px'>Confirmar autorización</button></form>")
+    elif c.autoriza_consulta:
+        f_auto = "<div class='ok'>Autorización registrada por %s el %s.</div>" % (_esc(c.autoriza_por), _esc(c.autoriza_en))
+    tarjetas = ""
+    for ent, suj, et, portal, cert, ok in slots:
+        mot = ""
+        if cert:
+            try:
+                mot = "<br>".join(_esc(m) for m in json.loads(cert.motivos or "[]"))
+            except Exception:
+                mot = ""
+        tarjetas += ("<tr><td><b>%s</b><br><a href='%s' target='_blank' rel='noopener'>Abrir portal ↗</a></td><td>%s</td><td style='font-size:12px'>%s%s</td></tr>" % (
+            _esc(et), _esc(portal), _act_res_chip(cert), mot or "<span style='color:#64748b'>Sin cargar</span>",
+            ("<br><span class='mono'>Cert. del %s · sha %s</span>" % (_esc(cert.fecha_cert or "—"), _esc((cert.texto_sha or "")[:16]))) if cert else ""))
+    opciones = "".join("<option value='%s|%s'>%s</option>" % (e, s, _esc(t)) for e, s, t, _p, _c, _o in slots)
+    f_cert = ""
+    if c.autoriza_consulta and c.estado in ("VERIFICACION", "REVISION_GERENCIA"):
+        f_cert = ("<form method='POST' enctype='multipart/form-data' class='card'><input type='hidden' name='accion' value='cert'>"
+                  "<h2>Cargar resultado de una entidad</h2><p class='sub'>Consulte en el portal oficial, copie el texto que arroja y péguelo aquí; o suba el PDF. El sistema lo lee, lo guarda y le pone una huella digital.</p>"
+                  "<label>¿Qué certificado es?</label><select name='slot'>%s</select>"
+                  "<label>Texto del certificado (pegar)</label><textarea name='texto' placeholder='Pegue aquí el texto completo que arrojó la entidad…'></textarea>"
+                  "<label>…o suba el PDF / imagen (máx. 5 MB)</label><input type='file' name='archivo' accept='application/pdf,image/png,image/jpeg'>"
+                  "<button class='btn' style='margin-top:12px'>Leer y guardar</button></form>" % opciones)
+    f_env = ""
+    if c.estado in ("CONTRATO_LISTO", "CONTRATO_ENVIADO"):
+        f_env = ("<form method='POST' class='card'><input type='hidden' name='accion' value='enviar'><h2>3 · Contrato del rector</h2>"
+                 "<p class='sub'>Contrato generado automáticamente con los datos verificados (sha256 <span class='mono'>%s</span>). El rector lo abre con su enlace y confirma con su cédula y el DANE.</p>"
+                 "<div class='row'><select name='canal' style='max-width:340px'><option value='sms'>Por SMS (yo copio el enlace)</option><option value='correo'>Por correo a %s</option><option value='ambos'>SMS y correo</option></select>"
+                 "<button class='btn'>%s</button></div></form>" % (
+                     _esc(c.contrato_sha[:24]), _esc(_vin_m_mail(c.correo) if c.correo else "— sin correo —"),
+                     "Reenviar / nuevo enlace" if c.estado == "CONTRATO_ENVIADO" else "Enviar contrato"))
+    f_est = ""
+    if c.bloqueado:
+        f_est += "<form method='POST' class='card'><input type='hidden' name='accion' value='desbloquear'><div class='aviso'>El enlace se bloqueó por demasiados intentos fallidos.</div><button class='btn sec'>Desbloquear enlace</button></form>"
+    if c.estado == "PROGRAMADA":
+        f_est += "<div class='ok'>El rector aceptó el contrato el %s. El servicio se activa automáticamente hacia las <b>%s</b>.</div>" % (_esc(c.aceptado_en), _esc(c.activar_en))
+    if c.estado == "ACTIVADA":
+        f_est += "<div class='ok'>Colegio activo desde %s.</div>" % _esc(c.activado_en)
+    if c.estado in ("ERROR_ACTIVACION", "RECHAZADA", "CANCELADA"):
+        f_est += "<div class='aviso'>%s %s</div>" % (_ACT_ESTADOS[c.estado][0], _esc(c.error_txt or c.decision_nota or ""))
+    if c.estado == "REVISION_GERENCIA":
+        f_est += "<div class='aviso'>Hay un hallazgo. Gerencia fue notificada y decidirá si el proceso continúa.</div>"
+    cuerpo = _ACT_CSS + ("<div class='ac'><h1>%s</h1><p class='sub'>Código %s · plan %s · asesor %s · %s</p>%s%s%s%s%s"
+              "<div class='card'><h2>Certificados en entidades</h2><table><tr><th>Entidad</th><th>Estado</th><th>Lectura</th></tr>%s</table></div>%s%s%s"
+              "<p><a href='/ventas/activaciones'>← Mis activaciones</a></p></div>") % (
+        _esc(c.nombre), _esc(c.codigo), _esc(c.plan), _esc(c.asesor), _act_chip(c.estado), tl, bloques, f_datos, f_auto, "", tarjetas, f_cert, f_env, f_est)
+    return page("Activación · " + c.nombre, shell(cuerpo))
+
+
+# ---------------------------------------------------------------- página pública del rector
+def _act_pub(titulo, cuerpo_html):
+    return page(titulo, "<div style='min-height:100vh;background:#f4f6fb;padding:22px 12px;font-family:-apple-system,Segoe UI,system-ui,sans-serif'>"
+                "<div style='max-width:820px;margin:0 auto'><div style='text-align:center;margin-bottom:14px'><div style='display:inline-block;background:#005BEA;color:#fff;font-weight:800;padding:8px 18px;border-radius:999px;letter-spacing:.04em'>PROCSIS · EduTrack</div></div>"
+                + cuerpo_html + "<p style='text-align:center;color:#94a3b8;font-size:11px;margin-top:16px'>Conexión protegida · su aceptación queda registrada con fecha, hora y dirección IP.</p></div></div>")
+
+
+@app.route("/contrato-activacion/<token>", methods=["GET", "POST"])
+def contrato_activacion_publico(token):
+    c = _act_por_token(token)
+    caja = "background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:22px;box-shadow:0 10px 30px rgba(15,23,42,.06)"
+    if not c:
+        return _act_pub("Contrato", "<div style='%s;text-align:center'><h1 style='color:#0B2D57'>Enlace no válido o vencido</h1><p style='color:#475569'>Pida a su asesor de PROCSIS un enlace nuevo.</p></div>" % caja)
+    if c.bloqueado:
+        return _act_pub("Contrato", "<div style='%s;text-align:center'><h1 style='color:#991b1b'>Enlace bloqueado</h1><p style='color:#475569'>Se superó el número de intentos. Comuníquese con su asesor de PROCSIS.</p></div>" % caja)
+    clave = "act_ok_%d" % c.id
+    autenticado = (session.get(clave) or 0) > _atm.time() - 1800
+    msg = ""
+    inp = "width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:12px;box-sizing:border-box;font-size:15px;margin-top:4px"
+    btn = "width:100%;margin-top:16px;padding:14px;border:0;border-radius:980px;background:#005BEA;color:#fff;font-weight:700;font-size:15px;cursor:pointer"
+    if request.method == "POST":
+        accion = request.form.get("accion") or ""
+        if accion == "verificar":
+            doc = re.sub(r"\D", "", request.form.get("cedula") or "")
+            dane = re.sub(r"\D", "", request.form.get("dane") or "")
+            if doc and dane and doc == re.sub(r"\D", "", c.rector_doc or "") and dane == re.sub(r"\D", "", c.dane or ""):
+                session[clave] = _atm.time()
+                autenticado = True
+                _act_aud(c.id, "ENLACE_ABIERTO", "Identidad confirmada con cédula y DANE.", actor="rector", ip=_act_ip())
+            else:
+                c.intentos = (c.intentos or 0) + 1
+                _act_aud(c.id, "INTENTO_FALLIDO", "Cédula/DANE no coinciden (intento %d)." % c.intentos, actor="desconocido", ip=_act_ip())
+                if c.intentos >= _ACT_MAX_INTENTOS:
+                    c.bloqueado = True
+                    _act_aud(c.id, "ENLACE_BLOQUEADO", "Se superaron %d intentos." % _ACT_MAX_INTENTOS, actor="sistema", ip=_act_ip())
+                db.session.commit()
+                msg = "Los datos no coinciden. Revíselos e intente de nuevo."
+        elif accion == "aceptar" and autenticado and c.estado == "CONTRATO_ENVIADO":
+            nom = (request.form.get("nombre") or "").strip()
+            if request.form.get("acepto") != "1" or len(nom) < 5:
+                msg = "Marque la casilla y escriba su nombre completo."
+            else:
+                ts = _act_ts()
+                c.aceptado_en, c.aceptado_ip = ts, _act_ip()
+                c.aceptado_ua = (request.headers.get("User-Agent") or "")[:300]
+                c.aceptado_nombre = nom[:200]
+                c.activar_en = (ahora() + timedelta(hours=_ACT_HORAS)).strftime("%Y-%m-%d %H:%M:%S")
+                c.estado = "PROGRAMADA"
+                c.actualizado_en = ts
+                db.session.commit()
+                _act_aud(c.id, "CONTRATO_ACEPTADO", "Aceptado por '%s' · contrato sha256 %s · equipo: %s · activación programada %s" % (
+                    nom[:120], c.contrato_sha, c.aceptado_ua[:120], c.activar_en), actor="rector:" + (c.rector_doc or ""), ip=c.aceptado_ip)
+                try:
+                    _notif_crear(["Gerente", "Superadmin", "Administrador", "Comercial"], "Contrato aceptado",
+                                 "%s aceptó el contrato. Activación hacia las %s." % (c.nombre, c.activar_en), "/gerencia/activaciones/%d" % c.id)
+                except Exception:
+                    pass
+    if not autenticado:
+        return _act_pub("Contrato", (
+            "<div style='%s'><h1 style='color:#0B2D57;margin:0 0 6px;font-size:22px'>Confirme su identidad</h1>"
+            "<p style='color:#475569;font-size:14px'>Para proteger su institución, escriba el número de cédula del representante legal y el código DANE del colegio <b>%s</b>.</p>%s"
+            "<form method='POST'><input type='hidden' name='accion' value='verificar'>"
+            "<label style='font-size:12px;font-weight:700;color:#334155'>Cédula del representante legal</label><input name='cedula' inputmode='numeric' autocomplete='off' style='%s'>"
+            "<label style='font-size:12px;font-weight:700;color:#334155;display:block;margin-top:10px'>Código DANE del colegio</label><input name='dane' inputmode='numeric' autocomplete='off' style='%s'>"
+            "<button style='%s'>Continuar</button></form></div>") % (
+                caja, _esc(c.nombre), ("<p style='color:#b91c1c;font-size:13px'>%s</p>" % _esc(msg)) if msg else "", inp, inp, btn))
+    if c.estado in ("PROGRAMADA", "ACTIVANDO", "ACTIVADA"):
+        hora = c.activar_en or ""
+        return _act_pub("Contrato aceptado", (
+            "<div style='%s;text-align:center'><div style='font-size:46px'>✅</div><h1 style='color:#0B2D57;font-size:22px'>Contrato aceptado</h1>"
+            "<p style='color:#475569;font-size:14px'>Gracias, %s. Su aceptación quedó registrada el %s.</p>"
+            "<p style='color:#475569;font-size:14px'>%s</p></div>") % (
+                caja, _esc(c.aceptado_nombre), _esc(c.aceptado_en),
+                "Su colegio ya está activo." if c.estado == "ACTIVADA" else "Estamos configurando su servicio. Estará listo hacia las <b>%s</b> (aprox. %d horas). Le avisaremos por correo." % (_esc(hora), _ACT_HORAS)))
+    if c.estado != "CONTRATO_ENVIADO":
+        return _act_pub("Contrato", "<div style='%s;text-align:center'><h1 style='color:#0B2D57'>Este contrato no está disponible</h1></div>" % caja)
+    return _act_pub("Su contrato", (
+        "<div style='%s'><h1 style='color:#0B2D57;margin:0 0 6px;font-size:22px'>Revise y acepte su contrato</h1>"
+        "<p style='color:#475569;font-size:13px'>Colegio: <b>%s</b> · Código DANE %s</p>"
+        "<div style='border:1px solid #e2e8f0;border-radius:12px;padding:16px;max-height:420px;overflow:auto;background:#fafcff;font-size:13px;line-height:1.55'>%s</div>"
+        "<p style='font-size:11px;color:#64748b;margin-top:8px'>Huella digital del documento (SHA-256): <span style='font-family:monospace;word-break:break-all'>%s</span></p>%s"
+        "<form method='POST'><input type='hidden' name='accion' value='aceptar'>"
+        "<label style='display:flex;gap:8px;align-items:flex-start;font-size:14px;margin-top:10px'><input type='checkbox' name='acepto' value='1' style='width:20px;height:20px;flex-shrink:0'>He leído el contrato y lo acepto en calidad de representante legal.</label>"
+        "<label style='font-size:12px;font-weight:700;color:#334155;display:block;margin-top:12px'>Escriba su nombre completo</label><input name='nombre' style='%s' autocomplete='off'>"
+        "<button style='%s'>Aceptar contrato</button></form></div>") % (
+            caja, _esc(c.nombre), _esc(c.dane), c.contrato_html, _esc(c.contrato_sha),
+            ("<p style='color:#b91c1c;font-size:13px'>%s</p>" % _esc(msg)) if msg else "", inp, btn))
+
+
+# ---------------------------------------------------------------- Gerencia
+@app.route("/gerencia/activaciones")
+def gerencia_activaciones():
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    _act_ensure()
+    est = (request.args.get("estado") or "").strip()
+    q = ActCaso.query.order_by(ActCaso.id.desc())
+    if est in _ACT_ESTADOS:
+        q = q.filter(ActCaso.estado == est)
+    cont = {}
+    for (e, n) in db.session.execute(text("SELECT estado, COUNT(*) FROM act_casos GROUP BY estado")).fetchall():
+        cont[e] = n
+    chips = "<a class='btn sec' href='/gerencia/activaciones'>Todos</a> " + " ".join(
+        "<a class='btn sec' href='/gerencia/activaciones?estado=%s'>%s (%d)</a>" % (k, _esc(v[0]), cont.get(k, 0)) for k, v in _ACT_ESTADOS.items() if cont.get(k))
+    filas = "".join("<tr><td><a href='/gerencia/activaciones/%d'>%s</a><br><span class='mono'>%s · %s</span></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+        c.id, _esc(c.nombre), _esc(c.codigo), _esc(c.plan), _esc(c.asesor), _act_chip(c.estado), _esc(c.aceptado_en or "—"), _esc(c.activar_en or c.activado_en or "—")) for c in q.limit(300).all())
+    cuerpo = (_ACT_CSS + "<div class='ac'><h1>🛡️ Activaciones y verificación</h1><p class='sub'>Antecedentes en entidades públicas, contrato y aceptación de cada colegio, con su huella de no repudio.</p>"
+              "<div class='card'><div class='row'>" + chips + "</div></div><div class='card'><table><tr><th>Colegio</th><th>Asesor</th><th>Estado</th><th>Aceptó</th><th>Activación</th></tr>" +
+              (filas or "<tr><td colspan='5' style='color:#64748b'>Sin casos.</td></tr>") + "</table></div></div>")
+    return page("Activaciones y verificación", shell(cuerpo))
+
+
+@app.route("/gerencia/activaciones/<int:cid>", methods=["GET", "POST"])
+def gerencia_activacion_detalle(cid):
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    _act_ensure()
+    c = ActCaso.query.get_or_404(cid)
+    msg = err = ""
+    if request.method == "POST":
+        accion = request.form.get("accion") or ""
+        nota = (request.form.get("nota") or "").strip()[:1000]
+        try:
+            if accion == "aprobar_cert":
+                cert = ActCert.query.get(int(request.form.get("cert_id") or 0))
+                if not cert or cert.caso_id != c.id:
+                    err = "Certificado no encontrado."
+                elif len(nota) < 10:
+                    err = "Escriba el motivo de la aprobación (mínimo 10 caracteres)."
+                else:
+                    cert.aprobado_por, cert.aprobado_en, cert.aprobado_nota = _act_actor(), _act_ts(), nota
+                    db.session.commit()
+                    _act_aud(c.id, "CERT_APROBADO_GERENCIA", "%s/%s resultado %s · motivo: %s" % (cert.entidad, cert.sujeto, cert.resultado, nota))
+                    _act_evaluar(c)
+                    msg = "Aprobado."
+            elif accion in ("rechazar", "cancelar") and c.estado not in ("ACTIVADA",):
+                if len(nota) < 10:
+                    err = "Escriba el motivo (mínimo 10 caracteres)."
+                else:
+                    c.estado = "RECHAZADA" if accion == "rechazar" else "CANCELADA"
+                    c.decision_nota = nota
+                    c.token_hash = ""
+                    c.logo_b64 = ""
+                    c.actualizado_en = _act_ts()
+                    db.session.commit()
+                    _act_aud(c.id, "CASO_" + c.estado, nota)
+                    msg = "Caso cerrado."
+            elif accion == "activar_ya" and c.estado in ("PROGRAMADA", "ERROR_ACTIVACION"):
+                if len(nota) < 10:
+                    err = "Escriba el motivo (mínimo 10 caracteres)."
+                else:
+                    _act_aud(c.id, "ACTIVACION_FORZADA", nota)
+                    db.session.execute(text("UPDATE act_casos SET estado='ACTIVANDO' WHERE id=:i"), {"i": c.id})
+                    db.session.commit()
+                    ok, m = _act_activar(c.id, forzado_por=_act_actor())
+                    msg, err = (m, "") if ok else ("", m)
+            elif accion == "desbloquear":
+                c.bloqueado, c.intentos = False, 0
+                db.session.commit()
+                _act_aud(c.id, "ENLACE_DESBLOQUEADO", nota or "Desbloqueado por Gerencia.")
+                msg = "Desbloqueado."
+        except Exception as ex:
+            db.session.rollback()
+            err = "No se pudo completar: %s" % str(ex)[:140]
+        c = ActCaso.query.get(cid)
+    certs = ActCert.query.filter_by(caso_id=c.id).order_by(ActCert.id.desc()).all()
+    filas_c = ""
+    for x in certs:
+        try:
+            mot = "<br>".join(_esc(m) for m in json.loads(x.motivos or "[]"))
+        except Exception:
+            mot = ""
+        acc = ""
+        if x.vigente and not x.aprobado_por and x.resultado != "LIMPIO" and c.estado in ("VERIFICACION", "REVISION_GERENCIA"):
+            acc = ("<form method='POST'><input type='hidden' name='accion' value='aprobar_cert'><input type='hidden' name='cert_id' value='%d'>"
+                   "<input name='nota' placeholder='Motivo de la aprobación' style='margin-bottom:6px'><button class='btn sec'>Aprobar</button></form>" % x.id)
+        arch = ("<br><a href='/gerencia/activaciones/cert/%d/archivo' target='_blank'>Ver archivo original</a>" % x.id) if x.archivo_b64 else ""
+        filas_c += ("<tr style='%s'><td><b>%s</b><br>%s<br><span class='mono'>%s</span></td><td>%s%s</td><td style='font-size:12px'>%s<br><span class='mono'>doc %s · cert %s<br>texto sha %s<br>%s · %s · IP %s</span>%s</td><td>%s</td></tr>" % (
+            "" if x.vigente else "opacity:.5", _esc(_ACT_ENTIDADES.get(x.entidad, x.entidad)), _esc(x.sujeto), "vigente" if x.vigente else "reemplazado",
+            _act_res_chip(x), ("<br><span class='mono'>Aprobó %s: %s</span>" % (_esc(x.aprobado_por), _esc(x.aprobado_nota))) if x.aprobado_por else "",
+            mot, _esc(x.documento), _esc(x.fecha_cert or "—"), _esc((x.texto_sha or "")[:32]), _esc(x.cargado_por), _esc(x.cargado_en), _esc(x.ip), arch, acc))
+    aud = ActAud.query.filter_by(caso_id=c.id).order_by(ActAud.id.asc()).all()
+    ok_cad, n_cad, roto = _act_cadena_ok(c.id)
+    filas_a = "".join("<tr><td class='mono'>%s</td><td>%s</td><td style='font-size:12px'>%s<br><span class='mono'>%s · IP %s</span></td><td class='mono'>%s</td></tr>" % (
+        _esc(a.ts), _esc(a.accion), _esc(a.detalle), _esc(a.actor), _esc(a.ip), _esc((a.hash or "")[:16])) for a in aud)
+    acciones = ""
+    if c.estado not in ("ACTIVADA", "RECHAZADA", "CANCELADA"):
+        acciones += ("<form method='POST' class='row'><input name='nota' placeholder='Motivo (obligatorio)' style='flex:1;min-width:240px'>"
+                     "<button name='accion' value='rechazar' class='btn rojo'>Rechazar</button><button name='accion' value='cancelar' class='btn sec'>Cancelar</button>%s%s</form>" % (
+                         "<button name='accion' value='activar_ya' class='btn verde'>Activar ahora</button>" if c.estado in ("PROGRAMADA", "ERROR_ACTIVACION") else "",
+                         "<button name='accion' value='desbloquear' class='btn sec'>Desbloquear enlace</button>" if c.bloqueado else ""))
+    elif c.estado == "ERROR_ACTIVACION":
+        pass
+    ficha = ("<div class='grid'><div><b>Rector:</b> %s · C.C. %s<br><b>NIT:</b> %s · <b>DANE:</b> %s<br><b>Contacto:</b> %s · %s<br><b>Asesor:</b> %s</div>"
+             "<div><b>Contrato (sha256):</b> <span class='mono'>%s</span><br><b>Aceptación:</b> %s<br><b>IP:</b> %s<br><b>Equipo:</b> <span class='mono'>%s</span><br><b>Activación:</b> %s %s</div></div>" % (
+                 _esc(c.rector), _esc(c.rector_doc), _esc(c.nit), _esc(c.dane), _esc(c.correo or "—"), _esc(c.telefono or "—"), _esc(c.asesor),
+                 _esc(c.contrato_sha or "—"), _esc(("%s · «%s»" % (c.aceptado_en, c.aceptado_nombre)) if c.aceptado_en else "pendiente"),
+                 _esc(c.aceptado_ip or "—"), _esc(c.aceptado_ua or "—"), _esc(c.activar_en or "—"),
+                 ("· <a href='/gerencia/instituciones'>ver colegio #%d</a>" % c.institucion_id) if c.institucion_id else ""))
+    cuerpo = _ACT_CSS + ("<div class='ac'><h1>%s</h1><p class='sub'>%s · plan %s · <a href='/gerencia/activaciones/%d/expediente' target='_blank'>📄 Expediente de no repudio (imprimir / PDF)</a></p>%s%s"
+              "<div class='card'>%s</div><div class='card'><h2>Decisión de Gerencia</h2>%s%s</div>"
+              "<div class='card'><h2>Certificados de entidades</h2><table><tr><th>Entidad</th><th>Resultado</th><th>Detalle y huella</th><th>Acción</th></tr>%s</table></div>"
+              "<div class='card'><h2>Auditoría inmutable</h2><div class='%s'>%s</div><table><tr><th>Fecha / hora</th><th>Acción</th><th>Detalle</th><th>Hash</th></tr>%s</table></div>"
+              "<p><a href='/gerencia/activaciones'>← Todas las activaciones</a></p></div>") % (
+        _esc(c.nombre), _act_chip(c.estado), _esc(c.plan), c.id,
+        ("<div class='ok'>%s</div>" % _esc(msg)) if msg else "", ("<div class='aviso'>%s</div>" % _esc(err)) if err else "",
+        ficha, ("<div class='aviso'>%s</div>" % _esc(c.error_txt)) if c.error_txt else "", acciones or "<span class='sub'>Caso cerrado.</span>",
+        filas_c or "<tr><td colspan='4' style='color:#64748b'>Aún sin certificados.</td></tr>",
+        "ok" if ok_cad else "aviso",
+        ("✔ Cadena íntegra: %d eslabones verificados." % n_cad) if ok_cad else ("⚠ La cadena fue alterada en el registro #%d." % roto), filas_a)
+    return page("Activación · " + c.nombre, shell(cuerpo))
+
+
+@app.route("/gerencia/activaciones/cert/<int:xid>/archivo")
+def gerencia_activacion_archivo(xid):
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    x = ActCert.query.get_or_404(xid)
+    if not x.archivo_b64 or x.archivo_mime not in ("application/pdf", "image/png", "image/jpeg"):
+        return Response("No encontrado", status=404)
+    r = Response(_ab64.b64decode(x.archivo_b64), mimetype=x.archivo_mime)
+    r.headers["Content-Disposition"] = "inline; filename=certificado_%d" % x.id
+    r.headers["X-Content-Type-Options"] = "nosniff"
+    r.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; img-src data:"
+    return r
+
+
+@app.route("/gerencia/activaciones/<int:cid>/expediente")
+def gerencia_activacion_expediente(cid):
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    _act_ensure()
+    c = ActCaso.query.get_or_404(cid)
+    _act_aud(c.id, "EXPEDIENTE_CONSULTADO", "Reporte de no repudio consultado.")
+    ok_cad, n_cad, roto = _act_cadena_ok(c.id)
+    certs = ActCert.query.filter_by(caso_id=c.id, vigente=True).order_by(ActCert.id.asc()).all()
+    aud = ActAud.query.filter_by(caso_id=c.id).order_by(ActAud.id.asc()).all()
+    fc = "".join("<tr><td>%s · %s</td><td>%s%s</td><td>%s</td><td style='font-family:monospace;font-size:10px;word-break:break-all'>%s<br>%s</td><td>%s %s</td></tr>" % (
+        _esc(_ACT_ENTIDADES.get(x.entidad, x.entidad)), _esc(x.sujeto), _esc(x.resultado), (" (aprobado por %s)" % _esc(x.aprobado_por)) if x.aprobado_por else "",
+        _esc(x.fecha_cert or "—"), _esc(x.texto_sha), _esc(x.archivo_sha or ""), _esc(x.cargado_por), _esc(x.cargado_en)) for x in certs)
+    fa = "".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s · %s</td><td style='font-family:monospace;font-size:10px'>%s</td></tr>" % (
+        _esc(a.ts), _esc(a.accion), _esc(a.detalle), _esc(a.actor), _esc(a.ip), _esc(a.hash)) for a in aud)
+    html = ("<!doctype html><html lang='es'><head><meta charset='utf-8'><meta name='robots' content='noindex'><title>Expediente %s</title>"
+            "<style>body{font-family:Segoe UI,Arial,sans-serif;color:#0f172a;margin:28px;font-size:12px}h1{color:#0B2D57;font-size:20px}h2{color:#0B2D57;font-size:14px;margin-top:22px;border-bottom:2px solid #005BEA;padding-bottom:4px}"
+            "table{width:100%%;border-collapse:collapse}td,th{border:1px solid #cbd5e1;padding:5px;vertical-align:top;text-align:left}th{background:#eef2f9}.b{background:#f8fafc;border:1px solid #cbd5e1;padding:10px;margin:8px 0}"
+            "@media print{.np{display:none}}</style></head><body><p class='np'><button onclick='window.print()'>Imprimir / Guardar como PDF</button></p>"
+            "<h1>Expediente de activación y no repudio</h1><div class='b'><b>Colegio:</b> %s · código %s · NIT %s · DANE %s<br><b>Plan:</b> %s · <b>Asesor:</b> %s<br>"
+            "<b>Representante legal:</b> %s · C.C. %s<br><b>Estado:</b> %s · <b>Generado:</b> %s</div>"
+            "<h2>Aceptación del contrato</h2><div class='b'>Contrato sha-256: <span style='font-family:monospace;word-break:break-all'>%s</span><br>Aceptado: %s por «%s»<br>IP: %s<br>Equipo: %s<br>Activación programada: %s · Activado: %s</div>"
+            "<h2>Certificados de entidades de control (vigentes)</h2><table><tr><th>Entidad</th><th>Resultado</th><th>Fecha cert.</th><th>Huellas</th><th>Cargó</th></tr>%s</table>"
+            "<h2>Cadena de auditoría</h2><div class='b'>%s</div><table><tr><th>Fecha/hora</th><th>Acción</th><th>Detalle</th><th>Actor · IP</th><th>Hash</th></tr>%s</table></body></html>") % (
+        _esc(c.nombre), _esc(c.nombre), _esc(c.codigo), _esc(c.nit), _esc(c.dane), _esc(c.plan), _esc(c.asesor), _esc(c.rector), _esc(c.rector_doc),
+        _esc(_ACT_ESTADOS.get(c.estado, (c.estado,))[0]), _act_ts(), _esc(c.contrato_sha or "—"), _esc(c.aceptado_en or "pendiente"), _esc(c.aceptado_nombre or "—"),
+        _esc(c.aceptado_ip or "—"), _esc(c.aceptado_ua or "—"), _esc(c.activar_en or "—"), _esc(c.activado_en or "—"), fc or "<tr><td colspan='5'>Sin certificados.</td></tr>",
+        ("Cadena íntegra: %d eslabones verificados." % n_cad) if ok_cad else ("ALTERADA en el registro #%d" % roto), fa)
+    return Response(html, mimetype="text/html")
 
 
 if __name__ == "__main__":
