@@ -87,7 +87,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
-    PERMANENT_SESSION_LIFETIME=timedelta(minutes=20),  # se renueva con cada request activo
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),  # tope de la cookie; la inactividad real: _limite_inactividad() (15 min, o 8-12 h en dispositivo autorizado)
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB (fotos biometría comprimidas)
     # Capacidad: colegios grandes (1.500–5.000 estudiantes)
     EDUTRACK_MAX_ESTUDIANTES=int(os.environ.get("EDUTRACK_MAX_ESTUDIANTES", "5000")),
@@ -1322,6 +1322,9 @@ class Usuario(db.Model):
     biometria_path = db.Column(db.String(300), default="")
     biometria_registrada = db.Column(db.Boolean, default=False)
     biometria_fecha = db.Column(db.String(30), default="")
+    # ID de acceso oculto: hash (para buscar) + cifrado (para que Secretaría/Soporte puedan entregarlo)
+    id_acceso_hash = db.Column(db.String(64), default="", index=True)
+    id_acceso_enc = db.Column(db.Text, default="")
 
 
 class IngresoPorteria(db.Model):
@@ -4964,6 +4967,8 @@ def migrar_columnas():
         ("usuarios", "biometria_path", "ALTER TABLE usuarios ADD COLUMN biometria_path VARCHAR(300) DEFAULT ''"),
         ("usuarios", "biometria_registrada", "ALTER TABLE usuarios ADD COLUMN biometria_registrada BOOLEAN DEFAULT 0"),
         ("usuarios", "biometria_fecha", "ALTER TABLE usuarios ADD COLUMN biometria_fecha VARCHAR(30) DEFAULT ''"),
+        ("usuarios", "id_acceso_hash", "ALTER TABLE usuarios ADD COLUMN id_acceso_hash VARCHAR(64) DEFAULT ''"),
+        ("usuarios", "id_acceso_enc", "ALTER TABLE usuarios ADD COLUMN id_acceso_enc TEXT DEFAULT ''"),
         ("login_challenges", "foto_validacion", "ALTER TABLE login_challenges ADD COLUMN foto_validacion VARCHAR(300) DEFAULT ''"),
         ("login_challenges", "mensaje_enviado", "ALTER TABLE login_challenges ADD COLUMN mensaje_enviado TEXT DEFAULT ''"),
         ("instituciones", "fecha_inicio_licencia", "ALTER TABLE instituciones ADD COLUMN fecha_inicio_licencia VARCHAR(20) DEFAULT ''"),
@@ -5592,6 +5597,10 @@ def inicializar_bd():
         return
     # Marcar YA para que si el worker se reinicia a mitad, el siguiente request no reintente el bloque pesado
     inicializar_bd._done = True
+    try:
+        _acc_ensure()  # ID de acceso + dispositivos autorizados
+    except Exception as _ea:
+        print("acceso seguro ensure:", _ea)
     # Solo lo minimo para que el login responda en <2s
     try:
         _ensure_inst_promo_columns()
@@ -5928,7 +5937,7 @@ def ruta_publica():
         or p.startswith("/qr/")
         or p.startswith("/matricula")
         or p.startswith("/colegio")
-        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/legal", "/cookies", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva", "/acudiente/autorizar-salida", "/acudiente/ficha-medica"]
+        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/validar-dispositivo", "/legal", "/cookies", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva", "/acudiente/autorizar-salida", "/acudiente/ficha-medica"]
         or p.startswith("/verificar-certificado")
         or p.startswith("/demo/invitar")
         or p.startswith("/pqr/")
@@ -5953,7 +5962,7 @@ def before():
     if requiere_login():
         ultimo = session.get("ultimo_movimiento")
         ahora_ts = ahora().timestamp()
-        TIEMPO_MAX_INACTIVIDAD = 15 * 60  # 15 minutos de inactividad (colegios y backoffice)
+        TIEMPO_MAX_INACTIVIDAD = _limite_inactividad()  # 15 min; 8-12 h si el dispositivo está autorizado
         if ultimo and ahora_ts - float(ultimo) > TIEMPO_MAX_INACTIVIDAD:
             rol_expirado = session.get("rol")
             session.clear()
@@ -10103,7 +10112,7 @@ def session_idle_timeout():
     import time
     now = time.time()
     last = session.get("_last_active") or session.get("ultimo_movimiento")
-    LIMITE = 15 * 60  # 15 minutos
+    LIMITE = _limite_inactividad()  # 15 min; 8-12 h si el dispositivo está autorizado
     if last and now - float(last) > LIMITE:
         rol_exp = session.get("rol") or ""
         session.clear()
@@ -11914,7 +11923,7 @@ def login():
             except (TypeError, ValueError):
                 inst_id = None
             # Sin captcha en login de colegios (solo equipo Procsis se identifica con la palabra clave PROCSIS)
-            user = login_usuario(usuario_in, password_in, institucion_id=inst_id)
+            user, _err_id = _login_por_id_acceso(usuario_in, password_in, inst_id)
             if user:
                 # Roles internos solo por /soporte-login
                 if (user.rol or "").strip() in ROLES_INTERNOS or (user.rol or "").strip() == "Soporte":
@@ -11939,6 +11948,9 @@ def login():
                         if lic.get("bloqueado"):
                             error = f"Institución suspendida: {lic.get('mensaje') or 'Contacte a Procsis / cartera.'}"
                         else:
+                            _gr = _dispositivo_gate(user, request.form.get("sede_id"))
+                            if _gr is not None:
+                                return _gr
                             session.pop("anuncio_dismissed_ver", None)
                             session["usuario"] = user.usuario
                             session["rol"] = user.rol
@@ -11978,6 +11990,9 @@ def login():
                             dest = "/docente-escritorio" if (user.rol or "").strip() == "Docente" else "/dashboard"
                             return redirect(dest)
                     else:
+                        _gr = _dispositivo_gate(user, request.form.get("sede_id"))
+                        if _gr is not None:
+                            return _gr
                         session.pop("anuncio_dismissed_ver", None)
                         session["usuario"] = user.usuario
                         session["rol"] = user.rol
@@ -11990,20 +12005,9 @@ def login():
                         dest = "/docente-escritorio" if (user.rol or "").strip() == "Docente" else "/dashboard"
                         return redirect(dest)
             else:
-                # Mensaje más claro: ¿existe el usuario en otro colegio?
-                mismos = Usuario.query.filter(func.lower(Usuario.usuario) == (usuario_in or "").strip().lower()).all()
-                if mismos and inst_id:
-                    en_este = [x for x in mismos if x.institucion_id is not None and int(x.institucion_id) == int(inst_id)]
-                    if not en_este:
-                        error = "Ese usuario no existe en el colegio seleccionado. Revisa el usuario admin creado para esa institución (ej: admin_CODIGO)."
-                    else:
-                        error = "Contraseña incorrecta para este colegio."
-                elif mismos:
-                    error = "Contraseña incorrecta."
-                    _rate_limit_fail(portal="colegios")
-                else:
-                    _rate_limit_fail(portal="colegios")
-                    error = "Usuario o contraseña incorrectos."
+                # Sin pistas: ID inexistente -> "Usuario incorrecto."; cada fallo cuenta para el límite de intentos
+                _rate_limit_fail(portal="colegios")
+                error = _err_id or "Usuario o contraseña incorrectos."
 
     instituciones = Institucion.query.filter(
         Institucion.estado.in_(["ACTIVA", "CANCELACION_PENDIENTE"])
@@ -12337,7 +12341,7 @@ def login():
               <p style="margin:4px 0 0;font-size:11px;color:#64748b">Si el colegio tiene varias sedes, elija a cuál ingresa.</p>
             </div>
             <label>Usuario</label>
-            <input name="usuario" placeholder="Usuario institucional" required autocomplete="username">
+            <input name="usuario" placeholder="ID de acceso (cédula) · equipo PROCSIS: usuario" required autocomplete="username">
             <label>Contraseña</label>
             <input name="password" type="password" placeholder="Contraseña" required autocomplete="current-password">
             <button type="submit" class="sinai-btn">Iniciar sesión  ›</button>
@@ -16280,7 +16284,7 @@ def usuarios():
                         institucion_id=(None if rol == "Soporte" else inst_new),
                     ))
                     db.session.commit()
-                    mensaje = f"Usuario creado: {usuario} · Rol: {rol} · Clave temporal: {temp}"
+                    mensaje = f"Usuario creado · ID de acceso: {id_acceso_de_usuario(usuario) or '—'} · Rol: {rol} · Clave temporal: {temp}"
                     tipo_msg = "ok"
                     registrar_auditoria("Crear usuario", f"{usuario} rol {rol} inst {inst_new}")
                 except Exception as ex:
@@ -22458,6 +22462,7 @@ def ventas_comprar():
                         print("activar facturacion:", _fex)
                     # Crear usuarios operativos con datos capturados en la venta
                     creds_creadas = []
+                    creds_ids = []
                     temp_pass = (request.form.get("clave_temporal") or "Colegio2026*").strip() or "Colegio2026*"
                     if len(temp_pass) < 8:
                         temp_pass = "Colegio2026*"
@@ -22494,7 +22499,14 @@ def ventas_comprar():
                                 except Exception:
                                     pass
                             db.session.add(nu)
+                            if rol_u == "Rectoría":
+                                _acc_asignar_cedula(nu, request.form.get("rector_doc"))  # si falla, queda ID provisional
+                            try:
+                                db.session.flush()
+                            except Exception:
+                                pass
                             creds_creadas.append(f"{rol_u}: {uname} ({nom_completo or '—'})")
+                            creds_ids.append(f"{rol_u}: ID {id_acceso_plano(nu) or '—'} ({nom_completo or '—'})")
                         db.session.commit()
                         if creds_creadas:
                             registrar_auditoria(
@@ -22508,7 +22520,7 @@ def ventas_comprar():
                         f"Plan {plan_nom} · {codigo} {nombre} · lim_e={lim_e or '∞'} · sedes={lim_s} · periodos={nper} · facturación activada",
                     )
                     n_fact = len(_r.get("facturas_creadas") or [])
-                    creds_txt = (" · Usuarios: " + " / ".join(creds_creadas) + f" · clave temporal: <code>{temp_pass}</code>") if creds_creadas else ""
+                    creds_txt = (" · Accesos: " + " / ".join(creds_ids or creds_creadas) + f" · clave temporal: <code>{temp_pass}</code>") if creds_creadas else ""
 
                     try:
                         _ensure_inst_promo_columns()
@@ -39074,7 +39086,7 @@ def soporte_usuarios_institucion(id):
                     password_temporal=True,
                 ))
                 db.session.commit()
-                mensaje = f"Creado: {usuario} · {rol} · clave {password} · colegio {inst.codigo}"
+                mensaje = f"Creado · ID de acceso: {id_acceso_de_usuario(usuario) or '—'} · {rol} · clave {password} · colegio {inst.codigo}"
                 tipo = "ok"
                 registrar_auditoria("Soporte crear usuario", f"{usuario} → {inst.codigo}")
             except Exception as ex:
@@ -45561,9 +45573,12 @@ def gestionar_docentes():
                         password_temporal=True,
                         institucion_id=iid,
                     )
+                    _ced, _ced_err = _acc_asignar_cedula(u, request.form.get("cedula"))
+                    if _ced_err:
+                        raise ValueError(_ced_err)
                     db.session.add(u)
                     db.session.commit()
-                    mensaje = f"Docente creado: {usuario} · Clave temporal: {clave}"
+                    mensaje = f"Docente creado · ID de acceso: {id_acceso_plano(u) or '(ver en Dispositivos y accesos)'} · Clave temporal: {clave}"
                     tipo = "ok"
                     try:
                         registrar_auditoria("Crear docente", f"{usuario} inst {iid}")
@@ -45671,7 +45686,7 @@ def gestionar_docentes():
     for u in docentes:
         n_asig = sum(1 for a in lista if a.usuario_id == u.id)
         filas_doc += f"""<tr>
-          <td><b>{u.usuario}</b></td>
+          <td><b>{u.usuario}</b><br><span style="font-family:monospace;font-size:12px;color:#475569">ID: {id_acceso_plano(u) or "—"}</span></td>
           <td>{u.correo or "—"}</td>
           <td>{n_asig} asignación(es)</td>
           <td>
@@ -45712,8 +45727,11 @@ def gestionar_docentes():
     <h2>1. Crear docente</h2>
     <form method="POST">
       <input type="hidden" name="accion" value="crear_docente">
-      <label><b>Usuario de acceso *</b></label>
-      <input name="usuario" required placeholder="Ej: profe.santiago">
+      <label><b>Nombre del docente *</b></label>
+      <input name="usuario" required placeholder="Ej: profe.santiago (solo para identificarlo; no se usa para ingresar)">
+      <label><b>Cédula del docente (será su ID de acceso) *</b></label>
+      <input name="cedula" required inputmode="numeric" placeholder="Ej: 1234567890">
+      <p class="mini-text">El docente ingresará con su <b>cédula</b> y su contraseña. Los dispositivos se administran en <a href="/seguridad/dispositivos">Dispositivos y accesos</a>.</p>
       <label><b>Correo</b></label>
       <input name="correo" type="email" placeholder="opcional">
       <label><b>Clave temporal</b></label>
@@ -45743,7 +45761,7 @@ def gestionar_docentes():
   <h2>Docentes del colegio</h2>
   <div class="table-card" style="overflow-x:auto">
   <table>
-    <tr><th>Usuario</th><th>Correo</th><th>Asignaciones</th><th>Clave</th></tr>
+    <tr><th>Docente · ID de acceso</th><th>Correo</th><th>Asignaciones</th><th>Clave</th></tr>
     {filas_doc or '<tr><td colspan="4">Aún no hay docentes. Créalos en el panel de la izquierda.</td></tr>'}
   </table>
   </div>
@@ -75306,8 +75324,25 @@ _NT_DEFAULTS = [
     dict(clave="usuario_creado", icono="👤", nombre="Creación de usuario", orden=4,
          asunto="👤 Su usuario fue creado en EduTrack", titulo="Bienvenido(a) a EduTrack",
          cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Se creó su acceso a EduTrack para <b>{{institucion}}</b>.</p>"
-                 "<p><b>Usuario:</b> {{usuario}}</p><p>Por seguridad, la contraseña le será entregada por un canal distinto y deberá cambiarla en su primer ingreso.</p>"),
+                 "<p><b>ID de acceso:</b> {{usuario}}</p><p>Por seguridad, la contraseña le será entregada por un canal distinto y deberá cambiarla en su primer ingreso.</p>"),
          boton_texto="Ingresar a EduTrack", boton_url="{{enlace}}"),
+    dict(clave="bienvenida_procsis", icono="🎉", nombre="Bienvenido a la familia PROCSIS", orden=20,
+         asunto="🎉 Bienvenido a la familia PROCSIS · {{institucion}}", titulo="Bienvenido a la familia PROCSIS",
+         cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Es un gusto darle la bienvenida a la familia PROCSIS. "
+                 "El servicio EduTrack de <b>{{institucion}}</b> ya está <b>activo</b>.</p>"
+                 "<p><b>Su ID de acceso:</b> <span style=\"font-family:monospace;font-size:16px\">{{usuario}}</span></p>"
+                 "<p>La contraseña temporal se la entregó su asesor comercial; el sistema le pedirá cambiarla al ingresar. "
+                 "En su primer ingreso desde un equipo nuevo le enviaremos un PIN de 4 dígitos a este correo para autorizarlo; "
+                 "luego no volverá a pedirse en ese equipo.</p><p>Cualquier duda, nuestro equipo de Soporte está para ayudarle.</p>"),
+         boton_texto="Ingresar a EduTrack", boton_url="{{enlace}}"),
+    dict(clave="pin_dispositivo", icono="🔐", nombre="PIN de verificación de dispositivo", orden=21,
+         asunto="🔐 Su PIN de verificación · EduTrack", titulo="Verifique este dispositivo",
+         cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Detectamos un ingreso a EduTrack (<b>{{institucion}}</b>) desde un dispositivo nuevo. "
+                 "Su PIN de verificación es:</p><div style=\"text-align:center;margin:14px 0\"><span style=\"display:inline-block;"
+                 "background:#eef2f9;border-radius:12px;padding:12px 26px;font-size:32px;font-weight:800;letter-spacing:10px;color:#0B2D57\">"
+                 "{{mensaje}}</span></div><p>Vence en 10 minutos. Si usted no intentó ingresar, ignore este mensaje y avise a Secretaría "
+                 "o a Soporte PROCSIS.</p>"),
+         boton_texto="", boton_url=""),
     dict(clave="recuperacion_clave", icono="🔑", nombre="Recuperación de contraseña", orden=5,
          asunto="🔑 Recuperación de contraseña · EduTrack", titulo="Recuperación de contraseña",
          cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Recibimos una solicitud para recuperar el acceso de su cuenta <b>{{usuario}}</b>.</p>"
@@ -78508,17 +78543,15 @@ def _act_activar(caso_id, forzado_por=None):
                      "/gerencia/activaciones/%d" % c.id, institucion_id=inst.id)
     except Exception:
         pass
-    if c.correo and _NT_EMAIL_RE.match(c.correo):
-        try:
-            p = {"asunto": "PROCSIS · Su servicio EduTrack ya está activo", "titulo": "¡Su colegio está activo!",
-                 "cuerpo": ("<p>El servicio de <b>{{colegio}}</b> ya quedó configurado.</p>"
-                            "<p>Su usuario de rectoría es <b>{{usuario}}</b>. La clave temporal se la entregó su asesor comercial; "
-                            "el sistema le pedirá cambiarla al ingresar.</p>"),
-                 "boton_texto": "Ingresar a EduTrack", "boton_url": "{{enlace}}"}
-            _nt_enviar(p, [c.correo], {"colegio": c.nombre, "usuario": d.get("rector_usuario") or ("rector." + c.codigo.lower()),
-                                       "enlace": _base_publica().rstrip("/") + "/login"}, "manual", "sistema", "activacion_lista")
-        except Exception as ex:
-            print("correo activacion:", repr(ex), flush=True)
+    # Disparador de bienvenida: se envía solo, una vez, cuando el caso pasa a ACTIVADA
+    try:
+        _act_enviar_bienvenida(c, inst, d)
+    except Exception as ex:
+        print("correo bienvenida activacion:", repr(ex), flush=True)
+    try:
+        _act_post_activacion_extra(c, inst, d)
+    except Exception as ex:
+        print("post activacion extra:", repr(ex), flush=True)
     return True, "Colegio activado."
 
 
@@ -79097,6 +79130,658 @@ def gerencia_activacion_expediente(cid):
         _esc(c.aceptado_ip or "—"), _esc(c.aceptado_ua or "—"), _esc(c.activar_en or "—"), _esc(c.activado_en or "—"), fc or "<tr><td colspan='5'>Sin certificados.</td></tr>",
         ("Cadena íntegra: %d eslabones verificados." % n_cad) if ok_cad else ("ALTERADA en el registro #%d" % roto), fa)
     return Response(html, mimetype="text/html")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ACCESO SEGURO DE COLEGIOS
+#   1) ID de acceso = cédula de la persona (guardada cifrada + hash) en vez del usuario; si aún no se conoce, ID aleatorio provisional
+#   2) Dispositivos autorizados: primer ingreso -> PIN de 4 dígitos por correo
+#   3) Sesión prolongada (8-12 h) solo en dispositivos autorizados
+#   4) Panel para Secretaría / Rectoría / Soporte PROCSIS: ver IDs y eliminar dispositivos
+# Variables de entorno opcionales:
+#   ID_ACCESO_PEPPER            clave para el hash del ID (si no, usa SECRET_KEY). No cambiarla luego.
+#   DISPOSITIVO_ACTIVO=0        apaga el control de dispositivos (emergencia)
+#   DISPOSITIVO_EXIGIR_CORREO=1 bloquea el ingreso de usuarios sin correo (por defecto entran con sesión corta)
+#   SESION_DISPOSITIVO_HORAS    duración de sesión en dispositivo autorizado (1-12, por defecto 10)
+#   LOGIN_ACEPTAR_USUARIO=1     transición: acepta también el usuario antiguo en el login de colegios
+# ══════════════════════════════════════════════════════════════════════════════
+import hmac as _acc_hmac
+import hashlib as _acc_hashlib
+from sqlalchemy import event as _acc_event
+from flask import make_response as _acc_make_response
+
+_ACC_ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # sin 0/O/1/I/L para evitar confusiones
+_ACC_LISTO = {"ok": False}
+_ACC_PIN_MINUTOS = 10
+_ACC_PIN_MAX_INTENTOS = 5
+_ACC_PIN_MAX_POR_HORA = 5
+_ACC_ROLES_PANEL = ("Secretaría", "Rectoría", "Administrador", "Soporte")
+
+
+class DispositivoAutorizado(db.Model):
+    __tablename__ = "dispositivos_autorizados"
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, index=True, nullable=False)
+    institucion_id = db.Column(db.Integer, index=True)
+    token_hash = db.Column(db.String(64), index=True, nullable=False)
+    etiqueta = db.Column(db.String(200), default="")
+    ip = db.Column(db.String(60), default="")
+    creado_en = db.Column(db.String(30), default="")
+    ultimo_uso = db.Column(db.String(30), default="")
+    revocado = db.Column(db.Boolean, default=False)
+    revocado_por = db.Column(db.String(80), default="")
+    revocado_en = db.Column(db.String(30), default="")
+
+
+class DispositivoPin(db.Model):
+    __tablename__ = "dispositivos_pines"
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, index=True, nullable=False)
+    pin_hash = db.Column(db.String(64), nullable=False)
+    salt = db.Column(db.String(32), nullable=False)
+    creado_ts = db.Column(db.Float, default=0.0)
+    expira_ts = db.Column(db.Float, default=0.0)
+    intentos = db.Column(db.Integer, default=0)
+    usado = db.Column(db.Boolean, default=False)
+    sede_id = db.Column(db.Integer)
+    ip = db.Column(db.String(60), default="")
+
+
+def _acc_ts():
+    return ahora().strftime("%Y-%m-%d %H:%M:%S")
+
+
+# ---------------------------------------------------------------- ID de acceso
+def _acc_pepper():
+    return (os.environ.get("ID_ACCESO_PEPPER") or str(app.secret_key)).encode("utf-8")
+
+
+def _acc_norm(txt):
+    """Deja solo letras/números en mayúscula: acepta 'k7m4-9qx2-h3tp', con o sin guiones."""
+    return re.sub(r"[^A-Z0-9]", "", (txt or "").upper())
+
+
+def _acc_hash(canon):
+    return _acc_hmac.new(_acc_pepper(), ("id|" + canon).encode("utf-8"), _acc_hashlib.sha256).hexdigest()
+
+
+def _acc_formato(canon):
+    # Cédula: solo dígitos. ID aleatorio provisional (12 caracteres): XXXX-XXXX-XXXX
+    if canon and len(canon) == 12 and not canon.isdigit():
+        return "-".join(canon[i:i + 4] for i in (0, 4, 8))
+    return canon or ""
+
+
+def _acc_enc(canon):
+    try:
+        t = _vi_cifrar(canon)
+    except Exception:
+        t = None
+    return t or ("plain:" + canon)
+
+
+def id_acceso_plano(u):
+    """ID de acceso legible (XXXX-XXXX-XXXX) o '' si el usuario aún no tiene."""
+    try:
+        enc = (getattr(u, "id_acceso_enc", "") or "")
+        if not enc:
+            return ""
+        canon = enc[6:] if enc.startswith("plain:") else _vi_descifrar(enc)
+        return _acc_formato(canon) if isinstance(canon, str) else ""
+    except Exception:
+        return ""
+
+
+def id_acceso_de_usuario(nombre_usuario):
+    try:
+        u = Usuario.query.filter(func.lower(Usuario.usuario) == (nombre_usuario or "").strip().lower()).first()
+        return id_acceso_plano(u) if u else ""
+    except Exception:
+        return ""
+
+
+def _acc_nuevo_unico(existe):
+    for _ in range(25):
+        canon = "".join(secrets.choice(_ACC_ALFABETO) for _ in range(12))
+        h = _acc_hash(canon)
+        if not existe(h):
+            return canon, h
+    raise RuntimeError("No se pudo generar un ID de acceso único")
+
+
+def _acc_asignar(u):
+    """Genera (o regenera) el ID de un usuario. No hace commit. Devuelve el ID legible."""
+    canon, h = _acc_nuevo_unico(
+        lambda x: db.session.query(Usuario.id).filter(Usuario.id_acceso_hash == x, Usuario.id != (u.id or 0)).first() is not None
+    )
+    u.id_acceso_hash = h
+    u.id_acceso_enc = _acc_enc(canon)
+    return _acc_formato(canon)
+
+
+@_acc_event.listens_for(Usuario, "before_insert")
+def _acc_usuario_before_insert(mapper, connection, target):
+    """Todo usuario de colegio recibe su ID de acceso al crearse, sin importar desde qué pantalla."""
+    try:
+        if target.institucion_id is None or (target.id_acceso_hash or ""):
+            return
+        canon, h = _acc_nuevo_unico(
+            lambda x: connection.execute(text("SELECT 1 FROM usuarios WHERE id_acceso_hash = :h"), {"h": x}).first() is not None
+        )
+        target.id_acceso_hash = h
+        target.id_acceso_enc = _acc_enc(canon)
+    except Exception as ex:
+        print("id_acceso before_insert:", repr(ex), flush=True)
+
+
+def _acc_cedula_valida(txt):
+    d = re.sub(r"\D", "", txt or "")
+    return d if 5 <= len(d) <= 12 else ""
+
+
+def _acc_asignar_cedula(u, cedula):
+    """El ID de acceso pasa a ser la cédula. No hace commit. Devuelve (cedula, error)."""
+    d = _acc_cedula_valida(cedula)
+    if not d:
+        return "", "Escribe una cédula válida (solo números, de 5 a 12 dígitos)."
+    h = _acc_hash(d)
+    dup = db.session.query(Usuario.id).filter(
+        Usuario.id_acceso_hash == h, Usuario.institucion_id == u.institucion_id, Usuario.id != (u.id or 0)).first()
+    if dup:
+        return "", "Ya existe otra persona con esa cédula en este colegio."
+    u.id_acceso_hash = h
+    u.id_acceso_enc = _acc_enc(d)
+    return d, ""
+
+
+def _acc_ensure():
+    """Columnas, tablas, índice y ID para los usuarios que ya existían. Una vez por proceso."""
+    if _ACC_LISTO["ok"]:
+        return
+    _ACC_LISTO["ok"] = True
+    try:
+        dialecto = (db.engine.dialect.name or "").lower()
+        with db.engine.begin() as conn:
+            if "postgres" in dialecto:
+                conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS id_acceso_hash VARCHAR(64) DEFAULT ''"))
+                conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS id_acceso_enc TEXT DEFAULT ''"))
+            else:
+                cols = {r[1] for r in conn.execute(text("PRAGMA table_info(usuarios)")).fetchall()}
+                if "id_acceso_hash" not in cols:
+                    conn.execute(text("ALTER TABLE usuarios ADD COLUMN id_acceso_hash VARCHAR(64) DEFAULT ''"))
+                if "id_acceso_enc" not in cols:
+                    conn.execute(text("ALTER TABLE usuarios ADD COLUMN id_acceso_enc TEXT DEFAULT ''"))
+    except Exception as ex:
+        print("acceso ensure columnas:", repr(ex)[:200], flush=True)
+    try:
+        for m in (DispositivoAutorizado, DispositivoPin):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        with db.engine.begin() as conn:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_usuarios_id_acceso_hash ON usuarios (id_acceso_hash)"))
+    except Exception as ex:
+        print("acceso ensure tablas:", repr(ex)[:200], flush=True)
+    try:
+        faltan = Usuario.query.filter(
+            Usuario.institucion_id.isnot(None),
+            or_(Usuario.id_acceso_hash.is_(None), Usuario.id_acceso_hash == ""),
+        ).all()
+        for u in faltan:
+            _acc_asignar(u)
+        if faltan:
+            db.session.commit()
+            print("acceso: ID asignado a %d usuarios existentes" % len(faltan), flush=True)
+    except Exception as ex:
+        db.session.rollback()
+        print("acceso ensure backfill:", repr(ex)[:200], flush=True)
+
+
+def _login_por_id_acceso(ident, password, inst_id=None):
+    """Login de colegios por ID de acceso. Devuelve (usuario, None) o (None, mensaje)."""
+    ident = (ident or "").strip()
+    password = (password or "").strip()
+    if not ident or not password:
+        return None, "Ingresa tu ID de acceso y tu contraseña."
+    canon = _acc_norm(ident)
+    u = None
+    if 5 <= len(canon) <= 12:
+        q = Usuario.query.filter(Usuario.id_acceso_hash == _acc_hash(canon))
+        if inst_id:
+            q = q.filter(Usuario.institucion_id == int(inst_id))  # la misma cédula puede existir en otro colegio
+        u = q.first()
+    if u is None:
+        if os.environ.get("LOGIN_ACEPTAR_USUARIO", "0") == "1":
+            leg = login_usuario(ident, password, institucion_id=inst_id)
+            return (leg, None) if leg else (None, "Usuario o contraseña incorrectos.")
+        return None, "Usuario incorrecto."
+    if inst_id and u.institucion_id and int(u.institucion_id) != int(inst_id):
+        return None, "Usuario incorrecto."
+    if not verificar_password(u.password, password):
+        return None, "Contraseña incorrecta."
+    if not es_hash_password(u.password):
+        u.password = crear_hash(password)
+        db.session.commit()
+    return u, None
+
+
+# --------------------------------------------------------------- sesión larga
+def _limite_inactividad():
+    """15 min por defecto; 8-12 h si el ingreso fue desde un dispositivo autorizado."""
+    try:
+        v = int(session.get("limite_inact") or 0)
+        if 900 <= v <= 12 * 3600:
+            return v
+    except Exception:
+        pass
+    return 15 * 60
+
+
+def _disp_horas():
+    try:
+        h = float(os.environ.get("SESION_DISPOSITIVO_HORAS", "10"))
+    except Exception:
+        h = 10.0
+    return max(1.0, min(h, 12.0))
+
+
+def _disp_etiqueta():
+    ua = request.headers.get("User-Agent", "") or ""
+    nav = next((n for k, n in (("Edg/", "Edge"), ("OPR/", "Opera"), ("Firefox/", "Firefox"), ("Chrome/", "Chrome"), ("Safari/", "Safari")) if k in ua), "Navegador")
+    so = next((n for k, n in (("Windows", "Windows"), ("Android", "Android"), ("iPhone", "iPhone"), ("iPad", "iPad"), ("Mac OS", "Mac"), ("Linux", "Linux")) if k in ua), "SO desconocido")
+    return ("%s · %s" % (nav, so))[:200]
+
+
+def _disp_cookie_nombre(uid):
+    return "procsis_disp_%d" % int(uid)
+
+
+def _disp_buscar(user):
+    token = request.cookies.get(_disp_cookie_nombre(user.id)) or ""
+    if len(token) < 20:
+        return None
+    return DispositivoAutorizado.query.filter_by(
+        usuario_id=user.id, token_hash=_acc_hashlib.sha256(token.encode("utf-8")).hexdigest(), revocado=False
+    ).first()
+
+
+def _disp_pagina_error(msg):
+    return page("Acceso", (
+        '<div class="center"><section class="card login-card"><h1>No se pudo continuar</h1>'
+        '<p>%s</p><p><a href="/login">Volver al inicio de sesión</a></p></section></div>') % _esc(msg))
+
+
+def _disp_pin_hash(salt, pin):
+    return _acc_hmac.new(_acc_pepper(), ("%s|%s" % (salt, pin)).encode("utf-8"), _acc_hashlib.sha256).hexdigest()
+
+
+def _disp_plantilla(clave, defecto):
+    try:
+        _nt_ensure()
+        pl = NotifPlantilla.query.get(clave)
+        if pl:
+            return {k: getattr(pl, k) for k in ("asunto", "titulo", "cuerpo", "boton_texto", "boton_url")}
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return defecto
+
+
+_DISP_PLANTILLA_PIN = {
+    "asunto": "🔐 Su PIN de verificación · EduTrack", "titulo": "Verifique este dispositivo",
+    "cuerpo": ("<p>Estimado(a) {{nombre}}:</p><p>Detectamos un ingreso a EduTrack (<b>{{institucion}}</b>) desde un dispositivo nuevo. "
+               "Su PIN de verificación es:</p>"
+               "<div style=\"text-align:center;margin:14px 0\"><span style=\"display:inline-block;background:#eef2f9;border-radius:12px;"
+               "padding:12px 26px;font-size:32px;font-weight:800;letter-spacing:10px;color:#0B2D57\">{{mensaje}}</span></div>"
+               "<p>Vence en 10 minutos. Si usted no intentó ingresar, ignore este mensaje y avise a Secretaría o a Soporte PROCSIS.</p>"),
+    "boton_texto": "", "boton_url": "",
+}
+
+
+def _disp_crear_y_enviar_pin(user, sede_id=None):
+    """Crea el PIN y lo envía por correo. Devuelve (DispositivoPin|None, mensaje_error)."""
+    import time as _t
+    ahora_t = _t.time()
+    recientes = DispositivoPin.query.filter(DispositivoPin.usuario_id == user.id, DispositivoPin.creado_ts > ahora_t - 3600).count()
+    if recientes >= _ACC_PIN_MAX_POR_HORA:
+        return None, "Se solicitaron demasiados PIN en la última hora. Intenta más tarde o contacta a Secretaría / Soporte PROCSIS."
+    pin = "%04d" % secrets.randbelow(10000)
+    salt = secrets.token_hex(8)
+    DispositivoPin.query.filter_by(usuario_id=user.id, usado=False).update({"usado": True})
+    fila = DispositivoPin(usuario_id=user.id, pin_hash=_disp_pin_hash(salt, pin), salt=salt, creado_ts=ahora_t,
+                          expira_ts=ahora_t + _ACC_PIN_MINUTOS * 60, intentos=0, usado=False,
+                          sede_id=(int(sede_id) if str(sede_id or "").isdigit() else None), ip=_client_ip()[:60])
+    db.session.add(fila)
+    db.session.commit()
+    inst = Institucion.query.get(user.institucion_id) if user.institucion_id else None
+    try:
+        ok, _err, msgs = _nt_enviar(
+            _disp_plantilla("pin_dispositivo", _DISP_PLANTILLA_PIN), [(user.correo or "").strip()],
+            {"nombre": user.nombre_completo or user.usuario, "institucion": inst.nombre if inst else "", "mensaje": pin,
+             "enlace": _base_publica().rstrip("/") + "/login"},
+            "auto", "sistema", "pin_dispositivo")
+    except Exception as ex:
+        ok, msgs = 0, [str(ex)[:120]]
+    if ok < 1:
+        fila.usado = True
+        db.session.commit()
+        return None, "No pudimos enviar el PIN al correo registrado. Contacta a Secretaría o a Soporte PROCSIS."
+    return fila, ""
+
+
+def _dispositivo_gate(user, sede_id=None):
+    """None = el ingreso continúa. Cualquier otro valor es la respuesta que debe devolver el login."""
+    if os.environ.get("DISPOSITIVO_ACTIVO", "1") == "0" or user.institucion_id is None:
+        return None
+    fila_d = _disp_buscar(user)
+    if fila_d:
+        fila_d.ultimo_uso = _acc_ts()
+        db.session.commit()
+        session["disp_id"] = fila_d.id
+        session["limite_inact"] = int(_disp_horas() * 3600)
+        return None
+    session.pop("disp_id", None)
+    session.pop("limite_inact", None)
+    correo = (user.correo or "").strip()
+    if not _NT_EMAIL_RE.match(correo):
+        if os.environ.get("DISPOSITIVO_EXIGIR_CORREO", "0") == "1":
+            return _disp_pagina_error("Tu usuario no tiene un correo registrado para verificar este dispositivo. Pide a Secretaría o a Soporte PROCSIS que lo registren.")
+        return None  # sin correo no se puede registrar: entra con sesión corta (15 min), como hasta hoy
+    fila_p, err = _disp_crear_y_enviar_pin(user, sede_id)
+    if not fila_p:
+        return _disp_pagina_error(err)
+    session.clear()
+    session["disp_pend"] = {"pid": fila_p.id, "uid": user.id}
+    return redirect("/validar-dispositivo")
+
+
+def _finalizar_login_colegio(user, sede_id=None, disp_id=None):
+    try:
+        sincronizar_licencias()
+    except Exception:
+        pass
+    tid = user.institucion_id
+    inst_chk = Institucion.query.get(tid) if tid else None
+    if inst_chk:
+        lic = estado_licencia(inst_chk)
+        if lic.get("bloqueado"):
+            return _disp_pagina_error("Institución suspendida: %s" % (lic.get("mensaje") or "Contacte a Procsis / cartera."))
+    session.pop("anuncio_dismissed_ver", None)
+    session["usuario"] = user.usuario
+    session["rol"] = user.rol
+    session["user_id"] = user.id
+    session["grupo_docente"] = user.grupo_docente or ""
+    session["password_temporal"] = bool(user.password_temporal)
+    session["ultimo_movimiento"] = ahora().timestamp()
+    session["institucion_id"] = tid
+    if disp_id:
+        session["disp_id"] = disp_id
+        session["limite_inact"] = int(_disp_horas() * 3600)
+    sede_ok = None
+    if sede_id:
+        sede_ok = SedeInstitucion.query.filter_by(id=sede_id, institucion_id=tid, activa=True).first()
+    if sede_ok:
+        session["sede_id"] = sede_ok.id
+        session["sede_nombre"] = sede_ok.nombre
+        session["sede_tipo"] = sede_ok.tipo or ""
+    else:
+        for k in ("sede_id", "sede_nombre", "sede_tipo"):
+            session.pop(k, None)
+    sincronizar_inst_globals()
+    registrar_auditoria("Inicio de sesión", "Usuario %s ingresó como %s%s" % (
+        user.usuario, user.rol, " · dispositivo verificado por PIN" if disp_id else ""))
+    return redirect("/docente-escritorio" if (user.rol or "").strip() == "Docente" else "/dashboard")
+
+
+@app.route("/validar-dispositivo", methods=["GET", "POST"])
+def validar_dispositivo():
+    import time as _t
+    pend = session.get("disp_pend") or {}
+    fila = DispositivoPin.query.get(pend.get("pid") or 0) if pend else None
+    user = Usuario.query.get(pend.get("uid") or 0) if pend else None
+    if not fila or not user or fila.usado or fila.usuario_id != user.id:
+        session.pop("disp_pend", None)
+        return redirect("/login")
+    error, info = "", ""
+    if request.method == "POST":
+        ok_rl, wait_m = _rate_limit_login(portal="pin_dispositivo")
+        if not ok_rl:
+            error = "Demasiados intentos. Espere %s segundos." % wait_m
+        elif (request.form.get("accion") or "") == "reenviar":
+            nueva, err = _disp_crear_y_enviar_pin(user, fila.sede_id)
+            if nueva:
+                session["disp_pend"] = {"pid": nueva.id, "uid": user.id}
+                info = "Enviamos un nuevo PIN a tu correo."
+            else:
+                error = err
+        else:
+            pin = re.sub(r"\D", "", request.form.get("pin") or "")
+            if _t.time() > (fila.expira_ts or 0):
+                error = "El PIN venció. Solicita uno nuevo."
+            else:
+                fila.intentos = (fila.intentos or 0) + 1
+                db.session.commit()
+                if len(pin) == 4 and _acc_hmac.compare_digest(_disp_pin_hash(fila.salt, pin), fila.pin_hash):
+                    fila.usado = True
+                    token = secrets.token_urlsafe(32)
+                    disp = DispositivoAutorizado(
+                        usuario_id=user.id, institucion_id=user.institucion_id,
+                        token_hash=_acc_hashlib.sha256(token.encode("utf-8")).hexdigest(),
+                        etiqueta=_disp_etiqueta(), ip=_client_ip()[:60], creado_en=_acc_ts(), ultimo_uso=_acc_ts())
+                    db.session.add(disp)
+                    db.session.commit()
+                    sede_id = fila.sede_id
+                    session.pop("disp_pend", None)
+                    resp = _acc_make_response(_finalizar_login_colegio(user, sede_id, disp_id=disp.id))
+                    resp.set_cookie(_disp_cookie_nombre(user.id), token, max_age=60 * 60 * 24 * 365, httponly=True,
+                                    samesite="Lax", secure=bool(app.config.get("SESSION_COOKIE_SECURE")), path="/")
+                    return resp
+                _rate_limit_fail(portal="pin_dispositivo")
+                if fila.intentos >= _ACC_PIN_MAX_INTENTOS:
+                    fila.usado = True
+                    db.session.commit()
+                    session.pop("disp_pend", None)
+                    return _disp_pagina_error("Superaste el número de intentos. Inicia sesión de nuevo para recibir otro PIN.")
+                error = "PIN incorrecto. Te quedan %d intento(s)." % (_ACC_PIN_MAX_INTENTOS - fila.intentos)
+    correo = (user.correo or "")
+    parte = correo.split("@")
+    oculto = (parte[0][:2] + "•••@" + parte[1]) if len(parte) == 2 and parte[0] else "tu correo"
+    body = (
+        '<div class="center"><section class="card login-card"><h1>Verifica este dispositivo</h1>'
+        '<p>Enviamos un PIN de 4 dígitos a <b>%s</b>. Escríbelo para autorizar este equipo; '
+        'no volverá a pedirse en este dispositivo.</p>%s%s'
+        '<form method="POST"><input name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" '
+        'autocomplete="one-time-code" placeholder="PIN de 4 dígitos" required autofocus '
+        'style="text-align:center;font-size:24px;letter-spacing:8px"><button>Verificar</button></form>'
+        '<form method="POST" style="margin-top:8px"><input type="hidden" name="accion" value="reenviar">'
+        '<button style="background:#64748b">Reenviar PIN</button></form>'
+        '<p style="margin-top:12px"><a href="/login">Cancelar</a></p></section></div>'
+    ) % (_esc(oculto),
+         ('<p style="color:#b91c1c"><b>%s</b></p>' % _esc(error)) if error else "",
+         ('<p style="color:#047857"><b>%s</b></p>' % _esc(info)) if info else "")
+    return page("Verificar dispositivo", body)
+
+
+@app.before_request
+def _disp_vigencia_gate():
+    """Si Secretaría / Soporte eliminan el dispositivo, la sesión abierta en él se cierra de inmediato."""
+    try:
+        did = session.get("disp_id")
+        if not did or "usuario" not in session or (request.path or "").startswith("/static"):
+            return
+        import time as _t
+        ahora_t = _t.time()
+        if ahora_t - float(session.get("disp_chk") or 0) < 10:
+            return
+        fila = DispositivoAutorizado.query.get(did)
+        if (not fila) or fila.revocado or fila.usuario_id != session.get("user_id"):
+            session.clear()
+            return redirect("/login")
+        session["disp_chk"] = ahora_t
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+# ------------------------------------------------------------------- panel
+def _acc_csrf():
+    t = session.get("_acc_csrf")
+    if not t:
+        t = secrets.token_urlsafe(24)
+        session["_acc_csrf"] = t
+    return t
+
+
+@app.route("/seguridad/dispositivos", methods=["GET", "POST"])
+def seguridad_dispositivos():
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in _ACC_ROLES_PANEL:
+        return acceso_denegado("Solo Secretaría, Rectoría o Soporte PROCSIS pueden administrar los dispositivos.")
+    _acc_ensure()
+    iid = None
+    if rol == "Soporte":
+        try:
+            iid = int(request.values.get("inst") or 0) or None
+        except Exception:
+            iid = None
+    iid = iid or institucion_id_actual()
+    if not iid:
+        if rol == "Soporte":
+            insts = Institucion.query.order_by(Institucion.nombre.asc()).all()
+            lista = "".join('<li><a href="/seguridad/dispositivos?inst=%d">%s</a></li>' % (i.id, _esc(i.nombre)) for i in insts)
+            return page("Dispositivos", shell_soporte('<div class="card"><h2>Elige un colegio</h2><ul>%s</ul></div>' % lista))
+        return acceso_denegado("Debes estar en una institución.")
+    mensaje, tipo = "", "ok"
+    if request.method == "POST":
+        if not _acc_hmac.compare_digest(str(request.form.get("csrf") or ""), str(session.get("_acc_csrf") or "x")):
+            mensaje, tipo = "La página caducó. Recárgala e intenta de nuevo.", "danger"
+        else:
+            accion = (request.form.get("accion") or "").strip()
+            try:
+                if accion == "eliminar_dispositivo":
+                    d = DispositivoAutorizado.query.get(int(request.form.get("dispositivo_id") or 0))
+                    if d and d.institucion_id == iid:
+                        d.revocado, d.revocado_por, d.revocado_en = True, (session.get("usuario") or "")[:80], _acc_ts()
+                        db.session.commit()
+                        registrar_auditoria("Eliminar dispositivo", "dispositivo %d usuario_id %d" % (d.id, d.usuario_id))
+                        mensaje = "Dispositivo eliminado. Su sesión se cierra de inmediato."
+                    else:
+                        mensaje, tipo = "No se encontró el dispositivo.", "danger"
+                elif accion in ("eliminar_todos", "cambiar_id"):
+                    u = Usuario.query.get(int(request.form.get("usuario_id") or 0))
+                    if not u or u.institucion_id != iid:
+                        mensaje, tipo = "No se encontró el usuario.", "danger"
+                    elif accion == "eliminar_todos":
+                        n = DispositivoAutorizado.query.filter_by(usuario_id=u.id, revocado=False).update(
+                            {"revocado": True, "revocado_por": (session.get("usuario") or "")[:80], "revocado_en": _acc_ts()})
+                        db.session.commit()
+                        registrar_auditoria("Eliminar dispositivos", "usuario_id %d · %d dispositivo(s)" % (u.id, n))
+                        mensaje = "Se eliminaron %d dispositivo(s)." % n
+                    else:
+                        ced, err = _acc_asignar_cedula(u, request.form.get("cedula"))
+                        if err:
+                            mensaje, tipo = err, "danger"
+                        else:
+                            db.session.commit()
+                            registrar_auditoria("ID de acceso actualizado (cédula)", "usuario_id %d" % u.id)
+                            mensaje = "ID de acceso de %s actualizado a su cédula." % (u.nombre_completo or u.usuario)
+            except Exception as ex:
+                db.session.rollback()
+                mensaje, tipo = "No se pudo completar: %s" % str(ex)[:120], "danger"
+    csrf = _acc_csrf()
+    usuarios = Usuario.query.filter(Usuario.institucion_id == iid).order_by(Usuario.rol.asc(), Usuario.usuario.asc()).all()
+    disp_por_u = {}
+    for d in DispositivoAutorizado.query.filter_by(institucion_id=iid, revocado=False).order_by(DispositivoAutorizado.id.desc()).all():
+        disp_por_u.setdefault(d.usuario_id, []).append(d)
+
+    def _form(accion, campo, valor, texto, estilo=""):
+        return ('<form method="POST" style="display:inline;margin:0"><input type="hidden" name="csrf" value="%s">'
+                '<input type="hidden" name="accion" value="%s"><input type="hidden" name="%s" value="%d">'
+                '<input type="hidden" name="inst" value="%d"><button style="padding:4px 9px;font-size:12px;%s">%s</button></form>'
+                ) % (csrf, accion, campo, valor, iid, estilo, texto)
+
+    filas = ""
+    for u in usuarios:
+        ids = id_acceso_plano(u)
+        devs = disp_por_u.get(u.id, [])
+        dtxt = "".join(
+            '<div style="margin:2px 0">%s · %s · último uso %s %s</div>' % (
+                _esc(d.etiqueta), _esc(d.creado_en[:10]), _esc(d.ultimo_uso or "—"),
+                _form("eliminar_dispositivo", "dispositivo_id", d.id, "Eliminar dispositivo", "background:#dc2626;color:#fff"))
+            for d in devs) or '<span style="color:#64748b">Sin dispositivos autorizados</span>'
+        acciones = ('<form method="POST" style="display:inline;margin:0"><input type="hidden" name="csrf" value="%s">'
+                    '<input type="hidden" name="accion" value="cambiar_id"><input type="hidden" name="usuario_id" value="%d">'
+                    '<input type="hidden" name="inst" value="%d"><input name="cedula" inputmode="numeric" placeholder="Cédula" '
+                    'style="width:110px;padding:4px"> <button style="padding:4px 9px;font-size:12px">Guardar cédula</button></form>'
+                    ) % (csrf, u.id, iid)
+        if devs:
+            acciones += " " + _form("eliminar_todos", "usuario_id", u.id, "Eliminar todos")
+        filas += ("<tr><td><b>%s</b><br><span style='font-size:11px;color:#64748b'>%s</span></td><td>%s</td>"
+                  "<td style='font-family:monospace;font-size:14px'>%s</td><td style='font-size:12px'>%s</td><td>%s</td></tr>") % (
+            _esc(u.nombre_completo or u.usuario), _esc(u.rol), _esc(u.correo or "— sin correo —"),
+            _esc(ids or "—"), dtxt, acciones)
+    inst = Institucion.query.get(iid)
+    color = "#047857" if tipo == "ok" else "#b91c1c"
+    content = (
+        '<div class="card" style="padding:18px"><h2 style="margin-top:0">Dispositivos e IDs de acceso · %s</h2>'
+        '<p style="color:#475569;font-size:13px">El ID de acceso es la <b>cédula</b>: es lo que cada persona escribe para ingresar. Quien aún tenga un ID aleatorio provisional (XXXX-XXXX-XXXX) necesita que se registre su cédula aquí. '
+        'Si alguien pierde un equipo, use <b>Eliminar dispositivo</b>: la sesión se cierra al instante y el próximo ingreso exigirá un PIN nuevo.</p>'
+        '%s<div style="overflow-x:auto"><table style="width:100%%;border-collapse:collapse" border="1" cellpadding="6">'
+        '<tr><th>Persona</th><th>Correo</th><th>ID de acceso (cédula)</th><th>Dispositivos autorizados</th><th>Acciones</th></tr>%s</table></div></div>'
+    ) % (_esc(inst.nombre if inst else ""),
+         ('<p style="color:%s"><b>%s</b></p>' % (color, _esc(mensaje))) if mensaje else "", filas)
+    return page("Dispositivos y accesos", (shell_soporte if rol == "Soporte" else shell)(content))
+
+
+# ------------------------------------------------- bienvenida al activar colegio
+_ACT_PLANTILLA_BIENVENIDA = {
+    "asunto": "🎉 Bienvenido a la familia PROCSIS · {{institucion}}", "titulo": "Bienvenido a la familia PROCSIS",
+    "cuerpo": ("<p>Estimado(a) {{nombre}}:</p><p>Es un gusto darle la bienvenida a la familia PROCSIS. "
+               "El servicio EduTrack de <b>{{institucion}}</b> ya está <b>activo</b>.</p>"
+               "<p><b>Su ID de acceso:</b> <span style=\"font-family:monospace;font-size:16px\">{{usuario}}</span></p>"
+               "<p>La contraseña temporal se la entregó su asesor comercial; el sistema le pedirá cambiarla al ingresar. "
+               "En su primer ingreso desde un equipo nuevo le enviaremos un PIN de 4 dígitos a este correo para autorizarlo; "
+               "luego no volverá a pedirse en ese equipo.</p>"
+               "<p>Cualquier duda, nuestro equipo de Soporte está para ayudarle.</p>"),
+    "boton_texto": "Ingresar a EduTrack", "boton_url": "{{enlace}}",
+}
+
+
+def _act_post_activacion_extra(caso, inst, datos):
+    """Punto de extensión: segunda acción que debe ocurrir junto con el correo de bienvenida (pendiente de definir)."""
+    return None
+
+
+def _act_enviar_bienvenida(caso, inst, datos):
+    """Correo HTML 'Bienvenido a la familia PROCSIS' al pasar el colegio a ACTIVADA."""
+    if not (caso.correo and _NT_EMAIL_RE.match(caso.correo)):
+        return False
+    id_txt = ""
+    try:
+        rec = Usuario.query.filter_by(institucion_id=inst.id, rol="Rectoría").order_by(Usuario.id.asc()).first()
+        if rec:
+            if not (rec.correo or "").strip():
+                rec.correo = caso.correo[:160]  # sin correo no podría recibir el PIN de su primer dispositivo
+            if not rec.id_acceso_hash:
+                if _acc_asignar_cedula(rec, caso.rector_doc)[1]:
+                    _acc_asignar(rec)
+            db.session.commit()
+            id_txt = id_acceso_plano(rec)
+    except Exception as ex:
+        db.session.rollback()
+        print("bienvenida: ID rector:", repr(ex), flush=True)
+    ok, _err, msgs = _nt_enviar(
+        _disp_plantilla("bienvenida_procsis", _ACT_PLANTILLA_BIENVENIDA), [caso.correo],
+        {"nombre": caso.rector or "", "institucion": caso.nombre,
+         "usuario": id_txt or "(se lo informará su asesor)", "enlace": _base_publica().rstrip("/") + "/login"},
+        "auto", "sistema", "bienvenida_procsis")
+    if ok < 1:
+        print("bienvenida PROCSIS no enviada:", msgs, flush=True)
+    return ok > 0
 
 
 if __name__ == "__main__":
