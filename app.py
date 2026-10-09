@@ -4043,6 +4043,7 @@ def _staff_nav_items(path, rol=""):
         items = _prov_menu_items()
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
+            ("/gerencia/donaciones", "🎗️ Proyectos y Donaciones"),
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/usuarios", "Usuarios internos"),
             ("/gerencia/auditoria", "Auditoría IP"),
@@ -7292,6 +7293,11 @@ def estado_licencia(inst):
     if not inst:
         return {"estado": "ok", "dias_restantes": None, "mensaje": "", "bloqueado": False, "popup_mora": False}
     est = (inst.estado or "ACTIVA").upper()
+    if es_donacion(inst):  # donación/convenio: cobranza no aplica; solo se bloquea si Gerencia finaliza el convenio
+        if (inst.motivo_bloqueo or "").startswith("CONVENIO") and est == "SUSPENDIDA":
+            return {"estado": "suspendida", "dias_restantes": 0, "mensaje": inst.motivo_bloqueo, "bloqueado": True, "popup_mora": False}
+        if est in ("ACTIVA", "SUSPENDIDA"):
+            return {"estado": "ok", "dias_restantes": None, "mensaje": "", "bloqueado": False, "popup_mora": False}
     if est == "SUSPENDIDA":
         # Si no hay deuda real, no bloquear el acceso (queda inconsistente en BD → auto-corregir)
         try:
@@ -7414,6 +7420,8 @@ def sincronizar_licencias():
         hoy = ahora().date()
         # 1) Reparar suspendidos sin deuda
         for inst in Institucion.query.filter(Institucion.estado == "SUSPENDIDA").all():
+            if es_donacion(inst):
+                continue  # donación/convenio: ni suspende ni reactiva la cobranza
             try:
                 if getattr(inst, "auto_suspender", None) is False:
                     continue
@@ -7436,6 +7444,8 @@ def sincronizar_licencias():
                     pass
         # 2) Suspender activos solo con deuda + vencimiento pasado
         for inst in Institucion.query.filter(Institucion.estado == "ACTIVA").all():
+            if es_donacion(inst):
+                continue  # donación/convenio: ni suspende ni reactiva la cobranza
             try:
                 if getattr(inst, "auto_suspender", None) is False:
                     continue
@@ -22225,6 +22235,8 @@ def ventas_comprar():
     except Exception:
         pass
     plan = (request.args.get("plan") or request.form.get("plan") or "estandar").strip().lower()
+    if plan.startswith("don-") and not request.environ.get("procsis_donacion_ok"):
+        return redirect("/ventas")  # los planes de donación solo se activan desde Gerencia
     if plan == "piloto":
         plan = "demo"
     pc = PlanComercial.query.filter_by(codigo=plan, activo=True).first()
@@ -54165,7 +54177,7 @@ def _es_plan_demo(inst_or_plan):
         p = p.strip().lower()
         for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u")):
             p = p.replace(a, b)
-        return p in ("demo", "piloto", "trial", "prueba", "free") or p.startswith("demo")
+        return p in ("demo", "piloto", "trial", "prueba", "free") or p.startswith("demo") or p.startswith("don-")  # don- = donación/convenio: nunca se factura
     except Exception:
         return False
 
@@ -75331,7 +75343,7 @@ _NT_DEFAULTS = [
          cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Es un gusto darle la bienvenida a la familia PROCSIS. "
                  "El servicio EduTrack de <b>{{institucion}}</b> ya está <b>activo</b>.</p>"
                  "<p><b>Su ID de acceso:</b> <span style=\"font-family:monospace;font-size:16px\">{{usuario}}</span></p>"
-                 "<p>La contraseña temporal se la entregó su asesor comercial; el sistema le pedirá cambiarla al ingresar. "
+                 "<p>La contraseña temporal se la entregó el equipo de PROCSIS; el sistema le pedirá cambiarla al ingresar. "
                  "En su primer ingreso desde un equipo nuevo le enviaremos un PIN de 4 dígitos a este correo para autorizarlo; "
                  "luego no volverá a pedirse en ese equipo.</p><p>Cualquier duda, nuestro equipo de Soporte está para ayudarle.</p>"),
          boton_texto="Ingresar a EduTrack", boton_url="{{enlace}}"),
@@ -79743,7 +79755,7 @@ _ACT_PLANTILLA_BIENVENIDA = {
     "cuerpo": ("<p>Estimado(a) {{nombre}}:</p><p>Es un gusto darle la bienvenida a la familia PROCSIS. "
                "El servicio EduTrack de <b>{{institucion}}</b> ya está <b>activo</b>.</p>"
                "<p><b>Su ID de acceso:</b> <span style=\"font-family:monospace;font-size:16px\">{{usuario}}</span></p>"
-               "<p>La contraseña temporal se la entregó su asesor comercial; el sistema le pedirá cambiarla al ingresar. "
+               "<p>La contraseña temporal se la entregó el equipo de PROCSIS; el sistema le pedirá cambiarla al ingresar. "
                "En su primer ingreso desde un equipo nuevo le enviaremos un PIN de 4 dígitos a este correo para autorizarlo; "
                "luego no volverá a pedirse en ese equipo.</p>"
                "<p>Cualquier duda, nuestro equipo de Soporte está para ayudarle.</p>"),
@@ -79782,6 +79794,562 @@ def _act_enviar_bienvenida(caso, inst, datos):
     if ok < 1:
         print("bienvenida PROCSIS no enviada:", msgs, flush=True)
     return ok > 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GERENCIA · PROYECTOS Y DONACIONES
+#   - Planes de donación: todas las funciones, gratis (no existen en el catálogo de Ventas)
+#   - Alta del colegio solo desde Gerencia (Ventas no interviene)
+#   - Cobranza: no genera cobros ni bloquea (es_donacion() + protección en Institucion)
+#   - Facturación: valor comercial real, descuento 100 % (concepto del convenio), factura $0 en Alegra,
+#     envío del XML/PDF validado por la DIAN al colegio y a SEDUCA
+# Variables de entorno:
+#   ALEGRA_EMAIL, ALEGRA_TOKEN   credenciales de la API de Alegra (Basic auth)
+#   ALEGRA_ITEM_ID               (opcional) id del ítem "Suite Procsis Edu" en Alegra; si falta se busca/crea
+#   ALEGRA_EMITIR_DIAN=0         crea la factura sin emitirla a la DIAN (pruebas)
+#   ALEGRA_INVOICE_EXTRA         (opcional) JSON que se mezcla en la factura (numeración, paymentForm, etc.)
+#   ALEGRA_CONTACT_EXTRA         (opcional) JSON que se mezcla al crear el cliente
+#   SEDUCA_EMAIL                 correo por defecto de la Secretaría de Educación
+# ══════════════════════════════════════════════════════════════════════════════
+import json as _don_json
+import base64 as _don_b64
+import urllib.request as _don_ur
+import urllib.error as _don_ue
+import urllib.parse as _don_up
+import threading as _don_th
+
+_DON_CONCEPTO = "Donación / Convenio de Cooperación Social Gobernación de Antioquia"
+_DON_LISTO = {"ok": False}
+
+
+def es_donacion(inst_o_plan):
+    """True si la institución (o el código de plan) es de donación. Única fuente de verdad."""
+    try:
+        p = getattr(inst_o_plan, "plan", inst_o_plan)
+        return str(p or "").strip().lower().startswith("don-")
+    except Exception:
+        return False
+
+
+class PlanDonacion(db.Model):
+    __tablename__ = "planes_donacion"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(60), unique=True, nullable=False)  # don-<slug>
+    nombre = db.Column(db.String(120), nullable=False)
+    valor_comercial = db.Column(db.Float, default=0.0)  # precio comercial REAL mensual de la suite
+    meses = db.Column(db.Integer, default=12)  # vigencia del convenio
+    descripcion = db.Column(db.Text, default="")
+    activo = db.Column(db.Boolean, default=True)
+    creado_por = db.Column(db.String(80), default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
+class Donacion(db.Model):
+    __tablename__ = "donaciones"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    plan_codigo = db.Column(db.String(60), default="")
+    plan_nombre = db.Column(db.String(120), default="")
+    valor_mensual = db.Column(db.Float, default=0.0)
+    meses = db.Column(db.Integer, default=12)
+    convenio = db.Column(db.String(255), default=_DON_CONCEPTO)
+    correo_colegio = db.Column(db.String(160), default="")
+    correo_seduca = db.Column(db.String(160), default="")
+    estado = db.Column(db.String(20), default="ACTIVO")  # ACTIVO | FINALIZADO
+    fecha_inicio = db.Column(db.String(20), default="")
+    fecha_fin = db.Column(db.String(20), default="")
+    notas = db.Column(db.Text, default="")
+    creado_por = db.Column(db.String(80), default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
+class DonacionFactura(db.Model):
+    __tablename__ = "donaciones_facturas"
+    id = db.Column(db.Integer, primary_key=True)
+    donacion_id = db.Column(db.Integer, index=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    concepto = db.Column(db.String(255), default="")
+    valor_unitario = db.Column(db.Float, default=0.0)
+    cantidad = db.Column(db.Integer, default=1)
+    valor_bruto = db.Column(db.Float, default=0.0)
+    descuento_pct = db.Column(db.Float, default=100.0)
+    valor_neto = db.Column(db.Float, default=0.0)  # siempre 0
+    estado = db.Column(db.String(24), default="PENDIENTE")  # PENDIENTE|SIN_CONFIG|EMITIDA|EMITIDA_SIN_CORREO|ENVIADA|ERROR
+    alegra_id = db.Column(db.String(40), default="")
+    numero = db.Column(db.String(60), default="")
+    enviado_a = db.Column(db.String(400), default="")
+    detalle = db.Column(db.Text, default="")
+    creado_en = db.Column(db.String(30), default="")
+    enviado_en = db.Column(db.String(30), default="")
+
+
+def _don_ts():
+    return ahora().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _don_ensure():
+    if _DON_LISTO["ok"]:
+        return
+    _DON_LISTO["ok"] = True
+    try:
+        for m in (PlanDonacion, Donacion, DonacionFactura):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+    except Exception as ex:
+        print("donaciones ensure:", repr(ex)[:200], flush=True)
+
+
+# Cobranza NUNCA bloquea una institución de donación (salvo cierre manual del convenio desde este módulo).
+@_acc_event.listens_for(Institucion, "before_update")
+def _don_proteger_institucion(mapper, connection, target):
+    try:
+        if (es_donacion(target) and (target.estado or "").upper() == "SUSPENDIDA"
+                and not (target.motivo_bloqueo or "").startswith("CONVENIO")
+                and (target.tipo_bloqueo or "") != "SEGURIDAD"):
+            target.estado = "ACTIVA"
+            target.tipo_bloqueo = ""
+            target.motivo_bloqueo = ""
+    except Exception:
+        pass
+
+
+# ------------------------------------------------------------------ Alegra
+def _alg_req(metodo, ruta, payload=None, timeout=25):
+    email = (os.environ.get("ALEGRA_EMAIL") or "").strip()
+    token = (os.environ.get("ALEGRA_TOKEN") or "").strip()
+    base = (os.environ.get("ALEGRA_BASE_URL") or "https://api.alegra.com/api/v1").rstrip("/")
+    if not email or not token:
+        raise RuntimeError("SIN_CONFIG: faltan ALEGRA_EMAIL y ALEGRA_TOKEN en las variables de entorno.")
+    data = _don_json.dumps(payload).encode("utf-8") if payload is not None else None
+    cred = _don_b64.b64encode(("%s:%s" % (email, token)).encode("utf-8")).decode("ascii")
+    req = _don_ur.Request(base + ruta, data=data, method=metodo, headers={
+        "Authorization": "Basic " + cred, "Accept": "application/json", "Content-Type": "application/json"})
+    try:
+        with _don_ur.urlopen(req, timeout=timeout) as r:
+            raw = r.read().decode("utf-8", "replace")
+            return r.status, (_don_json.loads(raw) if raw.strip() else {})
+    except _don_ue.HTTPError as e:
+        raw = e.read().decode("utf-8", "replace")
+        raise RuntimeError("Alegra respondió %s: %s" % (e.code, raw[:500]))
+
+
+def _don_extra(nombre_env):
+    try:
+        v = _don_json.loads(os.environ.get(nombre_env) or "{}")
+        return v if isinstance(v, dict) else {}
+    except Exception:
+        return {}
+
+
+def _alg_contacto(nombre, nit, correo):
+    """Id del cliente en Alegra (lo busca por NIT; si no existe lo crea)."""
+    partes = (nit or "").replace(".", "").split("-")
+    numero = re.sub(r"\D", "", partes[0])
+    dv = re.sub(r"\D", "", partes[1]) if len(partes) > 1 else ""
+    if numero:
+        _, lst = _alg_req("GET", "/contacts?type=client&identification=" + _don_up.quote(numero))
+        if isinstance(lst, list) and lst:
+            return lst[0].get("id")
+    payload = {"name": (nombre or "")[:200], "email": correo, "type": ["client"], "kindOfPerson": "LEGAL_ENTITY"}
+    if numero:
+        payload["identification"] = numero
+        payload["identificationObject"] = {"type": "NIT", "number": numero, "dv": dv}
+    payload.update(_don_extra("ALEGRA_CONTACT_EXTRA"))
+    _, c = _alg_req("POST", "/contacts", payload)
+    if not c.get("id"):
+        raise RuntimeError("Alegra no devolvió el id del cliente: %s" % str(c)[:200])
+    return c["id"]
+
+
+def _alg_item_id():
+    iid = (os.environ.get("ALEGRA_ITEM_ID") or "").strip()
+    if iid.isdigit():
+        return int(iid)
+    nombre = "Suite Procsis Edu (EduTrack) - suscripción"
+    _, lst = _alg_req("GET", "/items?query=" + _don_up.quote(nombre))
+    if isinstance(lst, list) and lst:
+        return lst[0].get("id")
+    _, it = _alg_req("POST", "/items", {"name": nombre, "price": 0, "type": "service"})
+    if not it.get("id"):
+        raise RuntimeError("Alegra no devolvió el id del ítem: %s" % str(it)[:200])
+    return it["id"]
+
+
+def _alg_crear_factura(nombre, nit, correo, valor_unit, cantidad, concepto, detalle):
+    """Crea (y emite a la DIAN) la factura con descuento del 100 %. Devuelve (alegra_id, numero)."""
+    cid = _alg_contacto(nombre, nit, correo)
+    item = _alg_item_id()
+    hoy = ahora().strftime("%Y-%m-%d")
+    payload = {
+        "date": hoy, "dueDate": hoy, "status": "open", "client": {"id": cid},
+        "items": [{"id": item, "price": valor_unit, "quantity": cantidad, "discount": 100,
+                   "description": detalle[:480]}],
+        "observations": concepto, "anotation": concepto,
+    }
+    if os.environ.get("ALEGRA_EMITIR_DIAN", "1") != "0":
+        payload["stamp"] = {"generateStamp": True}
+    payload.update(_don_extra("ALEGRA_INVOICE_EXTRA"))
+    _, resp = _alg_req("POST", "/invoices", payload, timeout=60)
+    aid = str(resp.get("id") or "")
+    if not aid:
+        raise RuntimeError("Alegra no devolvió el id de la factura: %s" % str(resp)[:200])
+    nt = resp.get("numberTemplate") or {}
+    return aid, str(nt.get("fullNumber") or resp.get("number") or "")
+
+
+def _alg_enviar(alegra_id, emails):
+    _alg_req("POST", "/invoices/%s/email" % alegra_id, {"emails": emails, "sendCopyToUser": False})
+
+
+def _don_emitir(fid):
+    """Emite en Alegra y envía por correo. Reintentable: retoma donde quedó."""
+    f = DonacionFactura.query.get(fid)
+    if not f:
+        return
+    d = Donacion.query.get(f.donacion_id)
+    inst = Institucion.query.get(f.institucion_id)
+    emails = [x for x in ((d.correo_colegio or "").strip(), (d.correo_seduca or "").strip()) if _NT_EMAIL_RE.match(x or "")]
+    try:
+        if not f.alegra_id:
+            f.alegra_id, f.numero = _alg_crear_factura(
+                inst.nombre, inst.nit, d.correo_colegio, f.valor_unitario, f.cantidad, f.concepto,
+                "Suite Procsis Edu · %s · %d mes(es). Descuento 100%%: %s" % (d.plan_nombre, f.cantidad, f.concepto))
+            f.estado = "EMITIDA"
+            db.session.commit()
+        if not emails:
+            raise RuntimeError("No hay correos válidos del colegio ni de SEDUCA para enviar la factura.")
+        _alg_enviar(f.alegra_id, emails)
+        f.estado, f.enviado_a, f.enviado_en, f.detalle = "ENVIADA", ", ".join(emails), _don_ts(), ""
+    except Exception as ex:
+        msg = str(ex)
+        f.estado = "SIN_CONFIG" if msg.startswith("SIN_CONFIG") else ("EMITIDA_SIN_CORREO" if f.alegra_id else "ERROR")
+        f.detalle = msg[:1500]
+    db.session.commit()
+
+
+def _don_emitir_bg(fid):
+    try:
+        with app.app_context():
+            _don_emitir(fid)
+    except Exception as ex:
+        print("donacion emitir bg:", repr(ex), flush=True)
+
+
+def _don_nueva_factura(d, inst, concepto=None):
+    f = DonacionFactura(
+        donacion_id=d.id, institucion_id=inst.id, concepto=(concepto or d.convenio or _DON_CONCEPTO)[:255],
+        valor_unitario=float(d.valor_mensual or 0), cantidad=int(d.meses or 12),
+        valor_bruto=float(d.valor_mensual or 0) * int(d.meses or 12), descuento_pct=100.0, valor_neto=0.0,
+        estado="PENDIENTE", creado_en=_don_ts())
+    db.session.add(f)
+    db.session.commit()
+    return f
+
+
+# --------------------------------------------------------------- pantallas
+_DON_CSS = """<style>
+.dn{max-width:1180px;margin:0 auto;padding:6px}
+.dn h1{color:#0B2D57;margin:0 0 4px}.dn .sub{color:#64748b;font-size:13px;margin-bottom:14px}
+.dn-k{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:12px 0}
+.dn-k div{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px}
+.dn-k b{display:block;font-size:22px;color:#0B2D57}.dn-k span{font-size:12px;color:#64748b}
+.dn-c{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;margin:12px 0}
+.dn table{width:100%;border-collapse:collapse;font-size:13px}.dn th{background:#f1f5f9;text-align:left;padding:8px}
+.dn td{padding:8px;border-top:1px solid #e2e8f0;vertical-align:top}
+.dn label{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}
+.dn input,.dn select,.dn textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}
+.dn .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:760px){.dn .g2{grid-template-columns:1fr}}
+.dn .bt{display:inline-block;background:#0B2D57;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;text-decoration:none;cursor:pointer;width:auto}
+.dn .bt.s{background:#475569;padding:5px 10px;font-size:12px}.dn .bt.r{background:#b91c1c}
+.dn .ok{background:#dcfce7;color:#166534;padding:10px;border-radius:10px;margin:10px 0}
+.dn .er{background:#fee2e2;color:#991b1b;padding:10px;border-radius:10px;margin:10px 0}
+.dn .tag{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;background:#e2e8f0}
+.dn .t-ENVIADA{background:#dcfce7;color:#166534}.dn .t-ERROR,.dn .t-SIN_CONFIG,.dn .t-EMITIDA_SIN_CORREO{background:#fee2e2;color:#991b1b}
+</style>"""
+
+
+def _don_pagina(titulo, cuerpo):
+    return page(titulo, shell(_DON_CSS + '<div class="dn">' + cuerpo + "</div>"))
+
+
+def _don_csrf_ok():
+    return _acc_hmac.compare_digest(str(request.form.get("csrf") or ""), str(session.get("_acc_csrf") or "x"))
+
+
+def _don_slug(txt):
+    s = re.sub(r"[^a-z0-9]+", "-", (txt or "").lower().replace("á", "a").replace("é", "e").replace("í", "i")
+               .replace("ó", "o").replace("ú", "u").replace("ñ", "n")).strip("-")
+    return ("don-" + s)[:40]
+
+
+@app.route("/gerencia/donaciones")
+def gerencia_donaciones():
+    g = _guard_gerencia()
+    if g:
+        return g
+    _don_ensure()
+    csrf = _acc_csrf()
+    msg = request.args.get("m", "")
+    err = request.args.get("e", "")
+    donaciones = Donacion.query.order_by(Donacion.id.desc()).all()
+    facs = {}
+    for f in DonacionFactura.query.order_by(DonacionFactura.id.asc()).all():
+        facs.setdefault(f.donacion_id, []).append(f)
+    total_comercial = sum((float(d.valor_mensual or 0) * int(d.meses or 0)) for d in donaciones if d.estado == "ACTIVO")
+    n_act = sum(1 for d in donaciones if d.estado == "ACTIVO")
+    n_err = sum(1 for lst in facs.values() for f in lst if f.estado in ("ERROR", "SIN_CONFIG", "EMITIDA_SIN_CORREO"))
+    filas = ""
+    for d in donaciones:
+        inst = Institucion.query.get(d.institucion_id)
+        lst = facs.get(d.id, [])
+        ult = lst[-1] if lst else None
+
+        def _f(ruta, texto, clase="s", extra=""):
+            return ('<form method="POST" action="/gerencia/donaciones/%d/%s" style="display:inline;margin:0">'
+                    '<input type="hidden" name="csrf" value="%s">%s<button class="bt %s">%s</button></form> ') % (
+                d.id, ruta, csrf, extra, clase, texto)
+        est_fac = ('<span class="tag t-%s">%s</span>' % (ult.estado, ult.estado.replace("_", " "))) if ult else "—"
+        det = ('<div style="color:#991b1b;font-size:11px;max-width:260px">%s</div>' % _esc(ult.detalle[:200])) if ult and ult.detalle else ""
+        num = ('<div style="font-size:11px;color:#475569">N° %s</div>' % _esc(ult.numero)) if ult and ult.numero else ""
+        acciones = _f("factura", "Reintentar / reenviar factura") if ult and ult.estado != "ENVIADA" else ""
+        acciones += _f("renovar", "Factura de renovación")
+        acciones += (_f("convenio", "Finalizar convenio", "r", '<input type="hidden" name="accion" value="finalizar">')
+                     if d.estado == "ACTIVO" else _f("convenio", "Reactivar", "s", '<input type="hidden" name="accion" value="reactivar">'))
+        filas += ("<tr><td><b>%s</b><br><span style='font-size:11px;color:#64748b'>%s · inicio %s</span></td><td>%s<br>"
+                  "<span style='font-size:11px;color:#64748b'>%s/mes × %d meses</span></td><td>%s</td><td>%s%s%s</td>"
+                  "<td><span class='tag'>%s</span></td><td>%s</td></tr>") % (
+            _esc(inst.nombre if inst else "(eliminada)"), _esc(inst.codigo if inst else ""), _esc(d.fecha_inicio),
+            _esc(d.plan_nombre), _cop(d.valor_mensual), int(d.meses or 0), _esc(d.convenio),
+            est_fac, num, det, _esc(d.estado), acciones)
+    planes = PlanDonacion.query.order_by(PlanDonacion.id.desc()).all()
+    fp = "".join("<tr><td><b>%s</b><br><code style='font-size:11px'>%s</code></td><td>%s / mes</td><td>%d</td>"
+                 "<td>Todas las funciones · Gratis</td></tr>" % (_esc(p.nombre), _esc(p.codigo), _cop(p.valor_comercial), int(p.meses or 0))
+                 for p in planes) or "<tr><td colspan='4' style='color:#64748b'>Aún no hay planes de donación.</td></tr>"
+    cuerpo = (
+        "<h1>🎗️ Proyectos y Donaciones</h1><div class='sub'>Colegios que usan la suite Procsis Edu sin costo, por convenio. "
+        "Se activan solo desde Gerencia; Ventas y Cobranza no intervienen.</div>"
+        + ('<div class="ok">%s</div>' % _esc(msg) if msg else "") + ('<div class="er">%s</div>' % _esc(err) if err else "")
+        + "<div class='dn-k'><div><b>%d</b><span>Colegios con convenio activo</span></div>"
+          "<div><b>%s</b><span>Valor comercial donado (convenios activos)</span></div>"
+          "<div><b>$0</b><span>Cobrado a estos colegios</span></div>"
+          "<div><b>%d</b><span>Facturas con novedad</span></div></div>" % (n_act, _cop(total_comercial), n_err)
+        + '<p><a class="bt" href="/gerencia/donaciones/nueva">➕ Activar colegio por donación</a> '
+          '<a class="bt s" href="/gerencia/donaciones/plan">Crear plan de donación</a></p>'
+        + "<div class='dn-c'><h3 style='margin-top:0'>Colegios</h3><div style='overflow-x:auto'><table><tr><th>Colegio</th><th>Plan</th>"
+          "<th>Convenio</th><th>Factura $0 (Alegra)</th><th>Estado</th><th>Acciones</th></tr>%s</table></div></div>" % (
+              filas or "<tr><td colspan='6' style='color:#64748b'>Aún no hay colegios por donación.</td></tr>")
+        + "<div class='dn-c'><h3 style='margin-top:0'>Planes de donación</h3><table><tr><th>Plan</th><th>Valor comercial</th>"
+          "<th>Meses</th><th>Incluye</th></tr>%s</table></div>" % fp)
+    return _don_pagina("Proyectos y Donaciones", cuerpo)
+
+
+@app.route("/gerencia/donaciones/plan", methods=["GET", "POST"])
+def gerencia_donaciones_plan():
+    g = _guard_gerencia()
+    if g:
+        return g
+    _don_ensure()
+    csrf = _acc_csrf()
+    error = ""
+    if request.method == "POST":
+        nombre = (request.form.get("nombre") or "").strip()
+        try:
+            valor = float(re.sub(r"[^\d.]", "", (request.form.get("valor") or "").replace(".", "")) or 0)
+            meses = int(request.form.get("meses") or 12)
+        except Exception:
+            valor, meses = 0, 0
+        if not _don_csrf_ok():
+            error = "La página caducó. Recárgala e intenta de nuevo."
+        elif not nombre or valor <= 0 or not (1 <= meses <= 60):
+            error = "Escribe el nombre, el valor comercial real mensual (mayor a 0) y los meses del convenio (1 a 60)."
+        else:
+            cod = _don_slug(nombre)
+            if PlanDonacion.query.filter_by(codigo=cod).first():
+                error = "Ya existe un plan de donación con ese nombre."
+            else:
+                db.session.add(PlanDonacion(codigo=cod, nombre=nombre[:120], valor_comercial=valor, meses=meses,
+                                            descripcion=(request.form.get("descripcion") or "")[:2000], activo=True,
+                                            creado_por=(session.get("usuario") or "")[:80], creado_en=_don_ts()))
+                db.session.commit()
+                try:
+                    registrar_auditoria("Plan de donación creado", "%s · %s/mes" % (cod, valor))
+                except Exception:
+                    pass
+                return redirect("/gerencia/donaciones?m=" + _don_up.quote("Plan de donación creado."))
+    cuerpo = (
+        "<h1>Crear plan de donación</h1><div class='sub'>Incluye <b>todas las funciones</b> y no se cobra. "
+        "El valor comercial es el precio real de la suite: es el que se muestra en la factura antes del descuento del 100 %.</div>"
+        + ('<div class="er">%s</div>' % _esc(error) if error else "")
+        + '<div class="dn-c"><form method="POST"><input type="hidden" name="csrf" value="%s">'
+          '<label>Nombre del plan *</label><input name="nombre" required placeholder="Ej: Procsis Edu · Convenio Gobernación 2026">'
+          '<div class="g2"><div><label>Valor comercial real mensual (COP) *</label><input name="valor" required inputmode="numeric" placeholder="Ej: 249000"></div>'
+          '<div><label>Meses del convenio *</label><input name="meses" required inputmode="numeric" value="12"></div></div>'
+          '<label>Descripción interna</label><textarea name="descripcion" rows="3"></textarea>'
+          '<p><button class="bt">Guardar plan</button> <a class="bt s" href="/gerencia/donaciones">Cancelar</a></p></form></div>' % csrf)
+    return _don_pagina("Plan de donación", cuerpo)
+
+
+@app.route("/gerencia/donaciones/nueva", methods=["GET", "POST"])
+def gerencia_donaciones_nueva():
+    g = _guard_gerencia()
+    if g:
+        return g
+    _don_ensure()
+    csrf = _acc_csrf()
+    planes = PlanDonacion.query.filter_by(activo=True).order_by(PlanDonacion.nombre.asc()).all()
+    error, ok_html = "", ""
+    f = request.form
+    if request.method == "POST":
+        plan = PlanDonacion.query.get(int(f.get("plan_id") or 0)) if (f.get("plan_id") or "").isdigit() else None
+        nombre, codigo = (f.get("nombre") or "").strip(), (f.get("codigo") or "").strip().upper()
+        rector, doc = (f.get("rector") or "").strip(), re.sub(r"\D", "", f.get("rector_doc") or "")
+        correo, seduca = (f.get("correo") or "").strip(), (f.get("correo_seduca") or "").strip()
+        if not _don_csrf_ok():
+            error = "La página caducó. Recárgala e intenta de nuevo."
+        elif not plan:
+            error = "Elige un plan de donación."
+        elif not (nombre and codigo and rector):
+            error = "Nombre del colegio, código y nombre del rector son obligatorios."
+        elif not (5 <= len(doc) <= 12):
+            error = "La cédula del rector es obligatoria (5 a 12 dígitos): será su ID de acceso."
+        elif not _NT_EMAIL_RE.match(correo):
+            error = "El correo del colegio es obligatorio y válido: recibe el PIN del dispositivo y la factura."
+        elif seduca and not _NT_EMAIL_RE.match(seduca):
+            error = "El correo de SEDUCA no es válido."
+        elif Institucion.query.filter((Institucion.codigo == codigo) | (Institucion.nombre == nombre)).first():
+            error = "Ya existe una institución con ese código o nombre."
+        else:
+            clave = "Don" + secrets.token_urlsafe(7) + "*1"
+            datos = {"plan": plan.codigo, "nombre": nombre, "codigo": codigo, "nit": (f.get("nit") or "").strip(),
+                     "dane": (f.get("dane") or "").strip(), "sede": "PRINCIPAL", "ciudad": (f.get("ciudad") or "").strip(),
+                     "departamento": (f.get("departamento") or "Antioquia").strip(), "rector": rector, "rector_nombre": rector,
+                     "rector_doc": doc, "telefono": (f.get("telefono") or "").strip(), "correo": correo,
+                     "asesor": "Gerencia · Donaciones", "clave_temporal": clave, "modalidad": "PRESENCIAL",
+                     "firma_acepta": "1", "num_periodos": "3"}
+            html = ""
+            try:
+                with app.test_request_context("/ventas/comprar", method="POST", data=datos, content_type="multipart/form-data",
+                                              environ_overrides={"REMOTE_ADDR": request.remote_addr or "127.0.0.1"},
+                                              headers={"User-Agent": "PROCSIS-donaciones"}):
+                    request.environ["procsis_act_ok"] = True
+                    request.environ["procsis_donacion_ok"] = True
+                    r = ventas_comprar()
+                    html = r if isinstance(r, str) else (r.get_data(as_text=True) if hasattr(r, "get_data") else "")
+            except Exception as ex:
+                db.session.rollback()
+                html = "No se pudo registrar: %s" % ex
+            inst = Institucion.query.filter_by(codigo=codigo[:40]).first()
+            if not inst:
+                m = re.search(r"(No se pudo[^<]{0,220}|Ya existe[^<]{0,200}|Nombre y codigo[^<]{0,100})", html or "")
+                error = (m.group(1) if m else "El alta no devolvió la institución.")[:300]
+            else:
+                inst.valor_mensual_pleno = int(plan.valor_comercial or 0)
+                inst.valor_mensual_con_descuento = 0
+                inst.nombre_promo_aplicada = _DON_CONCEPTO[:100]
+                inst.porcentaje_promo_aplicada = 100.0
+                inst.no_generar_facturas = True
+                inst.auto_suspender = False
+                inst.contacto_facturacion = correo[:160]
+                inst.rector = rector[:160]
+                if (f.get("notas") or "").strip():
+                    inst.notas = (f.get("notas") or "")[:1000]
+                rec_u = Usuario.query.filter_by(institucion_id=inst.id, rol="Rectoría").order_by(Usuario.id.asc()).first()
+                if rec_u and not (rec_u.correo or "").strip():
+                    rec_u.correo = correo[:160]
+                if not RectorInstitucion.query.filter_by(institucion_id=inst.id).first():
+                    partes = rector.split()
+                    db.session.add(RectorInstitucion(
+                        institucion_id=inst.id, nombres=" ".join(partes[:max(1, len(partes) // 2)])[:160],
+                        apellidos=" ".join(partes[max(1, len(partes) // 2):])[:160], tipo_id="C.C.", numero_id=doc[:40],
+                        telefono=(f.get("telefono") or "")[:40], correo=correo[:160], creado_en=_don_ts(),
+                        creado_por="donacion", actualizado_en=_don_ts()))
+                hoy = ahora().date()
+                don = Donacion(institucion_id=inst.id, plan_codigo=plan.codigo, plan_nombre=plan.nombre,
+                               valor_mensual=plan.valor_comercial, meses=plan.meses,
+                               convenio=(f.get("convenio") or _DON_CONCEPTO).strip()[:255] or _DON_CONCEPTO,
+                               correo_colegio=correo, correo_seduca=seduca or (os.environ.get("SEDUCA_EMAIL") or ""),
+                               estado="ACTIVO", fecha_inicio=hoy.isoformat(),
+                               fecha_fin=(hoy + timedelta(days=30 * int(plan.meses or 12))).isoformat(),
+                               notas=(f.get("notas") or "")[:1000], creado_por=(session.get("usuario") or "")[:80], creado_en=_don_ts())
+                db.session.add(don)
+                db.session.commit()
+                fac = _don_nueva_factura(don, inst)
+                _don_th.Thread(target=_don_emitir_bg, args=(fac.id,), daemon=True).start()
+                try:
+                    from types import SimpleNamespace as _SN
+                    _act_enviar_bienvenida(_SN(correo=correo, rector=rector, nombre=nombre), inst, {})
+                except Exception as ex:
+                    print("bienvenida donacion:", repr(ex), flush=True)
+                try:
+                    registrar_auditoria("Colegio activado por donación", "%s · plan %s" % (inst.codigo, plan.codigo))
+                except Exception:
+                    pass
+                rid = id_acceso_plano(rec_u) if rec_u else ""
+                ok_html = ('<div class="ok"><b>%s</b> quedó activo, sin cobro.<br>ID de acceso del rector (su cédula): <b>%s</b> · '
+                           'Contraseña temporal: <b>%s</b><br>Se está generando la factura electrónica por $0 y se enviará al colegio '
+                           'y a SEDUCA. <a href="/gerencia/donaciones">Ver el seguimiento</a>.</div>') % (_esc(nombre), _esc(rid or doc), _esc(clave))
+    if not planes:
+        form = '<div class="er">Primero crea un plan de donación.</div><a class="bt" href="/gerencia/donaciones/plan">Crear plan</a>'
+    else:
+        opts = "".join('<option value="%d">%s — valor comercial %s/mes</option>' % (p.id, _esc(p.nombre), _cop(p.valor_comercial)) for p in planes)
+        form = (
+            '<form method="POST"><input type="hidden" name="csrf" value="%s"><label>Plan de donación *</label><select name="plan_id">%s</select>'
+            '<div class="g2"><div><label>Nombre del colegio *</label><input name="nombre" required></div>'
+            '<div><label>Código *</label><input name="codigo" required placeholder="Ej: IE-BELLO-01"></div>'
+            '<div><label>NIT (con dígito de verificación)</label><input name="nit" placeholder="900123456-7"></div>'
+            '<div><label>DANE</label><input name="dane"></div>'
+            '<div><label>Municipio</label><input name="ciudad"></div>'
+            '<div><label>Departamento</label><input name="departamento" value="Antioquia"></div>'
+            '<div><label>Rector / representante legal *</label><input name="rector" required></div>'
+            '<div><label>Cédula del rector * (será su ID de acceso)</label><input name="rector_doc" required inputmode="numeric"></div>'
+            '<div><label>Correo del colegio * (PIN y factura)</label><input name="correo" type="email" required></div>'
+            '<div><label>Teléfono</label><input name="telefono"></div>'
+            '<div><label>Correo de SEDUCA (recibe la factura)</label><input name="correo_seduca" type="email" value="%s"></div>'
+            '<div><label>Concepto del convenio</label><input name="convenio" value="%s"></div></div>'
+            '<label>Notas internas</label><textarea name="notas" rows="2"></textarea>'
+            '<p><button class="bt">Activar sin cobro</button> <a class="bt s" href="/gerencia/donaciones">Cancelar</a></p></form>'
+        ) % (csrf, opts, _esc(os.environ.get("SEDUCA_EMAIL") or ""), _esc(_DON_CONCEPTO))
+    cuerpo = ("<h1>Activar colegio por donación</h1><div class='sub'>Se crea con todas las funciones, sin facturas de cobro y sin bloqueo por mora.</div>"
+              + ('<div class="er">%s</div>' % _esc(error) if error else "") + ok_html + '<div class="dn-c">' + form + "</div>")
+    return _don_pagina("Activar por donación", cuerpo)
+
+
+@app.route("/gerencia/donaciones/<int:did>/<accion>", methods=["POST"])
+def gerencia_donaciones_accion(did, accion):
+    g = _guard_gerencia()
+    if g:
+        return g
+    _don_ensure()
+    if not _don_csrf_ok():
+        return redirect("/gerencia/donaciones?e=" + _don_up.quote("La página caducó. Recárgala e intenta de nuevo."))
+    d = Donacion.query.get(did)
+    inst = Institucion.query.get(d.institucion_id) if d else None
+    if not d or not inst:
+        return redirect("/gerencia/donaciones?e=" + _don_up.quote("No se encontró el convenio."))
+    msg = ""
+    if accion == "factura":
+        f = DonacionFactura.query.filter_by(donacion_id=d.id).order_by(DonacionFactura.id.desc()).first() or _don_nueva_factura(d, inst)
+        _don_emitir(f.id)
+        msg = "Se reintentó la emisión/envío de la factura."
+    elif accion == "renovar":
+        f = _don_nueva_factura(d, inst, _DON_CONCEPTO + " · renovación")
+        _don_th.Thread(target=_don_emitir_bg, args=(f.id,), daemon=True).start()
+        msg = "Factura de renovación en proceso."
+    elif accion == "convenio":
+        if request.form.get("accion") == "finalizar":
+            d.estado = "FINALIZADO"
+            inst.estado, inst.tipo_bloqueo = "SUSPENDIDA", "CONVENIO"
+            inst.motivo_bloqueo = "CONVENIO: el convenio de cooperación finalizó. Contacte a PROCSIS."
+            msg = "Convenio finalizado: el colegio quedó suspendido."
+        else:
+            d.estado = "ACTIVO"
+            inst.estado, inst.tipo_bloqueo, inst.motivo_bloqueo = "ACTIVA", "", ""
+            msg = "Convenio reactivado."
+        db.session.commit()
+        try:
+            registrar_auditoria("Convenio de donación", "%s · %s" % (inst.codigo, d.estado))
+        except Exception:
+            pass
+    return redirect("/gerencia/donaciones?m=" + _don_up.quote(msg))
 
 
 if __name__ == "__main__":
