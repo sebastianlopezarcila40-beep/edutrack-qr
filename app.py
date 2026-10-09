@@ -1476,6 +1476,7 @@ class Institucion(db.Model):
     resolucion = db.Column(db.String(160), default="")
     municipio = db.Column(db.String(120), default="")
     departamento = db.Column(db.String(120), default="")
+    subdominio = db.Column(db.String(60), nullable=True, index=True)  # login por subdominio: <subdominio>.<DOMINIO_BASE>
     logo = db.Column(db.Text, default="/static/img/logo-edutrack.png")
     estado = db.Column(db.String(30), default="ACTIVA")  # ACTIVA, SUSPENDIDA, MANTENIMIENTO, CANCELACION_PENDIENTE, ARCHIVADA
     plan = db.Column(db.String(40), default="Basico")  # Basico | Institucional | Premium
@@ -4429,6 +4430,7 @@ def menu_items_por_rol():
             ("/feature_flags", "Funciones"),
             ("/servidores", "Servidores"),
             ("/cookies_admin", "Cookies"),
+            ("/soporte/subdominios", "Subdominios"),
             ("/perfil", "Mi perfil"),
         ]
 
@@ -4677,7 +4679,7 @@ def _icono_menu(nombre):
         "dot": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></svg>',
     }
     pares = [
-        ("perfil", "user"), ("inventario", "folder"), ("certi", "file"), ("riesgo", "shield"), ("salida", "door"),
+        ("subdominio", "link"), ("perfil", "user"), ("inventario", "folder"), ("certi", "file"), ("riesgo", "shield"), ("salida", "door"),
         ("inicio", "home"), ("escritorio", "home"), ("nota", "edit"), ("planilla", "edit"),
         ("asistencia", "check"), ("estudiante", "user"), ("registrar", "user-plus"), ("buscar", "search"),
         ("grupo", "users"), ("list", "file"), ("carn", "id"), ("qr", "grid"),
@@ -11270,6 +11272,7 @@ def _ensure_inst_promo_columns():
         ("flag_tarifa_plena_aplicada", "BOOLEAN DEFAULT FALSE"),
         ("nombre_promo_aplicada", "VARCHAR(100) DEFAULT ''"),
         ("porcentaje_promo_aplicada", "DOUBLE PRECISION DEFAULT 0"),
+        ("subdominio", "VARCHAR(60)"),
     ]
     try:
         with db.engine.begin() as conn:
@@ -11878,6 +11881,10 @@ def _html_login_pie_colegios():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = ""
+    # Identificación del colegio por subdominio (sin selector). Ver _login_modo_host().
+    _modo_host, _inst_host = _login_modo_host()
+    if _modo_host == "desconocido":
+        return _login_host_desconocido(), 404
     _motivo_ret = (request.args.get("error") or "").strip().lower() if request.method == "GET" else ""
     if _motivo_ret == "horario":
         error = ("Tu usuario está fuera de sus días u horario laboral, por eso no pudo entrar. "
@@ -11893,11 +11900,17 @@ def login():
         inst_id = int(inst_id) if inst_id else None
     except (TypeError, ValueError):
         inst_id = None
+    if _inst_host is not None:
+        inst_id = _inst_host.id  # el colegio lo define el subdominio, nunca el navegador
 
     if request.method == "POST" and not rate_blocked:
         usuario_in = request.form.get("usuario")
         password_in = request.form.get("password")
         raw_inst_txt = (request.form.get("institucion_id") or "").strip()
+        if _inst_host is not None:
+            raw_inst_txt = str(_inst_host.id)   # ignora lo que mande el formulario
+        elif _modo_host == "equipo":
+            raw_inst_txt = "PROCSIS"            # dominio principal en modo estricto: solo equipo interno
         es_staff_procsis = raw_inst_txt.upper() == "PROCSIS"
 
         if es_staff_procsis:
@@ -11917,6 +11930,8 @@ def login():
             if not staff_user or (staff_user.rol or "").strip() not in roles_staff_login:
                 _rate_limit_fail(portal="colegios")
                 error = "Usuario o contraseña incorrectos."
+                if _modo_host == "equipo":
+                    error += " Si perteneces a un colegio, ingresa desde la dirección web de tu institución."
             else:
                 staff_activo = True
                 try:
@@ -12056,10 +12071,10 @@ def login():
 
     instituciones = Institucion.query.filter(
         Institucion.estado.in_(["ACTIVA", "CANCELACION_PENDIENTE"])
-    ).order_by(Institucion.nombre.asc()).all()
+    ).order_by(Institucion.nombre.asc()).all() if _modo_host == "legacy" else []
     if not inst_id and instituciones:
         inst_id = instituciones[0].id
-    datos = datos_login_institucion(inst_id)
+    datos = datos_login_institucion(inst_id) if _modo_host != "equipo" else _datos_login_equipo()
     opciones = (
         '<option value="PROCSIS">— PROCSIS · Equipo interno —</option>'
         + "".join(
@@ -12073,7 +12088,12 @@ def login():
     import json as _json
     sedes_map = {}
     try:
-        for s in SedeInstitucion.query.filter_by(activa=True).order_by(SedeInstitucion.tipo.asc(), SedeInstitucion.nombre.asc()).all():
+        _qs_sedes = SedeInstitucion.query.filter_by(activa=True)
+        if _inst_host is not None:
+            _qs_sedes = _qs_sedes.filter_by(institucion_id=_inst_host.id)   # no exponer sedes de otros colegios
+        elif _modo_host == "equipo":
+            _qs_sedes = _qs_sedes.filter(SedeInstitucion.id < 0)
+        for s in _qs_sedes.order_by(SedeInstitucion.tipo.asc(), SedeInstitucion.nombre.asc()).all():
             sedes_map.setdefault(str(s.institucion_id), []).append({
                 "id": s.id,
                 "nombre": s.nombre or "",
@@ -12119,6 +12139,7 @@ def login():
             f'<p>{nov["reinicio"]}</p></div>'
         )
     err_block = f'<div class="error">{error}</div>' if error else ""
+    card_label, inst_field_html = _login_campo_institucion(_modo_host, _inst_host, opciones)
     hero_texto_html = _txt_a_html_lista(nov.get("hero_texto") or "")
     # Carrusel tipo portal (imágenes desde soporte / novedades)
     slides = []
@@ -12369,14 +12390,10 @@ def login():
         <h1>Portal de acceso a EduTrack</h1>
         <p class="sinai-sub">Un solo ingreso para toda su institución: rectoría, coordinación, secretaría y docentes</p>
         <div class="sinai-card">
-          <div class="sinai-card-label">ENCUENTRE SU INSTITUCIÓN</div>
+          <div class="sinai-card-label">{card_label}</div>
           {err_block}
           <form method="POST" action="/login" class="sinai-form" id="form-login-inst">
-            <label>Institución educativa</label>
-            <select name="institucion_id" id="inst-select" required size="1"
-              style="width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;margin-bottom:4px;background:#fff">
-              {opciones if opciones else '<option value="">Sin instituciones activas</option>'}
-            </select>
+            {inst_field_html}
             <div id="sede-wrap" style="display:none;margin-top:8px">
               <label>Sede (principal · primaria · rural / urbana)</label>
               <select name="sede_id" id="sede-select"
@@ -12399,7 +12416,7 @@ def login():
             var sedeWrap = document.getElementById('sede-wrap');
             var sedeSel = document.getElementById('sede-select');
             if(!sel) return;
-            var allOpts = [].slice.call(sel.options);
+            var allOpts = sel.options ? [].slice.call(sel.options) : [];
             function fillSedes(){{
               var id = String(sel.value||'');
               var list = SEDES[id] || [];
@@ -81454,6 +81471,195 @@ try:
     _MODELOS_RESET_DATOS.extend([SolicitudCertificado, RiesgoEstudiante])
 except Exception as _ex_reset:
     print("reset datos nuevos modulos:", _ex_reset)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  LOGIN POR SUBDOMINIO: cada colegio entra por <subdominio>.<DOMINIO_BASE>
+#  Sin selector de instituciones. Variables de entorno:
+#    DOMINIO_BASE            dominio raíz (por defecto el de DOMINIO_PUBLICO o procsishq.com)
+#    LOGIN_POR_SUBDOMINIO=1  modo estricto: sin selector en ninguna parte; el dominio principal
+#                            solo admite equipo PROCSIS y un subdominio desconocido da 404.
+#                            (Sin esta variable: modo transición, el selector sigue en el dominio principal.)
+# ══════════════════════════════════════════════════════════════════════════════
+import unicodedata as _n_ud
+
+_SUB_RESERVADOS = {"www", "app", "api", "admin", "soporte", "support", "gerencia", "ventas", "cobranza", "mail",
+                   "correo", "ftp", "smtp", "staging", "test", "demo", "static", "cdn", "procsis", "edutrack",
+                   "login", "portal", "docs", "ayuda", "status"}
+_SUB_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$")
+
+
+def _dominio_base():
+    b = (os.environ.get("DOMINIO_BASE") or "").strip().lower()
+    if not b:
+        b = re.sub(r"^https?://", "", (os.environ.get("DOMINIO_PUBLICO") or "").strip().lower()).split("/")[0]
+    b = b.split(":")[0].strip(".")
+    if b.startswith("www."):
+        b = b[4:]
+    if not b or "railway" in b:
+        b = "procsishq.com"
+    return b
+
+
+def _slug_sub(txt):
+    t = _n_ud.normalize("NFKD", txt or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:40]
+
+
+def _sub_efectivo(inst):
+    """Subdominio con el que entra un colegio: el asignado o, si no hay, su código en minúsculas."""
+    return ((inst.subdominio or "").strip().lower()) or _slug_sub(inst.codigo)
+
+
+def _subdominio_de_host(host=None):
+    """'rioh' en 'rioh.procsishq.com'; '' si el host es el dominio principal, una IP u otro dominio."""
+    h = (host or request.host or "").lower().split(":")[0].strip(".")
+    base = _dominio_base()
+    if h.endswith("." + base):
+        label = h[:-(len(base) + 1)]
+    elif h.endswith(".localhost"):
+        label = h[:-len(".localhost")]
+    else:
+        return ""
+    return label if label and "." not in label else ""
+
+
+def _inst_por_label(label):
+    if not label:
+        return None
+    inst = Institucion.query.filter(func.lower(Institucion.subdominio) == label).first()
+    if inst is None:
+        for i in Institucion.query.order_by(Institucion.id.asc()).all():
+            if not (i.subdominio or "").strip() and _slug_sub(i.codigo) == label:
+                inst = i
+                break
+    if inst is not None and (inst.estado or "").upper() == "ARCHIVADA":
+        return None
+    return inst
+
+
+def _login_modo_host():
+    """('colegio', inst) · ('equipo', None) · ('legacy', None) · ('desconocido', None)."""
+    estricto = os.environ.get("LOGIN_POR_SUBDOMINIO", "0") == "1"
+    try:
+        label = _subdominio_de_host()
+        if label and label not in _SUB_RESERVADOS:
+            inst = _inst_por_label(label)
+            if inst is not None:
+                return "colegio", inst
+            return ("desconocido" if estricto else "legacy"), None
+    except Exception as ex:
+        print("login por subdominio:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return "legacy", None
+    return ("equipo" if estricto else "legacy"), None
+
+
+def _login_host_desconocido():
+    body = ("<div style='max-width:460px;margin:12vh auto;padding:28px;background:#fff;border:1px solid #e2e8f0;"
+            "border-radius:16px;font-family:system-ui,Segoe UI,Arial,sans-serif;text-align:center'>"
+            "<h1 style='margin:0 0 8px;color:#0B2D57;font-size:22px'>Institución no encontrada</h1>"
+            "<p style='color:#475569;line-height:1.5'>Esta dirección no corresponde a ninguna institución registrada. "
+            "Revisa que la hayas escrito bien o pide a tu colegio el enlace correcto de acceso.</p></div>")
+    return page("Institución no encontrada", body)
+
+
+def _datos_login_equipo():
+    return {"id": None, "nombre": "%s · %s" % (nombre_producto(), nombre_empresa()),
+            "sede": "Acceso equipo PROCSIS", "logo": _logo_ruta_valida(DEFAULT_LOGO), "codigo": ""}
+
+
+def _login_campo_institucion(modo, inst, opciones):
+    """(rótulo de la tarjeta, HTML del campo de institución) según el modo de acceso."""
+    if modo == "colegio" and inst is not None:
+        sub = " · " + _esc(inst.municipio) if inst.municipio else ""
+        return ("ACCESO · " + _esc(inst.nombre).upper(),
+                "<label>Institución educativa</label>"
+                "<div style='width:100%%;box-sizing:border-box;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;"
+                "font-size:14px;margin-bottom:4px;background:#f8fafc;color:#0f172a;font-weight:600'>%s%s</div>"
+                "<input type='hidden' name='institucion_id' id='inst-select' value='%d'>" % (_esc(inst.nombre), sub, inst.id))
+    if modo == "equipo":
+        return ("ACCESO EQUIPO PROCSIS",
+                "<input type='hidden' name='institucion_id' id='inst-select' value='PROCSIS'>"
+                "<p style='margin:0 0 8px;font-size:12px;color:#64748b'>¿Eres de un colegio? Ingresa desde la dirección web de tu institución.</p>")
+    return ("ENCUENTRE SU INSTITUCIÓN",
+            '<label>Institución educativa</label>'
+            '<select name="institucion_id" id="inst-select" required size="1" '
+            'style="width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;margin-bottom:4px;background:#fff">'
+            + (opciones if opciones else '<option value="">Sin instituciones activas</option>') + '</select>')
+
+
+# ---------- Pantalla de administración: subdominio por colegio ----------
+def _sub_validar(txt, inst_id):
+    """Devuelve (valor_normalizado, error)."""
+    v = (txt or "").strip().lower()
+    if not v:
+        return "", ""   # vacío = usar el código del colegio
+    if not _SUB_RE.match(v):
+        return v, "Usa 3 a 40 caracteres: letras minúsculas, números y guiones (sin empezar ni terminar en guion)."
+    if v in _SUB_RESERVADOS:
+        return v, "«%s» es un nombre reservado." % v
+    for o in Institucion.query.filter(Institucion.id != inst_id).all():
+        if _sub_efectivo(o) == v:
+            return v, "«%s» ya lo usa %s." % (v, o.nombre)
+    return v, ""
+
+
+@app.route("/soporte/subdominios", methods=["GET", "POST"])
+def soporte_subdominios():
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Soporte", "Gerente", "Gerencia", "Superadmin"):
+        return acceso_denegado("Solo Soporte o Gerencia administran los subdominios de acceso.")
+    insts = Institucion.query.order_by(Institucion.nombre.asc()).all()
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido, intente de nuevo.")
+            return redirect("/soporte/subdominios")
+        cambios, errores = 0, []
+        for i in insts:
+            if ("sub_%d" % i.id) not in request.form:
+                continue
+            nuevo, err = _sub_validar(request.form.get("sub_%d" % i.id), i.id)
+            if err:
+                errores.append("%s: %s" % (i.nombre, err))
+                continue
+            if nuevo != (i.subdominio or ""):
+                i.subdominio = nuevo or None
+                cambios += 1
+                registrar_auditoria("Subdominio de colegio", "%s → %s" % (i.codigo, nuevo or "(código)"))
+        if cambios:
+            db.session.commit()
+        _n_flash("err" if errores else "ok", " · ".join(errores) if errores else "Guardado (%d cambio%s)." % (cambios, "" if cambios == 1 else "s"))
+        return redirect("/soporte/subdominios")
+    base = _dominio_base()
+    estricto = os.environ.get("LOGIN_POR_SUBDOMINIO", "0") == "1"
+    conteo = {}
+    for i in insts:
+        conteo[_sub_efectivo(i)] = conteo.get(_sub_efectivo(i), 0) + 1
+    filas = ""
+    for i in insts:
+        ef = _sub_efectivo(i)
+        dup = conteo.get(ef, 0) > 1
+        filas += ("<tr><td>%s</td><td><b>%s</b><div class='nx-small'>%s</div></td><td><input name='sub_%d' value='%s' placeholder='%s' style='min-width:160px'></td>"
+                  "<td><a href='https://%s.%s/login' target='_blank' rel='noopener'>%s.%s</a>%s</td></tr>" % (
+                      _esc(i.codigo), _esc(i.nombre), _esc(i.estado or ""), i.id, _esc(i.subdominio or ""), _esc(_slug_sub(i.codigo)),
+                      _esc(ef), _esc(base), _esc(ef), _esc(base),
+                      " <span class='nx-tag nx-t-bad'>repetido</span>" if dup else ""))
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🌐 Subdominios de acceso</h1><p>Cada colegio ingresa por su propia dirección, sin lista de instituciones.</p></div><a class="btn" href="/dashboard">Volver</a></header>
+{_n_flash_html()}
+<section class='nx-card'><h2>Estado</h2>
+<p>Dominio base: <b>{_esc(base)}</b> · Modo: <b>{"ESTRICTO (sin selector en ninguna parte)" if estricto else "TRANSICIÓN (el dominio principal aún muestra el selector)"}</b></p>
+<p class='nx-small'>Para que funcione necesitas un registro DNS comodín <b>*.{_esc(base)}</b> apuntando a esta aplicación y que tu hosting acepte ese dominio (con certificado HTTPS). Cuando todos los colegios entren bien por su dirección, define la variable <b>LOGIN_POR_SUBDOMINIO=1</b> para quitar el selector por completo.</p></section>
+<section class='nx-card'><h2>Colegios</h2>
+<form method='POST'>{_n_csrf_input()}<div class='nx-scroll'><table><tr><th>Código</th><th>Colegio</th><th>Subdominio (opcional)</th><th>Dirección de acceso</th></tr>{filas or "<tr><td colspan='4'>Sin colegios.</td></tr>"}</table></div>
+<p class='nx-small'>Si lo dejas vacío se usa el código del colegio. Solo letras minúsculas, números y guiones.</p><button>Guardar</button></form></section>"""
+    return page("Subdominios", shell(content))
+
 
 
 if __name__ == "__main__":
