@@ -2229,10 +2229,17 @@ class InventarioItem(db.Model):
     categoria = db.Column(db.String(80), default="Mobiliario")  # Mobiliario, Tecnología, Didáctico, Otro
     cantidad = db.Column(db.Integer, default=1)
     ubicacion = db.Column(db.String(120), default="")  # aula, sede, bodega
-    estado = db.Column(db.String(40), default="BUENO")  # BUENO, REGULAR, MALO, BAJA
+    estado = db.Column(db.String(40), default="BUENO")  # BUENO, REGULAR, MALO, BAJA (módulo nuevo: Bueno/Regular/Malo/En reparación/Dado de baja)
     observacion = db.Column(db.Text, default="")
     registrado_por = db.Column(db.String(120), default="")
     actualizado = db.Column(db.String(30), default="")
+    # Columnas del módulo ampliado de inventario (se agregan con _n_ensure_inv_cols en bases existentes)
+    responsable = db.Column(db.String(120), default="")
+    serial = db.Column(db.String(160), default="")
+    fecha_adq = db.Column(db.String(20), default="")
+    valor = db.Column(db.Float, nullable=True)
+    creado_en = db.Column(db.String(30), default="")
+    actualizado_en = db.Column(db.String(30), default="")
 
 
 class ActividadAsignada(db.Model):
@@ -4369,7 +4376,11 @@ window.addEventListener('pageshow', function (event) {
     else:
         _tab = f"EduTrack | {title}"
         _icon = "/static/img/favicon.png?v=7"
-    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0B2D57"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}</body></html>"""
+    try:
+        _n_guard = _n_guard_js()  # aviso antes de cerrar pestaña / sesión por expirar (todos los paneles)
+    except Exception:
+        _n_guard = ""
+    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0B2D57"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}{_n_guard}</body></html>"""
 
 
 
@@ -4392,10 +4403,12 @@ def menu_items_por_rol():
     Notas: solo Docente edita; Rectoría/Coordinación/Secretaría solo ven e imprimen.
     """
     rol = rol_actual()
-    if rol == "Contabilidad":
-        return _cta_menu_items()
-    if rol == "Proveedor":
-        return _prov_menu_items()
+    if rol in ("Contabilidad", "Proveedor"):
+        _its = list(_cta_menu_items() if rol == "Contabilidad" else _prov_menu_items())
+        if not any(h == "/perfil" for h, _ in _its):
+            _pos = next((i for i, (h, _) in enumerate(_its) if h == "/logout"), len(_its))
+            _its.insert(_pos, ("/perfil", "Mi perfil"))
+        return _its
     items = [("/dashboard", "Inicio")]
 
     if rol == "Soporte":
@@ -4416,6 +4429,7 @@ def menu_items_por_rol():
             ("/feature_flags", "Funciones"),
             ("/servidores", "Servidores"),
             ("/cookies_admin", "Cookies"),
+            ("/perfil", "Mi perfil"),
         ]
 
     elif rol == "Administrador":
@@ -4433,6 +4447,9 @@ def menu_items_por_rol():
             ("/backup_datos", "Respaldo de datos"),
             ("/admisiones", "Admisiones"),
             ("/notas", "Notas (ver / imprimir)"),
+            ("/inventario", "Inventario"),
+            ("/certi-procsis", "Certi-Procsis"),
+            ("/riesgo-escolar", "Riesgo escolar"),
             ("/radar-predictivo", "Radar predictivo"),
             ("/eduaura", "EduAura IA"),
             ("/privacidad/habeas", "Habeas data"),
@@ -4450,6 +4467,9 @@ def menu_items_por_rol():
         # Control y estrategia: monitorear y firmar (sin digitar notas ni operar matrícula)
         items += [
             ("/salidas/consulta", "Salidas (solo consulta)"),
+            ("/certi-procsis", "Certi-Procsis"),
+            ("/riesgo-escolar", "Riesgo escolar"),
+            ("/inventario", "Inventario"),
             ("/pqr-colegio", "PQR de padres"),
             ("/pqr", "PQR a PROCSIS"),
             ("/reportes", "Reportes MEN / estadísticas"),
@@ -4471,7 +4491,10 @@ def menu_items_por_rol():
 
     elif rol == "Coordinación":
         items += [
-            ("/coordinacion/salidas", "Salidas a autorizar"),
+            ("/coordinacion/salidas", "Salidas"),
+            ("/certi-procsis", "Certi-Procsis"),
+            ("/riesgo-escolar", "Riesgo escolar"),
+            ("/inventario", "Inventario"),
             ("/pqr-colegio", "PQR de padres"),
             ("/enlaces-publicos", "Enlaces públicos"),
             ("/panel_convivencia", "Convivencia"),
@@ -4495,6 +4518,9 @@ def menu_items_por_rol():
         # Operación administrativa: matrícula, citaciones, periodos (NO vaciar base de datos)
         items += [
             ("/salidas/consulta", "Salidas (solo consulta)"),
+            ("/inventario", "Inventario"),
+            ("/certi-procsis", "Certi-Procsis"),
+            ("/riesgo-escolar", "Riesgo escolar"),
             ("/periodo", "Cambiar periodo"),
             ("/cierres-periodo", "Cierre de periodos"),
             ("/registrar_estudiante", "Registrar estudiante"),
@@ -4536,6 +4562,8 @@ def menu_items_por_rol():
             ("/docente-movil", "Asistencia QR"),
             ("/notas/faltas", "Faltas"),
             ("/docente/salidas-hoy", "Salidas autorizadas hoy"),
+            ("/certi-procsis", "Certi-Procsis"),
+            ("/riesgo-escolar", "Riesgo escolar"),
             ("/horarios", "Horarios"),
             ("/calendario", "Calendario"),
             ("/eduaura", "EduAura IA"),
@@ -4543,6 +4571,8 @@ def menu_items_por_rol():
             ("/pqr", "Soporte PROCSIS"),
         ]
 
+    if not any(h == "/perfil" for h, _ in items):
+        items.append(("/perfil", "Mi perfil"))
     items.append(("/logout", "Cerrar sesión"))
     # Filtrar menú según módulos del plan del colegio (100% alineado con checks del plan)
     try:
@@ -4570,6 +4600,7 @@ def menu_items_por_rol():
                         ("/notas/faltas", "Faltas / asistencia"),
                         ("/calendario", "Calendario"),
                         ("/contacto", "Contacto"),
+                        ("/perfil", "Mi perfil"),
                         ("/logout", "Cerrar sesión"),
                     ]
                     return items
@@ -4646,6 +4677,7 @@ def _icono_menu(nombre):
         "dot": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></svg>',
     }
     pares = [
+        ("perfil", "user"), ("inventario", "folder"), ("certi", "file"), ("riesgo", "shield"), ("salida", "door"),
         ("inicio", "home"), ("escritorio", "home"), ("nota", "edit"), ("planilla", "edit"),
         ("asistencia", "check"), ("estudiante", "user"), ("registrar", "user-plus"), ("buscar", "search"),
         ("grupo", "users"), ("list", "file"), ("carn", "id"), ("qr", "grid"),
@@ -5971,7 +6003,8 @@ def before():
                        "Gerente": "/login", "Administrador": "/login",
                        "Superadmin": "/login"}.get(rol_expirado, "/login")
             return redirect(destino)
-        session["ultimo_movimiento"] = ahora_ts
+        if request.path != "/api/sesion-estado":  # el sondeo de la guardia de sesión NO renueva la inactividad
+            session["ultimo_movimiento"] = ahora_ts
         if session.get("password_temporal") and request.path not in ["/cambiar_password", "/logout", "/docente-login"] and not request.path.startswith("/static") and not request.path.startswith("/docente"):
             return redirect("/cambiar_password")
         # Mantener datos institucionales sincronizados con el tenant de la sesión
@@ -10138,6 +10171,8 @@ def session_idle_timeout():
         elif path.startswith("/ventas"):
             destino = "/login"
         return redirect(destino)
+    if path == "/api/sesion-estado":  # solo consulta: no renueva la inactividad
+        return
     session["_last_active"] = now
     session["ultimo_movimiento"] = now
     session.permanent = True
@@ -12994,9 +13029,36 @@ def dashboard():
         </section>
         """
     elif rol == "Coordinación":
+        try:
+            _iid_c = institucion_id_actual()
+            _pend_sal = AutorizacionSalida.query.filter_by(institucion_id=_iid_c, estado="PENDIENTE").count()
+        except Exception:
+            _pend_sal = 0
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        try:
+            _pend_cert = SolicitudCertificado.query.filter_by(institucion_id=_iid_c, estado="PENDIENTE").count()
+        except Exception:
+            _pend_cert = 0
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        _bdg = lambda n: (" <span style='background:#dc2626;color:#fff;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800'>%d</span>" % n) if n else ""
         ultimos = ''.join(f"<tr><td>{i.estudiante.grado}</td><td>{i.estudiante.nombre} {i.estudiante.apellido}</td><td>{i.hora}</td><td>{estado_badge(i.estado)}</td></tr>" for i in ingresos_hoy[-10:])
         body = f"""
         {cards}
+        <section class='role-grid'>
+          <div class='role-panel' style='border-left:4px solid #dc2626'><h2>Salidas y solicitudes pendientes</h2>
+            <p>Autoriza o rechaza las salidas de estudiantes solicitadas por los acudientes y decide las solicitudes de certificados.</p>
+            <a class='btn btn-green' href='/coordinacion/salidas'>🚪 Salidas a autorizar{_bdg(_pend_sal)}</a>
+            <a class='btn' href='/salidas/consulta'>Consulta de salidas</a>
+            <a class='btn' href='/certi-procsis'>🎓 Certi-Procsis{_bdg(_pend_cert)}</a>
+            <a class='btn' href='/riesgo-escolar'>🛡️ Riesgo escolar</a>
+          </div>
+        </section>
         <section class='role-grid'>
           <div class='role-panel'><h2>Control y convivencia</h2><p>Faltas Tipo I/II/III, debido proceso, novedades y citaciones. PDF y Word para imprimir.</p>
             <a class='btn' href='/panel_convivencia'>Panel convivencia</a>
@@ -13014,6 +13076,7 @@ def dashboard():
         {cards}
         <section class='role-grid'>
           <div class='role-panel'><h2>Matrículas y datos maestros</h2><p>Crear, editar y organizar datos básicos de estudiantes, carnés y QR.</p><a class='btn' href='/estudiantes'>Gestionar estudiantes</a> <a class='btn' href='/importar_estudiantes'>Importar Excel</a> <a class='btn btn-green' href='/exportar_estudiantes'>Exportar Excel</a> <a class='btn' href='/planillas'>Planillas PDF</a></div>
+          <div class='role-panel'><h2>Inventario y certificados</h2><p>Controla sillas, computadores y demás materiales del colegio, y gestiona constancias y certificados.</p><a class='btn' href='/inventario'>📦 Inventario</a> <a class='btn btn-green' href='/certi-procsis'>🎓 Certi-Procsis</a> <a class='btn' href='/riesgo-escolar'>🛡️ Riesgo escolar</a> <a class='btn' href='/perfil'>👤 Mi perfil</a></div>
           <div class='role-panel'><h2>Responsabilidad del rol</h2><ul><li>No modifica asistencia ni reportes disciplinarios.</li><li>No crea usuarios administrativos.</li><li>Solo gestiona datos básicos y planillas de listado.</li></ul></div>
         </section>
         """
@@ -15159,8 +15222,9 @@ def registrar_estudiante():
     mensaje = ""
     if request.method == "POST":
         codigo = request.form.get("codigo", "").strip()
-        nombre_chk = request.form.get("nombre", "").strip()
-        apellido_chk = request.form.get("apellido", "").strip()
+        # El formulario SIMAT envía nombre1/apellido1 (también se aceptan nombre/apellido de formularios viejos)
+        nombre_chk = (request.form.get("nombre1") or request.form.get("nombre") or "").strip()
+        apellido_chk = (request.form.get("apellido1") or request.form.get("apellido") or "").strip()
         if codigo and not (nombre_chk and apellido_chk):
             mensaje = "Nombre y apellido son obligatorios, no se guardó el registro."
         elif codigo:
@@ -41624,8 +41688,11 @@ def docente_escritorio():
         ("/notas/faltas", "Faltas", "Presente / ausente / tarde", "#c2410c", "A"),
         ("/docente-movil", "Asistencia QR", "QR en el aula", "#b91c1c", "Q"),
         ("/eduaura", "EduAura IA", "Observaciones y riesgo", "#6d28d9", "E"),
+        ("/certi-procsis", "Certi-Procsis", "Solicitud express de certificado o logro", "#b45309", "S"),
+        ("/riesgo-escolar", "Riesgo escolar", "Reportar alerta temprana", "#b91c1c", "R"),
         ("/horarios", "Horarios", "Mi jornada", "#1e3a5f", "H"),
         ("/calendario", "Calendario", "Agenda escolar", "#0B2D57", "C"),
+        ("/perfil", "Mi perfil", "Mis datos y contacto", "#475569", "M"),
         ("/pqr", "Soporte", "PQR y fallas técnicas", "#4c1d95", "P"),
     ]
 
@@ -41709,6 +41776,11 @@ def notas_hub():
     rol = rol_actual()
     es_docente = rol == "Docente"
     es_dir = rol in ["Administrador", "Rectoría", "Coordinación", "Soporte"]
+    # FIX: 'plan' no estaba definido y /notas fallaba con NameError en Secretaría/Coordinación/Rectoría
+    try:
+        plan = plan_institucion() or "Basico"
+    except Exception:
+        plan = "Basico"
 
     content = f"""
 <style>
@@ -56392,108 +56464,6 @@ def _iid_sesion():
         return int(session.get("institucion_id") or 0) or None
     except Exception:
         return None
-
-
-@app.route("/inventario", methods=["GET", "POST"])
-def inventario_colegio():
-    """Módulo de inventario físico — Rectoría y Coordinación."""
-    if not _rol_inventario_ok():
-        return redirect("/login")
-    iid = _iid_sesion()
-    msg = error = ""
-    if request.method == "POST":
-        accion = (request.form.get("accion") or "crear").strip()
-        if accion == "eliminar":
-            try:
-                iid_del = int(request.form.get("id") or 0)
-                it = InventarioItem.query.get(iid_del)
-                if it and (not iid or it.institucion_id == iid):
-                    db.session.delete(it)
-                    db.session.commit()
-                    msg = "Ítem eliminado del inventario."
-            except Exception as e:
-                db.session.rollback()
-                error = f"No se pudo eliminar: {e}"
-        else:
-            nombre = (request.form.get("nombre") or "").strip()
-            if not nombre:
-                error = "El nombre del bien es obligatorio."
-            else:
-                try:
-                    cant = int(request.form.get("cantidad") or 1)
-                except ValueError:
-                    cant = 1
-                it = InventarioItem(
-                    institucion_id=iid,
-                    codigo=(request.form.get("codigo") or "").strip()[:40],
-                    nombre=nombre[:160],
-                    categoria=(request.form.get("categoria") or "Mobiliario").strip()[:80],
-                    cantidad=max(0, cant),
-                    ubicacion=(request.form.get("ubicacion") or "").strip()[:120],
-                    estado=(request.form.get("estado") or "BUENO").strip()[:40],
-                    observacion=(request.form.get("observacion") or "").strip()[:2000],
-                    registrado_por=session.get("usuario") or "",
-                    actualizado=f"{fecha_hoy()} {hora_actual()}",
-                )
-                db.session.add(it)
-                db.session.commit()
-                msg = "Ítem registrado en inventario."
-    q = InventarioItem.query
-    if iid:
-        q = q.filter_by(institucion_id=iid)
-    items = q.order_by(InventarioItem.categoria.asc(), InventarioItem.nombre.asc()).limit(500).all()
-    filas = ""
-    for it in items:
-        filas += f"""<tr>
-          <td>{it.codigo or "—"}</td><td><b>{it.nombre}</b></td><td>{it.categoria}</td>
-          <td style="text-align:center">{it.cantidad}</td><td>{it.ubicacion or "—"}</td>
-          <td>{it.estado}</td><td>{(it.observacion or "")[:60]}</td>
-          <td>
-            <form method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar?');">
-              <input type="hidden" name="accion" value="eliminar">
-              <input type="hidden" name="id" value="{it.id}">
-              <button type="submit" class="btn" style="background:#b91c1c;padding:6px 10px;font-size:12px">Eliminar</button>
-            </form>
-          </td>
-        </tr>"""
-    body = f"""
-<header class="role-hero"><div>
-  <h1>Inventario del colegio</h1>
-  <p>Registro de bienes: sillas, mesas, tableros, equipos y más. Visible para Rectoría y Coordinación.</p>
-</div><a class="btn" href="/dashboard">Volver</a></header>
-{"<div class='msg ok'>"+msg+"</div>" if msg else ""}
-{"<div class='msg danger'>"+error+"</div>" if error else ""}
-<section class="role-panel">
-  <h2 style="margin-top:0;color:#0B2D57">Registrar bien</h2>
-  <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-    <div><label>Código</label><input name="codigo" placeholder="INV-001"></div>
-    <div><label>Nombre *</label><input name="nombre" required placeholder="Silla estudiantil"></div>
-    <div><label>Categoría</label>
-      <select name="categoria">
-        <option>Mobiliario</option><option>Tecnología</option><option>Didáctico</option>
-        <option>Deportes</option><option>Laboratorio</option><option>Otro</option>
-      </select>
-    </div>
-    <div><label>Cantidad</label><input name="cantidad" type="number" value="1" min="0"></div>
-    <div><label>Ubicación</label><input name="ubicacion" placeholder="Aula 5°A / Bodega"></div>
-    <div><label>Estado</label>
-      <select name="estado"><option>BUENO</option><option>REGULAR</option><option>MALO</option><option>BAJA</option></select>
-    </div>
-    <div style="grid-column:1/-1"><label>Observación</label><textarea name="observacion" rows="2"></textarea></div>
-    <div style="grid-column:1/-1"><button type="submit" class="btn">Guardar en inventario</button></div>
-  </form>
-</section>
-<section class="role-panel" style="margin-top:16px;overflow:auto">
-  <h2 style="color:#0B2D57">Listado ({len(items)})</h2>
-  <table class="table" style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">
-      <th>Código</th><th>Nombre</th><th>Categoría</th><th>Cant.</th><th>Ubicación</th><th>Estado</th><th>Obs.</th><th></th>
-    </tr>
-    {filas or "<tr><td colspan='8'>Sin registros aún. Agregue el primer bien arriba.</td></tr>"}
-  </table>
-</section>
-"""
-    return page("Inventario", shell(body) if "shell" in dir() else body)
 
 
 @app.route("/estudiante-login", methods=["GET", "POST"])
@@ -80350,6 +80320,1140 @@ def gerencia_donaciones_accion(did, accion):
         except Exception:
             pass
     return redirect("/gerencia/donaciones?m=" + _don_up.quote(msg))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  NUEVOS MÓDULOS: Mi perfil (PIN por correo) · Inventario y kits · Certi-Procsis
+#  · Riesgo escolar / alerta temprana · Guardia de sesión (aviso antes de cerrar
+#  pestaña / sesión por expirar).  Bloque autocontenido: usa solo helpers existentes.
+# ══════════════════════════════════════════════════════════════════════════════
+import hmac as _n_hmac
+import hashlib as _n_hashlib
+import time as _n_time
+
+_N_ROLES_COLEGIO = ("Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador")
+
+
+# ---------- utilidades comunes ----------
+def _n_csrf():
+    t = session.get("_n_csrf")
+    if not t:
+        t = secrets.token_urlsafe(24)
+        session["_n_csrf"] = t
+    return t
+
+
+def _n_csrf_input():
+    return "<input type='hidden' name='csrf' value='%s'>" % _n_csrf()
+
+
+def _n_csrf_ok():
+    try:
+        return _n_hmac.compare_digest(str(request.form.get("csrf") or ""), str(session.get("_n_csrf") or "x"))
+    except Exception:
+        return False
+
+
+def _n_flash(kind, msg):
+    session["_n_flash"] = [kind, msg]
+
+
+def _n_flash_html():
+    f = session.pop("_n_flash", None)
+    if not f:
+        return ""
+    cls = "ok" if f[0] == "ok" else "err"
+    return "<div class='msg %s'>%s</div>" % (cls, _esc(f[1]))
+
+
+_N_CSS = """<style>
+.nx-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 18px;margin:0 0 14px}
+.nx-card h2{margin:0 0 10px;font-size:16px;color:#0f172a}
+.nx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.nx-grid label{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:3px}
+.nx-grid input,.nx-grid select,.nx-grid textarea{width:100%;box-sizing:border-box}
+.nx-kpis{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px}
+.nx-kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 14px;min-width:110px}
+.nx-kpi b{display:block;font-size:20px;color:#0B2D57}.nx-kpi span{font-size:12px;color:#64748b}
+.nx-chip{display:inline-block;padding:5px 11px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;font-size:12px;text-decoration:none;margin:0 6px 6px 0}
+.nx-chip.on{background:#0B2D57;color:#fff;border-color:#0B2D57}
+.nx-tag{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:800}
+.nx-t-ok{background:#dcfce7;color:#166534}.nx-t-warn{background:#fef3c7;color:#92400e}
+.nx-t-bad{background:#fee2e2;color:#991b1b}.nx-t-info{background:#dbeafe;color:#1e40af}.nx-t-gray{background:#e2e8f0;color:#334155}
+.nx-scroll{overflow-x:auto}.nx-scroll table{min-width:640px}
+.nx-inline{display:inline;margin:0}
+.nx-small{font-size:12px;color:#64748b}
+.nx-btn-sm{padding:5px 10px;font-size:12px}
+</style>"""
+
+
+def _n_iid_o_error():
+    iid = institucion_id_actual()
+    if not iid:
+        return None, acceso_denegado("Este módulo opera dentro de un colegio. Ingrese con una cuenta de colegio.")
+    return iid, None
+
+
+def _n_buscar_estudiante(txt):
+    txt = (txt or "").strip()
+    if not txt:
+        return None
+    return q_estudiantes().filter(or_(Estudiante.codigo == txt, Estudiante.documento == txt)).first()
+
+
+def _n_ahora():
+    return "%s %s" % (fecha_hoy(), hora_actual())
+
+
+# ---------- modelos ----------
+class PerfilUsuario(db.Model):
+    __tablename__ = "perfiles_usuario"
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    documento = db.Column(db.String(40), default="")
+    telefono = db.Column(db.String(40), default="")
+    actualizado = db.Column(db.String(30), default="")
+
+
+class SolicitudCertificado(db.Model):
+    __tablename__ = "solicitudes_certificado"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    estudiante_id = db.Column(db.Integer, index=True, nullable=False)
+    tipo = db.Column(db.String(80), default="")
+    detalle = db.Column(db.Text, default="")
+    express = db.Column(db.Boolean, default=False)
+    estado = db.Column(db.String(20), default="PENDIENTE", index=True)  # PENDIENTE|APROBADA|RECHAZADA|EMITIDA
+    solicitado_por = db.Column(db.String(120), default="")
+    solicitado_rol = db.Column(db.String(40), default="")
+    creado_en = db.Column(db.String(30), default="")
+    decidido_por = db.Column(db.String(120), default="")
+    decidido_en = db.Column(db.String(30), default="")
+    nota_decision = db.Column(db.Text, default="")
+
+
+class RiesgoEstudiante(db.Model):
+    __tablename__ = "riesgo_estudiantes"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, index=True)
+    estudiante_id = db.Column(db.Integer, index=True, nullable=False)
+    categoria = db.Column(db.String(80), default="")
+    nivel = db.Column(db.String(20), default="Medio", index=True)  # Bajo|Medio|Alto|Crítico
+    descripcion = db.Column(db.Text, default="")
+    acciones = db.Column(db.Text, default="")
+    seguimiento = db.Column(db.Text, default="")
+    estado = db.Column(db.String(20), default="ABIERTO", index=True)  # ABIERTO|EN_SEGUIMIENTO|CERRADO
+    registrado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
+def _n_ensure_inv_cols():
+    """Agrega a inventario_items las columnas del módulo ampliado (bases ya existentes)."""
+    cols = [("responsable", "VARCHAR(120) DEFAULT ''"), ("serial", "VARCHAR(160) DEFAULT ''"),
+            ("fecha_adq", "VARCHAR(20) DEFAULT ''"), ("valor", "DOUBLE PRECISION"),
+            ("creado_en", "VARCHAR(30) DEFAULT ''"), ("actualizado_en", "VARCHAR(30) DEFAULT ''")]
+    for col, typ in cols:
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE inventario_items ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+        except Exception:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE inventario_items ADD COLUMN %s %s" % (col, typ)))
+            except Exception:
+                pass  # ya existe
+
+
+@app.before_request
+def _n_crear_tablas():
+    """Crea (una sola vez por proceso) las tablas nuevas y las columnas nuevas si no existen."""
+    if getattr(_n_crear_tablas, "_ok", False):
+        return None
+    if request.path.startswith("/static"):
+        return None
+    try:
+        for M in (PerfilUsuario, SolicitudCertificado, RiesgoEstudiante):
+            M.__table__.create(db.engine, checkfirst=True)
+        try:
+            InventarioItem.__table__.create(db.engine, checkfirst=True)
+        except Exception:
+            pass
+        _n_ensure_inv_cols()
+        _n_crear_tablas._ok = True
+    except Exception as ex:
+        print("nuevos modulos tablas:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return None
+
+
+# ══════════════════════════ 1) MI PERFIL ══════════════════════════
+_N_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+
+
+def _n_usuario_obj():
+    u = None
+    try:
+        u = _usuario_actual_obj()
+    except Exception:
+        u = None
+    if u:
+        return u
+    try:
+        q = Usuario.query.filter_by(usuario=session.get("usuario"))
+        iid = institucion_id_actual()
+        if iid:
+            q = q.filter_by(institucion_id=iid)
+        return q.first()
+    except Exception:
+        return None
+
+
+def _n_perfil_row(u, crear=False):
+    row = PerfilUsuario.query.filter_by(usuario_id=u.id).first()
+    if not row and crear:
+        row = PerfilUsuario(usuario_id=u.id, documento="", telefono="")
+        db.session.add(row)
+    return row
+
+
+def _n_mask_mail(c):
+    try:
+        a, d = c.split("@", 1)
+        return (a[:1] + "***" + (a[-1:] if len(a) > 2 else "")) + "@" + d
+    except Exception:
+        return "***"
+
+
+def _n_pin_hash(pin):
+    return _n_hmac.new(str(app.secret_key).encode(), ("perfil:%s" % pin).encode(), _n_hashlib.sha256).hexdigest()
+
+
+def _n_enviar_pin_perfil(destino, pin, usuario):
+    if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not SOPORTE_EMAIL or not SOPORTE_PASSWORD):
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = "PIN para actualizar tu perfil - %s" % APP_NAME
+    msg["From"] = SOPORTE_EMAIL
+    msg["To"] = destino
+    msg.set_content(
+        "Hola %s,\n\nTu PIN para confirmar el cambio de correo/teléfono de tu perfil es: %s\n"
+        "Vence en 5 minutos. Si no fuiste tú, ignora este mensaje y avisa a tu institución.\n\n%s"
+        % (usuario, pin, APP_NAME)
+    )
+    try:
+        _smtp_enviar(msg, SOPORTE_EMAIL, SOPORTE_PASSWORD)
+        return True
+    except Exception as ex:
+        print("ERROR PIN perfil:", ex)
+        return False
+
+
+@app.route("/perfil", methods=["GET", "POST"])
+def perfil_usuario():
+    if not requiere_login():
+        return redirect("/login")
+    u = _n_usuario_obj()
+    rol = rol_actual() or "—"
+    if not u:
+        return page("Mi perfil", shell(_N_CSS + """<section class='nx-card'><h2>Mi perfil</h2>
+<p>Esta cuenta no tiene un registro editable en el sistema. Contacte a su institución o a soporte.</p></section>"""))
+    row = _n_perfil_row(u)
+    pend = session.get("_perfil_chg")
+    if pend and pend.get("uid") != u.id:
+        session.pop("_perfil_chg", None)
+        pend = None
+
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Sesión del formulario inválida. Intente de nuevo.")
+            return redirect("/perfil")
+        accion = request.form.get("accion", "")
+        if accion == "guardar_documento":
+            doc = re.sub(r"[^0-9A-Za-z.\-]", "", request.form.get("documento", ""))[:40]
+            r2 = _n_perfil_row(u, crear=True)
+            if (r2.documento or "").strip():
+                _n_flash("err", "El documento ya está registrado y no se puede cambiar desde aquí.")
+            elif len(doc) < 5:
+                _n_flash("err", "Escribe un documento válido (mínimo 5 caracteres).")
+            else:
+                r2.documento = doc
+                r2.actualizado = _n_ahora()
+                db.session.commit()
+                registrar_auditoria("Perfil: documento registrado", u.usuario)
+                _n_flash("ok", "Documento registrado.")
+        elif accion == "pedir_pin":
+            nuevo_correo = (request.form.get("correo") or "").strip().lower()[:160]
+            nuevo_tel = re.sub(r"[^0-9+]", "", request.form.get("telefono") or "")[:20]
+            cur_correo = (u.correo or "").strip().lower()
+            cur_tel = (row.telefono if row else "") or ""
+            cambia_correo = bool(nuevo_correo) and nuevo_correo != cur_correo
+            cambia_tel = bool(nuevo_tel) and nuevo_tel != cur_tel
+            if not (cambia_correo or cambia_tel):
+                _n_flash("err", "No hay cambios para guardar.")
+            elif cambia_correo and not _N_EMAIL_RE.match(nuevo_correo):
+                _n_flash("err", "El correo no tiene un formato válido.")
+            elif cambia_tel and not (7 <= len(nuevo_tel.replace("+", "")) <= 15):
+                _n_flash("err", "El teléfono debe tener entre 7 y 15 dígitos.")
+            else:
+                # El PIN va al correo ACTUAL (prueba de que eres tú); si no hay, al nuevo correo.
+                destino = cur_correo or nuevo_correo
+                if not destino:
+                    _n_flash("err", "Para cambiar el teléfono primero debes tener un correo registrado. Escribe tu correo.")
+                else:
+                    pin = "%06d" % secrets.randbelow(1000000)
+                    if _n_enviar_pin_perfil(destino, pin, u.nombre_completo or u.usuario):
+                        session["_perfil_chg"] = {
+                            "uid": u.id, "h": _n_pin_hash(pin), "exp": _n_time.time() + 300, "intentos": 0,
+                            "correo": nuevo_correo if cambia_correo else "", "tel": nuevo_tel if cambia_tel else "",
+                            "destino": destino,
+                        }
+                        _n_flash("ok", "Enviamos un PIN de 6 dígitos a %s. Vence en 5 minutos." % _n_mask_mail(destino))
+                    else:
+                        _n_flash("err", "No se pudo enviar el PIN por correo. Intente más tarde o contacte a soporte.")
+        elif accion == "confirmar_pin":
+            p = session.get("_perfil_chg")
+            pin = re.sub(r"\D", "", request.form.get("pin") or "")[:6]
+            if not p or p.get("uid") != u.id:
+                _n_flash("err", "No hay un cambio pendiente. Solicita un PIN primero.")
+            elif _n_time.time() > p.get("exp", 0):
+                session.pop("_perfil_chg", None)
+                _n_flash("err", "El PIN venció. Solicita uno nuevo.")
+            elif p.get("intentos", 0) >= 5:
+                session.pop("_perfil_chg", None)
+                _n_flash("err", "Demasiados intentos. Solicita un PIN nuevo.")
+            elif not _n_hmac.compare_digest(_n_pin_hash(pin), p.get("h", "")):
+                p["intentos"] = p.get("intentos", 0) + 1
+                session["_perfil_chg"] = p
+                _n_flash("err", "PIN incorrecto. Intentos restantes: %d." % max(0, 5 - p["intentos"]))
+            else:
+                if p.get("correo"):
+                    u.correo = p["correo"]
+                if p.get("tel"):
+                    r2 = _n_perfil_row(u, crear=True)
+                    r2.telefono = p["tel"]
+                    r2.actualizado = _n_ahora()
+                db.session.commit()
+                registrar_auditoria("Perfil: contacto actualizado con PIN", "%s (%s)" % (u.usuario, ", ".join(
+                    [x for x in ("correo" if p.get("correo") else "", "teléfono" if p.get("tel") else "") if x])))
+                session.pop("_perfil_chg", None)
+                _n_flash("ok", "Datos actualizados correctamente.")
+        elif accion == "cancelar":
+            session.pop("_perfil_chg", None)
+            _n_flash("ok", "Cambio cancelado.")
+        return redirect("/perfil")
+
+    row = _n_perfil_row(u)
+    documento = (row.documento if row else "") or ""
+    telefono = (row.telefono if row else "") or ""
+    nombre = (u.nombre_completo or "").strip() or u.usuario
+    colegio = ""
+    try:
+        if u.institucion_id:
+            colegio = Institucion.query.get(u.institucion_id).nombre
+    except Exception:
+        colegio = ""
+    doc_html = "<b>%s</b>" % _esc(documento) if documento else (
+        "<form method='POST' class='nx-inline'>%s<input type='hidden' name='accion' value='guardar_documento'>"
+        "<input name='documento' placeholder='Registrar mi documento' style='max-width:220px'> "
+        "<button class='nx-btn-sm'>Guardar</button></form> <span class='nx-small'>(solo se puede registrar una vez)</span>"
+        % _n_csrf_input())
+    if pend:
+        dest = _n_mask_mail(pend.get("destino", ""))
+        bloque_cambio = f"""<section class='nx-card'><h2>Confirmar cambio con PIN</h2>
+<p>Enviamos un PIN de 6 dígitos a <b>{_esc(dest)}</b>. Escríbelo para aplicar los cambios.</p>
+<form method='POST' class='nx-grid'>{_n_csrf_input()}<input type='hidden' name='accion' value='confirmar_pin'>
+<div><label>PIN</label><input name='pin' inputmode='numeric' maxlength='6' autocomplete='one-time-code' required autofocus></div>
+<div style='align-self:end'><button>Confirmar</button></div></form>
+<form method='POST' style='margin-top:8px'>{_n_csrf_input()}<input type='hidden' name='accion' value='cancelar'><button class='nx-btn-sm' style='background:#64748b'>Cancelar cambio</button></form></section>"""
+    else:
+        bloque_cambio = f"""<section class='nx-card'><h2>Actualizar correo o teléfono</h2>
+<p class='nx-small'>Por seguridad, para cambiar estos datos te enviaremos un PIN al correo registrado.</p>
+<form method='POST' class='nx-grid'>{_n_csrf_input()}<input type='hidden' name='accion' value='pedir_pin'>
+<div><label>Correo</label><input type='email' name='correo' value='{_esc(u.correo or "")}' placeholder='correo@ejemplo.com'></div>
+<div><label>Teléfono</label><input name='telefono' value='{_esc(telefono)}' placeholder='3001234567'></div>
+<div style='align-self:end'><button>Enviar PIN</button></div></form></section>"""
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>👤 Mi perfil</h1><p>Tus datos en el sistema.</p></div><a class="btn" href="/dashboard">Volver</a></header>
+{_n_flash_html()}
+<section class='nx-card'><h2>Información</h2>
+<div class='nx-scroll'><table>
+<tr><th style='width:180px'>Nombre</th><td>{_esc(nombre)}</td></tr>
+<tr><th>Documento</th><td>{doc_html}</td></tr>
+<tr><th>Correo</th><td>{_esc(u.correo or "— sin registrar —")}</td></tr>
+<tr><th>Teléfono</th><td>{_esc(telefono or "— sin registrar —")}</td></tr>
+<tr><th>Rol</th><td>{_esc(rol)}</td></tr>
+<tr><th>Usuario de acceso</th><td>{_esc(u.usuario)}</td></tr>
+{"<tr><th>Institución</th><td>%s</td></tr>" % _esc(colegio) if colegio else ""}
+</table></div>
+<p class='nx-small'>Para corregir tu nombre o rol, contacta a Secretaría o a soporte.</p></section>
+{bloque_cambio}
+<section class='nx-card'><h2>Seguridad</h2><a class='btn' href='/cambiar_password'>Cambiar contraseña</a></section>"""
+    return page("Mi perfil", shell(content))
+
+
+# ══════════════════════════ 2) INVENTARIO Y KITS ══════════════════════════
+_INV_CATEGORIAS = ["Sillas", "Mesas / Pupitres", "Computadores", "Portátiles / Tablets", "Tableros",
+                   "Proyectores / TV", "Impresoras", "Libros / Biblioteca", "Material deportivo",
+                   "Laboratorio", "Kits escolares", "Mobiliario administrativo", "Redes / Conectividad", "Otros"]
+_INV_ESTADOS = ["Bueno", "Regular", "Malo", "En reparación", "Dado de baja"]
+_INV_VER = ("Secretaría", "Rectoría", "Coordinación", "Administrador")
+_INV_EDITAR = ("Secretaría", "Rectoría", "Coordinación", "Administrador")
+
+
+_INV_ESTADO_ALIAS = {"bueno": "Bueno", "regular": "Regular", "malo": "Malo", "baja": "Dado de baja",
+                     "en reparación": "En reparación", "en reparacion": "En reparación", "dado de baja": "Dado de baja"}
+
+
+def _inv_estado_norm(est):
+    return _INV_ESTADO_ALIAS.get((est or "").strip().lower(), (est or "").strip() or "Bueno")
+
+
+def _inv_tag(est):
+    est = _inv_estado_norm(est)
+    cls = {"Bueno": "ok", "Regular": "warn", "Malo": "bad", "En reparación": "info", "Dado de baja": "gray"}.get(est, "gray")
+    return "<span class='nx-tag nx-t-%s'>%s</span>" % (cls, _esc(est))
+
+
+def _inv_query(iid):
+    q = InventarioItem.query.filter_by(institucion_id=iid)
+    cat = (request.args.get("categoria") or "").strip()
+    est = (request.args.get("estado") or "").strip()
+    ubi = (request.args.get("ubicacion") or "").strip()
+    txt = (request.args.get("q") or "").strip()
+    if cat:
+        q = q.filter(InventarioItem.categoria == cat)
+    if est:
+        alias = {k for k, v in _INV_ESTADO_ALIAS.items() if v == est} | {est.lower()}
+        q = q.filter(func.lower(InventarioItem.estado).in_(alias))
+    if ubi:
+        q = q.filter(InventarioItem.ubicacion.ilike("%" + ubi + "%"))
+    if txt:
+        like = "%" + txt + "%"
+        q = q.filter(or_(InventarioItem.nombre.ilike(like), InventarioItem.codigo.ilike(like),
+                         InventarioItem.serial.ilike(like), InventarioItem.responsable.ilike(like)))
+    return q.order_by(InventarioItem.categoria.asc(), InventarioItem.nombre.asc())
+
+
+def _inv_form_datos(it):
+    cat = (request.form.get("categoria_otra") or "").strip() or (request.form.get("categoria") or "Otros")
+    it.nombre = (request.form.get("nombre") or "").strip()[:160]
+    it.categoria = cat[:60]
+    it.ubicacion = (request.form.get("ubicacion") or "").strip()[:120]
+    try:
+        it.cantidad = max(0, int(request.form.get("cantidad") or 1))
+    except Exception:
+        it.cantidad = 1
+    est = request.form.get("estado") or "Bueno"
+    it.estado = est if est in _INV_ESTADOS else "Bueno"
+    it.responsable = (request.form.get("responsable") or "").strip()[:120]
+    it.serial = (request.form.get("serial") or "").strip()[:160]
+    it.fecha_adq = (request.form.get("fecha_adq") or "").strip()[:20]
+    try:
+        v = (request.form.get("valor") or "").strip()
+        it.valor = float(v.replace(",", ".")) if v else None
+    except Exception:
+        it.valor = None
+    it.observacion = (request.form.get("observacion") or "").strip()[:2000]
+
+
+def _inv_campos_html(it=None, cats=None):
+    g = lambda a, d="": _esc(getattr(it, a, d) if it is not None and getattr(it, a, None) is not None else d)
+    cats = cats or _INV_CATEGORIAS
+    cur = getattr(it, "categoria", "") if it is not None else ""
+    opts = "".join("<option %s>%s</option>" % ("selected" if c == cur else "", _esc(c)) for c in cats)
+    ests = "".join("<option %s>%s</option>" % ("selected" if e == (_inv_estado_norm(getattr(it, "estado", "Bueno")) if it is not None else "Bueno") else "", e) for e in _INV_ESTADOS)
+    return f"""
+<div><label>Nombre / descripción *</label><input name='nombre' required value='{g("nombre")}' placeholder='Ej. Silla universitaria'></div>
+<div><label>Categoría</label><select name='categoria'>{opts}</select></div>
+<div><label>¿Otra categoría? (opcional)</label><input name='categoria_otra' placeholder='Escribe una nueva'></div>
+<div><label>Cantidad</label><input type='number' min='0' name='cantidad' value='{g("cantidad", 1)}'></div>
+<div><label>Estado</label><select name='estado'>{ests}</select></div>
+<div><label>Ubicación (salón / sede)</label><input name='ubicacion' value='{g("ubicacion")}'></div>
+<div><label>Responsable</label><input name='responsable' value='{g("responsable")}'></div>
+<div><label>Serial / placa</label><input name='serial' value='{g("serial")}'></div>
+<div><label>Fecha de adquisición</label><input type='date' name='fecha_adq' value='{g("fecha_adq")}'></div>
+<div><label>Valor unitario (COP)</label><input name='valor' value='{g("valor")}'></div>
+<div style='grid-column:1/-1'><label>Observaciones</label><textarea name='observacion' rows='2'>{g("observacion")}</textarea></div>"""
+
+
+def _inv_guard(editar=False):
+    if not requiere_login():
+        return None, redirect("/login")
+    roles = _INV_EDITAR if editar else _INV_VER
+    if rol_actual() not in roles:
+        return None, acceso_denegado("Solo Secretaría, Rectoría y Coordinación pueden %s el inventario." % (
+            "modificar" if editar else "consultar"))
+    return _n_iid_o_error()
+
+
+@app.route("/inventario", methods=["GET", "POST"])
+def inventario():
+    iid, err = _inv_guard()
+    if err is not None:
+        return err
+    puede = rol_actual() in _INV_EDITAR
+    if request.method == "POST":
+        if not puede:
+            return acceso_denegado("No tienes permiso para modificar el inventario.")
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido, intente de nuevo.")
+            return redirect("/inventario")
+        accion = request.form.get("accion")
+        if accion == "crear":
+            it = InventarioItem(institucion_id=iid)
+            _inv_form_datos(it)
+            if not it.nombre:
+                _n_flash("err", "El nombre es obligatorio.")
+            else:
+                n = InventarioItem.query.filter_by(institucion_id=iid).count() + 1
+                it.codigo = (request.form.get("codigo") or "").strip()[:40] or "INV-%05d" % n
+                it.creado_en = it.actualizado_en = _n_ahora()
+                it.registrado_por = session.get("usuario") or ""
+                it.actualizado = it.actualizado_en
+                db.session.add(it)
+                db.session.commit()
+                registrar_auditoria("Inventario: alta", "%s x%s" % (it.nombre, it.cantidad))
+                _n_flash("ok", "Registrado: %s (%s)." % (it.nombre, it.codigo))
+        elif accion == "eliminar":
+            it = InventarioItem.query.filter_by(id=int(request.form.get("id") or 0), institucion_id=iid).first()
+            if it:
+                registrar_auditoria("Inventario: baja definitiva", "%s (%s)" % (it.nombre, it.codigo))
+                db.session.delete(it)
+                db.session.commit()
+                _n_flash("ok", "Registro eliminado.")
+        return redirect("/inventario?" + (request.query_string.decode() if request.query_string else ""))
+    filas_q = _inv_query(iid)
+    total_reg = filas_q.count()
+    filas = filas_q.limit(500).all()
+    # Resumen por categoría (sin filtros) para chips
+    resumen = db.session.query(InventarioItem.categoria, func.sum(InventarioItem.cantidad)).filter(
+        InventarioItem.institucion_id == iid).group_by(InventarioItem.categoria).all()
+    cats_db = sorted({c for c, _ in resumen if c})
+    cats_todas = list(dict.fromkeys(_INV_CATEGORIAS + cats_db))
+    cat_sel = (request.args.get("categoria") or "").strip()
+    est_sel = (request.args.get("estado") or "").strip()
+    chips = "<a class='nx-chip %s' href='/inventario'>Todas</a>" % ("" if cat_sel else "on")
+    for c, s in sorted(resumen, key=lambda x: x[0] or ""):
+        chips += "<a class='nx-chip %s' href='/inventario?categoria=%s'>%s · %s</a>" % (
+            "on" if c == cat_sel else "", quote(c or ""), _esc(c), int(s or 0))
+    tot_unid = sum(int(s or 0) for _, s in resumen)
+    mal = db.session.query(func.sum(InventarioItem.cantidad)).filter(
+        InventarioItem.institucion_id == iid, func.lower(InventarioItem.estado).in_(["malo", "en reparación", "en reparacion"])).scalar() or 0
+    filtros = f"""<form method='GET' class='nx-grid' style='margin-bottom:12px'>
+<div><label>Buscar</label><input name='q' value='{_esc(request.args.get("q",""))}' placeholder='Nombre, código, serial…'></div>
+<div><label>Categoría</label><select name='categoria'><option value=''>Todas</option>{"".join("<option %s>%s</option>" % ("selected" if c == cat_sel else "", _esc(c)) for c in cats_todas)}</select></div>
+<div><label>Estado</label><select name='estado'><option value=''>Todos</option>{"".join("<option %s>%s</option>" % ("selected" if e == est_sel else "", e) for e in _INV_ESTADOS)}</select></div>
+<div><label>Ubicación</label><input name='ubicacion' value='{_esc(request.args.get("ubicacion",""))}'></div>
+<div style='align-self:end'><button>Filtrar</button> <a class='btn' href='/inventario/exportar?{_esc(request.query_string.decode())}'>⬇ Excel</a></div></form>"""
+    trs = ""
+    for it in filas:
+        acc = ""
+        if puede:
+            acc = (f"<a class='btn nx-btn-sm' href='/inventario/editar/{it.id}'>Editar</a> "
+                   f"<form method='POST' class='nx-inline' onsubmit=\"return confirm('¿Eliminar este registro?')\">{_n_csrf_input()}"
+                   f"<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='{it.id}'>"
+                   f"<button class='nx-btn-sm' style='background:#b91c1c'>Eliminar</button></form>")
+        val = ("$ {:,.0f}".format(it.valor).replace(",", ".")) if it.valor else "—"
+        trs += (f"<tr><td>{_esc(it.codigo)}</td><td><b>{_esc(it.nombre)}</b><div class='nx-small'>{_esc(it.serial)}</div></td>"
+                f"<td>{_esc(it.categoria)}</td><td style='text-align:center'>{it.cantidad}</td><td>{_inv_tag(it.estado)}</td>"
+                f"<td>{_esc(it.ubicacion)}</td><td>{_esc(it.responsable)}</td><td>{val}</td><td>{acc}</td></tr>")
+    crear = ""
+    if puede:
+        crear = f"""<details class='nx-card' {"open" if not total_reg else ""}><summary style='cursor:pointer;font-weight:800'>➕ Agregar elemento / kit</summary>
+<form method='POST' class='nx-grid' style='margin-top:12px'>{_n_csrf_input()}<input type='hidden' name='accion' value='crear'>
+{_inv_campos_html(None, cats_todas)}
+<div><label>Código (opcional, se genera solo)</label><input name='codigo'></div>
+<div style='align-self:end'><button>Guardar</button></div></form></details>"""
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>📦 Inventario y kits</h1><p>Sillas, computadores y todos los materiales del colegio.</p></div><a class="btn" href="/dashboard">Volver</a></header>
+{_n_flash_html()}
+<div class='nx-kpis'><div class='nx-kpi'><b>{tot_unid}</b><span>Unidades</span></div><div class='nx-kpi'><b>{len(resumen)}</b><span>Categorías</span></div><div class='nx-kpi'><b>{int(mal)}</b><span>En mal estado / reparación</span></div></div>
+{crear}
+<section class='nx-card'><h2>Categorías</h2>{chips}</section>
+<section class='nx-card'><h2>Listado ({total_reg}{" · mostrando 500" if total_reg > 500 else ""})</h2>{filtros}
+<div class='nx-scroll'><table><tr><th>Código</th><th>Elemento</th><th>Categoría</th><th>Cant.</th><th>Estado</th><th>Ubicación</th><th>Responsable</th><th>Valor</th><th></th></tr>
+{trs or "<tr><td colspan='9'>Sin registros con estos filtros.</td></tr>"}</table></div></section>"""
+    return page("Inventario", shell(content))
+
+
+@app.route("/inventario/editar/<int:iid_item>", methods=["GET", "POST"])
+def inventario_editar(iid_item):
+    iid, err = _inv_guard(editar=True)
+    if err is not None:
+        return err
+    it = InventarioItem.query.filter_by(id=iid_item, institucion_id=iid).first_or_404()
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido.")
+            return redirect("/inventario/editar/%d" % it.id)
+        _inv_form_datos(it)
+        if not it.nombre:
+            _n_flash("err", "El nombre es obligatorio.")
+            return redirect("/inventario/editar/%d" % it.id)
+        it.codigo = (request.form.get("codigo") or it.codigo or "").strip()[:40]
+        it.actualizado_en = _n_ahora()
+        it.actualizado = it.actualizado_en
+        db.session.commit()
+        registrar_auditoria("Inventario: edición", "%s (%s)" % (it.nombre, it.codigo))
+        _n_flash("ok", "Cambios guardados.")
+        return redirect("/inventario")
+    cats_db = [c for (c,) in db.session.query(InventarioItem.categoria).filter_by(institucion_id=iid).distinct() if c]
+    cats = list(dict.fromkeys(_INV_CATEGORIAS + cats_db))
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>Editar: {_esc(it.nombre)}</h1></div><a class="btn" href="/inventario">Volver</a></header>
+{_n_flash_html()}
+<section class='nx-card'><form method='POST' class='nx-grid'>{_n_csrf_input()}
+{_inv_campos_html(it, cats)}
+<div><label>Código</label><input name='codigo' value='{_esc(it.codigo)}'></div>
+<div style='align-self:end'><button>Guardar cambios</button></div></form></section>"""
+    return page("Editar inventario", shell(content))
+
+
+@app.route("/inventario/exportar")
+def inventario_exportar():
+    iid, err = _inv_guard()
+    if err is not None:
+        return err
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inventario"
+    ws.append(["Código", "Elemento", "Categoría", "Cantidad", "Estado", "Ubicación", "Responsable", "Serial", "Fecha adq.", "Valor unit.", "Observación"])
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="0B2D57")
+    for it in _inv_query(iid).all():
+        ws.append([it.codigo, it.nombre, it.categoria, it.cantidad, it.estado, it.ubicacion, it.responsable,
+                   it.serial, it.fecha_adq, it.valor, it.observacion])
+    for i, w in enumerate([12, 34, 22, 10, 14, 24, 22, 18, 12, 14, 40], 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return send_file(bio, as_attachment=True, download_name="inventario_%s.xlsx" % fecha_hoy(),
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+# ══════════════════════════ 3) CERTI-PROCSIS ══════════════════════════
+_CERTI_TIPOS = ["Constancia de estudio", "Certificado de logro", "Cartón de reconocimiento (tipo grado)",
+                "Certificado de buen comportamiento"]
+_CERTI_DECIDEN = ("Coordinación", "Secretaría", "Rectoría", "Administrador")
+
+
+def _certi_tag(est):
+    cls = {"PENDIENTE": "warn", "APROBADA": "ok", "EMITIDA": "info", "RECHAZADA": "bad"}.get(est, "gray")
+    return "<span class='nx-tag nx-t-%s'>%s</span>" % (cls, _esc(est))
+
+
+@app.route("/certi-procsis", methods=["GET", "POST"])
+def certi_procsis():
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in _N_ROLES_COLEGIO:
+        return page("Certi-Procsis", shell(_N_CSS + """<header class="role-hero"><div><h1>🎓 Certi-Procsis</h1></div><a class="btn" href="/dashboard">Volver</a></header>
+<section class='nx-card'><p>Las constancias y certificados se gestionan dentro de cada colegio (Docente, Coordinación, Secretaría y Rectoría).</p></section>"""))
+    iid, err = _n_iid_o_error()
+    if err is not None:
+        return err
+    decide = rol in _CERTI_DECIDEN
+    usuario = session.get("usuario") or ""
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido, intente de nuevo.")
+            return redirect("/certi-procsis")
+        accion = request.form.get("accion")
+        if accion in ("solicitar", "emitir"):
+            if accion == "emitir" and not decide:
+                return acceso_denegado("Solo Coordinación, Secretaría o Rectoría emiten directamente.")
+            tipo = request.form.get("tipo") or ""
+            if tipo not in _CERTI_TIPOS:
+                _n_flash("err", "Tipo de documento no válido.")
+                return redirect("/certi-procsis")
+            if rol == "Docente":
+                e = None
+                try:
+                    e = q_estudiantes().filter_by(id=int(request.form.get("estudiante_id") or 0)).first()
+                except Exception:
+                    e = None
+                grupos = grados_docente_autorizados() or []
+                if e is not None and grupos and e.grado not in grupos:
+                    e = None
+            else:
+                e = _n_buscar_estudiante(request.form.get("estudiante"))
+            if e is None:
+                _n_flash("err", "No se encontró el estudiante (revisa el código/documento o que sea de tus grupos).")
+                return redirect("/certi-procsis")
+            s = SolicitudCertificado(
+                institucion_id=iid, estudiante_id=e.id, tipo=tipo,
+                detalle=(request.form.get("detalle") or "").strip()[:2000],
+                express=bool(request.form.get("express")),
+                solicitado_por=usuario, solicitado_rol=rol, creado_en=_n_ahora())
+            if accion == "emitir":
+                s.estado = "APROBADA"
+                s.decidido_por, s.decidido_en = "%s (%s)" % (usuario, rol), _n_ahora()
+                s.nota_decision = "Emisión directa"
+            db.session.add(s)
+            db.session.commit()
+            registrar_auditoria("Certi-Procsis: %s" % ("emisión" if accion == "emitir" else "solicitud"),
+                                "%s · %s" % (tipo, estudiante_nombre(e)))
+            _n_flash("ok", ("Documento listo para descargar." if accion == "emitir" else
+                            "Solicitud enviada a Coordinación y Secretaría."
+                            + (" (marcada EXPRESS)" if s.express else "")))
+        elif accion in ("aprobar", "rechazar"):
+            if not decide:
+                return acceso_denegado("Solo Coordinación, Secretaría o Rectoría deciden solicitudes.")
+            s = SolicitudCertificado.query.filter_by(id=int(request.form.get("id") or 0), institucion_id=iid).first()
+            if not s or s.estado != "PENDIENTE":
+                _n_flash("err", "La solicitud no existe o ya fue gestionada.")
+            else:
+                s.estado = "APROBADA" if accion == "aprobar" else "RECHAZADA"
+                s.decidido_por, s.decidido_en = "%s (%s)" % (usuario, rol), _n_ahora()
+                s.nota_decision = (request.form.get("nota") or "").strip()[:1000]
+                db.session.commit()
+                registrar_auditoria("Certi-Procsis: " + s.estado.lower(), "#%s %s" % (s.id, s.tipo))
+                _n_flash("ok", "Solicitud %s." % s.estado.lower())
+        return redirect("/certi-procsis")
+
+    q = SolicitudCertificado.query.filter_by(institucion_id=iid)
+    if not decide:
+        q = q.filter_by(solicitado_por=usuario)
+    sols = q.order_by(SolicitudCertificado.express.desc(), SolicitudCertificado.id.desc()).limit(200).all()
+    ests = {e.id: e for e in Estudiante.query.filter(Estudiante.id.in_([s.estudiante_id for s in sols] or [0])).all()}
+    pendientes = [s for s in sols if s.estado == "PENDIENTE"]
+    trs = ""
+    for s in sols:
+        e = ests.get(s.estudiante_id)
+        acc = ""
+        if decide and s.estado == "PENDIENTE":
+            acc = (f"<form method='POST' class='nx-inline'>{_n_csrf_input()}<input type='hidden' name='id' value='{s.id}'>"
+                   f"<input name='nota' placeholder='Nota (opcional)' style='width:140px'> "
+                   f"<button name='accion' value='aprobar' class='nx-btn-sm'>Aprobar</button> "
+                   f"<button name='accion' value='rechazar' class='nx-btn-sm' style='background:#b91c1c'>Rechazar</button></form>")
+        elif decide and s.estado in ("APROBADA", "EMITIDA"):
+            acc = f"<a class='btn nx-btn-sm' href='/certi-procsis/pdf/{s.id}'>⬇ PDF</a>"
+        elif s.estado == "APROBADA":
+            acc = "<span class='nx-small'>Aprobada · Secretaría/Coordinación emitirá el documento</span>"
+        trs += (f"<tr><td>{'⚡ ' if s.express else ''}#{s.id}</td><td>{_esc(estudiante_nombre(e)) if e else '—'}<div class='nx-small'>{_esc(e.grado) if e else ''}</div></td>"
+                f"<td>{_esc(s.tipo)}<div class='nx-small'>{_esc(s.detalle[:120])}</div></td><td>{_esc(s.solicitado_por)}<div class='nx-small'>{_esc(s.solicitado_rol)} · {_esc(s.creado_en[:16])}</div></td>"
+                f"<td>{_certi_tag(s.estado)}<div class='nx-small'>{_esc(s.nota_decision)}</div></td><td>{acc}</td></tr>")
+    tipos_opts = "".join("<option>%s</option>" % _esc(t) for t in _CERTI_TIPOS)
+    if rol == "Docente":
+        grupos = grados_docente_autorizados() or []
+        qe = q_estudiantes()
+        if grupos:
+            qe = qe.filter(Estudiante.grado.in_(grupos))
+        lista = qe.order_by(Estudiante.grado.asc(), Estudiante.nombre.asc()).limit(600).all()
+        sel = "".join("<option value='%d'>%s — %s</option>" % (e.id, _esc(e.grado), _esc(estudiante_nombre(e))) for e in lista)
+        campo_est = f"<div><label>Estudiante *</label><select name='estudiante_id' required><option value=''>— elegir —</option>{sel}</select></div>"
+    else:
+        campo_est = "<div><label>Código o documento del estudiante *</label><input name='estudiante' required></div>"
+    form_sol = f"""<section class='nx-card'><h2>{"Solicitud express de certificado o logro" if rol == "Docente" else "Solicitar / emitir documento"}</h2>
+<form method='POST' class='nx-grid'>{_n_csrf_input()}
+{campo_est}
+<div><label>Tipo de documento</label><select name='tipo'>{tipos_opts}</select></div>
+<div style='grid-column:1/-1'><label>Detalle / logro a reconocer</label><textarea name='detalle' rows='2' placeholder='Ej. Primer puesto en feria de ciencias, excelente desempeño en el período…'></textarea></div>
+<div><label><input type='checkbox' name='express' value='1' style='width:auto'> ⚡ Solicitud express (prioridad)</label></div>
+<div style='align-self:end'><button name='accion' value='solicitar'>Enviar solicitud</button>
+{"<button name='accion' value='emitir' style='background:#16a34a'>Emitir ahora</button>" if decide else ""}</div></form></section>"""
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🎓 Certi-Procsis</h1><p>Constancias, certificados de logro y cartones de reconocimiento.</p></div><a class="btn" href="/dashboard">Volver</a></header>
+{_n_flash_html()}
+{"<div class='nx-kpis'><div class='nx-kpi'><b>%d</b><span>Pendientes por decidir</span></div></div>" % len(pendientes) if decide else ""}
+{form_sol}
+<section class='nx-card'><h2>{"Solicitudes del colegio" if decide else "Mis solicitudes"}</h2>
+<div class='nx-scroll'><table><tr><th>N°</th><th>Estudiante</th><th>Documento</th><th>Solicitó</th><th>Estado</th><th></th></tr>
+{trs or "<tr><td colspan='6'>Aún no hay solicitudes.</td></tr>"}</table></div></section>"""
+    return page("Certi-Procsis", shell(content))
+
+
+_MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+@app.route("/certi-procsis/pdf/<int:sid>")
+def certi_procsis_pdf(sid):
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in _CERTI_DECIDEN:
+        return acceso_denegado("Solo Coordinación, Secretaría o Rectoría emiten el documento.")
+    iid, err = _n_iid_o_error()
+    if err is not None:
+        return err
+    s = SolicitudCertificado.query.filter_by(id=sid, institucion_id=iid).first_or_404()
+    if s.estado not in ("APROBADA", "EMITIDA"):
+        return acceso_denegado("La solicitud aún no está aprobada.")
+    e = Estudiante.query.get(s.estudiante_id)
+    inst = Institucion.query.get(iid)
+    if not e or not inst:
+        return acceso_denegado("Datos incompletos para generar el documento.")
+    if s.estado == "APROBADA":
+        s.estado = "EMITIDA"
+        db.session.commit()
+    nombre = estudiante_nombre(e).upper()
+    hoy = ahora()
+    fecha_txt = "%d de %s de %d" % (hoy.day, _MESES_ES[hoy.month - 1], hoy.year)
+    ident = ("%s %s" % ((getattr(e, "tipo_doc", "") or "").strip(), (e.documento or "").strip())).strip() or "sin documento registrado"
+    consec = "CP-%s-%05d" % (inst.codigo, s.id)
+    carton = s.tipo.startswith("Cartón") or s.tipo.startswith("Certificado de logro")
+    buf = BytesIO()
+    st = getSampleStyleSheet()
+    c = canvas.Canvas(buf, pagesize=landscape(letter) if carton else letter)
+    W, H = c._pagesize
+    azul = colors.HexColor("#0B2D57")
+    dor = colors.HexColor("#b8892b")
+
+    def parrafo(txt, x, y, w, size=13, lead=20, align=1):
+        stl = ParagraphStyle("p", parent=st["Normal"], fontName="Helvetica", fontSize=size, leading=lead, alignment=align)
+        p = Paragraph(txt, stl)
+        _, h = p.wrap(w, 1000)
+        p.drawOn(c, x, y - h)
+        return y - h
+
+    if carton:
+        c.setStrokeColor(dor); c.setLineWidth(6); c.rect(24, 24, W - 48, H - 48)
+        c.setStrokeColor(azul); c.setLineWidth(1.5); c.rect(38, 38, W - 76, H - 76)
+        c.setFillColor(azul); c.setFont("Helvetica-Bold", 15)
+        c.drawCentredString(W / 2, H - 82, inst.nombre.upper())
+        c.setFont("Helvetica", 10)
+        c.drawCentredString(W / 2, H - 98, "%s · %s" % (inst.municipio or "", inst.resolucion or ""))
+        c.setFillColor(dor); c.setFont("Helvetica-Bold", 34)
+        c.drawCentredString(W / 2, H - 160, "RECONOCIMIENTO" if s.tipo.startswith("Cartón") else "CERTIFICADO DE LOGRO")
+        c.setFillColor(colors.black); c.setFont("Helvetica", 13)
+        c.drawCentredString(W / 2, H - 200, "Se otorga a")
+        c.setFillColor(azul); c.setFont("Helvetica-Bold", 28)
+        c.drawCentredString(W / 2, H - 245, nombre)
+        c.setFillColor(colors.black)
+        y = parrafo("estudiante del grado <b>%s</b>, %s, por: <b>%s</b>" % (
+            _esc(e.grado or ""), ident, _esc(s.detalle or "su destacado desempeño académico y formativo")), 90, H - 275, W - 180, 14, 21)
+        parrafo("Dado en %s, a los %s." % (_esc(inst.municipio or "la institución"), fecha_txt), 90, y - 14, W - 180, 12, 18)
+        c.setStrokeColor(colors.black); c.setLineWidth(0.8)
+        c.line(110, 100, 300, 100); c.line(W - 300, 100, W - 110, 100)
+        c.setFont("Helvetica", 10)
+        c.drawCentredString(205, 86, "Rector(a)"); c.drawCentredString(W - 205, 86, "Secretario(a) / Coordinación")
+        c.setFont("Helvetica-Oblique", 8); c.setFillColor(colors.grey)
+        c.drawCentredString(W / 2, 52, "Documento generado por Certi-Procsis · Consecutivo %s" % consec)
+    else:
+        c.setFillColor(azul); c.setFont("Helvetica-Bold", 14)
+        c.drawCentredString(W / 2, H - 70, inst.nombre.upper())
+        c.setFont("Helvetica", 10)
+        c.drawCentredString(W / 2, H - 86, "NIT %s · DANE %s" % (inst.nit or "—", inst.dane or "—"))
+        c.drawCentredString(W / 2, H - 100, inst.resolucion or "")
+        c.setFont("Helvetica-Bold", 16)
+        c.drawCentredString(W / 2, H - 150, "EL SUSCRITO RECTOR(A) / SECRETARIO(A)")
+        c.drawCentredString(W / 2, H - 172, "HACE CONSTAR")
+        c.setFillColor(colors.black)
+        if s.tipo.startswith("Constancia"):
+            cuerpo = ("Que <b>%s</b>, identificado(a) con %s, se encuentra matriculado(a) en esta institución en el grado "
+                      "<b>%s</b>, año lectivo %d." % (_esc(nombre), _esc(ident), _esc(e.grado or "—"), hoy.year))
+        else:
+            cuerpo = ("Que el(la) estudiante <b>%s</b>, identificado(a) con %s, del grado <b>%s</b>, ha observado un "
+                      "comportamiento adecuado dentro de la institución." % (_esc(nombre), _esc(ident), _esc(e.grado or "—")))
+        y = parrafo(cuerpo, 70, H - 215, W - 140, 13, 21, 4)
+        if s.detalle:
+            y = parrafo(_esc(s.detalle), 70, y - 12, W - 140, 12, 18, 4)
+        parrafo("Se expide a solicitud del interesado en %s, a los %s." % (_esc(inst.municipio or "la institución"), fecha_txt), 70, y - 18, W - 140, 12, 18, 4)
+        c.setStrokeColor(colors.black); c.line(W / 2 - 110, 150, W / 2 + 110, 150)
+        c.setFont("Helvetica", 10); c.drawCentredString(W / 2, 136, "Firma y sello")
+        c.setFont("Helvetica-Oblique", 8); c.setFillColor(colors.grey)
+        c.drawCentredString(W / 2, 60, "Documento generado por Certi-Procsis · Consecutivo %s" % consec)
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    registrar_auditoria("Certi-Procsis: PDF", "%s · %s" % (consec, nombre))
+    return send_file(buf, as_attachment=True, download_name="%s.pdf" % consec, mimetype="application/pdf")
+
+
+# ══════════════════════════ 4) RIESGO ESCOLAR / ALERTA TEMPRANA ══════════════════════════
+_RIESGO_CATS = ["Académico", "Inasistencia / deserción", "Convivencia", "Salud física o mental", "Socioeconómico / vulnerabilidad",
+                "Familiar / protección", "Consumo de sustancias", "Violencia o abuso", "Discapacidad / NEE", "Otro"]
+_RIESGO_NIVELES = ["Bajo", "Medio", "Alto", "Crítico"]
+_RIESGO_VER = ("Rectoría", "Coordinación", "Secretaría", "Administrador")
+_RIESGO_GESTIONA = ("Rectoría", "Coordinación", "Administrador")
+
+
+def _riesgo_tag(n):
+    cls = {"Bajo": "ok", "Medio": "warn", "Alto": "bad", "Crítico": "bad"}.get(n, "gray")
+    return "<span class='nx-tag nx-t-%s'>%s</span>" % (cls, _esc(n))
+
+
+def _riesgo_senales_auto(iid):
+    """Señales automáticas: ausencias recientes, faltas de convivencia y notas bajas."""
+    puntos = {}
+    razones = {}
+    hace30 = (ahora() - timedelta(days=30)).strftime("%Y-%m-%d")
+    hace60 = (ahora() - timedelta(days=60)).strftime("%Y-%m-%d")
+    try:
+        r = db.session.query(AsistenciaClase.estudiante_id, func.count(AsistenciaClase.id)).join(
+            Estudiante, Estudiante.id == AsistenciaClase.estudiante_id).filter(
+            Estudiante.institucion_id == iid, AsistenciaClase.estado == "Ausente",
+            AsistenciaClase.fecha >= hace30).group_by(AsistenciaClase.estudiante_id).all()
+        for eid, n in r:
+            puntos[eid] = puntos.get(eid, 0) + 2 * n
+            razones.setdefault(eid, []).append("%d ausencias (30 días)" % n)
+    except Exception as ex:
+        print("riesgo auto asistencia:", ex)
+        db.session.rollback()
+    try:
+        peso = {"I": 1, "II": 3, "III": 5}
+        for eid, tf, n in db.session.query(FaltaConvivencia.estudiante_id, FaltaConvivencia.tipo_falta, func.count(FaltaConvivencia.id)).filter(
+                FaltaConvivencia.institucion_id == iid, FaltaConvivencia.fecha >= hace60).group_by(
+                FaltaConvivencia.estudiante_id, FaltaConvivencia.tipo_falta).all():
+            puntos[eid] = puntos.get(eid, 0) + peso.get(tf, 1) * n
+            razones.setdefault(eid, []).append("%d falta(s) Tipo %s" % (n, tf))
+    except Exception as ex:
+        print("riesgo auto convivencia:", ex)
+        db.session.rollback()
+    try:
+        for eid, n in db.session.query(NotaRegistro.estudiante_id, func.count(NotaRegistro.id)).filter(
+                NotaRegistro.institucion_id == iid, NotaRegistro.periodo == periodo_actual(),
+                NotaRegistro.valor.isnot(None), NotaRegistro.valor < 3.0).group_by(NotaRegistro.estudiante_id).all():
+            if n >= 3:
+                puntos[eid] = puntos.get(eid, 0) + n
+                razones.setdefault(eid, []).append("%d notas bajo 3.0" % n)
+    except Exception as ex:
+        print("riesgo auto notas:", ex)
+        db.session.rollback()
+    top = sorted([(p, eid) for eid, p in puntos.items() if p >= 6], reverse=True)[:15]
+    return [(eid, p, "; ".join(razones.get(eid, []))) for p, eid in top]
+
+
+@app.route("/riesgo-escolar", methods=["GET", "POST"])
+def riesgo_escolar():
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in _RIESGO_VER and rol != "Docente":
+        return acceso_denegado("El módulo de riesgo escolar es para Rectoría, Coordinación, Secretaría y Docentes.")
+    iid, err = _n_iid_o_error()
+    if err is not None:
+        return err
+    usuario = session.get("usuario") or ""
+    gestiona = rol in _RIESGO_GESTIONA
+    puede_crear = rol in _RIESGO_GESTIONA or rol == "Docente"
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido.")
+            return redirect("/riesgo-escolar")
+        accion = request.form.get("accion")
+        if accion == "crear" and puede_crear:
+            e = _n_buscar_estudiante(request.form.get("estudiante"))
+            cat = request.form.get("categoria") or "Otro"
+            niv = request.form.get("nivel") or "Medio"
+            if e is None:
+                _n_flash("err", "No se encontró el estudiante por código o documento.")
+            elif cat not in _RIESGO_CATS or niv not in _RIESGO_NIVELES:
+                _n_flash("err", "Categoría o nivel no válidos.")
+            elif not (request.form.get("descripcion") or "").strip():
+                _n_flash("err", "Describe la situación observada.")
+            else:
+                r = RiesgoEstudiante(institucion_id=iid, estudiante_id=e.id, categoria=cat, nivel=niv,
+                                     descripcion=(request.form.get("descripcion") or "").strip()[:3000],
+                                     acciones=(request.form.get("acciones") or "").strip()[:3000],
+                                     registrado_por=usuario, creado_en=_n_ahora(), actualizado_en=_n_ahora())
+                db.session.add(r)
+                db.session.commit()
+                registrar_auditoria("Riesgo escolar: caso", "%s · %s · %s" % (estudiante_nombre(e), cat, niv))
+                _n_flash("ok", "Caso registrado.")
+        elif accion == "actualizar" and gestiona:
+            r = RiesgoEstudiante.query.filter_by(id=int(request.form.get("id") or 0), institucion_id=iid).first()
+            if r:
+                if request.form.get("nivel") in _RIESGO_NIVELES:
+                    r.nivel = request.form.get("nivel")
+                if request.form.get("estado") in ("ABIERTO", "EN_SEGUIMIENTO", "CERRADO"):
+                    r.estado = request.form.get("estado")
+                nota = (request.form.get("nota") or "").strip()
+                if nota:
+                    r.seguimiento = ((r.seguimiento or "") + "\n[%s · %s] %s" % (_n_ahora()[:16], usuario, nota[:1000])).strip()
+                r.actualizado_en = _n_ahora()
+                db.session.commit()
+                registrar_auditoria("Riesgo escolar: seguimiento", "caso #%s → %s/%s" % (r.id, r.nivel, r.estado))
+                _n_flash("ok", "Caso actualizado.")
+        else:
+            return acceso_denegado("No tienes permiso para esta acción.")
+        return redirect("/riesgo-escolar")
+
+    q = RiesgoEstudiante.query.filter_by(institucion_id=iid)
+    if rol == "Docente":
+        q = q.filter_by(registrado_por=usuario)  # el docente solo ve lo que reportó (dato sensible)
+    f_niv = request.args.get("nivel", "")
+    f_est = request.args.get("estado", "")
+    if f_niv in _RIESGO_NIVELES:
+        q = q.filter_by(nivel=f_niv)
+    if f_est in ("ABIERTO", "EN_SEGUIMIENTO", "CERRADO"):
+        q = q.filter_by(estado=f_est)
+    casos = q.order_by(RiesgoEstudiante.id.desc()).limit(300).all()
+    ests = {e.id: e for e in Estudiante.query.filter(Estudiante.id.in_([c.estudiante_id for c in casos] or [0])).all()}
+    cuenta = dict(db.session.query(RiesgoEstudiante.nivel, func.count(RiesgoEstudiante.id)).filter(
+        RiesgoEstudiante.institucion_id == iid, RiesgoEstudiante.estado != "CERRADO").group_by(RiesgoEstudiante.nivel).all()) if rol != "Docente" else {}
+    kpis = "".join("<div class='nx-kpi'><b>%d</b><span>%s</span></div>" % (cuenta.get(n, 0), n) for n in _RIESGO_NIVELES) if rol != "Docente" else ""
+    trs = ""
+    for c in casos:
+        e = ests.get(c.estudiante_id)
+        acc = ""
+        if gestiona:
+            nivs = "".join("<option %s>%s</option>" % ("selected" if n == c.nivel else "", n) for n in _RIESGO_NIVELES)
+            ests_o = "".join("<option value='%s' %s>%s</option>" % (v, "selected" if v == c.estado else "", v.replace("_", " ").title()) for v in ("ABIERTO", "EN_SEGUIMIENTO", "CERRADO"))
+            acc = (f"<form method='POST'>{_n_csrf_input()}<input type='hidden' name='accion' value='actualizar'><input type='hidden' name='id' value='{c.id}'>"
+                   f"<select name='nivel'>{nivs}</select> <select name='estado'>{ests_o}</select>"
+                   f"<input name='nota' placeholder='Nota de seguimiento' style='width:100%;margin:4px 0'><button class='nx-btn-sm'>Guardar</button></form>")
+        trs += (f"<tr><td>{_esc(estudiante_nombre(e)) if e else '—'}<div class='nx-small'>{_esc(e.grado) if e else ''}</div></td>"
+                f"<td>{_esc(c.categoria)}</td><td>{_riesgo_tag(c.nivel)}</td>"
+                f"<td>{_esc(c.descripcion[:220])}<div class='nx-small'>{_esc((c.seguimiento or '')[-260:])}</div></td>"
+                f"<td><span class='nx-tag nx-t-gray'>{_esc(c.estado.replace('_', ' '))}</span><div class='nx-small'>{_esc(c.registrado_por)} · {_esc(c.creado_en[:10])}</div></td><td>{acc}</td></tr>")
+    auto_html = ""
+    if gestiona:
+        try:
+            senales = _riesgo_senales_auto(iid)
+        except Exception as ex:
+            print("riesgo auto:", ex)
+            senales = []
+        if senales:
+            em = {e.id: e for e in Estudiante.query.filter(Estudiante.id.in_([s[0] for s in senales])).all()}
+            filas = "".join(
+                "<tr><td>%s<div class='nx-small'>%s</div></td><td><b>%d</b></td><td>%s</td><td><a class='btn nx-btn-sm' href='/riesgo-escolar?est=%s#nuevo'>Abrir caso</a></td></tr>" % (
+                    _esc(estudiante_nombre(em.get(eid))), _esc(getattr(em.get(eid), "grado", "")), p, _esc(rz), _esc(getattr(em.get(eid), "codigo", "")))
+                for eid, p, rz in senales if em.get(eid))
+            auto_html = f"""<section class='nx-card'><h2>⚠️ Alerta temprana automática</h2>
+<p class='nx-small'>Estudiantes con señales acumuladas (ausencias, faltas de convivencia y notas bajas). Es un apoyo para priorizar, no un diagnóstico.</p>
+<div class='nx-scroll'><table><tr><th>Estudiante</th><th>Puntaje</th><th>Señales</th><th></th></tr>{filas}</table></div></section>"""
+    pre = _esc(request.args.get("est", ""))
+    cats = "".join("<option>%s</option>" % _esc(c) for c in _RIESGO_CATS)
+    nivs = "".join("<option %s>%s</option>" % ("selected" if n == "Medio" else "", n) for n in _RIESGO_NIVELES)
+    form = f"""<section class='nx-card' id='nuevo'><h2>Reportar situación de riesgo</h2>
+<form method='POST' class='nx-grid'>{_n_csrf_input()}<input type='hidden' name='accion' value='crear'>
+<div><label>Código o documento del estudiante *</label><input name='estudiante' value='{pre}' required></div>
+<div><label>Categoría</label><select name='categoria'>{cats}</select></div>
+<div><label>Nivel</label><select name='nivel'>{nivs}</select></div>
+<div style='grid-column:1/-1'><label>Situación observada *</label><textarea name='descripcion' rows='3' required></textarea></div>
+<div style='grid-column:1/-1'><label>Acciones realizadas / sugeridas</label><textarea name='acciones' rows='2'></textarea></div>
+<div style='align-self:end'><button>Registrar caso</button></div></form></section>""" if puede_crear else ""
+    filtros = "".join("<a class='nx-chip %s' href='/riesgo-escolar?nivel=%s'>%s</a>" % ("on" if f_niv == n else "", n, n) for n in _RIESGO_NIVELES)
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🛡️ Riesgo escolar</h1><p>Alerta temprana y vulnerabilidad de estudiantes. Información sensible: úsese solo para protección y acompañamiento.</p></div><a class="btn" href="/dashboard">Volver</a></header>
+{_n_flash_html()}
+{"<div class='nx-kpis'>%s</div>" % kpis if kpis else ""}
+{auto_html}
+{form}
+<section class='nx-card'><h2>{"Mis reportes" if rol == "Docente" else "Casos"}</h2>
+<a class='nx-chip %s' href='/riesgo-escolar'>Todos</a>{filtros}
+<div class='nx-scroll'><table><tr><th>Estudiante</th><th>Categoría</th><th>Nivel</th><th>Situación / seguimiento</th><th>Estado</th><th></th></tr>
+{trs or "<tr><td colspan='6'>Sin casos registrados.</td></tr>"}</table></div></section>"""
+    return page("Riesgo escolar", shell(content))
+
+
+# ══════════════════════════ 5) GUARDIA DE SESIÓN ══════════════════════════
+@app.route("/api/sesion-estado")
+def api_sesion_estado():
+    """Segundos de sesión que le quedan (NO renueva la inactividad: ver before())."""
+    if not requiere_login():
+        return jsonify({"ok": False, "left": 0}), 401
+    try:
+        ult = float(session.get("ultimo_movimiento") or ahora().timestamp())
+        left = int(_limite_inactividad() - (ahora().timestamp() - ult))
+    except Exception:
+        left = 0
+    return jsonify({"ok": True, "left": max(0, left)})
+
+
+@app.route("/api/sesion-extender", methods=["POST"])
+def api_sesion_extender():
+    """Renueva la sesión (before() ya actualiza ultimo_movimiento en cada petición normal)."""
+    if not requiere_login():
+        return jsonify({"ok": False}), 401
+    return jsonify({"ok": True, "left": int(_limite_inactividad())})
+
+
+_N_GUARD_JS = r"""
+<script>
+(function(){
+  var LIMIT=__LIMIT__, WARN=Math.min(120,Math.floor(LIMIT*0.4)), t0=Date.now(), dirty=false, dform=null, shown=false, expired=false, lastSync=0;
+  var KEY="edutrack_draft:"+location.pathname;
+  function $(h){var d=document.createElement("div");d.innerHTML=h;return d.firstChild;}
+  function fmt(s){s=Math.max(0,s|0);return Math.floor(s/60)+":"+("0"+(s%60)).slice(-2);}
+  function fields(f){return Array.prototype.filter.call(f.elements,function(el){
+    return el.name&&!el.disabled&&el.type!=="password"&&el.type!=="file"&&el.type!=="hidden"&&el.type!=="submit"&&el.type!=="button";});}
+  function saveDraft(){ if(!dform) return; try{
+    var o={};fields(dform).forEach(function(el){o[el.name]=(el.type==="checkbox"||el.type==="radio")?(el.checked?el.value:null):el.value;});
+    localStorage.setItem(KEY,JSON.stringify({t:Date.now(),f:o}));}catch(e){} }
+  document.addEventListener("input",function(e){var f=e.target&&e.target.form;
+    if(f&&(f.method||"get").toLowerCase()==="post"&&!f.hasAttribute("data-noguard")){dirty=true;dform=f;}},true);
+  document.addEventListener("submit",function(e){ if(e.target===dform||(e.target&&(e.target.method||"").toLowerCase()==="post")){
+    dirty=false;try{localStorage.removeItem(KEY);}catch(x){}}},true);
+  var nav=false, navT=null;
+  function marcarNav(){ nav=true; clearTimeout(navT); navT=setTimeout(function(){nav=false;},2000); }
+  document.addEventListener("click",function(e){var a=e.target&&e.target.closest?e.target.closest("a"):null;
+    if(!a) return; var h=a.getAttribute("href")||"";
+    if(/\/logout/.test(h)){try{Object.keys(localStorage).forEach(function(k){if(k.indexOf("edutrack_draft:")===0)localStorage.removeItem(k);});}catch(x){} dirty=false; marcarNav(); return;}
+    try{ if(a.href&&!a.target&&!a.hasAttribute("download")&&new URL(a.href,location.href).origin===location.origin) marcarNav(); }catch(x){} },true);
+  document.addEventListener("submit",function(){ marcarNav(); },true);
+  // Alerta de seguridad: al cerrar/recargar la pestaña siempre avisa (la sesión se cierra al salir);
+  // al navegar dentro del sistema solo avisa si hay cambios sin guardar.
+  window.addEventListener("beforeunload",function(e){
+    if(dirty){ saveDraft(); }
+    if(dirty||!nav){ e.preventDefault(); e.returnValue="Si sales, se cerrará tu sesión por seguridad. Guarda tus cambios antes de salir."; return e.returnValue; }
+  });
+  window.addEventListener("pagehide",function(){ if(dirty) saveDraft(); });
+  window.addEventListener("pageshow",function(){ nav=false; });
+  var box=null;
+  function ensure(){ if(box) return box;
+    box=$('<div id="nx-sess" style="position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.6);display:none;align-items:center;justify-content:center;padding:16px">'+
+      '<div style="background:#fff;color:#0f172a;max-width:420px;width:100%;border-radius:14px;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.35);font-family:system-ui,Segoe UI,Arial,sans-serif">'+
+      '<h3 id="nx-t" style="margin:0 0 8px"></h3><p id="nx-m" style="margin:0 0 14px;line-height:1.5"></p><div id="nx-b" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>');
+    document.body.appendChild(box); return box; }
+  function btn(txt,bg,fn){var b=document.createElement("button");b.type="button";b.textContent=txt;
+    b.style.cssText="padding:9px 14px;border:0;border-radius:9px;color:#fff;font-weight:700;cursor:pointer;background:"+bg;b.onclick=fn;return b;}
+  function hide(){ if(box) box.style.display="none"; shown=false; }
+  function extend(){ fetch("/api/sesion-extender",{method:"POST",credentials:"same-origin"}).then(function(r){return r.json();}).then(function(j){
+      if(j&&j.ok){t0=Date.now();hide();} }).catch(function(){}); }
+  function show(left){ var b=ensure(); b.style.display="flex"; shown=true;
+    document.getElementById("nx-t").textContent="⚠️ Tu sesión está por expirar";
+    document.getElementById("nx-m").textContent="Por seguridad se cerrará en "+fmt(left)+(dirty?". Tienes cambios sin guardar: guárdalos ahora.":". ¿Quieres seguir conectado?");
+    var bar=document.getElementById("nx-b"); if(!bar.childNodes.length||bar.dataset.d!==String(!!dirty)){ bar.innerHTML=""; bar.dataset.d=String(!!dirty);
+      if(dirty&&dform) bar.appendChild(btn("💾 Guardar ahora","#16a34a",function(){ try{dform.requestSubmit?dform.requestSubmit():dform.submit();}catch(e){dform.submit();} }));
+      bar.appendChild(btn("Seguir conectado","#0B2D57",extend)); } }
+  function expire(){ if(expired) return; expired=true; saveDraft(); var b=ensure(); b.style.display="flex";
+    document.getElementById("nx-t").textContent="🔒 Sesión expirada";
+    document.getElementById("nx-m").textContent="Cerramos tu sesión por inactividad."+(dirty?" Guardamos un borrador en este navegador: al volver a entrar podrás restaurarlo.":"");
+    var bar=document.getElementById("nx-b"); bar.innerHTML=""; bar.appendChild(btn("Iniciar sesión","#0B2D57",function(){ dirty=false; location.href="/login"; })); }
+  function sync(){ var now=Date.now(); if(now-lastSync<10000) return; lastSync=now;
+    fetch("/api/sesion-estado",{credentials:"same-origin"}).then(function(r){ if(!r.ok||(r.headers.get("content-type")||"").indexOf("json")<0) throw 0; return r.json(); })
+    .then(function(j){ if(!j||!j.ok) return expire(); t0=Date.now()-((LIMIT-j.left)*1000); if(j.left>WARN) hide(); else if(j.left<=0) expire(); }).catch(function(){ expire(); }); }
+  setInterval(function(){ if(expired) return; var left=LIMIT-(Date.now()-t0)/1000;
+    if(left<=WARN){ if(!shown||left<=WARN) { if(!shown) saveDraft(); show(left); sync(); } }
+    else if(shown) hide(); }, 1000);
+  document.addEventListener("DOMContentLoaded",function(){ try{
+    var d=JSON.parse(localStorage.getItem(KEY)||"null"); if(!d) return;
+    if(Date.now()-d.t>3600000){localStorage.removeItem(KEY);return;}
+    var bn=$('<div style="position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:99998;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.2);font:14px system-ui,Arial,sans-serif;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span>📝 Tienes un borrador sin guardar de tu sesión anterior.</span></div>');
+    bn.appendChild(btn("Restaurar","#16a34a",function(){ Object.keys(d.f).forEach(function(n){ var el=document.querySelector('[name="'+n+'"]'); if(!el||d.f[n]===null) return;
+        if(el.type==="checkbox"||el.type==="radio") el.checked=true; else el.value=d.f[n]; el.dispatchEvent(new Event("input",{bubbles:true})); });
+      localStorage.removeItem(KEY); bn.remove(); }));
+    bn.appendChild(btn("Descartar","#64748b",function(){ localStorage.removeItem(KEY); bn.remove(); }));
+    document.body.appendChild(bn); }catch(e){} });
+})();
+</script>
+"""
+
+
+def _n_guard_js():
+    try:
+        if not session.get("usuario"):
+            return ""
+        p = request.path or ""
+        if p in ("/login", "/logout") or p.startswith("/static"):
+            return ""
+        return _N_GUARD_JS.replace("__LIMIT__", str(int(_limite_inactividad())))
+    except Exception:
+        return ""
+
+# Los datos sensibles nuevos también se vacían en el reinicio de datos (no se tocan logins ni colegios).
+try:
+    _MODELOS_RESET_DATOS.extend([SolicitudCertificado, RiesgoEstudiante])
+except Exception as _ex_reset:
+    print("reset datos nuevos modulos:", _ex_reset)
 
 
 if __name__ == "__main__":
