@@ -11886,6 +11886,8 @@ def login():
     if _modo_host == "desconocido":
         return _login_host_desconocido(), 404
     _motivo_ret = (request.args.get("error") or "").strip().lower() if request.method == "GET" else ""
+    if _motivo_ret == "seleccion":
+        error = "La selección expiró por seguridad. Ingresa tus datos nuevamente."
     if _motivo_ret == "horario":
         error = ("Tu usuario está fuera de sus días u horario laboral, por eso no pudo entrar. "
                  "Pide a Gerencia que ajuste tu horario (Seguridad de empleados) o que te habilite un acceso extraordinario.")
@@ -11907,10 +11909,26 @@ def login():
         usuario_in = request.form.get("usuario")
         password_in = request.form.get("password")
         raw_inst_txt = (request.form.get("institucion_id") or "").strip()
+        _pre_user = None   # usuario ya verificado en el paso "elige tu institución"
         if _inst_host is not None:
             raw_inst_txt = str(_inst_host.id)   # ignora lo que mande el formulario
-        elif _modo_host == "equipo":
-            raw_inst_txt = "PROCSIS"            # dominio principal en modo estricto: solo equipo interno
+        elif _modo_host == "unico":
+            # Un solo ingreso: el sistema identifica el rol y el colegio a partir de usuario + contraseña.
+            raw_inst_txt = ""
+            _pick = (request.form.get("pick_inst") or "").strip()
+            if _pick:
+                _pre_user = _login_tomar_eleccion(_pick)
+                if _pre_user is None:
+                    return redirect("/login?error=seleccion")
+                raw_inst_txt = str(_pre_user.institucion_id)
+            else:
+                _kind, _ids = _login_resolver_unico(usuario_in, password_in)
+                if _kind == "staff":
+                    raw_inst_txt = "PROCSIS"
+                elif _kind == "colegio" and len(_ids) == 1:
+                    raw_inst_txt = str(_ids[0])
+                elif _kind == "colegio":
+                    return _login_pagina_elegir(_ids)
         es_staff_procsis = raw_inst_txt.upper() == "PROCSIS"
 
         if es_staff_procsis:
@@ -11930,8 +11948,6 @@ def login():
             if not staff_user or (staff_user.rol or "").strip() not in roles_staff_login:
                 _rate_limit_fail(portal="colegios")
                 error = "Usuario o contraseña incorrectos."
-                if _modo_host == "equipo":
-                    error += " Si perteneces a un colegio, ingresa desde la dirección web de tu institución."
             else:
                 staff_activo = True
                 try:
@@ -11983,7 +11999,10 @@ def login():
             except (TypeError, ValueError):
                 inst_id = None
             # Sin captcha en login de colegios (solo equipo Procsis se identifica con la palabra clave PROCSIS)
-            user, _err_id = _login_por_id_acceso(usuario_in, password_in, inst_id)
+            if _pre_user is not None:
+                user, _err_id = _pre_user, None
+            else:
+                user, _err_id = _login_por_id_acceso(usuario_in, password_in, inst_id)
             if user:
                 # Roles internos solo por /soporte-login
                 if (user.rol or "").strip() in ROLES_INTERNOS or (user.rol or "").strip() == "Soporte":
@@ -12069,21 +12088,10 @@ def login():
                 _rate_limit_fail(portal="colegios")
                 error = _err_id or "Usuario o contraseña incorrectos."
 
-    instituciones = Institucion.query.filter(
-        Institucion.estado.in_(["ACTIVA", "CANCELACION_PENDIENTE"])
-    ).order_by(Institucion.nombre.asc()).all() if _modo_host == "legacy" else []
-    if not inst_id and instituciones:
-        inst_id = instituciones[0].id
-    datos = datos_login_institucion(inst_id) if _modo_host != "equipo" else _datos_login_equipo()
-    opciones = (
-        '<option value="PROCSIS">— PROCSIS · Equipo interno —</option>'
-        + "".join(
-            f'<option value="{i.id}" {"selected" if datos.get("id")==i.id else ""}>'
-            f'{(i.codigo or "")} — {i.nombre}'
-            f'{((" · " + (i.municipio or "")) if i.municipio else "")}</option>'
-            for i in instituciones
-        )
-    )
+    # Ya no se arma ninguna lista de colegios: el login es único y el colegio se deduce de las credenciales.
+    # Con subdominio de colegio se muestra su marca; en el dominio principal, la marca genérica de EduTrack.
+    datos = datos_login_institucion(_inst_host.id) if _inst_host is not None else _datos_login_equipo()
+    opciones = ""
     # Mapa institución → sedes (para filtro dinámico en login)
     import json as _json
     sedes_map = {}
@@ -12091,8 +12099,8 @@ def login():
         _qs_sedes = SedeInstitucion.query.filter_by(activa=True)
         if _inst_host is not None:
             _qs_sedes = _qs_sedes.filter_by(institucion_id=_inst_host.id)   # no exponer sedes de otros colegios
-        elif _modo_host == "equipo":
-            _qs_sedes = _qs_sedes.filter(SedeInstitucion.id < 0)
+        else:
+            _qs_sedes = _qs_sedes.filter(SedeInstitucion.id < 0)   # sin colegio identificado no se listan sedes
         for s in _qs_sedes.order_by(SedeInstitucion.tipo.asc(), SedeInstitucion.nombre.asc()).all():
             sedes_map.setdefault(str(s.institucion_id), []).append({
                 "id": s.id,
@@ -12403,7 +12411,7 @@ def login():
               <p style="margin:4px 0 0;font-size:11px;color:#64748b">Si el colegio tiene varias sedes, elija a cuál ingresa.</p>
             </div>
             <label>Usuario</label>
-            <input name="usuario" placeholder="ID de acceso (cédula) · equipo PROCSIS: usuario" required autocomplete="username">
+            <input name="usuario" placeholder="Usuario o ID de acceso (cédula)" required autocomplete="username">
             <label>Contraseña</label>
             <input name="password" type="password" placeholder="Contraseña" required autocomplete="current-password">
             <button type="submit" class="sinai-btn">Iniciar sesión  ›</button>
@@ -81474,12 +81482,10 @@ except Exception as _ex_reset:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  LOGIN POR SUBDOMINIO: cada colegio entra por <subdominio>.<DOMINIO_BASE>
-#  Sin selector de instituciones. Variables de entorno:
-#    DOMINIO_BASE            dominio raíz (por defecto el de DOMINIO_PUBLICO o procsishq.com)
-#    LOGIN_POR_SUBDOMINIO=1  modo estricto: sin selector en ninguna parte; el dominio principal
-#                            solo admite equipo PROCSIS y un subdominio desconocido da 404.
-#                            (Sin esta variable: modo transición, el selector sigue en el dominio principal.)
+#  LOGIN ÚNICO: sin lista de colegios ni opción "equipo". La persona escribe usuario y
+#  contraseña y el sistema identifica su rol y su colegio (_login_resolver_unico).
+#  Opcional: si un colegio entra por su subdominio (<subdominio>.<DOMINIO_BASE>), el ingreso
+#  queda fijado a ese colegio. DOMINIO_BASE = dominio raíz (por defecto el de DOMINIO_PUBLICO).
 # ══════════════════════════════════════════════════════════════════════════════
 import unicodedata as _n_ud
 
@@ -81539,23 +81545,94 @@ def _inst_por_label(label):
 
 
 def _login_modo_host():
-    """('colegio', inst) · ('equipo', None) · ('legacy', None) · ('desconocido', None)."""
-    estricto = os.environ.get("LOGIN_POR_SUBDOMINIO", "0") == "1"
+    """('colegio', inst) si la dirección es la de un colegio; ('unico', None) en cualquier otro caso.
+    En 'unico' no hay lista de colegios: el colegio y el rol se deducen de usuario + contraseña."""
     try:
         label = _subdominio_de_host()
         if label and label not in _SUB_RESERVADOS:
             inst = _inst_por_label(label)
             if inst is not None:
                 return "colegio", inst
-            return ("desconocido" if estricto else "legacy"), None
     except Exception as ex:
         print("login por subdominio:", ex)
         try:
             db.session.rollback()
         except Exception:
             pass
-        return "legacy", None
-    return ("equipo" if estricto else "legacy"), None
+    return "unico", None
+
+
+_STAFF_ROLES_LOGIN = ("Gerente", "Gerencia", "Superadmin", "Administrador", "Comercial", "Ventas", "Supervisor de Ventas",
+                      "Supervisor", "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer")
+
+
+def _login_resolver_unico(ident, password):
+    """Identifica quién es a partir de usuario + contraseña, sin que la persona elija colegio.
+    Devuelve ('staff', []) | ('colegio', [ids de institución]) | ('nada', [])."""
+    ident = (ident or "").strip()
+    password = (password or "").strip()
+    if not ident or not password:
+        return "nada", []
+    canon = _acc_norm(ident)
+    hash_ok = 5 <= len(canon) <= 12
+    h = _acc_hash(canon) if hash_ok else None
+    cands = {}
+    try:
+        if hash_ok:
+            for u in Usuario.query.filter(Usuario.id_acceso_hash == h).limit(25).all():
+                cands[u.id] = u
+        for u in Usuario.query.filter(func.lower(Usuario.usuario) == ident.lower()).limit(25).all():
+            cands[u.id] = u
+    except Exception as ex:
+        print("login único:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return "nada", []
+    acepta_usuario = os.environ.get("LOGIN_ACEPTAR_USUARIO", "0") == "1"
+    staff, verificados = False, []
+    for u in cands.values():
+        es_staff_u = u.institucion_id is None and (u.rol or "").strip() in _STAFF_ROLES_LOGIN
+        por_id = bool(h) and (u.id_acceso_hash or "") == h
+        if not (es_staff_u or por_id or acepta_usuario):
+            continue
+        if not verificar_password(u.password, password):
+            continue
+        if es_staff_u:
+            staff = True
+        elif u.institucion_id is not None:
+            verificados.append(u)
+    if staff:
+        return "staff", []
+    if not verificados:
+        return "nada", []
+    ids = sorted({int(u.institucion_id) for u in verificados})
+    if len(ids) > 1:   # misma persona/clave en varios colegios: se recuerda lo ya verificado para el paso de elección
+        session["_login_pick"] = {"u": {str(u.institucion_id): u.id for u in verificados}, "exp": _n_time.time() + 180}
+    return "colegio", ids
+
+
+def _login_tomar_eleccion(pick):
+    """Devuelve el usuario ya verificado del colegio elegido (uso único, vence a los 3 minutos)."""
+    d = session.pop("_login_pick", None)
+    if not d or _n_time.time() > float(d.get("exp", 0)):
+        return None
+    uid = (d.get("u") or {}).get(str(pick))
+    return Usuario.query.get(uid) if uid else None
+
+
+def _login_pagina_elegir(ids):
+    insts = Institucion.query.filter(Institucion.id.in_(ids)).order_by(Institucion.nombre.asc()).all()
+    btns = "".join(
+        "<form method='POST' action='/login' style='margin:0 0 10px'><input type='hidden' name='pick_inst' value='%d'>"
+        "<button type='submit' style='width:100%%;padding:13px;border:0;border-radius:12px;background:#0B2D57;color:#fff;font-weight:700;cursor:pointer'>%s</button></form>"
+        % (i.id, _esc(i.nombre)) for i in insts)
+    body = ("<div style='max-width:460px;margin:10vh auto;padding:28px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;"
+            "font-family:system-ui,Segoe UI,Arial,sans-serif'><h1 style='margin:0 0 6px;color:#0B2D57;font-size:21px'>¿A cuál institución ingresas?</h1>"
+            "<p style='color:#475569;margin:0 0 16px;font-size:14px'>Tu cuenta existe en más de una institución. Elige una para continuar.</p>"
+            + btns + "<p style='margin:12px 0 0;font-size:12px'><a href='/login'>Volver</a></p></div>")
+    return page("Elige tu institución", body)
 
 
 def _login_host_desconocido():
@@ -81573,7 +81650,7 @@ def _datos_login_equipo():
 
 
 def _login_campo_institucion(modo, inst, opciones):
-    """(rótulo de la tarjeta, HTML del campo de institución) según el modo de acceso."""
+    """(rótulo de la tarjeta, HTML del campo de institución). Sin selector: solo se muestra el colegio si la dirección es la suya."""
     if modo == "colegio" and inst is not None:
         sub = " · " + _esc(inst.municipio) if inst.municipio else ""
         return ("ACCESO · " + _esc(inst.nombre).upper(),
@@ -81581,15 +81658,7 @@ def _login_campo_institucion(modo, inst, opciones):
                 "<div style='width:100%%;box-sizing:border-box;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;"
                 "font-size:14px;margin-bottom:4px;background:#f8fafc;color:#0f172a;font-weight:600'>%s%s</div>"
                 "<input type='hidden' name='institucion_id' id='inst-select' value='%d'>" % (_esc(inst.nombre), sub, inst.id))
-    if modo == "equipo":
-        return ("ACCESO EQUIPO PROCSIS",
-                "<input type='hidden' name='institucion_id' id='inst-select' value='PROCSIS'>"
-                "<p style='margin:0 0 8px;font-size:12px;color:#64748b'>¿Eres de un colegio? Ingresa desde la dirección web de tu institución.</p>")
-    return ("ENCUENTRE SU INSTITUCIÓN",
-            '<label>Institución educativa</label>'
-            '<select name="institucion_id" id="inst-select" required size="1" '
-            'style="width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;margin-bottom:4px;background:#fff">'
-            + (opciones if opciones else '<option value="">Sin instituciones activas</option>') + '</select>')
+    return "INICIAR SESIÓN", ""
 
 
 # ---------- Pantalla de administración: subdominio por colegio ----------
@@ -81636,7 +81705,6 @@ def soporte_subdominios():
         _n_flash("err" if errores else "ok", " · ".join(errores) if errores else "Guardado (%d cambio%s)." % (cambios, "" if cambios == 1 else "s"))
         return redirect("/soporte/subdominios")
     base = _dominio_base()
-    estricto = os.environ.get("LOGIN_POR_SUBDOMINIO", "0") == "1"
     conteo = {}
     for i in insts:
         conteo[_sub_efectivo(i)] = conteo.get(_sub_efectivo(i), 0) + 1
@@ -81652,9 +81720,9 @@ def soporte_subdominios():
     content = f"""{_N_CSS}
 <header class="role-hero"><div><h1>🌐 Subdominios de acceso</h1><p>Cada colegio ingresa por su propia dirección, sin lista de instituciones.</p></div><a class="btn" href="/dashboard">Volver</a></header>
 {_n_flash_html()}
-<section class='nx-card'><h2>Estado</h2>
-<p>Dominio base: <b>{_esc(base)}</b> · Modo: <b>{"ESTRICTO (sin selector en ninguna parte)" if estricto else "TRANSICIÓN (el dominio principal aún muestra el selector)"}</b></p>
-<p class='nx-small'>Para que funcione necesitas un registro DNS comodín <b>*.{_esc(base)}</b> apuntando a esta aplicación y que tu hosting acepte ese dominio (con certificado HTTPS). Cuando todos los colegios entren bien por su dirección, define la variable <b>LOGIN_POR_SUBDOMINIO=1</b> para quitar el selector por completo.</p></section>
+<section class='nx-card'><h2>¿Para qué sirve?</h2>
+<p>El login ya <b>no muestra lista de colegios</b>: la persona escribe usuario y contraseña y el sistema identifica su colegio y su rol. El subdominio es opcional: si un colegio entra por su dirección, el ingreso queda fijado a ese colegio.</p>
+<p class='nx-small'>Dominio base: <b>{_esc(base)}</b>. Para usar direcciones por colegio necesitas un registro DNS comodín <b>*.{_esc(base)}</b> apuntando a esta aplicación y que tu hosting acepte ese dominio con HTTPS.</p></section>
 <section class='nx-card'><h2>Colegios</h2>
 <form method='POST'>{_n_csrf_input()}<div class='nx-scroll'><table><tr><th>Código</th><th>Colegio</th><th>Subdominio (opcional)</th><th>Dirección de acceso</th></tr>{filas or "<tr><td colspan='4'>Sin colegios.</td></tr>"}</table></div>
 <p class='nx-small'>Si lo dejas vacío se usa el código del colegio. Solo letras minúsculas, números y guiones.</p><button>Guardar</button></form></section>"""
