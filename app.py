@@ -4056,6 +4056,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/donaciones", "🎗️ Proyectos y Donaciones"),
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/usuarios", "Usuarios internos"),
+            ("/gerencia/horarios-asesores", "Horarios de asesores"),
             ("/gerencia/auditoria", "Auditoría IP"),
             ("/gerencia/auditoria-total", "Auditoría total (todos los roles)"),
             ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
@@ -7945,8 +7946,16 @@ def _dentro_horario_laboral(u):
     """True si el usuario puede entrar por horario o acceso extraordinario."""
     if not u or not _es_empleado_interno(u.rol):
         return True  # usuarios de colegio: no aplica bloqueo por horario corporativo
-    # Soporte y Superadmin: acceso 24/7 (operación crítica)
     rol = (u.rol or "").strip()
+    # Horario definido por Gerencia (módulo «Horarios de asesores»): manda sobre las reglas anteriores.
+    if rol not in ("Gerente", "Superadmin", "Administrador"):
+        try:
+            _est = _hl_eval(u.id)
+        except Exception:
+            _est = None
+        if _est is not None:
+            return True if _est else _tiene_acceso_extraordinario(u.id)
+    # Soporte y Superadmin: acceso 24/7 (operación crítica)
     if rol in ("Soporte", "Superadmin", "Gerente", "Comercial"):
         return True
     try:
@@ -7975,7 +7984,7 @@ def _dentro_horario_laboral(u):
 
 def _tiene_acceso_extraordinario(usuario_id):
     try:
-        now = ahora().strftime("%Y-%m-%d %H:%M") if hasattr(ahora(), "strftime") else ""
+        now = _hl_ahora().strftime("%Y-%m-%d %H:%M")
         q = AccesoExtraordinario.query.filter_by(usuario_id=usuario_id, activo=True).all()
         for a in q:
             if (a.desde or "") <= now <= (a.hasta or "9999"):
@@ -11903,7 +11912,7 @@ def login():
         error = "La selección expiró por seguridad. Ingresa tus datos nuevamente."
     if _motivo_ret == "horario":
         error = ("Tu usuario está fuera de sus días u horario laboral, por eso no pudo entrar. "
-                 "Pide a Gerencia que ajuste tu horario (Seguridad de empleados) o que te habilite un acceso extraordinario.")
+                 "Pide a Gerencia que ajuste tu horario (Horarios de asesores) o que te habilite un acceso extraordinario.")
     rate_blocked = False
     if request.method == "POST":
         ok_rl, wait_m = _rate_limit_login(portal="colegios")
@@ -82749,6 +82758,333 @@ def soporte_cambios_ver(cid):
     return page(c.codigo, shell(content))
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  HORARIOS DE ASESORES (Gerencia): a qué hora SÍ y a qué hora NO pueden ingresar
+#  · Horario por día de la semana (puede cruzar la medianoche: 22:00 → 06:00).
+#  · Sin horario configurado = sin restricción (se conserva el comportamiento anterior).
+#  · Con horario configurado se exige en CADA petición: al terminar el turno, la sesión se cierra.
+#  · Gerencia/Superadmin/Administrador nunca se bloquean (evita que Gerencia se quede fuera).
+#  · Acceso extraordinario temporal (tabla existente) = excepción autorizada y registrada.
+# ══════════════════════════════════════════════════════════════════════════════
+_HL_ROLES = ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Proveedor")
+_HL_DIAS = {1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves", 5: "Viernes", 6: "Sábado", 7: "Domingo"}
+_HL_DIA_CORTO = {1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb", 7: "Dom"}
+_HL_HORA_RE = _re_hl = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_HL_PRESETS = {
+    "lv_8_18": ("Lun–Vie 08:00–18:00", {1: ("08:00", "18:00"), 2: ("08:00", "18:00"), 3: ("08:00", "18:00"), 4: ("08:00", "18:00"), 5: ("08:00", "18:00")}),
+    "lv_7_19": ("Lun–Vie 07:00–19:00", {d: ("07:00", "19:00") for d in range(1, 6)}),
+    "ls_8_17": ("Lun–Sáb 08:00–17:00", {d: ("08:00", "17:00") for d in range(1, 7)}),
+    "turno_noche": ("Lun–Vie 22:00–06:00 (turno noche)", {d: ("22:00", "06:00") for d in range(1, 6)}),
+    "sin_acceso": ("Sin acceso (bloqueado en todo momento)", {}),
+    "libre": ("Sin restricción (24/7)", None),
+}
+
+
+class HorarioAsesor(db.Model):
+    __tablename__ = "horarios_asesores"
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, index=True)
+    dia = db.Column(db.Integer, default=1)               # 1=lunes … 7=domingo
+    activo = db.Column(db.Boolean, default=True)         # ¿puede ingresar ese día?
+    desde = db.Column(db.String(5), default="08:00")
+    hasta = db.Column(db.String(5), default="18:00")
+    actualizado_por = db.Column(db.String(120), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
+def _hl_ahora():
+    return ahora()
+
+
+def _hl_ensure():
+    if getattr(_hl_ensure, "_ok", False):
+        return True
+    try:
+        HorarioAsesor.__table__.create(db.engine, checkfirst=True)
+        _hl_ensure._ok = True
+        return True
+    except Exception as ex:
+        print("horarios_asesores:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def _hl_filas(uid):
+    return {r.dia: r for r in HorarioAsesor.query.filter_by(usuario_id=uid).all()}
+
+
+def _hl_eval(uid, now=None):
+    """None = sin horario configurado (sin restricción) · True = dentro del horario · False = fuera."""
+    if not _hl_ensure():
+        return None
+    filas = _hl_filas(uid)
+    if not filas:
+        return None
+    now = now or _hl_ahora()
+    wd, hm = now.isoweekday(), now.strftime("%H:%M")
+    r = filas.get(wd)
+    if r and r.activo:
+        d, h = r.desde or "00:00", r.hasta or "23:59"
+        if (d <= h and d <= hm <= h) or (d > h and hm >= d):
+            return True
+    prev = filas.get(7 if wd == 1 else wd - 1)
+    if prev and prev.activo and (prev.desde or "") > (prev.hasta or "") and hm <= (prev.hasta or ""):
+        return True   # tramo posterior a la medianoche de un turno nocturno
+    return False
+
+
+def _hl_resumen(uid_o_filas):
+    filas = uid_o_filas if isinstance(uid_o_filas, dict) else _hl_filas(uid_o_filas)
+    if not filas:
+        return "Sin restricción (24/7)"
+    act = [(d, filas[d].desde, filas[d].hasta) for d in sorted(filas) if filas[d].activo]
+    if not act:
+        return "Sin acceso"
+    grupos, i = [], 0
+    while i < len(act):
+        j = i
+        while j + 1 < len(act) and act[j + 1][0] == act[j][0] + 1 and act[j + 1][1:] == act[i][1:]:
+            j += 1
+        a, b = act[i][0], act[j][0]
+        grupos.append("%s %s–%s" % (_HL_DIA_CORTO[a] if a == b else "%s–%s" % (_HL_DIA_CORTO[a], _HL_DIA_CORTO[b]), act[i][1], act[i][2]))
+        i = j + 1
+    return " · ".join(grupos)
+
+
+def _hl_aplicar(u, preset=None, dias=None, quien=""):
+    """Reemplaza el horario de u. dias: {dia: (desde, hasta)} · preset 'libre' borra todo (sin restricción)."""
+    HorarioAsesor.query.filter_by(usuario_id=u.id).delete()
+    if dias is None:
+        dias = {}
+    if preset != "libre":
+        for d in range(1, 8):
+            if d in dias:
+                db.session.add(HorarioAsesor(usuario_id=u.id, dia=d, activo=True, desde=dias[d][0], hasta=dias[d][1], actualizado_por=quien, actualizado_en=_n_ahora()))
+            else:
+                db.session.add(HorarioAsesor(usuario_id=u.id, dia=d, activo=False, desde="08:00", hasta="18:00", actualizado_por=quien, actualizado_en=_n_ahora()))
+
+
+def _hl_texto_extra_dt(v):
+    v = (v or "").strip().replace("T", " ")[:16]
+    return v if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$", v) else ""
+
+
+@app.route("/gerencia/horarios-asesores", methods=["GET", "POST"])
+def gerencia_horarios_asesores():
+    g_ = _guard_gerencia()
+    if g_ is not None:
+        return g_
+    _hl_ensure()
+    try:
+        AccesoExtraordinario.__table__.create(db.engine, checkfirst=True)
+    except Exception:
+        db.session.rollback()
+    quien = session.get("usuario") or ""
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido, intente de nuevo.")
+            return redirect("/gerencia/horarios-asesores")
+        acc = (request.form.get("accion") or "").strip()
+        rol_f = (request.form.get("rol_filtro") or "").strip()
+        back = "/gerencia/horarios-asesores" + ("?rol=" + rol_f if rol_f in _HL_ROLES else "")
+
+        def _destino(uid):
+            u = db.session.get(Usuario, uid) if uid else None
+            return u if (u is not None and (u.rol or "").strip() in _HL_ROLES) else None
+        try:
+            uid = int(request.form.get("usuario_id") or 0)
+        except Exception:
+            uid = 0
+        if acc == "guardar":
+            u = _destino(uid)
+            if u is None:
+                _n_flash("err", "Usuario no válido para configurar horario.")
+                return redirect(back)
+            dias, err = {}, ""
+            for d in range(1, 8):
+                if request.form.get("act_%d" % d) == "1":
+                    a, b = (request.form.get("d_%d" % d) or "").strip(), (request.form.get("h_%d" % d) or "").strip()
+                    if not (_HL_HORA_RE.match(a) and _HL_HORA_RE.match(b)):
+                        err = "Hora inválida el %s (usa formato 24 h, ej. 08:00)." % _HL_DIAS[d]
+                        break
+                    if a == b:
+                        err = "El %s la hora de entrada y de salida no pueden ser iguales." % _HL_DIAS[d]
+                        break
+                    dias[d] = (a, b)
+            if err:
+                _n_flash("err", err)
+                return redirect(back)
+            antes = _hl_resumen(u.id)
+            _hl_aplicar(u, None, dias, quien)
+            db.session.commit()
+            registrar_auditoria("Horario asesor: actualizado", "%s (%s) · antes: %s → después: %s" % (u.usuario, u.rol, antes, _hl_resumen(u.id)))
+            _n_flash("ok", "Horario de %s actualizado: %s." % (u.usuario, _hl_resumen(u.id)))
+        elif acc == "preset":
+            clave = request.form.get("preset") or ""
+            if clave not in _HL_PRESETS:
+                _n_flash("err", "Plantilla desconocida.")
+                return redirect(back)
+            alcance = request.form.get("alcance") or "usuario"
+            if alcance == "rol":
+                rol_o = (request.form.get("rol_obj") or "").strip()
+                objetivos = Usuario.query.filter(Usuario.rol == rol_o).all() if rol_o in _HL_ROLES else []
+            else:
+                u = _destino(uid)
+                objetivos = [u] if u else []
+            if not objetivos:
+                _n_flash("err", "No hay usuarios a quienes aplicar la plantilla.")
+                return redirect(back)
+            nombre, dias = _HL_PRESETS[clave]
+            for u in objetivos:
+                antes = _hl_resumen(u.id)
+                _hl_aplicar(u, "libre" if dias is None else None, dias or {}, quien)
+                db.session.flush()
+                registrar_auditoria("Horario asesor: plantilla aplicada", "%s (%s) · %s · antes: %s" % (u.usuario, u.rol, nombre, antes))
+            db.session.commit()
+            _n_flash("ok", "Plantilla «%s» aplicada a %d usuario(s)." % (nombre, len(objetivos)))
+        elif acc == "extra":
+            u = _destino(uid)
+            d_, h_ = _hl_texto_extra_dt(request.form.get("desde")), _hl_texto_extra_dt(request.form.get("hasta"))
+            motivo = (request.form.get("motivo") or "").strip()[:300]
+            if u is None or not d_ or not h_ or h_ <= d_:
+                _n_flash("err", "Indica usuario y un rango válido (la hora final debe ser posterior).")
+            elif len(motivo) < 5:
+                _n_flash("err", "Escribe el motivo del acceso extraordinario.")
+            else:
+                db.session.add(AccesoExtraordinario(usuario_id=u.id, autorizado_por=quien, motivo=motivo, desde=d_, hasta=h_, activo=True))
+                db.session.commit()
+                registrar_auditoria("Horario asesor: acceso extraordinario", "%s · %s → %s · %s" % (u.usuario, d_, h_, motivo))
+                _n_flash("ok", "Acceso extraordinario autorizado a %s." % u.usuario)
+        elif acc == "extra_revocar":
+            try:
+                a = db.session.get(AccesoExtraordinario, int(request.form.get("extra_id") or 0))
+            except Exception:
+                a = None
+            if a is not None:
+                a.activo = False
+                db.session.commit()
+                registrar_auditoria("Horario asesor: acceso extraordinario revocado", "id %s · usuario_id %s" % (a.id, a.usuario_id))
+                _n_flash("ok", "Acceso extraordinario revocado.")
+        return redirect(back)
+
+    # ---------------- GET ----------------
+    rol_sel = (request.args.get("rol") or "").strip()
+    q = Usuario.query.filter(Usuario.rol.in_(list(_HL_ROLES)))
+    if rol_sel in _HL_ROLES:
+        q = q.filter(Usuario.rol == rol_sel)
+    usuarios = q.order_by(Usuario.rol.asc(), Usuario.usuario.asc()).limit(300).all()
+    ahora_dt = _hl_ahora()
+    now_s = ahora_dt.strftime("%Y-%m-%d %H:%M")
+    extras_act = {}
+    try:
+        for a in AccesoExtraordinario.query.filter_by(activo=True).all():
+            if (a.hasta or "") >= now_s:
+                extras_act.setdefault(a.usuario_id, []).append(a)
+    except Exception:
+        pass
+    n_en = n_fuera = n_libre = 0
+    filas_html = ""
+    for u in usuarios:
+        filas = _hl_filas(u.id)
+        est = _hl_eval(u.id, ahora_dt)
+        extra_vig = any((a.desde or "") <= now_s <= (a.hasta or "") for a in extras_act.get(u.id, []))
+        if est is None:
+            n_libre += 1
+            tag = "<span class='nx-tag nx-t-gray'>Sin restricción</span>"
+        elif est:
+            n_en += 1
+            tag = "<span class='nx-tag nx-t-ok'>En turno</span>"
+        else:
+            n_fuera += 1
+            tag = "<span class='nx-tag nx-t-bad'>Fuera de turno%s</span>" % (" · acceso extra vigente" if extra_vig else "")
+        inactivo = "" if getattr(u, "activo", True) is not False else " <span class='nx-tag nx-t-gray'>cuenta desactivada</span>"
+        grid = ""
+        for d in range(1, 8):
+            r = filas.get(d)
+            on = bool(r.activo) if r else not filas   # sin filas = formulario nuevo con L–V marcados por defecto
+            if not filas:
+                on = d <= 5
+            grid += ("<tr><td><label style='font-weight:600'><input type='checkbox' name='act_%d' value='1' %s style='width:auto'> %s</label></td>"
+                     "<td><input type='time' name='d_%d' value='%s'></td><td><input type='time' name='h_%d' value='%s'></td></tr>") % (
+                d, "checked" if on else "", _HL_DIAS[d], d, _esc((r.desde if r else "08:00") or "08:00"), d, _esc((r.hasta if r else "18:00") or "18:00"))
+        presets = "".join("<option value='%s'>%s</option>" % (k, _esc(v[0])) for k, v in _HL_PRESETS.items())
+        filas_html += f"""<tr><td><b>{_esc(u.usuario)}</b><div class='nx-small'>{_esc(u.nombre_completo or '')}</div>{inactivo}</td><td>{_esc(u.rol)}</td>
+<td>{tag}</td><td>{_esc(_hl_resumen(filas))}</td>
+<td><details><summary>Editar horario</summary>
+<form method='POST'>{_n_csrf_input()}<input type='hidden' name='accion' value='guardar'><input type='hidden' name='usuario_id' value='{u.id}'><input type='hidden' name='rol_filtro' value='{_esc(rol_sel)}'>
+<table class='nx-mini'><tr><th>Día (puede ingresar)</th><th>Desde</th><th>Hasta</th></tr>{grid}</table>
+<p class='nx-small'>Si «Hasta» es menor que «Desde» (ej. 22:00 → 06:00) el turno cruza la medianoche. Un día sin marcar = no puede ingresar.</p>
+<button class='nx-btn-sm'>Guardar horario</button></form>
+<form method='POST' style='margin-top:8px' class='nx-inline'>{_n_csrf_input()}<input type='hidden' name='accion' value='preset'><input type='hidden' name='usuario_id' value='{u.id}'><input type='hidden' name='rol_filtro' value='{_esc(rol_sel)}'>
+<select name='preset'>{presets}</select> <button class='nx-btn-sm' style='background:#64748b' onclick="return confirm('¿Reemplazar el horario de este usuario?')">Aplicar plantilla</button></form>
+<form method='POST' style='margin-top:8px'>{_n_csrf_input()}<input type='hidden' name='accion' value='extra'><input type='hidden' name='usuario_id' value='{u.id}'><input type='hidden' name='rol_filtro' value='{_esc(rol_sel)}'>
+<div class='nx-small'><b>Acceso extraordinario</b> (excepción temporal)</div>
+<input type='datetime-local' name='desde' required> <input type='datetime-local' name='hasta' required> <input name='motivo' placeholder='Motivo' required style='min-width:160px'> <button class='nx-btn-sm'>Autorizar</button></form>
+</details></td></tr>"""
+    if not filas_html:
+        filas_html = "<tr><td colspan='5'>No hay asesores con ese filtro.</td></tr>"
+    # excepciones vigentes
+    nombres = {x.id: x.usuario for x in Usuario.query.filter(Usuario.id.in_(list(extras_act.keys()) or [0])).all()}
+    ex_html = ""
+    for uid_, lst in extras_act.items():
+        for a in lst:
+            ex_html += (f"<tr><td>{_esc(nombres.get(uid_, uid_))}</td><td>{_esc(a.desde)} → {_esc(a.hasta)}</td><td>{_esc(a.motivo)}</td><td>{_esc(a.autorizado_por)}</td>"
+                        f"<td><form method='POST'>{_n_csrf_input()}<input type='hidden' name='accion' value='extra_revocar'><input type='hidden' name='extra_id' value='{a.id}'><button class='nx-btn-sm' style='background:#b91c1c'>Revocar</button></form></td></tr>")
+    ex_html = ex_html or "<tr><td colspan='5'>No hay accesos extraordinarios vigentes.</td></tr>"
+    # intentos bloqueados recientes
+    bloq = Auditoria.query.filter(or_(Auditoria.accion.ilike("Acceso fuera de horario%"), Auditoria.accion.ilike("Login bloqueado horario%"))).order_by(Auditoria.id.desc()).limit(25).all()
+    bl_html = "".join("<tr><td>%s %s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(b.fecha), _esc(b.hora), _esc(b.usuario), _esc(b.accion), _esc((b.ip or ""))) for b in bloq) or "<tr><td colspan='4'>Sin intentos bloqueados recientes.</td></tr>"
+    tabs = "".join("<a class='btn nx-btn-sm' style='%s' href='/gerencia/horarios-asesores%s'>%s</a> " % (
+        "" if (r == rol_sel) else "background:#64748b", ("?rol=" + r) if r else "", r or "Todos") for r in ("",) + _HL_ROLES)
+    presets_rol = "".join("<option value='%s'>%s</option>" % (k, _esc(v[0])) for k, v in _HL_PRESETS.items())
+    roles_opt = "".join("<option>%s</option>" % r for r in _HL_ROLES)
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🕒 Horarios de asesores</h1><p>Define a qué hora y en qué días puede ingresar cada asesor. Hora de Colombia: <b>{_esc(ahora_dt.strftime('%d/%m/%Y %H:%M'))}</b>. Al terminar el turno, la sesión se cierra sola.</p></div><a class="btn" href="/gerencia/hq">Volver</a></header>
+{_n_flash_html()}
+<section class='nx-card'><div class='nx-grid'>
+<div><b style='font-size:24px;color:#16a34a'>{n_en}</b><div class='nx-small'>En turno ahora</div></div>
+<div><b style='font-size:24px;color:#b91c1c'>{n_fuera}</b><div class='nx-small'>Fuera de turno (sin acceso)</div></div>
+<div><b style='font-size:24px;color:#64748b'>{n_libre}</b><div class='nx-small'>Sin restricción</div></div></div>
+<p class='nx-small'>Quien no tenga horario configurado conserva el acceso sin restricción. Gerencia nunca se bloquea por horario.</p></section>
+<section class='nx-card'><h2>Aplicar plantilla a todo un rol</h2>
+<form method='POST' class='nx-inline'>{_n_csrf_input()}<input type='hidden' name='accion' value='preset'><input type='hidden' name='alcance' value='rol'><input type='hidden' name='rol_filtro' value='{_esc(rol_sel)}'>
+<select name='rol_obj'>{roles_opt}</select> <select name='preset'>{presets_rol}</select>
+<button class='nx-btn-sm' onclick="return confirm('Esto reemplaza el horario de TODOS los usuarios de ese rol. ¿Continuar?')">Aplicar a todo el rol</button></form></section>
+<section class='nx-card'><h2>Asesores</h2><p>{tabs}</p>
+<div class='nx-scroll'><table><tr><th>Usuario</th><th>Rol</th><th>Estado ahora</th><th>Horario</th><th>Configurar</th></tr>{filas_html}</table></div></section>
+<section class='nx-card'><h2>Accesos extraordinarios vigentes</h2><div class='nx-scroll'><table><tr><th>Usuario</th><th>Ventana</th><th>Motivo</th><th>Autorizó</th><th></th></tr>{ex_html}</table></div></section>
+<section class='nx-card'><h2>Intentos bloqueados por horario</h2><div class='nx-scroll'><table><tr><th>Fecha</th><th>Usuario</th><th>Evento</th><th>IP</th></tr>{bl_html}</table></div></section>"""
+    return page("Horarios de asesores", shell(content))
+
+
+@app.before_request
+def _hl_gate_horario_asesores():
+    """Aplica el horario definido por Gerencia en CADA petición (también paneles y APIs), no solo al iniciar sesión."""
+    try:
+        path = request.path or ""
+        if path.startswith(("/static", "/media")) or path in ("/logout", "/salir", "/login", "/api/sesion-estado", "/favicon.ico") or path.endswith("-login"):
+            return None
+        usuario = session.get("usuario")
+        rol = (session.get("rol") or "").strip()
+        if not usuario or rol not in _HL_ROLES:
+            return None
+        uid = session.get("uid")
+        if not uid:
+            u0 = Usuario.query.filter_by(usuario=usuario, rol=rol).first()
+            uid = u0.id if u0 else None
+        if not uid or _hl_eval(uid) is not False or _tiene_acceso_extraordinario(uid):
+            return None
+        registrar_auditoria("Acceso fuera de horario", "Bloqueado %s (%s) en %s · horario: %s" % (usuario, rol, path[:80], _hl_resumen(uid)))
+        session.clear()
+        return redirect("/login?error=horario")
+    except Exception as ex:
+        print("hl_gate:", ex)
+        return None
 
 
 if __name__ == "__main__":
