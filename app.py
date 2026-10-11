@@ -34,7 +34,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from sqlalchemy import func, text, or_
+from sqlalchemy import func, text, or_, and_
 from modules.tenants import (
     init_tenants_db,
     crear_institucion,
@@ -650,6 +650,13 @@ def modulos_plan_actual(inst=None):
                 mods = [str(x).strip() for x in feats["modulos"] if str(x).strip()]
     except Exception:
         mods = []
+    # 1b) Plan de donación: las funciones que Gerencia marcó al crearlo (sin selección = todas)
+    if not mods and str(cod or "").lower().startswith("don-"):
+        try:
+            _dm = _don_mods_de(cod)
+            mods = list(_dm) if _dm is not None else list(dict.fromkeys(list(_DON_TODAS) + list((PLANES_EDUTRACK.get("Premium") or {}).get("modulos") or [])))
+        except Exception:
+            mods = []
     # 2) Fallback diccionario técnico
     if not mods:
         meta = PLANES_EDUTRACK.get(cod)
@@ -795,6 +802,12 @@ def mensaje_plan_no_incluye(path):
 
 def plan_permite_ruta(path=None, inst=None):
     """False si la ruta exige una función que el plan del colegio no incluye."""
+    try:
+        _dp = _don_permite_ruta(path or (request.path if request else ""), inst)
+        if _dp is not None:   # colegio por donación con funciones seleccionadas por Gerencia
+            return _dp
+    except Exception:
+        pass
     if not es_plan_solo_qr(inst):
         try:
             p = (path or (request.path if request else "") or "").split("?")[0]
@@ -3901,6 +3914,18 @@ _APPLE_SHELL_CSS = (
     "padding:10px 14px;border-radius:12px;margin:2px 0;font-weight:400;transition:all .2s ease}"
     ".nav-item-apple:hover{background:rgba(255,255,255,.08);color:#fff}"
     ".nav-item-apple.is-active{background:#005BEA;color:#fff;font-weight:500}"
+    ".nav-group{margin:4px 0;border-radius:12px}"
+    ".nav-group>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;"
+    "letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.6);padding:9px 12px;border-radius:10px;user-select:none}"
+    ".nav-group>summary::-webkit-details-marker{display:none}"
+    ".nav-group>summary:hover{background:rgba(255,255,255,.07);color:#fff}"
+    ".nav-group>summary:after{content:'\\25B8';font-size:12px;transition:transform .15s}"
+    ".nav-group[open]>summary:after{transform:rotate(90deg)}"
+    ".nav-group[open]>summary{color:#fff}"
+    ".nav-group .nav-item-apple{padding:8px 12px 8px 20px;font-size:12.5px}"
+    ".nav-group .cnt{background:rgba(255,255,255,.12);border-radius:999px;padding:0 7px;font-size:10px;margin-left:6px}"
+    ".nav-search input{width:100%;box-sizing:border-box;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:12.5px;margin:4px 0 6px}"
+    ".nav-search input::placeholder{color:rgba(255,255,255,.45)}"
     ".sidebar-footer-legal{font-size:11px;color:rgba(255,255,255,.35);padding:16px 8px 0;margin-top:auto}"
     ".main-content-container{margin-left:260px;width:calc(100% - 260px);min-height:100vh;"
     "display:flex;flex-direction:column;background:#f5f5f7}"
@@ -3983,6 +4008,59 @@ def _staff_module_title(path, rol=""):
     return "<strong>PROCSIS</strong> · Backoffice"
 
 
+_NAV_GRUPOS = {
+    "gerencia": [
+        ("Inicio", ("/gerencia/hq", "/gerencia/hub")),
+        ("Equipo y seguridad", ("/gerencia/usuarios", "/gerencia/equipo-carnes", "/gerencia/horarios-asesores", "/gerencia/turnos", "/seguridad", "/gerencia/validaciones-identidad")),
+        ("Auditoría", ("/gerencia/auditoria", "/gerencia/auditoria-total", "/gerencia/auditoria-instituciones")),
+        ("Tickets y soporte", ("/tickets-doc", "/gerencia/support", "/support", "/gerencia/notificaciones")),
+        ("Colegios y planes", ("/gerencia/colegios-config", "/gerencia/activaciones", "/gerencia/planes", "/gerencia/planes/nuevo", "/gerencia/planes-vendidos",
+                               "/planes/buscar", "/gerencia/beneficios", "/gerencia/donaciones", "/gerencia/rectores", "/gerencia/finanzas/promociones")),
+        ("Contratos y legal", ("/gerencia/plantilla-contrato", "/gerencia/contratos", "/gerencia/legal/consentimientos", "/gerencia/paginas-legales", "/gerencia/textos-legales",
+                               "/gerencia/firmas-corporativas", "/gerencia/retractos", "/gerencia/retractos/config", "/gerencia/retractos/reembolsos")),
+        ("Correos", ("/gerencia/correo-soporte", "/gerencia/correo-notificaciones", "/gerencia/correo-extra/1", "/gerencia/correo-extra/2", "/gerencia/correo-extra/3")),
+        ("Empresa y web", ("/gerencia/datos-empresa", "/gerencia/web-corporativa", "/gerencia/web-menu", "/gerencia/pie-login")),
+        ("Reportes", ("/gerencia/reportes", "/gerencia/indicadores")),
+    ],
+    "soporte": [
+        ("Inicio", ("/soporte_admin",)),
+        ("Colegios", ("/soporte/instituciones", "/tenants", "/soporte/periodos-colegio", "/soporte/planes-vendidos", "/planes/buscar", "/soporte/prorroga")),
+        ("Usuarios y seguridad", ("/soporte/bloqueo-carne", "/soporte/validacion-identidad", "/soporte/impersonar", "/soporte/cambios", "/soporte/reset-clave", "/usuarios", "/seguridad")),
+        ("Tickets y PQR", ("/tickets-doc", "/soporte/pqr", "/soporte/pqr/crear", "/soporte/pqr/consulta")),
+        ("Auditoría y sistema", ("/soporte/auditoria-colegios", "/soporte/logs-errores", "/servidores")),
+        ("Ayuda y contenido", ("/soporte/actualizaciones", "/support", "/support/editor", "/contacto")),
+    ],
+}
+
+
+def _nav_agrupar(filas, grupos):
+    """Menú lateral en secciones plegables + buscador, para no tener que bajar por decenas de opciones."""
+    por_href = {h: (h, l, a) for h, l, a in filas}
+    usados, bloques = set(), []
+    def _a(h, l, a):
+        return '<a class="nav-item-apple' + a + '" href="' + h + '">' + l + "</a>"
+    for nombre, hrefs in grupos:
+        its = [por_href[h] for h in hrefs if h in por_href and h not in usados]
+        if not its:
+            continue
+        usados.update(h for h, _l, _a_ in its)
+        abierto = any("is-active" in a for _h, _l, a in its)
+        bloques.append('<details class="nav-group" data-g="%s"%s><summary><span>%s<span class="cnt">%d</span></span></summary>%s</details>' % (
+            nombre, " open" if abierto else "", nombre, len(its), "".join(_a(*x) for x in its)))
+    resto = [x for x in filas if x[0] not in usados and x[0] != "/logout"]
+    if resto:
+        abierto = any("is-active" in a for _h, _l, a in resto)
+        bloques.append('<details class="nav-group" data-g="Otros"%s><summary><span>Otros<span class="cnt">%d</span></span></summary>%s</details>' % (
+            " open" if abierto else "", len(resto), "".join(_a(*x) for x in resto)))
+    salir = "".join(_a(*x) for x in filas if x[0] == "/logout")
+    js = ("<script>(function(){var q=document.getElementById('nav-q');if(!q)return;var gs=[].slice.call(document.querySelectorAll('.nav-group'));"
+          "try{var st=JSON.parse(localStorage.getItem('navg')||'{}');gs.forEach(function(g){var k=g.getAttribute('data-g');if(st[k]===1)g.open=true;});}catch(e){}"
+          "gs.forEach(function(g){g.addEventListener('toggle',function(){if(q.value)return;try{var st=JSON.parse(localStorage.getItem('navg')||'{}');st[g.getAttribute('data-g')]=g.open?1:0;localStorage.setItem('navg',JSON.stringify(st));}catch(e){}});});"
+          "q.addEventListener('input',function(){var t=q.value.trim().toLowerCase();gs.forEach(function(g){var n=0;[].forEach.call(g.querySelectorAll('a'),function(a){var ok=!t||a.textContent.toLowerCase().indexOf(t)>-1;a.style.display=ok?'':'none';if(ok)n++;});"
+          "g.style.display=n?'':'none';if(t)g.open=n>0;});});})();</script>")
+    return '<div class="nav-search"><input id="nav-q" type="search" placeholder="Buscar módulo…" autocomplete="off"></div>' + "".join(bloques) + salir + js
+
+
 def _staff_nav_items(path, rol=""):
     """Menú lateral por ROL (no por URL). Login único: /backoffice."""
     path = path or ""
@@ -3997,6 +4075,7 @@ def _staff_nav_items(path, rol=""):
             ("/dev-console?tab=anuncios", "Seguridad"),
             ("/dev-console?tab=temas", "Diseño / CSS"),
             ("/gerencia/planes/nuevo", "Crear plan (técnico)"),
+            ("/tickets-doc", "Tickets por área"),
             ("/seguridad", "Seguridad e incidentes"),
             ("/gerencia/hub", "Tablero maestro"),
             ("/logout", "Salir"),
@@ -4009,6 +4088,7 @@ def _staff_nav_items(path, rol=""):
             ("/ventas/beneficios", "Beneficios / planes"),
             ("/ventas/planes-vendidos", "Planes vendidos"),
             ("/planes/buscar", "Buscar planes"),
+            ("/tickets-doc", "Tickets por área"),
             ("/logout", "Salir"),
         ]
     elif rol == "Soporte":
@@ -4030,10 +4110,11 @@ def _staff_nav_items(path, rol=""):
             ("/soporte/pqr", "Centro PQR"),
             ("/soporte/pqr/crear", "Radicar PQR interna"),
             ("/soporte/pqr/consulta", "Consulta validada"),
+            ("/tickets-doc", "Tickets por área"),
             ("/support", "Support"),
             ("/support/editor", "Redactar en Support"),
             ("/contacto", "Vista contacto público"),
-            ("/auditoria", "Auditoría"),
+            ("/soporte/auditoria-colegios", "Auditoría de colegios (cambios)"),
             ("/planes/buscar", "Buscar planes"),
             ("/soporte/planes-vendidos", "Planes activos / vendidos"),
             ("/seguridad", "Seguridad e incidentes"),
@@ -4056,7 +4137,9 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/donaciones", "🎗️ Proyectos y Donaciones"),
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/usuarios", "Usuarios internos"),
+            ("/gerencia/equipo-carnes", "Carnés del equipo"),
             ("/gerencia/horarios-asesores", "Horarios de asesores"),
+            ("/tickets-doc", "Tickets por área"),
             ("/gerencia/auditoria", "Auditoría IP"),
             ("/gerencia/auditoria-total", "Auditoría total (todos los roles)"),
             ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
@@ -4107,6 +4190,7 @@ def _staff_nav_items(path, rol=""):
         items = [("/login", "Portal de acceso"), ("/logout", "Salir")]
 
     html = []
+    filas_nav = []
     try:
         full = (request.full_path or path or "").split("#")[0]
     except Exception:
@@ -4131,6 +4215,10 @@ def _staff_nav_items(path, rol=""):
         else:
             active = " is-active" if (path == href or path.startswith(href.rstrip("/") + "/")) else ""
         html.append('<a class="nav-item-apple' + active + '" href="' + href + '">' + lab + "</a>")
+        filas_nav.append((href, lab, active))
+    grupos = _NAV_GRUPOS.get("gerencia" if rol in ("Gerente", "Superadmin", "Administrador", "Gerencia") else ("soporte" if rol == "Soporte" else ""))
+    if grupos and len(items) > 12:
+        return _nav_agrupar(filas_nav, grupos)
     return "".join(html)
 
 
@@ -18526,6 +18614,9 @@ function limpiarForm(){{
 def auditoria():
     if not requiere_login(): return redirect("/login")
     if not puede_auditoria(): return acceso_denegado()
+    if rol_actual() == "Soporte":
+        # Soporte solo ve los cambios de los usuarios de los colegios (nada interno ni de sus compañeros).
+        return redirect("/soporte/auditoria-colegios")
     mensaje = ""
     if request.method == "POST":
         if rol_actual() != "Soporte":
@@ -21063,6 +21154,8 @@ def _bloquear_auditoria_boletines_soporte():
         if rol != "Soporte":
             return None
         p = request.path or ""
+        if p == "/auditoria":
+            return redirect("/soporte/auditoria-colegios")   # Soporte solo ve los cambios de los colegios
         if p.startswith("/auditoria") or p.startswith("/soporte/boletines") or p.startswith("/gerencia/auditoria"):
             return acceso_denegado("Auditoría y boletines son exclusivos de Gerencia. Soporte no tiene acceso a este módulo.")
     except Exception:
@@ -33632,6 +33725,7 @@ def gerencia_usuarios():
       <h1 style="margin:0;color:#0B2D57">Gerencia · Equipo y roles</h1>
       <p style="margin:4px 0 0;color:#64748b;font-size:13px">Cree, renombre, desactive o elimine usuarios de Ventas, Soporte, Cobranza y Gerencia</p>
     </div>
+    <a href="/gerencia/equipo-carnes" style="margin-left:auto;background:#0B2D57;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">🪪 Carnés del equipo</a>
   </div>
   {"<p style='color:#16a34a;background:#f0fdf4;padding:10px;border-radius:8px'>"+msg+"</p>" if msg else ""}
   {"<p style='color:#b91c1c;background:#fef2f2;padding:10px;border-radius:8px'>"+error+"</p>" if error else ""}
@@ -33663,7 +33757,7 @@ def gerencia_usuarios():
       {filas or '<tr><td colspan="5" style="padding:16px">Sin usuarios internos aún</td></tr>'}
     </table>
   </div>
-  <p style="margin-top:14px;font-size:13px"><a href="/gerencia/hq">← HQ Gerencia</a> · <a href="/gerencia/planes">Planes</a> · <a href="/ventas/panel">Panel ventas</a></p>
+  <p style="margin-top:14px;font-size:13px"><a href="/gerencia/equipo-carnes" style="font-weight:700">🪪 Carnés del equipo</a> · <a href="/gerencia/horarios-asesores">🕒 Horarios de asesores</a> · <a href="/gerencia/hq">← HQ Gerencia</a> · <a href="/gerencia/planes">Planes</a> · <a href="/ventas/panel">Panel ventas</a></p>
   <p style="font-size:12px;color:#64748b">Para cambiar <b>su propio nombre de ingreso</b> al portal de gerencia, use la acción Renombrar en su fila de la tabla.</p>
 </div>
 """
@@ -38195,7 +38289,7 @@ def _modulos_por_rol(rol):
         ("Vista contacto público", "/contacto", "#0f766e"),
         ("Buscar planes", "/planes/buscar", "#1d4ed8"),
         ("Planes activos / vendidos", "/soporte/planes-vendidos", "#1d4ed8"),
-        ("Auditoría", "/auditoria", "#64748b"),
+        ("Auditoría de colegios", "/soporte/auditoria-colegios", "#64748b"),
         ("Periodos por colegio (3/4)", "/soporte/periodos-colegio", "#0B2D57"),
     ]
     ventas = [
@@ -49768,6 +49862,10 @@ class TicketDoc(db.Model):
     rechazado_por = db.Column(db.String(80), default="")
     rechazado_en = db.Column(db.String(30), default="")
     rechazo_motivo = db.Column(db.Text, default="")
+    area_destino = db.Column(db.String(20), default="")      # Soporte | Cobranza | Contabilidad | Desarrollo | Comercial | Gerencia
+    asignado_a = db.Column(db.String(80), default="")
+    resuelto_por = db.Column(db.String(80), default="")
+    resuelto_en = db.Column(db.String(30), default="")
 
 
 class TicketDocEvento(db.Model):
@@ -50353,7 +50451,8 @@ _TD_TIPOS = (("ajuste_tarifa", "Ajuste de Tarifa SaaS"), ("validacion_precio", "
 _TD_LIMITE_DESC = 15.0  # % de descuento sobre el cual el ticket salta al CEO
 _TD_ESTADOS = {"PEND_CONTABILIDAD": ("Pendiente Contabilidad", "#b45309"), "PEND_CEO": ("Pendiente CEO", "#b91c1c"),
                "APROBADO": ("Aprobado", "#15803d"), "AUTORIZADO": ("Autorizado por el CEO", "#15803d"),
-               "APLICADO": ("Aplicado", "#334155"), "RECHAZADO": ("Rechazado", "#7f1d1d")}
+               "APLICADO": ("Aplicado", "#334155"), "RECHAZADO": ("Rechazado", "#7f1d1d"),
+               "ABIERTO": ("Abierto", "#b45309"), "EN_PROCESO": ("En proceso", "#1d4ed8"), "RESUELTO": ("Resuelto", "#15803d")}
 
 
 def _td_evento(t, accion, detalle=""):
@@ -50367,20 +50466,76 @@ def _td_guard():
     if rol_actual() not in _ROLES_TICKET:
         return acceso_denegado("Este módulo es para roles internos de PROCSIS.")
     _seg_ensure()
+    _td_cols()
     return None
 
 
 _TD_COBRANZA_VE = ("PEND_CEO", "APROBADO", "AUTORIZADO", "APLICADO")
+# Área a la que va el ticket → qué roles la atienden. «Contabilidad» es el flujo financiero (Contabilidad → CEO → Cobranza aplica).
+_TD_AREAS = {
+    "Soporte": ("Soporte", ("Soporte",)),
+    "Cobranza": ("Cobranza", ("Cobranza",)),
+    "Contabilidad": ("Contabilidad (flujo financiero)", ("Contabilidad",)),
+    "Desarrollo": ("Desarrollo", ("Desarrollador", "Developer")),
+    "Comercial": ("Comercial / Ventas", ("Comercial",)),
+    "Gerencia": ("Gerencia", ("Gerente", "Superadmin", "Administrador")),
+}
+# Tipos por área (el formulario muestra solo los de la área elegida). Contabilidad usa los financieros de _TD_TIPOS.
+_TD_TIPOS_AREA = {
+    "Soporte": (("incidente_tecnico", "Incidente técnico"), ("solicitud_soporte", "Solicitud de soporte"), ("cambio_datos", "Cambio de datos de un usuario o colegio"), ("otro_soporte", "Otro")),
+    "Cobranza": (("gestion_cartera", "Gestión de cartera / cobro"), ("consulta_pago", "Consulta o verificación de un pago"), ("otro_cobranza", "Otro")),
+    "Desarrollo": (("bug", "Error en el sistema (bug)"), ("nueva_funcion", "Nueva funcionalidad"), ("mejora", "Mejora de algo existente"), ("otro_desarrollo", "Otro")),
+    "Comercial": (("solicitud_comercial", "Solicitud comercial / cliente"), ("otro_comercial", "Otro")),
+    "Gerencia": (("autorizacion", "Decisión o autorización"), ("otro_gerencia", "Otro")),
+}
+_TD_TIPOS_TODOS = dict(_TD_TIPOS)
+for _a, _ts_ in _TD_TIPOS_AREA.items():
+    _TD_TIPOS_TODOS.update(dict(_ts_))
+_TD_COLS_OK = {"ok": False}
+
+
+def _td_cols():
+    """Añade las columnas nuevas a tickets_doc si la tabla ya existía (idempotente)."""
+    if _TD_COLS_OK["ok"]:
+        return
+    try:
+        from sqlalchemy import inspect as _insp
+        ins = _insp(db.engine)
+        if "tickets_doc" not in ins.get_table_names():
+            return
+        existentes = {c["name"] for c in ins.get_columns("tickets_doc")}
+        for col, ddl in (("area_destino", "VARCHAR(20) DEFAULT ''"), ("asignado_a", "VARCHAR(80) DEFAULT ''"),
+                         ("resuelto_por", "VARCHAR(80) DEFAULT ''"), ("resuelto_en", "VARCHAR(30) DEFAULT ''")):
+            if col not in existentes:
+                db.session.execute(db.text("ALTER TABLE tickets_doc ADD COLUMN %s %s" % (col, ddl)))
+        db.session.commit()
+        _TD_COLS_OK["ok"] = True
+    except Exception as ex:
+        db.session.rollback()
+        print("tickets_doc cols:", ex)
+
+
+def _td_area(t):
+    """Área efectiva (los tickets antiguos sin área son del flujo financiero)."""
+    return (getattr(t, "area_destino", "") or "") or "Contabilidad"
+
+
+def _td_area_de_rol(rol):
+    for k, (_lab, roles) in _TD_AREAS.items():
+        if rol in roles:
+            return k
+    return ""
 
 
 def _td_puede_ver(rol, usuario, t):
     """Contabilidad y Gerencia ven todo. Cobranza ve los suyos y todos los que ya pasaron a su etapa
     (pendiente de CEO, aprobado, autorizado, aplicado): es quien debe aplicar el cambio. El resto solo los que creó."""
-    if rol in ("Contabilidad",) + _ROLES_GERENCIA:
+    if rol in _ROLES_GERENCIA or t.creado_por == usuario:
         return True
-    if t.creado_por == usuario:
-        return True
-    return rol == "Cobranza" and (t.estado in _TD_COBRANZA_VE)
+    area = _td_area(t)
+    if rol in _TD_AREAS.get(area, ("", ()))[1]:
+        return True     # el ticket va dirigido a su área
+    return area == "Contabilidad" and rol == "Cobranza" and (t.estado in _TD_COBRANZA_VE)
 
 
 def _td_badge(est):
@@ -50411,26 +50566,55 @@ def tickets_doc_lista():
         return g
     rol, usuario = rol_actual(), session.get("usuario") or ""
     q = TicketDoc.query
-    if rol == "Cobranza":
-        q = q.filter(or_(TicketDoc.creado_por == usuario, TicketDoc.estado.in_(_TD_COBRANZA_VE)))
-    elif rol not in ("Contabilidad",) + _ROLES_GERENCIA:
+    mi_area = _td_area_de_rol(rol)
+    if rol not in _ROLES_GERENCIA:
+        conds = [TicketDoc.creado_por == usuario]
+        if mi_area:
+            conds.append(TicketDoc.area_destino == mi_area)
+            if mi_area == "Contabilidad":
+                conds.append(or_(TicketDoc.area_destino.is_(None), TicketDoc.area_destino == ""))
+        if rol == "Cobranza":   # además, lo financiero que ya llegó a su etapa para aplicar
+            conds.append(and_(or_(TicketDoc.area_destino.is_(None), TicketDoc.area_destino == "", TicketDoc.area_destino == "Contabilidad"),
+                              TicketDoc.estado.in_(_TD_COBRANZA_VE)))
+        q = q.filter(or_(*conds))
+    area_f = (request.args.get("area") or "").strip()
+    if area_f in _TD_AREAS:
+        if area_f == "Contabilidad":
+            q = q.filter(or_(TicketDoc.area_destino.is_(None), TicketDoc.area_destino == "", TicketDoc.area_destino == "Contabilidad"))
+        else:
+            q = q.filter(TicketDoc.area_destino == area_f)
+    vista = (request.args.get("vista") or "").strip()
+    if vista == "mios":
         q = q.filter(TicketDoc.creado_por == usuario)
+    elif vista == "area" and mi_area and rol not in _ROLES_GERENCIA:
+        if mi_area == "Contabilidad":
+            q = q.filter(or_(TicketDoc.area_destino.is_(None), TicketDoc.area_destino == "", TicketDoc.area_destino == "Contabilidad"))
+        else:
+            q = q.filter(TicketDoc.area_destino == mi_area)
     est = (request.args.get("estado") or "").strip()
     if est in _TD_ESTADOS:
         q = q.filter(TicketDoc.estado == est)
     rows = q.order_by(TicketDoc.id.desc()).limit(200).all()
     tr = "".join(
-        "<tr style='border-bottom:1px solid #e2e8f0'><td><a href='/tickets-doc/%d'><b>%s</b></a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
-            t.id, _esc(t.codigo), _esc(t.titulo), _esc(t.institucion_codigo or "—"),
+        "<tr style='border-bottom:1px solid #e2e8f0'><td><a href='/tickets-doc/%d'><b>%s</b></a></td><td>%s<div class='mini-text'>%s</div></td><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            t.id, _esc(t.codigo), _esc(t.titulo), _esc(_TD_TIPOS_TODOS.get(t.tipo, t.tipo)), _esc(_TD_AREAS[_td_area(t)][0]), _esc(t.institucion_codigo or "—"),
             "<b style='color:#b91c1c'>ALTA</b>" if t.importancia == "ALTA" else "Normal", _td_badge(t.estado), _esc((t.creado_en or "")[:16]))
-        for t in rows) or "<tr><td colspan='6' style='padding:16px;text-align:center;color:#64748b'>Sin tickets.</td></tr>"
-    chips = "".join("<a class='btn' style='padding:5px 12px;font-size:12px' href='?estado=%s'>%s</a>" % (k, v[0]) for k, v in _TD_ESTADOS.items())
-    content = ("<header class='role-hero'><div><h1>📄 Tickets documentales</h1><p>Solicitudes que requieren validación: Contabilidad revisa la cartera y, si es crítico, "
-               "el CEO autoriza con token. Hasta entonces Cobranza no puede aplicar el cambio.</p></div></header>"
-               "<section class='role-panel'><div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px'><a class='btn' href='/tickets-doc/nuevo'>➕ Nuevo ticket</a>%s</div>"
+        for t in rows) or "<tr><td colspan='7' style='padding:16px;text-align:center;color:#64748b'>Sin tickets.</td></tr>"
+    def _chip(href, txt, on=False):
+        return "<a class='btn' style='padding:5px 12px;font-size:12px;%s' href='%s'>%s</a>" % ("" if on else "background:#64748b", href, txt)
+    ch_vista = _chip("/tickets-doc", "Todos los míos y de mi área", not vista and not area_f and not est) + _chip("/tickets-doc?vista=mios", "Los que yo creé", vista == "mios")
+    if mi_area and rol not in _ROLES_GERENCIA:
+        ch_vista += _chip("/tickets-doc?vista=area", "Dirigidos a mi área (%s)" % _TD_AREAS[mi_area][0].split(" (")[0], vista == "area")
+    ch_area = "".join(_chip("/tickets-doc?area=%s" % k, v[0].split(" (")[0], area_f == k) for k, v in _TD_AREAS.items())
+    ch_est = "".join(_chip("/tickets-doc?estado=%s" % k, v[0], est == k) for k, v in _TD_ESTADOS.items())
+    content = ("<header class='role-hero'><div><h1>📄 Tickets</h1><p>Cada ticket se envía a un <b>área</b> (Soporte, Cobranza, Contabilidad, Desarrollo, Comercial o Gerencia) y lo atiende quien la integra. "
+               "Los financieros pasan por Contabilidad y, si es crítico, por el CEO con token, antes de que Cobranza aplique el cambio.</p></div></header>"
+               "<section class='role-panel'><div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px'><a class='btn' href='/tickets-doc/nuevo'>➕ Nuevo ticket</a>%s</div>"
+               "<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px'><span class='mini-text' style='align-self:center'>Área:</span>%s</div>"
+               "<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px'><span class='mini-text' style='align-self:center'>Estado:</span>%s</div>"
                "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'><tr style='background:#0B2D57;color:#fff'>"
-               "<th style='padding:8px;text-align:left'>Ticket</th><th style='text-align:left'>Asunto</th><th style='text-align:left'>Colegio</th><th style='text-align:left'>Importancia</th><th style='text-align:left'>Estado</th><th style='text-align:left'>Creado</th></tr>%s</table></div></section>") % (chips, tr)
-    return page("Tickets documentales", shell(content))
+               "<th style='padding:8px;text-align:left'>Ticket</th><th style='text-align:left'>Asunto</th><th style='text-align:left'>Área</th><th style='text-align:left'>Colegio</th><th style='text-align:left'>Importancia</th><th style='text-align:left'>Estado</th><th style='text-align:left'>Creado</th></tr>%s</table></div></section>") % (ch_vista, ch_area, ch_est, tr)
+    return page("Tickets", shell(content))
 
 
 @app.route("/tickets-doc/nuevo", methods=["GET", "POST"])
@@ -50439,21 +50623,28 @@ def tickets_doc_nuevo():
     if g is not None:
         return g
     err = ""
+    f = request.form
     if request.method == "POST":
-        f = request.form
+        area = f.get("area_destino", "")
         tipo = f.get("tipo", "")
         titulo = (f.get("titulo") or "").strip()[:220]
         just = (f.get("justificacion") or "").strip()
         iid = f.get("institucion_id", type=int)
+        fin = (area == "Contabilidad")
+        tipos_ok = dict(_TD_TIPOS) if fin else dict(_TD_TIPOS_AREA.get(area, ()))
         va, vs = _cta_dec(f.get("valor_actual")), _cta_dec(f.get("valor_solicitado"))
         archivo = request.files.get("adjunto")
-        if tipo not in dict(_TD_TIPOS) or not titulo or len(just) < 20:
-            err = "Completa el tipo, el asunto y una justificación de al menos 20 caracteres."
-        elif not archivo or not archivo.filename:
-            err = "Adjunta el documento de soporte."
-        elif not _step_up_form_ok():
+        con_archivo = bool(archivo and archivo.filename)
+        if area not in _TD_AREAS:
+            err = "Elige el área a la que va el ticket (Soporte, Cobranza, Contabilidad, Desarrollo…)."
+        elif tipo not in tipos_ok or not titulo or len(just) < 20:
+            err = "Completa el tipo, el asunto y una descripción de al menos 20 caracteres."
+        elif fin and not con_archivo:
+            err = "Los tickets financieros (Contabilidad) requieren el documento de soporte."
+        elif fin and not _step_up_form_ok():
             err = "No se pudo validar tu identidad. Revisa tu contraseña / código."
-        if not err:
+        data, ext = b"", ""
+        if not err and con_archivo:
             data = archivo.read(5 * 1024 * 1024 + 1)
             ext = (archivo.filename.rsplit(".", 1)[-1] if "." in archivo.filename else "").lower()
             if len(data) > 5 * 1024 * 1024:
@@ -50463,38 +50654,59 @@ def tickets_doc_nuevo():
         if not err:
             inst = Institucion.query.get(iid) if iid else None
             pct = 0.0
-            if va > 0 and vs >= 0 and vs < va:
+            if fin and va > 0 and vs >= 0 and vs < va:
                 pct = float((va - vs) / va * 100)
-            alta = (tipo == "cambio_contrato") or pct > _TD_LIMITE_DESC or bool(f.get("critico"))
+            alta = ((tipo == "cambio_contrato") or pct > _TD_LIMITE_DESC or bool(f.get("critico"))) if fin else (f.get("prioridad") == "ALTA")
             n = TicketDoc.query.filter(TicketDoc.codigo.like("TD-%s-%%" % fecha_hoy()[:4])).count() + 1
             t = TicketDoc(codigo="TD-%s-%04d" % (fecha_hoy()[:4], n), tipo=tipo, titulo=titulo, justificacion=just, institucion_id=iid,
                           institucion_codigo=(inst.codigo if inst else ""), institucion_nombre=(inst.nombre if inst else ""),
-                          valor_actual=va, valor_solicitado=vs, porcentaje=round(pct, 2), importancia="ALTA" if alta else "NORMAL",
-                          estado="PEND_CONTABILIDAD", creado_por=session.get("usuario") or "", creado_rol=rol_actual() or "", creado_en=_ts(),
-                          adjunto_nombre=re.sub(r"[^\w.\- ]", "_", archivo.filename)[:200], adjunto_mime=(archivo.mimetype or "")[:80], adjunto_bytes=data)
+                          valor_actual=va if fin else 0, valor_solicitado=vs if fin else 0, porcentaje=round(pct, 2), importancia="ALTA" if alta else "NORMAL",
+                          estado="PEND_CONTABILIDAD" if fin else "ABIERTO", area_destino=area,
+                          creado_por=session.get("usuario") or "", creado_rol=rol_actual() or "", creado_en=_ts(),
+                          adjunto_nombre=re.sub(r"[^\w.\- ]", "_", archivo.filename)[:200] if con_archivo else "",
+                          adjunto_mime=(archivo.mimetype or "")[:80] if con_archivo else "", adjunto_bytes=data if con_archivo else None)
             db.session.add(t)
             db.session.flush()
-            _td_evento(t, "Creó el ticket", "%s · importancia %s" % (dict(_TD_TIPOS)[tipo], t.importancia))
+            _td_evento(t, "Creó el ticket", "Área: %s · %s · importancia %s" % (_TD_AREAS[area][0], tipos_ok[tipo], t.importancia))
             db.session.commit()
-            _notif_crear(("Contabilidad",), "Nuevo ticket documental %s" % t.codigo, "%s · %s" % (t.institucion_codigo or "sin colegio", titulo), "/tickets-doc/%d" % t.id)
+            _notif_crear(_TD_AREAS[area][1], "Nuevo ticket %s para %s" % (t.codigo, _TD_AREAS[area][0].split(" (")[0]),
+                         "%s · %s" % (t.institucion_codigo or "sin colegio", titulo), "/tickets-doc/%d" % t.id, None, "alerta" if alta else "info")
             return redirect("/tickets-doc/%d" % t.id)
     insts = Institucion.query.order_by(Institucion.codigo).all()
     opt_i = "<option value=''>— Sin colegio —</option>" + "".join("<option value='%d'>%s · %s</option>" % (i.id, _esc(i.codigo), _esc(i.nombre)) for i in insts)
-    opt_t = "".join("<option value='%s'>%s</option>" % (k, v) for k, v in _TD_TIPOS)
+    sel_area = f.get("area_destino", "") if request.method == "POST" else (request.args.get("area") or "")
+    opt_a = "<option value=''>— Elige el área —</option>" + "".join("<option value='%s' %s>%s</option>" % (k, "selected" if k == sel_area else "", _esc(v[0])) for k, v in _TD_AREAS.items())
+    opt_t = "".join("<option value='%s' data-area='Contabilidad'>%s</option>" % (k, _esc(v)) for k, v in _TD_TIPOS)
+    for a_, ts_ in _TD_TIPOS_AREA.items():
+        opt_t += "".join("<option value='%s' data-area='%s'>%s</option>" % (k, a_, _esc(v)) for k, v in ts_)
     inp = "padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box"
     aviso = ("<div class='msg danger'>%s</div>" % _esc(err)) if err else ""
-    content = ("<header class='role-hero'><div><h1>➕ Nuevo ticket documental</h1></div></header>%s<section class='role-panel'>"
+    js = """<script>(function(){var a=document.getElementById('tk-area'),t=document.getElementById('tk-tipo'),fin=document.querySelectorAll('.tk-fin'),ope=document.querySelectorAll('.tk-ope'),ad=document.getElementById('tk-adj'),hint=document.getElementById('tk-hint');
+var H={Contabilidad:'Flujo financiero: Contabilidad revisa la cartera y, si es crítico, el CEO autoriza con token; luego Cobranza aplica el cambio.',Soporte:'Lo atiende el equipo de Soporte.',Cobranza:'Lo atiende el equipo de Cobranza.',Desarrollo:'Lo atiende el equipo de Desarrollo.',Comercial:'Lo atiende el equipo Comercial.',Gerencia:'Lo atiende Gerencia.'};
+function up(){var v=a.value,first=null;[].forEach.call(t.options,function(o){var ok=o.getAttribute('data-area')===v;o.hidden=!ok;o.disabled=!ok;if(ok&&!first)first=o;});
+if(t.selectedOptions[0]&&t.selectedOptions[0].disabled){t.value=first?first.value:'';}
+fin.forEach(function(e){var on=(v==='Contabilidad');e.style.display=on?'':'none';[].forEach.call(e.querySelectorAll('input,select,textarea'),function(x){x.disabled=!on;});});ope.forEach(function(e){var on=(v&&v!=='Contabilidad');e.style.display=on?'':'none';[].forEach.call(e.querySelectorAll('input,select,textarea'),function(x){x.disabled=!on;});});
+ad.required=(v==='Contabilidad');hint.textContent=H[v]||'Elige primero el área: según ella cambian los tipos de ticket y el proceso.';t.disabled=!v;}
+a.addEventListener('change',up);up();})();</script>"""
+    campos_su = _step_up_campos()
+    content = ("<header class='role-hero'><div><h1>➕ Nuevo ticket</h1><p>Primero elige el <b>área</b> a la que va: el sistema muestra los tipos y el proceso que le corresponden.</p></div><a class='btn' href='/tickets-doc'>← Tickets</a></header>%s<section class='role-panel'>"
                "<form method='POST' enctype='multipart/form-data'><div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px'>"
-               "<div><label><b>Tipo *</b></label><select name='tipo' required style='%s'>%s</select></div>"
+               "<div><label><b>Área destino *</b></label><select name='area_destino' id='tk-area' required style='%s'>%s</select></div>"
+               "<div><label><b>Tipo *</b></label><select name='tipo' id='tk-tipo' required style='%s'>%s</select></div>"
                "<div><label><b>Colegio</b></label><select name='institucion_id' style='%s'>%s</select></div>"
-               "<div><label><b>Valor actual (COP)</b></label><input name='valor_actual' placeholder='900.000' style='%s'></div>"
-               "<div><label><b>Valor solicitado (COP)</b></label><input name='valor_solicitado' placeholder='750.000' style='%s'></div></div>"
-               "<label style='display:block;margin-top:10px'><b>Asunto *</b></label><input name='titulo' required maxlength='220' style='%s'>"
-               "<label style='display:block;margin-top:10px'><b>Justificación *</b></label><textarea name='justificacion' rows='4' required style='%s'></textarea>"
-               "<label style='display:block;margin-top:10px'><b>Documento de soporte * (PDF, imagen, Word o Excel · máx. 5 MB)</b></label><input type='file' name='adjunto' required style='%s'>"
-               "<label style='display:flex;gap:8px;margin-top:10px;font-size:13px'><input type='checkbox' name='critico' value='1'> Marcar como crítico (pasa directo al CEO tras Contabilidad)</label>"
-               "<p class='mini-text'>Se marca automáticamente como ALTA si el descuento supera el %s %% o si es un cambio de contrato.</p>%s"
-               "<button class='btn' style='margin-top:6px'>Enviar ticket</button></form></section>") % (aviso, inp, opt_t, inp, opt_i, inp, inp, inp, inp, inp, int(_TD_LIMITE_DESC), _step_up_campos())
+               "<div class='tk-fin'><label><b>Valor actual (COP)</b></label><input name='valor_actual' placeholder='900.000' style='%s'></div>"
+               "<div class='tk-fin'><label><b>Valor solicitado (COP)</b></label><input name='valor_solicitado' placeholder='750.000' style='%s'></div>"
+               "<div class='tk-ope'><label><b>Prioridad</b></label><select name='prioridad' style='%s'><option value='NORMAL'>Normal</option><option value='ALTA'>Alta (urgente)</option></select></div></div>"
+               "<p id='tk-hint' class='mini-text' style='margin:8px 0'></p>"
+               "<label style='display:block;margin-top:6px'><b>Asunto *</b></label><input name='titulo' required maxlength='220' value='%s' style='%s'>"
+               "<label style='display:block;margin-top:10px'><b>Descripción / justificación *</b> (mín. 20 caracteres)</label><textarea name='justificacion' rows='4' required style='%s'>%s</textarea>"
+               "<label style='display:block;margin-top:10px'><b>Documento o captura</b> <span class='mini-text'>(PDF, imagen, Word o Excel · máx. 5 MB · obligatorio en tickets financieros)</span></label><input type='file' name='adjunto' id='tk-adj' style='%s'>"
+               "<label class='tk-fin' style='display:flex;gap:8px;margin-top:10px;font-size:13px'><input type='checkbox' name='critico' value='1'> Marcar como crítico (pasa directo al CEO tras Contabilidad)</label>"
+               "<p class='mini-text tk-fin'>Se marca automáticamente como ALTA si el descuento supera el %s %% o si es un cambio de contrato.</p>"
+               "<div class='tk-fin'>%s</div>"
+               "<button class='btn' style='margin-top:6px'>Enviar ticket</button></form></section>%s") % (
+        aviso, inp, opt_a, inp, opt_t, inp, opt_i, inp, inp, inp, _esc(f.get("titulo", "")) if request.method == "POST" else "", inp, inp,
+        _esc(f.get("justificacion", "")) if request.method == "POST" else "", inp, int(_TD_LIMITE_DESC), campos_su, js)
     return page("Nuevo ticket", shell(content))
 
 
@@ -50508,11 +50720,53 @@ def tickets_doc_ver(tid):
     if not _td_puede_ver(rol, usuario, t):
         return acceso_denegado("No tienes acceso a este ticket: solo ves los que creaste o los que están en tu etapa.")
     err = msg = ""
+    area_t = _td_area(t)
+    financiero = (area_t == "Contabilidad")
+    atiende = rol in _ROLES_GERENCIA or rol in _TD_AREAS.get(area_t, ("", ()))[1]
     if request.method == "POST":
         acc = request.form.get("accion", "")
         nota = (request.form.get("nota") or "").strip()
-        if not _step_up_form_ok():
+        if financiero and not _step_up_form_ok():
             err = "No se pudo validar tu identidad. Revisa tu contraseña / código."
+        elif not financiero and acc == "tomar" and atiende and t.estado == "ABIERTO":
+            t.estado, t.asignado_a = "EN_PROCESO", usuario
+            _td_evento(t, "Tomó el ticket", nota)
+            db.session.commit()
+            _notif_crear((t.creado_rol,) if t.creado_rol else (), "Ticket %s en proceso" % t.codigo, "Lo está atendiendo %s." % usuario, "/tickets-doc/%d" % t.id)
+            msg = "Ticket en proceso: quedó asignado a ti."
+        elif not financiero and acc in ("resolver", "rechazar_op") and atiende and t.estado in ("ABIERTO", "EN_PROCESO"):
+            if len(nota) < 10:
+                err = "Escribe la respuesta o el motivo (mín. 10 caracteres)."
+            elif acc == "resolver":
+                t.estado, t.resuelto_por, t.resuelto_en = "RESUELTO", usuario, _ts()
+                _td_evento(t, "Resolvió", nota)
+                db.session.commit()
+                _notif_crear((t.creado_rol,) if t.creado_rol else (), "Ticket %s resuelto" % t.codigo, nota[:160], "/tickets-doc/%d" % t.id)
+                msg = "Ticket resuelto."
+            else:
+                t.estado, t.rechazado_por, t.rechazado_en, t.rechazo_motivo = "RECHAZADO", usuario, _ts(), nota
+                _td_evento(t, "Rechazó", nota)
+                db.session.commit()
+                _notif_crear((t.creado_rol,) if t.creado_rol else (), "Ticket %s rechazado" % t.codigo, nota[:160], "/tickets-doc/%d" % t.id)
+                msg = "Ticket rechazado."
+        elif not financiero and acc == "reasignar" and atiende and t.estado in ("ABIERTO", "EN_PROCESO"):
+            nueva = request.form.get("area_nueva", "")
+            if nueva not in _TD_AREAS or nueva in ("Contabilidad", area_t):
+                err = "Elige otra área de destino (los tickets financieros se crean con el flujo de Contabilidad)."
+            elif len(nota) < 5:
+                err = "Indica por qué lo envías a otra área."
+            else:
+                t.area_destino, t.estado, t.asignado_a = nueva, "ABIERTO", ""
+                if t.tipo not in dict(_TD_TIPOS_AREA.get(nueva, ())):
+                    t.tipo = _TD_TIPOS_AREA[nueva][-1][0]   # «Otro» del área nueva
+                _td_evento(t, "Reasignó a %s" % _TD_AREAS[nueva][0], "Desde %s. %s" % (_TD_AREAS[area_t][0], nota))
+                db.session.commit()
+                _notif_crear(_TD_AREAS[nueva][1], "Ticket %s reasignado a tu área" % t.codigo, "%s · %s" % (t.institucion_codigo or "sin colegio", t.titulo), "/tickets-doc/%d" % t.id, None, "alerta" if t.importancia == "ALTA" else "info")
+                msg = "Ticket enviado a %s." % _TD_AREAS[nueva][0]
+                atiende = rol in _ROLES_GERENCIA or rol in _TD_AREAS[nueva][1]
+                area_t = nueva
+        elif not financiero:
+            err = "Acción no permitida en este estado."
         elif acc == "aprobar_escalar" and rol == "Contabilidad" and t.estado == "PEND_CONTABILIDAD":
             est_c, _nv, _tot = _td_cartera(t.institucion_id)
             if est_c == "EN MORA" and len(nota) < 10:
@@ -50576,23 +50830,39 @@ def tickets_doc_ver(tid):
                     "<button class='btn' name='accion' value='rechazar' style='background:#b91c1c;color:#fff'>Rechazar</button></div></form>") % (nota_in, _step_up_campos())
     elif t.estado in ("APROBADO", "AUTORIZADO") and rol == "Cobranza":
         acciones = ("<form method='POST'><h3>Aplicar el cambio</h3>%s%s<button class='btn' name='accion' value='aplicar' style='margin-top:8px'>Marcar como aplicado</button></form>") % (nota_in, _step_up_campos())
-    elif t.estado == "PEND_CEO":
+    elif financiero and t.estado == "PEND_CEO":
         acciones = "<div class='msg danger'>Bloqueado: Cobranza no puede aplicar este cambio hasta que el CEO lo autorice con token.</div>"
+    elif not financiero and atiende and t.estado in ("ABIERTO", "EN_PROCESO"):
+        otras = "".join("<option value='%s'>%s</option>" % (k, _esc(v[0])) for k, v in _TD_AREAS.items() if k not in ("Contabilidad", area_t))
+        tomar = ("<button class='btn' name='accion' value='tomar'>Tomar el ticket</button>" if t.estado == "ABIERTO" else "")
+        acciones = ("<form method='POST'><h3>Atender el ticket · %s</h3>%s<div style='display:flex;gap:8px;margin-top:8px;flex-wrap:wrap'>%s"
+                    "<button class='btn' name='accion' value='resolver' style='background:#15803d;color:#fff'>Marcar como resuelto</button>"
+                    "<button class='btn' name='accion' value='rechazar_op' style='background:#b91c1c;color:#fff'>Rechazar</button></div>"
+                    "<div style='margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center'><span class='mini-text'>¿No es de tu área?</span>"
+                    "<select name='area_nueva' style='padding:8px;border:1px solid #cbd5e1;border-radius:8px'>%s</select>"
+                    "<button class='btn' name='accion' value='reasignar' style='background:#64748b'>Enviar a esa área</button></div>"
+                    "<p class='mini-text'>La nota es obligatoria al resolver, rechazar o reasignar (queda en la trazabilidad).</p></form>") % (_esc(_TD_AREAS[area_t][0]), nota_in, tomar, otras)
     aviso = ("<div class='msg ok'>%s</div>" % _esc(msg) if msg else "") + ("<div class='msg danger'>%s</div>" % _esc(err) if err else "")
+    if financiero:
+        extra_grid = "<div><b>Valor actual → solicitado</b><br>%s → %s</div><div><b>Descuento</b><br>%s %%</div>" % (_cta_fmt(t.valor_actual), _cta_fmt(t.valor_solicitado), t.porcentaje)
+        cartera = "<p><b>Cartera del colegio:</b> <b style='color:%s'>%s</b>%s</p>" % (
+            col_c, est_c, (" · %d factura(s) vencida(s) · pendiente %s" % (nv, _cta_fmt(tot))) if est_c != "SIN COLEGIO" else "")
+    else:
+        extra_grid = ("<div><b>Asignado a</b><br>%s</div>" % _esc(t.asignado_a or "— sin tomar —")) + (
+            ("<div><b>Resuelto por</b><br>%s · %s</div>" % (_esc(t.resuelto_por), _esc((t.resuelto_en or "")[:16]))) if t.resuelto_por else "")
+        cartera = ("<p><b>Motivo del rechazo:</b> %s</p>" % _esc(t.rechazo_motivo)) if (t.estado == "RECHAZADO" and t.rechazo_motivo) else ""
+    adj = ("<p><b>Soporte:</b> <a href='/tickets-doc/%d/adjunto'>📎 %s</a></p>" % (t.id, _esc(t.adjunto_nombre))) if t.adjunto_nombre else ""
     content = ("<header class='role-hero'><div><h1>%s</h1><p>%s %s</p></div><a class='btn' href='/tickets-doc'>← Tickets</a></header>%s"
                "<section class='role-panel'><div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:13px'>"
-               "<div><b>Tipo</b><br>%s</div><div><b>Colegio</b><br>%s %s</div><div><b>Creado por</b><br>%s (%s)</div><div><b>Valor actual → solicitado</b><br>%s → %s</div>"
-               "<div><b>Descuento</b><br>%s %%</div><div><b>Importancia</b><br>%s</div></div>"
-               "<p><b>Asunto:</b> %s</p><p style='white-space:pre-wrap'>%s</p>"
-               "<p><b>Soporte:</b> <a href='/tickets-doc/%d/adjunto'>📎 %s</a></p>"
-               "<p><b>Cartera del colegio:</b> <b style='color:%s'>%s</b>%s</p>%s</section>"
+               "<div><b>Área destino</b><br>%s</div><div><b>Tipo</b><br>%s</div><div><b>Colegio</b><br>%s %s</div><div><b>Creado por</b><br>%s (%s)</div>%s"
+               "<div><b>Importancia</b><br>%s</div></div>"
+               "<p><b>Asunto:</b> %s</p><p style='white-space:pre-wrap'>%s</p>%s%s%s</section>"
                "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>Trazabilidad</h3><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:12.5px'>"
                "<tr style='background:#f1f5f9'><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr>%s</table></div></section>") % (
         _esc(t.codigo), _td_badge(t.estado), "· Importancia ALTA" if t.importancia == "ALTA" else "", aviso,
-        _esc(dict(_TD_TIPOS).get(t.tipo, t.tipo)), _esc(t.institucion_codigo or "—"), _esc(t.institucion_nombre or ""), _esc(t.creado_por), _esc(t.creado_rol),
-        _cta_fmt(t.valor_actual), _cta_fmt(t.valor_solicitado), t.porcentaje, "<b style='color:#b91c1c'>ALTA</b>" if t.importancia == "ALTA" else "Normal",
-        _esc(t.titulo), _esc(t.justificacion), t.id, _esc(t.adjunto_nombre), col_c, est_c,
-        (" · %d factura(s) vencida(s) · pendiente %s" % (nv, _cta_fmt(tot))) if est_c != "SIN COLEGIO" else "", acciones, ev)
+        _esc(_TD_AREAS[area_t][0]), _esc(_TD_TIPOS_TODOS.get(t.tipo, t.tipo)), _esc(t.institucion_codigo or "—"), _esc(t.institucion_nombre or ""), _esc(t.creado_por), _esc(t.creado_rol),
+        extra_grid, "<b style='color:#b91c1c'>ALTA</b>" if t.importancia == "ALTA" else "Normal",
+        _esc(t.titulo), _esc(t.justificacion), adj, cartera, acciones, ev)
     return page(t.codigo, shell(content))
 
 
@@ -79875,6 +80145,7 @@ class PlanDonacion(db.Model):
     activo = db.Column(db.Boolean, default=True)
     creado_por = db.Column(db.String(80), default="")
     creado_en = db.Column(db.String(30), default="")
+    modulos_json = db.Column(db.Text, default="")   # funciones incluidas (lista JSON). Vacío = todas las funciones
 
 
 class Donacion(db.Model):
@@ -79916,6 +80187,90 @@ class DonacionFactura(db.Model):
     enviado_en = db.Column(db.String(30), default="")
 
 
+# Funciones que puede incluir un plan de donación, por área del colegio. (clave, nombre, obligatoria)
+_DON_FUNCIONES = (
+    ("Académico", (
+        ("estudiantes", "Estudiantes, grupos y matrícula", True), ("portal_docente", "Portal docente", False),
+        ("notas_basico", "Notas / planilla", False), ("notas_completo", "Planilla de notas tipo Excel", False),
+        ("siee", "SIEE completo", False), ("boletines_pdf", "Boletines PDF", False), ("horarios", "Horarios", False),
+        ("calendario", "Calendario escolar", False), ("import_excel", "Importar estudiantes desde Excel", False),
+        ("simat", "SIMAT · exportación y migración histórica", False), ("tareas", "Tareas", False), ("examenes", "Exámenes", False),
+        ("foros", "Foros", False), ("clases_virtuales", "Clases virtuales", False), ("offline_notas", "Notas sin conexión", False),
+        ("elecciones", "Elecciones escolares", False), ("eduaura", "EduAura IA", False))),
+    ("Convivencia y familia", (
+        ("novedades", "Convivencia / novedades", False), ("citaciones", "Citaciones", False), ("reportes_padres", "Reportes a padres", False),
+        ("historial_padres", "Portal familiar con asistencia en vivo", False), ("contacto", "PQR de padres y a PROCSIS", False),
+        ("pqr_institucional", "PQR institucional", False), ("riesgo_escolar", "Riesgo escolar · alerta temprana", False),
+        ("salidas", "Salidas y autorizaciones (Coordinación)", False))),
+    ("Ingreso y seguridad", (
+        ("asistencia_qr", "Asistencia QR", False), ("portal_porteria", "Portal de portería / QR de ingreso", False),
+        ("ingreso_manual", "Ingreso manual", False), ("aviso_ingreso_whatsapp", "Aviso de ingreso por WhatsApp", False),
+        ("alertas_impuntualidad", "Alertas de impuntualidad", False), ("carnes", "Carnés digitales", False))),
+    ("Secretaría y documentos", (
+        ("certificados", "Certificados y paz y salvo", False), ("certi_procsis", "Certi-Procsis · constancias y logros", False),
+        ("prematricula", "Pre-matrícula / admisiones", False), ("inventario", "Inventario y kits", False), ("multi_sede", "Multi-sede", False))),
+    ("Control y reportes", (
+        ("reportes_basicos", "Reportes en pantalla", True), ("reportes_excel", "Exportar Excel / PDF / Word", True),
+        ("auditoria", "Auditoría de notas", False))),
+)
+_DON_TODAS = tuple(k for _a, fs in _DON_FUNCIONES for (k, _n, _o) in fs)
+_DON_OBLIG = tuple(k for _a, fs in _DON_FUNCIONES for (k, _n, o) in fs if o)
+_DON_NOMBRE_FUNC = {k: n for _a, fs in _DON_FUNCIONES for (k, n, _o) in fs}
+# Rutas de colegio → función (solo para planes de donación; el resto de planes no cambia)
+_DON_RUTA_FUNC = {
+    "/inventario": "inventario", "/certi-procsis": "certi_procsis", "/riesgo-escolar": "riesgo_escolar",
+    "/coordinacion/salidas": "salidas", "/salidas": "salidas", "/paz-y-salvo": "certificados",
+    "/admisiones": "prematricula", "/pqr-colegio": "pqr_institucional", "/exportar_simat": "simat", "/migracion-historica": "simat",
+}
+_DON_ALIAS = {"notas_completo": ("notas_basico",), "siee": ("notas_basico",), "boletines_pdf": ("notas_basico",)}
+
+
+def _don_mods_de(plan_o_cod):
+    """Conjunto de funciones de un plan de donación; None = todas (plan antiguo o sin selección)."""
+    try:
+        cod = getattr(plan_o_cod, "plan", plan_o_cod)
+        pl = plan_o_cod if isinstance(plan_o_cod, PlanDonacion) else PlanDonacion.query.filter_by(codigo=str(cod or "")).first()
+        raw = (pl.modulos_json or "").strip() if pl is not None else ""
+        if not raw:
+            return None
+        lst = _don_json.loads(raw)
+        if not isinstance(lst, list) or not lst:
+            return None
+        out = set(str(x) for x in lst) | set(_DON_OBLIG)
+        for k in list(out):
+            out.update(_DON_ALIAS.get(k, ()))
+        return out
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _don_permite_ruta(path, inst=None):
+    """None = no aplica (no es donación o plan con todas las funciones); True/False = decisión."""
+    try:
+        if inst is None:
+            iid = institucion_id_actual()
+            inst = db.session.get(Institucion, iid) if iid else None
+        if inst is None or not es_donacion(inst):
+            return None
+        mods = _don_mods_de(inst)
+        if mods is None:
+            return None
+        p = (path or "").split("?")[0]
+        for pref, func_ in _DON_RUTA_FUNC.items():
+            if p == pref or p.startswith(pref + "/"):
+                return func_ in mods
+        for pref, func_ in _RUTA_MODULO_PLAN.items():
+            if p == pref or p.startswith(pref + "/"):
+                return func_ in mods
+        return None
+    except Exception:
+        return None
+
+
 def _don_ts():
     return ahora().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -79929,6 +80284,14 @@ def _don_ensure():
             m.__table__.create(bind=db.engine, checkfirst=True)
     except Exception as ex:
         print("donaciones ensure:", repr(ex)[:200], flush=True)
+    try:
+        from sqlalchemy import inspect as _insp_d
+        if "modulos_json" not in {c["name"] for c in _insp_d(db.engine).get_columns("planes_donacion")}:
+            db.session.execute(db.text("ALTER TABLE planes_donacion ADD COLUMN modulos_json TEXT DEFAULT ''"))
+            db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        print("planes_donacion modulos_json:", repr(ex)[:200], flush=True)
 
 
 # Cobranza NUNCA bloquea una institución de donación (salvo cierre manual del convenio desde este módulo).
@@ -80154,9 +80517,25 @@ def gerencia_donaciones():
             _esc(d.plan_nombre), _cop(d.valor_mensual), int(d.meses or 0), _esc(d.convenio),
             est_fac, num, det, _esc(d.estado), acciones)
     planes = PlanDonacion.query.order_by(PlanDonacion.id.desc()).all()
-    fp = "".join("<tr><td><b>%s</b><br><code style='font-size:11px'>%s</code></td><td>%s / mes</td><td>%d</td>"
-                 "<td>Todas las funciones · Gratis</td></tr>" % (_esc(p.nombre), _esc(p.codigo), _cop(p.valor_comercial), int(p.meses or 0))
-                 for p in planes) or "<tr><td colspan='4' style='color:#64748b'>Aún no hay planes de donación.</td></tr>"
+    usan = {}
+    for _i in Institucion.query.filter(Institucion.plan.like("don-%")).all():
+        usan[_i.plan] = usan.get(_i.plan, 0) + 1
+    fp = ""
+    for p in planes:
+        mods = _don_mods_de(p)
+        n_f = len(_DON_TODAS) if mods is None else len([k for k in _DON_TODAS if k in mods])
+        inc = ("<b>Todas las funciones</b> (%d)" % len(_DON_TODAS)) if mods is None else (
+            "<details><summary><b>%d de %d funciones</b></summary><div style='font-size:11px;color:#475569;max-width:360px;margin-top:4px'>%s</div></details>" % (
+                n_f, len(_DON_TODAS), _esc(", ".join(_DON_NOMBRE_FUNC[k] for k in _DON_TODAS if k in mods))))
+        en_uso = usan.get(p.codigo, 0)
+        eliminar = ('<form method="POST" action="/gerencia/donaciones/plan/%d/eliminar" style="display:inline" onsubmit="return confirm(\'¿Eliminar el plan %s? Esta acción no se puede deshacer.\')">'
+                    '<input type="hidden" name="csrf" value="%s"><button class="bt r" style="padding:5px 10px;font-size:12px">Eliminar</button></form>') % (p.id, _esc(p.nombre).replace("'", ""), csrf)
+        fp += ("<tr><td><b>%s</b><br><code style='font-size:11px'>%s</code></td><td>%s / mes</td><td>%d</td><td>%s</td><td>%s</td>"
+               "<td><a class='bt s' href='/gerencia/donaciones/plan/%d'>Editar funciones</a> %s%s</td></tr>") % (
+            _esc(p.nombre), _esc(p.codigo), _cop(p.valor_comercial), int(p.meses or 0), inc,
+            ("%d colegio(s)" % en_uso) if en_uso else "<span style='color:#64748b'>Sin colegios</span>", p.id, eliminar,
+            "" if not en_uso else "<div style='font-size:11px;color:#92400e;margin-top:3px'>En uso: no se puede eliminar</div>")
+    fp = fp or "<tr><td colspan='6' style='color:#64748b'>Aún no hay planes de donación.</td></tr>"
     cuerpo = (
         "<h1>🎗️ Proyectos y Donaciones</h1><div class='sub'>Colegios que usan la suite Procsis Edu sin costo, por convenio. "
         "Se activan solo desde Gerencia; Ventas y Cobranza no intervienen.</div>"
@@ -80170,9 +80549,66 @@ def gerencia_donaciones():
         + "<div class='dn-c'><h3 style='margin-top:0'>Colegios</h3><div style='overflow-x:auto'><table><tr><th>Colegio</th><th>Plan</th>"
           "<th>Convenio</th><th>Factura $0 (Alegra)</th><th>Estado</th><th>Acciones</th></tr>%s</table></div></div>" % (
               filas or "<tr><td colspan='6' style='color:#64748b'>Aún no hay colegios por donación.</td></tr>")
-        + "<div class='dn-c'><h3 style='margin-top:0'>Planes de donación</h3><table><tr><th>Plan</th><th>Valor comercial</th>"
-          "<th>Meses</th><th>Incluye</th></tr>%s</table></div>" % fp)
+        + "<div class='dn-c'><h3 style='margin-top:0'>Planes de donación</h3><div style='overflow-x:auto'><table><tr><th>Plan</th><th>Valor comercial</th>"
+          "<th>Meses</th><th>Funciones incluidas</th><th>Usado por</th><th>Acciones</th></tr>%s</table></div></div>" % fp)
     return _don_pagina("Proyectos y Donaciones", cuerpo)
+
+
+def _don_form_plan(plan, error, csrf):
+    """Formulario de plan de donación: datos del convenio + funciones del colegio por área."""
+    sel = _don_mods_de(plan) if plan is not None else None
+    bloques = ""
+    for area, funcs in _DON_FUNCIONES:
+        its = ""
+        for k, nombre, oblig in funcs:
+            on = oblig or sel is None or k in sel
+            its += ('<label class="dn-f"><input type="checkbox" name="modulos" value="%s" %s %s> <span>%s%s</span></label>' % (
+                k, "checked" if on else "", "disabled" if oblig else "", _esc(nombre), " <i style='color:#64748b'>(siempre incluida)</i>" if oblig else ""))
+            if oblig:
+                its += '<input type="hidden" name="modulos" value="%s">' % k
+        bloques += ("<div class='dn-c' style='margin:8px 0'><div style='display:flex;justify-content:space-between;align-items:center;gap:8px'><h3 style='margin:0'>%s</h3>"
+                    "<span><button type='button' class='bt s' onclick=\"dnTodo(this,true)\">Marcar todo</button> <button type='button' class='bt s' onclick=\"dnTodo(this,false)\">Quitar todo</button></span></div>"
+                    "<div class='dn-fg'>%s</div></div>") % (_esc(area), its)
+    nombre = _esc(plan.nombre) if plan is not None else _esc(request.form.get("nombre", "")) if request.method == "POST" else ""
+    valor = (str(int(plan.valor_comercial or 0)) if plan is not None else (request.form.get("valor", "") if request.method == "POST" else ""))
+    meses = (str(int(plan.meses or 12)) if plan is not None else (request.form.get("meses", "12") if request.method == "POST" else "12"))
+    desc = _esc(plan.descripcion) if plan is not None else _esc(request.form.get("descripcion", "")) if request.method == "POST" else ""
+    editar = plan is not None
+    return (
+        "<style>.dn-fg{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 14px;margin-top:8px}"
+        ".dn .dn-f{display:flex;align-items:center;gap:8px;font-weight:500;margin:2px 0;font-size:13px;color:#1e293b}.dn .dn-f input{width:auto}</style>"
+        "<h1>%s</h1><div class='sub'>Marca las <b>funciones</b> que tendrá el colegio. Por defecto van <b>todas</b>; lo que quites quedará bloqueado para ese colegio. "
+        "El valor comercial es el precio real de la suite: es el que se muestra en la factura antes del descuento del 100 %%.</div>%s"
+        "<form method='POST'><input type='hidden' name='csrf' value='%s'><div class='dn-c'>"
+        "<label>Nombre del plan *</label><input name='nombre' required value='%s' placeholder='Ej: Procsis Edu · Convenio Gobernación 2026'>"
+        "<div class='g2'><div><label>Valor comercial real mensual (COP) *</label><input name='valor' required inputmode='numeric' value='%s' placeholder='Ej: 249000'></div>"
+        "<div><label>Meses del convenio *</label><input name='meses' required inputmode='numeric' value='%s'></div></div>"
+        "<label>Descripción interna</label><textarea name='descripcion' rows='2'>%s</textarea></div>"
+        "<h2 style='margin:16px 0 4px;color:#0B2D57'>Funciones del colegio</h2>%s"
+        "<p><button class='bt'>%s</button> <a class='bt s' href='/gerencia/donaciones'>Cancelar</a></p></form>"
+        "<script>function dnTodo(b,v){var c=b.closest('.dn-c');[].forEach.call(c.querySelectorAll('input[type=checkbox]:not(:disabled)'),function(x){x.checked=v;});}</script>"
+    ) % ("Editar plan de donación" if editar else "Crear plan de donación",
+         ('<div class="er">%s</div>' % _esc(error)) if error else "", csrf, nombre, _esc(valor), _esc(meses), desc, bloques,
+         "Guardar cambios" if editar else "Guardar plan")
+
+
+def _don_leer_modulos():
+    """Funciones marcadas en el formulario → lista JSON ('' si están todas = plan con todas las funciones)."""
+    marc = [m for m in request.form.getlist("modulos") if m in _DON_TODAS]
+    for k in _DON_OBLIG:
+        if k not in marc:
+            marc.append(k)
+    return "" if set(marc) >= set(_DON_TODAS) else _don_json.dumps(sorted(set(marc)))
+
+
+def _don_leer_basicos():
+    nombre = (request.form.get("nombre") or "").strip()
+    try:
+        valor = float(re.sub(r"[^\d.]", "", (request.form.get("valor") or "").replace(".", "")) or 0)
+        meses = int(request.form.get("meses") or 12)
+    except Exception:
+        valor, meses = 0, 0
+    return nombre, valor, meses
 
 
 @app.route("/gerencia/donaciones/plan", methods=["GET", "POST"])
@@ -80184,12 +80620,7 @@ def gerencia_donaciones_plan():
     csrf = _acc_csrf()
     error = ""
     if request.method == "POST":
-        nombre = (request.form.get("nombre") or "").strip()
-        try:
-            valor = float(re.sub(r"[^\d.]", "", (request.form.get("valor") or "").replace(".", "")) or 0)
-            meses = int(request.form.get("meses") or 12)
-        except Exception:
-            valor, meses = 0, 0
+        nombre, valor, meses = _don_leer_basicos()
         if not _don_csrf_ok():
             error = "La página caducó. Recárgala e intenta de nuevo."
         elif not nombre or valor <= 0 or not (1 <= meses <= 60):
@@ -80199,26 +80630,75 @@ def gerencia_donaciones_plan():
             if PlanDonacion.query.filter_by(codigo=cod).first():
                 error = "Ya existe un plan de donación con ese nombre."
             else:
+                mods = _don_leer_modulos()
                 db.session.add(PlanDonacion(codigo=cod, nombre=nombre[:120], valor_comercial=valor, meses=meses,
-                                            descripcion=(request.form.get("descripcion") or "")[:2000], activo=True,
+                                            descripcion=(request.form.get("descripcion") or "")[:2000], activo=True, modulos_json=mods,
                                             creado_por=(session.get("usuario") or "")[:80], creado_en=_don_ts()))
                 db.session.commit()
                 try:
-                    registrar_auditoria("Plan de donación creado", "%s · %s/mes" % (cod, valor))
+                    registrar_auditoria("Plan de donación creado", "%s · %s/mes · %s" % (cod, valor, "todas las funciones" if not mods else "%d funciones" % len(_don_json.loads(mods))))
                 except Exception:
                     pass
                 return redirect("/gerencia/donaciones?m=" + _don_up.quote("Plan de donación creado."))
-    cuerpo = (
-        "<h1>Crear plan de donación</h1><div class='sub'>Incluye <b>todas las funciones</b> y no se cobra. "
-        "El valor comercial es el precio real de la suite: es el que se muestra en la factura antes del descuento del 100 %.</div>"
-        + ('<div class="er">%s</div>' % _esc(error) if error else "")
-        + '<div class="dn-c"><form method="POST"><input type="hidden" name="csrf" value="%s">'
-          '<label>Nombre del plan *</label><input name="nombre" required placeholder="Ej: Procsis Edu · Convenio Gobernación 2026">'
-          '<div class="g2"><div><label>Valor comercial real mensual (COP) *</label><input name="valor" required inputmode="numeric" placeholder="Ej: 249000"></div>'
-          '<div><label>Meses del convenio *</label><input name="meses" required inputmode="numeric" value="12"></div></div>'
-          '<label>Descripción interna</label><textarea name="descripcion" rows="3"></textarea>'
-          '<p><button class="bt">Guardar plan</button> <a class="bt s" href="/gerencia/donaciones">Cancelar</a></p></form></div>' % csrf)
-    return _don_pagina("Plan de donación", cuerpo)
+    return _don_pagina("Plan de donación", _don_form_plan(None, error, csrf))
+
+
+@app.route("/gerencia/donaciones/plan/<int:pid>", methods=["GET", "POST"])
+def gerencia_donaciones_plan_editar(pid):
+    g = _guard_gerencia()
+    if g:
+        return g
+    _don_ensure()
+    plan = db.session.get(PlanDonacion, pid)
+    if plan is None:
+        return redirect("/gerencia/donaciones?e=" + _don_up.quote("No se encontró el plan."))
+    csrf = _acc_csrf()
+    error = ""
+    if request.method == "POST":
+        nombre, valor, meses = _don_leer_basicos()
+        if not _don_csrf_ok():
+            error = "La página caducó. Recárgala e intenta de nuevo."
+        elif not nombre or valor <= 0 or not (1 <= meses <= 60):
+            error = "Escribe el nombre, el valor comercial real mensual (mayor a 0) y los meses del convenio (1 a 60)."
+        else:
+            antes = "todas" if not (plan.modulos_json or "").strip() else str(len(_don_json.loads(plan.modulos_json)))
+            plan.nombre, plan.valor_comercial, plan.meses = nombre[:120], valor, meses   # el código no cambia: los colegios siguen enlazados
+            plan.descripcion = (request.form.get("descripcion") or "")[:2000]
+            plan.modulos_json = _don_leer_modulos()
+            db.session.commit()
+            try:
+                registrar_auditoria("Plan de donación editado", "%s · funciones antes: %s → después: %s" % (
+                    plan.codigo, antes, "todas" if not plan.modulos_json else str(len(_don_json.loads(plan.modulos_json)))))
+            except Exception:
+                pass
+            return redirect("/gerencia/donaciones?m=" + _don_up.quote("Plan actualizado. Los cambios de funciones aplican de inmediato a los colegios que lo usan."))
+    return _don_pagina("Editar plan de donación", _don_form_plan(plan, error, csrf))
+
+
+@app.route("/gerencia/donaciones/plan/<int:pid>/eliminar", methods=["POST"])
+def gerencia_donaciones_plan_eliminar(pid):
+    g = _guard_gerencia()
+    if g:
+        return g
+    _don_ensure()
+    if not _don_csrf_ok():
+        return redirect("/gerencia/donaciones?e=" + _don_up.quote("La página caducó. Recárgala e intenta de nuevo."))
+    plan = db.session.get(PlanDonacion, pid)
+    if plan is None:
+        return redirect("/gerencia/donaciones?e=" + _don_up.quote("No se encontró el plan."))
+    en_uso = Institucion.query.filter(Institucion.plan == plan.codigo).count()
+    activos = Donacion.query.filter(Donacion.plan_codigo == plan.codigo, Donacion.estado == "ACTIVO").count()
+    if en_uso or activos:
+        return redirect("/gerencia/donaciones?e=" + _don_up.quote(
+            "No se puede eliminar «%s»: lo usan %d colegio(s). Finaliza los convenios o cambia el plan de esos colegios primero." % (plan.nombre, max(en_uso, activos))))
+    nombre, cod = plan.nombre, plan.codigo
+    db.session.delete(plan)
+    db.session.commit()
+    try:
+        registrar_auditoria("Plan de donación eliminado", "%s (%s)" % (nombre, cod))
+    except Exception:
+        pass
+    return redirect("/gerencia/donaciones?m=" + _don_up.quote("Plan «%s» eliminado." % nombre))
 
 
 @app.route("/gerencia/donaciones/nueva", methods=["GET", "POST"])
@@ -82446,12 +82926,14 @@ def soporte_cambios():
     tabs = "".join("<a class='nx-chip %s' href='/soporte/cambios?vista=%s'>%s</a>" % ("on" if vista == k else "", k, t) for k, t in
                    (("solicitudes", "Solicitudes de cambio"), ("actividad", "Actividad de cuentas (inicios, PIN, cambios)")))
     if vista == "actividad":
-        q = Auditoria.query
-        if rol == "Soporte":   # Soporte ve a los usuarios de colegios y lo suyo; el registro completo es de Gerencia
-            q = q.filter(or_(Auditoria.usuario == session.get("usuario"), Auditoria.rol.in_(list(_ROLES_COLEGIO))))
         cat = (request.args.get("cat") or "").strip()
-        cond = _aud_cond(cat) if cat in ("inicio", "validacion", "cambio") else or_(_aud_cond("inicio"), _aud_cond("validacion"), _aud_cond("cambio"))
-        q = q.filter(cond)
+        if rol == "Soporte":   # Soporte solo ve CAMBIOS de usuarios de colegios; el registro completo es de Gerencia
+            q = _aud_q_colegios()
+            cat = "cambio"
+        else:
+            q = Auditoria.query
+            cond = _aud_cond(cat) if cat in ("inicio", "validacion", "cambio") else or_(_aud_cond("inicio"), _aud_cond("validacion"), _aud_cond("cambio"))
+            q = q.filter(cond)
         txt = (request.args.get("q") or "").strip()[:80]
         if txt:
             like = "%" + txt + "%"
@@ -82464,10 +82946,10 @@ def soporte_cambios():
         filas = q.order_by(Auditoria.id.desc()).offset((pg - 1) * 50).limit(50).all()
         insts = {i.id: i.nombre for i in Institucion.query.all()}
         chips = "".join("<a class='nx-chip %s' href='/soporte/cambios?vista=actividad&cat=%s'>%s</a>" % ("on" if cat == c else "", c, t)
-                        for c, t in (("", "Todo"), ("inicio", "Inicios de sesión"), ("validacion", "Validaciones PIN / biometría"), ("cambio", "Cambios y actualizaciones")))
+                        for c, t in ((("cambio", "Cambios de los colegios"),) if rol == "Soporte" else (("", "Todo"), ("inicio", "Inicios de sesión"), ("validacion", "Validaciones PIN / biometría"), ("cambio", "Cambios y actualizaciones"))))
         trs = "".join("<tr><td style='white-space:nowrap'>%s<div class='nx-small'>%s</div></td><td><b>%s</b><div class='nx-small'>%s · %s</div></td><td>%s<details><summary class='nx-small' style='cursor:pointer'>detalle</summary><div class='nx-small' style='white-space:pre-wrap;max-width:420px'>%s</div></details></td><td class='nx-small'>%s</td></tr>" % (
             _esc(a.fecha), _esc(a.hora), _esc(a.usuario), _esc(a.rol), _esc(insts.get(a.institucion_id, "") if a.institucion_id else ""),
-            _esc((a.accion or "")[:80]), _esc(a.detalle or ""), _esc(" · ".join(x for x in (a.ip, a.navegador, a.sistema_os) if x))) for a in filas)
+            _esc((a.accion or "")[:80]), _esc(_aud_limpiar_detalle(a.detalle) if rol == "Soporte" else (a.detalle or "")), "" if rol == "Soporte" else _esc(" · ".join(x for x in (a.ip, a.navegador, a.sistema_os) if x))) for a in filas)
         pags = max(1, (total + 49) // 50)
         nav = ""
         if pg > 1:
@@ -83085,6 +83567,199 @@ def _hl_gate_horario_asesores():
     except Exception as ex:
         print("hl_gate:", ex)
         return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  AUDITORÍA PARA SOPORTE: solo CAMBIOS que hacen los roles de los colegios
+#  · Nada de la parte interna de PROCSIS ni de lo que hacen los compañeros (Soporte, Cobranza, Gerencia…).
+#  · Solo cambios (no consultas, no inicios de sesión, no denegados), de usuarios que pertenecen a un colegio.
+#  · No se muestran IP, ubicación ni dispositivo de esas personas: solo qué cambió, quién (del colegio) y cuándo.
+# ══════════════════════════════════════════════════════════════════════════════
+_AUD_ROLES_NO_COLEGIO = ("Soporte", "Superadmin", "Administrador", "Gerente", "Gerencia", "Comercial", "Ventas", "Cobranza", "Contabilidad",
+                         "Proveedor", "Desarrollador", "Developer")
+_AUD_RUTAS_INTERNAS = ("/soporte", "/gerencia", "/cobranza", "/ventas", "/contabilidad", "/dev", "/proveedor", "/tickets-doc", "/interno",
+                       "/backoffice", "/servidores", "/tenants", "/usuarios")
+
+
+def _aud_q_colegios():
+    """Consulta de Auditoria ya acotada a lo que Soporte puede ver."""
+    A = Auditoria
+    internos = [r[0] for r in db.session.query(Usuario.usuario).filter(Usuario.rol.in_(list(_AUD_ROLES_NO_COLEGIO))).all()]
+    q = A.query.filter(A.institucion_id.isnot(None), A.rol.isnot(None), A.rol != "", ~A.rol.in_(list(_AUD_ROLES_NO_COLEGIO)))
+    if internos:
+        q = q.filter(~A.usuario.in_(internos))
+    for pref in _AUD_RUTAS_INTERNAS:
+        q = q.filter(~A.ruta.ilike(pref + "%"))
+    return q.filter(_aud_cond("cambio")).filter(~A.accion.ilike("Cambio guiado%"), ~A.accion.ilike("Horario asesor%"))
+
+
+def _aud_limpiar_detalle(det):
+    """Quita IP / ubicación / ISP que el registro añade al detalle."""
+    return re.sub(r"\s*\|\s*(IP|Ubic|ISP):[^|]*", "", det or "").strip()
+
+
+@app.route("/soporte/auditoria-colegios")
+def soporte_auditoria_colegios():
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Soporte",) + _ROLES_GERENCIA:
+        return acceso_denegado("Este módulo es para Soporte y Gerencia.")
+    q = _aud_q_colegios()
+    insts = {i.id: i.nombre for i in Institucion.query.order_by(Institucion.nombre).all()}
+    try:
+        iid = int(request.args.get("colegio") or 0)
+    except Exception:
+        iid = 0
+    rol_f = (request.args.get("rol") or "").strip()[:40]
+    txt = (request.args.get("q") or "").strip()[:80]
+    desde, hasta = (request.args.get("desde") or "").strip()[:10], (request.args.get("hasta") or "").strip()[:10]
+    if iid:
+        q = q.filter(Auditoria.institucion_id == iid)
+    if rol_f:
+        q = q.filter(Auditoria.rol == rol_f)
+    if txt:
+        like = "%" + txt + "%"
+        q = q.filter(or_(Auditoria.usuario.ilike(like), Auditoria.accion.ilike(like), Auditoria.detalle.ilike(like)))
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", desde):
+        q = q.filter(Auditoria.fecha >= desde)
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", hasta):
+        q = q.filter(Auditoria.fecha <= hasta)
+    try:
+        pg = max(1, int(request.args.get("page") or 1))
+    except Exception:
+        pg = 1
+    total = q.count()
+    filas = q.order_by(Auditoria.id.desc()).offset((pg - 1) * 50).limit(50).all()
+    roles_vistos = sorted({x for (x,) in _aud_q_colegios().with_entities(Auditoria.rol).distinct().limit(40).all() if x})
+    trs = ""
+    for a in filas:
+        trs += "<tr><td style='white-space:nowrap'>%s<div class='nx-small'>%s</div></td><td>%s</td><td><b>%s</b><div class='nx-small'>%s</div></td><td>%s<div class='nx-small' style='white-space:pre-wrap;max-width:460px'>%s</div></td></tr>" % (
+            _esc(a.fecha), _esc(a.hora), _esc(insts.get(a.institucion_id, "—")), _esc(a.usuario), _esc(a.rol),
+            _esc((a.accion or "")[:90]), _esc(_aud_limpiar_detalle(a.detalle)[:400]))
+    base = "/soporte/auditoria-colegios?colegio=%s&rol=%s&q=%s&desde=%s&hasta=%s" % (iid or "", quote_plus(rol_f), quote_plus(txt), desde, hasta)
+    pags = max(1, (total + 49) // 50)
+    nav = ("<a class='btn nx-btn-sm' href='%s&page=%d'>← Anterior</a> " % (base, pg - 1)) if pg > 1 else ""
+    nav += "<span class='nx-small'>Página %d de %d · %d cambios</span> " % (pg, pags, total)
+    nav += ("<a class='btn nx-btn-sm' href='%s&page=%d'>Siguiente →</a>" % (base, pg + 1)) if pg < pags else ""
+    opt_c = "<option value=''>Todos los colegios</option>" + "".join("<option value='%d' %s>%s</option>" % (k, "selected" if k == iid else "", _esc(v)) for k, v in insts.items())
+    opt_r = "<option value=''>Todos los roles</option>" + "".join("<option %s>%s</option>" % ("selected" if r == rol_f else "", _esc(r)) for r in roles_vistos)
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🧾 Auditoría de cambios de los colegios</h1><p>Qué cambian los usuarios de cada colegio (rectoría, coordinación, secretaría, docentes…). Aquí no aparece nada de la parte interna de PROCSIS ni de otros asesores.</p></div><a class="btn" href="/{'gerencia/hq' if rol_actual() in _ROLES_GERENCIA else 'soporte_admin'}">Volver</a></header>
+<section class='nx-card'><form method='GET' class='nx-grid'>
+<div><label>Colegio</label><select name='colegio'>{opt_c}</select></div><div><label>Rol</label><select name='rol'>{opt_r}</select></div>
+<div><label>Buscar</label><input name='q' value='{_esc(txt)}' placeholder='Usuario o acción'></div>
+<div><label>Desde</label><input type='date' name='desde' value='{_esc(desde)}'></div><div><label>Hasta</label><input type='date' name='hasta' value='{_esc(hasta)}'></div>
+<div style='align-self:end'><button>Filtrar</button></div></form>
+<p class='nx-small'>Solo se muestran los cambios (qué campo o dato modificó cada usuario), sin contraseñas, PIN ni valores personales.</p></section>
+<section class='nx-card'><div class='nx-scroll'><table><tr><th>Fecha</th><th>Colegio</th><th>Usuario</th><th>Qué cambió</th></tr>{trs or "<tr><td colspan='4'>Sin cambios con estos filtros.</td></tr>"}</table></div><div style='margin-top:10px'>{nav}</div></section>"""
+    return page("Auditoría de cambios de los colegios", shell(content))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CARNÉS DEL EQUIPO (Gerencia): un solo lugar para generar/imprimir el carné de cada integrante interno
+#  (antes solo estaba en «Equipo Procsis» de Soporte, y Gerencia no lo encontraba en Usuarios internos).
+# ══════════════════════════════════════════════════════════════════════════════
+_CARNE_AREA_POR_ROL = {"Soporte": "Soporte", "Comercial": "Comercial", "Gerente": "Gerencia", "Superadmin": "Gerencia", "Administrador": "Gerencia",
+                       "Cobranza": "Cartera", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor", "Desarrollador": "Desarrollo"}
+_CARNE_CARGO_POR_ROL = {"Soporte": "Asesor de soporte", "Comercial": "Asesor comercial", "Gerente": "Gerente", "Superadmin": "Superadmin", "Administrador": "Administrador",
+                        "Cobranza": "Asesor de cobranza", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor de carnés", "Desarrollador": "Desarrollador"}
+
+
+def _carne_equipo_de_usuario(u):
+    """Devuelve (PersonalLogix, creado) para un usuario interno; lo crea si aún no tiene carné."""
+    p = PersonalLogix.query.filter(func.lower(PersonalLogix.usuario_sistema) == (u.usuario or "").lower()).first()
+    if p is not None:
+        return p, False
+    doc = ""
+    try:
+        r = _n_perfil_row(u)
+        doc = (r.documento if r else "") or ""
+    except Exception:
+        db.session.rollback()
+    base = "PRC-%04d" % u.id
+    codigo, n = base, 1
+    while PersonalLogix.query.filter_by(codigo=codigo).first():
+        n += 1
+        codigo = "%s-%d" % (base, n)
+    p = PersonalLogix(codigo=codigo, nombre=(u.nombre_completo or u.usuario or "").strip()[:160], documento=doc[:40], cargo=_CARNE_CARGO_POR_ROL.get(u.rol, u.rol or "")[:120],
+                      area=_CARNE_AREA_POR_ROL.get(u.rol, "Soporte"), correo=(u.correo or "")[:160], usuario_sistema=u.usuario, activo=True, fecha_alta=fecha_hoy())
+    db.session.add(p)
+    db.session.commit()
+    return p, True
+
+
+@app.route("/gerencia/equipo-carnes", methods=["GET", "POST"])
+def gerencia_equipo_carnes():
+    g_ = _guard_gerencia()
+    if g_ is not None:
+        return g_
+    try:
+        PersonalLogix.__table__.create(db.engine, checkfirst=True)
+    except Exception:
+        db.session.rollback()
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido, intente de nuevo.")
+            return redirect("/gerencia/equipo-carnes")
+        try:
+            uid = int(request.form.get("uid") or 0)
+        except Exception:
+            uid = 0
+        u = db.session.get(Usuario, uid) if uid else None
+        if u is None or (u.rol or "") not in ROLES_INTERNOS:
+            _n_flash("err", "Usuario interno no válido.")
+            return redirect("/gerencia/equipo-carnes")
+        p, creado = _carne_equipo_de_usuario(u)
+        if creado:
+            registrar_auditoria("Carné del equipo: generado", "%s (%s) · código %s" % (u.usuario, u.rol, p.codigo))
+        return redirect("/gerencia/equipo/carnet/%d" % p.id)
+    rol_f = (request.args.get("rol") or "").strip()
+    txt = (request.args.get("q") or "").strip()[:60]
+    q = Usuario.query.filter(Usuario.rol.in_(list(ROLES_INTERNOS)))
+    if rol_f in ROLES_INTERNOS:
+        q = q.filter(Usuario.rol == rol_f)
+    if txt:
+        like = "%" + txt + "%"
+        q = q.filter(or_(Usuario.usuario.ilike(like), Usuario.nombre_completo.ilike(like), Usuario.correo.ilike(like)))
+    usuarios = q.order_by(Usuario.rol.asc(), Usuario.usuario.asc()).limit(300).all()
+    carnes = {(p.usuario_sistema or "").lower(): p for p in PersonalLogix.query.filter(PersonalLogix.usuario_sistema != "").all()}
+    trs = ""
+    for u in usuarios:
+        p = carnes.get((u.usuario or "").lower())
+        if p:
+            accion = "<a class='btn nx-btn-sm' href='/gerencia/equipo/carnet/%d' target='_blank'>🪪 Ver / imprimir carné</a>" % p.id
+            cod = "<b>%s</b>" % _esc(p.codigo)
+        else:
+            accion = "<form method='POST' style='display:inline'>%s<input type='hidden' name='uid' value='%d'><button class='nx-btn-sm'>Generar carné</button></form>" % (_n_csrf_input(), u.id)
+            cod = "<span class='nx-small'>— sin carné —</span>"
+        trs += "<tr><td><b>%s</b><div class='nx-small'>%s</div></td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            _esc(u.usuario), _esc(u.nombre_completo or ""), _esc(u.rol), cod, accion)
+    sin_cuenta = PersonalLogix.query.filter(or_(PersonalLogix.usuario_sistema.is_(None), PersonalLogix.usuario_sistema == "")).order_by(PersonalLogix.id.desc()).limit(100).all()
+    trs2 = "".join("<tr><td><b>%s</b></td><td>%s<div class='nx-small'>%s · %s</div></td><td><a class='btn nx-btn-sm' href='/gerencia/equipo/carnet/%d' target='_blank'>🪪 Ver / imprimir carné</a></td></tr>" % (
+        _esc(p.codigo), _esc(p.nombre), _esc(p.cargo), _esc(p.area), p.id) for p in sin_cuenta)
+    tabs = "".join("<a class='btn nx-btn-sm' style='%s' href='/gerencia/equipo-carnes%s'>%s</a> " % ("" if r == rol_f else "background:#64748b", ("?rol=" + r) if r else "", r or "Todos")
+                   for r in ("",) + tuple(ROLES_INTERNOS))
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🪪 Carnés del equipo</h1><p>Carné corporativo de cada integrante de PROCSIS (Soporte, Comercial, Cobranza, Contabilidad, Desarrollo, Gerencia…). Si todavía no tiene, se genera con sus datos de «Mi perfil».</p></div><a class="btn" href="/gerencia/usuarios">Usuarios internos</a></header>
+{_n_flash_html()}
+<section class='nx-card'><p>{tabs}</p>
+<form method='GET' style='margin:8px 0'><input type='hidden' name='rol' value='{_esc(rol_f)}'><input name='q' value='{_esc(txt)}' placeholder='Buscar por usuario, nombre o correo' style='max-width:320px'> <button>Buscar</button></form>
+<div class='nx-scroll'><table><tr><th>Usuario</th><th>Rol</th><th>Código de carné</th><th></th></tr>{trs or "<tr><td colspan='4'>Sin resultados.</td></tr>"}</table></div></section>
+{("<section class='nx-card'><h2>Colaboradores sin usuario de acceso</h2><div class='nx-scroll'><table><tr><th>Código</th><th>Nombre</th><th></th></tr>%s</table></div></section>" % trs2) if trs2 else ""}
+<section class='nx-card'><p class='nx-small'>¿Registrar a alguien que aún no tiene usuario? Usa <a href='/soporte/equipo'>Equipo Procsis</a> (alta de personal + credenciales).</p></section>"""
+    return page("Carnés del equipo", shell(content))
+
+
+@app.route("/gerencia/equipo/carnet/<int:id>")
+def gerencia_equipo_carnet(id):
+    g_ = _guard_gerencia()
+    if g_ is not None:
+        return g_
+    try:
+        registrar_auditoria("Carné del equipo: consultado", "id %s" % id)
+    except Exception:
+        db.session.rollback()
+    return soporte_equipo_carnet(id)
 
 
 if __name__ == "__main__":
