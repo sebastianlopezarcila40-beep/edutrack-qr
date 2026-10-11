@@ -4018,6 +4018,7 @@ def _staff_nav_items(path, rol=""):
             ("/soporte/instituciones", "Instituciones y validación"),
             ("/soporte/validacion-identidad", "Validación de identidad (enlace)"),
             ("/soporte/impersonar", "Suplantar usuario"),
+            ("/soporte/cambios", "Cambios y actualizaciones"),
             ("/soporte/reset-clave", "Resetear claves"),
             ("/soporte/periodos-colegio", "Periodos colegio"),
             ("/usuarios", "Usuarios · activo / eliminar"),
@@ -4043,6 +4044,7 @@ def _staff_nav_items(path, rol=""):
             ("/cobranza", "Dashboard"),
             ("/cobranza/contabilidad", "Contabilidad"),
             ("/cobranza/panel", "Cartera"),
+            ("/tickets-doc", "Tickets"),
             ("/logout", "Salir"),
         ]
     elif rol == "Contabilidad" or (path or "").startswith("/contabilidad"):
@@ -4055,6 +4057,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/usuarios", "Usuarios internos"),
             ("/gerencia/auditoria", "Auditoría IP"),
+            ("/gerencia/auditoria-total", "Auditoría total (todos los roles)"),
             ("/gerencia/validaciones-identidad", "Validaciones de identidad"),
             ("/gerencia/auditoria-instituciones", "Auditoría de instituciones"),
             ("/gerencia/activaciones", "Activaciones y verificación"),
@@ -4419,6 +4422,7 @@ def menu_items_por_rol():
             ("/soporte/instituciones", "Instituciones y validación"),
             ("/soporte/validacion-identidad", "Validación de identidad (enlace)"),
             ("/tickets-doc", "Tickets documentales"),
+            ("/soporte/cambios", "Cambios y actualizaciones"),
             ("/usuarios", "Usuarios (reset / altas)"),
             ("/soporte/equipo", "Equipo Procsis"),
             ("/tenants", "Instituciones"),
@@ -4776,6 +4780,11 @@ def shell(content):
 
 
 def acceso_denegado(mensaje="No tienes permiso para acceder a este módulo."):
+    try:
+        from flask import g as _gd
+        _gd._aud_denegado = str(mensaje)[:200]
+    except Exception:
+        pass
     try:
         _seg_registrar_evento("ACCESO_DENEGADO", session.get("usuario") or "")
     except Exception:
@@ -5445,6 +5454,10 @@ def _client_ip_audit():
 
 def registrar_auditoria(accion, detalle=""):
     """Registro preciso: IP, ubicación, ISP, UA, dispositivo, navegador, SO, ruta, tenant."""
+    try:
+        _aud_marcar_explicito()
+    except Exception:
+        pass
     try:
         ip = _client_ip_audit()
         ua = (request.headers.get("User-Agent") or "")[:400]
@@ -47794,6 +47807,7 @@ def _cta_menu_items():
         ("/contabilidad/cuentas-por-cobrar", "Cuentas por cobrar"),
         ("/contabilidad/estados", "Estados financieros"),
         ("/contabilidad/auditoria", "Auditoría"),
+        ("/tickets-doc", "Tickets"),
         ("/logout", "Salir"),
     ]
 
@@ -50347,6 +50361,19 @@ def _td_guard():
     return None
 
 
+_TD_COBRANZA_VE = ("PEND_CEO", "APROBADO", "AUTORIZADO", "APLICADO")
+
+
+def _td_puede_ver(rol, usuario, t):
+    """Contabilidad y Gerencia ven todo. Cobranza ve los suyos y todos los que ya pasaron a su etapa
+    (pendiente de CEO, aprobado, autorizado, aplicado): es quien debe aplicar el cambio. El resto solo los que creó."""
+    if rol in ("Contabilidad",) + _ROLES_GERENCIA:
+        return True
+    if t.creado_por == usuario:
+        return True
+    return rol == "Cobranza" and (t.estado in _TD_COBRANZA_VE)
+
+
 def _td_badge(est):
     lab, col = _TD_ESTADOS.get(est, (est, "#334155"))
     return "<span style='background:%s;color:#fff;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700'>%s</span>" % (col, _esc(lab))
@@ -50375,7 +50402,9 @@ def tickets_doc_lista():
         return g
     rol, usuario = rol_actual(), session.get("usuario") or ""
     q = TicketDoc.query
-    if rol not in ("Contabilidad",) + _ROLES_GERENCIA:
+    if rol == "Cobranza":
+        q = q.filter(or_(TicketDoc.creado_por == usuario, TicketDoc.estado.in_(_TD_COBRANZA_VE)))
+    elif rol not in ("Contabilidad",) + _ROLES_GERENCIA:
         q = q.filter(TicketDoc.creado_por == usuario)
     est = (request.args.get("estado") or "").strip()
     if est in _TD_ESTADOS:
@@ -50467,8 +50496,8 @@ def tickets_doc_ver(tid):
         return g
     t = TicketDoc.query.get_or_404(tid)
     rol, usuario = rol_actual(), session.get("usuario") or ""
-    if rol not in ("Contabilidad",) + _ROLES_GERENCIA and t.creado_por != usuario:
-        return acceso_denegado("Solo ves los tickets que creaste.")
+    if not _td_puede_ver(rol, usuario, t):
+        return acceso_denegado("No tienes acceso a este ticket: solo ves los que creaste o los que están en tu etapa.")
     err = msg = ""
     if request.method == "POST":
         acc = request.form.get("accion", "")
@@ -50564,7 +50593,7 @@ def tickets_doc_adjunto(tid):
     if g is not None:
         return g
     t = TicketDoc.query.get_or_404(tid)
-    if rol_actual() not in ("Contabilidad",) + _ROLES_GERENCIA and t.creado_por != (session.get("usuario") or ""):
+    if not _td_puede_ver(rol_actual(), session.get("usuario") or "", t):
         return acceso_denegado("Sin acceso.")
     try:
         registrar_auditoria("Ticket documental · descarga de adjunto", t.codigo)
@@ -72536,7 +72565,7 @@ def _seg_sellar_auto():
     _SEG_SELLO_T["t"] = now
     try:
         _seg_ensure()
-        _seg_sellar(500)
+        _seg_sellar(2000)
     except Exception:
         pass
 
@@ -80636,6 +80665,7 @@ def perfil_usuario():
                             "correo": nuevo_correo if cambia_correo else "", "tel": nuevo_tel if cambia_tel else "",
                             "destino": destino,
                         }
+                        registrar_auditoria("Perfil: PIN de validación enviado", "%s · cambio de %s · destino %s" % (u.usuario, ", ".join([x for x in ("correo" if cambia_correo else "", "teléfono" if cambia_tel else "") if x]), _n_mask_mail(destino)))
                         _n_flash("ok", "Enviamos un PIN de 6 dígitos a %s. Vence en 5 minutos." % _n_mask_mail(destino))
                     else:
                         _n_flash("err", "No se pudo enviar el PIN por correo. Intente más tarde o contacte a soporte.")
@@ -80646,6 +80676,7 @@ def perfil_usuario():
                 _n_flash("err", "No hay un cambio pendiente. Solicita un PIN primero.")
             elif _n_time.time() > p.get("exp", 0):
                 session.pop("_perfil_chg", None)
+                registrar_auditoria("Perfil: PIN vencido", u.usuario)
                 _n_flash("err", "El PIN venció. Solicita uno nuevo.")
             elif p.get("intentos", 0) >= 5:
                 session.pop("_perfil_chg", None)
@@ -80653,8 +80684,12 @@ def perfil_usuario():
             elif not _n_hmac.compare_digest(_n_pin_hash(pin), p.get("h", "")):
                 p["intentos"] = p.get("intentos", 0) + 1
                 session["_perfil_chg"] = p
+                registrar_auditoria("Perfil: PIN incorrecto", "%s · intento %d de 5" % (u.usuario, p["intentos"]))
                 _n_flash("err", "PIN incorrecto. Intentos restantes: %d." % max(0, 5 - p["intentos"]))
             else:
+                _ant_c = u.correo or ""
+                _r_ant = _n_perfil_row(u)
+                _ant_t = (_r_ant.telefono if _r_ant else "") or ""
                 if p.get("correo"):
                     u.correo = p["correo"]
                 if p.get("tel"):
@@ -80662,8 +80697,12 @@ def perfil_usuario():
                     r2.telefono = p["tel"]
                     r2.actualizado = _n_ahora()
                 db.session.commit()
-                registrar_auditoria("Perfil: contacto actualizado con PIN", "%s (%s)" % (u.usuario, ", ".join(
-                    [x for x in ("correo" if p.get("correo") else "", "teléfono" if p.get("tel") else "") if x])))
+                _dif = []
+                if p.get("correo"):
+                    _dif.append("correo: %s → %s" % (_cb_mask("correo", _ant_c) or "—", _cb_mask("correo", p["correo"])))
+                if p.get("tel"):
+                    _dif.append("teléfono: %s → %s" % (_cb_mask("telefono", _ant_t) or "—", _cb_mask("telefono", p["tel"])))
+                registrar_auditoria("Perfil: contacto actualizado con PIN", "%s · %s" % (u.usuario, "; ".join(_dif)))
                 session.pop("_perfil_chg", None)
                 _n_flash("ok", "Datos actualizados correctamente.")
         elif accion == "cancelar":
@@ -81727,6 +81766,988 @@ def soporte_subdominios():
 <form method='POST'>{_n_csrf_input()}<div class='nx-scroll'><table><tr><th>Código</th><th>Colegio</th><th>Subdominio (opcional)</th><th>Dirección de acceso</th></tr>{filas or "<tr><td colspan='4'>Sin colegios.</td></tr>"}</table></div>
 <p class='nx-small'>Si lo dejas vacío se usa el código del colegio. Solo letras minúsculas, números y guiones.</p><button>Guardar</button></form></section>"""
     return page("Subdominios", shell(content))
+
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  AUDITORÍA TOTAL (Gerencia) + REGISTRO AUTOMÁTICO DE TODOS LOS ROLES
+#  · Cada acción de un usuario con sesión queda en la tabla `auditoria` (la misma que ya usa
+#    todo el sistema, con su cadena de sellos anti-manipulación): cambios (POST/PUT/PATCH/DELETE),
+#    consultas de pantallas, descargas, accesos denegados e inicios de sesión fallidos.
+#  · NUNCA se guardan valores de formularios (contraseñas, PIN, datos personales): solo los
+#    NOMBRES de los campos enviados, la ruta, el resultado HTTP y quién/desde dónde.
+#  Variables de entorno (opcionales):
+#    AUDITORIA_CONSULTAS=0   no registrar la simple consulta de pantallas (por defecto sí se registra)
+# ══════════════════════════════════════════════════════════════════════════════
+_AUD_ULT = {}
+_AUD_SKIP_PREF = ("/static", "/media", "/api/sesion", "/api/salida-segura", "/api/biometria/estado", "/notificaciones",
+                  "/api/health", "/favicon", "/manifest", "/sw.js", "/robots.txt", "/_")
+_AUD_LOGIN_RUTAS = ("/login", "/docente-login", "/familia-login", "/soporte-login", "/cobranza-login", "/ventas-login",
+                    "/gerencia-login", "/dev-console-login", "/estudiante-login")
+
+
+def _aud_marcar_explicito():
+    try:
+        from flask import g as _gg
+        _gg._aud_explicito = True
+    except Exception:
+        pass
+
+
+def _aud_enmascarar(txt):
+    t = (txt or "").strip()
+    return (t[:2] + "***") if t else ""
+
+
+def _aud_insertar(usuario, rol, accion, detalle, iid=None, ruta=""):
+    """Inserta una fila de auditoría ligera (sin consulta de geolocalización: no debe frenar la petición)."""
+    try:
+        ip = _client_ip_audit()
+        ua = (request.headers.get("User-Agent") or "")[:400]
+        try:
+            disp, nav, so = _parse_user_agent(ua)
+        except Exception:
+            disp, nav, so = "", "", ""
+        db.session.add(Auditoria(
+            fecha=fecha_hoy(), hora=hora_actual(), usuario=(usuario or "Sistema")[:120], rol=(rol or "")[:60],
+            accion=(accion or "")[:120], detalle=(detalle or "")[:1500], ip=(ip or "")[:80], user_agent=ua,
+            dispositivo=(disp or "")[:80], navegador=(nav or "")[:80], sistema_os=(so or "")[:80],
+            institucion_id=iid, ruta=(ruta or "")[:200]))
+        db.session.commit()
+        try:
+            _seg_sellar_auto()
+        except Exception:
+            pass
+    except Exception as ex:
+        print("AUDITORIA AUTO:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+@app.after_request
+def _aud_auto(resp):
+    """Registra automáticamente lo que hace cualquier rol. Nunca rompe ni retrasa la respuesta."""
+    try:
+        if request.method in ("HEAD", "OPTIONS"):
+            return resp
+        path = request.path or ""
+        if path.startswith(_AUD_SKIP_PREF):
+            return resp
+        from flask import g as _gg
+        explicito = bool(getattr(_gg, "_aud_explicito", False))
+        denegado = getattr(_gg, "_aud_denegado", None)
+        usuario = session.get("usuario")
+        status = resp.status_code
+        iid = None
+        try:
+            iid = int(session.get("institucion_id")) if session.get("institucion_id") is not None else None
+        except Exception:
+            iid = None
+        metodo = request.method
+        # 1) Inicios de sesión fallidos (formulario devuelto sin sesión) o exitosos sin registro propio
+        if metodo == "POST" and path in _AUD_LOGIN_RUTAS:
+            tipeado = _aud_enmascarar(request.form.get("usuario") or request.form.get("codigo") or request.form.get("documento") or "")
+            if not usuario and status < 400 and not (resp.headers.get("Location") or ""):
+                _aud_insertar("(sin sesión)", "", "Inicio fallido · %s" % path, "Intento con usuario %s · HTTP %s" % (tipeado or "—", status), None, path)
+            elif usuario and not explicito:
+                _aud_insertar(usuario, session.get("rol") or "", "Inicio de sesión · %s" % path, "HTTP %s" % status, iid, path)
+            return resp
+        if not usuario:
+            return resp
+        rol = session.get("rol") or ""
+        # 2) Acceso denegado
+        if denegado is not None:
+            _aud_insertar(usuario, rol, "Acceso denegado · %s" % path, "Intentó %s %s · %s" % (metodo, path, str(denegado)[:300]), iid, path)
+            return resp
+        if explicito:
+            return resp   # esa acción ya quedó con su descripción propia
+        endpoint = request.endpoint or ""
+        args = ",".join("%s=%s" % (k, str(v)[:30]) for k, v in (request.view_args or {}).items())
+        # 3) Cambios: cualquier método que modifique
+        if metodo in ("POST", "PUT", "PATCH", "DELETE"):
+            campos = ",".join(sorted(k for k in list(request.form.keys()) + list(request.files.keys()))[:40])
+            if request.is_json and not campos:
+                try:
+                    campos = ",".join(sorted((request.get_json(silent=True) or {}).keys())[:40])
+                except Exception:
+                    campos = ""
+            det = "%s %s · HTTP %s · endpoint=%s%s%s" % (metodo, path, status, endpoint, (" · " + args) if args else "",
+                                                        (" · campos: " + campos) if campos else "")
+            _aud_insertar(usuario, rol, "Cambio · %s %s" % (metodo, path), det, iid, path)
+            return resp
+        # 4) Descargas y consultas
+        if status >= 400:
+            return resp
+        cd = (resp.headers.get("Content-Disposition") or "").lower()
+        mt = (resp.mimetype or "").lower()
+        es_desc = "attachment" in cd or mt in ("application/pdf", "text/csv") or mt.startswith("application/vnd.")
+        if not es_desc and (mt != "text/html" or os.environ.get("AUDITORIA_CONSULTAS", "1") == "0"):
+            return resp
+        clave = (usuario, path, "D" if es_desc else "C")
+        t = _time.time()
+        if t - _AUD_ULT.get(clave, 0) < (5 if es_desc else 30):
+            return resp   # evita llenar el registro con recargas seguidas
+        if len(_AUD_ULT) > 4000:
+            _AUD_ULT.clear()
+        _AUD_ULT[clave] = t
+        qs = ",".join(sorted(request.args.keys())[:15])
+        det = "GET %s · HTTP %s · endpoint=%s%s%s" % (path, status, endpoint, (" · " + args) if args else "", (" · filtros: " + qs) if qs else "")
+        _aud_insertar(usuario, rol, ("Descarga · " if es_desc else "Consulta · ") + path, det, iid, path)
+    except Exception as ex:
+        print("aud_auto:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return resp
+
+
+# ---------- categorías (compartidas con el módulo de Soporte) ----------
+def _aud_cond(cat):
+    A = Auditoria
+    if cat == "inicio":
+        return or_(A.accion.ilike("Inicio de sesi%"), A.accion.ilike("Inicio fallido%"), A.accion.ilike("Login%"),
+                   A.accion.ilike("Cierre de sesi%"), A.accion.ilike("Intento de inicio%"))
+    if cat == "validacion":
+        return or_(A.accion.ilike("%PIN%"), A.accion.ilike("%biometr%"), A.accion.ilike("%validaci%"), A.accion.ilike("%MFA%"),
+                   A.ruta.ilike("/validar%"), A.ruta.ilike("/biometria%"), A.ruta.ilike("/mfa%"))
+    if cat == "cambio":
+        return or_(A.accion.ilike("Cambio%"), A.accion.ilike("Perfil:%"), A.accion.ilike("%actualiz%"), A.accion.ilike("%edici%"),
+                   A.accion.ilike("Inventario:%"), A.accion.ilike("Certi-Procsis:%"), A.accion.ilike("Riesgo escolar:%"),
+                   A.accion.ilike("Subdominio%"), A.accion.ilike("Guardar %"), A.accion.ilike("Actualizar %"))
+    if cat == "descarga":
+        return or_(A.accion.ilike("Descarga%"), A.accion.ilike("%export%"), A.accion.ilike("%PDF%"))
+    if cat == "denegado":
+        return A.accion.ilike("Acceso denegado%")
+    if cat == "consulta":
+        return A.accion.ilike("Consulta%")
+    return None
+
+
+_AUD_CATS = [("", "Todo"), ("inicio", "Inicios de sesión"), ("cambio", "Cambios"), ("validacion", "Validaciones (PIN / biometría)"),
+             ("descarga", "Descargas"), ("consulta", "Consultas"), ("denegado", "Accesos denegados")]
+
+
+def _aud_filtrar(q, args):
+    """Aplica a un query de Auditoria los filtros de pantalla (fecha, rol, usuario, colegio, categoría, texto)."""
+    desde = (args.get("desde") or "").strip()[:10]
+    hasta = (args.get("hasta") or "").strip()[:10]
+    if desde:
+        q = q.filter(Auditoria.fecha >= desde)
+    if hasta:
+        q = q.filter(Auditoria.fecha <= hasta)
+    rol = (args.get("rol") or "").strip()[:60]
+    if rol:
+        q = q.filter(Auditoria.rol == rol)
+    usu = (args.get("usuario") or "").strip()[:80]
+    if usu:
+        q = q.filter(Auditoria.usuario.ilike("%" + usu + "%"))
+    try:
+        ins = int(args.get("inst") or 0)
+    except Exception:
+        ins = 0
+    if ins:
+        q = q.filter(Auditoria.institucion_id == ins)
+    cond = _aud_cond((args.get("cat") or "").strip())
+    if cond is not None:
+        q = q.filter(cond)
+    txt = (args.get("q") or "").strip()[:80]
+    if txt:
+        like = "%" + txt + "%"
+        q = q.filter(or_(Auditoria.accion.ilike(like), Auditoria.detalle.ilike(like), Auditoria.ip.ilike(like), Auditoria.ruta.ilike(like)))
+    return q
+
+
+def _csv_seguro(v):
+    s = "" if v is None else str(v)
+    return ("'" + s) if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
+@app.route("/gerencia/auditoria-total")
+def gerencia_auditoria_total():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    args = dict(request.args.items())
+    hoy = fecha_hoy()
+    if "desde" not in args:   # por defecto, últimos 7 días
+        args["desde"] = (ahora() - timedelta(days=7)).strftime("%Y-%m-%d")
+    q = _aud_filtrar(Auditoria.query, args)
+    fmt = (request.args.get("export") or "").strip().lower()
+    if fmt in ("csv", "xlsx"):
+        filas = q.order_by(Auditoria.id.desc()).limit(20000).all()
+        insts = {i.id: i.nombre for i in Institucion.query.all()}
+        cab = ["ID", "Fecha", "Hora", "Usuario", "Rol", "Colegio", "Acción", "Detalle", "IP", "Ubicación", "Dispositivo", "Navegador", "Sistema", "Ruta"]
+        reg = [[a.id, a.fecha, a.hora, a.usuario, a.rol, insts.get(a.institucion_id, ""), a.accion, a.detalle, a.ip, a.ubicacion,
+                a.dispositivo, a.navegador, a.sistema_os, a.ruta] for a in filas]
+        if fmt == "csv":
+            import csv as _csvm
+            from io import StringIO
+            sio = StringIO()
+            w = _csvm.writer(sio)
+            w.writerow(cab)
+            for r in reg:
+                w.writerow([_csv_seguro(x) for x in r])
+            return Response("﻿" + sio.getvalue(), mimetype="text/csv; charset=utf-8",
+                            headers={"Content-Disposition": "attachment; filename=auditoria_%s.csv" % hoy})
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Auditoría"
+        ws.append(cab)
+        for c in ws[1]:
+            c.font = Font(bold=True, color="FFFFFF")
+            c.fill = PatternFill("solid", fgColor="0B2D57")
+        for r in reg:
+            ws.append([_csv_seguro(x) if isinstance(x, str) else x for x in r])
+        for i, wd in enumerate([8, 11, 9, 18, 14, 28, 34, 60, 16, 22, 14, 14, 14, 30], 1):
+            ws.column_dimensions[get_column_letter(i)].width = wd
+        bio = BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        registrar_auditoria("Exportó auditoría", "%s · %d filas" % (fmt.upper(), len(reg)))
+        return send_file(bio, as_attachment=True, download_name="auditoria_%s.xlsx" % hoy,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    # --- pantalla ---
+    try:
+        pg = max(1, int(request.args.get("page") or 1))
+    except Exception:
+        pg = 1
+    por = 50
+    total = q.count()
+    filas = q.order_by(Auditoria.id.desc()).offset((pg - 1) * por).limit(por).all()
+    insts = {i.id: i.nombre for i in Institucion.query.order_by(Institucion.nombre.asc()).all()}
+    roles_op = [r for (r,) in db.session.query(Auditoria.rol).filter(Auditoria.rol != "").distinct().order_by(Auditoria.rol.asc()).all()]
+    base_q = Auditoria.query.filter(Auditoria.fecha == hoy)
+    k_hoy = base_q.count()
+    k_usu = db.session.query(func.count(func.distinct(Auditoria.usuario))).filter(Auditoria.fecha == hoy, Auditoria.usuario != "(sin sesión)").scalar() or 0
+    k_den = base_q.filter(_aud_cond("denegado")).count()
+    k_fail = base_q.filter(Auditoria.accion.ilike("Inicio fallido%")).count()
+    k_desc = base_q.filter(_aud_cond("descarga")).count()
+    k_cam = base_q.filter(_aud_cond("cambio")).count()
+    por_rol = db.session.query(Auditoria.rol, func.count(Auditoria.id)).filter(Auditoria.fecha >= (args.get("desde") or hoy)).group_by(Auditoria.rol).order_by(func.count(Auditoria.id).desc()).limit(14).all()
+    top_usu = db.session.query(Auditoria.usuario, Auditoria.rol, func.count(Auditoria.id)).filter(Auditoria.fecha >= (args.get("desde") or hoy), Auditoria.usuario != "(sin sesión)").group_by(Auditoria.usuario, Auditoria.rol).order_by(func.count(Auditoria.id).desc()).limit(10).all()
+    qs_base = {k: v for k, v in args.items() if k not in ("page", "export")}
+    from urllib.parse import urlencode as _ue
+    def _href(**kw):
+        d = dict(qs_base)
+        d.update({k: v for k, v in kw.items() if v is not None})
+        return "/gerencia/auditoria-total?" + _ue({k: v for k, v in d.items() if v not in ("", None)})
+    # integridad (solo si se pide: recorre toda la cadena)
+    integ = ""
+    if request.args.get("verificar") == "1":
+        try:
+            _seg_sellar(2000)
+            v = _seg_verificar()
+            if v.get("ok") and not v.get("n_anom"):
+                integ = "<div class='msg ok'>✅ Integridad verificada: %d registros sellados, sin alteraciones ni eliminaciones. %s pendientes de sellar.</div>" % (v.get("selladas", 0), v.get("pendientes", 0))
+            else:
+                integ = "<div class='msg danger'>⚠️ Se detectaron %d anomalías en la cadena de sellos (registros modificados o eliminados). Revisa «Seguridad e incidentes».</div>" % int(v.get("n_anom", 0))
+        except Exception as ex:
+            integ = "<div class='msg danger'>No se pudo verificar: %s</div>" % _esc(str(ex)[:120])
+    kp = "".join("<div class='nx-kpi'><b>%s</b><span>%s</span></div>" % (v, t) for v, t in [
+        (k_hoy, "Eventos hoy"), (k_usu, "Usuarios activos hoy"), (k_cam, "Cambios hoy"), (k_desc, "Descargas hoy"),
+        (k_den, "Accesos denegados hoy"), (k_fail, "Inicios fallidos hoy")])
+    chips = "".join("<a class='nx-chip %s' href='%s'>%s</a>" % ("on" if (args.get("cat") or "") == c else "", _href(cat=c, page=None), t) for c, t in _AUD_CATS)
+    sel_rol = "<option value=''>Todos los roles</option>" + "".join("<option %s>%s</option>" % ("selected" if args.get("rol") == r else "", _esc(r)) for r in roles_op)
+    sel_ins = "<option value=''>Todos los colegios</option>" + "".join("<option value='%d' %s>%s</option>" % (i, "selected" if str(args.get("inst") or "") == str(i) else "", _esc(n)) for i, n in insts.items())
+    trs = ""
+    for a in filas:
+        cat_cls = "bad" if (a.accion or "").startswith(("Acceso denegado", "Inicio fallido")) else ("info" if (a.accion or "").startswith(("Consulta", "Descarga")) else "ok")
+        det = (a.detalle or "")
+        trs += ("<tr><td style='white-space:nowrap'>%s<div class='nx-small'>%s</div></td><td><b>%s</b><div class='nx-small'>%s</div></td><td>%s</td>"
+                "<td><span class='nx-tag nx-t-%s'>%s</span><details><summary class='nx-small' style='cursor:pointer'>detalle</summary><div class='nx-small' style='white-space:pre-wrap;max-width:420px'>%s\n%s</div></details></td>"
+                "<td class='nx-small'>%s<br>%s</td></tr>") % (
+            _esc(a.fecha), _esc(a.hora), _esc(a.usuario), _esc(a.rol), _esc(insts.get(a.institucion_id, "—") if a.institucion_id else "—"),
+            cat_cls, _esc((a.accion or "")[:70]), _esc(det), _esc(a.ruta or ""),
+            _esc(a.ip or ""), _esc(" · ".join(x for x in (a.navegador, a.sistema_os, a.ubicacion) if x)))
+    pags = max(1, (total + por - 1) // por)
+    nav = ""
+    if pg > 1:
+        nav += "<a class='btn nx-btn-sm' href='%s'>← Anterior</a> " % _href(page=pg - 1)
+    nav += "<span class='nx-small'>Página %d de %d · %d registros</span> " % (pg, pags, total)
+    if pg < pags:
+        nav += "<a class='btn nx-btn-sm' href='%s'>Siguiente →</a>" % _href(page=pg + 1)
+    r_rol = "".join("<tr><td>%s</td><td style='text-align:right'><b>%d</b></td></tr>" % (_esc(r or "(sin sesión)"), n) for r, n in por_rol)
+    r_usu = "".join("<tr><td>%s <span class='nx-small'>%s</span></td><td style='text-align:right'><b>%d</b></td></tr>" % (_esc(u), _esc(r), n) for u, r, n in top_usu)
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🛡️ Auditoría total</h1><p>Todo lo que hacen todos los roles queda registrado: cambios, consultas, descargas, accesos denegados e inicios de sesión. No se guardan contraseñas ni datos de formularios, solo qué se hizo, quién, cuándo y desde dónde.</p></div><a class="btn" href="/gerencia/hq">← HQ</a></header>
+{integ}
+<div class='nx-kpis'>{kp}</div>
+<section class='nx-card'><h2>Filtros</h2>
+<div>{chips}</div>
+<form method='GET' class='nx-grid' style='margin-top:8px'>
+<input type='hidden' name='cat' value='{_esc(args.get("cat") or "")}'>
+<div><label>Desde</label><input type='date' name='desde' value='{_esc(args.get("desde") or "")}'></div>
+<div><label>Hasta</label><input type='date' name='hasta' value='{_esc(args.get("hasta") or "")}'></div>
+<div><label>Rol</label><select name='rol'>{sel_rol}</select></div>
+<div><label>Colegio</label><select name='inst'>{sel_ins}</select></div>
+<div><label>Usuario</label><input name='usuario' value='{_esc(args.get("usuario") or "")}' placeholder='Nombre de usuario'></div>
+<div><label>Buscar</label><input name='q' value='{_esc(args.get("q") or "")}' placeholder='Acción, ruta, IP, detalle…'></div>
+<div style='align-self:end'><button>Filtrar</button> <a class='btn' href='{_href(export="csv", page=None)}'>⬇ CSV</a> <a class='btn' href='{_href(export="xlsx", page=None)}'>⬇ Excel</a> <a class='btn' href='{_href(verificar="1", page=None)}'>🔒 Verificar integridad</a></div></form></section>
+<section class='nx-card'><h2>Registro</h2><div class='nx-scroll'><table><tr><th>Fecha</th><th>Usuario / rol</th><th>Colegio</th><th>Acción</th><th>Origen</th></tr>
+{trs or "<tr><td colspan='5'>Sin registros con estos filtros.</td></tr>"}</table></div><div style='margin-top:10px'>{nav}</div></section>
+<div class='nx-grid'>
+<section class='nx-card'><h2>Actividad por rol (periodo filtrado)</h2><table>{r_rol or "<tr><td>Sin datos</td></tr>"}</table></section>
+<section class='nx-card'><h2>Usuarios con más actividad</h2><table>{r_usu or "<tr><td>Sin datos</td></tr>"}</table></section></div>"""
+    return page("Auditoría total", shell(content))
+
+
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SOPORTE · CAMBIOS Y ACTUALIZACIONES con doble validación
+#  · Antes de ejecutar un cambio sensible (contacto de un usuario, activar/desactivar una cuenta,
+#    datos de una institución) se muestra el ANTES y el DESPUÉS y no se aplica nada hasta superar
+#    DOS validaciones del solicitante:  1) biometría (selfie desde el celular + PIN)  y
+#    2) preguntas de seguridad según su cargo.  Todo queda en auditoría.
+#  · La pestaña «Actividad de cuentas» muestra inicios de sesión, validaciones por PIN/biometría y
+#    cambios de los usuarios de los colegios.
+# ══════════════════════════════════════════════════════════════════════════════
+import json as _cb_json
+import random as _cb_random
+
+_CB_GERENCIA = ("Gerente", "Superadmin", "Administrador")
+_CB_ROLES = ("Soporte",) + _CB_GERENCIA
+_CB_VIGENCIA = 30 * 60           # la solicitud vence a los 30 minutos
+_CB_MAX_INTENTOS = 3
+_CB_TIPOS = {
+    "usuario_contacto": {"label": "Datos de contacto de un usuario (correo, teléfono, nombre)", "riesgo": "Alto",
+                         "campos": [("correo", "Correo"), ("telefono", "Teléfono"), ("nombre_completo", "Nombre completo")]},
+    "usuario_estado": {"label": "Activar o desactivar una cuenta de usuario", "riesgo": "Crítico",
+                       "campos": [("activo", "Estado de la cuenta")]},
+    "institucion_datos": {"label": "Datos de una institución", "riesgo": "Alto",
+                          "campos": [("nombre", "Nombre"), ("municipio", "Municipio"), ("departamento", "Departamento"), ("dane", "DANE"),
+                                     ("nit", "NIT"), ("direccion", "Dirección"), ("rector", "Rector(a)"),
+                                     ("contacto_facturacion", "Contacto de facturación"), ("subdominio", "Subdominio de acceso")]},
+}
+
+
+class CambioSolicitud(db.Model):
+    __tablename__ = "cambios_solicitud"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(20), default="", index=True)
+    tipo = db.Column(db.String(40), default="")
+    objetivo_id = db.Column(db.Integer, index=True)
+    objetivo_nombre = db.Column(db.String(220), default="")
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    motivo = db.Column(db.Text, default="")
+    antes_json = db.Column(db.Text, default="{}")
+    despues_json = db.Column(db.Text, default="{}")
+    riesgo = db.Column(db.String(12), default="Alto")
+    estado = db.Column(db.String(14), default="PENDIENTE", index=True)   # PENDIENTE|EJECUTADO|RECHAZADO|EXPIRADO|FALLIDO
+    solicitado_por = db.Column(db.String(120), default="")
+    solicitado_rol = db.Column(db.String(40), default="")
+    solicitado_uid = db.Column(db.Integer, index=True)
+    creado_en = db.Column(db.String(30), default="")
+    expira_ts = db.Column(db.Float, default=0.0)
+    bio_estado = db.Column(db.String(12), default="PENDIENTE")           # PENDIENTE|ESPERANDO|OK
+    bio_token = db.Column(db.String(64), default="")
+    bio_en = db.Column(db.String(30), default="")
+    preg_estado = db.Column(db.String(14), default="PENDIENTE")          # PENDIENTE|EN_CURSO|OK|FALLIDO|NO_DISPONIBLE
+    preg_json = db.Column(db.Text, default="")
+    preg_intentos = db.Column(db.Integer, default=0)
+    preg_en = db.Column(db.String(30), default="")
+    ejecutado_en = db.Column(db.String(30), default="")
+    resultado = db.Column(db.Text, default="")
+    ip = db.Column(db.String(80), default="")
+
+
+def _cb_ensure():
+    if getattr(_cb_ensure, "_ok", False):
+        return
+    try:
+        CambioSolicitud.__table__.create(db.engine, checkfirst=True)
+        PerfilUsuario.__table__.create(db.engine, checkfirst=True)
+        _cb_ensure._ok = True
+    except Exception as ex:
+        print("cambios tablas:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _cb_guard():
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in _CB_ROLES:
+        return acceso_denegado("El módulo de cambios y actualizaciones es para Soporte y Gerencia.")
+    _cb_ensure()
+    return None
+
+
+def _cb_mask(campo, valor):
+    v = "" if valor is None else str(valor)
+    if campo == "correo":
+        return _n_mask_mail(v) if "@" in v else v
+    if campo == "telefono":
+        return ("*" * max(0, len(v) - 3) + v[-3:]) if len(v) > 3 else v
+    return v
+
+
+def _cb_perfil(u, crear=False):
+    return _n_perfil_row(u, crear=crear)
+
+
+# ---------- lectura / validación / aplicación por tipo ----------
+def _cb_obj(tipo, oid):
+    try:
+        oid = int(oid)
+    except Exception:
+        return None
+    if tipo in ("usuario_contacto", "usuario_estado"):
+        return Usuario.query.get(oid)
+    if tipo == "institucion_datos":
+        return Institucion.query.get(oid)
+    return None
+
+
+def _cb_puede_tocar(tipo, obj):
+    """Soporte solo opera sobre cuentas de colegios; las cuentas internas son de Gerencia."""
+    if obj is None:
+        return False
+    if tipo == "institucion_datos":
+        return True
+    if rol_actual() in _CB_GERENCIA:
+        return True
+    return obj.institucion_id is not None and (obj.rol or "").strip() not in ROLES_INTERNOS
+
+
+def _cb_leer(tipo, obj):
+    if tipo == "usuario_contacto":
+        p = _cb_perfil(obj)
+        return {"correo": obj.correo or "", "telefono": (p.telefono if p else "") or "", "nombre_completo": obj.nombre_completo or ""}
+    if tipo == "usuario_estado":
+        return {"activo": "Inactivo" if obj.activo is False else "Activo"}
+    return {k: (getattr(obj, k, "") or "") for k, _ in _CB_TIPOS[tipo]["campos"]}
+
+
+def _cb_validar(tipo, obj, form):
+    """Devuelve (solo_los_campos_que_cambian, error)."""
+    actual = _cb_leer(tipo, obj)
+    nuevos = {}
+    for k, _lab in _CB_TIPOS[tipo]["campos"]:
+        if k not in form:
+            continue
+        v = (form.get(k) or "").strip()
+        if k == "correo":
+            v = v.lower()[:160]
+            if v and not _N_EMAIL_RE.match(v):
+                return None, "El correo no tiene un formato válido."
+        elif k == "telefono":
+            v = re.sub(r"[^0-9+]", "", v)[:20]
+            if v and not (7 <= len(v.replace("+", "")) <= 15):
+                return None, "El teléfono debe tener entre 7 y 15 dígitos."
+        elif k == "activo":
+            if v not in ("Activo", "Inactivo"):
+                return None, "Estado no válido."
+        elif k == "subdominio":
+            v, err = _sub_validar(v, obj.id)
+            if err:
+                return None, err
+        elif k in ("dane", "nit"):
+            v = re.sub(r"[^0-9\-]", "", v)[:40]
+        elif k == "nombre" and not v:
+            return None, "El nombre de la institución no puede quedar vacío."
+        else:
+            v = v[:220]
+        if v != (actual.get(k) or ""):
+            nuevos[k] = v
+    if not nuevos:
+        return None, "No hay cambios: los valores son iguales a los actuales."
+    if tipo == "usuario_estado" and obj.id == (session.get("uid") or session.get("user_id")):
+        return None, "No puedes desactivar tu propia cuenta."
+    return nuevos, ""
+
+
+def _cb_aplicar(tipo, obj, cambios):
+    try:
+        if tipo == "usuario_contacto":
+            if "correo" in cambios:
+                obj.correo = cambios["correo"]
+            if "nombre_completo" in cambios:
+                obj.nombre_completo = cambios["nombre_completo"]
+            if "telefono" in cambios:
+                p = _cb_perfil(obj, crear=True)
+                p.telefono = cambios["telefono"]
+                p.actualizado = _n_ahora()
+        elif tipo == "usuario_estado":
+            obj.activo = cambios.get("activo") == "Activo"
+            if not obj.activo:
+                obj.session_token = secrets.token_hex(16)   # cierra las sesiones abiertas de esa cuenta
+        elif tipo == "institucion_datos":
+            for k, v in cambios.items():
+                setattr(obj, k, (v or None) if k == "subdominio" else v)
+        db.session.commit()
+        return True, "Cambio aplicado."
+    except Exception as ex:
+        db.session.rollback()
+        return False, "No se pudo aplicar: %s" % str(ex)[:160]
+
+
+# ---------- preguntas de seguridad según el cargo ----------
+_CB_FILL_MUNI = ["Medellín", "Bogotá", "Cali", "Barranquilla", "Bucaramanga", "Cartagena", "Cúcuta", "Manizales", "Pereira"]
+
+
+def _cb_hash(cid, i, texto):
+    return _n_hmac.new(str(app.secret_key).encode(), ("cambio:%s:%s:%s" % (cid, i, texto)).encode(), _n_hashlib.sha256).hexdigest()
+
+
+def _cb_mc(correcta, pool, relleno):
+    rnd = _cb_random.SystemRandom()
+    c = str(correcta)
+    otros = [str(x) for x in dict.fromkeys(pool) if x and str(x) != c]
+    rnd.shuffle(otros)
+    otros = otros[:3]
+    for r in relleno:
+        if len(otros) >= 3:
+            break
+        if str(r) != c and str(r) not in otros:
+            otros.append(str(r))
+    if len(otros) < 3:
+        return None
+    ops = otros[:3] + [c]
+    rnd.shuffle(ops)
+    return ops
+
+
+def _cb_digitos_falsos(real, n):
+    rnd = _cb_random.SystemRandom()
+    out = set()
+    while len(out) < 6:
+        x = "".join(str(rnd.randrange(10)) for _ in range(n))
+        if x != real:
+            out.add(x)
+    return list(out)
+
+
+def _cb_banco(u):
+    """Preguntas de opción múltiple sobre lo que esa persona conoce por su cargo. Primero las del cargo, luego generales."""
+    por_cargo, generales = [], []
+    rol = (u.rol or "").strip()
+    inst = Institucion.query.get(u.institucion_id) if u.institucion_id else None
+    todas = Institucion.query.limit(300).all()
+    if inst is not None:   # Rectoría, Coordinación, Secretaría, Docente…
+        if (inst.municipio or "").strip():
+            por_cargo.append(("¿En qué municipio está ubicada tu institución?", inst.municipio.strip(), [i.municipio for i in todas], _CB_FILL_MUNI))
+        dane = re.sub(r"\D", "", inst.dane or "")
+        if len(dane) >= 4:
+            por_cargo.append(("¿Cuáles son los últimos 4 dígitos del DANE de tu institución?", dane[-4:], [], _cb_digitos_falsos(dane[-4:], 4)))
+        nit = re.sub(r"\D", "", inst.nit or "")
+        if len(nit) >= 3:
+            por_cargo.append(("¿Cuáles son los últimos 3 dígitos del NIT de tu institución?", nit[-3:], [], _cb_digitos_falsos(nit[-3:], 3)))
+        if (inst.plan or "").strip():
+            por_cargo.append(("¿Qué plan de EduTrack tiene contratado tu institución?", inst.plan.strip(), ["Basico", "Institucional", "Premium"], ["Ninguno de los anteriores"]))
+        if rol == "Docente" and (u.grupo_docente or "").strip():
+            grupos = [x.grupo_docente for x in Usuario.query.filter(Usuario.institucion_id == inst.id).limit(200).all() if x.grupo_docente]
+            por_cargo.append(("¿Cuál es el grupo que tienes asignado?", u.grupo_docente.strip(), grupos, ["601", "702", "803", "904", "1001", "1102"]))
+    else:
+        if rol in ("Soporte", "Desarrollador", "Developer"):
+            nombres = {i.id: i.nombre for i in todas}
+            ult = Auditoria.query.filter(Auditoria.usuario == u.usuario, Auditoria.institucion_id.isnot(None)).order_by(Auditoria.id.desc()).first()
+            if ult and nombres.get(ult.institucion_id):
+                por_cargo.append(("¿Con cuál institución trabajaste más recientemente?", nombres[ult.institucion_id], list(nombres.values()), []))
+        if rol in _CB_GERENCIA:
+            n = Institucion.query.filter(Institucion.estado == "ACTIVA").count()
+            por_cargo.append(("¿Cuántas instituciones están activas hoy en la plataforma?", str(n), [], [str(max(0, n + d)) for d in (-3, -2, -1, 1, 2, 3, 4)]))
+        if rol in ("Cobranza", "Contabilidad"):
+            filas = db.session.query(FacturaCobro.institucion_id, func.sum(FacturaCobro.valor)).filter(FacturaCobro.estado.in_(("PENDIENTE", "VENCIDO"))).group_by(FacturaCobro.institucion_id).order_by(func.sum(FacturaCobro.valor).desc()).all()
+            nombres = {i.id: i.nombre for i in todas}
+            if filas and nombres.get(filas[0][0]):
+                por_cargo.append(("¿Qué institución tiene el mayor saldo pendiente hoy?", nombres[filas[0][0]], list(nombres.values()), []))
+    dom = ((u.correo or "").split("@", 1) + [""])[1].strip().lower()
+    if dom:
+        generales.append(("¿Cuál es el dominio del correo registrado en tu cuenta?", dom, [], ["gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "procsis.com", "icloud.com", "edu.co"]))
+    prev = Auditoria.query.filter(Auditoria.usuario == u.usuario, or_(Auditoria.accion.ilike("Inicio de sesi%"), Auditoria.accion.ilike("Login%"))).order_by(Auditoria.id.desc()).offset(1).limit(1).first()
+    if prev and (prev.navegador or "").strip():
+        generales.append(("¿Con qué navegador iniciaste sesión la vez anterior?", prev.navegador.strip(), [], ["Chrome", "Firefox", "Edge", "Safari", "Opera", "Brave"]))
+    return por_cargo, generales
+
+
+def _cb_generar_preguntas(c, u):
+    por_cargo, generales = _cb_banco(u)
+    items = []
+    for (txt, correcta, pool, relleno) in por_cargo + generales:
+        ops = _cb_mc(correcta, pool, relleno)
+        if not ops:
+            continue
+        i = len(items)
+        items.append({"q": txt, "ops": ops, "h": _cb_hash(c.id, i, ops[ops.index(str(correcta))])})
+        if len(items) >= 3:
+            break
+    return items
+
+
+def _cb_preg_estado_inicial(c, u):
+    items = _cb_generar_preguntas(c, u)
+    if len(items) < 2:
+        c.preg_estado, c.preg_json = "NO_DISPONIBLE", ""
+        return False
+    c.preg_estado, c.preg_json = "EN_CURSO", _cb_json.dumps({"items": items}, ensure_ascii=False)
+    return True
+
+
+# ---------- biometría: reutiliza el reto PIN + selfie del celular que ya usa el login ----------
+def _cb_sync_bio(c):
+    if c.bio_estado != "ESPERANDO" or not c.bio_token:
+        return
+    ch = LoginChallenge.query.filter_by(token=c.bio_token).first()
+    if ch is None or ch.usuario_id != c.solicitado_uid:
+        c.bio_estado, c.bio_token = "PENDIENTE", ""
+    elif ch.estado == "aprobado":
+        c.bio_estado, c.bio_en = "OK", _n_ahora()
+        registrar_auditoria("Cambio guiado: biometría validada", "%s · %s" % (c.codigo, c.solicitado_por))
+    elif ch.estado in ("rechazado", "expirado") or not _reto_vigente(ch):
+        c.bio_estado, c.bio_token = "PENDIENTE", ""
+    db.session.commit()
+
+
+def _cb_tag(est):
+    cls = {"PENDIENTE": "warn", "EJECUTADO": "ok", "RECHAZADO": "bad", "EXPIRADO": "gray", "FALLIDO": "bad"}.get(est, "gray")
+    return "<span class='nx-tag nx-t-%s'>%s</span>" % (cls, _esc(est))
+
+
+def _cb_expirar_si_toca(c):
+    if c.estado == "PENDIENTE" and _n_time.time() > (c.expira_ts or 0):
+        c.estado, c.resultado = "EXPIRADO", "La solicitud venció sin completarse."
+        db.session.commit()
+        registrar_auditoria("Cambio guiado: expirado", c.codigo)
+
+
+def _cb_puede_ver(c):
+    return rol_actual() in _CB_GERENCIA or c.solicitado_uid == (session.get("uid") or session.get("user_id"))
+
+
+def _cb_mi_uid():
+    u = _usuario_sesion()
+    return u.id if u else None
+
+
+# ═════════════════════════ LISTA + ACTIVIDAD DE CUENTAS ═════════════════════════
+@app.route("/soporte/cambios")
+def soporte_cambios():
+    g = _cb_guard()
+    if g is not None:
+        return g
+    vista = (request.args.get("vista") or "solicitudes").strip()
+    rol = rol_actual()
+    uid = _cb_mi_uid()
+    tabs = "".join("<a class='nx-chip %s' href='/soporte/cambios?vista=%s'>%s</a>" % ("on" if vista == k else "", k, t) for k, t in
+                   (("solicitudes", "Solicitudes de cambio"), ("actividad", "Actividad de cuentas (inicios, PIN, cambios)")))
+    if vista == "actividad":
+        q = Auditoria.query
+        if rol == "Soporte":   # Soporte ve a los usuarios de colegios y lo suyo; el registro completo es de Gerencia
+            q = q.filter(or_(Auditoria.usuario == session.get("usuario"), Auditoria.rol.in_(list(_ROLES_COLEGIO))))
+        cat = (request.args.get("cat") or "").strip()
+        cond = _aud_cond(cat) if cat in ("inicio", "validacion", "cambio") else or_(_aud_cond("inicio"), _aud_cond("validacion"), _aud_cond("cambio"))
+        q = q.filter(cond)
+        txt = (request.args.get("q") or "").strip()[:80]
+        if txt:
+            like = "%" + txt + "%"
+            q = q.filter(or_(Auditoria.usuario.ilike(like), Auditoria.accion.ilike(like), Auditoria.detalle.ilike(like)))
+        try:
+            pg = max(1, int(request.args.get("page") or 1))
+        except Exception:
+            pg = 1
+        total = q.count()
+        filas = q.order_by(Auditoria.id.desc()).offset((pg - 1) * 50).limit(50).all()
+        insts = {i.id: i.nombre for i in Institucion.query.all()}
+        chips = "".join("<a class='nx-chip %s' href='/soporte/cambios?vista=actividad&cat=%s'>%s</a>" % ("on" if cat == c else "", c, t)
+                        for c, t in (("", "Todo"), ("inicio", "Inicios de sesión"), ("validacion", "Validaciones PIN / biometría"), ("cambio", "Cambios y actualizaciones")))
+        trs = "".join("<tr><td style='white-space:nowrap'>%s<div class='nx-small'>%s</div></td><td><b>%s</b><div class='nx-small'>%s · %s</div></td><td>%s<details><summary class='nx-small' style='cursor:pointer'>detalle</summary><div class='nx-small' style='white-space:pre-wrap;max-width:420px'>%s</div></details></td><td class='nx-small'>%s</td></tr>" % (
+            _esc(a.fecha), _esc(a.hora), _esc(a.usuario), _esc(a.rol), _esc(insts.get(a.institucion_id, "") if a.institucion_id else ""),
+            _esc((a.accion or "")[:80]), _esc(a.detalle or ""), _esc(" · ".join(x for x in (a.ip, a.navegador, a.sistema_os) if x))) for a in filas)
+        pags = max(1, (total + 49) // 50)
+        nav = ""
+        if pg > 1:
+            nav += "<a class='btn nx-btn-sm' href='/soporte/cambios?vista=actividad&cat=%s&q=%s&page=%d'>← Anterior</a> " % (cat, quote_plus(txt), pg - 1)
+        nav += "<span class='nx-small'>Página %d de %d · %d registros</span> " % (pg, pags, total)
+        if pg < pags:
+            nav += "<a class='btn nx-btn-sm' href='/soporte/cambios?vista=actividad&cat=%s&q=%s&page=%d'>Siguiente →</a>" % (cat, quote_plus(txt), pg + 1)
+        cuerpo = f"""<section class='nx-card'><h2>Actividad de cuentas</h2>
+<div>{chips}</div>
+<form method='GET' style='margin:8px 0'><input type='hidden' name='vista' value='actividad'><input type='hidden' name='cat' value='{_esc(cat)}'><input name='q' value='{_esc(txt)}' placeholder='Buscar usuario o acción…' style='max-width:320px'> <button>Buscar</button></form>
+<div class='nx-scroll'><table><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Origen</th></tr>{trs or "<tr><td colspan='4'>Sin actividad con estos filtros.</td></tr>"}</table></div><div style='margin-top:10px'>{nav}</div></section>"""
+    else:
+        q = CambioSolicitud.query
+        if rol not in _CB_GERENCIA:
+            q = q.filter(CambioSolicitud.solicitado_uid == uid)
+        filas = q.order_by(CambioSolicitud.id.desc()).limit(100).all()
+        for c in filas:
+            _cb_expirar_si_toca(c)
+        trs = "".join("<tr><td><a href='/soporte/cambios/%d'><b>%s</b></a></td><td>%s<div class='nx-small'>%s</div></td><td>%s</td><td>%s<div class='nx-small'>%s</div></td><td>%s</td></tr>" % (
+            c.id, _esc(c.codigo), _esc(_CB_TIPOS.get(c.tipo, {}).get("label", c.tipo)), _esc(c.objetivo_nombre), _esc(c.riesgo),
+            _esc(c.solicitado_por), _esc(c.creado_en[:16]), _cb_tag(c.estado)) for c in filas)
+        cuerpo = f"""<section class='nx-card'><h2>Solicitudes de cambio</h2>
+<p class='nx-small'>Ningún cambio sensible se ejecuta sin mostrar el antes y el después y sin superar las dos validaciones: biometría y preguntas de seguridad según tu cargo.</p>
+<p><a class='btn' href='/soporte/cambios/nuevo'>➕ Nueva solicitud de cambio</a></p>
+<div class='nx-scroll'><table><tr><th>Código</th><th>Cambio</th><th>Riesgo</th><th>Solicitó</th><th>Estado</th></tr>{trs or "<tr><td colspan='5'>Aún no hay solicitudes.</td></tr>"}</table></div></section>"""
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🔄 Cambios y actualizaciones</h1><p>Qué se va a cambiar, quién lo pide y qué validaciones superó antes de ejecutarse.</p></div><a class="btn" href="/{'gerencia/hq' if rol in _CB_GERENCIA else 'soporte_admin'}">Volver</a></header>
+{_n_flash_html()}<div style='margin-bottom:10px'>{tabs}</div>{cuerpo}"""
+    return page("Cambios y actualizaciones", shell(content))
+
+
+# ═════════════════════════ NUEVA SOLICITUD ═════════════════════════
+@app.route("/soporte/cambios/nuevo", methods=["GET", "POST"])
+def soporte_cambios_nuevo():
+    g = _cb_guard()
+    if g is not None:
+        return g
+    uid = _cb_mi_uid()
+    if not uid:
+        return acceso_denegado("Tu cuenta no tiene un registro de usuario válido para solicitar cambios.")
+    tipo = (request.values.get("tipo") or "").strip()
+    obj_id = (request.values.get("obj") or "").strip()
+    if tipo not in _CB_TIPOS:
+        tipo = ""
+    obj = _cb_obj(tipo, obj_id) if (tipo and obj_id) else None
+    if obj is not None and not _cb_puede_tocar(tipo, obj):
+        obj = None
+        _n_flash("err", "No tienes permiso para solicitar cambios sobre ese registro.")
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido, intente de nuevo.")
+            return redirect("/soporte/cambios/nuevo")
+        motivo = (request.form.get("motivo") or "").strip()
+        if not tipo or obj is None:
+            _n_flash("err", "Elige el tipo de cambio y el registro.")
+        elif len(motivo) < 10:
+            _n_flash("err", "Escribe el motivo del cambio (mínimo 10 caracteres).")
+            return redirect("/soporte/cambios/nuevo?tipo=%s&obj=%s" % (tipo, obj.id))
+        else:
+            nuevos, err = _cb_validar(tipo, obj, request.form)
+            if err:
+                _n_flash("err", err)
+                return redirect("/soporte/cambios/nuevo?tipo=%s&obj=%s" % (tipo, obj.id))
+            antes_all = _cb_leer(tipo, obj)
+            c = CambioSolicitud(
+                tipo=tipo, objetivo_id=obj.id, riesgo=_CB_TIPOS[tipo]["riesgo"], motivo=motivo[:2000],
+                objetivo_nombre=(getattr(obj, "nombre", None) or ("%s (%s)" % (obj.usuario, obj.rol)))[:220],
+                institucion_id=(obj.id if tipo == "institucion_datos" else getattr(obj, "institucion_id", None)),
+                antes_json=_cb_json.dumps({k: antes_all.get(k, "") for k in nuevos}, ensure_ascii=False),
+                despues_json=_cb_json.dumps(nuevos, ensure_ascii=False),
+                solicitado_por=session.get("usuario") or "", solicitado_rol=rol_actual() or "", solicitado_uid=uid,
+                creado_en=_n_ahora(), expira_ts=_n_time.time() + _CB_VIGENCIA, ip=_client_ip_audit()[:80])
+            db.session.add(c)
+            db.session.commit()
+            c.codigo = "CAM-%05d" % c.id
+            db.session.commit()
+            det = "; ".join("%s: %s → %s" % (k, _cb_mask(k, antes_all.get(k, "")) or "—", _cb_mask(k, v) or "—") for k, v in nuevos.items())
+            registrar_auditoria("Cambio guiado: solicitud creada", "%s · %s · %s · motivo: %s" % (c.codigo, c.objetivo_nombre, det, motivo[:200]))
+            return redirect("/soporte/cambios/%d" % c.id)
+        return redirect("/soporte/cambios/nuevo?tipo=%s&obj=%s" % (tipo, obj_id))
+    # ---- GET ----
+    tipos_opts = "".join("<option value='%s' %s>%s</option>" % (k, "selected" if k == tipo else "", _esc(v["label"])) for k, v in _CB_TIPOS.items())
+    paso = f"""<form method='GET' class='nx-grid'><div><label>1. ¿Qué vas a cambiar?</label><select name='tipo' onchange='this.form.submit()'><option value=''>— elegir —</option>{tipos_opts}</select></div></form>"""
+    bloque = ""
+    if tipo and obj is None:
+        if tipo == "institucion_datos":
+            lista = "".join("<tr><td>%s</td><td>%s</td><td><a class='btn nx-btn-sm' href='/soporte/cambios/nuevo?tipo=%s&obj=%d'>Elegir</a></td></tr>" % (
+                _esc(i.codigo), _esc(i.nombre), tipo, i.id) for i in Institucion.query.order_by(Institucion.nombre.asc()).limit(300).all())
+            bloque = "<h3>2. Elige la institución</h3><div class='nx-scroll'><table><tr><th>Código</th><th>Institución</th><th></th></tr>%s</table></div>" % lista
+        else:
+            qtxt = (request.args.get("q") or "").strip()[:80]
+            res = ""
+            if qtxt:
+                qq = Usuario.query.filter(or_(func.lower(Usuario.usuario) == qtxt.lower(), func.lower(Usuario.correo) == qtxt.lower(), Usuario.nombre_completo.ilike("%" + qtxt + "%")))
+                if rol_actual() not in _CB_GERENCIA:
+                    qq = qq.filter(Usuario.institucion_id.isnot(None))
+                insts = {i.id: i.nombre for i in Institucion.query.all()}
+                for x in qq.limit(30).all():
+                    if _cb_puede_tocar(tipo, x):
+                        res += "<tr><td><b>%s</b><div class='nx-small'>%s</div></td><td>%s</td><td>%s</td><td><a class='btn nx-btn-sm' href='/soporte/cambios/nuevo?tipo=%s&obj=%d'>Elegir</a></td></tr>" % (
+                            _esc(x.usuario), _esc(x.nombre_completo or ""), _esc(x.rol), _esc(insts.get(x.institucion_id, "PROCSIS")), tipo, x.id)
+            bloque = f"""<h3>2. Busca la cuenta</h3><form method='GET' class='nx-grid'><input type='hidden' name='tipo' value='{tipo}'>
+<div><label>Usuario, correo o nombre</label><input name='q' value='{_esc(qtxt)}' required></div><div style='align-self:end'><button>Buscar</button></div></form>
+{"<div class='nx-scroll'><table><tr><th>Usuario</th><th>Rol</th><th>Colegio</th><th></th></tr>%s</table></div>" % res if qtxt else ""}
+{"<p class='nx-small'>Sin resultados o sin permiso sobre esas cuentas.</p>" if qtxt and not res else ""}"""
+    elif tipo and obj is not None:
+        actual = _cb_leer(tipo, obj)
+        campos = ""
+        for k, lab in _CB_TIPOS[tipo]["campos"]:
+            if k == "activo":
+                campos += "<div><label>%s</label><select name='activo'>%s</select></div>" % (lab, "".join("<option %s>%s</option>" % ("selected" if actual.get("activo") == o else "", o) for o in ("Activo", "Inactivo")))
+            else:
+                campos += "<div><label>%s</label><input name='%s' value='%s'></div>" % (lab, k, _esc(actual.get(k, "")))
+        nombre = getattr(obj, "nombre", None) or "%s (%s)" % (obj.usuario, obj.rol)
+        bloque = f"""<h3>3. Datos a cambiar · {_esc(nombre)}</h3>
+<form method='POST' class='nx-grid'>{_n_csrf_input()}<input type='hidden' name='tipo' value='{tipo}'><input type='hidden' name='obj' value='{obj.id}'>{campos}
+<div style='grid-column:1/-1'><label>Motivo del cambio * (queda en auditoría)</label><textarea name='motivo' rows='2' required placeholder='Ej. El usuario perdió acceso a su correo y lo confirmó por llamada al número oficial'></textarea></div>
+<div style='align-self:end'><button>Revisar el cambio →</button></div></form>
+<p class='nx-small'>En el siguiente paso verás el antes y el después y deberás superar dos validaciones para ejecutarlo.</p>"""
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>➕ Nueva solicitud de cambio</h1></div><a class="btn" href="/soporte/cambios">Volver</a></header>
+{_n_flash_html()}<section class='nx-card'>{paso}{bloque}</section>"""
+    return page("Nueva solicitud de cambio", shell(content))
+
+
+# ═════════════════════════ DETALLE, VALIDACIONES Y EJECUCIÓN ═════════════════════════
+@app.route("/soporte/cambios/<int:cid>", methods=["GET", "POST"])
+def soporte_cambios_ver(cid):
+    g = _cb_guard()
+    if g is not None:
+        return g
+    c = CambioSolicitud.query.get_or_404(cid)
+    if not _cb_puede_ver(c):
+        return acceso_denegado("Solo ves las solicitudes que tú creaste.")
+    soy_solicitante = c.solicitado_uid == _cb_mi_uid()
+    _cb_expirar_si_toca(c)
+    u = _usuario_sesion()
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            _n_flash("err", "Formulario inválido, intente de nuevo.")
+            return redirect("/soporte/cambios/%d" % c.id)
+        acc = request.form.get("accion", "")
+        uclave = "cambio:%s" % (u.id if u else "x")
+        if c.estado != "PENDIENTE":
+            _n_flash("err", "Esta solicitud ya no está activa (%s)." % c.estado)
+        elif acc == "cancelar" and (soy_solicitante or rol_actual() in _CB_GERENCIA):
+            c.estado, c.resultado = "RECHAZADO", "Cancelada por %s." % (session.get("usuario") or "")
+            db.session.commit()
+            registrar_auditoria("Cambio guiado: cancelado", c.codigo)
+            _n_flash("ok", "Solicitud cancelada.")
+        elif not soy_solicitante:
+            return acceso_denegado("Las validaciones y la ejecución solo las hace quien creó la solicitud.")
+        elif acc == "bio_iniciar":
+            try:
+                ch = _crear_reto_biometrico(u.id)
+                ch.expira = (ahora() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+                db.session.commit()
+                c.bio_estado, c.bio_token = "ESPERANDO", ch.token
+                db.session.commit()
+                registrar_auditoria("Cambio guiado: biometría solicitada", c.codigo)
+            except Exception as ex:
+                db.session.rollback()
+                _n_flash("err", "No se pudo iniciar la validación biométrica: %s" % str(ex)[:120])
+        elif acc == "bio_cancelar":
+            c.bio_estado, c.bio_token = "PENDIENTE", ""
+            db.session.commit()
+        elif acc == "preg_generar" and c.preg_estado in ("PENDIENTE", "NO_DISPONIBLE"):
+            if not _cb_preg_estado_inicial(c, u):
+                _n_flash("err", "No hay suficientes datos de tu cuenta para generar las preguntas de seguridad. Pide a Gerencia que ejecute este cambio.")
+            db.session.commit()
+        elif acc == "preg_responder" and c.preg_estado == "EN_CURSO":
+            if _seg_fallos(uclave, 15) >= 5:
+                _n_flash("err", "Demasiados intentos fallidos. Espera 15 minutos.")
+            else:
+                items = (_cb_json.loads(c.preg_json or "{}") or {}).get("items", [])
+                ok_all = bool(items)
+                for i, it in enumerate(items):
+                    try:
+                        sel = it["ops"][int(request.form.get("r_%d" % i, "-1"))]
+                    except Exception:
+                        sel = None
+                    if sel is None or not _n_hmac.compare_digest(_cb_hash(c.id, i, sel), it["h"]):
+                        ok_all = False
+                if ok_all:
+                    c.preg_estado, c.preg_en, c.preg_json = "OK", _n_ahora(), ""
+                    _seg_limpiar(uclave)
+                    registrar_auditoria("Cambio guiado: preguntas de seguridad superadas", c.codigo)
+                    _n_flash("ok", "Preguntas superadas.")
+                else:
+                    c.preg_intentos = (c.preg_intentos or 0) + 1
+                    _seg_registrar_fallo(uclave)
+                    registrar_auditoria("Cambio guiado: preguntas de seguridad falladas", "%s · intento %d" % (c.codigo, c.preg_intentos))
+                    if c.preg_intentos >= _CB_MAX_INTENTOS:
+                        c.preg_estado, c.estado, c.preg_json = "FALLIDO", "RECHAZADO", ""
+                        c.resultado = "Se agotaron los intentos de las preguntas de seguridad."
+                        _n_flash("err", "Agotaste los %d intentos. La solicitud fue rechazada." % _CB_MAX_INTENTOS)
+                    else:
+                        _cb_preg_estado_inicial(c, u)
+                        _n_flash("err", "Respuestas incorrectas. Intento %d de %d: se generaron preguntas nuevas." % (c.preg_intentos, _CB_MAX_INTENTOS))
+                db.session.commit()
+        elif acc == "ejecutar":
+            _cb_sync_bio(c)
+            if c.bio_estado != "OK" or c.preg_estado != "OK":
+                _n_flash("err", "Debes superar las dos validaciones antes de ejecutar el cambio.")
+            else:
+                obj = _cb_obj(c.tipo, c.objetivo_id)
+                antes = _cb_json.loads(c.antes_json or "{}")
+                despues = _cb_json.loads(c.despues_json or "{}")
+                if obj is None or not _cb_puede_tocar(c.tipo, obj):
+                    c.estado, c.resultado = "FALLIDO", "El registro ya no existe o no tienes permiso sobre él."
+                    db.session.commit()
+                    _n_flash("err", c.resultado)
+                elif any((_cb_leer(c.tipo, obj).get(k, "") or "") != (v or "") for k, v in antes.items()):
+                    c.estado, c.resultado = "FALLIDO", "Los datos cambiaron mientras tanto. Crea una nueva solicitud."
+                    db.session.commit()
+                    registrar_auditoria("Cambio guiado: abortado", "%s · los datos cambiaron" % c.codigo)
+                    _n_flash("err", c.resultado)
+                else:
+                    ok, msg = _cb_aplicar(c.tipo, obj, despues)
+                    c.estado = "EJECUTADO" if ok else "FALLIDO"
+                    c.ejecutado_en, c.resultado = _n_ahora(), msg
+                    db.session.commit()
+                    det = "; ".join("%s: %s → %s" % (k, _cb_mask(k, antes.get(k, "")) or "—", _cb_mask(k, v) or "—") for k, v in despues.items())
+                    registrar_auditoria("Cambio guiado: ejecutado" if ok else "Cambio guiado: falló", "%s · %s · %s · validado con biometría y preguntas" % (c.codigo, c.objetivo_nombre, det))
+                    if ok and c.riesgo == "Crítico":
+                        _notif_crear(_CB_GERENCIA, "Cambio crítico ejecutado: %s" % c.codigo, "%s por %s" % (c.objetivo_nombre, c.solicitado_por), "/soporte/cambios/%d" % c.id, None, "alerta")
+                    _n_flash("ok" if ok else "err", msg)
+        return redirect("/soporte/cambios/%d" % c.id)
+    # ---- GET ----
+    if soy_solicitante:
+        _cb_sync_bio(c)
+    antes = _cb_json.loads(c.antes_json or "{}")
+    despues = _cb_json.loads(c.despues_json or "{}")
+    etiquetas = dict(_CB_TIPOS.get(c.tipo, {}).get("campos", []))
+    diff = "".join("<tr><td><b>%s</b></td><td style='background:#fef2f2'>%s</td><td style='background:#f0fdf4'>%s</td></tr>" % (
+        _esc(etiquetas.get(k, k)), _esc(antes.get(k, "") or "— vacío —"), _esc(v or "— vacío —")) for k, v in despues.items())
+    activa = c.estado == "PENDIENTE"
+    resta = max(0, int((c.expira_ts or 0) - _n_time.time()))
+    # --- tarjeta biometría ---
+    if c.bio_estado == "OK":
+        t_bio = "<span class='nx-tag nx-t-ok'>✔ Validada</span> <span class='nx-small'>%s</span>" % _esc(c.bio_en)
+    elif c.bio_estado == "ESPERANDO" and activa and soy_solicitante:
+        ch = LoginChallenge.query.filter_by(token=c.bio_token).first()
+        link = "%s/biometria/validar/%s" % (_base_publica(), c.bio_token)
+        t_bio = f"""<p>Abre este enlace <b>en tu celular</b>, escribe el PIN y toma la foto del rostro:</p>
+<div class='nx-small' style='word-break:break-all;background:#f1f5f9;border-radius:8px;padding:8px'>{_esc(link)}</div>
+<p>PIN: <b style='font-size:26px;letter-spacing:6px'>{_esc(ch.pin if ch else '------')}</b></p>
+<p class='nx-small'>Esperando la validación… esta pantalla se actualiza sola.</p>
+<form method='POST'>{_n_csrf_input()}<input type='hidden' name='accion' value='bio_cancelar'><button class='nx-btn-sm' style='background:#64748b'>Cancelar y reintentar</button></form>
+<script>(function(){{var t={_cb_json.dumps(c.bio_token)};function p(){{fetch('/api/biometria/estado/'+t,{{credentials:'same-origin'}}).then(function(r){{return r.json();}}).then(function(j){{if(j.estado==='aprobado'||j.estado==='rechazado'||j.estado==='expirado'){{location.reload();}}else{{setTimeout(p,2000);}}}}).catch(function(){{setTimeout(p,3000);}});}}p();}})();</script>"""
+    elif activa and soy_solicitante:
+        t_bio = f"<p class='nx-small'>Validación facial con tu celular: te mostramos un PIN y un enlace; abres el enlace, escribes el PIN y tomas una foto del rostro.</p><form method='POST'>{_n_csrf_input()}<input type='hidden' name='accion' value='bio_iniciar'><button>Iniciar validación biométrica</button></form>"
+    else:
+        t_bio = "<span class='nx-tag nx-t-gray'>Pendiente</span>"
+    # --- tarjeta preguntas ---
+    if c.preg_estado == "OK":
+        t_preg = "<span class='nx-tag nx-t-ok'>✔ Superadas</span> <span class='nx-small'>%s</span>" % _esc(c.preg_en)
+    elif c.preg_estado == "EN_CURSO" and activa and soy_solicitante:
+        items = (_cb_json.loads(c.preg_json or "{}") or {}).get("items", [])
+        bloques = ""
+        for i, it in enumerate(items):
+            ops = "".join("<label style='display:block;font-weight:400;margin:3px 0'><input type='radio' name='r_%d' value='%d' required style='width:auto'> %s</label>" % (i, j, _esc(o)) for j, o in enumerate(it["ops"]))
+            bloques += "<p><b>%d. %s</b></p>%s" % (i + 1, _esc(it["q"]), ops)
+        t_preg = f"<p class='nx-small'>Responde todas correctamente. Intento {int(c.preg_intentos or 0) + 1} de {_CB_MAX_INTENTOS}.</p><form method='POST'>{_n_csrf_input()}<input type='hidden' name='accion' value='preg_responder'>{bloques}<button>Responder</button></form>"
+    elif c.preg_estado == "FALLIDO":
+        t_preg = "<span class='nx-tag nx-t-bad'>✖ Fallidas</span>"
+    elif activa and soy_solicitante:
+        t_preg = f"<p class='nx-small'>Preguntas de opción múltiple sobre lo que conoces por tu cargo ({_esc(c.solicitado_rol)}).</p><form method='POST'>{_n_csrf_input()}<input type='hidden' name='accion' value='preg_generar'><button>Generar preguntas</button></form>"
+    else:
+        t_preg = "<span class='nx-tag nx-t-gray'>Pendiente</span>"
+    listo = activa and soy_solicitante and c.bio_estado == "OK" and c.preg_estado == "OK"
+    ejecutar = (f"<form method='POST' style='margin-top:12px'>{_n_csrf_input()}<input type='hidden' name='accion' value='ejecutar'><button style='background:#16a34a;font-size:15px' onclick=\"return confirm('¿Ejecutar este cambio ahora?')\">✅ Ejecutar cambio</button></form>"
+                if listo else ("<p class='nx-small'>El botón para ejecutar aparece cuando superes las dos validaciones.</p>" if activa and soy_solicitante else ""))
+    cancel = (f"<form method='POST' style='margin-top:8px'>{_n_csrf_input()}<input type='hidden' name='accion' value='cancelar'><button class='nx-btn-sm' style='background:#b91c1c'>Cancelar solicitud</button></form>"
+              if activa and (soy_solicitante or rol_actual() in _CB_GERENCIA) else "")
+    content = f"""{_N_CSS}
+<header class="role-hero"><div><h1>🔄 {_esc(c.codigo)} · {_cb_tag(c.estado)}</h1><p>{_esc(_CB_TIPOS.get(c.tipo, {}).get('label', c.tipo))} · {_esc(c.objetivo_nombre)}</p></div><a class="btn" href="/soporte/cambios">Volver</a></header>
+{_n_flash_html()}
+<section class='nx-card'><h2>Qué se va a cambiar</h2>
+<div class='nx-scroll'><table><tr><th>Campo</th><th>Antes</th><th>Después</th></tr>{diff}</table></div>
+<p class='nx-small'>Riesgo: <b>{_esc(c.riesgo)}</b> · Solicitó: <b>{_esc(c.solicitado_por)}</b> ({_esc(c.solicitado_rol)}) · {_esc(c.creado_en[:16])}{(' · vence en %d min' % (resta // 60 + 1)) if activa else ''}</p>
+<p><b>Motivo:</b> {_esc(c.motivo)}</p>
+{('<p class="nx-small"><b>Resultado:</b> ' + _esc(c.resultado) + '</p>') if c.resultado else ''}</section>
+<div class='nx-grid'>
+<section class='nx-card'><h2>Validación 1 · Biometría</h2>{t_bio}</section>
+<section class='nx-card'><h2>Validación 2 · Preguntas según tu cargo</h2>{t_preg}</section></div>
+<section class='nx-card'>{ejecutar}{cancel}</section>"""
+    return page(c.codigo, shell(content))
+
 
 
 
