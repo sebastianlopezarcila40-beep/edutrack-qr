@@ -83949,7 +83949,16 @@ _C48_CSS = """
 
 
 def _c48_page(titulo, cuerpo):
-    return page(titulo, _C48_CSS + "<div class='c48'>" + cuerpo + "</div>")
+    """Páginas del participante con logo PROCSIS."""
+    logo = (
+        "<div style='text-align:center;padding:18px 12px 8px'>"
+        "<img src='/static/img/logo-procsis.svg' alt='PROCSIS' "
+        "style='height:56px;width:auto;max-width:200px;object-fit:contain' "
+        "onerror=\"this.onerror=null;this.src='/static/img/logo-procsis.png'\">"
+        "<div style='font-size:12px;color:#64748b;margin-top:6px;font-weight:600'>"
+        "PROCSIS · EduTrack · Convocatoria de 48 Horas</div></div>"
+    )
+    return page(titulo, _C48_CSS + logo + "<div class='c48'>" + cuerpo + "</div>")
 
 
 def _c48_now():
@@ -84044,6 +84053,25 @@ def _c48_init():
                     db.session.rollback()
                 except Exception:
                     pass
+        
+        for col, typ in (
+            ("bloqueado_en", "VARCHAR(20) DEFAULT ''"),
+            ("elimina_en", "VARCHAR(20) DEFAULT ''"),
+        ):
+            try:
+                with db.engine.begin() as conn:
+                    try:
+                        conn.execute(text("ALTER TABLE conv48_participantes ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+                    except Exception:
+                        try:
+                            conn.execute(text("ALTER TABLE conv48_participantes ADD COLUMN %s %s" % (col, typ)))
+                        except Exception:
+                            pass
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
         _c48_estado_init["ok"] = True
     except Exception as e:
         db.session.rollback()
@@ -84073,6 +84101,67 @@ def _c48_nota_min():
         return max(1, min(100, int(_c48_cfg("nota_min", "60"))))
     except Exception:
         return 60
+
+
+def _c48_habilitada():
+    """Gerencia puede apagar la convocatoria: se oculta del login y cierra rutas públicas."""
+    try:
+        return str(_c48_cfg("habilitada", "1")).strip() not in ("0", "false", "False", "no", "off")
+    except Exception:
+        return True
+
+
+def _c48_fuera_de_servicio():
+    return _c48_page(
+        "Convocatoria no disponible",
+        "<div class='c48-card' style='text-align:center'><h1>🌱 Convocatoria no disponible</h1>"
+        "<p>La Convocatoria de 48 Horas no está habilitada en este momento.</p>"
+        "<a class='c48-btn' href='/login'>Volver al login</a></div>",
+    )
+
+
+def _c48_marcar_bloqueo_post_cert(pid):
+    """Tras enviar certificado: bloquea acceso y programa eliminación a 4 días."""
+    try:
+        elim = (ahora() + timedelta(days=4)).strftime("%Y-%m-%d %H:%M:%S")
+        _c48_x(
+            "UPDATE conv48_participantes SET estado='bloqueado', bloqueado_en=:n, elimina_en=:e WHERE id=:i",
+            n=_c48_now(), e=elim, i=pid,
+        )
+    except Exception as ex:
+        print("c48 bloqueo post cert:", ex)
+
+
+def _c48_msg_bloqueado(p):
+    elim = (p.get("elimina_en") or "")[:10]
+    return _c48_page(
+        "Cuenta finalizada",
+        "<div class='c48-card' style='text-align:center'>"
+        "<h1>🎓 Proceso culminado</h1>"
+        "<p>Ya recibiste tu certificado. Tu acceso a la convocatoria quedó <b>bloqueado</b>.</p>"
+        "<p>En un plazo de <b>4 días</b> tu cuenta y datos de participación serán eliminados del sistema"
+        + ((" (estimado: <b>%s</b>)." % _esc(elim)) if elim else ".")
+        + "</p>"
+        "<p class='small'>Revisa tu correo (y la carpeta de spam) para el certificado. Si no llegó, contacta a PROCSIS por PQR.</p>"
+        "<a class='c48-btn sec' href='/login'>Salir al login</a></div>",
+    )
+
+
+def _c48_limpiar_vencidos():
+    """Borra participantes bloqueados cuya fecha elimina_en ya venció."""
+    try:
+        ahora_s = _c48_now()
+        for (pid,) in _c48_q(
+            "SELECT id FROM conv48_participantes WHERE estado='bloqueado' AND elimina_en<>'' AND elimina_en<=:n",
+            n=ahora_s,
+        ):
+            try:
+                _c48_x("DELETE FROM conv48_respuestas WHERE participante_id=:i", i=pid)
+                _c48_x("DELETE FROM conv48_participantes WHERE id=:i", i=pid)
+            except Exception as e:
+                print("c48 purge:", e)
+    except Exception as e:
+        print("c48 limpiar:", e)
 
 
 def _c48_enviar_correo(destino, asunto, texto, html=None, pdf=None, pdf_name="certificado.pdf"):
@@ -84239,6 +84328,11 @@ def _c48_cards_modulos(prefijo="/convocatoria48/registro?modulo="):
 
 def _c48_login_card():
     """Tarjeta para el login principal (desplegable con los 3 módulos)."""
+    try:
+        if not _c48_habilitada():
+            return ""
+    except Exception:
+        pass
     return (
         "<style>.c48-lg{margin:12px 0}.c48-lg summary{list-style:none;cursor:pointer;background:linear-gradient(135deg,#047857,#0b63ce);"
         "color:#fff;border-radius:16px;padding:14px 16px;font-weight:800;font-size:15px;text-align:center;box-shadow:0 10px 24px rgba(4,120,87,.28)}"
@@ -84258,6 +84352,8 @@ def _c48_login_card():
 @app.route("/convocatoria48")
 def c48_inicio():
     _c48_init()
+    if not _c48_habilitada():
+        return _c48_fuera_de_servicio()
     cuerpo = (
         "<div class='c48-card' style='text-align:center'><h1>🌱 Convocatoria de 48 Horas</h1>"
         "<p>Responde 30 preguntas en 2 días y recibe tu certificado digital para tu hoja de vida. "
@@ -84287,6 +84383,8 @@ def c48_habeas():
 @app.route("/convocatoria48/registro", methods=["GET", "POST"])
 def c48_registro():
     _c48_init()
+    if not _c48_habilitada():
+        return _c48_fuera_de_servicio()
     modulo = (request.values.get("modulo") or "").strip().lower()
     if modulo not in _C48_MODULOS:
         return redirect("/convocatoria48")
@@ -84431,6 +84529,8 @@ def c48_crear_clave():
 @app.route("/convocatoria48/ingresar", methods=["GET", "POST"])
 def c48_ingresar():
     _c48_init()
+    if not _c48_habilitada():
+        return _c48_fuera_de_servicio()
     error = ""
     if request.method == "POST":
         correo = (request.form.get("correo") or "").strip().lower()
@@ -84439,6 +84539,9 @@ def c48_ingresar():
         if p and (p.get("bloqueo_hasta") or "") > _c48_now():
             error = "Demasiados intentos. Espera unos minutos o recupera tu contraseña."
         elif p and p.get("password_hash") and check_password_hash(p["password_hash"], clave):
+            if (p.get("estado") or "") == "bloqueado":
+                session.pop("c48_pid", None)
+                return _c48_msg_bloqueado(p)
             _c48_x("UPDATE conv48_participantes SET intentos_login=0, bloqueo_hasta='' WHERE id=:i", i=p["id"])
             session["c48_pid"] = p["id"]
             return redirect("/convocatoria48/panel")
@@ -84498,9 +84601,15 @@ def _c48_progreso(p):
 @app.route("/convocatoria48/panel")
 def c48_panel():
     _c48_init()
+    if not _c48_habilitada():
+        session.pop("c48_pid", None)
+        return _c48_fuera_de_servicio()
     p = _c48_actual()
     if not p:
         return redirect("/convocatoria48/ingresar")
+    if (p.get("estado") or "") == "bloqueado":
+        session.pop("c48_pid", None)
+        return _c48_msg_bloqueado(p)
     ic, nom_mod, _d = _c48_modulo_info(p["modulo"])
     dia, espera, fin = _c48_estado_dia(p)
     por_dia = _c48_por_dia()
@@ -84970,6 +85079,7 @@ def _c48_enviar_certificado(pid):
     ok = _c48_enviar_correo(p["correo"], "Tu certificado · Convocatoria de 48 Horas", texto, html, pdf, "Certificado_48_Horas_%s.pdf" % p["cert_codigo"])
     if ok:
         _c48_x("UPDATE conv48_participantes SET cert_enviado_en=:n, estado='certificado', cert_error='' WHERE id=:i", n=_c48_now(), i=pid)
+        _c48_marcar_bloqueo_post_cert(pid)
     else:
         _c48_x("UPDATE conv48_participantes SET cert_error='No se pudo enviar el correo' WHERE id=:i", i=pid)
     return ok
@@ -84977,6 +85087,10 @@ def _c48_enviar_certificado(pid):
 
 def _c48_procesar_certificados():
     _c48_init()
+    try:
+        _c48_limpiar_vencidos()
+    except Exception:
+        pass
     ahora_s = _c48_now()
     filas = _c48_q("SELECT id FROM conv48_participantes WHERE estado='aprobado' AND cert_enviado_en='' AND cert_programado_en<>'' AND cert_programado_en<=:n", n=ahora_s)
     for (pid,) in filas:
@@ -85186,10 +85300,8 @@ def _c48_gerencia_html(tab, filtro):
                    "<button class='c48-btn full'>Guardar diseño</button></form>"
                    "<p style='text-align:center'><a class='c48-btn sec' href='/gerencia/convocatoria48/certificado-muestra.pdf' target='_blank'>👁 Ver certificado de muestra</a></p></div>" % ("".join(celdas), campos))
     else:
-        out.append("<div class='c48-card'><h2>Configuración</h2><form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='accion' value='cfg'>"
-                   "<label>Preguntas por día</label><input type='text' name='por_dia' value='%d'>"
-                   "<label>Puntaje mínimo para aprobar y recibir certificado (%%)</label><input type='text' name='nota_min' value='%d'>"
-                   "<button class='c48-btn full'>Guardar</button></form></div>" % (por_dia, nota))
+        hab = '1' if _c48_habilitada() else '0'
+        out.append("<div class='c48-card'><h2>Configuración</h2><form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='accion' value='cfg'><label>Estado de la convocatoria</label><select name='habilitada'><option value='1'%s>✅ Habilitada (visible en login y abierta)</option><option value='0'%s>🚫 Inhabilitada (oculta en login y sin acceso)</option></select><p class='small'>Al inhabilitar, se oculta del login de inmediato y /convocatoria48 deja de admitir participantes.</p><label>Preguntas por día</label><input type='text' name='por_dia' value='%d'><label>Puntaje mínimo para aprobar y recibir certificado (%%)</label><input type='text' name='nota_min' value='%d'><button class='c48-btn full'>Guardar</button></form></div>" % ((' selected' if hab == '1' else ''), (' selected' if hab == '0' else ''), por_dia, nota))
     out.append("</div>")
     return "".join(out)
 
@@ -85351,6 +85463,7 @@ def gerencia_convocatoria48_accion():
         elif a == "cfg":
             _c48_cfg_set("por_dia", max(1, min(50, int(f.get("por_dia") or 15))))
             _c48_cfg_set("nota_min", max(1, min(100, int(f.get("nota_min") or 60))))
+            _c48_cfg_set("habilitada", "1" if str(f.get("habilitada") or "1").strip() in ("1", "true", "on", "si", "sí") else "0")
             destino = "/gerencia/convocatoria48?t=config"
         elif a == "part_reenviar":
             _c48_x("UPDATE conv48_participantes SET estado='aprobado', cert_enviado_en='', cert_lock='', cert_programado_en=:p WHERE id=:i", p=_c48_now(), i=int(f.get("id") or 0))
