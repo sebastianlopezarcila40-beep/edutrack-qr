@@ -84546,7 +84546,6 @@ def _c48_img_mime(datos):
 
 
 
-
 def _c48_enviar_correo_multi(destino, asunto, texto, html=None, adjuntos=None):
     """Envía correo con varios adjuntos PDF. adjuntos = [(bytes, filename), ...]."""
     correo, pwd = _credenciales_smtp("soporte")
@@ -84570,8 +84569,9 @@ def _c48_enviar_correo_multi(destino, asunto, texto, html=None, adjuntos=None):
         print("c48 correo multi error:", e)
         return False
 
+
 def _c48_pdf_certificado(p):
-    """Certificado: estructura clásica centrada (horizontal), marca de agua y firmas configurables desde Gerencia."""
+    """Certificado: estructura clásica centrada, marca de agua y firmas configurables desde Gerencia."""
     from reportlab.lib.utils import simpleSplit, ImageReader
     from reportlab.lib.pagesizes import A4
     buf = BytesIO()
@@ -84664,12 +84664,13 @@ def _c48_pdf_certificado(p):
     return buf.read()
 
 
+
 def _c48_pdf_constancia(p):
-    """Constancia vertical (estilo institucional formal) con logo de empresa arriba — diseño tipo SENA/centro de formación."""
+    """Constancia vertical (estilo institucional formal) con logo de empresa arriba."""
     from reportlab.lib.utils import simpleSplit, ImageReader
     from reportlab.lib.pagesizes import A4
     buf = BytesIO()
-    W, H = A4  # vertical / portrait
+    W, H = A4
     c = canvas.Canvas(buf, pagesize=(W, H))
     azul = colors.HexColor("#0B2D57")
     gris = colors.HexColor("#475569")
@@ -84702,14 +84703,12 @@ def _c48_pdf_constancia(p):
     dep = p.get("departamento") or ""
     lugar_id = (", ".join([x for x in (mun, dep) if x]) or "Colombia")
 
-    # Marco exterior
     c.setStrokeColor(azul)
     c.setLineWidth(2.2)
     c.rect(28, 28, W - 56, H - 56)
     c.setLineWidth(0.7)
     c.rect(34, 34, W - 68, H - 68)
 
-    # Marca de agua
     fondo = imagen("img_fondo")
     if fondo:
         c.saveState()
@@ -84718,8 +84717,6 @@ def _c48_pdf_constancia(p):
         c.restoreState()
 
     y = H - 55
-
-    # Logo de empresa arriba
     enc = imagen("img_encabezado")
     if enc:
         h_logo = poner(enc, W / 2, y - 70, 160, 70)
@@ -84732,7 +84729,6 @@ def _c48_pdf_constancia(p):
         c.drawCentredString(W / 2, y - 28, "PROCSIS")
         y -= 70
 
-    # Nombre de la entidad
     c.setFillColor(azul)
     c.setFont("Times-Bold", 13)
     c.drawCentredString(W / 2, y, entidad.upper())
@@ -84742,13 +84738,11 @@ def _c48_pdf_constancia(p):
     c.drawCentredString(W / 2, y, "Programa Procsis Edu · Convocatoria de 48 Horas")
     y -= 28
 
-    # Título CERTIFICA
     c.setFillColor(negro)
     c.setFont("Times-Bold", 22)
     c.drawCentredString(W / 2, y, "CERTIFICA")
     y -= 28
 
-    # Cuerpo formal tipo constancia
     cuerpo = (
         "Que %s identificado(a) con %s No. %s de %s, realizó y aprobó el curso de "
         "%s, con una intensidad horaria de Cuarenta y Ocho (48) horas, "
@@ -84772,7 +84766,6 @@ def _c48_pdf_constancia(p):
     c.drawString(55, y, "A: Aprobó")
     y -= 24
 
-    # Fecha
     try:
         f = datetime.strptime((p.get("dia2_fin") or _c48_now())[:10], "%Y-%m-%d")
         dia_n = f.day
@@ -84796,8 +84789,6 @@ def _c48_pdf_constancia(p):
         y -= 15
 
     y -= 20
-
-    # Firmas
     firma1 = imagen("img_firma1")
     firma2 = imagen("img_firma2")
     base_y = max(120, y - 90)
@@ -84828,7 +84819,6 @@ def _c48_pdf_constancia(p):
     bloque_firma(W * 0.30, 1, firma1)
     bloque_firma(W * 0.70, 2, firma2)
 
-    # Pie + QR
     url = "%s/convocatoria48/validar/%s" % (_base_publica().rstrip("/"), p.get("cert_codigo") or "")
     c.setFillColor(gris)
     c.setFont("Times-Italic", 9)
@@ -84873,7 +84863,6 @@ def _c48_enviar_certificado(pid):
             "<p>Completaste la <b>Convocatoria de 48 Horas</b> de PROCSIS. Adjuntamos tu <b>certificado</b> y tu <b>constancia</b> digital para tu hoja de vida.</p>"
             "<p style='color:#64748b;font-size:13px'>Código de verificación: <b>%s</b></p>"
             "<p style='color:#64748b;font-size:12px'>Proceso 100%% digital, cero papel.</p></div>" % (_esc(nombre), _esc(p["cert_codigo"])))
-    # Enviar certificado (principal) + constancia como segundo adjunto
     ok = _c48_enviar_correo_multi(
         p["correo"],
         "Tu certificado y constancia · Convocatoria de 48 Horas",
@@ -84979,19 +84968,79 @@ def _c48_gerencia_html(tab, filtro):
                            % (_esc(e), cor, "" if act else " · INACTIVA", i, filtro, "Desactivar" if act else "Activar"))
             out.append("</table></div>")
     elif tab == "participantes":
-        filas = _c48_q("SELECT p.id, p.nombres, p.modulo, p.correo, p.telefono, p.municipio, p.estado, p.aciertos, p.total, p.cert_enviado_en, p.cert_programado_en, p.cert_error, "
-                       "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL) FROM conv48_participantes p ORDER BY p.id DESC LIMIT 500")
-        out.append("<div class='c48-card' style='overflow-x:auto'><p><a class='c48-btn sec' href='/gerencia/convocatoria48/export.csv'>⬇ Exportar CSV</a> <b>%d</b> participantes</p>"
-                   "<table style='width:100%%;border-collapse:collapse;font-size:13px;min-width:820px'><tr style='text-align:left'><th>Participante</th><th>Módulo</th><th>Contacto</th><th>Estado</th><th>Avance</th><th>Certificado</th><th></th></tr>" % len(filas))
-        for i, nom, mod, cor, tel, mun, est, ac, tot, env, prog, err, resp in filas:
+        filas = _c48_q(
+            "SELECT p.id, p.nombres, p.modulo, p.correo, p.telefono, p.municipio, p.estado, p.aciertos, p.total, "
+            "p.cert_enviado_en, p.cert_programado_en, p.cert_error, "
+            "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL), "
+            "(SELECT COALESCE(SUM(r.correcta),0) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL), "
+            "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL AND COALESCE(r.correcta,0)=0) "
+            "FROM conv48_participantes p ORDER BY p.id DESC LIMIT 500"
+        )
+        nota_min = _c48_nota_min()
+        total_preg = por_dia * 2
+        out.append(
+            "<div class='c48-card' style='overflow-x:auto'>"
+            "<p><a class='c48-btn sec' href='/gerencia/convocatoria48/export.xlsx'>⬇ Exportar Excel</a> "
+            "<b>%d</b> participantes · Nota mínima para certificado: <b>%d%%</b></p>"
+            "<table style='width:100%%;border-collapse:collapse;font-size:13px;min-width:920px'>"
+            "<tr style='text-align:left;background:#f1f5f9'>"
+            "<th style='padding:8px'>Participante</th><th>Módulo</th><th>Contacto</th><th>Estado</th>"
+            "<th>Avance</th><th>Aciertos</th><th>Fallos</th><th>%%</th><th>Resultado</th><th>Certificado</th><th></th></tr>"
+            % (len(filas), nota_min)
+        )
+        for row in filas:
+            (i, nom, mod, cor, tel, mun, est, ac, tot, env, prog, err, resp, aciertos_live, fallos_live) = row
+            resp = int(resp or 0)
+            aciertos_live = int(aciertos_live or 0)
+            fallos_live = int(fallos_live or 0)
+            # Si ya cerró día 2 usa totales guardados; si no, los en vivo
+            if int(tot or 0) > 0:
+                aciertos_n, total_n = int(ac or 0), int(tot)
+            else:
+                aciertos_n, total_n = aciertos_live, resp
+            fallos_n = max(0, total_n - aciertos_n) if total_n else fallos_live
+            pct = round(100.0 * aciertos_n / total_n, 1) if total_n else 0.0
+            if est in ("aprobado", "certificado"):
+                resultado = "<span style='color:#166534;font-weight:800'>✅ Aprobado (≥%d%%)</span>" % nota_min
+            elif est == "no_aprobado":
+                resultado = "<span style='color:#b91c1c;font-weight:800'>❌ No alcanza (%d%%)</span>" % nota_min
+            elif total_n >= total_preg and total_n > 0:
+                if pct >= nota_min:
+                    resultado = "<span style='color:#166534;font-weight:800'>✅ Alcanza certificado</span>"
+                else:
+                    resultado = "<span style='color:#b91c1c;font-weight:800'>❌ No alcanza (%d%%)</span>" % nota_min
+            elif resp > 0:
+                # proyección con lo respondido hasta ahora
+                if pct >= nota_min:
+                    resultado = "<span style='color:#047857'>En camino (≥%d%%)</span>" % nota_min
+                else:
+                    resultado = "<span style='color:#b45309'>Bajo mínimo (%d%%)</span>" % nota_min
+            else:
+                resultado = "<span class='small' style='color:#64748b'>—</span>"
             cert = ("Enviado " + env) if env else (("Programado " + prog) if prog else "—")
             if err:
                 cert += " ⚠ " + err
-            out.append("<tr style='border-top:1px solid #e2e8f0'><td style='padding:8px'><b>%s</b><br><span class='small'>%s</span></td><td>%s</td><td>%s<br>%s</td><td>%s</td><td>%s/%d · aciertos %s/%s</td><td>%s</td><td>"
-                       "<form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='id' value='%d'>%s"
-                       "<button name='accion' value='part_reset' class='c48-btn sec' style='padding:6px 10px' onclick=\"return confirm('Esto borra sus respuestas y le permite repetir. ¿Continuar?')\">Reiniciar</button></form></td></tr>"
-                       % (_esc(nom), _esc(mun), _c48_modulo_info(mod)[1], _esc(cor), _esc(tel), _esc(est), resp, por_dia * 2, ac or 0, tot or 0, _esc(cert), i,
-                          ("<button name='accion' value='part_reenviar' class='c48-btn sec' style='padding:6px 10px'>Reenviar cert.</button> " if est in ("aprobado", "certificado") else "")))
+            avance_txt = "%d/%d preguntas" % (resp, total_preg)
+            out.append(
+                "<tr style='border-top:1px solid #e2e8f0'>"
+                "<td style='padding:8px'><b>%s</b><br><span class='small'>%s</span></td>"
+                "<td>%s</td><td>%s<br>%s</td><td>%s</td>"
+                "<td>%s</td>"
+                "<td style='color:#166534;font-weight:700'>%d</td>"
+                "<td style='color:#b91c1c;font-weight:700'>%d</td>"
+                "<td><b>%.1f%%</b></td>"
+                "<td>%s</td><td>%s</td><td>"
+                "<form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='id' value='%d'>%s"
+                "<button name='accion' value='part_reset' class='c48-btn sec' style='padding:6px 10px' "
+                "onclick=\"return confirm('Esto borra sus respuestas y le permite repetir. ¿Continuar?')\">Reiniciar</button>"
+                "</form></td></tr>"
+                % (
+                    _esc(nom), _esc(mun), _c48_modulo_info(mod)[1], _esc(cor), _esc(tel), _esc(est),
+                    avance_txt, aciertos_n, fallos_n, pct, resultado, _esc(cert), i,
+                    ("<button name='accion' value='part_reenviar' class='c48-btn sec' style='padding:6px 10px'>Reenviar cert.</button> "
+                     if est in ("aprobado", "certificado") else ""),
+                )
+            )
         out.append("</table></div>")
     elif tab == "certificado":
         celdas = []
@@ -85035,18 +85084,142 @@ def gerencia_convocatoria48():
 
 
 @app.route("/gerencia/convocatoria48/export.csv")
-def gerencia_convocatoria48_csv():
+@app.route("/gerencia/convocatoria48/export.xlsx")
+def gerencia_convocatoria48_excel():
+    """Exporta participantes de la Convocatoria 48h a Excel con diseño completo."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
     _c48_init()
-    import csv
-    out = _c48_io.StringIO()
-    w = csv.writer(out)
-    w.writerow(["id", "nombres", "tipo_id", "num_id", "correo", "telefono", "departamento", "municipio", "modulo", "estado", "aciertos", "total", "certificado", "enviado_en"])
-    for r in _c48_q("SELECT id, nombres, tipo_id, num_id, correo, telefono, departamento, municipio, modulo, estado, aciertos, total, cert_codigo, cert_enviado_en FROM conv48_participantes ORDER BY id"):
-        w.writerow(list(r))
-    return Response("\ufeff" + out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=convocatoria48_participantes.csv"})
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Participantes"
+
+    amarillo_fill = PatternFill(start_color="FACC15", end_color="FACC15", fill_type="solid")
+    gris_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    verde_fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+    rojo_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    titulo_font = Font(bold=True, color="0B2D57", name="Calibri", size=16)
+    sub_font = Font(bold=True, color="334155", name="Calibri", size=11)
+    normal_font = Font(name="Calibri", size=10)
+    header_font = Font(bold=True, color="0B2D57", name="Calibri", size=10)
+    borde = Border(
+        left=Side(style="thin", color="94A3B8"),
+        right=Side(style="thin", color="94A3B8"),
+        top=Side(style="thin", color="94A3B8"),
+        bottom=Side(style="thin", color="94A3B8"),
+    )
+    centro = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    izq = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+    ws.merge_cells("A1:R1")
+    ws["A1"] = "PROCSIS · EduTrack"
+    ws["A1"].font = titulo_font
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A2:R2")
+    ws["A2"] = "Convocatoria de 48 Horas · Listado de participantes"
+    ws["A2"].font = sub_font
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+
+    nota_min = _c48_nota_min()
+    total_preg = _c48_por_dia() * 2
+    ws.merge_cells("A3:R3")
+    ws["A3"] = "Exportado el %s (hora Colombia) · Nota mínima para certificado: %d%% · Total preguntas: %d" % (
+        ahora().strftime("%d/%m/%Y %H:%M"), nota_min, total_preg)
+    ws["A3"].font = Font(name="Calibri", size=9, color="64748B", italic=True)
+    ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[2].height = 20
+    ws.row_dimensions[3].height = 16
+
+    headers = [
+        "ID", "Nombres y apellidos", "Tipo ID", "Número ID", "Correo", "Teléfono",
+        "Departamento", "Municipio", "Módulo", "Estado",
+        "Respondidas", "Aciertos", "Fallos", "Porcentaje %", "Resultado",
+        "Código certificado", "Enviado el",
+    ]
+    header_row = 5
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=header_row, column=col, value=h)
+        cell.fill = amarillo_fill
+        cell.font = header_font
+        cell.alignment = centro
+        cell.border = borde
+    ws.row_dimensions[header_row].height = 22
+
+    filas = _c48_q(
+        "SELECT p.id, p.nombres, p.tipo_id, p.num_id, p.correo, p.telefono, p.departamento, p.municipio, "
+        "p.modulo, p.estado, p.aciertos, p.total, p.cert_codigo, p.cert_enviado_en, "
+        "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL), "
+        "(SELECT COALESCE(SUM(r.correcta),0) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL) "
+        "FROM conv48_participantes p ORDER BY p.id"
+    )
+    for i, r in enumerate(filas):
+        (pid, nom, tipo, num, correo, tel, dep, mun, mod, est, ac, tot, cert_c, env,
+         resp, aciertos_live) = r
+        resp = int(resp or 0)
+        aciertos_live = int(aciertos_live or 0)
+        if int(tot or 0) > 0:
+            aciertos_n, total_n = int(ac or 0), int(tot)
+        else:
+            aciertos_n, total_n = aciertos_live, resp
+        fallos_n = max(0, total_n - aciertos_n)
+        pct = round(100.0 * aciertos_n / total_n, 1) if total_n else 0.0
+        if est in ("aprobado", "certificado") or (total_n >= total_preg and pct >= nota_min):
+            resultado = "Aprobado / Alcanza certificado"
+        elif est == "no_aprobado" or (total_n >= total_preg and pct < nota_min):
+            resultado = "No alcanza (%d%% mín.)" % nota_min
+        elif resp > 0:
+            resultado = "En curso"
+        else:
+            resultado = "Sin iniciar"
+        mod_nom = _c48_modulo_info(mod)[1] if mod else ""
+        valores = [
+            pid, nom, tipo, num, correo, tel, dep, mun, mod_nom, est,
+            resp, aciertos_n, fallos_n, pct, resultado, cert_c or "", env or "",
+        ]
+        row_num = header_row + 1 + i
+        for col, val in enumerate(valores, 1):
+            cell = ws.cell(row=row_num, column=col, value=val if val is not None else "")
+            cell.font = normal_font
+            cell.border = borde
+            cell.alignment = centro if col in (1, 10, 11, 12, 13, 14) else izq
+            if i % 2 == 1:
+                cell.fill = gris_fill
+            if col == 15:
+                if "Aprobado" in str(resultado) or "Alcanza" in str(resultado):
+                    cell.fill = verde_fill
+                    cell.font = Font(name="Calibri", size=10, bold=True, color="166534")
+                elif "No alcanza" in str(resultado):
+                    cell.fill = rojo_fill
+                    cell.font = Font(name="Calibri", size=10, bold=True, color="B91C1C")
+
+    anchos = {
+        "A": 8, "B": 30, "C": 18, "D": 14, "E": 28, "F": 14,
+        "G": 14, "H": 14, "I": 14, "J": 12, "K": 12, "L": 10,
+        "M": 10, "N": 12, "O": 26, "P": 18, "Q": 18,
+    }
+    for col, width in anchos.items():
+        ws.column_dimensions[col].width = width
+
+    pie_row = header_row + 2 + len(filas)
+    ws.merge_cells(start_row=pie_row, start_column=1, end_row=pie_row, end_column=17)
+    ws.cell(row=pie_row, column=1, value="Total participantes: %d  ·  Documento generado por PROCSIS EduTrack" % len(filas))
+    ws.cell(row=pie_row, column=1).font = Font(name="Calibri", size=9, color="64748B", italic=True)
+    ws.cell(row=pie_row, column=1).alignment = Alignment(horizontal="center")
+    ws.freeze_panes = "A6"
+
+    b = BytesIO()
+    wb.save(b)
+    b.seek(0)
+    return send_file(
+        b,
+        as_attachment=True,
+        download_name="convocatoria48_participantes.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/gerencia/convocatoria48/accion", methods=["POST"])
