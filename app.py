@@ -20967,6 +20967,160 @@ def _login_portal(rol=None):
     }.get(r, "/login")
 
 
+
+# ============================================================
+#  BIENVENIDA COMÚN — roles administrativos PROCSIS
+#  (Soporte, Ventas, Cobranza, Contabilidad, Proveedor, Gerencia, Desarrollo)
+#  No aplica a los roles de colegio.
+# ============================================================
+_BIENVENIDA_ROLES = {
+    "Soporte": ("Soporte técnico", "Mesa técnica: consulte instituciones, usuarios y tickets, y atienda las solicitudes de los colegios."),
+    "Comercial": ("Ventas", "Gestione su CRM, propuestas, demos, contratos y comisiones."),
+    "Cobranza": ("Cobranza", "Seguimiento de cartera, acuerdos de pago y recaudo de las instituciones."),
+    "Contabilidad": ("Contabilidad", "Libro de movimientos, plan de cuentas, estados financieros y auditoría contable."),
+    "Proveedor": ("Proveedor de carnés", "Producción física de carnés: descargue lotes, imprima y cierre cada tanda con su evidencia."),
+    "Gerente": ("Gerencia", "Visión global de la operación: colegios, ventas, cartera, auditoría y control."),
+    "Administrador": ("Gerencia", "Visión global de la operación: colegios, ventas, cartera, auditoría y control."),
+    "Superadmin": ("Gerencia", "Visión global de la operación: colegios, ventas, cartera, auditoría y control."),
+    "Desarrollador": ("Desarrollo", "Consola técnica, versiones y mantenimiento de la plataforma."),
+    "Developer": ("Desarrollo", "Consola técnica, versiones y mantenimiento de la plataforma."),
+}
+_DIAS_ES = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+_MESES_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+             "septiembre", "octubre", "noviembre", "diciembre")
+_NOMBRES_FEM = frozenset((
+    "maria", "ana", "laura", "carmen", "sofia", "lucia", "paola", "andrea", "diana", "sandra",
+    "jenny", "jennifer", "carolina", "valentina", "camila", "isabella", "alejandra", "patricia",
+    "monica", "claudia", "luz", "martha", "marta", "liliana", "gloria", "yurany", "johana",
+    "viviana", "natalia", "daniela", "juliana", "katherine", "karen", "paula", "angela",
+    "mariana", "luisa", "esperanza", "rosa", "beatriz", "adriana", "catalina", "tatiana",
+))
+_NOMBRES_MASC_A = frozenset(("joshua", "luca", "borja", "jehova", "nikita"))
+
+
+def _sin_tildes(txt):
+    import unicodedata as _ud
+    return "".join(c for c in _ud.normalize("NFD", txt or "") if _ud.category(c) != "Mn")
+
+
+def _tratamiento_usuario():
+    """'señor' o 'señora' según el nombre a mostrar del usuario."""
+    try:
+        u = _usuario_actual_obj()
+        tiene_nombre = bool(u and (u.nombre_completo or "").strip())
+    except Exception:
+        tiene_nombre = False
+    base = (nombre_mostrar_actual() or "").strip()
+    primero = re.split(r"[\s._\-]+", _sin_tildes(base).lower())[0] if base else ""
+    if primero in _NOMBRES_FEM:
+        return "señora"
+    if tiene_nombre and len(primero) >= 3 and primero.endswith("a") and primero not in _NOMBRES_MASC_A:
+        return "señora"
+    return "señor"
+
+
+def _saludo_staff():
+    """Devuelve (frase_grande, subtitulo) según día de la semana y hora de Colombia."""
+    n = ahora()
+    h = n.hour
+    if 5 <= h < 12:
+        franja = "Buenos días"
+    elif 12 <= h < 19:
+        franja = "Buenas tardes"
+    else:
+        franja = "Buenas noches"
+    nombre = (nombre_mostrar_actual() or "colaborador").strip()
+    trat = _tratamiento_usuario()
+    fecha = "%s %d de %s de %d" % (_DIAS_ES[n.weekday()], n.day, _MESES_ES[n.month - 1], n.year)
+    if n.weekday() == 0:
+        grande = "¡Feliz lunes, %s %s!" % (trat, nombre)
+        sub = "%s · %s" % (franja, fecha)
+    else:
+        grande = "%s, %s %s" % (franja, trat, nombre)
+        sub = fecha
+    return grande, sub
+
+
+def _bienvenida_staff_html(rol, mensaje=None, destino=None, boton="Ir al panel principal", titulo_mod=None):
+    """Pantalla de bienvenida unificada (mismo diseño que la de Soporte)."""
+    etiqueta, desc = _BIENVENIDA_ROLES.get(rol, ("PROCSIS", ""))
+    grande, sub = _saludo_staff()
+    try:
+        logo = logo_plataforma()
+    except Exception:
+        logo = "/static/img/logo-procsis.svg"
+    destino = destino or "/bienvenida/continuar"
+    cuerpo_txt = mensaje if mensaje is not None else (
+        "Este es su módulo de <b>%s</b>. %s" % (_esc(etiqueta), _esc(desc)))
+    return f"""
+<style>
+@keyframes bvIn{{from{{opacity:0;transform:translateY(14px)}}to{{opacity:1;transform:none}}}}
+.bv-wrap{{min-height:70vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f7}}
+.bv-box{{text-align:center;max-width:640px;animation:bvIn .6s ease both}}
+.bv-logo{{width:180px;height:180px;object-fit:contain;background:#fff;border-radius:32px;padding:18px;
+  box-shadow:0 16px 48px rgba(0,32,96,.12);margin-bottom:28px}}
+.bv-hi{{font-size:clamp(34px,6vw,58px);font-weight:800;line-height:1.08;margin:0 0 8px;letter-spacing:-.03em;
+  background:linear-gradient(90deg,#002060,#005BEA);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:#002060}}
+.bv-sub{{font-size:15px;color:#6e6e73;margin:0 0 20px;text-transform:capitalize}}
+.bv-txt{{font-size:16px;color:#6e6e73;line-height:1.5;margin:0 0 22px}}
+.bv-btn{{display:inline-block;background:#005BEA;color:#fff;padding:12px 26px;border-radius:980px;
+  font-weight:600;text-decoration:none}}
+</style>
+<div class="bv-wrap"><div class="bv-box">
+  <img class="bv-logo" src="{_esc(logo)}" alt="PROCSIS" onerror="this.style.display='none'">
+  <h1 class="bv-hi">{_esc(grande)}</h1>
+  <p class="bv-sub">{_esc(sub)}</p>
+  <p class="bv-txt">{cuerpo_txt}</p>
+  <a class="bv-btn" href="{_esc(destino)}">{_esc(boton)}</a>
+</div></div>
+"""
+
+
+@app.route("/bienvenida")
+def bienvenida_staff():
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in _BIENVENIDA_ROLES:
+        return redirect("/dashboard")
+    body = _bienvenida_staff_html(rol)
+    try:
+        return page("Bienvenida", shell(body))
+    except Exception:
+        return page("Bienvenida", body)
+
+
+@app.route("/bienvenida/continuar")
+def bienvenida_staff_continuar():
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if rol not in _BIENVENIDA_ROLES:
+        return redirect("/dashboard")
+    session["bienvenida_vista"] = True
+    return redirect(_home_portal(rol))
+
+
+@app.before_request
+def _bienvenida_staff_inicio():
+    """Al entrar al panel principal de un rol administrativo (tras iniciar sesión), mostrar la bienvenida una vez."""
+    try:
+        if request.method != "GET" or not session.get("usuario") or session.get("bienvenida_vista"):
+            return None
+        if session.get("soporte") or session.get("impersonate") or session.get("impersonator"):
+            return None
+        rol = rol_actual()
+        if rol not in _BIENVENIDA_ROLES:
+            return None
+        if (request.path or "") == _home_portal(rol):
+            return redirect("/bienvenida")
+    except Exception:
+        pass
+    return None
+
+
 @app.before_request
 def _aislar_paneles_internos():
     """Cada rol interno SOLO opera en su portal. Atrás del navegador no salta a otro panel."""
@@ -21017,7 +21171,7 @@ def _aislar_paneles_internos():
         return None
 
     # Rutas siempre permitidas para staff
-    if path in ("/logout", "/mi-perfil", "/cambiar_password", "/mfa", "/login", "/gerencia/hub") or path.startswith("/biometria"):
+    if path in ("/logout", "/mi-perfil", "/cambiar_password", "/mfa", "/login", "/gerencia/hub", "/bienvenida", "/bienvenida/continuar") or path.startswith("/biometria"):
         return None
     if path.startswith("/api/interno"):
         return None
@@ -71988,40 +72142,13 @@ def soporte_auditoria_colegio_bloqueada():
         return redirect("/gerencia/hq")
     if rol != "Soporte":
         return acceso_denegado()
-    nombre = (session.get("nombre_completo") or session.get("usuario") or "colaborador").strip()
-    nom_l = nombre.lower()
-    if any(x in nom_l for x in (
-        "maria", "maría", "ana", "laura", "carmen", "sofia", "sofía", "lucia", "lucía",
-        "paola", "andrea", "diana", "sandra", "jenny", "jennifer", "carolina", "valentina",
-        "camila", "isabella", "señora", "sra", "alejandra", "patricia", "monica", "mónica",
-    )):
-        saludo = "Bienvenida, señora"
-    else:
-        saludo = "Bienvenido, señor"
-    try:
-        logo = logo_plataforma()
-    except Exception:
-        logo = "/static/img/logo-procsis.svg"
-    body = f"""
-<div style="min-height:70vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f7">
-  <div style="text-align:center;max-width:520px">
-    <img src="{_esc(logo)}" alt="PROCSIS" style="width:180px;height:180px;object-fit:contain;background:#fff;
-      border-radius:32px;padding:18px;box-shadow:0 16px 48px rgba(0,32,96,.12);margin-bottom:28px"
-      onerror="this.style.display='none'">
-    <h1 style="font-size:28px;font-weight:700;color:#002060;margin:0 0 10px;letter-spacing:-.02em">
-      {saludo} {_esc(nombre)}
-    </h1>
-    <p style="font-size:16px;color:#6e6e73;line-height:1.5;margin:0 0 18px">
-      Este módulo (<b>Auditoría de colegio / ofertas</b>) es exclusivo de Gerencia comercial.
-      Como Soporte técnico puede consultar instituciones, usuarios y tickets, pero no alterar
-      propuestas, precios ni altas comerciales.
-    </p>
-    <a href="/soporte_admin" style="display:inline-block;background:#005BEA;color:#fff;padding:12px 24px;
-      border-radius:980px;font-weight:600;text-decoration:none">Ir al panel principal</a>
-  </div>
-</div>
-"""
+    body = _bienvenida_staff_html(
+        "Soporte",
+        mensaje=("Este módulo (<b>Auditoría de colegio / ofertas</b>) es exclusivo de Gerencia comercial. "
+                 "Como Soporte técnico puede consultar instituciones, usuarios y tickets, pero no alterar "
+                 "propuestas, precios ni altas comerciales."),
+        destino="/soporte_admin",
+    )
     return page("Bienvenida Soporte", shell(body))
 
 
