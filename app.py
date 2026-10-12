@@ -84016,11 +84016,18 @@ def _c48_init():
         db.session.commit()
         for col, typ in (
             ("act2_descargado_en", "VARCHAR(20) DEFAULT ''"),
+            ("act2_ideas", "TEXT DEFAULT ''"),
+            ("act2_intenciones", "TEXT DEFAULT ''"),
+            ("act2_conclusiones", "TEXT DEFAULT ''"),
+            ("act2_enviado_en", "VARCHAR(20) DEFAULT ''"),
             ("act3_resumen", "TEXT DEFAULT ''"),
             ("act3_conclusiones", "TEXT DEFAULT ''"),
             ("act3_evidencias", "TEXT DEFAULT ''"),
             ("act3_enviado_en", "VARCHAR(20) DEFAULT ''"),
             ("act4_descargado_en", "VARCHAR(20) DEFAULT ''"),
+            ("act4_solucion", "TEXT DEFAULT ''"),
+            ("act4_conclusion", "TEXT DEFAULT ''"),
+            ("act4_enviado_en", "VARCHAR(20) DEFAULT ''"),
             ("act4_marcado_en", "VARCHAR(20) DEFAULT ''"),
         ):
             try:
@@ -84157,10 +84164,10 @@ def _c48_nombre_pdf(n):
 
 
 _C48_ACT_NOMBRES = {
-    1: ("Evaluación automatizada", "30 preguntas en dos fases de 15 (plataforma EduTrack)"),
-    2: ("Taller de comprensión lectora", "Lecturas, interpretación, ideas principales y análisis de argumentos (PDF descargable)"),
-    3: ("Trabajo práctico", "Análisis de texto, resumen (~250 caracteres), conclusiones y evidencias"),
-    4: ("Evaluación complementaria", "Cuestionario / documento independiente de sustentación final"),
+    1: ("Comprensión lectora", "30 preguntas de selección múltiple en dos días (plataforma). Sin PDF. Evaluación automática."),
+    2: ("Lectura y análisis de textos", "Lee el PDF y responde sobre ideas principales, intenciones del autor y conclusiones. PDF sí. Evaluación por revisión."),
+    3: ("Argumentación y evaluación crítica", "Hechos vs opiniones y argumentos. Usa el PDF de la actividad 2 (no requiere PDF nuevo). Evaluación por revisión."),
+    4: ("Aplicación práctica y conclusión", "Caso práctico, solución y conclusión sustentada. PDF con caso e instrucciones. Evaluación por revisión."),
 }
 
 
@@ -84515,7 +84522,7 @@ def c48_panel():
         boton = ""
     elif espera:
         aviso = ("<div class='c48-ok'>¡Excelente trabajo! Completaste el bloque de preguntas del Día 1. "
-                 "Continúa con las actividades externas (taller y trabajo práctico) y vuelve mañana para las últimas %d preguntas.</div>" % por_dia)
+                 "Continúa con las actividades 2 y 3 y vuelve mañana para las últimas %d preguntas.</div>" % por_dia)
         boton = "<span class='c48-btn sec full' style='opacity:.6'>Día 2 (preguntas) disponible desde mañana</span>"
     else:
         aviso = ""
@@ -84527,6 +84534,7 @@ def c48_panel():
     def _badge_pend(txt):
         return "<span class='c48-chip' style='background:#fef3c7;color:#92400e'>%s</span>" % txt
 
+    # Act 1
     if fin or p.get("dia2_fin"):
         act1_estado = _badge_ok("Completada")
     elif p.get("dia1_fin"):
@@ -84536,58 +84544,62 @@ def c48_panel():
     else:
         act1_estado = _badge_pend("Pendiente")
 
+    # Act 2 — PDF + respuestas (revisión)
     tiene2 = _c48_mat_tiene(mod, 2)
-    act2_desc = (p.get("act2_descargado_en") or "").strip()
-    act2_estado = _badge_ok("Descargado %s" % act2_desc[:16]) if act2_desc else _badge_pend("Pendiente de descarga")
-    act2_btn = ("<a class='c48-btn sec' href='/convocatoria48/material/2'>⬇ Descargar taller (PDF)</a>"
-                if tiene2 else "<span class='small' style='color:#b91c1c'>Material aún no cargado por Gerencia</span>")
-
-    act3_env = (p.get("act3_enviado_en") or "").strip()
-    act3_estado = _badge_ok("Enviado %s" % act3_env[:16]) if act3_env else _badge_pend("Pendiente de entrega")
-    tiene3 = _c48_mat_tiene(mod, 3)
-    act3_dl = ("<a class='c48-btn sec' href='/convocatoria48/material/3'>⬇ Descargar guía (PDF)</a> " if tiene3 else "")
-    act3_btn = act3_dl + "<a class='c48-btn' href='/convocatoria48/trabajo-practico'>%s</a>" % (
-        "Ver / editar mi entrega" if act3_env else "Entregar trabajo práctico")
-
-    tiene4 = _c48_mat_tiene(mod, 4)
-    act4_desc = (p.get("act4_descargado_en") or "").strip()
-    act4_marc = (p.get("act4_marcado_en") or "").strip()
-    if act4_marc:
-        act4_estado = _badge_ok("Marcada como realizada %s" % act4_marc[:16])
-    elif act4_desc:
-        act4_estado = _badge_pend("Descargada · falta marcar como hecha")
+    act2_env = (p.get("act2_enviado_en") or "").strip()
+    act2_estado = _badge_ok("Entregada %s" % act2_env[:16]) if act2_env else _badge_pend("Pendiente de entrega")
+    act2_btn = ""
+    if tiene2:
+        act2_btn += "<a class='c48-btn sec' href='/convocatoria48/material/2'>⬇ Descargar lecturas (PDF)</a> "
     else:
-        act4_estado = _badge_pend("Pendiente")
+        act2_btn += "<span class='small' style='color:#b91c1c'>PDF aún no cargado por Gerencia</span> "
+    act2_btn += "<a class='c48-btn' href='/convocatoria48/actividad/2'>%s</a>" % ("Ver / editar respuestas" if act2_env else "Responder actividad 2")
+
+    # Act 3 — sin PDF nuevo (usa el de act 2); argumentos
+    act3_env = (p.get("act3_enviado_en") or "").strip()
+    act3_estado = _badge_ok("Entregada %s" % act3_env[:16]) if act3_env else _badge_pend("Pendiente de entrega")
+    act3_btn = ""
+    if tiene2:
+        act3_btn += "<a class='c48-btn sec' href='/convocatoria48/material/2'>⬇ Reutilizar PDF actividad 2</a> "
+    act3_btn += "<a class='c48-btn' href='/convocatoria48/actividad/3'>%s</a>" % ("Ver / editar argumentos" if act3_env else "Entregar argumentación")
+
+    # Act 4 — PDF caso + solución/conclusión
+    tiene4 = _c48_mat_tiene(mod, 4)
+    act4_env = (p.get("act4_enviado_en") or "").strip()
+    act4_estado = _badge_ok("Entregada %s" % act4_env[:16]) if act4_env else _badge_pend("Pendiente de entrega")
     act4_btn = ""
     if tiene4:
-        act4_btn += "<a class='c48-btn sec' href='/convocatoria48/material/4'>⬇ Descargar evaluación complementaria (PDF)</a> "
+        act4_btn += "<a class='c48-btn sec' href='/convocatoria48/material/4'>⬇ Descargar caso práctico (PDF)</a> "
     else:
-        act4_btn += "<span class='small' style='color:#b91c1c'>Material aún no cargado por Gerencia</span> "
-    if not act4_marc:
-        act4_btn += ("<form method='POST' action='/convocatoria48/actividad4' style='display:inline;margin-left:8px'>"
-                     "<button class='c48-btn sec' type='submit'>Marcar como realizada</button></form>")
+        act4_btn += "<span class='small' style='color:#b91c1c'>PDF del caso aún no cargado por Gerencia</span> "
+    act4_btn += "<a class='c48-btn' href='/convocatoria48/actividad/4'>%s</a>" % ("Ver / editar solución" if act4_env else "Entregar aplicación práctica")
 
     actividades_html = (
-        "<div class='c48-card'><h2>📋 Actividades del programa (48 horas certificadas)</h2>"
-        "<p class='small'>Fase 1 (día del registro, 24 h) · Fase 2 (día siguiente, 24 h). La evaluación automatizada de 30 preguntas no cambia.</p>"
+        "<div class='c48-card'><h2>📋 Actividades del reto Procsis (48 horas)</h2>"
+        "<p class='small'>Orden sugerido: Act. 1 (preguntas) → Act. 2 (lectura PDF) → Act. 3 (argumentación, mismo PDF) → "
+        "Act. 1 día 2 → Act. 4 (caso práctico). Solo hay PDF en las actividades 2 y 4.</p>"
+
         "<div style='border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0'>"
-        "<b>Actividad 1 · Evaluación automatizada</b> " + act1_estado + "<br>"
-        "<span class='small'>30 preguntas en dos fases de 15 (plataforma). Hora 0–4 y Hora 24–28.</span><br>"
+        "<b>Actividad 1 · Comprensión lectora</b> " + act1_estado + "<br>"
+        "<span class='small'>30 preguntas de selección múltiple en dos días. Sin PDF. Evaluación automática.</span><br>"
         + (boton if not fin else "<span class='small'>Completada</span>") +
         "</div>"
+
         "<div style='border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0'>"
-        "<b>Actividad 2 · Taller de comprensión lectora</b> " + act2_estado + "<br>"
-        "<span class='small'>PDF con lecturas, interpretación, ideas principales y análisis de argumentos. Hora 4–14 (10 h académicas externas).</span><br>"
+        "<b>Actividad 2 · Lectura y análisis de textos</b> " + act2_estado + "<br>"
+        "<span class='small'>Lee el PDF y responde sobre ideas principales, intenciones del autor y conclusiones. Evaluación por revisión.</span><br>"
         + act2_btn +
         "</div>"
+
         "<div style='border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0'>"
-        "<b>Actividad 3 · Trabajo práctico</b> " + act3_estado + "<br>"
-        "<span class='small'>Analiza el texto, redacta un resumen (~250 caracteres), conclusiones y evidencias. Hora 14–24 (10 h académicas externas).</span><br>"
+        "<b>Actividad 3 · Argumentación y evaluación crítica</b> " + act3_estado + "<br>"
+        "<span class='small'>A partir de la lectura de la Act. 2: hechos vs opiniones y defensa de tu punto de vista. No requiere PDF nuevo.</span><br>"
         + act3_btn +
         "</div>"
+
         "<div style='border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0'>"
-        "<b>Actividad 4 · Evaluación complementaria</b> " + act4_estado + "<br>"
-        "<span class='small'>Cuestionario o documento independiente de sustentación final. Hora 28–48 (20 h académicas externas). No modifica el software de preguntas.</span><br>"
+        "<b>Actividad 4 · Aplicación práctica y conclusión</b> " + act4_estado + "<br>"
+        "<span class='small'>Resuelve el caso del PDF, propone una solución y escribe una conclusión sustentada. Evaluación por revisión.</span><br>"
         + act4_btn +
         "</div></div>"
     )
@@ -84604,7 +84616,6 @@ def c48_panel():
     return _c48_page("Mi panel · Convocatoria 48 Horas", cuerpo)
 
 
-
 @app.route("/convocatoria48/material/<int:actividad>")
 def c48_material_descarga(actividad):
     """Descarga el PDF de la actividad 2, 3 o 4 del módulo del participante."""
@@ -84612,7 +84623,7 @@ def c48_material_descarga(actividad):
     p = _c48_actual()
     if not p:
         return redirect("/convocatoria48/ingresar")
-    if actividad not in (2, 3, 4):
+    if actividad not in (2, 4):
         return redirect("/convocatoria48/panel")
     mat = _c48_mat_get(p.get("modulo") or "", actividad)
     if not mat or not mat.get("contenido"):
@@ -84637,71 +84648,133 @@ def c48_material_descarga(actividad):
     })
 
 
-@app.route("/convocatoria48/trabajo-practico", methods=["GET", "POST"])
-def c48_trabajo_practico():
-    """Actividad 3: resumen (~250 caracteres), conclusiones y evidencias."""
+
+@app.route("/convocatoria48/actividad/<int:num>", methods=["GET", "POST"])
+def c48_actividad_entrega(num):
+    """Entregas de actividades 2, 3 y 4 (revisión manual por Gerencia)."""
     _c48_init()
     p = _c48_actual()
     if not p:
         return redirect("/convocatoria48/ingresar")
+    if num not in (2, 3, 4):
+        return redirect("/convocatoria48/panel")
     error = ""
-    resumen = (p.get("act3_resumen") or "")
-    concl = (p.get("act3_conclusiones") or "")
-    evid = (p.get("act3_evidencias") or "")
-    if request.method == "POST":
-        resumen = (request.form.get("resumen") or "").strip()
-        concl = (request.form.get("conclusiones") or "").strip()
-        evid = (request.form.get("evidencias") or "").strip()
-        if len(resumen) < 80:
-            error = "El resumen debe tener al menos ~80 caracteres (objetivo: aproximadamente 250)."
-        elif len(resumen) > 400:
-            error = "El resumen no debe superar 400 caracteres (aprox. 250 recomendados)."
-        elif len(concl) < 20:
-            error = "Escribe tus conclusiones (mínimo 20 caracteres)."
-        elif len(evid) < 20:
-            error = "Indica las evidencias del texto que justifican tu respuesta (mínimo 20 caracteres)."
-        else:
-            _c48_x(
-                "UPDATE conv48_participantes SET act3_resumen=:r, act3_conclusiones=:c, act3_evidencias=:e, act3_enviado_en=:n WHERE id=:i",
-                r=resumen[:500], c=concl[:2000], e=evid[:2000], n=_c48_now(), i=p["id"],
+    mod = p.get("modulo") or ""
+
+    if num == 2:
+        titulo = "Actividad 2 · Lectura y análisis de textos"
+        intro = ("Lee el PDF de tu módulo y responde: ideas principales, intenciones del autor y conclusiones. "
+                 "Tus respuestas serán revisadas por el equipo.")
+        campos = [
+            ("ideas", "Ideas principales del texto *", p.get("act2_ideas") or "", 5),
+            ("intenciones", "Intenciones del autor *", p.get("act2_intenciones") or "", 4),
+            ("conclusiones", "Conclusiones *", p.get("act2_conclusiones") or "", 4),
+        ]
+        enviado = p.get("act2_enviado_en") or ""
+        dl = ("<p><a class='c48-btn sec' href='/convocatoria48/material/2'>⬇ Descargar lecturas (PDF)</a></p>"
+              if _c48_mat_tiene(mod, 2) else
+              "<p class='small' style='color:#b91c1c'>El PDF aún no está cargado para tu módulo.</p>")
+        if request.method == "POST":
+            ideas = (request.form.get("ideas") or "").strip()
+            intenciones = (request.form.get("intenciones") or "").strip()
+            conclusiones = (request.form.get("conclusiones") or "").strip()
+            if min(len(ideas), len(intenciones), len(conclusiones)) < 30:
+                error = "Completa los tres campos (mínimo ~30 caracteres cada uno)."
+            else:
+                _c48_x(
+                    "UPDATE conv48_participantes SET act2_ideas=:a, act2_intenciones=:b, act2_conclusiones=:c, act2_enviado_en=:n WHERE id=:i",
+                    a=ideas[:3000], b=intenciones[:3000], c=conclusiones[:3000], n=_c48_now(), i=p["id"],
+                )
+                return redirect("/convocatoria48/panel")
+            campos = [("ideas", campos[0][1], ideas, 5), ("intenciones", campos[1][1], intenciones, 4),
+                      ("conclusiones", campos[2][1], conclusiones, 4)]
+
+    elif num == 3:
+        titulo = "Actividad 3 · Argumentación y evaluación crítica"
+        intro = ("A partir de la lectura de la actividad 2, identifica hechos y opiniones, y defiende tu punto de vista "
+                 "con argumentos. No necesitas un PDF nuevo: puedes reutilizar el de la actividad 2.")
+        campos = [
+            ("resumen", "Hechos vs opiniones (aprox. 250 caracteres) *", p.get("act3_resumen") or "", 4),
+            ("conclusiones", "Tu punto de vista / argumentos *", p.get("act3_conclusiones") or "", 4),
+            ("evidencias", "Evidencias del texto que sustentan tu argumento *", p.get("act3_evidencias") or "", 4),
+        ]
+        enviado = p.get("act3_enviado_en") or ""
+        dl = ("<p><a class='c48-btn sec' href='/convocatoria48/material/2'>⬇ Reutilizar PDF de la actividad 2</a></p>"
+              if _c48_mat_tiene(mod, 2) else
+              "<p class='small'>Si Gerencia ya cargó el PDF de la Act. 2, aparecerá aquí para reutilizarlo.</p>")
+        if request.method == "POST":
+            resumen = (request.form.get("resumen") or "").strip()
+            conclusiones = (request.form.get("conclusiones") or "").strip()
+            evidencias = (request.form.get("evidencias") or "").strip()
+            if len(resumen) < 80:
+                error = "Describe hechos vs opiniones (mín. ~80 caracteres; objetivo ~250)."
+            elif len(resumen) > 400:
+                error = "El campo de hechos/opiniones no debe superar 400 caracteres."
+            elif len(conclusiones) < 30 or len(evidencias) < 20:
+                error = "Completa argumentos y evidencias."
+            else:
+                _c48_x(
+                    "UPDATE conv48_participantes SET act3_resumen=:r, act3_conclusiones=:c, act3_evidencias=:e, act3_enviado_en=:n WHERE id=:i",
+                    r=resumen[:500], c=conclusiones[:2000], e=evidencias[:2000], n=_c48_now(), i=p["id"],
+                )
+                return redirect("/convocatoria48/panel")
+            campos = [("resumen", campos[0][1], resumen, 4), ("conclusiones", campos[1][1], conclusiones, 4),
+                      ("evidencias", campos[2][1], evidencias, 4)]
+
+    else:  # 4
+        titulo = "Actividad 4 · Aplicación práctica y conclusión"
+        intro = ("Descarga el caso práctico, propón una solución y escribe una conclusión sustentada en lo aprendido. "
+                 "La entrega será revisada por el equipo.")
+        campos = [
+            ("solucion", "Solución propuesta al caso *", p.get("act4_solucion") or "", 5),
+            ("conclusion", "Conclusión sustentada *", p.get("act4_conclusion") or "", 4),
+        ]
+        enviado = p.get("act4_enviado_en") or ""
+        dl = ("<p><a class='c48-btn sec' href='/convocatoria48/material/4'>⬇ Descargar caso e instrucciones (PDF)</a></p>"
+              if _c48_mat_tiene(mod, 4) else
+              "<p class='small' style='color:#b91c1c'>El PDF del caso aún no está cargado para tu módulo.</p>")
+        if request.method == "POST":
+            solucion = (request.form.get("solucion") or "").strip()
+            conclusion = (request.form.get("conclusion") or "").strip()
+            if len(solucion) < 40 or len(conclusion) < 30:
+                error = "Desarrolla la solución y la conclusión con más detalle."
+            else:
+                _c48_x(
+                    "UPDATE conv48_participantes SET act4_solucion=:s, act4_conclusion=:c, act4_enviado_en=:n, act4_marcado_en=:n WHERE id=:i",
+                    s=solucion[:4000], c=conclusion[:3000], n=_c48_now(), i=p["id"],
+                )
+                return redirect("/convocatoria48/panel")
+            campos = [("solucion", campos[0][1], solucion, 5), ("conclusion", campos[1][1], conclusion, 4)]
+
+    campos_html = ""
+    for name, label, val, rows in campos:
+        extra = ""
+        if name == "resumen":
+            extra = ("<p class='small' id='c48c'>%d/250 (máx. 400)</p>" % len(val or "") +
+                     " oninput=\"document.getElementById('c48c').textContent=this.value.length+'/250 (máx. 400)'\"")
+            # fix: oninput must be on textarea
+            campos_html += (
+                "<label>%s</label><textarea name='%s' rows='%d' maxlength='400' required "
+                "oninput=\"document.getElementById('c48c').textContent=this.value.length+'/250 (máx. 400)'\">%s</textarea>"
+                "<p class='small' id='c48c'>%d/250 (máx. 400)</p>"
+                % (_esc(label), name, rows, _esc(val), len(val or ""))
             )
-            return redirect("/convocatoria48/panel")
-    n_res = len(resumen)
-    color = "#166534" if 200 <= n_res <= 300 else ("#b45309" if n_res else "#64748b")
-    tiene3 = _c48_mat_tiene(p.get("modulo") or "", 3)
-    dl = ("<p><a class='c48-btn sec' href='/convocatoria48/material/3'>⬇ Descargar guía del trabajo práctico (PDF)</a></p>" if tiene3 else
-          "<p class='small' style='color:#b91c1c'>La guía PDF aún no está cargada para tu módulo.</p>")
+        else:
+            campos_html += (
+                "<label>%s</label><textarea name='%s' rows='%d' maxlength='4000' required>%s</textarea>"
+                % (_esc(label), name, rows, _esc(val))
+            )
+
     cuerpo = (
-        "<div class='c48-card'><h1>Actividad 3 · Trabajo práctico</h1>"
-        "<p>Analiza el texto de tu módulo, redacta un <b>resumen de aproximadamente 250 caracteres</b>, "
-        "identifica tus conclusiones y justifica con evidencias del texto.</p>"
-        + dl
+        "<div class='c48-card'><h1>%s</h1><p>%s</p>%s"
+        % (_esc(titulo), intro, dl)
         + ("<div class='c48-err'>%s</div>" % _esc(error) if error else "")
-        + ("<div class='c48-ok'>Entrega guardada. Puedes actualizarla si lo necesitas.</div>" if ((p.get("act3_enviado_en") or "") and not error) else "")
-        + "<form method='POST'>"
-          "<label>Resumen (aprox. 250 caracteres) *</label>"
-          "<textarea name='resumen' rows='4' maxlength='400' required "
-          "oninput=\"document.getElementById('c48c').textContent=this.value.length+'/250 (máx. 400)'\">%s</textarea>"
-          "<p class='small' id='c48c' style='color:%s'>%d/250 (máx. 400)</p>"
-          "<label>Conclusiones *</label>"
-          "<textarea name='conclusiones' rows='3' maxlength='2000' required>%s</textarea>"
-          "<label>Evidencias del texto (justificación) *</label>"
-          "<textarea name='evidencias' rows='3' maxlength='2000' required>%s</textarea>"
-          "<button class='c48-btn full'>Guardar entrega</button></form>"
-          "<p style='text-align:center;margin-top:12px'><a href='/convocatoria48/panel'>← Volver al panel</a></p></div>"
-        % (_esc(resumen), color, n_res, _esc(concl), _esc(evid))
+        + ("<div class='c48-ok'>Entrega guardada el %s. Puedes actualizarla.</div>" % _esc(enviado[:16]) if enviado and not error else "")
+        + "<form method='POST'>" + campos_html
+        + "<button class='c48-btn full'>Guardar entrega</button></form>"
+        + "<p style='text-align:center;margin-top:12px'><a href='/convocatoria48/panel'>← Volver al panel</a></p></div>"
     )
-    return _c48_page("Trabajo práctico · Convocatoria 48 Horas", cuerpo)
-
-
-@app.route("/convocatoria48/actividad4", methods=["POST"])
-def c48_actividad4_marcar():
-    _c48_init()
-    p = _c48_actual()
-    if not p:
-        return redirect("/convocatoria48/ingresar")
-    _c48_x("UPDATE conv48_participantes SET act4_marcado_en=:n WHERE id=:i", n=_c48_now(), i=p["id"])
-    return redirect("/convocatoria48/panel")
+    return _c48_page(titulo, cuerpo)
 
 
 @app.route("/convocatoria48/preguntas", methods=["GET", "POST"])
@@ -85059,10 +85132,11 @@ def _c48_gerencia_html(tab, filtro):
         out.append("<div class='c48-card'><h2>Materiales PDF por módulo y actividad</h2>"
                    "<p class='small'>Sube un PDF por cada módulo (Educación, Ambiental, Tecnología) para las actividades 2, 3 y 4. "
                    "Los participantes solo ven y descargan el material de <b>su módulo</b>.</p>"
-                   "<ul class='small'><li><b>Act. 2</b> Taller de comprensión lectora</li>"
-                   "<li><b>Act. 3</b> Guía del trabajo práctico</li>"
-                   "<li><b>Act. 4</b> Evaluación complementaria (formulario/documento externo)</li></ul></div>")
-        for act in (2, 3, 4):
+                   "<ul class='small'><li><b>Act. 2</b> Lectura y análisis de textos (PDF de lecturas)</li>"
+                   "<li><b>Act. 3</b> No requiere PDF propio (reutiliza el de la Act. 2)</li>"
+                   "<li><b>Act. 4</b> Caso práctico e instrucciones (PDF)</li></ul>"
+                   "<p class='small'>Solo sube PDF para las actividades <b>2</b> y <b>4</b>, por cada módulo.</p></div>")
+        for act in (2, 4):
             nom_act, desc_act = _C48_ACT_NOMBRES.get(act, ("Actividad %d" % act, ""))
             out.append("<div class='c48-card'><h2>Actividad %d · %s</h2><p class='small'>%s</p><div class='c48-mods'>" % (act, _esc(nom_act), _esc(desc_act)))
             for mod_k, mod_v in _C48_MODULOS.items():
@@ -85224,7 +85298,7 @@ def gerencia_convocatoria48_material():
         actividad = int(request.form.get("actividad") or 0)
     except Exception:
         actividad = 0
-    if modulo not in _C48_MODULOS or actividad not in (2, 3, 4):
+    if modulo not in _C48_MODULOS or actividad not in (2, 4):
         return redirect("/gerencia/convocatoria48?t=materiales")
     try:
         if accion == "quitar":
