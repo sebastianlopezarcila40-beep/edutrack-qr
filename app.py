@@ -84546,13 +84546,16 @@ def _c48_img_mime(datos):
 
 
 def _c48_pdf_certificado(p):
-    """Certificado: estructura clásica centrada, marca de agua y firmas configurables desde Gerencia."""
+    """Certificado vertical (estilo formal institucional) con logo de empresa arriba, texto centrado y firmas."""
     from reportlab.lib.utils import simpleSplit, ImageReader
     from reportlab.lib.pagesizes import A4
     buf = BytesIO()
-    W, H = landscape(A4)
+    W, H = A4  # vertical / portrait
     c = canvas.Canvas(buf, pagesize=(W, H))
-    azul, verde, gris = colors.HexColor("#002855"), colors.HexColor("#2e7d32"), colors.HexColor("#555555")
+    azul = colors.HexColor("#0B2D57")
+    verde = colors.HexColor("#047857")
+    gris = colors.HexColor("#475569")
+    negro = colors.HexColor("#111827")
 
     def imagen(clave):
         d = _c48_img_bytes(clave)
@@ -84569,72 +84572,171 @@ def _c48_pdf_certificado(p):
         esc = min(max_w / float(iw), max_h / float(ih))
         w, h = iw * esc, ih * esc
         c.drawImage(img, cx - w / 2, y, width=w, height=h, mask="auto")
+        return h
 
-    # marco
-    c.setStrokeColor(azul); c.setLineWidth(5); c.rect(22, 22, W - 44, H - 44)
-    c.setLineWidth(1); c.rect(32, 32, W - 64, H - 64)
-    # marca de agua (logo de fondo)
+    cfg = lambda k: _c48_cfg(k, _C48_CERT_DEF[k])
+    entidad = cfg("entidad")
+    _ic, nom_mod, _d = _c48_modulo_info(p["modulo"])
+    nombre = _c48_nombre_pdf(p["nombres"]).upper()
+    tipo_id = p.get("tipo_id") or "Documento"
+    num_id = p.get("num_id") or ""
+    mun = p.get("municipio") or ""
+    dep = p.get("departamento") or ""
+    lugar_id = (", ".join([x for x in (mun, dep) if x]) or "Colombia")
+
+    # Marco exterior
+    c.setStrokeColor(azul)
+    c.setLineWidth(2.2)
+    c.rect(28, 28, W - 56, H - 56)
+    c.setLineWidth(0.7)
+    c.rect(34, 34, W - 68, H - 68)
+
+    # Marca de agua (logo de fondo)
     fondo = imagen("img_fondo")
     if fondo:
-        c.saveState(); c.setFillAlpha(0.07); poner(fondo, W / 2, H / 2 - 160, 340, 320); c.restoreState()
-    # encabezado
+        c.saveState()
+        c.setFillAlpha(0.06)
+        poner(fondo, W / 2, H / 2 - 120, 280, 280)
+        c.restoreState()
+
+    y = H - 55
+
+    # Logo de empresa arriba (encabezado)
     enc = imagen("img_encabezado")
-    y = H - 50
     if enc:
-        poner(enc, W / 2, y - 55, 170, 55); y -= 66
-    cfg = lambda k: _c48_cfg(k, _C48_CERT_DEF[k])
-    c.setFillColor(azul); c.setFont("Times-Bold", 30); c.drawCentredString(W / 2, y - 22, cfg("entidad"))
-    c.setFillColor(gris); c.setFont("Times-Italic", 12.5); c.drawCentredString(W / 2, y - 42, "Programa Procsis Edu · Convocatoria de 48 Horas")
-    y -= 78
-    c.setFillColor(colors.black); c.setFont("Times-BoldItalic", 15); c.drawCentredString(W / 2, y, "Hace constar que")
-    nombre = _c48_nombre_pdf(p["nombres"]).upper()
-    tam = 25
-    while tam > 14 and c.stringWidth(nombre, "Times-Bold", tam) > W - 160:
-        tam -= 1
-    c.setFillColor(azul); c.setFont("Times-Bold", tam); c.drawCentredString(W / 2, y - 32, nombre)
-    nw = c.stringWidth(nombre, "Times-Bold", tam)
-    c.setStrokeColor(azul); c.setLineWidth(1.2); c.line(W / 2 - nw / 2, y - 38, W / 2 + nw / 2, y - 38)
-    c.setFillColor(colors.HexColor("#333333")); c.setFont("Times-Italic", 13)
-    c.drawCentredString(W / 2, y - 58, "Identificado(a) con %s No. %s de %s, %s, Colombia." % (p["tipo_id"], p["num_id"], p["municipio"], p["departamento"]))
-    c.setFont("Times-Italic", 14); c.drawCentredString(W / 2, y - 92, "Cursó y aprobó satisfactoriamente la jornada de formación del módulo de")
-    _ic, nom_mod, _d = _c48_modulo_info(p["modulo"])
-    c.setFillColor(verde); c.setFont("Times-Bold", 22); c.drawCentredString(W / 2, y - 120, nom_mod.upper())
-    c.setFillColor(colors.HexColor("#333333")); c.setFont("Times-Italic", 13.5)
-    c.drawCentredString(W / 2, y - 144, "con una intensidad de 48 horas, bajo la iniciativa ecológica de Cero Papel y Cero Contaminación,")
-    c.drawCentredString(W / 2, y - 161, "a través de la plataforma académica EduTrack.")
+        h_logo = poner(enc, W / 2, y - 70, 160, 70)
+        y -= (h_logo + 18)
+    else:
+        # Si no hay logo cargado, dibujar bloque de marca
+        c.setFillColor(azul)
+        c.roundRect(W / 2 - 70, y - 55, 140, 48, 8, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawCentredString(W / 2, y - 28, "PROCSIS")
+        y -= 70
+
+    # Nombre de la entidad
+    c.setFillColor(azul)
+    c.setFont("Times-Bold", 13)
+    c.drawCentredString(W / 2, y, entidad.upper())
+    y -= 16
+    c.setFillColor(gris)
+    c.setFont("Times-Italic", 10)
+    c.drawCentredString(W / 2, y, "Programa Procsis Edu · Convocatoria de 48 Horas")
+    y -= 28
+
+    # Título CERTIFICA
+    c.setFillColor(negro)
+    c.setFont("Times-Bold", 22)
+    c.drawCentredString(W / 2, y, "CERTIFICA")
+    y -= 28
+
+    # Cuerpo del certificado (párrafo formal, estilo institucional)
+    cuerpo = (
+        "Que %s identificado(a) con %s No. %s de %s, realizó y aprobó el curso de "
+        "%s, con una intensidad horaria de Cuarenta y Ocho (48) horas, "
+        "bajo la iniciativa ecológica de Cero Papel y Cero Contaminación, a través de la "
+        "plataforma académica EduTrack, y obtuvo una evaluación Apto (A)."
+    ) % (nombre, tipo_id, num_id, lugar_id, nom_mod.upper())
+
+    c.setFillColor(negro)
+    c.setFont("Times-Roman", 11.5)
+    lineas = simpleSplit(cuerpo, "Times-Roman", 11.5, W - 110)
+    for ln in lineas:
+        c.drawString(55, y, ln)
+        y -= 16
+
+    y -= 10
+    # Equivalencia de evaluaciones
+    c.setFont("Times-Bold", 11)
+    c.drawString(55, y, "Equivalencia de Evaluaciones:")
+    y -= 16
+    c.setFont("Times-Roman", 11)
+    c.drawString(55, y, "D: Reprobó")
+    y -= 14
+    c.drawString(55, y, "A: Aprobó")
+    y -= 24
+
+    # Fecha de expedición
     try:
         f = datetime.strptime((p.get("dia2_fin") or _c48_now())[:10], "%Y-%m-%d")
-        fecha_txt = "a los %d días del mes de %s de %d" % (f.day, _MESES_ES[f.month - 1], f.year)
+        dia_n = f.day
+        mes_n = _MESES_ES[f.month - 1] if isinstance(_MESES_ES, (list, tuple)) else _MESES_ES[f.month - 1]
+        anio = f.year
+        _dias_txt = {
+            1: "uno", 2: "dos", 3: "tres", 4: "cuatro", 5: "cinco", 6: "seis", 7: "siete", 8: "ocho",
+            9: "nueve", 10: "diez", 11: "once", 12: "doce", 13: "trece", 14: "catorce", 15: "quince",
+            16: "dieciséis", 17: "diecisiete", 18: "dieciocho", 19: "diecinueve", 20: "veinte",
+            21: "veintiuno", 22: "veintidós", 23: "veintitrés", 24: "veinticuatro", 25: "veinticinco",
+            26: "veintiséis", 27: "veintisiete", 28: "veintiocho", 29: "veintinueve", 30: "treinta", 31: "treinta y uno",
+        }
+        dia_txt = _dias_txt.get(dia_n, str(dia_n))
+        fecha_txt = "Se expide en Colombia, a los %s (%d) días del mes de %s de %d." % (dia_txt, dia_n, mes_n, anio)
     except Exception:
-        fecha_txt = "el %s" % (p.get("dia2_fin") or "")[:10]
-    c.setFont("Times-Italic", 11.5); c.drawCentredString(W / 2, y - 190, "En testimonio de lo anterior, se expide el presente certificado en Colombia, %s." % fecha_txt)
-    # firmas en paralelo
-    base = 122
-    for i, cx in ((1, W * 0.30), (2, W * 0.70)):
-        im = imagen("img_firma%d" % i)
-        if im:
-            poner(im, cx, base + 6, 190, 58)
-        c.setStrokeColor(colors.HexColor("#666666")); c.setLineWidth(0.8); c.line(cx - 110, base, cx + 110, base)
-        c.setFillColor(colors.HexColor("#222222")); c.setFont("Times-Bold", 11.5); c.drawCentredString(cx, base - 14, cfg("firma%d_nombre" % i))
-        c.setFillColor(gris); c.setFont("Times-Roman", 9.5)
-        yy = base - 26
+        fecha_txt = "Se expide en Colombia, el %s." % ((p.get("dia2_fin") or _c48_now())[:10])
+
+    c.setFont("Times-Roman", 11)
+    for ln in simpleSplit(fecha_txt, "Times-Roman", 11, W - 110):
+        c.drawString(55, y, ln)
+        y -= 15
+
+    y -= 20
+
+    # Firmas (dos en paralelo)
+    firma1 = imagen("img_firma1")
+    firma2 = imagen("img_firma2")
+    base_y = max(120, y - 90)
+
+    def bloque_firma(cx, i, img_f):
+        c.setStrokeColor(colors.HexColor("#94a3b8"))
+        c.setLineWidth(0.8)
+        c.rect(cx - 95, base_y + 8, 190, 52)
+        c.setFillColor(gris)
+        c.setFont("Helvetica", 8)
+        c.drawCentredString(cx, base_y + 48, "Firmado Digitalmente por")
+        if img_f:
+            poner(img_f, cx, base_y + 12, 150, 36)
+        else:
+            c.setStrokeColor(azul)
+            c.setLineWidth(1)
+            c.line(cx - 70, base_y + 22, cx + 70, base_y + 22)
+        c.setFillColor(negro)
+        c.setFont("Times-Bold", 9.5)
+        c.drawCentredString(cx, base_y - 6, cfg("firma%d_nombre" % i))
+        c.setFillColor(gris)
+        c.setFont("Times-Roman", 8)
+        yy = base_y - 18
         for ln in cfg("firma%d_cargo" % i).split("\n")[:3]:
-            c.drawCentredString(cx, yy, ln); yy -= 11
-    # pie y verificación
-    url = "%s/convocatoria48/validar/%s" % (_base_publica().rstrip("/"), p["cert_codigo"])
-    c.setFillColor(colors.HexColor("#777777")); c.setFont("Times-Roman", 8.5)
-    c.drawString(52, 62, "Documento privado emitido digitalmente por %s · Certificado 100%% digital, política de cero papel." % cfg("entidad"))
-    c.drawString(52, 50, "Código de verificación: %s · Verifique su autenticidad en: %s" % (p["cert_codigo"], url))
+            c.drawCentredString(cx, yy, ln)
+            yy -= 11
+
+    bloque_firma(W * 0.30, 1, firma1)
+    bloque_firma(W * 0.70, 2, firma2)
+
+    # Pie: verificación + QR
+    url = "%s/convocatoria48/validar/%s" % (_base_publica().rstrip("/"), p.get("cert_codigo") or "")
+    c.setFillColor(gris)
+    c.setFont("Times-Italic", 9)
+    c.drawCentredString(W / 2, 78, "PROCSIS · Tecnología para una educación moderna y responsable")
+    c.setFont("Times-Roman", 7.5)
+    c.drawCentredString(W / 2, 64, "Documento emitido digitalmente · Certificado 100%% digital, política de cero papel.")
+    c.drawCentredString(W / 2, 52, "Código de verificación: %s" % (p.get("cert_codigo") or "—"))
+    c.drawCentredString(W / 2, 42, "Verifique la autenticidad en: %s" % url)
     try:
         from reportlab.graphics.barcode import qr
         from reportlab.graphics.shapes import Drawing
         from reportlab.graphics import renderPDF
-        w = qr.QrCodeWidget(url); bb = w.getBounds(); size = 60
-        d = Drawing(size, size, transform=[size / (bb[2] - bb[0]), 0, 0, size / (bb[3] - bb[1]), 0, 0]); d.add(w)
-        renderPDF.draw(d, c, W - 52 - size, 42)
+        w = qr.QrCodeWidget(url)
+        bb = w.getBounds()
+        size = 48
+        d = Drawing(size, size, transform=[size / (bb[2] - bb[0]), 0, 0, size / (bb[3] - bb[1]), 0, 0])
+        d.add(w)
+        renderPDF.draw(d, c, W - 90, 38)
     except Exception as e:
         print("c48 qr:", e)
-    c.showPage(); c.save()
+
+    c.showPage()
+    c.save()
     buf.seek(0)
     return buf.read()
 
@@ -84754,7 +84856,7 @@ def _c48_gerencia_html(tab, filtro):
     elif tab == "participantes":
         filas = _c48_q("SELECT p.id, p.nombres, p.modulo, p.correo, p.telefono, p.municipio, p.estado, p.aciertos, p.total, p.cert_enviado_en, p.cert_programado_en, p.cert_error, "
                        "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL) FROM conv48_participantes p ORDER BY p.id DESC LIMIT 500")
-        out.append("<div class='c48-card' style='overflow-x:auto'><p><a class='c48-btn sec' href='/gerencia/convocatoria48/export.csv'>⬇ Exportar CSV</a> <b>%d</b> participantes</p>"
+        out.append("<div class='c48-card' style='overflow-x:auto'><p><a class='c48-btn sec' href='/gerencia/convocatoria48/export.xlsx'>⬇ Exportar Excel</a> <b>%d</b> participantes</p>"
                    "<table style='width:100%%;border-collapse:collapse;font-size:13px;min-width:820px'><tr style='text-align:left'><th>Participante</th><th>Módulo</th><th>Contacto</th><th>Estado</th><th>Avance</th><th>Certificado</th><th></th></tr>" % len(filas))
         for i, nom, mod, cor, tel, mun, est, ac, tot, env, prog, err, resp in filas:
             cert = ("Enviado " + env) if env else (("Programado " + prog) if prog else "—")
@@ -84808,18 +84910,124 @@ def gerencia_convocatoria48():
 
 
 @app.route("/gerencia/convocatoria48/export.csv")
-def gerencia_convocatoria48_csv():
+@app.route("/gerencia/convocatoria48/export.xlsx")
+def gerencia_convocatoria48_excel():
+    """Exporta participantes de la Convocatoria 48h a Excel con diseño (encabezado, colores, bordes)."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
     _c48_init()
-    import csv
-    out = _c48_io.StringIO()
-    w = csv.writer(out)
-    w.writerow(["id", "nombres", "tipo_id", "num_id", "correo", "telefono", "departamento", "municipio", "modulo", "estado", "aciertos", "total", "certificado", "enviado_en"])
-    for r in _c48_q("SELECT id, nombres, tipo_id, num_id, correo, telefono, departamento, municipio, modulo, estado, aciertos, total, cert_codigo, cert_enviado_en FROM conv48_participantes ORDER BY id"):
-        w.writerow(list(r))
-    return Response("\ufeff" + out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=convocatoria48_participantes.csv"})
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Participantes"
+
+    # Estilos
+    azul_fill = PatternFill(start_color="0B2D57", end_color="0B2D57", fill_type="solid")
+    amarillo_fill = PatternFill(start_color="FACC15", end_color="FACC15", fill_type="solid")
+    gris_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    verde_fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+    titulo_font = Font(bold=True, color="0B2D57", name="Calibri", size=16)
+    sub_font = Font(bold=True, color="334155", name="Calibri", size=11)
+    normal_font = Font(name="Calibri", size=10)
+    header_font = Font(bold=True, color="0B2D57", name="Calibri", size=10)
+    borde = Border(
+        left=Side(style="thin", color="94A3B8"),
+        right=Side(style="thin", color="94A3B8"),
+        top=Side(style="thin", color="94A3B8"),
+        bottom=Side(style="thin", color="94A3B8"),
+    )
+    centro = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    izq = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+    # Encabezado institucional
+    ws.merge_cells("A1:N1")
+    ws["A1"] = "PROCSIS · EduTrack"
+    ws["A1"].font = titulo_font
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A2:N2")
+    ws["A2"] = "Convocatoria de 48 Horas · Listado de participantes"
+    ws["A2"].font = sub_font
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A3:N3")
+    ws["A3"] = "Exportado el %s (hora Colombia)" % ahora().strftime("%d/%m/%Y %H:%M")
+    ws["A3"].font = Font(name="Calibri", size=9, color="64748B", italic=True)
+    ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[2].height = 20
+    ws.row_dimensions[3].height = 16
+
+    # Fila de encabezados de columnas
+    headers = [
+        "ID", "Nombres y apellidos", "Tipo ID", "Número ID", "Correo", "Teléfono",
+        "Departamento", "Municipio", "Módulo", "Estado", "Aciertos", "Total",
+        "Código certificado", "Enviado el",
+    ]
+    header_row = 5
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=header_row, column=col, value=h)
+        cell.fill = amarillo_fill
+        cell.font = header_font
+        cell.alignment = centro
+        cell.border = borde
+    ws.row_dimensions[header_row].height = 22
+
+    # Datos
+    filas = _c48_q(
+        "SELECT id, nombres, tipo_id, num_id, correo, telefono, departamento, municipio, "
+        "modulo, estado, aciertos, total, cert_codigo, cert_enviado_en "
+        "FROM conv48_participantes ORDER BY id"
+    )
+    for i, r in enumerate(filas):
+        row_num = header_row + 1 + i
+        valores = list(r)
+        # Nombre legible del módulo
+        if len(valores) > 8 and valores[8]:
+            valores[8] = _c48_modulo_info(valores[8])[1]
+        for col, val in enumerate(valores, 1):
+            cell = ws.cell(row=row_num, column=col, value=val if val is not None else "")
+            cell.font = normal_font
+            cell.border = borde
+            cell.alignment = centro if col in (1, 10, 11, 12) else izq
+            if i % 2 == 1:
+                cell.fill = gris_fill
+            # Resaltar estados aprobados / certificados
+            if col == 10:
+                est = str(val or "").lower()
+                if est in ("aprobado", "certificado"):
+                    cell.fill = verde_fill
+                    cell.font = Font(name="Calibri", size=10, bold=True, color="166534")
+
+    # Anchos de columna
+    anchos = {
+        "A": 8, "B": 32, "C": 20, "D": 16, "E": 30, "F": 14,
+        "G": 16, "H": 16, "I": 14, "J": 14, "K": 10, "L": 10,
+        "M": 18, "N": 18,
+    }
+    for col, width in anchos.items():
+        ws.column_dimensions[col].width = width
+
+    # Pie
+    pie_row = header_row + 2 + len(filas)
+    ws.merge_cells(start_row=pie_row, start_column=1, end_row=pie_row, end_column=14)
+    ws.cell(row=pie_row, column=1, value="Total participantes: %d  ·  Documento generado por PROCSIS EduTrack" % len(filas))
+    ws.cell(row=pie_row, column=1).font = Font(name="Calibri", size=9, color="64748B", italic=True)
+    ws.cell(row=pie_row, column=1).alignment = Alignment(horizontal="center")
+
+    # Congelar encabezado
+    ws.freeze_panes = "A6"
+
+    b = BytesIO()
+    wb.save(b)
+    b.seek(0)
+    return send_file(
+        b,
+        as_attachment=True,
+        download_name="convocatoria48_participantes.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/gerencia/convocatoria48/accion", methods=["POST"])
