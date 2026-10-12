@@ -84790,3 +84790,135 @@ def _c48_gerencia_html(tab, filtro):
                    "<p style='text-align:center'><a class='c48-btn sec' href='/gerencia/convocatoria48/certificado-muestra.pdf' target='_blank'>👁 Ver certificado de muestra</a></p></div>" % ("".join(celdas), campos))
     else:
         out.append("<div class='c48-card'><h2>Configuración</h2><form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='accion' value='cfg'>"
+                   "<label>Preguntas por día</label><input type='text' name='por_dia' value='%d'>"
+                   "<label>Puntaje mínimo para aprobar y recibir certificado (%%)</label><input type='text' name='nota_min' value='%d'>"
+                   "<button class='c48-btn full'>Guardar</button></form></div>" % (por_dia, nota))
+    out.append("</div>")
+    return "".join(out)
+
+
+@app.route("/gerencia/convocatoria48")
+def gerencia_convocatoria48():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    tab = request.args.get("t") or "preguntas"
+    return page("Convocatoria 48 horas", shell(_C48_CSS + _c48_gerencia_html(tab, request.args.get("m") or "")))
+
+
+@app.route("/gerencia/convocatoria48/export.csv")
+def gerencia_convocatoria48_csv():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    import csv
+    out = _c48_io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["id", "nombres", "tipo_id", "num_id", "correo", "telefono", "departamento", "municipio", "modulo", "estado", "aciertos", "total", "certificado", "enviado_en"])
+    for r in _c48_q("SELECT id, nombres, tipo_id, num_id, correo, telefono, departamento, municipio, modulo, estado, aciertos, total, cert_codigo, cert_enviado_en FROM conv48_participantes ORDER BY id"):
+        w.writerow(list(r))
+    return Response("\ufeff" + out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=convocatoria48_participantes.csv"})
+
+
+@app.route("/gerencia/convocatoria48/accion", methods=["POST"])
+def gerencia_convocatoria48_accion():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    a = request.form.get("accion") or ""
+    f = request.form
+    destino = "/gerencia/convocatoria48?t=preguntas&m=" + (f.get("modulo") or f.get("m") or "")
+    try:
+        if a == "pregunta_add" and f.get("modulo") in _C48_MODULOS and (f.get("correcta") or "").upper() in "ABCD":
+            _c48_x("INSERT INTO conv48_preguntas (modulo, enunciado, op_a, op_b, op_c, op_d, correcta, activa, creado_en) VALUES (:m,:e,:a,:b,:c,:d,:k,1,:n)",
+                   m=f["modulo"], e=(f.get("enunciado") or "").strip(), a=(f.get("op_a") or "").strip(), b=(f.get("op_b") or "").strip(),
+                   c=(f.get("op_c") or "").strip(), d=(f.get("op_d") or "").strip(), k=f["correcta"].upper(), n=_c48_now())
+        elif a == "pregunta_bulk" and f.get("modulo") in _C48_MODULOS:
+            for linea in (f.get("lote") or "").splitlines():
+                partes = [x.strip() for x in linea.split("|")]
+                if len(partes) >= 6 and partes[5].upper() in ("A", "B", "C", "D") and partes[0] and partes[1] and partes[2]:
+                    _c48_x("INSERT INTO conv48_preguntas (modulo, enunciado, op_a, op_b, op_c, op_d, correcta, activa, creado_en) VALUES (:m,:e,:a,:b,:c,:d,:k,1,:n)",
+                           m=f["modulo"], e=partes[0], a=partes[1], b=partes[2], c=partes[3], d=partes[4], k=partes[5].upper(), n=_c48_now())
+        elif a == "pregunta_toggle":
+            _c48_x("UPDATE conv48_preguntas SET activa=CASE WHEN activa=1 THEN 0 ELSE 1 END WHERE id=:i", i=int(f.get("id") or 0))
+        elif a == "pregunta_del":
+            uso = _c48_q("SELECT COUNT(*) FROM conv48_respuestas WHERE pregunta_id=:i", i=int(f.get("id") or 0))
+            if uso and uso[0][0]:
+                _c48_x("UPDATE conv48_preguntas SET activa=0 WHERE id=:i", i=int(f.get("id") or 0))   # ya fue entregada: solo se desactiva
+            else:
+                _c48_x("DELETE FROM conv48_preguntas WHERE id=:i", i=int(f.get("id") or 0))
+        elif a == "cfg":
+            _c48_cfg_set("por_dia", max(1, min(50, int(f.get("por_dia") or 15))))
+            _c48_cfg_set("nota_min", max(1, min(100, int(f.get("nota_min") or 60))))
+            destino = "/gerencia/convocatoria48?t=config"
+        elif a == "part_reenviar":
+            _c48_x("UPDATE conv48_participantes SET estado='aprobado', cert_enviado_en='', cert_lock='', cert_programado_en=:p WHERE id=:i", p=_c48_now(), i=int(f.get("id") or 0))
+            destino = "/gerencia/convocatoria48?t=participantes"
+        elif a == "part_reset":
+            pid = int(f.get("id") or 0)
+            _c48_x("DELETE FROM conv48_respuestas WHERE participante_id=:i", i=pid)
+            _c48_x("UPDATE conv48_participantes SET estado='activo', dia1_fin='', dia2_fin='', aciertos=0, total=0, cert_codigo='', cert_programado_en='', cert_enviado_en='', cert_lock='', cert_error='' WHERE id=:i", i=pid)
+            destino = "/gerencia/convocatoria48?t=participantes"
+        registrar_auditoria("Convocatoria 48h: " + a, session.get("usuario", ""))
+    except Exception as e:
+        print("c48 gerencia:", e)
+    return redirect(destino)
+
+
+
+
+@app.route("/gerencia/convocatoria48/certificado", methods=["POST"])
+def gerencia_convocatoria48_cert():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    try:
+        for clave, _et in _C48_IMGS:
+            if request.form.get("quitar_" + clave):
+                _c48_cfg_set(clave, "")
+            arch = request.files.get(clave)
+            if arch and arch.filename:
+                datos = arch.read(1500001)
+                if len(datos) <= 1500000 and _c48_img_mime(datos):
+                    _c48_cfg_set(clave, _c48_b64.b64encode(datos).decode())
+        for k in _C48_CERT_DEF:
+            v = (request.form.get(k) or "").strip()[:160 if not k.endswith("cargo") else 200]
+            if v:
+                _c48_cfg_set(k, v)
+        registrar_auditoria("Convocatoria 48h: diseño de certificado", session.get("usuario", ""))
+    except Exception as e:
+        print("c48 diseño certificado:", e)
+    return redirect("/gerencia/convocatoria48?t=certificado")
+
+
+@app.route("/gerencia/convocatoria48/certificado-muestra.pdf")
+def gerencia_convocatoria48_cert_muestra():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    muestra = {"nombres": "María Fernanda Pérez Gómez", "tipo_id": "Cédula de Ciudadanía", "num_id": "1000000000", "municipio": "Medellín",
+               "departamento": "Antioquia", "modulo": "ambiental", "dia2_fin": _c48_now(), "cert_codigo": "C48-MUESTRA"}
+    return Response(_c48_pdf_certificado(muestra), mimetype="application/pdf", headers={"Content-Disposition": "inline; filename=certificado_muestra.pdf"})
+
+
+if __name__ == "__main__":
+    with app.app_context():
+        inicializar_bd()
+        try:
+            sincronizar_licencias()
+            aplicar_cambios_plan_pendientes()
+            _ciclo_facturacion_automatica()
+        except Exception as _e:
+            print("ciclo facturacion:", _e)
+    # debug=True en producción es lento (recarga automática, sin caché de templates)
+    # y un riesgo de seguridad grave (consola interactiva remota). threaded=True permite
+    # atender varias peticiones a la vez en vez de una por una. PORT lo asigna Railway/Render.
+    _debug_on = os.environ.get("FLASK_DEBUG", "0") == "1"
+    _port = int(os.environ.get("PORT", 5000))
+    app.run(debug=_debug_on, host="0.0.0.0", port=_port, threaded=True)
+
