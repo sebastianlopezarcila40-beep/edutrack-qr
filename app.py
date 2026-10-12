@@ -84006,11 +84006,37 @@ def _c48_init():
         "cert_lock VARCHAR(20) DEFAULT '', cert_error TEXT DEFAULT '', intentos_login INTEGER DEFAULT 0, bloqueo_hasta VARCHAR(20) DEFAULT '')",
         "CREATE TABLE IF NOT EXISTS conv48_respuestas (id SERIAL PRIMARY KEY, participante_id INTEGER, dia INTEGER, orden INTEGER, "
         "pregunta_id INTEGER, respuesta VARCHAR(1), correcta INTEGER DEFAULT 0, respondida_en VARCHAR(20) DEFAULT '')",
+        "CREATE TABLE IF NOT EXISTS conv48_materiales (id SERIAL PRIMARY KEY, modulo VARCHAR(20) NOT NULL, actividad INTEGER NOT NULL, "
+        "nombre_archivo VARCHAR(255) DEFAULT '', mime VARCHAR(80) DEFAULT 'application/pdf', "
+        "contenido TEXT DEFAULT '', actualizado_en VARCHAR(20) DEFAULT '', actualizado_por VARCHAR(80) DEFAULT '')",
     )
     try:
         for d in ddls:
             db.session.execute(text(d))
         db.session.commit()
+        for col, typ in (
+            ("act2_descargado_en", "VARCHAR(20) DEFAULT ''"),
+            ("act3_resumen", "TEXT DEFAULT ''"),
+            ("act3_conclusiones", "TEXT DEFAULT ''"),
+            ("act3_evidencias", "TEXT DEFAULT ''"),
+            ("act3_enviado_en", "VARCHAR(20) DEFAULT ''"),
+            ("act4_descargado_en", "VARCHAR(20) DEFAULT ''"),
+            ("act4_marcado_en", "VARCHAR(20) DEFAULT ''"),
+        ):
+            try:
+                with db.engine.begin() as conn:
+                    try:
+                        conn.execute(text("ALTER TABLE conv48_participantes ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+                    except Exception:
+                        try:
+                            conn.execute(text("ALTER TABLE conv48_participantes ADD COLUMN %s %s" % (col, typ)))
+                        except Exception:
+                            pass
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
         _c48_estado_init["ok"] = True
     except Exception as e:
         db.session.rollback()
@@ -84127,6 +84153,44 @@ def _c48_clave_valida(p):
 def _c48_nombre_pdf(n):
     n = " ".join((n or "").split())
     return n.title() if (n.isupper() or n.islower()) else n
+
+
+
+_C48_ACT_NOMBRES = {
+    1: ("Evaluación automatizada", "30 preguntas en dos fases de 15 (plataforma EduTrack)"),
+    2: ("Taller de comprensión lectora", "Lecturas, interpretación, ideas principales y análisis de argumentos (PDF descargable)"),
+    3: ("Trabajo práctico", "Análisis de texto, resumen (~250 caracteres), conclusiones y evidencias"),
+    4: ("Evaluación complementaria", "Cuestionario / documento independiente de sustentación final"),
+}
+
+
+def _c48_mat_get(modulo, actividad):
+    r = _c48_q("SELECT id, nombre_archivo, mime, contenido, actualizado_en FROM conv48_materiales WHERE modulo=:m AND actividad=:a",
+               m=modulo, a=int(actividad))
+    return _c48_dict(r[0]) if r else None
+
+
+def _c48_mat_tiene(modulo, actividad):
+    r = _c48_q("SELECT id FROM conv48_materiales WHERE modulo=:m AND actividad=:a AND contenido IS NOT NULL AND contenido<>''",
+               m=modulo, a=int(actividad))
+    return bool(r)
+
+
+def _c48_mat_guardar(modulo, actividad, nombre, mime, datos_b64, quien=""):
+    ahora_s = _c48_now()
+    n = _c48_x(
+        "UPDATE conv48_materiales SET nombre_archivo=:n, mime=:mi, contenido=:c, actualizado_en=:a, actualizado_por=:p "
+        "WHERE modulo=:m AND actividad=:act",
+        n=(nombre or "")[:255], mi=(mime or "application/pdf")[:80], c=datos_b64, a=ahora_s, p=(quien or "")[:80],
+        m=modulo, act=int(actividad),
+    )
+    if not n:
+        _c48_x(
+            "INSERT INTO conv48_materiales (modulo, actividad, nombre_archivo, mime, contenido, actualizado_en, actualizado_por) "
+            "VALUES (:m,:act,:n,:mi,:c,:a,:p)",
+            m=modulo, act=int(actividad), n=(nombre or "")[:255], mi=(mime or "application/pdf")[:80],
+            c=datos_b64, a=ahora_s, p=(quien or "")[:80],
+        )
 
 
 def _c48_estado_dia(p):
@@ -84435,8 +84499,10 @@ def c48_panel():
     por_dia = _c48_por_dia()
     _a, resp = _c48_progreso(p)
     total = por_dia * 2
-    horas = (24 if p.get("dia1_fin") else 0) + (24 if p.get("dia2_fin") else 0)
+    horas_cert = (24 if p.get("dia1_fin") else 0) + (24 if p.get("dia2_fin") else 0)
     pct = int(round(100.0 * resp / total)) if total else 0
+    mod = p.get("modulo") or ""
+
     if fin:
         if p["estado"] == "no_aprobado":
             aviso = ("<div class='c48-err'>Terminaste las preguntas pero no alcanzaste el puntaje mínimo de aprobación (%d%%). "
@@ -84448,21 +84514,194 @@ def c48_panel():
                      "Tu certificado llegará a <b>%s</b> en aproximadamente 15 minutos.</div>" % _esc(p["correo"]))
         boton = ""
     elif espera:
-        aviso = "<div class='c48-ok'>¡Excelente trabajo por hoy! Completaste el Día 1. Ve a descansar y vuelve mañana para tus últimas %d preguntas.</div>" % por_dia
-        boton = "<span class='c48-btn sec full' style='opacity:.6'>Día 2 disponible desde mañana</span>"
+        aviso = ("<div class='c48-ok'>¡Excelente trabajo! Completaste el bloque de preguntas del Día 1. "
+                 "Continúa con las actividades externas (taller y trabajo práctico) y vuelve mañana para las últimas %d preguntas.</div>" % por_dia)
+        boton = "<span class='c48-btn sec full' style='opacity:.6'>Día 2 (preguntas) disponible desde mañana</span>"
     else:
         aviso = ""
-        etiqueta = ("Continuar" if (resp and resp < por_dia * dia) else "Comenzar") + " Día %d" % dia
+        etiqueta = ("Continuar" if (resp and resp < por_dia * dia) else "Comenzar") + " · Actividad 1 · Día %d" % dia
         boton = "<a class='c48-btn full' href='/convocatoria48/preguntas'>%s</a>" % etiqueta
+
+    def _badge_ok(txt):
+        return "<span class='c48-chip' style='background:#dcfce7;color:#166534'>%s</span>" % txt
+    def _badge_pend(txt):
+        return "<span class='c48-chip' style='background:#fef3c7;color:#92400e'>%s</span>" % txt
+
+    if fin or p.get("dia2_fin"):
+        act1_estado = _badge_ok("Completada")
+    elif p.get("dia1_fin"):
+        act1_estado = _badge_ok("Fase 1 lista") + " · " + (_badge_pend("Fase 2 mañana") if espera else _badge_ok("Fase 2 disponible"))
+    elif resp > 0:
+        act1_estado = _badge_pend("%d/%d preguntas" % (resp, total))
+    else:
+        act1_estado = _badge_pend("Pendiente")
+
+    tiene2 = _c48_mat_tiene(mod, 2)
+    act2_desc = (p.get("act2_descargado_en") or "").strip()
+    act2_estado = _badge_ok("Descargado %s" % act2_desc[:16]) if act2_desc else _badge_pend("Pendiente de descarga")
+    act2_btn = ("<a class='c48-btn sec' href='/convocatoria48/material/2'>⬇ Descargar taller (PDF)</a>"
+                if tiene2 else "<span class='small' style='color:#b91c1c'>Material aún no cargado por Gerencia</span>")
+
+    act3_env = (p.get("act3_enviado_en") or "").strip()
+    act3_estado = _badge_ok("Enviado %s" % act3_env[:16]) if act3_env else _badge_pend("Pendiente de entrega")
+    tiene3 = _c48_mat_tiene(mod, 3)
+    act3_dl = ("<a class='c48-btn sec' href='/convocatoria48/material/3'>⬇ Descargar guía (PDF)</a> " if tiene3 else "")
+    act3_btn = act3_dl + "<a class='c48-btn' href='/convocatoria48/trabajo-practico'>%s</a>" % (
+        "Ver / editar mi entrega" if act3_env else "Entregar trabajo práctico")
+
+    tiene4 = _c48_mat_tiene(mod, 4)
+    act4_desc = (p.get("act4_descargado_en") or "").strip()
+    act4_marc = (p.get("act4_marcado_en") or "").strip()
+    if act4_marc:
+        act4_estado = _badge_ok("Marcada como realizada %s" % act4_marc[:16])
+    elif act4_desc:
+        act4_estado = _badge_pend("Descargada · falta marcar como hecha")
+    else:
+        act4_estado = _badge_pend("Pendiente")
+    act4_btn = ""
+    if tiene4:
+        act4_btn += "<a class='c48-btn sec' href='/convocatoria48/material/4'>⬇ Descargar evaluación complementaria (PDF)</a> "
+    else:
+        act4_btn += "<span class='small' style='color:#b91c1c'>Material aún no cargado por Gerencia</span> "
+    if not act4_marc:
+        act4_btn += ("<form method='POST' action='/convocatoria48/actividad4' style='display:inline;margin-left:8px'>"
+                     "<button class='c48-btn sec' type='submit'>Marcar como realizada</button></form>")
+
+    actividades_html = (
+        "<div class='c48-card'><h2>📋 Actividades del programa (48 horas certificadas)</h2>"
+        "<p class='small'>Fase 1 (día del registro, 24 h) · Fase 2 (día siguiente, 24 h). La evaluación automatizada de 30 preguntas no cambia.</p>"
+        "<div style='border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0'>"
+        "<b>Actividad 1 · Evaluación automatizada</b> " + act1_estado + "<br>"
+        "<span class='small'>30 preguntas en dos fases de 15 (plataforma). Hora 0–4 y Hora 24–28.</span><br>"
+        + (boton if not fin else "<span class='small'>Completada</span>") +
+        "</div>"
+        "<div style='border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0'>"
+        "<b>Actividad 2 · Taller de comprensión lectora</b> " + act2_estado + "<br>"
+        "<span class='small'>PDF con lecturas, interpretación, ideas principales y análisis de argumentos. Hora 4–14 (10 h académicas externas).</span><br>"
+        + act2_btn +
+        "</div>"
+        "<div style='border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0'>"
+        "<b>Actividad 3 · Trabajo práctico</b> " + act3_estado + "<br>"
+        "<span class='small'>Analiza el texto, redacta un resumen (~250 caracteres), conclusiones y evidencias. Hora 14–24 (10 h académicas externas).</span><br>"
+        + act3_btn +
+        "</div>"
+        "<div style='border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0'>"
+        "<b>Actividad 4 · Evaluación complementaria</b> " + act4_estado + "<br>"
+        "<span class='small'>Cuestionario o documento independiente de sustentación final. Hora 28–48 (20 h académicas externas). No modifica el software de preguntas.</span><br>"
+        + act4_btn +
+        "</div></div>"
+    )
+
     cuerpo = (
         "<div class='c48-card'><h1>Hola, %s 👋</h1><p><span class='c48-chip'>%s Módulo: %s</span></p>" % (_esc((p["nombres"] or "").split()[0]), ic, _esc(nom_mod))
         + aviso
-        + "<h2>Tu progreso: %d de 48 horas</h2><div class='c48-bar'><div style='width:%d%%'></div></div>"
-          "<p class='small'>Día %d de 2 · %d de %d preguntas respondidas</p>" % (horas, pct, min(dia, 2), resp, total)
-        + boton + "</div>"
-        "<div class='c48-card'><h2>Soporte</h2><p>¿Dudas técnicas? Radica una PQR y el equipo de Procsis te responderá.</p>"
-        "<a class='c48-btn sec' href='/pqr' target='_blank'>Radicar PQR</a> <a class='c48-btn sec' href='/convocatoria48/salir'>Salir</a></div>")
+        + "<h2>Tu progreso: %d de 48 horas certificadas</h2><div class='c48-bar'><div style='width:%d%%'></div></div>"
+          "<p class='small'>Día %d de 2 · %d de %d preguntas de la Actividad 1 respondidas</p></div>" % (horas_cert, pct, min(dia, 2), resp, total)
+        + actividades_html
+        + "<div class='c48-card'><h2>Soporte</h2><p>¿Dudas técnicas? Radica una PQR y el equipo de Procsis te responderá.</p>"
+        "<a class='c48-btn sec' href='/pqr' target='_blank'>Radicar PQR</a> <a class='c48-btn sec' href='/convocatoria48/salir'>Salir</a></div>"
+    )
     return _c48_page("Mi panel · Convocatoria 48 Horas", cuerpo)
+
+
+
+@app.route("/convocatoria48/material/<int:actividad>")
+def c48_material_descarga(actividad):
+    """Descarga el PDF de la actividad 2, 3 o 4 del módulo del participante."""
+    _c48_init()
+    p = _c48_actual()
+    if not p:
+        return redirect("/convocatoria48/ingresar")
+    if actividad not in (2, 3, 4):
+        return redirect("/convocatoria48/panel")
+    mat = _c48_mat_get(p.get("modulo") or "", actividad)
+    if not mat or not mat.get("contenido"):
+        return _c48_page("Material", "<div class='c48-card'><h1>Material no disponible</h1>"
+                         "<p>Gerencia aún no ha cargado el PDF de esta actividad para tu módulo.</p>"
+                         "<a class='c48-btn' href='/convocatoria48/panel'>Volver</a></div>")
+    try:
+        datos = _c48_b64.b64decode(mat["contenido"])
+    except Exception:
+        return _c48_page("Material", "<div class='c48-card'><h1>Error</h1><p>No se pudo leer el archivo.</p>"
+                         "<a class='c48-btn' href='/convocatoria48/panel'>Volver</a></div>")
+    col = {2: "act2_descargado_en", 4: "act4_descargado_en"}.get(actividad)
+    if col and not (p.get(col) or "").strip():
+        try:
+            _c48_x("UPDATE conv48_participantes SET %s=:n WHERE id=:i" % col, n=_c48_now(), i=p["id"])
+        except Exception:
+            pass
+    nombre = mat.get("nombre_archivo") or ("actividad_%d.pdf" % actividad)
+    mime = mat.get("mime") or "application/pdf"
+    return Response(datos, mimetype=mime, headers={
+        "Content-Disposition": "attachment; filename=%s" % nombre.replace('"', "")
+    })
+
+
+@app.route("/convocatoria48/trabajo-practico", methods=["GET", "POST"])
+def c48_trabajo_practico():
+    """Actividad 3: resumen (~250 caracteres), conclusiones y evidencias."""
+    _c48_init()
+    p = _c48_actual()
+    if not p:
+        return redirect("/convocatoria48/ingresar")
+    error = ""
+    resumen = (p.get("act3_resumen") or "")
+    concl = (p.get("act3_conclusiones") or "")
+    evid = (p.get("act3_evidencias") or "")
+    if request.method == "POST":
+        resumen = (request.form.get("resumen") or "").strip()
+        concl = (request.form.get("conclusiones") or "").strip()
+        evid = (request.form.get("evidencias") or "").strip()
+        if len(resumen) < 80:
+            error = "El resumen debe tener al menos ~80 caracteres (objetivo: aproximadamente 250)."
+        elif len(resumen) > 400:
+            error = "El resumen no debe superar 400 caracteres (aprox. 250 recomendados)."
+        elif len(concl) < 20:
+            error = "Escribe tus conclusiones (mínimo 20 caracteres)."
+        elif len(evid) < 20:
+            error = "Indica las evidencias del texto que justifican tu respuesta (mínimo 20 caracteres)."
+        else:
+            _c48_x(
+                "UPDATE conv48_participantes SET act3_resumen=:r, act3_conclusiones=:c, act3_evidencias=:e, act3_enviado_en=:n WHERE id=:i",
+                r=resumen[:500], c=concl[:2000], e=evid[:2000], n=_c48_now(), i=p["id"],
+            )
+            return redirect("/convocatoria48/panel")
+    n_res = len(resumen)
+    color = "#166534" if 200 <= n_res <= 300 else ("#b45309" if n_res else "#64748b")
+    tiene3 = _c48_mat_tiene(p.get("modulo") or "", 3)
+    dl = ("<p><a class='c48-btn sec' href='/convocatoria48/material/3'>⬇ Descargar guía del trabajo práctico (PDF)</a></p>" if tiene3 else
+          "<p class='small' style='color:#b91c1c'>La guía PDF aún no está cargada para tu módulo.</p>")
+    cuerpo = (
+        "<div class='c48-card'><h1>Actividad 3 · Trabajo práctico</h1>"
+        "<p>Analiza el texto de tu módulo, redacta un <b>resumen de aproximadamente 250 caracteres</b>, "
+        "identifica tus conclusiones y justifica con evidencias del texto.</p>"
+        + dl
+        + ("<div class='c48-err'>%s</div>" % _esc(error) if error else "")
+        + ("<div class='c48-ok'>Entrega guardada. Puedes actualizarla si lo necesitas.</div>" if ((p.get("act3_enviado_en") or "") and not error) else "")
+        + "<form method='POST'>"
+          "<label>Resumen (aprox. 250 caracteres) *</label>"
+          "<textarea name='resumen' rows='4' maxlength='400' required "
+          "oninput=\"document.getElementById('c48c').textContent=this.value.length+'/250 (máx. 400)'\">%s</textarea>"
+          "<p class='small' id='c48c' style='color:%s'>%d/250 (máx. 400)</p>"
+          "<label>Conclusiones *</label>"
+          "<textarea name='conclusiones' rows='3' maxlength='2000' required>%s</textarea>"
+          "<label>Evidencias del texto (justificación) *</label>"
+          "<textarea name='evidencias' rows='3' maxlength='2000' required>%s</textarea>"
+          "<button class='c48-btn full'>Guardar entrega</button></form>"
+          "<p style='text-align:center;margin-top:12px'><a href='/convocatoria48/panel'>← Volver al panel</a></p></div>"
+        % (_esc(resumen), color, n_res, _esc(concl), _esc(evid))
+    )
+    return _c48_page("Trabajo práctico · Convocatoria 48 Horas", cuerpo)
+
+
+@app.route("/convocatoria48/actividad4", methods=["POST"])
+def c48_actividad4_marcar():
+    _c48_init()
+    p = _c48_actual()
+    if not p:
+        return redirect("/convocatoria48/ingresar")
+    _c48_x("UPDATE conv48_participantes SET act4_marcado_en=:n WHERE id=:i", n=_c48_now(), i=p["id"])
+    return redirect("/convocatoria48/panel")
 
 
 @app.route("/convocatoria48/preguntas", methods=["GET", "POST"])
@@ -84543,31 +84782,6 @@ def _c48_img_bytes(clave):
 
 def _c48_img_mime(datos):
     return "image/png" if datos[:8] == b"\x89PNG\r\n\x1a\n" else ("image/jpeg" if datos[:3] == b"\xff\xd8\xff" else "")
-
-
-
-def _c48_enviar_correo_multi(destino, asunto, texto, html=None, adjuntos=None):
-    """Envía correo con varios adjuntos PDF. adjuntos = [(bytes, filename), ...]."""
-    correo, pwd = _credenciales_smtp("soporte")
-    if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not correo or not pwd):
-        print("c48 correo multi: faltan credenciales")
-        return False
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = asunto
-        msg["From"] = correo or SOPORTE_EMAIL
-        msg["To"] = destino
-        msg.set_content(texto)
-        if html:
-            msg.add_alternative(html, subtype="html")
-        for datos, nombre in (adjuntos or []):
-            if datos:
-                msg.add_attachment(datos, maintype="application", subtype="pdf", filename=nombre or "documento.pdf")
-        _smtp_enviar(msg, correo, pwd)
-        return True
-    except Exception as e:
-        print("c48 correo multi error:", e)
-        return False
 
 
 def _c48_pdf_certificado(p):
@@ -84664,214 +84878,23 @@ def _c48_pdf_certificado(p):
     return buf.read()
 
 
-
-def _c48_pdf_constancia(p):
-    """Constancia vertical (estilo institucional formal) con logo de empresa arriba."""
-    from reportlab.lib.utils import simpleSplit, ImageReader
-    from reportlab.lib.pagesizes import A4
-    buf = BytesIO()
-    W, H = A4
-    c = canvas.Canvas(buf, pagesize=(W, H))
-    azul = colors.HexColor("#0B2D57")
-    gris = colors.HexColor("#475569")
-    negro = colors.HexColor("#111827")
-
-    def imagen(clave):
-        d = _c48_img_bytes(clave)
-        if not d:
-            return None
-        try:
-            return ImageReader(BytesIO(d))
-        except Exception as e:
-            print("c48 imagen constancia", clave, e)
-            return None
-
-    def poner(img, cx, y, max_w, max_h):
-        iw, ih = img.getSize()
-        esc = min(max_w / float(iw), max_h / float(ih))
-        w, h = iw * esc, ih * esc
-        c.drawImage(img, cx - w / 2, y, width=w, height=h, mask="auto")
-        return h
-
-    cfg = lambda k: _c48_cfg(k, _C48_CERT_DEF[k])
-    entidad = cfg("entidad")
-    _ic, nom_mod, _d = _c48_modulo_info(p["modulo"])
-    nombre = _c48_nombre_pdf(p["nombres"]).upper()
-    tipo_id = p.get("tipo_id") or "Documento"
-    num_id = p.get("num_id") or ""
-    mun = p.get("municipio") or ""
-    dep = p.get("departamento") or ""
-    lugar_id = (", ".join([x for x in (mun, dep) if x]) or "Colombia")
-
-    c.setStrokeColor(azul)
-    c.setLineWidth(2.2)
-    c.rect(28, 28, W - 56, H - 56)
-    c.setLineWidth(0.7)
-    c.rect(34, 34, W - 68, H - 68)
-
-    fondo = imagen("img_fondo")
-    if fondo:
-        c.saveState()
-        c.setFillAlpha(0.06)
-        poner(fondo, W / 2, H / 2 - 120, 280, 280)
-        c.restoreState()
-
-    y = H - 55
-    enc = imagen("img_encabezado")
-    if enc:
-        h_logo = poner(enc, W / 2, y - 70, 160, 70)
-        y -= (h_logo + 18)
-    else:
-        c.setFillColor(azul)
-        c.roundRect(W / 2 - 70, y - 55, 140, 48, 8, fill=1, stroke=0)
-        c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 14)
-        c.drawCentredString(W / 2, y - 28, "PROCSIS")
-        y -= 70
-
-    c.setFillColor(azul)
-    c.setFont("Times-Bold", 13)
-    c.drawCentredString(W / 2, y, entidad.upper())
-    y -= 16
-    c.setFillColor(gris)
-    c.setFont("Times-Italic", 10)
-    c.drawCentredString(W / 2, y, "Programa Procsis Edu · Convocatoria de 48 Horas")
-    y -= 28
-
-    c.setFillColor(negro)
-    c.setFont("Times-Bold", 22)
-    c.drawCentredString(W / 2, y, "CERTIFICA")
-    y -= 28
-
-    cuerpo = (
-        "Que %s identificado(a) con %s No. %s de %s, realizó y aprobó el curso de "
-        "%s, con una intensidad horaria de Cuarenta y Ocho (48) horas, "
-        "bajo la iniciativa ecológica de Cero Papel y Cero Contaminación, a través de la "
-        "plataforma académica EduTrack, y obtuvo una evaluación Apto (A)."
-    ) % (nombre, tipo_id, num_id, lugar_id, nom_mod.upper())
-
-    c.setFillColor(negro)
-    c.setFont("Times-Roman", 11.5)
-    for ln in simpleSplit(cuerpo, "Times-Roman", 11.5, W - 110):
-        c.drawString(55, y, ln)
-        y -= 16
-
-    y -= 10
-    c.setFont("Times-Bold", 11)
-    c.drawString(55, y, "Equivalencia de Evaluaciones:")
-    y -= 16
-    c.setFont("Times-Roman", 11)
-    c.drawString(55, y, "D: Reprobó")
-    y -= 14
-    c.drawString(55, y, "A: Aprobó")
-    y -= 24
-
-    try:
-        f = datetime.strptime((p.get("dia2_fin") or _c48_now())[:10], "%Y-%m-%d")
-        dia_n = f.day
-        mes_n = _MESES_ES[f.month - 1]
-        anio = f.year
-        _dias_txt = {
-            1: "uno", 2: "dos", 3: "tres", 4: "cuatro", 5: "cinco", 6: "seis", 7: "siete", 8: "ocho",
-            9: "nueve", 10: "diez", 11: "once", 12: "doce", 13: "trece", 14: "catorce", 15: "quince",
-            16: "dieciséis", 17: "diecisiete", 18: "dieciocho", 19: "diecinueve", 20: "veinte",
-            21: "veintiuno", 22: "veintidós", 23: "veintitrés", 24: "veinticuatro", 25: "veinticinco",
-            26: "veintiséis", 27: "veintisiete", 28: "veintiocho", 29: "veintinueve", 30: "treinta", 31: "treinta y uno",
-        }
-        dia_txt = _dias_txt.get(dia_n, str(dia_n))
-        fecha_txt = "Se expide en Colombia, a los %s (%d) días del mes de %s de %d." % (dia_txt, dia_n, mes_n, anio)
-    except Exception:
-        fecha_txt = "Se expide en Colombia, el %s." % ((p.get("dia2_fin") or _c48_now())[:10])
-
-    c.setFont("Times-Roman", 11)
-    for ln in simpleSplit(fecha_txt, "Times-Roman", 11, W - 110):
-        c.drawString(55, y, ln)
-        y -= 15
-
-    y -= 20
-    firma1 = imagen("img_firma1")
-    firma2 = imagen("img_firma2")
-    base_y = max(120, y - 90)
-
-    def bloque_firma(cx, i, img_f):
-        c.setStrokeColor(colors.HexColor("#94a3b8"))
-        c.setLineWidth(0.8)
-        c.rect(cx - 95, base_y + 8, 190, 52)
-        c.setFillColor(gris)
-        c.setFont("Helvetica", 8)
-        c.drawCentredString(cx, base_y + 48, "Firmado Digitalmente por")
-        if img_f:
-            poner(img_f, cx, base_y + 12, 150, 36)
-        else:
-            c.setStrokeColor(azul)
-            c.setLineWidth(1)
-            c.line(cx - 70, base_y + 22, cx + 70, base_y + 22)
-        c.setFillColor(negro)
-        c.setFont("Times-Bold", 9.5)
-        c.drawCentredString(cx, base_y - 6, cfg("firma%d_nombre" % i))
-        c.setFillColor(gris)
-        c.setFont("Times-Roman", 8)
-        yy = base_y - 18
-        for ln in cfg("firma%d_cargo" % i).split("\n")[:3]:
-            c.drawCentredString(cx, yy, ln)
-            yy -= 11
-
-    bloque_firma(W * 0.30, 1, firma1)
-    bloque_firma(W * 0.70, 2, firma2)
-
-    url = "%s/convocatoria48/validar/%s" % (_base_publica().rstrip("/"), p.get("cert_codigo") or "")
-    c.setFillColor(gris)
-    c.setFont("Times-Italic", 9)
-    c.drawCentredString(W / 2, 78, "PROCSIS · Tecnología para una educación moderna y responsable")
-    c.setFont("Times-Roman", 7.5)
-    c.drawCentredString(W / 2, 64, "Documento emitido digitalmente · Constancia 100%% digital, política de cero papel.")
-    c.drawCentredString(W / 2, 52, "Código de verificación: %s" % (p.get("cert_codigo") or "—"))
-    c.drawCentredString(W / 2, 42, "Verifique la autenticidad en: %s" % url)
-    try:
-        from reportlab.graphics.barcode import qr
-        from reportlab.graphics.shapes import Drawing
-        from reportlab.graphics import renderPDF
-        w = qr.QrCodeWidget(url)
-        bb = w.getBounds()
-        size = 48
-        d = Drawing(size, size, transform=[size / (bb[2] - bb[0]), 0, 0, size / (bb[3] - bb[1]), 0, 0])
-        d.add(w)
-        renderPDF.draw(d, c, W - 90, 38)
-    except Exception as e:
-        print("c48 qr constancia:", e)
-
-    c.showPage()
-    c.save()
-    buf.seek(0)
-    return buf.read()
-
-
 def _c48_enviar_certificado(pid):
     p = _c48_part(pid)
     if not p:
         return False
     try:
         pdf = _c48_pdf_certificado(p)
-        pdf_constancia = _c48_pdf_constancia(p)
     except Exception as e:
         _c48_x("UPDATE conv48_participantes SET cert_error=:e WHERE id=:i", e="PDF: %s" % e, i=pid)
         return False
     nombre = _c48_nombre_pdf(p["nombres"])
-    texto = ("Hola %s,\n\n¡Felicitaciones! Completaste la Convocatoria de 48 Horas de PROCSIS. Adjuntamos tu certificado y tu constancia digital para tu hoja de vida.\n"
+    texto = ("Hola %s,\n\n¡Felicitaciones! Completaste la Convocatoria de 48 Horas de PROCSIS. Adjuntamos tu certificado digital para tu hoja de vida.\n"
              "Código de verificación: %s\n\nPROCSIS · Tecnología para una educación moderna y responsable." % (nombre, p["cert_codigo"]))
     html = ("<div style='font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:20px'><h2 style='color:#0B2D57'>🎓 ¡Felicitaciones, %s!</h2>"
-            "<p>Completaste la <b>Convocatoria de 48 Horas</b> de PROCSIS. Adjuntamos tu <b>certificado</b> y tu <b>constancia</b> digital para tu hoja de vida.</p>"
+            "<p>Completaste la <b>Convocatoria de 48 Horas</b> de PROCSIS. Adjuntamos tu certificado digital para tu hoja de vida.</p>"
             "<p style='color:#64748b;font-size:13px'>Código de verificación: <b>%s</b></p>"
             "<p style='color:#64748b;font-size:12px'>Proceso 100%% digital, cero papel.</p></div>" % (_esc(nombre), _esc(p["cert_codigo"])))
-    ok = _c48_enviar_correo_multi(
-        p["correo"],
-        "Tu certificado y constancia · Convocatoria de 48 Horas",
-        texto, html,
-        [
-            (pdf, "Certificado_48_Horas_%s.pdf" % p["cert_codigo"]),
-            (pdf_constancia, "Constancia_48_Horas_%s.pdf" % p["cert_codigo"]),
-        ],
-    )
+    ok = _c48_enviar_correo(p["correo"], "Tu certificado · Convocatoria de 48 Horas", texto, html, pdf, "Certificado_48_Horas_%s.pdf" % p["cert_codigo"])
     if ok:
         _c48_x("UPDATE conv48_participantes SET cert_enviado_en=:n, estado='certificado', cert_error='' WHERE id=:i", n=_c48_now(), i=pid)
     else:
@@ -84933,7 +84956,7 @@ def c48_validar(codigo):
 def _c48_gerencia_html(tab, filtro):
     por_dia, nota = _c48_por_dia(), _c48_nota_min()
     tabs = "".join("<a class='c48-btn%s' style='padding:8px 16px;margin-right:6px' href='/gerencia/convocatoria48?t=%s'>%s</a>" % ("" if tab == k else " sec", k, t)
-                   for k, t in (("preguntas", "Preguntas"), ("participantes", "Participantes"), ("certificado", "Certificado"), ("config", "Configuración")))
+                   for k, t in (("preguntas", "Preguntas"), ("participantes", "Participantes"), ("materiales", "Materiales PDF"), ("certificado", "Certificado"), ("config", "Configuración")))
     out = ["<div class='c48' style='max-width:1100px'><h1>🌱 Convocatoria de 48 Horas</h1>"
            "<p>Gestiona el banco de preguntas por módulo y a los participantes. El sistema entrega a cada participante %d preguntas aleatorias por día (2 días)."
            " Enlace público: <a href='/convocatoria48' target='_blank'>/convocatoria48</a></p><p>%s</p>" % (por_dia, tabs)]
@@ -84972,8 +84995,7 @@ def _c48_gerencia_html(tab, filtro):
             "SELECT p.id, p.nombres, p.modulo, p.correo, p.telefono, p.municipio, p.estado, p.aciertos, p.total, "
             "p.cert_enviado_en, p.cert_programado_en, p.cert_error, "
             "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL), "
-            "(SELECT COALESCE(SUM(r.correcta),0) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL), "
-            "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL AND COALESCE(r.correcta,0)=0) "
+            "(SELECT COALESCE(SUM(r.correcta),0) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL) "
             "FROM conv48_participantes p ORDER BY p.id DESC LIMIT 500"
         )
         nota_min = _c48_nota_min()
@@ -84989,32 +85011,27 @@ def _c48_gerencia_html(tab, filtro):
             % (len(filas), nota_min)
         )
         for row in filas:
-            (i, nom, mod, cor, tel, mun, est, ac, tot, env, prog, err, resp, aciertos_live, fallos_live) = row
+            (pid, nom, mod, cor, tel, mun, est, ac, tot, env, prog, err, resp, aciertos_live) = row
             resp = int(resp or 0)
             aciertos_live = int(aciertos_live or 0)
-            fallos_live = int(fallos_live or 0)
-            # Si ya cerró día 2 usa totales guardados; si no, los en vivo
             if int(tot or 0) > 0:
                 aciertos_n, total_n = int(ac or 0), int(tot)
             else:
                 aciertos_n, total_n = aciertos_live, resp
-            fallos_n = max(0, total_n - aciertos_n) if total_n else fallos_live
+            fallos_n = max(0, total_n - aciertos_n)
             pct = round(100.0 * aciertos_n / total_n, 1) if total_n else 0.0
             if est in ("aprobado", "certificado"):
                 resultado = "<span style='color:#166534;font-weight:800'>✅ Aprobado (≥%d%%)</span>" % nota_min
             elif est == "no_aprobado":
                 resultado = "<span style='color:#b91c1c;font-weight:800'>❌ No alcanza (%d%%)</span>" % nota_min
             elif total_n >= total_preg and total_n > 0:
-                if pct >= nota_min:
-                    resultado = "<span style='color:#166534;font-weight:800'>✅ Alcanza certificado</span>"
-                else:
-                    resultado = "<span style='color:#b91c1c;font-weight:800'>❌ No alcanza (%d%%)</span>" % nota_min
+                resultado = ("<span style='color:#166534;font-weight:800'>✅ Alcanza certificado</span>"
+                             if pct >= nota_min else
+                             "<span style='color:#b91c1c;font-weight:800'>❌ No alcanza (%d%%)</span>" % nota_min)
             elif resp > 0:
-                # proyección con lo respondido hasta ahora
-                if pct >= nota_min:
-                    resultado = "<span style='color:#047857'>En camino (≥%d%%)</span>" % nota_min
-                else:
-                    resultado = "<span style='color:#b45309'>Bajo mínimo (%d%%)</span>" % nota_min
+                resultado = ("<span style='color:#047857'>En camino (≥%d%%)</span>" % nota_min
+                             if pct >= nota_min else
+                             "<span style='color:#b45309'>Bajo mínimo (%d%%)</span>" % nota_min)
             else:
                 resultado = "<span class='small' style='color:#64748b'>—</span>"
             cert = ("Enviado " + env) if env else (("Programado " + prog) if prog else "—")
@@ -85024,25 +85041,55 @@ def _c48_gerencia_html(tab, filtro):
             out.append(
                 "<tr style='border-top:1px solid #e2e8f0'>"
                 "<td style='padding:8px'><b>%s</b><br><span class='small'>%s</span></td>"
-                "<td>%s</td><td>%s<br>%s</td><td>%s</td>"
-                "<td>%s</td>"
+                "<td>%s</td><td>%s<br>%s</td><td>%s</td><td>%s</td>"
                 "<td style='color:#166534;font-weight:700'>%d</td>"
                 "<td style='color:#b91c1c;font-weight:700'>%d</td>"
-                "<td><b>%.1f%%</b></td>"
-                "<td>%s</td><td>%s</td><td>"
+                "<td><b>%.1f%%</b></td><td>%s</td><td>%s</td><td>"
                 "<form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='id' value='%d'>%s"
                 "<button name='accion' value='part_reset' class='c48-btn sec' style='padding:6px 10px' "
                 "onclick=\"return confirm('Esto borra sus respuestas y le permite repetir. ¿Continuar?')\">Reiniciar</button>"
                 "</form></td></tr>"
-                % (
-                    _esc(nom), _esc(mun), _c48_modulo_info(mod)[1], _esc(cor), _esc(tel), _esc(est),
-                    avance_txt, aciertos_n, fallos_n, pct, resultado, _esc(cert), i,
-                    ("<button name='accion' value='part_reenviar' class='c48-btn sec' style='padding:6px 10px'>Reenviar cert.</button> "
-                     if est in ("aprobado", "certificado") else ""),
-                )
+                % (_esc(nom), _esc(mun), _c48_modulo_info(mod)[1], _esc(cor), _esc(tel), _esc(est),
+                   avance_txt, aciertos_n, fallos_n, pct, resultado, _esc(cert), pid,
+                   ("<button name='accion' value='part_reenviar' class='c48-btn sec' style='padding:6px 10px'>Reenviar cert.</button> "
+                    if est in ("aprobado", "certificado") else ""))
             )
         out.append("</table></div>")
+    elif tab == "materiales":
+        out.append("<div class='c48-card'><h2>Materiales PDF por módulo y actividad</h2>"
+                   "<p class='small'>Sube un PDF por cada módulo (Educación, Ambiental, Tecnología) para las actividades 2, 3 y 4. "
+                   "Los participantes solo ven y descargan el material de <b>su módulo</b>.</p>"
+                   "<ul class='small'><li><b>Act. 2</b> Taller de comprensión lectora</li>"
+                   "<li><b>Act. 3</b> Guía del trabajo práctico</li>"
+                   "<li><b>Act. 4</b> Evaluación complementaria (formulario/documento externo)</li></ul></div>")
+        for act in (2, 3, 4):
+            nom_act, desc_act = _C48_ACT_NOMBRES.get(act, ("Actividad %d" % act, ""))
+            out.append("<div class='c48-card'><h2>Actividad %d · %s</h2><p class='small'>%s</p><div class='c48-mods'>" % (act, _esc(nom_act), _esc(desc_act)))
+            for mod_k, mod_v in _C48_MODULOS.items():
+                mat = _c48_mat_get(mod_k, act)
+                if mat and mat.get("contenido"):
+                    estado = "<span style='color:#166534;font-weight:700'>✓ Cargado</span><br><span class='small'>%s<br>%s</span>" % (
+                        _esc(mat.get("nombre_archivo") or "archivo.pdf"), _esc((mat.get("actualizado_en") or "")[:16]))
+                    quitar = ("<form method='POST' action='/gerencia/convocatoria48/material' style='margin-top:6px'>"
+                              "<input type='hidden' name='accion' value='quitar'><input type='hidden' name='modulo' value='%s'>"
+                              "<input type='hidden' name='actividad' value='%d'>"
+                              "<button class='c48-btn sec' style='padding:6px 10px' onclick=\"return confirm('¿Quitar este PDF?')\">Quitar</button></form>" % (mod_k, act))
+                else:
+                    estado = "<span style='color:#b45309'>Sin archivo</span>"
+                    quitar = ""
+                out.append(
+                    "<div class='c48-mod' style='text-align:left;cursor:default'>"
+                    "<span class='ic'>%s</span><b>%s</b><div style='margin:8px 0'>%s</div>"
+                    "<form method='POST' action='/gerencia/convocatoria48/material' enctype='multipart/form-data'>"
+                    "<input type='hidden' name='accion' value='subir'><input type='hidden' name='modulo' value='%s'>"
+                    "<input type='hidden' name='actividad' value='%d'>"
+                    "<input type='file' name='archivo' accept='application/pdf' required style='font-size:12px'>"
+                    "<button class='c48-btn' style='margin-top:8px;padding:8px 12px;width:100%%'>Subir PDF</button></form>%s</div>"
+                    % (mod_v[0], _esc(mod_v[1]), estado, mod_k, act, quitar)
+                )
+            out.append("</div></div>")
     elif tab == "certificado":
+
         celdas = []
         for clave, etiqueta in _C48_IMGS:
             d = _c48_img_bytes(clave)
@@ -85063,7 +85110,7 @@ def _c48_gerencia_html(tab, filtro):
                    "Los cambios aplican a los certificados que se envíen desde ahora.</p>"
                    "<form method='POST' action='/gerencia/convocatoria48/certificado' enctype='multipart/form-data'><div class='c48-mods'>%s</div>%s"
                    "<button class='c48-btn full'>Guardar diseño</button></form>"
-                   "<p style='text-align:center'><a class='c48-btn sec' href='/gerencia/convocatoria48/certificado-muestra.pdf' target='_blank'>👁 Ver certificado de muestra</a> <a class='c48-btn sec' href='/gerencia/convocatoria48/constancia-muestra.pdf' target='_blank'>👁 Ver constancia de muestra</a></p></div>" % ("".join(celdas), campos))
+                   "<p style='text-align:center'><a class='c48-btn sec' href='/gerencia/convocatoria48/certificado-muestra.pdf' target='_blank'>👁 Ver certificado de muestra</a></p></div>" % ("".join(celdas), campos))
     else:
         out.append("<div class='c48-card'><h2>Configuración</h2><form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='accion' value='cfg'>"
                    "<label>Preguntas por día</label><input type='text' name='por_dia' value='%d'>"
@@ -85086,7 +85133,7 @@ def gerencia_convocatoria48():
 @app.route("/gerencia/convocatoria48/export.csv")
 @app.route("/gerencia/convocatoria48/export.xlsx")
 def gerencia_convocatoria48_excel():
-    """Exporta participantes de la Convocatoria 48h a Excel con diseño completo."""
+    """Exporta participantes a Excel con diseño (aciertos, fallos, %, resultado)."""
     _g = _guard_gerencia()
     if _g is not None:
         return _g
@@ -85094,77 +85141,42 @@ def gerencia_convocatoria48_excel():
     wb = Workbook()
     ws = wb.active
     ws.title = "Participantes"
-
-    amarillo_fill = PatternFill(start_color="FACC15", end_color="FACC15", fill_type="solid")
-    gris_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
-    verde_fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
-    rojo_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    amarillo = PatternFill(start_color="FACC15", end_color="FACC15", fill_type="solid")
+    gris = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    verde = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+    rojo = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
     titulo_font = Font(bold=True, color="0B2D57", name="Calibri", size=16)
     sub_font = Font(bold=True, color="334155", name="Calibri", size=11)
-    normal_font = Font(name="Calibri", size=10)
+    normal = Font(name="Calibri", size=10)
     header_font = Font(bold=True, color="0B2D57", name="Calibri", size=10)
-    borde = Border(
-        left=Side(style="thin", color="94A3B8"),
-        right=Side(style="thin", color="94A3B8"),
-        top=Side(style="thin", color="94A3B8"),
-        bottom=Side(style="thin", color="94A3B8"),
-    )
+    borde = Border(left=Side(style="thin", color="94A3B8"), right=Side(style="thin", color="94A3B8"),
+                   top=Side(style="thin", color="94A3B8"), bottom=Side(style="thin", color="94A3B8"))
     centro = Alignment(horizontal="center", vertical="center", wrap_text=True)
     izq = Alignment(horizontal="left", vertical="center", wrap_text=True)
-
-    ws.merge_cells("A1:R1")
-    ws["A1"] = "PROCSIS · EduTrack"
-    ws["A1"].font = titulo_font
+    ws.merge_cells("A1:Q1"); ws["A1"] = "PROCSIS · EduTrack"; ws["A1"].font = titulo_font
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
-
-    ws.merge_cells("A2:R2")
-    ws["A2"] = "Convocatoria de 48 Horas · Listado de participantes"
-    ws["A2"].font = sub_font
+    ws.merge_cells("A2:Q2"); ws["A2"] = "Convocatoria de 48 Horas · Participantes"; ws["A2"].font = sub_font
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
-
-    nota_min = _c48_nota_min()
-    total_preg = _c48_por_dia() * 2
-    ws.merge_cells("A3:R3")
-    ws["A3"] = "Exportado el %s (hora Colombia) · Nota mínima para certificado: %d%% · Total preguntas: %d" % (
-        ahora().strftime("%d/%m/%Y %H:%M"), nota_min, total_preg)
+    nota_min = _c48_nota_min(); total_preg = _c48_por_dia() * 2
+    ws.merge_cells("A3:Q3")
+    ws["A3"] = "Exportado %s · Nota mínima certificado: %d%% · Preguntas: %d" % (ahora().strftime("%d/%m/%Y %H:%M"), nota_min, total_preg)
     ws["A3"].font = Font(name="Calibri", size=9, color="64748B", italic=True)
-    ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
-
-    ws.row_dimensions[1].height = 28
-    ws.row_dimensions[2].height = 20
-    ws.row_dimensions[3].height = 16
-
-    headers = [
-        "ID", "Nombres y apellidos", "Tipo ID", "Número ID", "Correo", "Teléfono",
-        "Departamento", "Municipio", "Módulo", "Estado",
-        "Respondidas", "Aciertos", "Fallos", "Porcentaje %", "Resultado",
-        "Código certificado", "Enviado el",
-    ]
-    header_row = 5
+    ws["A3"].alignment = Alignment(horizontal="center")
+    headers = ["ID", "Nombres", "Tipo ID", "Número ID", "Correo", "Teléfono", "Departamento", "Municipio", "Módulo",
+               "Estado", "Respondidas", "Aciertos", "Fallos", "Porcentaje %", "Resultado", "Código cert.", "Enviado"]
     for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=header_row, column=col, value=h)
-        cell.fill = amarillo_fill
-        cell.font = header_font
-        cell.alignment = centro
-        cell.border = borde
-    ws.row_dimensions[header_row].height = 22
-
+        cell = ws.cell(row=5, column=col, value=h)
+        cell.fill = amarillo; cell.font = header_font; cell.alignment = centro; cell.border = borde
     filas = _c48_q(
         "SELECT p.id, p.nombres, p.tipo_id, p.num_id, p.correo, p.telefono, p.departamento, p.municipio, "
         "p.modulo, p.estado, p.aciertos, p.total, p.cert_codigo, p.cert_enviado_en, "
         "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL), "
         "(SELECT COALESCE(SUM(r.correcta),0) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL) "
-        "FROM conv48_participantes p ORDER BY p.id"
-    )
+        "FROM conv48_participantes p ORDER BY p.id")
     for i, r in enumerate(filas):
-        (pid, nom, tipo, num, correo, tel, dep, mun, mod, est, ac, tot, cert_c, env,
-         resp, aciertos_live) = r
-        resp = int(resp or 0)
-        aciertos_live = int(aciertos_live or 0)
-        if int(tot or 0) > 0:
-            aciertos_n, total_n = int(ac or 0), int(tot)
-        else:
-            aciertos_n, total_n = aciertos_live, resp
+        pid, nom, tipo, num, correo, tel, dep, mun, mod, est, ac, tot, cert_c, env, resp, ac_live = r
+        resp = int(resp or 0); ac_live = int(ac_live or 0)
+        aciertos_n, total_n = (int(ac or 0), int(tot)) if int(tot or 0) > 0 else (ac_live, resp)
         fallos_n = max(0, total_n - aciertos_n)
         pct = round(100.0 * aciertos_n / total_n, 1) if total_n else 0.0
         if est in ("aprobado", "certificado") or (total_n >= total_preg and pct >= nota_min):
@@ -85175,51 +85187,63 @@ def gerencia_convocatoria48_excel():
             resultado = "En curso"
         else:
             resultado = "Sin iniciar"
-        mod_nom = _c48_modulo_info(mod)[1] if mod else ""
-        valores = [
-            pid, nom, tipo, num, correo, tel, dep, mun, mod_nom, est,
-            resp, aciertos_n, fallos_n, pct, resultado, cert_c or "", env or "",
-        ]
-        row_num = header_row + 1 + i
-        for col, val in enumerate(valores, 1):
-            cell = ws.cell(row=row_num, column=col, value=val if val is not None else "")
-            cell.font = normal_font
-            cell.border = borde
+        vals = [pid, nom, tipo, num, correo, tel, dep, mun, _c48_modulo_info(mod)[1] if mod else "", est,
+                resp, aciertos_n, fallos_n, pct, resultado, cert_c or "", env or ""]
+        for col, val in enumerate(vals, 1):
+            cell = ws.cell(row=6 + i, column=col, value=val if val is not None else "")
+            cell.font = normal; cell.border = borde
             cell.alignment = centro if col in (1, 10, 11, 12, 13, 14) else izq
-            if i % 2 == 1:
-                cell.fill = gris_fill
+            if i % 2:
+                cell.fill = gris
             if col == 15:
                 if "Aprobado" in str(resultado) or "Alcanza" in str(resultado):
-                    cell.fill = verde_fill
-                    cell.font = Font(name="Calibri", size=10, bold=True, color="166534")
+                    cell.fill = verde; cell.font = Font(name="Calibri", size=10, bold=True, color="166534")
                 elif "No alcanza" in str(resultado):
-                    cell.fill = rojo_fill
-                    cell.font = Font(name="Calibri", size=10, bold=True, color="B91C1C")
-
-    anchos = {
-        "A": 8, "B": 30, "C": 18, "D": 14, "E": 28, "F": 14,
-        "G": 14, "H": 14, "I": 14, "J": 12, "K": 12, "L": 10,
-        "M": 10, "N": 12, "O": 26, "P": 18, "Q": 18,
-    }
-    for col, width in anchos.items():
-        ws.column_dimensions[col].width = width
-
-    pie_row = header_row + 2 + len(filas)
-    ws.merge_cells(start_row=pie_row, start_column=1, end_row=pie_row, end_column=17)
-    ws.cell(row=pie_row, column=1, value="Total participantes: %d  ·  Documento generado por PROCSIS EduTrack" % len(filas))
-    ws.cell(row=pie_row, column=1).font = Font(name="Calibri", size=9, color="64748B", italic=True)
-    ws.cell(row=pie_row, column=1).alignment = Alignment(horizontal="center")
+                    cell.fill = rojo; cell.font = Font(name="Calibri", size=10, bold=True, color="B91C1C")
+    for col, w in {"A":8,"B":28,"C":16,"D":14,"E":26,"F":12,"G":14,"H":14,"I":12,"J":12,"K":12,"L":10,"M":10,"N":12,"O":26,"P":16,"Q":16}.items():
+        ws.column_dimensions[col].width = w
+    pie = 7 + len(filas)
+    ws.merge_cells(start_row=pie, start_column=1, end_row=pie, end_column=17)
+    ws.cell(row=pie, column=1, value="Total: %d participantes · PROCSIS EduTrack" % len(filas))
+    ws.cell(row=pie, column=1).font = Font(name="Calibri", size=9, color="64748B", italic=True)
     ws.freeze_panes = "A6"
+    b = BytesIO(); wb.save(b); b.seek(0)
+    return send_file(b, as_attachment=True, download_name="convocatoria48_participantes.xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    b = BytesIO()
-    wb.save(b)
-    b.seek(0)
-    return send_file(
-        b,
-        as_attachment=True,
-        download_name="convocatoria48_participantes.xlsx",
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+
+@app.route("/gerencia/convocatoria48/material", methods=["POST"])
+def gerencia_convocatoria48_material():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    accion = (request.form.get("accion") or "").strip()
+    modulo = (request.form.get("modulo") or "").strip().lower()
+    try:
+        actividad = int(request.form.get("actividad") or 0)
+    except Exception:
+        actividad = 0
+    if modulo not in _C48_MODULOS or actividad not in (2, 3, 4):
+        return redirect("/gerencia/convocatoria48?t=materiales")
+    try:
+        if accion == "quitar":
+            _c48_x("DELETE FROM conv48_materiales WHERE modulo=:m AND actividad=:a", m=modulo, a=actividad)
+            registrar_auditoria("Convocatoria 48h: material quitado", "%s act %s" % (modulo, actividad))
+        elif accion == "subir":
+            arch = request.files.get("archivo")
+            if arch and arch.filename:
+                datos = arch.read(6 * 1024 * 1024 + 1)
+                if len(datos) <= 6 * 1024 * 1024:
+                    nombre = (arch.filename or "material.pdf").rsplit("/", 1)[-1][:200]
+                    if not nombre.lower().endswith(".pdf"):
+                        nombre = nombre + ".pdf"
+                    _c48_mat_guardar(modulo, actividad, nombre, "application/pdf",
+                                     _c48_b64.b64encode(datos).decode(), session.get("usuario") or "")
+                    registrar_auditoria("Convocatoria 48h: material subido", "%s act %s · %s" % (modulo, actividad, nombre))
+    except Exception as e:
+        print("c48 material:", e)
+    return redirect("/gerencia/convocatoria48?t=materiales")
 
 
 @app.route("/gerencia/convocatoria48/accion", methods=["POST"])
@@ -85304,19 +85328,6 @@ def gerencia_convocatoria48_cert_muestra():
     muestra = {"nombres": "María Fernanda Pérez Gómez", "tipo_id": "Cédula de Ciudadanía", "num_id": "1000000000", "municipio": "Medellín",
                "departamento": "Antioquia", "modulo": "ambiental", "dia2_fin": _c48_now(), "cert_codigo": "C48-MUESTRA"}
     return Response(_c48_pdf_certificado(muestra), mimetype="application/pdf", headers={"Content-Disposition": "inline; filename=certificado_muestra.pdf"})
-
-
-
-@app.route("/gerencia/convocatoria48/constancia-muestra.pdf")
-def gerencia_convocatoria48_constancia_muestra():
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    _c48_init()
-    muestra = {"nombres": "María Fernanda Pérez Gómez", "tipo_id": "Cédula de Ciudadanía", "num_id": "1000000000", "municipio": "Medellín",
-               "departamento": "Antioquia", "modulo": "ambiental", "dia2_fin": _c48_now(), "cert_codigo": "C48-MUESTRA"}
-    return Response(_c48_pdf_constancia(muestra), mimetype="application/pdf", headers={"Content-Disposition": "inline; filename=constancia_muestra.pdf"})
-
 
 
 if __name__ == "__main__":
