@@ -83902,6 +83902,7 @@ def gerencia_equipo_carnet(id):
 #  Los participantes NO son usuarios del sistema: usan su propia sesión (c48_pid).
 # ============================================================================
 import io as _c48_io
+import base64 as _c48_b64
 import threading as _c48_th
 import secrets as _c48_sec
 import random as _c48_rnd
@@ -84523,42 +84524,114 @@ def _c48_cerrar_dia(p, dia):
 
 
 # ---------- certificado ----------
-def _c48_pdf_certificado(p):
-    from reportlab.lib.utils import simpleSplit
-    buf = BytesIO()
-    W, H = landscape(letter)
-    c = canvas.Canvas(buf, pagesize=landscape(letter))
-    c.setStrokeColor(colors.HexColor("#047857")); c.setLineWidth(6); c.rect(24, 24, W - 48, H - 48)
-    c.setStrokeColor(colors.HexColor("#0b63ce")); c.setLineWidth(1.5); c.rect(36, 36, W - 72, H - 72)
-    c.setFillColor(colors.HexColor("#0B2D57")); c.setFont("Helvetica-Bold", 14); c.drawCentredString(W / 2, H - 78, "PROCSIS · PLATAFORMA EDUTRACK")
-    c.setFont("Helvetica-Bold", 34); c.drawCentredString(W / 2, H - 125, "CERTIFICADO DIGITAL")
-    c.setFillColor(colors.HexColor("#475569")); c.setFont("Helvetica", 13); c.drawCentredString(W / 2, H - 155, "Convocatoria de 48 Horas")
-    nombre = _c48_nombre_pdf(p["nombres"])
-    c.setFillColor(colors.HexColor("#047857")); c.setFont("Helvetica-Bold", 28); c.drawCentredString(W / 2, H - 215, nombre)
-    _ic, nom_mod, _d = _c48_modulo_info(p["modulo"])
+_C48_IMGS = (("img_fondo", "Logo de fondo (marca de agua)"), ("img_encabezado", "Logo del encabezado"),
+             ("img_firma1", "Firma del Representante Legal (PNG transparente)"), ("img_firma2", "Firma del Gerente General (PNG transparente)"))
+_C48_CERT_DEF = {
+    "entidad": "PROCSIS S.A.S.",
+    "firma1_nombre": "MARÍA DUBER LÓPEZ ARCILA", "firma1_cargo": "Representante Legal\nPROCSIS S.A.S.",
+    "firma2_nombre": "SEBASTIÁN LÓPEZ ARCILA", "firma2_cargo": "Gerente General\nPROCSIS EDU",
+}
+
+
+def _c48_img_bytes(clave):
     try:
-        fecha = datetime.strptime((p.get("dia2_fin") or _c48_now())[:10], "%Y-%m-%d")
-        fecha_txt = "%d de %s de %d" % (fecha.day, _MESES_ES[fecha.month - 1], fecha.year)
+        v = _c48_cfg(clave, "")
+        return _c48_b64.b64decode(v) if v else None
     except Exception:
-        fecha_txt = (p.get("dia2_fin") or "")[:10]
-    texto = ("Que %s identificado(a) con %s No. %s de %s, %s, realizó y aprobó la Convocatoria de 48 Horas de PROCSIS, módulo de %s, "
-             "con una intensidad de 48 horas, el %s." % (nombre, p["tipo_id"], p["num_id"], p["municipio"], p["departamento"], nom_mod, fecha_txt))
-    c.setFillColor(colors.HexColor("#0f172a")); c.setFont("Helvetica", 15)
-    y = H - 265
-    for linea in simpleSplit(texto, "Helvetica", 15, W - 190):
-        c.drawCentredString(W / 2, y, linea); y -= 22
-    c.setFillColor(colors.HexColor("#64748b")); c.setFont("Helvetica", 10)
+        return None
+
+
+def _c48_img_mime(datos):
+    return "image/png" if datos[:8] == b"\x89PNG\r\n\x1a\n" else ("image/jpeg" if datos[:3] == b"\xff\xd8\xff" else "")
+
+
+def _c48_pdf_certificado(p):
+    """Certificado: estructura clásica centrada, marca de agua y firmas configurables desde Gerencia."""
+    from reportlab.lib.utils import simpleSplit, ImageReader
+    from reportlab.lib.pagesizes import A4
+    buf = BytesIO()
+    W, H = landscape(A4)
+    c = canvas.Canvas(buf, pagesize=(W, H))
+    azul, verde, gris = colors.HexColor("#002855"), colors.HexColor("#2e7d32"), colors.HexColor("#555555")
+
+    def imagen(clave):
+        d = _c48_img_bytes(clave)
+        if not d:
+            return None
+        try:
+            return ImageReader(BytesIO(d))
+        except Exception as e:
+            print("c48 imagen", clave, e)
+            return None
+
+    def poner(img, cx, y, max_w, max_h):
+        iw, ih = img.getSize()
+        esc = min(max_w / float(iw), max_h / float(ih))
+        w, h = iw * esc, ih * esc
+        c.drawImage(img, cx - w / 2, y, width=w, height=h, mask="auto")
+
+    # marco
+    c.setStrokeColor(azul); c.setLineWidth(5); c.rect(22, 22, W - 44, H - 44)
+    c.setLineWidth(1); c.rect(32, 32, W - 64, H - 64)
+    # marca de agua (logo de fondo)
+    fondo = imagen("img_fondo")
+    if fondo:
+        c.saveState(); c.setFillAlpha(0.07); poner(fondo, W / 2, H / 2 - 160, 340, 320); c.restoreState()
+    # encabezado
+    enc = imagen("img_encabezado")
+    y = H - 50
+    if enc:
+        poner(enc, W / 2, y - 55, 170, 55); y -= 66
+    cfg = lambda k: _c48_cfg(k, _C48_CERT_DEF[k])
+    c.setFillColor(azul); c.setFont("Times-Bold", 30); c.drawCentredString(W / 2, y - 22, cfg("entidad"))
+    c.setFillColor(gris); c.setFont("Times-Italic", 12.5); c.drawCentredString(W / 2, y - 42, "Programa Procsis Edu · Convocatoria de 48 Horas")
+    y -= 78
+    c.setFillColor(colors.black); c.setFont("Times-BoldItalic", 15); c.drawCentredString(W / 2, y, "Hace constar que")
+    nombre = _c48_nombre_pdf(p["nombres"]).upper()
+    tam = 25
+    while tam > 14 and c.stringWidth(nombre, "Times-Bold", tam) > W - 160:
+        tam -= 1
+    c.setFillColor(azul); c.setFont("Times-Bold", tam); c.drawCentredString(W / 2, y - 32, nombre)
+    nw = c.stringWidth(nombre, "Times-Bold", tam)
+    c.setStrokeColor(azul); c.setLineWidth(1.2); c.line(W / 2 - nw / 2, y - 38, W / 2 + nw / 2, y - 38)
+    c.setFillColor(colors.HexColor("#333333")); c.setFont("Times-Italic", 13)
+    c.drawCentredString(W / 2, y - 58, "Identificado(a) con %s No. %s de %s, %s, Colombia." % (p["tipo_id"], p["num_id"], p["municipio"], p["departamento"]))
+    c.setFont("Times-Italic", 14); c.drawCentredString(W / 2, y - 92, "Cursó y aprobó satisfactoriamente la jornada de formación del módulo de")
+    _ic, nom_mod, _d = _c48_modulo_info(p["modulo"])
+    c.setFillColor(verde); c.setFont("Times-Bold", 22); c.drawCentredString(W / 2, y - 120, nom_mod.upper())
+    c.setFillColor(colors.HexColor("#333333")); c.setFont("Times-Italic", 13.5)
+    c.drawCentredString(W / 2, y - 144, "con una intensidad de 48 horas, bajo la iniciativa ecológica de Cero Papel y Cero Contaminación,")
+    c.drawCentredString(W / 2, y - 161, "a través de la plataforma académica EduTrack.")
+    try:
+        f = datetime.strptime((p.get("dia2_fin") or _c48_now())[:10], "%Y-%m-%d")
+        fecha_txt = "a los %d días del mes de %s de %d" % (f.day, _MESES_ES[f.month - 1], f.year)
+    except Exception:
+        fecha_txt = "el %s" % (p.get("dia2_fin") or "")[:10]
+    c.setFont("Times-Italic", 11.5); c.drawCentredString(W / 2, y - 190, "En testimonio de lo anterior, se expide el presente certificado en Colombia, %s." % fecha_txt)
+    # firmas en paralelo
+    base = 122
+    for i, cx in ((1, W * 0.30), (2, W * 0.70)):
+        im = imagen("img_firma%d" % i)
+        if im:
+            poner(im, cx, base + 6, 190, 58)
+        c.setStrokeColor(colors.HexColor("#666666")); c.setLineWidth(0.8); c.line(cx - 110, base, cx + 110, base)
+        c.setFillColor(colors.HexColor("#222222")); c.setFont("Times-Bold", 11.5); c.drawCentredString(cx, base - 14, cfg("firma%d_nombre" % i))
+        c.setFillColor(gris); c.setFont("Times-Roman", 9.5)
+        yy = base - 26
+        for ln in cfg("firma%d_cargo" % i).split("\n")[:3]:
+            c.drawCentredString(cx, yy, ln); yy -= 11
+    # pie y verificación
     url = "%s/convocatoria48/validar/%s" % (_base_publica().rstrip("/"), p["cert_codigo"])
-    c.drawString(60, 78, "Código de verificación: %s" % p["cert_codigo"])
-    c.drawString(60, 64, "Verifique la autenticidad en: %s" % url)
-    c.drawString(60, 50, "Certificado 100%% digital · Política de cero papel · %s" % _C48_CORREO_PROGRAMA)
+    c.setFillColor(colors.HexColor("#777777")); c.setFont("Times-Roman", 8.5)
+    c.drawString(52, 62, "Documento privado emitido digitalmente por %s · Certificado 100%% digital, política de cero papel." % cfg("entidad"))
+    c.drawString(52, 50, "Código de verificación: %s · Verifique su autenticidad en: %s" % (p["cert_codigo"], url))
     try:
         from reportlab.graphics.barcode import qr
         from reportlab.graphics.shapes import Drawing
         from reportlab.graphics import renderPDF
-        w = qr.QrCodeWidget(url); b = w.getBounds(); size = 84
-        d = Drawing(size, size, transform=[size / (b[2] - b[0]), 0, 0, size / (b[3] - b[1]), 0, 0]); d.add(w)
-        renderPDF.draw(d, c, W - 60 - size, 52)
+        w = qr.QrCodeWidget(url); bb = w.getBounds(); size = 60
+        d = Drawing(size, size, transform=[size / (bb[2] - bb[0]), 0, 0, size / (bb[3] - bb[1]), 0, 0]); d.add(w)
+        renderPDF.draw(d, c, W - 52 - size, 42)
     except Exception as e:
         print("c48 qr:", e)
     c.showPage(); c.save()
@@ -84644,7 +84717,7 @@ def c48_validar(codigo):
 def _c48_gerencia_html(tab, filtro):
     por_dia, nota = _c48_por_dia(), _c48_nota_min()
     tabs = "".join("<a class='c48-btn%s' style='padding:8px 16px;margin-right:6px' href='/gerencia/convocatoria48?t=%s'>%s</a>" % ("" if tab == k else " sec", k, t)
-                   for k, t in (("preguntas", "Preguntas"), ("participantes", "Participantes"), ("config", "Configuración")))
+                   for k, t in (("preguntas", "Preguntas"), ("participantes", "Participantes"), ("certificado", "Certificado"), ("config", "Configuración")))
     out = ["<div class='c48' style='max-width:1100px'><h1>🌱 Convocatoria de 48 Horas</h1>"
            "<p>Gestiona el banco de preguntas por módulo y a los participantes. El sistema entrega a cada participante %d preguntas aleatorias por día (2 días)."
            " Enlace público: <a href='/convocatoria48' target='_blank'>/convocatoria48</a></p><p>%s</p>" % (por_dia, tabs)]
@@ -84693,100 +84766,27 @@ def _c48_gerencia_html(tab, filtro):
                        % (_esc(nom), _esc(mun), _c48_modulo_info(mod)[1], _esc(cor), _esc(tel), _esc(est), resp, por_dia * 2, ac or 0, tot or 0, _esc(cert), i,
                           ("<button name='accion' value='part_reenviar' class='c48-btn sec' style='padding:6px 10px'>Reenviar cert.</button> " if est in ("aprobado", "certificado") else "")))
         out.append("</table></div>")
+    elif tab == "certificado":
+        celdas = []
+        for clave, etiqueta in _C48_IMGS:
+            d = _c48_img_bytes(clave)
+            vista = ("<img src='data:%s;base64,%s' style='max-height:70px;max-width:100%%;background:#e5e7eb;border-radius:8px;display:block;margin:6px 0'>"
+                     "<label style='font-weight:600'><input type='checkbox' name='quitar_%s' value='1'> Quitar imagen</label>" % (_c48_img_mime(d) or "image/png", _c48_b64.b64encode(d).decode(), clave)
+                     if d else "<p class='small'>Sin imagen cargada</p>")
+            celdas.append("<div><label>%s</label>%s<input type='file' name='%s' accept='image/png,image/jpeg'></div>" % (etiqueta, vista, clave))
+        _lc = []
+        for k, et in (("entidad", "Nombre de la entidad"), ("firma1_nombre", "Representante Legal · nombre"), ("firma1_cargo", "Representante Legal · cargo (una línea por renglón)"),
+                      ("firma2_nombre", "Gerente General · nombre"), ("firma2_cargo", "Gerente General · cargo (una línea por renglón)")):
+            val = _esc(_c48_cfg(k, _C48_CERT_DEF[k]))
+            if k.endswith("cargo"):
+                _lc.append("<label>%s</label><textarea name='%s' rows='2'>%s</textarea>" % (et, k, val))
+            else:
+                _lc.append("<label>%s</label><input type='text' name='%s' value='%s'>" % (et, k, val))
+        campos = "".join(_lc)
+        out.append("<div class='c48-card'><h2>Diseño del certificado</h2><p class='small'>Sube el logo de fondo y las firmas digitalizadas (PNG con fondo transparente, máx. 1,5 MB cada una). "
+                   "Los cambios aplican a los certificados que se envíen desde ahora.</p>"
+                   "<form method='POST' action='/gerencia/convocatoria48/certificado' enctype='multipart/form-data'><div class='c48-mods'>%s</div>%s"
+                   "<button class='c48-btn full'>Guardar diseño</button></form>"
+                   "<p style='text-align:center'><a class='c48-btn sec' href='/gerencia/convocatoria48/certificado-muestra.pdf' target='_blank'>👁 Ver certificado de muestra</a></p></div>" % ("".join(celdas), campos))
     else:
         out.append("<div class='c48-card'><h2>Configuración</h2><form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='accion' value='cfg'>"
-                   "<label>Preguntas por día</label><input type='text' name='por_dia' value='%d'>"
-                   "<label>Puntaje mínimo para aprobar y recibir certificado (%%)</label><input type='text' name='nota_min' value='%d'>"
-                   "<button class='c48-btn full'>Guardar</button></form></div>" % (por_dia, nota))
-    out.append("</div>")
-    return "".join(out)
-
-
-@app.route("/gerencia/convocatoria48")
-def gerencia_convocatoria48():
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    _c48_init()
-    tab = request.args.get("t") or "preguntas"
-    return page("Convocatoria 48 horas", shell(_C48_CSS + _c48_gerencia_html(tab, request.args.get("m") or "")))
-
-
-@app.route("/gerencia/convocatoria48/export.csv")
-def gerencia_convocatoria48_csv():
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    _c48_init()
-    import csv
-    out = _c48_io.StringIO()
-    w = csv.writer(out)
-    w.writerow(["id", "nombres", "tipo_id", "num_id", "correo", "telefono", "departamento", "municipio", "modulo", "estado", "aciertos", "total", "certificado", "enviado_en"])
-    for r in _c48_q("SELECT id, nombres, tipo_id, num_id, correo, telefono, departamento, municipio, modulo, estado, aciertos, total, cert_codigo, cert_enviado_en FROM conv48_participantes ORDER BY id"):
-        w.writerow(list(r))
-    return Response("\ufeff" + out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=convocatoria48_participantes.csv"})
-
-
-@app.route("/gerencia/convocatoria48/accion", methods=["POST"])
-def gerencia_convocatoria48_accion():
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    _c48_init()
-    a = request.form.get("accion") or ""
-    f = request.form
-    destino = "/gerencia/convocatoria48?t=preguntas&m=" + (f.get("modulo") or f.get("m") or "")
-    try:
-        if a == "pregunta_add" and f.get("modulo") in _C48_MODULOS and (f.get("correcta") or "").upper() in "ABCD":
-            _c48_x("INSERT INTO conv48_preguntas (modulo, enunciado, op_a, op_b, op_c, op_d, correcta, activa, creado_en) VALUES (:m,:e,:a,:b,:c,:d,:k,1,:n)",
-                   m=f["modulo"], e=(f.get("enunciado") or "").strip(), a=(f.get("op_a") or "").strip(), b=(f.get("op_b") or "").strip(),
-                   c=(f.get("op_c") or "").strip(), d=(f.get("op_d") or "").strip(), k=f["correcta"].upper(), n=_c48_now())
-        elif a == "pregunta_bulk" and f.get("modulo") in _C48_MODULOS:
-            for linea in (f.get("lote") or "").splitlines():
-                partes = [x.strip() for x in linea.split("|")]
-                if len(partes) >= 6 and partes[5].upper() in ("A", "B", "C", "D") and partes[0] and partes[1] and partes[2]:
-                    _c48_x("INSERT INTO conv48_preguntas (modulo, enunciado, op_a, op_b, op_c, op_d, correcta, activa, creado_en) VALUES (:m,:e,:a,:b,:c,:d,:k,1,:n)",
-                           m=f["modulo"], e=partes[0], a=partes[1], b=partes[2], c=partes[3], d=partes[4], k=partes[5].upper(), n=_c48_now())
-        elif a == "pregunta_toggle":
-            _c48_x("UPDATE conv48_preguntas SET activa=CASE WHEN activa=1 THEN 0 ELSE 1 END WHERE id=:i", i=int(f.get("id") or 0))
-        elif a == "pregunta_del":
-            uso = _c48_q("SELECT COUNT(*) FROM conv48_respuestas WHERE pregunta_id=:i", i=int(f.get("id") or 0))
-            if uso and uso[0][0]:
-                _c48_x("UPDATE conv48_preguntas SET activa=0 WHERE id=:i", i=int(f.get("id") or 0))   # ya fue entregada: solo se desactiva
-            else:
-                _c48_x("DELETE FROM conv48_preguntas WHERE id=:i", i=int(f.get("id") or 0))
-        elif a == "cfg":
-            _c48_cfg_set("por_dia", max(1, min(50, int(f.get("por_dia") or 15))))
-            _c48_cfg_set("nota_min", max(1, min(100, int(f.get("nota_min") or 60))))
-            destino = "/gerencia/convocatoria48?t=config"
-        elif a == "part_reenviar":
-            _c48_x("UPDATE conv48_participantes SET estado='aprobado', cert_enviado_en='', cert_lock='', cert_programado_en=:p WHERE id=:i", p=_c48_now(), i=int(f.get("id") or 0))
-            destino = "/gerencia/convocatoria48?t=participantes"
-        elif a == "part_reset":
-            pid = int(f.get("id") or 0)
-            _c48_x("DELETE FROM conv48_respuestas WHERE participante_id=:i", i=pid)
-            _c48_x("UPDATE conv48_participantes SET estado='activo', dia1_fin='', dia2_fin='', aciertos=0, total=0, cert_codigo='', cert_programado_en='', cert_enviado_en='', cert_lock='', cert_error='' WHERE id=:i", i=pid)
-            destino = "/gerencia/convocatoria48?t=participantes"
-        registrar_auditoria("Convocatoria 48h: " + a, session.get("usuario", ""))
-    except Exception as e:
-        print("c48 gerencia:", e)
-    return redirect(destino)
-
-
-
-if __name__ == "__main__":
-    with app.app_context():
-        inicializar_bd()
-        try:
-            sincronizar_licencias()
-            aplicar_cambios_plan_pendientes()
-            _ciclo_facturacion_automatica()
-        except Exception as _e:
-            print("ciclo facturacion:", _e)
-    # debug=True en producción es lento (recarga automática, sin caché de templates)
-    # y un riesgo de seguridad grave (consola interactiva remota). threaded=True permite
-    # atender varias peticiones a la vez en vez de una por una. PORT lo asigna Railway/Render.
-    _debug_on = os.environ.get("FLASK_DEBUG", "0") == "1"
-    _port = int(os.environ.get("PORT", 5000))
-    app.run(debug=_debug_on, host="0.0.0.0", port=_port, threaded=True)
-
