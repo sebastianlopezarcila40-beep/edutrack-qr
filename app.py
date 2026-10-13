@@ -84017,6 +84017,10 @@ def _c48_init():
         "cert_lock VARCHAR(20) DEFAULT '', cert_error TEXT DEFAULT '', intentos_login INTEGER DEFAULT 0, bloqueo_hasta VARCHAR(20) DEFAULT '')",
         "CREATE TABLE IF NOT EXISTS conv48_respuestas (id SERIAL PRIMARY KEY, participante_id INTEGER, dia INTEGER, orden INTEGER, "
         "pregunta_id INTEGER, respuesta VARCHAR(1), correcta INTEGER DEFAULT 0, respondida_en VARCHAR(20) DEFAULT '')",
+        "CREATE TABLE IF NOT EXISTS conv48_act_resp (id SERIAL PRIMARY KEY, participante_id INTEGER NOT NULL, actividad INTEGER NOT NULL, "
+        "r1 TEXT DEFAULT '', r2 TEXT DEFAULT '', r3 TEXT DEFAULT '', estado VARCHAR(12) DEFAULT 'enviada', enviado_en VARCHAR(20) DEFAULT '', "
+        "observacion TEXT DEFAULT '', revisado_por VARCHAR(80) DEFAULT '', revisado_en VARCHAR(20) DEFAULT '', UNIQUE (participante_id, actividad))",
+        "ALTER TABLE conv48_participantes ADD COLUMN IF NOT EXISTS cert_fecha_en VARCHAR(20) DEFAULT ''",
     )
     try:
         for d in ddls:
@@ -84354,7 +84358,7 @@ def c48_crear_clave():
         elif a != b:
             error = "Las contraseñas no coinciden."
         else:
-            nuevo_estado = p["estado"] if p["estado"] in ("activo", "aprobado", "no_aprobado", "certificado") else "activo"
+            nuevo_estado = p["estado"] if p["estado"] in ("activo", "actividades", "aprobado", "no_aprobado", "certificado") else "activo"
             _c48_x("UPDATE conv48_participantes SET password_hash=:h, estado=:e, intentos_login=0, bloqueo_hasta='' WHERE id=:i",
                    h=generate_password_hash(a), e=nuevo_estado, i=p["id"])
             session.pop("c48_pw_ok", None)
@@ -84453,6 +84457,9 @@ def c48_panel():
         if p["estado"] == "no_aprobado":
             aviso = ("<div class='c48-err'>Terminaste las preguntas pero no alcanzaste el puntaje mínimo de aprobación (%d%%). "
                      "Escríbenos por PQR para revisar tu caso.</div>" % _c48_nota_min())
+        elif p["estado"] == "actividades":
+            aviso = ("<div class='c48-ok'>✅ ¡Aprobaste la Actividad 1! Continúa con las Actividades 2, 3 y 4. Cuando el equipo de Procsis "
+                     "las apruebe, tu certificado llegará automáticamente a <b>%s</b>.</div>" % _esc(p["correo"]))
         elif p["estado"] == "certificado":
             aviso = "<div class='c48-ok'>🎓 ¡Tu certificado fue enviado a <b>%s</b>! Revisa también la carpeta de spam.</div>" % _esc(p["correo"])
         else:
@@ -84472,6 +84479,7 @@ def c48_panel():
         + "<h2>Tu progreso: %d de 48 horas</h2><div class='c48-bar'><div style='width:%d%%'></div></div>"
           "<p class='small'>Día %d de 2 · %d de %d preguntas respondidas</p>" % (horas, pct, min(dia, 2), resp, total)
         + boton + "</div>"
+        + _c48_panel_resultados(p) + _c48_panel_actividades(p) +
         "<div class='c48-card'><h2>Soporte</h2><p>¿Dudas técnicas? Radica una PQR y el equipo de Procsis te responderá.</p>"
         "<a class='c48-btn sec' href='/pqr' target='_blank'>Radicar PQR</a> <a class='c48-btn sec' href='/convocatoria48/salir'>Salir</a></div>")
     return _c48_page("Mi panel · Convocatoria 48 Horas", cuerpo)
@@ -84526,13 +84534,188 @@ def _c48_cerrar_dia(p, dia):
         total, aciertos = int(r[0][0] or 0), int(r[0][1] or 0)
         pct = 100.0 * aciertos / total if total else 0
         if pct >= _c48_nota_min():
-            codigo = "C48-" + _c48_sec.token_hex(5).upper()
-            _c48_x("UPDATE conv48_participantes SET dia2_fin=:n, aciertos=:a, total=:t, estado='aprobado', cert_codigo=:c, cert_programado_en=:pr "
-                   "WHERE id=:i AND dia2_fin=''", n=_c48_now(), a=aciertos, t=total, c=codigo, pr=_c48_plus(15), i=p["id"])
+            # Actividad 1 aprobada: sigue con las actividades 2, 3 y 4. El certificado se programa al aprobarlas todas.
+            _c48_x("UPDATE conv48_participantes SET dia2_fin=:n, aciertos=:a, total=:t, estado='actividades' "
+                   "WHERE id=:i AND dia2_fin=''", n=_c48_now(), a=aciertos, t=total, i=p["id"])
         else:
             _c48_x("UPDATE conv48_participantes SET dia2_fin=:n, aciertos=:a, total=:t, estado='no_aprobado' WHERE id=:i AND dia2_fin=''",
                    n=_c48_now(), a=aciertos, t=total, i=p["id"])
     return redirect("/convocatoria48/panel")
+
+
+# ---------- Actividades 2, 3 y 4 (lectura, argumentación y caso práctico) ----------
+_C48_ACTS = {
+    2: {"icono": "📖", "titulo": "Lectura y análisis de textos", "pdf": "pdf_act2",
+        "campos": (("r1", "Ideas principales de los textos"), ("r2", "Intención del autor"), ("r3", "Conclusiones a las que llegas")),
+        "ins": "Descarga y lee el PDF con los textos. Luego responde: ¿cuáles son las ideas principales?, ¿qué intención tiene el autor? y ¿qué conclusiones puedes sacar?"},
+    3: {"icono": "⚖️", "titulo": "Argumentación y evaluación crítica", "pdf": "pdf_act2",
+        "campos": (("r1", "Hechos que identificas en los textos"), ("r2", "Opiniones que identificas en los textos"), ("r3", "Tu punto de vista y tus argumentos")),
+        "ins": "Usa el mismo PDF de la Actividad 2. Distingue los hechos de las opiniones y defiende tu punto de vista con argumentos claros."},
+    4: {"icono": "🛠️", "titulo": "Aplicación práctica y conclusión", "pdf": "pdf_act4",
+        "campos": (("r1", "Solución propuesta al caso práctico"), ("r2", "Conclusión sustentada en lo aprendido")),
+        "ins": "Descarga el PDF con el caso y las instrucciones. Resuelve el caso, propón una solución y escribe una conclusión sustentada en lo aprendido."},
+}
+_C48_ACT_BADGE = {"enviada": ("⏳ En revisión", "#b45309"), "aprobada": ("✅ Aprobada", "#166534"), "ajustes": ("✏️ Requiere ajustes", "#b91c1c")}
+
+
+def _c48_act_ins(n):
+    return _c48_cfg("ins_act%d" % n, _C48_ACTS[n]["ins"])
+
+
+def _c48_act_filas(pid):
+    out = {}
+    for r in _c48_q("SELECT id, actividad, r1, r2, r3, estado, enviado_en, observacion FROM conv48_act_resp WHERE participante_id=:p", p=pid) or []:
+        out[int(r[1])] = {"id": r[0], "r1": r[2] or "", "r2": r[3] or "", "r3": r[4] or "", "estado": r[5] or "enviada", "enviado_en": r[6] or "", "obs": r[7] or ""}
+    return out
+
+
+def _c48_pdf_nombre(clave):
+    return _c48_cfg(clave + "_nombre", "")
+
+
+def _c48_pdf_bytes(clave):
+    try:
+        v = _c48_cfg(clave, "")
+        return _c48_b64.b64decode(v) if v else None
+    except Exception:
+        return None
+
+
+def _c48_pdf_respuesta(clave, n):
+    datos = _c48_pdf_bytes(clave)
+    if not datos:
+        return None
+    nombre = re.sub(r"[^A-Za-z0-9._-]", "_", _c48_pdf_nombre(clave) or ("Actividad_%d.pdf" % n))[:80] or ("Actividad_%d.pdf" % n)
+    if not nombre.lower().endswith(".pdf"):
+        nombre += ".pdf"
+    return Response(datos, mimetype="application/pdf", headers={"Content-Disposition": "attachment; filename=%s" % nombre})
+
+
+def _c48_resultado(p):
+    """(respondidas, buenas, malas, porcentaje) de la Actividad 1."""
+    r = _c48_q("SELECT SUM(CASE WHEN respuesta IS NOT NULL THEN 1 ELSE 0 END), "
+               "SUM(CASE WHEN respuesta IS NOT NULL AND correcta=1 THEN 1 ELSE 0 END) FROM conv48_respuestas WHERE participante_id=:p", p=p["id"])
+    resp = int(r[0][0] or 0) if r else 0
+    buenas = int(r[0][1] or 0) if r else 0
+    return resp, buenas, resp - buenas, (int(round(100.0 * buenas / resp)) if resp else 0)
+
+
+def _c48_panel_resultados(p):
+    resp, buenas, malas, pct = _c48_resultado(p)
+    if not resp:
+        return ""
+    return ("<div class='c48-card'><h2>📊 Actividad 1 · Tus resultados</h2>"
+            "<p>Respondidas: <b>%d</b> · Buenas: <b style='color:#166534'>%d</b> · Malas: <b style='color:#991b1b'>%d</b></p>"
+            "<div class='c48-bar'><div style='width:%d%%'></div></div>"
+            "<p class='small'>Porcentaje de aciertos: <b>%d%%</b> · Mínimo para aprobar: %d%%</p></div>") % (resp, buenas, malas, pct, pct, _c48_nota_min())
+
+
+def _c48_panel_actividades(p):
+    filas = _c48_act_filas(p["id"])
+    if p["estado"] != "actividades" and not filas:
+        return ""
+    items = []
+    for n in (2, 3, 4):
+        cfg = _C48_ACTS[n]
+        f = filas.get(n)
+        previa = n == 2 or (n - 1) in filas
+        if f:
+            txt, color = _C48_ACT_BADGE.get(f["estado"], (f["estado"], "#334155"))
+            estado_html = "<b style='color:%s'>%s</b>" % (color, txt)
+            boton = "<a class='c48-btn sec' href='/convocatoria48/actividad/%d'>%s</a>" % (n, "Corregir y reenviar" if f["estado"] == "ajustes" else "Ver mi respuesta")
+        elif previa and p["estado"] == "actividades":
+            estado_html = "<b style='color:#0b63ce'>Disponible</b>"
+            boton = "<a class='c48-btn' href='/convocatoria48/actividad/%d'>Comenzar</a>" % n
+        else:
+            estado_html = "<b style='color:#64748b'>🔒 Se habilita al enviar la actividad anterior</b>"
+            boton = ""
+        items.append("<div style='border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin:10px 0'><b>%s Actividad %d · %s</b><br>%s<div style='margin-top:8px'>%s</div></div>"
+                     % (cfg["icono"], n, _esc(cfg["titulo"]), estado_html, boton))
+    return ("<div class='c48-card'><h2>Actividades 2, 3 y 4</h2>"
+            "<p class='small'>Descarga el PDF, responde aquí mismo y el equipo de Procsis revisará tus respuestas. No necesitas subir archivos.</p>%s</div>") % "".join(items)
+
+
+@app.route("/convocatoria48/actividad/<int:n>", methods=["GET", "POST"])
+def c48_actividad(n):
+    _c48_init()
+    p = _c48_actual()
+    if not p:
+        return redirect("/convocatoria48/ingresar")
+    if n not in _C48_ACTS:
+        return redirect("/convocatoria48/panel")
+    filas = _c48_act_filas(p["id"])
+    fila = filas.get(n)
+    if p["estado"] != "actividades" and not fila:
+        return redirect("/convocatoria48/panel")
+    if n > 2 and (n - 1) not in filas and not fila:
+        return redirect("/convocatoria48/panel")
+    cfg = _C48_ACTS[n]
+    hay_pdf = bool(_c48_pdf_nombre(cfg["pdf"]))
+    bloqueada = bool(fila and fila["estado"] in ("enviada", "aprobada")) or p["estado"] != "actividades"
+    vals = {k: (fila[k] if fila else "") for k, _e in cfg["campos"]}
+    error = ""
+    if request.method == "POST" and not bloqueada:
+        vals = {k: (request.form.get(k) or "").strip()[:6000] for k, _e in cfg["campos"]}
+        if not hay_pdf:
+            error = "El PDF de esta actividad aún no está publicado. Vuelve más tarde."
+        elif any(len(v) < 40 for v in vals.values()):
+            error = "Desarrolla cada respuesta con un mínimo de 40 caracteres."
+        else:
+            _c48_x("INSERT INTO conv48_act_resp (participante_id, actividad, r1, r2, r3, estado, enviado_en) VALUES (:p,:a,:r1,:r2,:r3,'enviada',:n) "
+                   "ON CONFLICT (participante_id, actividad) DO UPDATE SET r1=:r1, r2=:r2, r3=:r3, estado='enviada', enviado_en=:n, observacion='' "
+                   "WHERE conv48_act_resp.estado='ajustes'",
+                   p=p["id"], a=n, r1=vals.get("r1", ""), r2=vals.get("r2", ""), r3=vals.get("r3", ""), n=_c48_now())
+            return redirect("/convocatoria48/panel")
+    aviso = ""
+    if fila and fila["estado"] == "ajustes":
+        aviso = "<div class='c48-err'><b>Observaciones del revisor:</b><br>%s</div>" % _esc(fila["obs"]).replace("\n", "<br>")
+    elif fila and fila["estado"] == "enviada":
+        aviso = "<div class='c48-ok'>⏳ Enviada el %s. Está en revisión por el equipo de Procsis.</div>" % _esc(fila["enviado_en"][:16])
+    elif fila and fila["estado"] == "aprobada":
+        aviso = "<div class='c48-ok'>✅ Esta actividad fue aprobada.</div>"
+    if error:
+        aviso += "<div class='c48-err'>%s</div>" % _esc(error)
+    pdf_html = ("<p><a class='c48-btn' href='/convocatoria48/pdf/%d'>⬇ Descargar PDF</a></p>" % n) if hay_pdf else \
+               "<div class='c48-err'>El PDF de esta actividad aún no está disponible. Vuelve más tarde.</div>"
+    campos = ""
+    for k, et in cfg["campos"]:
+        if bloqueada:
+            campos += "<label>%s</label><div style='background:#f8fafc;border-radius:12px;padding:10px;white-space:pre-wrap'>%s</div>" % (_esc(et), _esc(vals.get(k, "")))
+        else:
+            campos += "<label>%s</label><textarea name='%s' rows='6' required minlength='40' maxlength='6000'>%s</textarea>" % (_esc(et), k, _esc(vals.get(k, "")))
+    boton = "" if bloqueada else "<button class='c48-btn full'>Enviar para revisión</button>"
+    cuerpo = ("<div class='c48-card'><p><span class='c48-chip'>%s Actividad %d</span></p><h1>%s</h1><p>%s</p>%s%s"
+              "<form method='POST'>%s%s</form><p class='small' style='text-align:center'><a href='/convocatoria48/panel'>Volver al panel</a></p></div>"
+              % (cfg["icono"], n, _esc(cfg["titulo"]), _esc(_c48_act_ins(n)).replace("\n", "<br>"), pdf_html, aviso, campos, boton))
+    return _c48_page("Actividad %d · Convocatoria 48 Horas" % n, cuerpo)
+
+
+@app.route("/convocatoria48/pdf/<int:n>")
+def c48_actividad_pdf(n):
+    _c48_init()
+    p = _c48_actual()
+    if not p:
+        return redirect("/convocatoria48/ingresar")
+    if n not in _C48_ACTS:
+        return redirect("/convocatoria48/panel")
+    filas = _c48_act_filas(p["id"])
+    if p["estado"] != "actividades" and not filas:
+        return redirect("/convocatoria48/panel")
+    if n > 2 and (n - 1) not in filas and n not in filas:
+        return redirect("/convocatoria48/panel")
+    r = _c48_pdf_respuesta(_C48_ACTS[n]["pdf"], n)
+    return r if r is not None else redirect("/convocatoria48/panel")
+
+
+def _c48_finalizar_si_completo(pid):
+    """Si las actividades 2, 3 y 4 están aprobadas: programa el certificado (se envía solo ~15 min después)."""
+    r = _c48_q("SELECT COUNT(*) FROM conv48_act_resp WHERE participante_id=:p AND actividad IN (2,3,4) AND estado='aprobada'", p=pid)
+    if not (r and int(r[0][0] or 0) >= 3):
+        return False
+    codigo = "C48-" + _c48_sec.token_hex(5).upper()
+    n = _c48_x("UPDATE conv48_participantes SET estado='aprobado', cert_codigo=:c, cert_programado_en=:pr, cert_fecha_en=:f, cert_enviado_en='', cert_lock='', cert_error='' "
+               "WHERE id=:i AND estado='actividades'", c=codigo, pr=_c48_plus(15), f=_c48_now(), i=pid)
+    return bool(n)
 
 
 # ---------- certificado ----------
@@ -84615,10 +84798,10 @@ def _c48_pdf_certificado(p):
     c.drawCentredString(W / 2, y - 144, "con una intensidad de 48 horas, bajo la iniciativa ecológica de Cero Papel y Cero Contaminación,")
     c.drawCentredString(W / 2, y - 161, "a través de la plataforma académica EduTrack.")
     try:
-        f = datetime.strptime((p.get("dia2_fin") or _c48_now())[:10], "%Y-%m-%d")
+        f = datetime.strptime((p.get("cert_fecha_en") or p.get("dia2_fin") or _c48_now())[:10], "%Y-%m-%d")
         fecha_txt = "a los %d días del mes de %s de %d" % (f.day, _MESES_ES[f.month - 1], f.year)
     except Exception:
-        fecha_txt = "el %s" % (p.get("dia2_fin") or "")[:10]
+        fecha_txt = "el %s" % (p.get("cert_fecha_en") or p.get("dia2_fin") or "")[:10]
     c.setFont("Times-Italic", 11.5); c.drawCentredString(W / 2, y - 190, "En testimonio de lo anterior, se expide el presente certificado en Colombia, %s." % fecha_txt)
     # firmas en paralelo
     base = 122
@@ -84715,7 +84898,7 @@ def _c48_arrancar_hilo():
 @app.route("/convocatoria48/validar/<codigo>")
 def c48_validar(codigo):
     _c48_init()
-    r = _c48_q("SELECT nombres, num_id, modulo, dia2_fin FROM conv48_participantes WHERE cert_codigo=:c AND estado IN ('aprobado','certificado')", c=(codigo or "").strip().upper())
+    r = _c48_q("SELECT nombres, num_id, modulo, COALESCE(NULLIF(cert_fecha_en,''), dia2_fin) FROM conv48_participantes WHERE cert_codigo=:c AND estado IN ('aprobado','certificado')", c=(codigo or "").strip().upper())
     if not r:
         cuerpo = "<div class='c48-card'><h1>❌ Certificado no encontrado</h1><p>El código no corresponde a un certificado emitido.</p></div>"
     else:
@@ -84726,10 +84909,15 @@ def c48_validar(codigo):
 
 
 # ---------- Gerencia ----------
+def _c48_pend_rev():
+    r = _c48_q("SELECT COUNT(*) FROM conv48_act_resp WHERE estado='enviada'")
+    return int(r[0][0] or 0) if r else 0
+
+
 def _c48_gerencia_html(tab, filtro):
     por_dia, nota = _c48_por_dia(), _c48_nota_min()
     tabs = "".join("<a class='c48-btn%s' style='padding:8px 16px;margin-right:6px' href='/gerencia/convocatoria48?t=%s'>%s</a>" % ("" if tab == k else " sec", k, t)
-                   for k, t in (("preguntas", "Preguntas"), ("participantes", "Participantes"), ("certificado", "Certificado"), ("config", "Configuración")))
+                   for k, t in (("preguntas", "Preguntas"), ("participantes", "Participantes"), ("revision", "Revisión (%d)" % _c48_pend_rev()), ("actividades", "Actividades"), ("certificado", "Certificado"), ("prueba", "Prueba de envío"), ("config", "Configuración")))
     out = ["<div class='c48' style='max-width:1100px'><h1>🌱 Convocatoria de 48 Horas</h1>"
            "<p>Gestiona el banco de preguntas por módulo y a los participantes. El sistema entrega a cada participante %d preguntas aleatorias por día (2 días)."
            " Enlace público: <a href='/convocatoria48' target='_blank'>/convocatoria48</a></p><p>%s</p>" % (por_dia, tabs)]
@@ -84764,20 +84952,83 @@ def _c48_gerencia_html(tab, filtro):
                            % (_esc(e), cor, "" if act else " · INACTIVA", i, filtro, "Desactivar" if act else "Activar"))
             out.append("</table></div>")
     elif tab == "participantes":
-        filas = _c48_q("SELECT p.id, p.nombres, p.modulo, p.correo, p.telefono, p.municipio, p.estado, p.aciertos, p.total, p.cert_enviado_en, p.cert_programado_en, p.cert_error, "
-                       "(SELECT COUNT(*) FROM conv48_respuestas r WHERE r.participante_id=p.id AND r.respuesta IS NOT NULL) FROM conv48_participantes p ORDER BY p.id DESC LIMIT 500")
+        filas = _c48_q("SELECT p.id, p.nombres, p.modulo, p.correo, p.telefono, p.municipio, p.estado, p.cert_enviado_en, p.cert_programado_en, p.cert_error, "
+                       "COALESCE(SUM(CASE WHEN r.respuesta IS NOT NULL THEN 1 ELSE 0 END),0), "
+                       "COALESCE(SUM(CASE WHEN r.respuesta IS NOT NULL AND r.correcta=1 THEN 1 ELSE 0 END),0) "
+                       "FROM conv48_participantes p LEFT JOIN conv48_respuestas r ON r.participante_id=p.id GROUP BY p.id ORDER BY p.id DESC LIMIT 500") or []
+        acts = {}
+        for pid_, act_, est_ in _c48_q("SELECT participante_id, actividad, estado FROM conv48_act_resp") or []:
+            acts.setdefault(pid_, {})[act_] = est_
+        icono_act = {"enviada": "⏳", "aprobada": "✅", "ajustes": "✏️"}
         out.append("<div class='c48-card' style='overflow-x:auto'><p><a class='c48-btn sec' href='/gerencia/convocatoria48/export.csv'>⬇ Exportar CSV</a> <b>%d</b> participantes</p>"
-                   "<table style='width:100%%;border-collapse:collapse;font-size:13px;min-width:820px'><tr style='text-align:left'><th>Participante</th><th>Módulo</th><th>Contacto</th><th>Estado</th><th>Avance</th><th>Certificado</th><th></th></tr>" % len(filas))
-        for i, nom, mod, cor, tel, mun, est, ac, tot, env, prog, err, resp in filas:
+                   "<table style='width:100%%;border-collapse:collapse;font-size:13px;min-width:900px'><tr style='text-align:left'><th>Participante</th><th>Módulo</th><th>Contacto</th><th>Estado</th>"
+                   "<th>Act. 1 · preguntas</th><th>Act. 2 · 3 · 4</th><th>Certificado</th><th></th></tr>" % len(filas))
+        for i, nom, mod, cor, tel, mun, est, env, prog, err, resp, buenas in filas:
             cert = ("Enviado " + env) if env else (("Programado " + prog) if prog else "—")
             if err:
                 cert += " ⚠ " + err
-            out.append("<tr style='border-top:1px solid #e2e8f0'><td style='padding:8px'><b>%s</b><br><span class='small'>%s</span></td><td>%s</td><td>%s<br>%s</td><td>%s</td><td>%s/%d · aciertos %s/%s</td><td>%s</td><td>"
+            malas = resp - buenas
+            pct = int(round(100.0 * buenas / resp)) if resp else 0
+            a = acts.get(i, {})
+            a_txt = " · ".join("%s%s" % (n, icono_act.get(a.get(n), "—")) for n in (2, 3, 4))
+            out.append("<tr style='border-top:1px solid #e2e8f0'><td style='padding:8px'><b>%s</b><br><span class='small'>%s</span></td><td>%s</td><td>%s<br>%s</td><td>%s</td>"
+                       "<td>%d/%d resp.<br>✅ %d buenas · ❌ %d malas<br><b>%d%%</b></td><td>%s</td><td>%s</td><td>"
                        "<form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='id' value='%d'>%s"
-                       "<button name='accion' value='part_reset' class='c48-btn sec' style='padding:6px 10px' onclick=\"return confirm('Esto borra sus respuestas y le permite repetir. ¿Continuar?')\">Reiniciar</button></form></td></tr>"
-                       % (_esc(nom), _esc(mun), _c48_modulo_info(mod)[1], _esc(cor), _esc(tel), _esc(est), resp, por_dia * 2, ac or 0, tot or 0, _esc(cert), i,
+                       "<button name='accion' value='part_reset' class='c48-btn sec' style='padding:6px 10px' onclick=\"return confirm('Esto borra sus respuestas y actividades y le permite repetir. ¿Continuar?')\">Reiniciar</button></form></td></tr>"
+                       % (_esc(nom), _esc(mun), _c48_modulo_info(mod)[1], _esc(cor), _esc(tel), _esc(est), resp, por_dia * 2, buenas, malas, pct, a_txt, _esc(cert), i,
                           ("<button name='accion' value='part_reenviar' class='c48-btn sec' style='padding:6px 10px'>Reenviar cert.</button> " if est in ("aprobado", "certificado") else "")))
-        out.append("</table></div>")
+        out.append("</table><p class='small'>⏳ en revisión · ✅ aprobada · ✏️ requiere ajustes · — sin enviar</p></div>")
+    elif tab == "revision":
+        pend = _c48_q("SELECT a.id, a.actividad, a.r1, a.r2, a.r3, a.enviado_en, p.nombres, p.modulo FROM conv48_act_resp a "
+                      "JOIN conv48_participantes p ON p.id=a.participante_id WHERE a.estado='enviada' ORDER BY a.enviado_en ASC LIMIT 100") or []
+        out.append("<div class='c48-card'><h2>Revisión de actividades 2, 3 y 4</h2><p class='small'>Aprueba o pide ajustes. Cuando un participante tenga las tres actividades aprobadas, "
+                   "su certificado se programa y se envía solo (~15 minutos).</p></div>")
+        if not pend:
+            out.append("<div class='c48-card'><p>No hay actividades pendientes de revisión. 🎉</p></div>")
+        for aid, act, r1, r2, r3, env, nom, mod in pend:
+            cfg_a = _C48_ACTS.get(act)
+            if not cfg_a:
+                continue
+            resp_html = "".join("<p><b>%s</b></p><div style='background:#f8fafc;border-radius:12px;padding:10px;white-space:pre-wrap'>%s</div>" % (_esc(et), _esc(v or ""))
+                                for (k, et), v in zip(cfg_a["campos"], (r1, r2, r3)))
+            out.append("<div class='c48-card'><h2>%s Actividad %d · %s</h2><p class='small'>%s · %s · enviada %s</p>%s"
+                       "<form method='POST' action='/gerencia/convocatoria48/accion'><input type='hidden' name='id' value='%d'>"
+                       "<label>Observación para el participante (obligatoria si pides ajustes)</label><textarea name='observacion' rows='3'></textarea>"
+                       "<button name='accion' value='act_aprobar' class='c48-btn'>✅ Aprobar</button> "
+                       "<button name='accion' value='act_ajustes' class='c48-btn sec' onclick=\"if(!this.form.observacion.value.trim()){alert('Escribe qué debe corregir.');return false;}\">✏️ Pedir ajustes</button></form></div>"
+                       % (cfg_a["icono"], act, _esc(cfg_a["titulo"]), _esc(nom), _esc(_c48_modulo_info(mod)[1]), _esc((env or "")[:16]), resp_html, aid))
+    elif tab == "actividades":
+        celdas = []
+        for clave, et in (("pdf_act2", "PDF de la Actividad 2 (textos de lectura; también lo usa la Actividad 3)"), ("pdf_act4", "PDF de la Actividad 4 (caso práctico e instrucciones)")):
+            nombre = _c48_pdf_nombre(clave)
+            n_act = 2 if clave == "pdf_act2" else 4
+            vista = (("<p class='small'>Cargado: <b>%s</b> · <a href='/gerencia/convocatoria48/pdf/%d' target='_blank'>Ver</a></p>"
+                      "<label style='font-weight:600'><input type='checkbox' name='quitar_%s' value='1'> Quitar PDF</label>") % (_esc(nombre), n_act, clave)
+                     if nombre else "<p class='small' style='color:#b91c1c'>Sin PDF cargado: los participantes no podrán enviar esta actividad.</p>")
+            celdas.append("<div><label>%s</label>%s<input type='file' name='%s' accept='application/pdf'></div>" % (et, vista, clave))
+        ins = "".join("<label>Instrucciones · Actividad %d (%s)</label><textarea name='ins_act%d' rows='3'>%s</textarea>" % (n, _esc(c["titulo"]), n, _esc(_c48_act_ins(n)))
+                      for n, c in _C48_ACTS.items())
+        out.append("<div class='c48-card'><h2>Actividades 2, 3 y 4</h2><p class='small'>Sube los PDF (máx. 5 MB cada uno). Los participantes los descargan, responden en la plataforma "
+                   "y tú revisas en la pestaña Revisión. La Actividad 3 usa el mismo PDF de la 2.</p>"
+                   "<form method='POST' action='/gerencia/convocatoria48/actividades' enctype='multipart/form-data'><div class='c48-mods'>%s</div>%s"
+                   "<button class='c48-btn full'>Guardar actividades</button></form></div>" % ("".join(celdas), ins))
+    elif tab == "prueba":
+        _rk = (os.environ.get("RESEND_API_KEY") or "").strip()
+        try:
+            _co, _pw = _credenciales_smtp("soporte")
+        except Exception:
+            _co, _pw = "", ""
+        if _rk:
+            diag = "✅ Envío por Resend (HTTPS) configurado."
+        elif _co and _pw:
+            diag = "✅ Envío por SMTP con la cuenta de Soporte (%s). En Railway Hobby el SMTP puede estar bloqueado." % _esc(_c48_mask_correo(_co))
+        else:
+            diag = "⚠ Sin credenciales de correo: configura RESEND_API_KEY o SOPORTE_EMAIL + SOPORTE_PASSWORD en Railway."
+        out.append("<div class='c48-card'><h2>Prueba de envío de certificado</h2><p class='small'>Solo para pruebas: envía un certificado de muestra (código C48-PRUEBA, no verificable) "
+                   "al correo que escribas, para comprobar que el PDF se genera y el correo llega.</p><p>%s</p>"
+                   "<form method='POST' action='/gerencia/convocatoria48/prueba-envio'><label>Correo de destino</label><input type='email' name='correo' required placeholder='nombre@correo.com'>"
+                   "<label>Nombre en el certificado (opcional)</label><input type='text' name='nombre' maxlength='120' placeholder='María Fernanda Pérez Gómez'>"
+                   "<button class='c48-btn full'>Enviar certificado de prueba</button></form></div>" % diag)
     elif tab == "certificado":
         celdas = []
         for clave, etiqueta in _C48_IMGS:
@@ -84816,7 +85067,11 @@ def gerencia_convocatoria48():
         return _g
     _c48_init()
     tab = request.args.get("t") or "preguntas"
-    return page("Convocatoria 48 horas", shell(_C48_CSS + _c48_gerencia_html(tab, request.args.get("m") or "")))
+    gm = session.pop("c48_gmsg", None)
+    aviso = ""
+    if isinstance(gm, (list, tuple)) and len(gm) == 2:
+        aviso = "<div class='c48' style='max-width:1100px;padding-bottom:0'><div class='%s'>%s</div></div>" % ("c48-ok" if gm[0] == "ok" else "c48-err", _esc(gm[1]))
+    return page("Convocatoria 48 horas", shell(_C48_CSS + aviso + _c48_gerencia_html(tab, request.args.get("m") or "")))
 
 
 @app.route("/gerencia/convocatoria48/export.csv")
@@ -84866,13 +85121,27 @@ def gerencia_convocatoria48_accion():
             _c48_cfg_set("por_dia", max(1, min(50, int(f.get("por_dia") or 15))))
             _c48_cfg_set("nota_min", max(1, min(100, int(f.get("nota_min") or 60))))
             destino = "/gerencia/convocatoria48?t=config"
+        elif a in ("act_aprobar", "act_ajustes"):
+            aid = int(f.get("id") or 0)
+            obs = (f.get("observacion") or "").strip()[:1500]
+            nuevo = "aprobada" if a == "act_aprobar" else "ajustes"
+            if nuevo == "ajustes" and not obs:
+                obs = "Revisa y mejora tu respuesta."
+            n_upd = _c48_x("UPDATE conv48_act_resp SET estado=:e, observacion=:o, revisado_por=:u, revisado_en=:n WHERE id=:i AND estado='enviada'",
+                           e=nuevo, o=obs, u=(session.get("usuario") or "")[:80], n=_c48_now(), i=aid)
+            if n_upd and nuevo == "aprobada":
+                rr = _c48_q("SELECT participante_id FROM conv48_act_resp WHERE id=:i", i=aid)
+                if rr and _c48_finalizar_si_completo(rr[0][0]):
+                    session["c48_gmsg"] = ("ok", "Aprobada. El participante completó las 3 actividades: su certificado se enviará solo en ~15 minutos.")
+            destino = "/gerencia/convocatoria48?t=revision"
         elif a == "part_reenviar":
             _c48_x("UPDATE conv48_participantes SET estado='aprobado', cert_enviado_en='', cert_lock='', cert_programado_en=:p WHERE id=:i", p=_c48_now(), i=int(f.get("id") or 0))
             destino = "/gerencia/convocatoria48?t=participantes"
         elif a == "part_reset":
             pid = int(f.get("id") or 0)
             _c48_x("DELETE FROM conv48_respuestas WHERE participante_id=:i", i=pid)
-            _c48_x("UPDATE conv48_participantes SET estado='activo', dia1_fin='', dia2_fin='', aciertos=0, total=0, cert_codigo='', cert_programado_en='', cert_enviado_en='', cert_lock='', cert_error='' WHERE id=:i", i=pid)
+            _c48_x("DELETE FROM conv48_act_resp WHERE participante_id=:i", i=pid)
+            _c48_x("UPDATE conv48_participantes SET estado='activo', dia1_fin='', dia2_fin='', aciertos=0, total=0, cert_codigo='', cert_programado_en='', cert_enviado_en='', cert_lock='', cert_error='', cert_fecha_en='' WHERE id=:i", i=pid)
             destino = "/gerencia/convocatoria48?t=participantes"
         registrar_auditoria("Convocatoria 48h: " + a, session.get("usuario", ""))
     except Exception as e:
@@ -84905,6 +85174,85 @@ def gerencia_convocatoria48_cert():
     except Exception as e:
         print("c48 diseño certificado:", e)
     return redirect("/gerencia/convocatoria48?t=certificado")
+
+
+@app.route("/gerencia/convocatoria48/actividades", methods=["POST"])
+def gerencia_convocatoria48_actividades():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    try:
+        errores = []
+        for clave, n in (("pdf_act2", 2), ("pdf_act4", 4)):
+            if request.form.get("quitar_" + clave):
+                _c48_cfg_set(clave, "")
+                _c48_cfg_set(clave + "_nombre", "")
+            arch = request.files.get(clave)
+            if arch and arch.filename:
+                datos = arch.read(5000001)
+                if len(datos) <= 5000000 and datos[:5] == b"%PDF-":
+                    _c48_cfg_set(clave, _c48_b64.b64encode(datos).decode())
+                    _c48_cfg_set(clave + "_nombre", (arch.filename or "Actividad_%d.pdf" % n)[:80])
+                else:
+                    errores.append("El PDF de la Actividad %d no es válido o pesa más de 5 MB." % n)
+        for n in _C48_ACTS:
+            v = (request.form.get("ins_act%d" % n) or "").strip()[:4000]
+            if v:
+                _c48_cfg_set("ins_act%d" % n, v)
+        registrar_auditoria("Convocatoria 48h: actividades 2-4", session.get("usuario", ""))
+        session["c48_gmsg"] = ("err", " ".join(errores)) if errores else ("ok", "Actividades guardadas.")
+    except Exception as e:
+        print("c48 actividades:", e)
+        session["c48_gmsg"] = ("err", "No se pudieron guardar las actividades.")
+    return redirect("/gerencia/convocatoria48?t=actividades")
+
+
+@app.route("/gerencia/convocatoria48/pdf/<int:n>")
+def gerencia_convocatoria48_pdf(n):
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    if n not in _C48_ACTS:
+        return redirect("/gerencia/convocatoria48?t=actividades")
+    r = _c48_pdf_respuesta(_C48_ACTS[n]["pdf"], n)
+    return r if r is not None else redirect("/gerencia/convocatoria48?t=actividades")
+
+
+@app.route("/gerencia/convocatoria48/prueba-envio", methods=["POST"])
+def gerencia_convocatoria48_prueba():
+    """Solo pruebas: envía un certificado de muestra al correo indicado."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _c48_init()
+    correo = (request.form.get("correo") or "").strip().lower()
+    nombre = " ".join((request.form.get("nombre") or "").split())[:120] or "Participante de Prueba"
+    ts = _c48_time.time()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
+        session["c48_gmsg"] = ("err", "Escribe un correo válido.")
+    elif ts - float(session.get("c48_prueba_ts") or 0) < 20:
+        session["c48_gmsg"] = ("err", "Espera unos segundos antes de enviar otra prueba.")
+    else:
+        session["c48_prueba_ts"] = ts
+        muestra = {"nombres": nombre, "tipo_id": "Cédula de Ciudadanía", "num_id": "1000000000", "municipio": "Medellín",
+                   "departamento": "Antioquia", "modulo": "ambiental", "dia2_fin": _c48_now(), "cert_fecha_en": _c48_now(), "cert_codigo": "C48-PRUEBA"}
+        try:
+            pdf = _c48_pdf_certificado(muestra)
+            texto = ("PRUEBA de envío de certificado · Convocatoria de 48 Horas · PROCSIS.\n\nAdjuntamos un certificado de muestra. "
+                     "El código C48-PRUEBA no es verificable: este mensaje solo comprueba que el PDF se genera y el correo llega.")
+            html = ("<div style='font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:20px'><h2 style='color:#0B2D57'>🧪 Prueba de envío de certificado</h2>"
+                    "<p>Adjuntamos un certificado de <b>muestra</b> de la Convocatoria de 48 Horas.</p>"
+                    "<p style='color:#64748b;font-size:13px'>El código C48-PRUEBA no es verificable; este mensaje solo comprueba que el PDF se genera y el correo llega.</p></div>")
+            ok = _c48_enviar_correo(correo, "[PRUEBA] Certificado · Convocatoria de 48 Horas", texto, html, pdf, "Certificado_PRUEBA.pdf")
+            session["c48_gmsg"] = ("ok", "Prueba enviada a %s. Revisa también spam." % correo) if ok else \
+                                  ("err", "El PDF se generó, pero el correo no salió. Revisa las credenciales de correo en Railway y los logs.")
+            registrar_auditoria("Convocatoria 48h: prueba de envío", _c48_mask_correo(correo))
+        except Exception as e:
+            print("c48 prueba envío:", e)
+            session["c48_gmsg"] = ("err", "No se pudo generar el certificado de prueba: %s" % str(e)[:200])
+    return redirect("/gerencia/convocatoria48?t=prueba")
 
 
 @app.route("/gerencia/convocatoria48/certificado-muestra.pdf")
