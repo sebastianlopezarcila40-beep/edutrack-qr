@@ -2066,6 +2066,17 @@ class HistorialPQR(db.Model):
     estado_nuevo = db.Column(db.String(40), default="")
 
 
+class ClienteEtiqueta(db.Model):
+    """Etiqueta interna de satisfacción por institución (rol Soluciones Procsis). No altera la tabla instituciones."""
+    __tablename__ = "clientes_etiquetas"
+    id = db.Column(db.Integer, primary_key=True)
+    institucion_id = db.Column(db.Integer, nullable=False, unique=True, index=True)
+    etiqueta = db.Column(db.String(60), default="")
+    nota = db.Column(db.Text, default="")
+    actualizado_por = db.Column(db.String(120), default="")
+    actualizado_en = db.Column(db.String(30), default="")
+
+
 class SieeDimension(db.Model):
     """SIEE dinámico: dimensiones (cognitivo 40%, procedimental 40%, actitudinal 20%)."""
     __tablename__ = "siee_dimensiones"
@@ -3984,7 +3995,7 @@ def _is_staff_path(path):
     )
     if path in skip:
         return False
-    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/contabilidad", "/proveedor-carnes", "/dev-console", "/cerrar-turno")
+    keys = ("/gerencia", "/ventas", "/soporte", "/cobranza", "/contabilidad", "/soluciones-procsis", "/proveedor-carnes", "/dev-console", "/cerrar-turno")
     return any(path == k or path.startswith(k + "/") or (k != "/gerencia" and path.startswith(k)) or path.startswith("/gerencia") for k in keys)
 
 
@@ -4001,6 +4012,8 @@ def _staff_module_title(path, rol=""):
         return "<strong>COBRANZA</strong> · Cartera"
     if path.startswith("/contabilidad") or rol == "Contabilidad":
         return "<strong>CONTABILIDAD</strong> · Libros y estados financieros"
+    if path.startswith("/soluciones-procsis") or rol == "Soluciones":
+        return "<strong>SOLUCIONES PROCSIS</strong> · Atención al cliente"
     if path.startswith("/proveedor-carnes") or rol == "Proveedor":
         return "<strong>PROVEEDOR DE CARNÉS</strong> · Producción física"
     if "dev" in path or rol in ("Desarrollador", "Developer"):
@@ -4108,7 +4121,7 @@ def _staff_nav_items(path, rol=""):
             ("/servidores", "Servidores"),
             ("/soporte/prorroga", "Prórroga 24h"),
             ("/soporte/actualizaciones", "Actualizaciones / FAQ / Ayuda"),
-            ("/soporte/pqr", "Centro PQR"),
+            ("/soporte/pqr", "PQR (solo lectura)"),
             ("/soporte/pqr/crear", "Radicar PQR interna"),
             ("/soporte/pqr/consulta", "Consulta validada"),
             ("/tickets-doc", "Tickets por área"),
@@ -4119,6 +4132,16 @@ def _staff_nav_items(path, rol=""):
             ("/planes/buscar", "Buscar planes"),
             ("/soporte/planes-vendidos", "Planes activos / vendidos"),
             ("/seguridad", "Seguridad e incidentes"),
+            ("/logout", "Salir"),
+        ]
+    elif rol == "Soluciones":
+        items = [
+            ("/soluciones-procsis", "Panel"),
+            ("/soluciones-procsis/pqr", "Centro PQRS"),
+            ("/soluciones-procsis/pqr/crear", "Radicar PQRS"),
+            ("/soluciones-procsis/clientes", "Clientes"),
+            ("/soluciones-procsis/fidelizacion", "Satisfacción CSAT"),
+            ("/soluciones-procsis/auditoria", "Mi bitácora"),
             ("/logout", "Salir"),
         ]
     elif rol == "Cobranza":
@@ -4498,6 +4521,16 @@ def menu_items_por_rol():
     Notas: solo Docente edita; Rectoría/Coordinación/Secretaría solo ven e imprimen.
     """
     rol = rol_actual()
+    if rol == "Soluciones":
+        return [
+            ("/soluciones-procsis", "Panel"),
+            ("/soluciones-procsis/pqr", "Centro PQRS"),
+            ("/soluciones-procsis/pqr/crear", "Radicar PQRS"),
+            ("/soluciones-procsis/clientes", "Clientes"),
+            ("/soluciones-procsis/fidelizacion", "Satisfacción CSAT"),
+            ("/soluciones-procsis/auditoria", "Mi bitácora"),
+            ("/logout", "Salir"),
+        ]
     if rol in ("Contabilidad", "Proveedor"):
         _its = list(_cta_menu_items() if rol == "Contabilidad" else _prov_menu_items())
         if not any(h == "/perfil" for h, _ in _its):
@@ -4674,7 +4707,7 @@ def menu_items_por_rol():
     # Filtrar menú según módulos del plan del colegio (100% alineado con checks del plan)
     try:
         rol = rol_actual() or ""
-        if rol not in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador", "Desarrollador", "Developer", "Cobranza", "Contabilidad", "Proveedor"):
+        if rol not in ("Soporte", "Gerente", "Superadmin", "Comercial", "Administrador", "Desarrollador", "Developer", "Cobranza", "Contabilidad", "Proveedor", "Soluciones"):
             mods = set(modulos_plan_actual())
             if "notas_completo" in mods:
                 mods.update({"notas_basico", "portal_docente"})
@@ -8010,10 +8043,10 @@ def qr_texto(e):
 
 
 # ===== Seguridad de empleados =====
-ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador")
+ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Soluciones")
 # Cuota de almacenamiento por colegio (GB)
 ALMACENAMIENTO_GB_POR_COLEGIO = 10
-ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza")
+ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza", "Soluciones")
 ACCIONES_SENSIBLES = (
     "eliminar", "export", "exportar", "borrar", "desactivar", "permiso",
     "reset", "restablecer", "backup", "respaldo", "simat",
@@ -8476,7 +8509,7 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
 
 def es_gerente_pqr():
     u = (session.get("usuario") or "").strip().lower()
-    return u in GERENTES_PQR or u in ("soporte", "gerente", "admin")
+    return rol_actual() in _ROLES_GERENCIA_PQR or (u in ("gerente", "admin") and rol_actual() != "Soporte")
 
 
 def registrar_historial_pqr(ticket_id, accion, detalle="", estado_nuevo=""):
@@ -9777,7 +9810,7 @@ _ROLES_COLEGIO = frozenset({
     "Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador",
 })
 _ROLES_GLOBAL = frozenset({
-    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Developer",
+    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Developer", "Soluciones",
 })
 # Quién puede EJECUTAR (no solo ver) cada capacidad crítica
 _CAPACIDAD_ROLES = {
@@ -12051,7 +12084,7 @@ def login():
             roles_staff_login = (
                 "Gerente", "Gerencia", "Superadmin", "Administrador",
                 "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer",
+                "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones",
             )
             staff_user = None
             try:
@@ -12071,6 +12104,8 @@ def login():
                     error = "Usuario desactivado. Contacte a Gerencia."
                 else:
                     rol_staff = (staff_user.rol or "").strip()
+                    if rol_staff == "Soluciones":
+                        return _login_soluciones(staff_user)
                     try:
                         session.clear()
                     except Exception:
@@ -12813,7 +12848,7 @@ def cambiar_password():
     if not requiere_login(): return redirect("/login")
     mensaje = ""
     rol = rol_actual()
-    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza", "Contabilidad", "Proveedor")
+    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones")
     if request.method == "POST":
         nueva = request.form.get("password", "").strip()
         confirmar = request.form.get("confirmar", "").strip()
@@ -12833,7 +12868,8 @@ def cambiar_password():
             registrar_auditoria("Cambio de contraseña", "Usuario cambió su contraseña temporal" + (f" · nombre: {nombre_completo}" if es_staff else ""))
             if es_staff:
                 destino = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Gerente": "/gerencia/hq",
-                           "Administrador": "/gerencia/hq", "Superadmin": "/gerencia/hq", "Cobranza": "/cobranza/panel"}.get(rol, "/dashboard")
+                           "Administrador": "/gerencia/hq", "Superadmin": "/gerencia/hq", "Cobranza": "/cobranza/panel",
+                           "Soluciones": "/soluciones-procsis"}.get(rol, "/dashboard")
                 return redirect(destino)
             return redirect("/dashboard")
     campo_nombre = (
@@ -20949,6 +20985,7 @@ def _home_portal(rol=None):
         "Superadmin": "/gerencia/hq",
         "Cobranza": "/cobranza/panel",
         "Contabilidad": "/contabilidad",
+        "Soluciones": "/soluciones-procsis",
         "Proveedor": "/proveedor-carnes",
         "Desarrollador": "/dev-console",
         "Developer": "/dev-console",
@@ -20965,6 +21002,7 @@ def _login_portal(rol=None):
         "Superadmin": "/login",
         "Cobranza": "/login",
         "Contabilidad": "/login",
+        "Soluciones": "/login",
         "Proveedor": "/login",
         "Desarrollador": "/login",
         "Developer": "/login",
@@ -20982,6 +21020,7 @@ _BIENVENIDA_ROLES = {
     "Comercial": ("Ventas", "Gestione su CRM, propuestas, demos, contratos y comisiones."),
     "Cobranza": ("Cobranza", "Seguimiento de cartera, acuerdos de pago y recaudo de las instituciones."),
     "Contabilidad": ("Contabilidad", "Libro de movimientos, plan de cuentas, estados financieros y auditoría contable."),
+    "Soluciones": ("Soluciones Procsis", "Atención al cliente: gestione PQRS, consulte instituciones y haga seguimiento a la satisfacción."),
     "Proveedor": ("Proveedor de carnés", "Producción física de carnés: descargue lotes, imprima y cierre cada tanda con su evidencia."),
     "Gerente": ("Gerencia", "Visión global de la operación: colegios, ventas, cartera, auditoría y control."),
     "Administrador": ("Gerencia", "Visión global de la operación: colegios, ventas, cartera, auditoría y control."),
@@ -21237,6 +21276,18 @@ def _aislar_paneles_internos():
         )
         if not ok_prov:
             return redirect("/proveedor-carnes")
+
+    elif rol == "Soluciones":
+        # RBAC estricto: solo su panel. Cero acceso a servidores, configuración, facturación, contratos ni BD.
+        ok_sol = (
+            path.startswith("/soluciones-procsis")
+            or path.startswith("/mi-perfil")
+            or path.startswith("/cambiar_password")
+            or path.startswith("/mfa")
+            or path.startswith("/pqr/pdf")
+        )
+        if not ok_sol:
+            return redirect("/soluciones-procsis")
 
     elif rol == "Contabilidad":
         ok_cta = (
@@ -23487,6 +23538,8 @@ def _destino_por_rol_staff(rol):
         return "/cobranza/panel"
     if r in ("Contabilidad",):
         return "/contabilidad"
+    if r in ("Soluciones",):
+        return "/soluciones-procsis"
     if r in ("Proveedor",):
         return "/proveedor-carnes"
     if r in ("Soporte",):
@@ -23649,10 +23702,12 @@ def _DEPRECATED_portal_backoffice_sin_ruta():
                         roles_staff = (
                             "Gerente", "Gerencia", "Superadmin", "Administrador",
                             "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                            "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer",
+                            "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones",
                         )
                         if rol not in roles_staff:
                             error = "Este acceso es solo para personal PROCSIS. Use el portal de instituciones (/login)."
+                        elif rol == "Soluciones":
+                            return _login_soluciones(user)
                         else:
                             try:
                                 session.clear()
@@ -33718,7 +33773,7 @@ def gerencia_usuarios():
             usuario = (request.form.get("usuario") or "").strip().lower()
             password = (request.form.get("password") or "").strip()
             rol = (request.form.get("rol") or "Comercial").strip()
-            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Superadmin", "Desarrollador"):
+            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif not usuario or len(password) < 8:
                 error = "Usuario obligatorio y contraseña de al menos 8 caracteres."
@@ -33736,7 +33791,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo = (request.form.get("nuevo_usuario") or "").strip().lower()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Desarrollador"):
                 error = "Usuario no válido."
             elif not nuevo or len(nuevo) < 3:
                 error = "Nuevo nombre de usuario inválido."
@@ -33757,9 +33812,9 @@ def gerencia_usuarios():
             u = Usuario.query.get(uid) if uid else None
             if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
                 error = "Solo Gerencia puede cambiar roles de usuarios."
-            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador"):
+            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Desarrollador"):
                 error = "Usuario no válido."
-            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Superadmin", "Desarrollador"):
+            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif session.get("uid") == u.id and nuevo_rol != u.rol:
                 error = "No puede cambiarse el rol a usted mismo — pídaselo a otro Gerente/Superadmin."
@@ -33773,7 +33828,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nueva_clave = (request.form.get("nueva_clave") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Desarrollador"):
                 error = "Usuario no válido."
             elif len(nueva_clave) < 8:
                 error = "La contraseña debe tener mínimo 8 caracteres."
@@ -33789,7 +33844,7 @@ def gerencia_usuarios():
         elif accion == "toggle_activo":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Desarrollador"):
                 error = "Usuario no válido."
             elif session.get("uid") == u.id:
                 error = "No puede desactivarse a sí mismo."
@@ -33804,7 +33859,7 @@ def gerencia_usuarios():
         elif accion == "eliminar":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones"):
                 error = "Usuario no válido o no se puede eliminar (protegido)."
             elif session.get("uid") == u.id:
                 error = "No puede eliminarse a sí mismo."
@@ -33826,7 +33881,7 @@ def gerencia_usuarios():
                 except Exception as ex:
                     db.session.rollback()
                     error = f"No se pudo eliminar: {ex}"
-    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor"])).order_by(Usuario.id.desc()).limit(80).all()
+    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones"])).order_by(Usuario.id.desc()).limit(80).all()
     filas = ""
     for u in lista:
         activo = getattr(u, "activo", True)
@@ -33856,6 +33911,7 @@ def gerencia_usuarios():
                 <option value="Soporte" {"selected" if u.rol=="Soporte" else ""}>Soporte</option>
                 <option value="Cobranza" {"selected" if u.rol=="Cobranza" else ""}>Cobranza</option>
                 <option value="Contabilidad" {"selected" if u.rol=="Contabilidad" else ""}>Contabilidad</option>
+                <option value="Soluciones" {"selected" if u.rol=="Soluciones" else ""}>Soluciones Procsis</option>
                 <option value="Proveedor" {"selected" if u.rol=="Proveedor" else ""}>Proveedor de carnés</option>
                 <option value="Gerente" {"selected" if u.rol=="Gerente" else ""}>Gerente</option>
                 <option value="Superadmin" {"selected" if u.rol=="Superadmin" else ""}>Superadmin</option>
@@ -33902,6 +33958,7 @@ def gerencia_usuarios():
       <option value="Soporte">Soporte técnico</option>
       <option value="Cobranza">Cobranza / Facturación</option>
       <option value="Contabilidad">Contabilidad</option>
+      <option value="Soluciones">Soluciones Procsis (atención al cliente)</option>
       <option value="Proveedor">Proveedor de carnés</option>
       <option value="Gerente">Gerente</option>
       <option value="Superadmin">Superadmin</option>
@@ -52197,18 +52254,20 @@ def soporte_diseno():
 _PQR_BUCKETS = {
     "abiertos": (["RADICADA", "EN VALIDACIÓN", "ABIERTO"], "🔴", "#dc2626"),
     "proceso": (["ASIGNADA", "EN PROCESO", "PENDIENTE DEL CLIENTE"], "🟡", "#ca8a04"),
-    "escalados": (["ESCALADA A DESARROLLO"], "🔵", "#2563eb"),
+    "escalados": (["ESCALADA A DESARROLLO", "ESCALADA A SOPORTE", "ESCALADA A GERENCIA"], "🔵", "#2563eb"),
     "cerrados": (["RESUELTA", "CERRADA"], "🟢", "#16a34a"),
 }
 
 
 @app.route("/soporte/pqr/probar-correo", methods=["GET", "POST"])
+@app.route("/soluciones-procsis/pqr/probar-correo", methods=["GET", "POST"])
 def soporte_pqr_probar_correo():
     """Página de prueba: envía un correo de notificación estilo Tigo de verdad, para
     confirmar que SOPORTE_EMAIL / SOPORTE_PASSWORD están bien conectados en Railway,
     sin tener que esperar a resolver un ticket real de un colegio."""
-    if not requiere_login() or rol_actual() not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
-        return redirect("/soporte-login")
+    g = _pqr_guard("editar")
+    if g:
+        return g
     p = plataforma()
     soporte_conectado = bool((p.smtp_correo or "").strip() and (p.smtp_password or "").strip())
     notif_conectado = bool((p.smtp_notif_correo or "").strip() and (p.smtp_notif_password or "").strip())
@@ -52263,7 +52322,7 @@ def soporte_pqr_probar_correo():
                 mensaje = "❌ No se pudo enviar. Revisa la conexión de Gmail en /gerencia/correo-soporte."
     content = f"""
 <header class="role-hero"><div><h1>Probar envío de correo PQR</h1><p>Verifica que el sistema esté conectado a una cuenta real antes de usarlo en producción</p></div>
-  <a class="btn" href="/soporte/pqr">← Centro PQR</a>
+  <a class="btn" href="{_pqr_base()}">← Centro PQR</a>
 </header>
 <div class="role-panel">
   <h3 style="margin-top:0">Estado de configuración</h3>
@@ -52287,9 +52346,15 @@ def soporte_pqr_probar_correo():
 
 
 @app.route("/soporte/pqr")
+@app.route("/soluciones-procsis/pqr")
 def soporte_pqr_centro():
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
+    g = _pqr_guard("ver")
+    if g:
+        return g
+    B = _pqr_base()
+    puede_editar = _pqr_puede_editar()
+    if rol_actual() == "Soluciones":
+        _sol_auditar("Consulta centro PQRS", request.query_string.decode("utf-8", "ignore")[:120])
     bucket = (request.args.get("bucket") or "abiertas").strip().lower()
     qtxt = (request.args.get("q") or "").strip()
     f_subtipo = (request.args.get("subtipo") or "").strip()
@@ -52327,23 +52392,23 @@ def soporte_pqr_centro():
     rows = q.order_by(TicketPQR.id.desc()).limit(150).all()
     filas = ""
     for t in rows:
-        filas += f"<tr><td><a href='/soporte/pqr/{t.id}'>{t.radicado}</a><br><span class='mini-text'>{t.ticket}</span></td><td>{t.razon_social}<br><span class='mini-text'>{t.numero_documento or ''} · {t.email}</span></td><td>{t.tipo_pqr}/{t.subtipo}</td><td><b>{t.estado}</b></td><td>{t.prioridad}</td><td>{t.fecha}</td></tr>"
+        filas += f"<tr><td><a href='{B}/{t.id}'>{t.radicado}</a><br><span class='mini-text'>{t.ticket}</span></td><td>{t.razon_social}<br><span class='mini-text'>{t.numero_documento or ''} · {t.email}</span></td><td>{t.tipo_pqr}/{t.subtipo}</td><td><b>{t.estado}</b>{("<br><span class='mini-text'>→ " + _esc(t.asignado_a) + "</span>") if t.asignado_a else ""}</td><td>{t.prioridad}</td><td>{t.fecha}</td></tr>"
     conteos = {b: TicketPQR.query.filter(TicketPQR.estado.in_(v[0])).count() for b, v in _PQR_BUCKETS.items()}
     tabs = "".join(
-        f'<a href="/soporte/pqr?bucket={b}{("&q="+qtxt) if qtxt else ""}" '
+        f'<a href="{B}?bucket={b}{("&q="+qtxt) if qtxt else ""}" '
         f'style="padding:8px 14px;border-radius:999px;font-weight:700;font-size:13px;text-decoration:none;'
         f'border:2px solid {v[2]};color:{"#fff" if bucket==b else v[2]};background:{v[2] if bucket==b else "#fff"};margin-right:6px;display:inline-block">'
         f'{v[1]} {b.capitalize()} ({conteos[b]})</a>'
         for b, v in _PQR_BUCKETS.items()
     )
-    limpiar = '<a href="/soporte/pqr" style="font-size:12px;color:#64748b;margin-left:6px">Quitar filtro ×</a>' if bucket else ""
+    limpiar = f'<a href="{B}" style="font-size:12px;color:#64748b;margin-left:6px">Quitar filtro ×</a>' if bucket else ""
     content = f"""
-<header class="role-hero"><div><h1>Centro PQR · Soporte</h1><p>Canal interno Procsis</p></div>
-  <a class="btn" href="/soporte/pqr/crear">Radicar interna</a>
-  <a class="btn" href="/soporte/pqr/consulta">Consulta validada</a>
-  <a class="btn" href="/soporte/pqr/probar-correo" style="background:#0f766e">📧 Probar correo</a>
-  <a class="btn" href="/gerencia/pqr-limpieza" style="background:#b91c1c">🧹 Limpieza PQR</a>
-  <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488">💙 CSAT</a>
+<header class="role-hero"><div><h1>{"Centro PQRS · Soluciones Procsis" if puede_editar else "Centro PQR · Soporte (solo lectura)"}</h1><p>Canal interno Procsis</p></div>
+  <a class="btn" href="{B}/crear">Radicar interna</a>
+  <a class="btn" href="{B}/consulta">Consulta validada</a>
+  {('<a class="btn" href="' + B + '/probar-correo" style="background:#0f766e">📧 Probar correo</a>') if puede_editar else ""}
+  {('<a class="btn" href="/gerencia/pqr-limpieza" style="background:#b91c1c">🧹 Limpieza PQR</a>') if rol_actual() in _ROLES_GERENCIA_PQR else ""}
+  <a class="btn" href="{"/soluciones-procsis/fidelizacion" if puede_editar else "/soporte/fidelizacion"}" style="background:#0d9488">💙 CSAT</a>
 </header>
 <div class="role-panel" style="margin-bottom:12px">
   {_script_divipola_subtipos()}
@@ -52385,9 +52450,12 @@ def soporte_pqr_centro():
 
 
 @app.route("/soporte/pqr/crear", methods=["GET", "POST"])
+@app.route("/soluciones-procsis/pqr/crear", methods=["GET", "POST"])
 def soporte_pqr_crear():
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
+    g = _pqr_guard("crear")
+    if g:
+        return g
+    B = _pqr_base()
     mensaje = ""
     if request.method == "POST":
         f = request.form
@@ -52424,6 +52492,7 @@ def soporte_pqr_crear():
             db.session.add(t)
             db.session.commit()
             mensaje = f"Radicado interno: {rad}"
+            _sol_auditar("PQR radicada", "%s · %s" % (rad, (t.razon_social or "")[:80]))
             if email_cli:
                 try:
                     ok_mail = enviar_correo_pqr(
@@ -52441,7 +52510,7 @@ def soporte_pqr_crear():
             db.session.rollback()
             mensaje = f"⚠ No se pudo radicar: {ex}. Intente de nuevo."
     content = f"""
-<header class="role-hero"><div><h1>Radicar PQR interna</h1></div><a class="btn" href="/soporte/pqr">Volver</a></header>
+<header class="role-hero"><div><h1>Radicar PQR interna</h1></div><a class="btn" href="{B}">Volver</a></header>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
 <div class="role-panel">
 <form method="POST">
@@ -52493,9 +52562,12 @@ def soporte_pqr_crear():
 
 
 @app.route("/soporte/pqr/consulta", methods=["GET", "POST"])
+@app.route("/soluciones-procsis/pqr/consulta", methods=["GET", "POST"])
 def soporte_pqr_consulta():
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
+    g = _pqr_guard("ver")
+    if g:
+        return g
+    B = _pqr_base()
     info = ""
     if request.method == "POST":
         codigo = (request.form.get("codigo") or "").strip()
@@ -52506,6 +52578,8 @@ def soporte_pqr_consulta():
             inst = Institucion.query.filter_by(codigo=codigo).first()
         if not inst and nit:
             inst = Institucion.query.filter(Institucion.nit.ilike(f"%{nit}%")).first()
+        if inst and rol_actual() == "Soluciones":
+            _sol_auditar("Consulta validada de institución", "%s · %s" % (inst.codigo, inst.nombre[:80]))
         if inst:
             # anti-fraude simple: si envían municipio, validar
             ok = True
@@ -52525,7 +52599,7 @@ def soporte_pqr_consulta():
             info = "<div class='msg danger'>Institución no encontrada.</div>"
     content = f"""
 <header class="role-hero"><div><h1>Consulta validada</h1><p>Anti-fraude antes de entregar datos del colegio</p></div>
-<a class="btn" href="/soporte/pqr">Volver</a></header>
+<a class="btn" href="{B}">Volver</a></header>
 <div class="role-panel">
 <form method="POST">
   <label>Código EduTrack</label><input name="codigo">
@@ -52542,10 +52616,13 @@ def soporte_pqr_consulta():
 
 
 @app.route("/soporte/pqr/<int:id>/pdf")
+@app.route("/soluciones-procsis/pqr/<int:id>/pdf")
 def soporte_pqr_pdf(id):
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
+    g = _pqr_guard("ver")
+    if g:
+        return g
     t = TicketPQR.query.get_or_404(id)
+    _sol_auditar("PQR PDF descargado", t.radicado)
     b = generar_pdf_respuesta_pqr(t)
     return send_file(b, as_attachment=True, download_name=f"respuesta_pqr_{t.ticket or t.id}.pdf", mimetype="application/pdf")
 
@@ -53361,6 +53438,7 @@ def soporte_consultas_descargas_reportes():
 
 @app.route("/gerencia/fidelizacion", methods=["GET", "POST"])
 @app.route("/soporte/fidelizacion", methods=["GET", "POST"])
+@app.route("/soluciones-procsis/fidelizacion", methods=["GET", "POST"])
 @app.route("/ventas/fidelizacion", methods=["GET", "POST"])
 @app.route("/cobranza/fidelizacion", methods=["GET", "POST"])
 def panel_fidelizacion_csat():
@@ -53389,16 +53467,18 @@ def _panel_fidelizacion_csat_inner():
     if not requiere_login():
         # redirigir al login del portal según path
         p = request.path or ""
-        if p.startswith("/soporte"):
-            return redirect("/soporte-login")
+        if p.startswith("/soporte") or p.startswith("/soluciones-procsis"):
+            return redirect("/login")
         if p.startswith("/cobranza"):
             return redirect("/cobranza-login")
         if p.startswith("/gerencia"):
             return redirect("/gerencia-login")
         return redirect("/ventas-login")
     rol = (rol_actual() or "").strip()
-    if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte", "Comercial", "Ventas", "Cobranza"):
+    if rol not in ("Gerente", "Superadmin", "Administrador", "Soporte", "Comercial", "Ventas", "Cobranza", "Soluciones"):
         return acceso_denegado("Panel de fidelización restringido.")
+    if session.get("mfa_pendiente"):
+        return redirect("/mfa")
 
     def _ensure_csat_table():
         try:
@@ -53753,22 +53833,34 @@ def _panel_fidelizacion_csat_inner():
 
 
 @app.route("/soporte/pqr/<int:id>", methods=["GET", "POST"])
+@app.route("/soluciones-procsis/pqr/<int:id>", methods=["GET", "POST"])
 def soporte_pqr_detalle(id):
-    if not requiere_login() or rol_actual() != "Soporte":
-        return redirect("/soporte-login")
+    g = _pqr_guard("ver")
+    if g:
+        return g
+    B = _pqr_base()
+    puede_editar = _pqr_puede_editar()
+    if request.method == "POST" and not puede_editar:
+        return _pqr_bloqueo_lectura()
     try:
         t = TicketPQR.query.get_or_404(id)
     except Exception as e404:
         return page("Detalle PQR", shell(
             f"<div class='msg danger'>Ticket no encontrado ({_esc(str(e404)[:120])})</div>"
-            "<p><a class='btn' href='/soporte/pqr'>← Centro PQR</a></p>"
+            f"<p><a class='btn' href='{B}'>← Centro PQR</a></p>"
         ))
     mensaje = ""
     cerrado = (t.estado or "").upper() in ("CERRADA", "CERRADO", "RESUELTA")
+    if request.method == "GET":
+        _sol_auditar("Consulta PQR", t.radicado)
     if request.method == "POST":
-        # Bloqueo total si ya está cerrada/resuelta (solo consulta)
-        if cerrado and not es_gerente_pqr():
+        accion_f = (request.form.get("accion") or "gestion").strip()
+        # Bloqueo total si ya está cerrada/resuelta (solo consulta; Gerencia puede reabrir)
+        if cerrado and not _pqr_puede_reabrir():
             mensaje = "Ticket cerrado/resuelto: no se permiten más cambios. Solo consulta."
+        elif accion_f in ("nota", "escalar"):
+            mensaje = _pqr_procesar_accion(t, accion_f, request.form)
+            cerrado = (t.estado or "").upper() in ("CERRADA", "CERRADO", "RESUELTA")
         else:
             nuevo = (request.form.get("estado") or t.estado).strip()
             resp = (request.form.get("respuesta") or "").strip()
@@ -53797,6 +53889,8 @@ def soporte_pqr_detalle(id):
                     db.session.rollback()
                     print("historial pqr:", ex)
                 cierra_caso = nuevo.upper() in ("CERRADA", "CERRADO", "RESUELTA")
+                _sol_auditar("PQR cerrada" if cierra_caso else ("PQR respondida" if resp else "PQR cambio de estado"),
+                             "%s → %s%s" % (t.radicado, nuevo, " (con respuesta)" if resp else ""))
                 encuesta_url = ""
                 if cierra_caso:
                     try:
@@ -53853,7 +53947,14 @@ def soporte_pqr_detalle(id):
     )
     resp_html = (t.respuesta or "").replace("<", "&lt;").replace("\n", "<br>")
     form_block = ""
-    if cerrado and not es_gerente_pqr():
+    if not puede_editar:
+        form_block = (
+            "<div class='msg' style='background:#e0f2fe;color:#075985;padding:12px;border-radius:10px'>"
+            "👁 <b>Modo solo lectura.</b> Soporte puede ver lo que escribió el cliente, las respuestas y el historial, pero no editar. "
+            "La gestión de PQRS es de Soluciones Procsis.</div>"
+            f"<div style='margin-top:10px'><a class='btn' href='{B}/{t.id}/pdf' target='_blank'>Descargar PDF de respuesta</a></div>"
+        )
+    elif cerrado and not _pqr_puede_reabrir():
         form_block = "<div class='msg' style='background:#fef3c7;color:#92400e;padding:12px;border-radius:10px'>Ticket <b>cerrado/resuelto</b>. Solo consulta. No se puede editar ni eliminar.</div>"
     else:
         form_block = f"""
@@ -53878,11 +53979,13 @@ def soporte_pqr_detalle(id):
     <button type="submit">Guardar respuesta / estado</button>
   </form>
   <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">
-    <a class="btn" href="/soporte/pqr/{t.id}/pdf" target="_blank">Descargar PDF de respuesta</a>
+    <a class="btn" href="{B}/{t.id}/pdf" target="_blank">Descargar PDF de respuesta</a>
     <a class="btn" style="background:#0d9488" href="/pqr/consulta">Ver consulta pública</a>
   </div>
 """
 
+    if puede_editar and not (cerrado and not _pqr_puede_reabrir()):
+        form_block += _pqr_forms_extra(t)
     csat_box = ""
     try:
         if (t.estado or "").upper() in ("RESUELTA", "CERRADA", "CERRADO") or (getattr(t, "token_csat", None) or "").strip():
@@ -53903,7 +54006,7 @@ def soporte_pqr_detalle(id):
 
     content = f"""
 <header class="role-hero"><div><h1>{t.radicado}</h1><p>Ticket {t.ticket} · {t.canal}</p></div>
-<a class="btn" href="/soporte/pqr">Volver</a></header>
+<a class="btn" href="{B}">Volver</a></header>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
 {csat_box}
 <div class="role-panel">
@@ -53922,6 +54025,541 @@ def soporte_pqr_detalle(id):
 </div>
 """
     return page("Detalle PQR", shell(content))
+
+
+
+# ============================================================
+#  SOLUCIONES PROCSIS — Atención al cliente (PQRS + consulta de clientes)
+#  Rol "Soluciones": 2FA obligatorio, acceso solo a /soluciones-procsis,
+#  sin acceso a BD, facturación/contratos (solo lectura) ni configuración.
+# ============================================================
+ROL_SOLUCIONES = "Soluciones"
+_ROLES_GERENCIA_PQR = ("Gerente", "Superadmin", "Administrador")
+ETIQUETAS_CLIENTE = ("Cliente Satisfecho", "Cliente en Riesgo", "Seguimiento Especial", "Sin clasificar")
+_COLOR_ETIQUETA = {
+    "Cliente Satisfecho": "#16a34a", "Cliente en Riesgo": "#dc2626",
+    "Seguimiento Especial": "#b45309", "Sin clasificar": "#64748b",
+}
+DESTINOS_ESCALAMIENTO = {
+    "SOLUCIONES": ("Soluciones Procsis", "ASIGNADA"),
+    "SOPORTE": ("Soporte (área técnica)", "ESCALADA A SOPORTE"),
+    "GERENCIA": ("Gerencia (revisión contractual)", "ESCALADA A GERENCIA"),
+}
+_sol_tablas_ok = {"ok": False}
+
+
+def _sol_asegurar_tablas():
+    if _sol_tablas_ok["ok"]:
+        return
+    try:
+        db.create_all()
+        _sol_tablas_ok["ok"] = True
+    except Exception as e:
+        print("soluciones create_all:", e)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _sol_firma(usuario, rol, accion, texto):
+    """Firma digital (HMAC-SHA256 truncado) de una acción con la identidad del usuario."""
+    import hmac as _hm, hashlib as _hl
+    k = app.secret_key or os.environ.get("SECRET_KEY") or "procsis"
+    if isinstance(k, str):
+        k = k.encode("utf-8")
+    msg = ("%s|%s|%s|%s" % (usuario, rol, accion, texto)).encode("utf-8")
+    return _hm.new(k, msg, _hl.sha256).hexdigest()[:16]
+
+
+def _sol_auditar(accion, detalle=""):
+    """Auditoría con firma digital del usuario. Nunca interrumpe el flujo."""
+    try:
+        usuario = session.get("usuario") or "Sistema"
+        rol = session.get("rol") or ""
+        ts = ahora().strftime("%Y-%m-%d %H:%M:%S")
+        base = "%s | TS:%s" % ((detalle or "")[:700], ts)
+        firma = _sol_firma(usuario, rol, accion[:120], base)
+        registrar_auditoria(accion[:120], "%s | FIRMA:%s" % (base, firma))
+    except Exception as e:
+        print("sol_auditar:", e)
+
+
+def _sol_firma_valida(row):
+    m = re.match(r"^(.*) \| FIRMA:([0-9a-f]{16})(?: \||$)", row.detalle or "", re.S)
+    if not m:
+        return None
+    return _sol_firma(row.usuario, row.rol, row.accion, m.group(1)) == m.group(2)
+
+
+def _sol_guard(roles=None):
+    """None si el rol actual puede entrar; si no, la respuesta de bloqueo."""
+    if not requiere_login():
+        return redirect("/login")
+    if session.get("mfa_pendiente"):
+        return redirect("/mfa")
+    permitido = roles or ((ROL_SOLUCIONES,) + _ROLES_GERENCIA_PQR)
+    if rol_actual() not in permitido:
+        return acceso_denegado("Este módulo es exclusivo de Soluciones Procsis.")
+    _sol_asegurar_tablas()
+    return None
+
+
+def _pqr_guard(accion="ver"):
+    roles = {
+        "ver": ("Soporte", ROL_SOLUCIONES) + _ROLES_GERENCIA_PQR,
+        "crear": ("Soporte", ROL_SOLUCIONES) + _ROLES_GERENCIA_PQR,
+        "editar": (ROL_SOLUCIONES,) + _ROLES_GERENCIA_PQR,
+    }[accion]
+    return _sol_guard(roles)
+
+
+def _pqr_puede_editar():
+    return rol_actual() in ((ROL_SOLUCIONES,) + _ROLES_GERENCIA_PQR)
+
+
+def _pqr_puede_reabrir():
+    return rol_actual() in _ROLES_GERENCIA_PQR
+
+
+def _pqr_base():
+    return "/soporte/pqr" if rol_actual() == "Soporte" else "/soluciones-procsis/pqr"
+
+
+def _pqr_bloqueo_lectura():
+    _sol_auditar("PQR edición bloqueada (solo lectura)", "%s intentó modificar %s" % (session.get("usuario", ""), request.path))
+    return acceso_denegado(
+        "Soporte solo puede visualizar las PQRS (lo escrito y las respuestas), radicar PQR y crear tickets. "
+        "La gestión y respuesta de PQRS es de Soluciones Procsis."
+    )
+
+
+def _pqr_procesar_accion(t, accion, f):
+    """Anotaciones (nota/llamada/acuerdo) y asignación/escalamiento. Devuelve mensaje."""
+    try:
+        if accion == "nota":
+            tipo = (f.get("tipo_nota") or "NOTA").strip().upper()
+            if tipo not in ("NOTA", "LLAMADA", "ACUERDO", "CORREO", "WHATSAPP"):
+                tipo = "NOTA"
+            texto = (f.get("texto") or "").strip()[:1500]
+            if not texto:
+                return "Escriba el contenido de la anotación."
+            registrar_historial_pqr(t.id, tipo, texto, t.estado or "")
+            db.session.commit()
+            _sol_auditar("PQR anotación " + tipo.lower(), "%s · %s" % (t.radicado, texto[:120]))
+            return "Anotación (%s) registrada en el historial." % tipo.lower()
+        if accion == "escalar":
+            key = (f.get("destino") or "").strip().upper()
+            if key not in DESTINOS_ESCALAMIENTO:
+                return "Destino no válido."
+            motivo = (f.get("motivo") or "").strip()[:800]
+            if key != "SOLUCIONES" and not motivo:
+                return "Indique el motivo del escalamiento."
+            etiqueta, nuevo_estado = DESTINOS_ESCALAMIENTO[key]
+            resp = (f.get("asignado_a") or "").strip()[:60]
+            t.asignado_a = (etiqueta + (" · " + resp if resp else ""))[:120]
+            t.estado = nuevo_estado
+            registrar_historial_pqr(
+                t.id, "ASIGNACIÓN" if key == "SOLUCIONES" else "ESCALAMIENTO",
+                "→ %s%s. %s" % (etiqueta, (" (" + resp + ")") if resp else "", ("Motivo: " + motivo) if motivo else ""),
+                nuevo_estado,
+            )
+            db.session.commit()
+            _sol_auditar("PQR %s" % ("asignada" if key == "SOLUCIONES" else "escalada"), "%s → %s" % (t.radicado, etiqueta))
+            return "Caso %s a: %s." % ("asignado" if key == "SOLUCIONES" else "escalado", etiqueta)
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("pqr accion:", ex)
+        return "No se pudo guardar. Intente de nuevo."
+    return ""
+
+
+def _pqr_forms_extra(t):
+    """Formularios de anotaciones y asignación/escalamiento (solo rol que gestiona)."""
+    destinos = "".join('<option value="%s">%s</option>' % (k, _esc(v[0])) for k, v in DESTINOS_ESCALAMIENTO.items())
+    return f"""
+<div style="margin-top:16px;padding:14px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc">
+  <h3 style="margin:0 0 8px">📝 Registrar interacción con el cliente</h3>
+  <form method="POST">
+    <input type="hidden" name="accion" value="nota">
+    <select name="tipo_nota" style="padding:8px;border-radius:8px;border:1px solid #cbd5e1">
+      <option value="NOTA">Anotación</option><option value="LLAMADA">Llamada</option>
+      <option value="ACUERDO">Acuerdo logrado</option><option value="CORREO">Correo</option><option value="WHATSAPP">WhatsApp</option>
+    </select>
+    <textarea name="texto" rows="3" required placeholder="Qué se habló / acordó con el cliente…" style="width:100%;margin-top:8px"></textarea>
+    <button type="submit" style="margin-top:8px">Guardar en historial</button>
+  </form>
+</div>
+<div style="margin-top:12px;padding:14px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb">
+  <h3 style="margin:0 0 8px">🔀 Asignar / escalar caso</h3>
+  <p style="font-size:12px;color:#92400e;margin:0 0 8px">Actualmente asignado a: <b>{_esc(t.asignado_a or "—")}</b></p>
+  <form method="POST">
+    <input type="hidden" name="accion" value="escalar">
+    <select name="destino" style="padding:8px;border-radius:8px;border:1px solid #cbd5e1">{destinos}</select>
+    <input name="asignado_a" maxlength="60" placeholder="Responsable (opcional)" style="padding:8px;border-radius:8px;border:1px solid #cbd5e1">
+    <textarea name="motivo" rows="2" placeholder="Motivo (obligatorio al escalar a Soporte o Gerencia)" style="width:100%;margin-top:8px"></textarea>
+    <button type="submit" style="margin-top:8px">Aplicar</button>
+  </form>
+</div>"""
+
+
+# ---------- 2FA (TOTP) ----------
+def _mfa_qr_datauri(uri):
+    import io as _io, base64 as _b64
+    img = qrcode.make(uri)
+    buf = _io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + _b64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _login_soluciones(user):
+    """Ingreso del rol Soluciones: el 2FA es SIEMPRE obligatorio (enrolamiento en el primer acceso)."""
+    pwd_temp = bool(getattr(user, "password_temporal", False))
+    session.clear()
+    session["mfa_pendiente"] = True
+    session["mfa_user_id"] = user.id
+    session["usuario"] = user.usuario
+    session["rol"] = ROL_SOLUCIONES
+    session["uid"] = user.id
+    session["password_temporal"] = pwd_temp
+    session["panel"] = "backoffice"
+    try:
+        registrar_auditoria("Login Soluciones: 2FA pendiente", user.usuario)
+    except Exception:
+        pass
+    return redirect("/mfa")
+
+
+def _mfa_completar_login(u):
+    rol = (u.rol or "").strip()
+    for k in ("mfa_pendiente", "mfa_user_id", "mfa_secret_tmp", "mfa_intentos"):
+        session.pop(k, None)
+    session["usuario"] = u.usuario
+    session["rol"] = rol
+    session["uid"] = u.id
+    session["panel"] = "backoffice"
+    session["ultimo_movimiento"] = ahora().timestamp()
+    session["_last_active"] = ahora().timestamp()
+    try:
+        registrar_sesion_empleado(u)
+    except Exception:
+        pass
+    registrar_auditoria("Login con 2FA verificado", "%s · %s" % (u.usuario, rol))
+    try:
+        if rol in ("Soporte", "Comercial", "Cobranza") and not turno_abierto_actual(
+            usuario_id=u.id, area=("Ventas" if rol == "Comercial" else rol)
+        ):
+            session["turno_pending_redirect"] = _home_portal(rol)
+            return redirect("/abrir-turno")
+    except Exception:
+        pass
+    return redirect(_home_portal(rol))
+
+
+@app.route("/mfa", methods=["GET", "POST"])
+@app.route("/mfa/verificar", methods=["GET", "POST"])
+def mfa_pagina():
+    uid = session.get("mfa_user_id")
+    if not session.get("mfa_pendiente") or not uid:
+        return redirect("/login")
+    u = Usuario.query.get(uid)
+    if not u or not _usuario_activo_ok(u):
+        session.clear()
+        return redirect("/login")
+    enrolado = bool(getattr(u, "mfa_habilitado", False) and (getattr(u, "mfa_secret", None) or "").strip())
+    secret_tmp = ""
+    if not enrolado:
+        secret_tmp = session.get("mfa_secret_tmp") or ""
+        if not secret_tmp:
+            secret_tmp = _mfa_nuevo_secret()
+            session["mfa_secret_tmp"] = secret_tmp
+    error = ""
+    if request.method == "POST":
+        intentos = int(session.get("mfa_intentos", 0)) + 1
+        session["mfa_intentos"] = intentos
+        codigo = (request.form.get("codigo") or "").strip().replace(" ", "")
+        secreto = u.mfa_secret if enrolado else secret_tmp
+        if _mfa_verificar(secreto, codigo):
+            if not enrolado:
+                u.mfa_secret = secret_tmp
+                u.mfa_habilitado = True
+                db.session.commit()
+                registrar_auditoria("2FA activado", u.usuario)
+            return _mfa_completar_login(u)
+        registrar_auditoria("2FA código incorrecto", "%s · intento %d" % (u.usuario, intentos))
+        error = "Código incorrecto o vencido. Intente de nuevo."
+        if intentos >= 5:
+            registrar_auditoria("2FA bloqueado por intentos", u.usuario)
+            session.clear()
+            return redirect("/login")
+    bloque_enrolar = ""
+    if not enrolado:
+        from urllib.parse import quote as _q
+        uri = "otpauth://totp/Procsis:%s?secret=%s&issuer=Procsis" % (_q(u.usuario), secret_tmp)
+        try:
+            qr = '<img src="%s" alt="QR 2FA" style="width:190px;height:190px;margin:8px auto;display:block">' % _mfa_qr_datauri(uri)
+        except Exception:
+            qr = ""
+        bloque_enrolar = (
+            "<p style='font-size:13px;color:#334155'><b>Primer ingreso:</b> active la verificación en dos pasos. "
+            "Escanee el QR con Google Authenticator, Microsoft Authenticator o similar y escriba el código de 6 dígitos.</p>"
+            + qr +
+            "<p style='font-size:11px;color:#64748b;text-align:center;word-break:break-all'>Clave manual: <code>%s</code></p>" % secret_tmp
+        )
+    else:
+        bloque_enrolar = "<p style='font-size:13px;color:#334155'>Escriba el código de 6 dígitos de su aplicación autenticadora.</p>"
+    body = f"""
+<div style="min-height:100vh;background:#f4f6f8;display:flex;align-items:center;justify-content:center;font-family:Segoe UI,system-ui,sans-serif">
+  <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:380px;width:100%;box-shadow:0 8px 28px rgba(15,23,42,.08)">
+    <h1 style="margin:0 0 8px;font-size:20px;color:#0B2D57;text-align:center">Verificación de identidad (2FA)</h1>
+    {bloque_enrolar}
+    {"<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0;font-size:13px'>"+_esc(error)+"</div>" if error else ""}
+    <form method="POST">
+      <input name="codigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" required autofocus
+        style="width:100%;box-sizing:border-box;padding:12px;font-size:20px;letter-spacing:8px;text-align:center;border:1px solid #e2e8f0;border-radius:10px;margin:10px 0">
+      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer">Verificar e ingresar</button>
+    </form>
+    <p style="text-align:center;margin-top:12px"><a href="/logout" style="font-size:12px;color:#0B2D57">Cancelar</a></p>
+  </div>
+</div>"""
+    return page("Verificación 2FA", body)
+
+
+# ---------- Panel ----------
+def _sol_etiqueta_html(txt):
+    txt = txt or "Sin clasificar"
+    c = _COLOR_ETIQUETA.get(txt, "#64748b")
+    return "<span style='background:%s;color:#fff;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700'>%s</span>" % (c, _esc(txt))
+
+
+@app.route("/soluciones-procsis")
+def soluciones_home():
+    g = _sol_guard()
+    if g:
+        return g
+    conteos = {}
+    try:
+        conteos = {b: TicketPQR.query.filter(TicketPQR.estado.in_(v[0])).count() for b, v in _PQR_BUCKETS.items()}
+    except Exception:
+        conteos = {b: 0 for b in _PQR_BUCKETS}
+    riesgo = []
+    try:
+        riesgo = ClienteEtiqueta.query.filter(
+            ClienteEtiqueta.etiqueta.in_(["Cliente en Riesgo", "Seguimiento Especial"])
+        ).order_by(ClienteEtiqueta.id.desc()).limit(8).all()
+    except Exception:
+        pass
+    filas_r = ""
+    for e in riesgo:
+        inst = Institucion.query.get(e.institucion_id)
+        if inst:
+            filas_r += "<tr><td><a href='/soluciones-procsis/clientes/%d'>%s</a></td><td>%s</td><td>%s</td></tr>" % (
+                inst.id, _esc(inst.nombre), _sol_etiqueta_html(e.etiqueta), _esc(e.actualizado_en or ""))
+    tarjetas = "".join(
+        "<a href='/soluciones-procsis/pqr?bucket=%s' style='text-decoration:none'><div class='role-panel' style='border-left:6px solid %s;text-align:center'>"
+        "<div style='font-size:30px;font-weight:800;color:%s'>%d</div><div style='font-size:12px;color:#475569;font-weight:700'>%s %s</div></div></a>"
+        % (b, v[2], v[2], conteos.get(b, 0), v[1], b.capitalize())
+        for b, v in _PQR_BUCKETS.items()
+    )
+    content = f"""
+<header class="role-hero"><div><h1>Soluciones Procsis</h1><p>Atención al cliente · PQRS y consulta de clientes</p></div>
+<a class="btn" href="/soluciones-procsis/pqr/crear">➕ Radicar PQRS</a></header>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px">{tarjetas}</div>
+<div class="role-panel"><h3 style="margin-top:0">Clientes en riesgo / seguimiento especial</h3>
+<table><tr><th>Institución</th><th>Etiqueta</th><th>Actualizado</th></tr>
+{filas_r or "<tr><td colspan=3>Sin clientes marcados</td></tr>"}</table></div>
+<div class="role-panel" style="margin-top:12px"><p style="margin:0;font-size:13px;color:#475569">
+Todas sus acciones (respuestas, cambios de estado y consultas de datos) quedan registradas con su firma digital.
+<a href="/soluciones-procsis/auditoria">Ver mi bitácora firmada →</a></p></div>
+"""
+    return page("Soluciones Procsis", shell(content))
+
+
+# ---------- Clientes (consulta corporativa) ----------
+@app.route("/soluciones-procsis/clientes")
+def soluciones_clientes():
+    g = _sol_guard()
+    if g:
+        return g
+    q = (request.args.get("q") or "").strip()
+    qs = Institucion.query
+    if q:
+        like = "%" + q + "%"
+        qs = qs.filter(or_(Institucion.nombre.ilike(like), Institucion.codigo.ilike(like), Institucion.nit.ilike(like),
+                           Institucion.municipio.ilike(like), Institucion.rector.ilike(like)))
+        _sol_auditar("Consulta de clientes", "búsqueda: %s" % q[:80])
+    rows = qs.order_by(Institucion.nombre.asc()).limit(100).all()
+    etiquetas = {}
+    try:
+        etiquetas = {e.institucion_id: e.etiqueta for e in ClienteEtiqueta.query.all()}
+    except Exception:
+        pass
+    filas = "".join(
+        "<tr><td><a href='/soluciones-procsis/clientes/%d'><b>%s</b></a><br><span class='mini-text'>%s</span></td>"
+        "<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            r.id, _esc(r.nombre), _esc(r.codigo), _esc(r.nit or "—"), _esc(r.municipio or "—"),
+            _esc(r.plan or "—"), _esc(r.estado or "—"), _sol_etiqueta_html(etiquetas.get(r.id)))
+        for r in rows
+    )
+    content = f"""
+<header class="role-hero"><div><h1>Clientes</h1><p>Consulta corporativa de instituciones (solo lectura)</p></div>
+<a class="btn" href="/soluciones-procsis">Volver</a></header>
+<div class="role-panel"><form method="GET" style="display:flex;gap:8px">
+<input name="q" value="{_esc(q)}" placeholder="Nombre, código, NIT, municipio o rector" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+<button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button></form></div>
+<div class="role-panel" style="overflow:auto;margin-top:12px"><table>
+<tr><th>Institución</th><th>NIT</th><th>Municipio</th><th>Plan</th><th>Estado</th><th>Satisfacción</th></tr>
+{filas or "<tr><td colspan=6>Sin resultados</td></tr>"}</table></div>"""
+    return page("Clientes", shell(content))
+
+
+@app.route("/soluciones-procsis/clientes/<int:iid>", methods=["GET", "POST"])
+def soluciones_cliente_detalle(iid):
+    g = _sol_guard()
+    if g:
+        return g
+    inst = Institucion.query.get_or_404(iid)
+    mensaje = ""
+    if request.method == "POST":
+        et = (request.form.get("etiqueta") or "").strip()
+        nota = (request.form.get("nota") or "").strip()[:600]
+        if et not in ETIQUETAS_CLIENTE:
+            mensaje = "Etiqueta no válida."
+        else:
+            try:
+                reg = ClienteEtiqueta.query.filter_by(institucion_id=iid).first()
+                ant = reg.etiqueta if reg else "Sin clasificar"
+                if not reg:
+                    reg = ClienteEtiqueta(institucion_id=iid)
+                    db.session.add(reg)
+                reg.etiqueta = et
+                reg.nota = nota
+                reg.actualizado_por = session.get("usuario", "")
+                reg.actualizado_en = ahora().strftime("%Y-%m-%d %H:%M")
+                db.session.commit()
+                _sol_auditar("Etiqueta de cliente", "%s: %s → %s" % (inst.codigo, ant, et))
+                mensaje = "Etiqueta actualizada."
+            except Exception as ex:
+                db.session.rollback()
+                print("etiqueta:", ex)
+                mensaje = "No se pudo guardar la etiqueta."
+    else:
+        _sol_auditar("Consulta perfil institucional", "%s · %s" % (inst.codigo, inst.nombre[:80]))
+
+    def _q(fn):
+        try:
+            return fn()
+        except Exception as ex:
+            print("cliente detalle:", ex)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return []
+
+    reg = _q(lambda: ClienteEtiqueta.query.filter_by(institucion_id=iid).first()) or None
+    facturas = _q(lambda: FacturaCobro.query.filter_by(institucion_id=iid).order_by(FacturaCobro.id.desc()).limit(8).all())
+    hoy = fecha_hoy()
+    mora = [f for f in facturas if (f.estado or "").upper() == "VENCIDO" or
+            ((f.estado or "").upper() == "PENDIENTE" and (f.vencimiento or "9999") < hoy)]
+    al_dia = ("<span style='color:#16a34a;font-weight:800'>✔ Al día</span>" if not mora
+              else "<span style='color:#dc2626;font-weight:800'>⚠ Con %d factura(s) en mora</span>" % len(mora))
+    contratos = _q(lambda: ContratoSaaSColegio.query.filter_by(institucion_id=iid).order_by(ContratoSaaSColegio.id.desc()).limit(5).all())
+    errores = _q(lambda: LogErrorSistema.query.filter_by(institucion_id=iid).order_by(LogErrorSistema.id.desc()).limit(6).all())
+    n_err = _q(lambda: LogErrorSistema.query.filter_by(institucion_id=iid).count()) or 0
+    incid = []
+    for i in _q(lambda: IncidenteSeg.query.order_by(IncidenteSeg.id.desc()).limit(300).all()):
+        if str(iid) in [x.strip() for x in (i.instituciones_ids or "").split(",")]:
+            incid.append(i)
+    contenciones = _q(lambda: ContencionSeg.query.filter_by(institucion_id=iid).order_by(ContencionSeg.id.desc()).limit(6).all())
+    pqrs = _q(lambda: TicketPQR.query.filter(or_(
+        TicketPQR.institucion_id == iid,
+        TicketPQR.codigo_colegio == (inst.codigo or "#"),
+        and_(TicketPQR.nit_colegio != "", TicketPQR.nit_colegio == (inst.nit or "#")),
+    )).order_by(TicketPQR.id.desc()).limit(15).all())
+
+    def tabla(cab, filas, vacio):
+        return ("<table><tr>%s</tr>%s</table>" % ("".join("<th>%s</th>" % c for c in cab), filas)
+                if filas else "<p style='color:#64748b;font-size:13px'>%s</p>" % vacio)
+
+    t_fact = tabla(["Recibo", "Concepto", "Valor", "Estado", "Vence"], "".join(
+        "<tr><td>%s</td><td>%s</td><td>$%s</td><td>%s</td><td>%s</td></tr>" % (
+            _esc(f.consecutivo), _esc(f.concepto), format(int(f.valor or 0), ","), _esc(f.estado), _esc(f.vencimiento))
+        for f in facturas), "Sin facturas registradas.")
+    t_cont = tabla(["Plan", "Estado", "Inicio", "Fin", "Valor mensual"], "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>$%s</td></tr>" % (
+            _esc(c.plan), _esc(c.estado), _esc(c.fecha_inicio), _esc(c.fecha_fin), format(int(c.valor_mensual or 0), ","))
+        for c in contratos), "Sin contratos/convenios registrados.")
+    t_err = tabla(["Fecha", "Nivel", "Mensaje"], "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(e.ts), _esc(e.nivel), _esc((e.mensaje or "")[:140]))
+        for e in errores), "Sin fallos registrados.")
+    t_inc = tabla(["Código", "Incidente", "Gravedad", "Estado", "Detectado"], "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            _esc(i.codigo), _esc(i.titulo), _esc(i.gravedad), _esc(i.estado), _esc(i.detectado_en))
+        for i in incid[:6]), "Sin incidentes masivos asociados.")
+    t_blq = tabla(["Acción", "Activa", "Motivo", "Fecha"], "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            _esc(c.accion), "Sí" if c.activa else "No", _esc((c.motivo or "")[:120]), _esc(c.creado_en))
+        for c in contenciones), "Sin bloqueos/contenciones previas.")
+    t_pqr = tabla(["Radicado", "Tipo", "Estado", "Fecha"], "".join(
+        "<tr><td><a href='/soluciones-procsis/pqr/%d'>%s</a></td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            p.id, _esc(p.radicado), _esc("%s/%s" % (p.tipo_pqr, p.subtipo)), _esc(p.estado), _esc(p.fecha))
+        for p in pqrs), "Sin PQRS asociadas.")
+    bloqueo_actual = ""
+    if (inst.tipo_bloqueo or "").strip() or (inst.estado or "").upper() in ("SUSPENDIDA",):
+        bloqueo_actual = "<div class='msg danger'>Bloqueo/suspensión actual: %s · %s · %s</div>" % (
+            _esc(inst.estado), _esc(inst.tipo_bloqueo or "—"), _esc(inst.motivo_bloqueo or ""))
+    opts = "".join('<option %s>%s</option>' % ("selected" if (reg and reg.etiqueta == e) else "", _esc(e)) for e in ETIQUETAS_CLIENTE)
+    et_actual = reg.etiqueta if reg else "Sin clasificar"
+    content = f"""
+<header class="role-hero"><div><h1>{_esc(inst.nombre)}</h1><p>Código {_esc(inst.codigo)} · NIT {_esc(inst.nit or '—')} · {_sol_etiqueta_html(et_actual)}</p></div>
+<a class="btn" href="/soluciones-procsis/clientes">Volver</a></header>
+{"<div class='msg ok'>"+_esc(mensaje)+"</div>" if mensaje else ""}
+{bloqueo_actual}
+<div class="role-panel"><h3 style="margin-top:0">Perfil institucional</h3>
+<p>Rector: <b>{_esc(inst.rector or '—')}</b> · Contacto: <b>{_esc(inst.contacto_facturacion or '—')}</b><br>
+{_esc(inst.direccion or '')} · {_esc(inst.municipio or '')} {_esc(inst.departamento or '')} · DANE {_esc(inst.dane or '—')}<br>
+Plan: <b>{_esc(inst.plan or '—')}</b> · Estado: <b>{_esc(inst.estado or '—')}</b> ·
+Vigencia: {_esc(inst.fecha_inicio_licencia or '—')} → {_esc(inst.fecha_vencimiento or '—')}<br>
+Estado de cuenta: {al_dia}</p>
+<form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+  <div><label style="font-size:12px;font-weight:700">Etiqueta de satisfacción (interna)</label><br>
+  <select name="etiqueta" style="padding:9px;border-radius:8px;border:1px solid #cbd5e1">{opts}</select></div>
+  <input name="nota" value="{_esc(reg.nota if reg else '')}" placeholder="Nota interna (opcional)" style="flex:1;min-width:200px;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
+  <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar etiqueta</button>
+</form></div>
+<div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">Convenios / contratos (solo lectura)</h3>{t_cont}
+<h3>Facturación (solo lectura)</h3>{t_fact}</div>
+<div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">Historial de actividad de la cuenta</h3>
+<h4>Bloqueos y contenciones previas</h4>{t_blq}
+<h4>Fallos masivos / incidentes</h4>{t_inc}
+<h4>Errores del sistema ({n_err} en total · últimos 6)</h4>{t_err}</div>
+<div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">PQRS de esta institución</h3>{t_pqr}</div>"""
+    return page("Cliente", shell(content))
+
+
+@app.route("/soluciones-procsis/auditoria")
+def soluciones_auditoria():
+    g = _sol_guard()
+    if g:
+        return g
+    rows = Auditoria.query.filter_by(usuario=session.get("usuario", "")).order_by(Auditoria.id.desc()).limit(150).all()
+    filas = ""
+    for a in rows:
+        v = _sol_firma_valida(a)
+        sello = "<span style='color:#16a34a'>✔ firmada</span>" if v else ("<span style='color:#dc2626'>✖ no coincide</span>" if v is False else "<span style='color:#94a3b8'>—</span>")
+        filas += "<tr><td>%s %s</td><td>%s</td><td style='max-width:420px;word-break:break-word'>%s</td><td>%s</td></tr>" % (
+            _esc(a.fecha), _esc(a.hora), _esc(a.accion), _esc((a.detalle or "")[:220]), sello)
+    content = f"""
+<header class="role-hero"><div><h1>Mi bitácora firmada</h1><p>Acciones registradas con su firma digital (auditoría interna)</p></div>
+<a class="btn" href="/soluciones-procsis">Volver</a></header>
+<div class="role-panel" style="overflow:auto"><table><tr><th>Fecha</th><th>Acción</th><th>Detalle</th><th>Firma</th></tr>
+{filas or "<tr><td colspan=4>Sin registros</td></tr>"}</table></div>"""
+    return page("Mi bitácora", shell(content))
+
 
 
 @app.route("/exportar_simat")
@@ -82222,7 +82860,7 @@ def _login_modo_host():
 
 
 _STAFF_ROLES_LOGIN = ("Gerente", "Gerencia", "Superadmin", "Administrador", "Comercial", "Ventas", "Supervisor de Ventas",
-                      "Supervisor", "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer")
+                      "Supervisor", "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones")
 
 
 def _login_resolver_unico(ident, password):
@@ -83381,7 +84019,7 @@ def soporte_cambios_ver(cid):
 #  · Gerencia/Superadmin/Administrador nunca se bloquean (evita que Gerencia se quede fuera).
 #  · Acceso extraordinario temporal (tabla existente) = excepción autorizada y registrada.
 # ══════════════════════════════════════════════════════════════════════════════
-_HL_ROLES = ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Proveedor")
+_HL_ROLES = ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Proveedor", "Soluciones")
 _HL_DIAS = {1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves", 5: "Viernes", 6: "Sábado", 7: "Domingo"}
 _HL_DIA_CORTO = {1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb", 7: "Dom"}
 _HL_HORA_RE = _re_hl = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -83707,8 +84345,8 @@ def _hl_gate_horario_asesores():
 #  · No se muestran IP, ubicación ni dispositivo de esas personas: solo qué cambió, quién (del colegio) y cuándo.
 # ══════════════════════════════════════════════════════════════════════════════
 _AUD_ROLES_NO_COLEGIO = ("Soporte", "Superadmin", "Administrador", "Gerente", "Gerencia", "Comercial", "Ventas", "Cobranza", "Contabilidad",
-                         "Proveedor", "Desarrollador", "Developer")
-_AUD_RUTAS_INTERNAS = ("/soporte", "/gerencia", "/cobranza", "/ventas", "/contabilidad", "/dev", "/proveedor", "/tickets-doc", "/interno",
+                         "Proveedor", "Desarrollador", "Developer", "Soluciones")
+_AUD_RUTAS_INTERNAS = ("/soporte", "/gerencia", "/cobranza", "/ventas", "/contabilidad", "/soluciones-procsis", "/dev", "/proveedor", "/tickets-doc", "/interno",
                        "/backoffice", "/servidores", "/tenants", "/usuarios")
 
 
@@ -83791,9 +84429,9 @@ def soporte_auditoria_colegios():
 #  (antes solo estaba en «Equipo Procsis» de Soporte, y Gerencia no lo encontraba en Usuarios internos).
 # ══════════════════════════════════════════════════════════════════════════════
 _CARNE_AREA_POR_ROL = {"Soporte": "Soporte", "Comercial": "Comercial", "Gerente": "Gerencia", "Superadmin": "Gerencia", "Administrador": "Gerencia",
-                       "Cobranza": "Cartera", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor", "Desarrollador": "Desarrollo"}
+                       "Cobranza": "Cartera", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor", "Desarrollador": "Desarrollo", "Soluciones": "Soluciones Procsis"}
 _CARNE_CARGO_POR_ROL = {"Soporte": "Asesor de soporte", "Comercial": "Asesor comercial", "Gerente": "Gerente", "Superadmin": "Superadmin", "Administrador": "Administrador",
-                        "Cobranza": "Asesor de cobranza", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor de carnés", "Desarrollador": "Desarrollador"}
+                        "Cobranza": "Asesor de cobranza", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor de carnés", "Desarrollador": "Desarrollador", "Soluciones": "Atención al cliente"}
 
 
 def _carne_equipo_de_usuario(u):
