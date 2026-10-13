@@ -8046,7 +8046,7 @@ def qr_texto(e):
 ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Soluciones")
 # Cuota de almacenamiento por colegio (GB)
 ALMACENAMIENTO_GB_POR_COLEGIO = 10
-ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza", "Soluciones")
+ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza")
 ACCIONES_SENSIBLES = (
     "eliminar", "export", "exportar", "borrar", "desactivar", "permiso",
     "reset", "restablecer", "backup", "respaldo", "simat",
@@ -54030,7 +54030,7 @@ def soporte_pqr_detalle(id):
 
 # ============================================================
 #  SOLUCIONES PROCSIS — Atención al cliente (PQRS + consulta de clientes)
-#  Rol "Soluciones": 2FA obligatorio, acceso solo a /soluciones-procsis,
+#  Rol "Soluciones": verificación de ingreso por PIN al correo, acceso solo a /soluciones-procsis,
 #  sin acceso a BD, facturación/contratos (solo lectura) ni configuración.
 # ============================================================
 ROL_SOLUCIONES = "Soluciones"
@@ -54206,17 +54206,28 @@ def _pqr_forms_extra(t):
 </div>"""
 
 
-# ---------- 2FA (TOTP) ----------
-def _mfa_qr_datauri(uri):
-    import io as _io, base64 as _b64
-    img = qrcode.make(uri)
-    buf = _io.BytesIO()
-    img.save(buf, format="PNG")
-    return "data:image/png;base64," + _b64.b64encode(buf.getvalue()).decode("ascii")
+# ---------- Verificación de ingreso por PIN al correo ----------
+def _enviar_pin_acceso(correo, pin):
+    if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not SOPORTE_EMAIL or not SOPORTE_PASSWORD):
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = "Código de verificación de ingreso - Procsis"
+    msg["From"] = SOPORTE_EMAIL
+    msg["To"] = correo
+    msg.set_content(
+        "Su código de verificación es: %s\n"
+        "Vence en 5 minutos. Si usted no intentó ingresar, ignore este mensaje y avise a Gerencia.\n%s" % (pin, APP_NAME)
+    )
+    try:
+        _smtp_enviar(msg, SOPORTE_EMAIL, SOPORTE_PASSWORD)
+        return True
+    except Exception as e:
+        print("ERROR PIN acceso:", e)
+        return False
 
 
 def _login_soluciones(user):
-    """Ingreso del rol Soluciones: el 2FA es SIEMPRE obligatorio (enrolamiento en el primer acceso)."""
+    """Ingreso del rol Soluciones: se verifica con un PIN enviado al correo."""
     pwd_temp = bool(getattr(user, "password_temporal", False))
     session.clear()
     session["mfa_pendiente"] = True
@@ -54227,7 +54238,7 @@ def _login_soluciones(user):
     session["password_temporal"] = pwd_temp
     session["panel"] = "backoffice"
     try:
-        registrar_auditoria("Login Soluciones: 2FA pendiente", user.usuario)
+        registrar_auditoria("Login Soluciones: verificación por correo pendiente", user.usuario)
     except Exception:
         pass
     return redirect("/mfa")
@@ -54235,7 +54246,7 @@ def _login_soluciones(user):
 
 def _mfa_completar_login(u):
     rol = (u.rol or "").strip()
-    for k in ("mfa_pendiente", "mfa_user_id", "mfa_secret_tmp", "mfa_intentos"):
+    for k in ("mfa_pendiente", "mfa_user_id", "mfa_pin_token", "mfa_correo", "mfa_intentos", "mfa_envios"):
         session.pop(k, None)
     session["usuario"] = u.usuario
     session["rol"] = rol
@@ -54247,16 +54258,16 @@ def _mfa_completar_login(u):
         registrar_sesion_empleado(u)
     except Exception:
         pass
-    registrar_auditoria("Login con 2FA verificado", "%s · %s" % (u.usuario, rol))
-    try:
-        if rol in ("Soporte", "Comercial", "Cobranza") and not turno_abierto_actual(
-            usuario_id=u.id, area=("Ventas" if rol == "Comercial" else rol)
-        ):
-            session["turno_pending_redirect"] = _home_portal(rol)
-            return redirect("/abrir-turno")
-    except Exception:
-        pass
+    registrar_auditoria("Login verificado por PIN de correo", "%s · %s" % (u.usuario, rol))
     return redirect(_home_portal(rol))
+
+
+def _mask_correo(c):
+    try:
+        a, d = c.split("@", 1)
+        return (a[:2] + "***@" + d)
+    except Exception:
+        return "***"
 
 
 @app.route("/mfa", methods=["GET", "POST"])
@@ -54269,63 +54280,94 @@ def mfa_pagina():
     if not u or not _usuario_activo_ok(u):
         session.clear()
         return redirect("/login")
-    enrolado = bool(getattr(u, "mfa_habilitado", False) and (getattr(u, "mfa_secret", None) or "").strip())
-    secret_tmp = ""
-    if not enrolado:
-        secret_tmp = session.get("mfa_secret_tmp") or ""
-        if not secret_tmp:
-            secret_tmp = _mfa_nuevo_secret()
-            session["mfa_secret_tmp"] = secret_tmp
-    error = ""
-    if request.method == "POST":
-        intentos = int(session.get("mfa_intentos", 0)) + 1
-        session["mfa_intentos"] = intentos
-        codigo = (request.form.get("codigo") or "").strip().replace(" ", "")
-        secreto = u.mfa_secret if enrolado else secret_tmp
-        if _mfa_verificar(secreto, codigo):
-            if not enrolado:
-                u.mfa_secret = secret_tmp
-                u.mfa_habilitado = True
-                db.session.commit()
-                registrar_auditoria("2FA activado", u.usuario)
-            return _mfa_completar_login(u)
-        registrar_auditoria("2FA código incorrecto", "%s · intento %d" % (u.usuario, intentos))
-        error = "Código incorrecto o vencido. Intente de nuevo."
-        if intentos >= 5:
-            registrar_auditoria("2FA bloqueado por intentos", u.usuario)
+    registrado = (u.correo or "").strip()
+    error = info = ""
+    accion = (request.form.get("accion") or "") if request.method == "POST" else ""
+    ch = None
+    tok = session.get("mfa_pin_token")
+    if tok:
+        ch = LoginChallenge.query.filter_by(token=tok, usuario_id=u.id).first()
+
+    if accion == "reiniciar":
+        session.pop("mfa_pin_token", None)
+        ch = None
+    elif accion == "enviar":
+        correo = (request.form.get("correo") or "").strip().lower()
+        envios = int(session.get("mfa_envios", 0))
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
+            error = "Escriba un correo válido."
+        elif registrado and correo != registrado.lower():
+            error = "Ese correo no coincide con el registrado para su usuario."
+            registrar_auditoria("PIN correo distinto al registrado", "%s · %s" % (u.usuario, correo))
+        elif envios >= 5:
+            registrar_auditoria("PIN: demasiados envíos", u.usuario)
             session.clear()
             return redirect("/login")
-    bloque_enrolar = ""
-    if not enrolado:
-        from urllib.parse import quote as _q
-        uri = "otpauth://totp/Procsis:%s?secret=%s&issuer=Procsis" % (_q(u.usuario), secret_tmp)
-        try:
-            qr = '<img src="%s" alt="QR 2FA" style="width:190px;height:190px;margin:8px auto;display:block">' % _mfa_qr_datauri(uri)
-        except Exception:
-            qr = ""
-        bloque_enrolar = (
-            "<p style='font-size:13px;color:#334155'><b>Primer ingreso:</b> active la verificación en dos pasos. "
-            "Escanee el QR con Google Authenticator, Microsoft Authenticator o similar y escriba el código de 6 dígitos.</p>"
-            + qr +
-            "<p style='font-size:11px;color:#64748b;text-align:center;word-break:break-all'>Clave manual: <code>%s</code></p>" % secret_tmp
-        )
+        else:
+            ch = _crear_reto_pin(u.id)
+            if _enviar_pin_acceso(correo, ch.pin):
+                session["mfa_pin_token"] = ch.token
+                session["mfa_correo"] = correo
+                session["mfa_envios"] = envios + 1
+                session["mfa_intentos"] = 0
+                registrar_auditoria("PIN de ingreso enviado", "%s · %s" % (u.usuario, _mask_correo(correo)))
+                info = "Enviamos un PIN de 6 dígitos a %s." % _mask_correo(correo)
+            else:
+                ch = None
+                error = ("No se pudo enviar el correo. Verifique que el correo de envío del sistema "
+                         "(SOPORTE_EMAIL / RESEND_API_KEY) esté configurado y vuelva a intentar.")
+                registrar_auditoria("PIN de ingreso: fallo de envío", u.usuario)
+    elif accion == "validar" and ch:
+        intentos = int(session.get("mfa_intentos", 0)) + 1
+        session["mfa_intentos"] = intentos
+        pin = (request.form.get("pin") or "").strip().replace(" ", "")
+        if not _reto_vigente(ch):
+            error = "El PIN venció. Solicite uno nuevo."
+            session.pop("mfa_pin_token", None)
+            ch = None
+        elif pin != (ch.pin or ""):
+            error = "PIN incorrecto."
+            registrar_auditoria("PIN de ingreso incorrecto", "%s · intento %d" % (u.usuario, intentos))
+            if intentos >= 5:
+                registrar_auditoria("PIN bloqueado por intentos", u.usuario)
+                session.clear()
+                return redirect("/login")
+        else:
+            ch.estado = "aprobado"
+            if not registrado and session.get("mfa_correo"):
+                u.correo = session.get("mfa_correo")
+            db.session.commit()
+            return _mfa_completar_login(u)
+
+    if ch and session.get("mfa_pin_token"):
+        cuerpo = f"""
+    <p style="font-size:13px;color:#64748b;text-align:center;margin:0 0 14px">Escriba el PIN de 6 dígitos enviado a <b>{_esc(_mask_correo(session.get('mfa_correo','')))}</b>. Vence en 5 minutos.</p>
+    <form method="POST"><input type="hidden" name="accion" value="validar">
+      <input name="pin" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" required autofocus
+        style="width:100%;box-sizing:border-box;padding:12px;font-size:20px;letter-spacing:8px;text-align:center;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px">
+      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer">Validar e ingresar</button>
+    </form>
+    <form method="POST" style="text-align:center;margin-top:10px"><input type="hidden" name="accion" value="reiniciar">
+      <button style="background:none;border:0;color:#0B2D57;font-size:12px;cursor:pointer;text-decoration:underline">Cambiar correo / reenviar PIN</button></form>"""
     else:
-        bloque_enrolar = "<p style='font-size:13px;color:#334155'>Escriba el código de 6 dígitos de su aplicación autenticadora.</p>"
+        cuerpo = f"""
+    <p style="font-size:13px;color:#64748b;text-align:center;margin:0 0 14px">Para validar su identidad, escriba el correo donde recibirá el PIN de verificación.</p>
+    <form method="POST"><input type="hidden" name="accion" value="enviar">
+      <input name="correo" type="email" required autofocus value="{_esc(registrado)}" placeholder="correo@ejemplo.com"
+        style="width:100%;box-sizing:border-box;padding:12px;font-size:15px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px">
+      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer">Enviar PIN</button>
+    </form>"""
     body = f"""
 <div style="min-height:100vh;background:#f4f6f8;display:flex;align-items:center;justify-content:center;font-family:Segoe UI,system-ui,sans-serif">
   <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:380px;width:100%;box-shadow:0 8px 28px rgba(15,23,42,.08)">
-    <h1 style="margin:0 0 8px;font-size:20px;color:#0B2D57;text-align:center">Verificación de identidad (2FA)</h1>
-    {bloque_enrolar}
+    <h1 style="margin:0 0 8px;font-size:20px;color:#0B2D57;text-align:center">Verificación de ingreso</h1>
+    {"<div style='background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:10px 0;font-size:13px'>"+_esc(info)+"</div>" if info else ""}
     {"<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0;font-size:13px'>"+_esc(error)+"</div>" if error else ""}
-    <form method="POST">
-      <input name="codigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" required autofocus
-        style="width:100%;box-sizing:border-box;padding:12px;font-size:20px;letter-spacing:8px;text-align:center;border:1px solid #e2e8f0;border-radius:10px;margin:10px 0">
-      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer">Verificar e ingresar</button>
-    </form>
+    {cuerpo}
     <p style="text-align:center;margin-top:12px"><a href="/logout" style="font-size:12px;color:#0B2D57">Cancelar</a></p>
   </div>
 </div>"""
-    return page("Verificación 2FA", body)
+    return page("Verificación de ingreso", body)
 
 
 # ---------- Panel ----------
