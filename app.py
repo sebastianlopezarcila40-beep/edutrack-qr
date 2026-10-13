@@ -4350,29 +4350,28 @@ def page(title, body):
     body = (_APPLE_SHELL_CSS or "") + (_STAFF_TAB_JS or "") + body
 
     cookie_banner = """
-<div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;font-family:Segoe UI,Arial,sans-serif">
-  <div style="max-width:920px;margin:0 auto 16px;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.2);padding:22px 24px;border:1px solid #e5e7eb">
-    <h2 style="margin:0 0 10px;font-size:22px;color:#16a34a;font-weight:800">Usamos cookies para mejorar tu experiencia</h2>
-    <p style="margin:0 0 16px;font-size:14px;line-height:1.55;color:#334155">
-      En este portal utilizamos datos de navegación / cookies propias y técnicas para gestionar el acceso seguro,
-      mantener tu sesión, elaborar información estadística básica de uso del sistema y optimizar la funcionalidad del sitio.
+<div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);background:rgba(11,45,87,.28)">
+  <div style="max-width:560px;margin:0 auto;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border-radius:20px;box-shadow:0 8px 32px rgba(11,45,87,.22);padding:18px 16px 16px;border:1px solid rgba(255,255,255,.65);box-sizing:border-box">
+    <h2 style="margin:0 0 8px;font-size:clamp(16px,4.2vw,19px);color:#0B2D57;font-weight:800;letter-spacing:-.02em;line-height:1.25">Usamos cookies para mejorar tu experiencia</h2>
+    <p style="margin:0 0 14px;font-size:13px;line-height:1.5;color:#334155;word-wrap:break-word;overflow-wrap:anywhere">
+      Usamos cookies propias y técnicas para acceso seguro, sesión, estadísticas básicas y el funcionamiento del sitio.
       <b>No usamos cookies de publicidad de terceros.</b>
-      Si continúa navegando o acepta, autoriza esta utilización.
-      Puede conocer más en
-      <a href="/cookies" style="color:#15803d;font-weight:700">política completa de cookies</a>
+      Al continuar o aceptar, autorizas esta utilización.
+      Más info:
+      <a href="/cookies" style="color:#0b63ce;font-weight:700;text-decoration:underline">política de cookies</a>
       y
-      <a href="/tratamiento-datos" style="color:#15803d;font-weight:700">política de tratamiento de datos personales</a>.
+      <a href="/tratamiento-datos" style="color:#0b63ce;font-weight:700;text-decoration:underline">tratamiento de datos</a>.
     </p>
-    <div id="cookie-config-panel" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;margin-bottom:14px;font-size:13px;color:#166534">
-      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" checked disabled> Cookies esenciales (sesión / seguridad) — siempre activas</label>
-      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="ck-pref" checked> Preferencias de interfaz</label>
-      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="ck-stat"> Estadística anónima de uso</label>
-      <button type="button" id="cookie-save-cfg" style="margin-top:8px;background:#15803d;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">Guardar preferencias</button>
+    <div id="cookie-config-panel" style="display:none;background:rgba(239,246,255,.9);border:1px solid #bfdbfe;border-radius:14px;padding:12px;margin-bottom:12px;font-size:13px;color:#1e3a5f">
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;line-height:1.35"><input type="checkbox" checked disabled style="width:18px;height:18px;flex-shrink:0;margin-top:2px"> Cookies esenciales (sesión / seguridad) — siempre activas</label>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;line-height:1.35"><input type="checkbox" id="ck-pref" checked style="width:18px;height:18px;flex-shrink:0;margin-top:2px"> Preferencias de interfaz</label>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;line-height:1.35"><input type="checkbox" id="ck-stat" style="width:18px;height:18px;flex-shrink:0;margin-top:2px"> Estadística anónima de uso</label>
+      <button type="button" id="cookie-save-cfg" style="margin-top:8px;width:100%;background:#0b63ce;color:#fff;border:0;border-radius:12px;padding:11px 14px;font-weight:700;cursor:pointer;font-size:14px">Guardar preferencias</button>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
-      <button type="button" id="cookie-accept-all" style="background:#16a34a;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:800;cursor:pointer;font-size:14px">Aceptar todas las cookies</button>
-      <button type="button" id="cookie-reject" style="background:#fff;color:#166534;border:2px solid #16a34a;border-radius:999px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:14px">Rechazar cookies no esenciales</button>
-      <button type="button" id="cookie-config" style="background:#fff;color:#166534;border:2px solid #16a34a;border-radius:999px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:14px">Configurar cookies</button>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button type="button" id="cookie-accept-all" style="width:100%;background:#0b63ce;color:#fff;border:0;border-radius:14px;padding:13px 16px;font-weight:800;cursor:pointer;font-size:15px;box-shadow:0 4px 14px rgba(11,99,206,.35)">Aceptar todas las cookies</button>
+      <button type="button" id="cookie-reject" style="width:100%;background:#fff;color:#0B2D57;border:1.5px solid #93c5fd;border-radius:14px;padding:12px 16px;font-weight:700;cursor:pointer;font-size:14px">Rechazar cookies no esenciales</button>
+      <button type="button" id="cookie-config" style="width:100%;background:transparent;color:#0b63ce;border:0;border-radius:14px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:14px">Configurar cookies</button>
     </div>
   </div>
 </div>
@@ -4409,6 +4408,7 @@ def page(title, body):
 })();
 </script>
 """
+
     _bfcache_fix = """
 <script>
 // Corrige el botón "atrás": si el navegador restaura esta página desde su caché
@@ -83920,31 +83920,41 @@ _c48_estado_init = {"ok": False, "hilo": False}
 
 _C48_CSS = """
 <style>
-.c48{max-width:760px;margin:0 auto;padding:22px 14px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a}
-.c48 h1{font-size:clamp(26px,5vw,40px);margin:0 0 6px;letter-spacing:-.02em;color:#0B2D57}
-.c48 h2{font-size:20px;margin:0 0 8px;color:#0B2D57}
-.c48 p{line-height:1.5;color:#475569}
-.c48-card{background:#fff;border-radius:20px;padding:22px 20px;box-shadow:0 12px 36px rgba(11,45,87,.12);border:1px solid #e2e8f0;margin-bottom:16px}
+.c48{max-width:760px;margin:0 auto;padding:18px 12px 48px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;box-sizing:border-box;width:100%;overflow-x:hidden}
+.c48 *,.c48 *::before,.c48 *::after{box-sizing:border-box}
+.c48 h1{font-size:clamp(22px,5vw,36px);margin:0 0 6px;letter-spacing:-.02em;color:#0B2D57}
+.c48 h2{font-size:clamp(17px,4vw,20px);margin:0 0 8px;color:#0B2D57}
+.c48 p{line-height:1.5;color:#475569;word-wrap:break-word;overflow-wrap:anywhere}
+.c48-card{background:#fff;border-radius:18px;padding:18px 14px;box-shadow:0 12px 36px rgba(11,45,87,.12);border:1px solid #e2e8f0;margin-bottom:16px;overflow:visible;max-width:100%}
 .c48 label{display:block;font-size:12px;font-weight:800;margin:10px 0 4px;color:#334155}
-.c48 input[type=text],.c48 input[type=email],.c48 input[type=tel],.c48 input[type=password],.c48 select,.c48 textarea{width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:11px 12px;font-size:15px;box-sizing:border-box;background:#fff;font-family:inherit}
-.c48-btn{display:inline-block;background:linear-gradient(135deg,#047857,#0b63ce);color:#fff!important;border:0;border-radius:14px;padding:12px 22px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;text-align:center}
+.c48 input[type=text],.c48 input[type=email],.c48 input[type=tel],.c48 input[type=password],.c48 select,.c48 textarea{width:100%;max-width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:11px 12px;font-size:16px;box-sizing:border-box;background:#fff;font-family:inherit}
+.c48 input[type=checkbox],.c48 input[type=radio]{width:18px;height:18px;min-width:18px;max-width:18px;margin:0;padding:0;flex-shrink:0;accent-color:#0b63ce}
+.c48-legal{display:flex!important;flex-direction:row;align-items:flex-start;gap:10px;font-weight:600!important;font-size:13px!important;line-height:1.45;margin:16px 0 8px!important;color:#334155;max-width:100%}
+.c48-legal span{flex:1;min-width:0;word-wrap:break-word;overflow-wrap:anywhere;font-weight:600}
+.c48-legal a{color:#0b63ce;text-decoration:underline}
+.c48-btn{display:inline-block;background:linear-gradient(135deg,#0b63ce,#0B2D57);color:#fff!important;border:0;border-radius:14px;padding:12px 22px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;text-align:center}
 .c48-btn.sec{background:#e2e8f0;color:#0B2D57!important}
 .c48-btn.full{width:100%;margin-top:14px;box-sizing:border-box}
-.c48-err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:10px}
-.c48-ok{background:#dcfce7;color:#166534;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:10px}
-.c48-mods{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:14px 0}
-.c48-mod{display:block;text-align:center;text-decoration:none;background:#f8fafc;border:2px solid #e2e8f0;border-radius:18px;padding:18px 12px;color:#0B2D57}
+.c48-err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:10px;word-wrap:break-word}
+.c48-ok{background:#dcfce7;color:#166534;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:10px;word-wrap:break-word}
+.c48-mods{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0}
+.c48-mod{display:block;text-align:center;text-decoration:none;background:#f8fafc;border:2px solid #e2e8f0;border-radius:18px;padding:16px 10px;color:#0B2D57}
 .c48-mod:hover{border-color:#0b63ce;background:#eff6ff}
-.c48-mod .ic{font-size:40px;display:block}
-.c48-mod b{display:block;font-size:17px;margin:6px 0 2px}
-.c48-mod small{color:#64748b}
+.c48-mod .ic{font-size:36px;display:block}
+.c48-mod b{display:block;font-size:15px;margin:6px 0 2px}
+.c48-mod small{color:#64748b;font-size:11px}
 .c48-bar{height:16px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:8px 0}
-.c48-bar>div{height:100%;background:linear-gradient(90deg,#10b981,#0b63ce)}
-.c48-chip{display:inline-block;background:#ecfdf5;color:#047857;border-radius:99px;padding:4px 12px;font-weight:800;font-size:13px}
-.c48-opt{display:block;border:2px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin:8px 0;cursor:pointer;color:#0f172a;font-size:15px;font-weight:600}
+.c48-bar>div{height:100%;background:linear-gradient(90deg,#0b63ce,#0B2D57)}
+.c48-chip{display:inline-block;background:#eff6ff;color:#0b63ce;border-radius:99px;padding:4px 12px;font-weight:800;font-size:13px}
+.c48-opt{display:block;border:2px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin:8px 0;cursor:pointer;color:#0f172a;font-size:15px;font-weight:600;word-wrap:break-word}
 .c48-opt:hover{border-color:#0b63ce;background:#eff6ff}
 .c48-opt input{margin-right:8px}
 .c48 .small{font-size:12px;color:#64748b}
+@media (max-width:480px){
+  .c48{padding:12px 10px 56px}
+  .c48-card{padding:16px 12px;border-radius:16px}
+  .c48-btn{padding:13px 16px;font-size:15px}
+}
 </style>
 """
 
@@ -84283,10 +84293,10 @@ def c48_registro():
         + "<label>Correo electrónico *</label><input type='email' name='correo' value='%s' required maxlength='160'>" % _esc(v["correo"])
         + "<label>Teléfono / Celular (WhatsApp) *</label><input type='tel' name='telefono' value='%s' required maxlength='20'>" % _esc(v["telefono"])
         + _html_campos_dep_mun("departamento", "municipio", v["departamento"], v["municipio"], True, "Ciudad / Municipio")
-        + "<label style='display:flex;gap:8px;align-items:flex-start;font-weight:600;margin-top:16px'>"
-          "<input type='checkbox' name='acepto' value='1' required style='margin-top:3px'>"
-          "<span>* Acepto los Términos y Condiciones de la Convocatoria de 48 Horas y autorizo a PROCSIS el Tratamiento de mis Datos Personales de acuerdo con la "
-          "<a href='/convocatoria48/habeas-data' target='_blank'>Ley 1581 de 2012 de Habeas Data en Colombia y la Política de Privacidad</a> de la empresa.</span></label>"
+        + "<label class='c48-legal'>"
+          "<input type='checkbox' name='acepto' value='1' required>"
+          "<span>* Acepto los Términos y Condiciones de la Convocatoria de 48 Horas y autorizo a PROCSIS el Tratamiento de mis Datos Personales según la "
+          "<a href='/convocatoria48/habeas-data' target='_blank'>Ley 1581 de 2012 (Habeas Data) y la Política de Privacidad</a> de la empresa.</span></label>"
         + "<button class='c48-btn full'>Registrarme y enviar PIN</button></form></div>")
     return _c48_page("Registro · Convocatoria 48 Horas", cuerpo)
 
@@ -84907,28 +84917,17 @@ def gerencia_convocatoria48_cert_muestra():
     return Response(_c48_pdf_certificado(muestra), mimetype="application/pdf", headers={"Content-Disposition": "inline; filename=certificado_muestra.pdf"})
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Soporte · Actualización Convocatoria 48 Horas
-# Flujo: participante abre enlace → ve PIN → lo dicta a Soporte → Soporte edita datos.
-# Contraseña: enlace aparte que solo el participante completa.
-# ══════════════════════════════════════════════════════════════════════════════
 
+# --- Soporte: Actualización Convocatoria 48h (PIN dictado → Soporte edita; clave aparte) ---
 def _c48_mask_correo(c):
     c = (c or "").strip()
-    if "@" not in c:
-        return "***"
+    if "@" not in c: return "***"
     u, d = c.split("@", 1)
-    if len(u) <= 2:
-        return "*@" + d
-    return u[:2] + "***@" + d
-
+    return ("*@" + d) if len(u) <= 2 else (u[:2] + "***@" + d)
 
 def _c48_mask_tel(t):
     t = (t or "").strip()
-    if len(t) <= 4:
-        return "****"
-    return t[:3] + "****" + t[-2:]
-
+    return "****" if len(t) <= 4 else (t[:3] + "****" + t[-2:])
 
 def _c48_upd_init():
     _c48_init()
@@ -84938,62 +84937,38 @@ def _c48_upd_init():
             "id SERIAL PRIMARY KEY, participante_id INTEGER NOT NULL, "
             "token_hash VARCHAR(255) NOT NULL, pin_hash VARCHAR(255) DEFAULT '', "
             "pin_plain VARCHAR(12) DEFAULT '', prop VARCHAR(20) DEFAULT 'datos', "
-            "estado VARCHAR(16) DEFAULT 'GENERADO', "
-            "creado_por VARCHAR(80) DEFAULT '', creado_en VARCHAR(20) DEFAULT '', "
-            "vence_en VARCHAR(20) DEFAULT '', usado_en VARCHAR(20) DEFAULT '', "
-            "activado_en VARCHAR(20) DEFAULT '', pin_fallos INTEGER DEFAULT 0)"
-        ))
+            "estado VARCHAR(16) DEFAULT 'GENERADO', creado_por VARCHAR(80) DEFAULT '', "
+            "creado_en VARCHAR(20) DEFAULT '', vence_en VARCHAR(20) DEFAULT '', "
+            "usado_en VARCHAR(20) DEFAULT '', activado_en VARCHAR(20) DEFAULT '', pin_fallos INTEGER DEFAULT 0)"))
         db.session.commit()
     except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
+        try: db.session.rollback()
+        except Exception: pass
         print("c48 upd init:", e)
     for col, typ in (("pin_plain", "VARCHAR(12) DEFAULT ''"), ("activado_en", "VARCHAR(20) DEFAULT ''")):
         try:
             with db.engine.begin() as conn:
-                try:
-                    conn.execute(text("ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
+                try: conn.execute(text("ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
                 except Exception:
-                    try:
-                        conn.execute(text("ALTER TABLE conv48_update_tokens ADD COLUMN %s %s" % (col, typ)))
-                    except Exception:
-                        pass
+                    try: conn.execute(text("ALTER TABLE conv48_update_tokens ADD COLUMN %s %s" % (col, typ)))
+                    except Exception: pass
         except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-
+            try: db.session.rollback()
+            except Exception: pass
 
 def _c48_base_url():
-    try:
-        return (request.url_root or "").rstrip("/")
-    except Exception:
-        return ""
-
+    try: return (request.url_root or "").rstrip("/")
+    except Exception: return ""
 
 def _soporte_o_gerencia():
-    if not requiere_login():
-        return False
+    if not requiere_login(): return False
     return (session.get("rol") or "") in ("Soporte", "Gerente", "Superadmin", "Administrador")
 
-
 def _c48_tok_by_id(tid):
-    r = _c48_q(
-        "SELECT id, participante_id, token_hash, pin_hash, pin_plain, prop, estado, vence_en, pin_fallos, creado_por "
-        "FROM conv48_update_tokens WHERE id=:i", i=int(tid or 0),
-    )
-    if not r:
-        return None
+    r = _c48_q("SELECT id, participante_id, token_hash, pin_hash, pin_plain, prop, estado, vence_en, pin_fallos, creado_por FROM conv48_update_tokens WHERE id=:i", i=int(tid or 0))
+    if not r: return None
     row = r[0]
-    return {
-        "id": row[0], "pid": row[1], "token_hash": row[2], "pin_hash": row[3],
-        "pin_plain": row[4] or "", "prop": row[5] or "datos", "estado": row[6] or "",
-        "vence_en": row[7] or "", "pin_fallos": int(row[8] or 0), "creado_por": row[9] or "",
-    }
-
+    return {"id": row[0], "pid": row[1], "token_hash": row[2], "pin_hash": row[3], "pin_plain": row[4] or "", "prop": row[5] or "datos", "estado": row[6] or "", "vence_en": row[7] or "", "pin_fallos": int(row[8] or 0), "creado_por": row[9] or ""}
 
 @app.route("/soporte/convocatoria48-actualizacion", methods=["GET", "POST"])
 def soporte_c48_actualizacion():
@@ -85002,60 +84977,37 @@ def soporte_c48_actualizacion():
     _c48_upd_init()
     msg = err = ""
     usuario = session.get("usuario") or ""
-
     if request.method == "POST":
         accion = (request.form.get("accion") or "").strip()
-        try:
-            pid = int(request.form.get("pid") or 0)
-        except Exception:
-            pid = 0
-        try:
-            tid = int(request.form.get("tid") or 0)
-        except Exception:
-            tid = 0
+        try: pid = int(request.form.get("pid") or 0)
+        except Exception: pid = 0
+        try: tid = int(request.form.get("tid") or 0)
+        except Exception: tid = 0
         p = _c48_part(pid) if pid else None
-
         if accion == "generar_enlace" and p:
             if (p.get("estado") or "") == "bloqueado":
-                err = "Participante bloqueado. No se genera enlace."
+                err = "Participante bloqueado."
             else:
                 token = secrets.token_urlsafe(32)
                 vence = (ahora() + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S")
-                _c48_x(
-                    "INSERT INTO conv48_update_tokens (participante_id, token_hash, pin_hash, pin_plain, prop, estado, creado_por, creado_en, vence_en) "
-                    "VALUES (:p,:th,'','','datos','GENERADO',:u,:n,:v)",
-                    p=pid, th=generate_password_hash(token), u=usuario[:80], n=_c48_now(), v=vence,
-                )
+                _c48_x("INSERT INTO conv48_update_tokens (participante_id, token_hash, pin_hash, pin_plain, prop, estado, creado_por, creado_en, vence_en) VALUES (:p,:th,'','','datos','GENERADO',:u,:n,:v)",
+                       p=pid, th=generate_password_hash(token), u=usuario[:80], n=_c48_now(), v=vence)
                 link = _c48_base_url() + "/convocatoria48/actualizar/" + token
                 nombre = (p.get("nombres") or "participante").split()[0]
-                texto = (
-                    "Hola %s,\n\nSoporte PROCSIS necesita verificar tu identidad para actualizar datos de la "
-                    "Convocatoria de 48 Horas.\n\n1) Abre este enlace (válido 4 horas):\n%s\n\n"
-                    "2) El sistema te mostrará un PIN de 6 dígitos.\n"
-                    "3) Dicta ese PIN al agente de Soporte.\n\nNo compartas el enlace.\n\nPROCSIS · EduTrack"
-                ) % (nombre, link)
-                html = (
-                    "<div style='font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:20px'>"
-                    "<h2 style='color:#0B2D57'>Verificación · Convocatoria 48 Horas</h2>"
-                    "<p>Hola <b>%s</b>, abre el enlace, anota el PIN y dictáselo a Soporte PROCSIS.</p>"
-                    "<p style='text-align:center;margin:24px 0'><a href='%s' style='background:#0b63ce;color:#fff;"
-                    "padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700'>Abrir enlace</a></p></div>"
-                ) % (_esc(nombre), _esc(link))
+                texto = "Hola %s,\n\nAbre este enlace (4 h), anota el PIN de 6 dígitos y dictáselo a Soporte PROCSIS:\n%s\n\nPROCSIS" % (nombre, link)
+                html = "<div style='font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:20px'><h2 style='color:#0B2D57'>Verificación · Convocatoria 48 Horas</h2><p>Hola <b>%s</b>, abre el enlace, anota el PIN y dictáselo a Soporte.</p><p style='text-align:center'><a href='%s' style='background:#0b63ce;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700'>Abrir enlace</a></p></div>" % (_esc(nombre), _esc(link))
                 enviado = _c48_enviar_correo(p.get("correo") or "", "Verificación de datos · Convocatoria 48 Horas", texto, html)
                 session["c48_upd_nuevo"] = {"pid": pid, "link": link, "nombre": p.get("nombres") or "", "enviado": bool(enviado)}
-                try:
-                    registrar_auditoria("C48: enlace verificación", "pid=%s por %s" % (pid, usuario))
-                except Exception:
-                    pass
+                try: registrar_auditoria("C48: enlace verificación", "pid=%s" % pid)
+                except Exception: pass
                 return redirect("/soporte/convocatoria48-actualizacion")
-
         elif accion == "activar_pin" and tid:
             tok = _c48_tok_by_id(tid)
             pin_in = re.sub(r"\D", "", request.form.get("pin") or "")
             if not tok or tok["estado"] not in ("PIN_LISTO", "GENERADO"):
                 err = "El caso no espera PIN."
             elif not tok.get("pin_hash"):
-                err = "El participante aún no abrió el enlace (sin PIN)."
+                err = "El participante aún no abrió el enlace."
             elif not check_password_hash(tok["pin_hash"], pin_in):
                 fallos = tok["pin_fallos"] + 1
                 _c48_x("UPDATE conv48_update_tokens SET pin_fallos=:f WHERE id=:i", f=fallos, i=tid)
@@ -85063,247 +85015,109 @@ def soporte_c48_actualizacion():
                     _c48_x("UPDATE conv48_update_tokens SET estado='CANCELADO' WHERE id=:i", i=tid)
                     err = "PIN incorrecto 5 veces: caso anulado."
                 else:
-                    err = "PIN incorrecto. Restan %d intentos." % (5 - fallos)
+                    err = "PIN incorrecto. Restan %d." % (5 - fallos)
             else:
                 _c48_x("UPDATE conv48_update_tokens SET estado='ACTIVO', activado_en=:n, pin_plain='' WHERE id=:i", n=_c48_now(), i=tid)
-                session["c48_upd_activo"] = tid
-                msg = "PIN correcto. Ya puedes actualizar los datos básicos."
-                try:
-                    registrar_auditoria("C48: PIN OK edición", "tid=%s" % tid)
-                except Exception:
-                    pass
-
+                msg = "PIN correcto. Ya puedes editar los datos."
         elif accion == "guardar_datos" and tid:
             tok = _c48_tok_by_id(tid)
             if not tok or tok["estado"] != "ACTIVO":
                 err = "Activa el caso con el PIN antes de guardar."
             else:
                 p = _c48_part(tok["pid"])
-                if not p:
-                    err = "Participante no encontrado."
+                nombres = (request.form.get("nombres") or "").strip()
+                telefono = re.sub(r"\D", "", request.form.get("telefono") or "")
+                correo_nuevo = (request.form.get("correo") or "").strip().lower()
+                politicas = request.form.get("acepto_politicas") == "1"
+                if not p: err = "Participante no encontrado."
+                elif not politicas: err = "Marca la aceptación de políticas."
+                elif len(nombres) < 5 or len(telefono) < 7 or "@" not in correo_nuevo: err = "Datos incompletos."
                 else:
-                    nombres = (request.form.get("nombres") or "").strip()
-                    telefono = re.sub(r"\D", "", request.form.get("telefono") or "")
-                    correo_nuevo = (request.form.get("correo") or "").strip().lower()
-                    politicas = request.form.get("acepto_politicas") == "1"
-                    if not politicas:
-                        err = "Marca la aceptación de políticas."
-                    elif len(nombres) < 5 or len(telefono) < 7 or "@" not in correo_nuevo:
-                        err = "Completa nombres, celular y correo válidos."
+                    correo_act = (p.get("correo") or "").strip().lower()
+                    if correo_nuevo != correo_act:
+                        session["c48_upd_correo_pend"] = {"tid": tid, "pid": p["id"], "nombres": nombres[:160], "telefono": telefono[:20], "correo": correo_nuevo}
+                        ok_pin, err_pin = _c48_enviar_pin(correo_nuevo, "actualizacion")
+                        if not ok_pin: err = err_pin or "No se pudo enviar PIN al correo nuevo."
+                        else: msg = "PIN enviado a %s." % correo_nuevo
                     else:
-                        correo_act = (p.get("correo") or "").strip().lower()
-                        if correo_nuevo != correo_act:
-                            session["c48_upd_correo_pend"] = {
-                                "tid": tid, "pid": p["id"], "nombres": nombres[:160],
-                                "telefono": telefono[:20], "correo": correo_nuevo,
-                            }
-                            ok_pin, err_pin = _c48_enviar_pin(correo_nuevo, "actualizacion")
-                            if not ok_pin:
-                                err = err_pin or "No se pudo enviar PIN al correo nuevo."
-                            else:
-                                msg = "PIN enviado a %s. Confírmalo abajo." % correo_nuevo
-                        else:
-                            _c48_x("UPDATE conv48_participantes SET nombres=:n, telefono=:t WHERE id=:i",
-                                   n=nombres[:160], t=telefono[:20], i=p["id"])
-                            _c48_x("UPDATE conv48_update_tokens SET estado='USADO', usado_en=:n, pin_plain='' WHERE id=:i",
-                                   n=_c48_now(), i=tid)
-                            session.pop("c48_upd_activo", None)
-                            msg = "Datos actualizados (nombre y celular)."
-                            try:
-                                registrar_auditoria("C48: datos por Soporte", "pid=%s" % p["id"])
-                            except Exception:
-                                pass
-
+                        _c48_x("UPDATE conv48_participantes SET nombres=:n, telefono=:t WHERE id=:i", n=nombres[:160], t=telefono[:20], i=p["id"])
+                        _c48_x("UPDATE conv48_update_tokens SET estado='USADO', usado_en=:n, pin_plain='' WHERE id=:i", n=_c48_now(), i=tid)
+                        msg = "Datos actualizados."
         elif accion == "confirmar_correo_nuevo" and tid:
             pend = session.get("c48_upd_correo_pend") or {}
-            if not pend or int(pend.get("tid") or 0) != tid:
-                err = "No hay cambio de correo pendiente."
+            if not pend or int(pend.get("tid") or 0) != tid: err = "No hay cambio de correo pendiente."
             else:
                 pin_in = re.sub(r"\D", "", request.form.get("pin_correo") or "")
                 correo_n = pend.get("correo") or ""
-                rpin = _c48_q(
-                    "SELECT id, pin_hash, vence_en FROM conv48_pines WHERE correo=:c AND prop='actualizacion' ORDER BY id DESC LIMIT 1",
-                    c=correo_n,
-                )
-                if not rpin or not check_password_hash(rpin[0][1] or "", pin_in):
-                    err = "PIN del correo nuevo incorrecto."
-                elif rpin[0][2] and rpin[0][2] < _c48_now():
-                    err = "PIN del correo nuevo vencido."
+                rpin = _c48_q("SELECT id, pin_hash, vence_en FROM conv48_pines WHERE correo=:c AND prop='actualizacion' ORDER BY id DESC LIMIT 1", c=correo_n)
+                if not rpin or not check_password_hash(rpin[0][1] or "", pin_in): err = "PIN del correo nuevo incorrecto."
+                elif rpin[0][2] and rpin[0][2] < _c48_now(): err = "PIN vencido."
                 else:
-                    _c48_x("UPDATE conv48_participantes SET nombres=:n, telefono=:t, correo=:c WHERE id=:i",
-                           n=pend["nombres"][:160], t=pend["telefono"][:20], c=correo_n, i=pend["pid"])
+                    _c48_x("UPDATE conv48_participantes SET nombres=:n, telefono=:t, correo=:c WHERE id=:i", n=pend["nombres"][:160], t=pend["telefono"][:20], c=correo_n, i=pend["pid"])
                     _c48_x("UPDATE conv48_update_tokens SET estado='USADO', usado_en=:n, pin_plain='' WHERE id=:i", n=_c48_now(), i=tid)
                     _c48_x("DELETE FROM conv48_pines WHERE correo=:c AND prop='actualizacion'", c=correo_n)
                     session.pop("c48_upd_correo_pend", None)
-                    session.pop("c48_upd_activo", None)
                     msg = "Correo y datos actualizados."
-
         elif accion == "generar_clave" and p:
             token = secrets.token_urlsafe(32)
             vence = (ahora() + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S")
-            _c48_x(
-                "INSERT INTO conv48_update_tokens (participante_id, token_hash, pin_hash, pin_plain, prop, estado, creado_por, creado_en, vence_en) "
-                "VALUES (:p,:th,'','','clave','GENERADO',:u,:n,:v)",
-                p=pid, th=generate_password_hash(token), u=usuario[:80], n=_c48_now(), v=vence,
-            )
+            _c48_x("INSERT INTO conv48_update_tokens (participante_id, token_hash, pin_hash, pin_plain, prop, estado, creado_por, creado_en, vence_en) VALUES (:p,:th,'','','clave','GENERADO',:u,:n,:v)",
+                   p=pid, th=generate_password_hash(token), u=usuario[:80], n=_c48_now(), v=vence)
             link = _c48_base_url() + "/convocatoria48/nueva-clave/" + token
             nombre = (p.get("nombres") or "participante").split()[0]
-            texto = (
-                "Hola %s,\n\nDefine tu nueva contraseña de la Convocatoria de 48 Horas (válido 4 horas):\n%s\n\n"
-                "Solo tú eliges la contraseña.\n\nPROCSIS · EduTrack"
-            ) % (nombre, link)
-            html = (
-                "<div style='font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:20px'>"
-                "<h2 style='color:#0B2D57'>Nueva contraseña</h2>"
-                "<p>Hola <b>%s</b>, define tu contraseña aquí:</p>"
-                "<p style='text-align:center;margin:24px 0'><a href='%s' style='background:#0b63ce;color:#fff;"
-                "padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700'>Definir contraseña</a></p></div>"
-            ) % (_esc(nombre), _esc(link))
+            texto = "Hola %s,\n\nDefine tu nueva contraseña (4 h):\n%s\n\nPROCSIS" % (nombre, link)
+            html = "<div style='font-family:Arial,sans-serif;padding:20px'><h2 style='color:#0B2D57'>Nueva contraseña</h2><p><a href='%s' style='background:#0b63ce;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none'>Definir contraseña</a></p></div>" % _esc(link)
             enviado = _c48_enviar_correo(p.get("correo") or "", "Nueva contraseña · Convocatoria 48 Horas", texto, html)
             session["c48_upd_clave"] = {"link": link, "enviado": bool(enviado)}
-            try:
-                registrar_auditoria("C48: enlace clave", "pid=%s" % pid)
-            except Exception:
-                pass
             return redirect("/soporte/convocatoria48-actualizacion")
-
         elif accion == "cancelar" and tid:
             _c48_x("UPDATE conv48_update_tokens SET estado='CANCELADO', pin_plain='' WHERE id=:i AND estado IN ('GENERADO','PIN_LISTO','ACTIVO')", i=tid)
-            if session.get("c48_upd_activo") == tid:
-                session.pop("c48_upd_activo", None)
             msg = "Caso cancelado."
 
     nuevo_html = ""
     nv = session.pop("c48_upd_nuevo", None)
     if isinstance(nv, dict):
-        nuevo_html = (
-            "<section class='role-panel' style='border:2px solid #0b63ce;margin-bottom:14px'>"
-            "<h2 style='margin-top:0'>🔗 Enlace de verificación generado</h2>"
-            "<p class='mini-text'>Correo: <b>%s</b>. El participante abre el enlace, <b>ve el PIN</b> y te lo dicta. Luego lo ingresas en el caso.</p>"
-            "<input readonly value='%s' style='width:100%%;font-size:12px' onclick='this.select()'>"
-            "<p class='mini-text'>Ref: %s · id %s</p></section>"
-            % ("sí" if nv.get("enviado") else "no", _esc(nv.get("link") or ""),
-               _esc((nv.get("nombre") or "")[:40]), nv.get("pid"))
-        )
+        nuevo_html = "<section class='role-panel' style='border:2px solid #0b63ce;margin-bottom:14px'><h2 style='margin-top:0'>🔗 Enlace generado</h2><p class='mini-text'>Correo: <b>%s</b>. El participante abre el enlace, ve el PIN y te lo dicta.</p><input readonly value='%s' style='width:100%%;font-size:12px' onclick='this.select()'></section>" % ("sí" if nv.get("enviado") else "no", _esc(nv.get("link") or ""))
     nv2 = session.pop("c48_upd_clave", None)
     if isinstance(nv2, dict):
-        nuevo_html += (
-            "<section class='role-panel' style='border:2px solid #047857;margin-bottom:14px'>"
-            "<h2 style='margin-top:0'>🔑 Enlace de contraseña</h2>"
-            "<p class='mini-text'>Enviado: <b>%s</b>. Solo el participante define la clave.</p>"
-            "<input readonly value='%s' style='width:100%%;font-size:12px' onclick='this.select()'></section>"
-            % ("sí" if nv2.get("enviado") else "no", _esc(nv2.get("link") or ""))
-        )
+        nuevo_html += "<section class='role-panel' style='border:2px solid #047857;margin-bottom:14px'><h2 style='margin-top:0'>🔑 Enlace contraseña</h2><input readonly value='%s' style='width:100%%;font-size:12px' onclick='this.select()'></section>" % _esc(nv2.get("link") or "")
 
-    casos = _c48_q(
-        "SELECT t.id, t.participante_id, t.estado, t.creado_en, t.vence_en, t.creado_por, t.prop, "
-        "p.nombres, p.correo, p.telefono, p.modulo, p.estado "
-        "FROM conv48_update_tokens t LEFT JOIN conv48_participantes p ON p.id=t.participante_id "
-        "WHERE t.estado IN ('GENERADO','PIN_LISTO','ACTIVO') ORDER BY t.id DESC LIMIT 40"
-    ) or []
-
+    casos = _c48_q("SELECT t.id, t.participante_id, t.estado, t.creado_en, t.vence_en, t.creado_por, t.prop, p.nombres, p.correo, p.modulo, p.estado FROM conv48_update_tokens t LEFT JOIN conv48_participantes p ON p.id=t.participante_id WHERE t.estado IN ('GENERADO','PIN_LISTO','ACTIVO') ORDER BY t.id DESC LIMIT 40") or []
     casos_html = []
     for c in casos:
-        tid, tpid, est, cre, ven, por, prop, nom, cor, tel, mod, pest = c
-        badge = {"GENERADO": "⏳ Esperando que abra el enlace", "PIN_LISTO": "📌 PIN listo — que te lo dicte",
-                 "ACTIVO": "✅ Activo — puedes editar"}.get(est, est)
-        bloque = (
-            "<div style='border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:10px 0'>"
-            "<b>Caso #%s</b> · %s · %s<br>"
-            "<span class='mini-text'>Ref: %s · %s · módulo %s · estado %s · creado %s · vence %s · por %s</span>"
-            % (tid, prop, badge, _esc((nom or "")[:3] + "***" if nom else "—"),
-               _esc(_c48_mask_correo(cor)), _esc(_c48_modulo_info(mod or "")[1]), _esc(pest or ""),
-               _esc(cre or ""), _esc(ven or ""), _esc(por or ""))
-        )
+        tid, tpid, est, cre, ven, por, prop, nom, cor, mod, pest = c
+        badge = {"GENERADO": "⏳ Esperando apertura", "PIN_LISTO": "📌 PIN listo — dictado", "ACTIVO": "✅ Activo"}.get(est, est)
+        bloque = "<div style='border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:10px 0'><b>Caso #%s</b> · %s · %s<br><span class='mini-text'>%s · %s · %s · %s</span>" % (tid, prop, badge, _esc((nom or "")[:3]+"***" if nom else "—"), _esc(_c48_mask_correo(cor)), _esc(_c48_modulo_info(mod or "")[1]), _esc(est))
         if est == "PIN_LISTO":
-            bloque += (
-                "<form method='POST' style='margin-top:10px;display:flex;gap:8px;align-items:end;flex-wrap:wrap'>"
-                "<input type='hidden' name='accion' value='activar_pin'><input type='hidden' name='tid' value='%d'>"
-                "<div><label class='mini-text'>PIN dictado por el participante</label>"
-                "<input name='pin' inputmode='numeric' maxlength='6' required style='width:120px'></div>"
-                "<button class='btn'>Activar y editar</button></form>" % tid
-            )
+            bloque += "<form method='POST' style='margin-top:10px;display:flex;gap:8px;flex-wrap:wrap'><input type='hidden' name='accion' value='activar_pin'><input type='hidden' name='tid' value='%d'><input name='pin' inputmode='numeric' maxlength='6' required placeholder='PIN dictado' style='width:120px'><button class='btn'>Activar</button></form>" % tid
         if est == "ACTIVO":
             pp = _c48_part(tpid) or {}
             pend = session.get("c48_upd_correo_pend") or {}
-            bloque += (
-                "<form method='POST' style='margin-top:12px;background:#f8fafc;padding:12px;border-radius:10px'>"
-                "<input type='hidden' name='accion' value='guardar_datos'><input type='hidden' name='tid' value='%d'>"
-                "<label>Nombres y apellidos</label><input name='nombres' required value='%s'>"
-                "<label>Celular</label><input name='telefono' required value='%s'>"
-                "<label>Correo</label><input name='correo' type='email' required value='%s'>"
-                "<p class='mini-text'>Si cambias el correo, se envía PIN al correo nuevo.</p>"
-                "<label style='display:flex;gap:8px;align-items:flex-start'>"
-                "<input type='checkbox' name='acepto_politicas' value='1' required style='width:auto'> "
-                "<span class='mini-text'>Confirmo aceptación de Políticas de Tratamiento, Privacidad y Habeas Data PROCSIS.</span></label>"
-                "<button class='btn' style='margin-top:8px'>Guardar datos básicos</button></form>"
-                % (tid, _esc(pp.get("nombres") or ""), _esc(pp.get("telefono") or ""), _esc(pp.get("correo") or ""))
-            )
+            bloque += "<form method='POST' style='margin-top:12px;background:#f8fafc;padding:12px;border-radius:10px'><input type='hidden' name='accion' value='guardar_datos'><input type='hidden' name='tid' value='%d'><label>Nombres</label><input name='nombres' required value='%s'><label>Celular</label><input name='telefono' required value='%s'><label>Correo</label><input name='correo' type='email' required value='%s'><label style='display:flex;gap:8px'><input type='checkbox' name='acepto_politicas' value='1' required style='width:auto'> Aceptación políticas PROCSIS</label><button class='btn'>Guardar datos</button></form>" % (tid, _esc(pp.get("nombres") or ""), _esc(pp.get("telefono") or ""), _esc(pp.get("correo") or ""))
             if pend.get("tid") == tid:
-                bloque += (
-                    "<form method='POST' style='margin-top:8px'>"
-                    "<input type='hidden' name='accion' value='confirmar_correo_nuevo'><input type='hidden' name='tid' value='%d'>"
-                    "<label>PIN del correo nuevo (%s)</label>"
-                    "<input name='pin_correo' inputmode='numeric' maxlength='6' required>"
-                    "<button class='btn'>Confirmar correo</button></form>" % (tid, _esc(pend.get("correo") or ""))
-                )
-        bloque += (
-            "<form method='POST' style='display:inline;margin-top:6px'>"
-            "<input type='hidden' name='accion' value='cancelar'><input type='hidden' name='tid' value='%d'>"
-            "<button class='btn-red' style='padding:4px 10px;font-size:12px'>Cancelar</button></form></div>" % tid
-        )
+                bloque += "<form method='POST' style='margin-top:8px'><input type='hidden' name='accion' value='confirmar_correo_nuevo'><input type='hidden' name='tid' value='%d'><label>PIN correo nuevo</label><input name='pin_correo' inputmode='numeric' maxlength='6' required><button class='btn'>Confirmar correo</button></form>" % tid
+        bloque += "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='cancelar'><input type='hidden' name='tid' value='%d'><button class='btn-red' style='padding:4px 10px;font-size:12px'>Cancelar</button></form></div>" % tid
         casos_html.append(bloque)
 
     q = (request.args.get("q") or "").strip().lower()
     filas = _c48_q("SELECT id, nombres, correo, telefono, modulo, estado FROM conv48_participantes ORDER BY id DESC LIMIT 300") or []
-    if q:
-        filas = [r for r in filas if q in ((r[1] or "") + (r[2] or "") + str(r[0])).lower()]
+    if q: filas = [r for r in filas if q in ((r[1] or "")+(r[2] or "")+str(r[0])).lower()]
     rows = []
     for r in filas:
         pid, nom, cor, tel, mod, est = r
-        rows.append(
-            "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td style='white-space:nowrap'>"
-            "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Enviar enlace de verificación?');\">"
-            "<input type='hidden' name='accion' value='generar_enlace'><input type='hidden' name='pid' value='%d'>"
-            "<button class='btn' style='padding:5px 8px;font-size:12px'>🔗 Verificar / editar datos</button></form> "
-            "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Enviar enlace de contraseña?');\">"
-            "<input type='hidden' name='accion' value='generar_clave'><input type='hidden' name='pid' value='%d'>"
-            "<button class='btn' style='padding:5px 8px;font-size:12px;background:#047857'>🔑 Contraseña</button></form>"
-            "</td></tr>"
-            % (pid, _esc((nom or "")[:3] + "***" if nom else "***"), _esc(_c48_mask_correo(cor)),
-               _esc(_c48_mask_tel(tel)), _esc(_c48_modulo_info(mod or "")[1]), _esc(est or ""), pid, pid)
-        )
+        rows.append("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td style='white-space:nowrap'><form method='POST' style='display:inline'><input type='hidden' name='accion' value='generar_enlace'><input type='hidden' name='pid' value='%d'><button class='btn' style='padding:5px 8px;font-size:12px'>🔗 Verificar</button></form> <form method='POST' style='display:inline'><input type='hidden' name='accion' value='generar_clave'><input type='hidden' name='pid' value='%d'><button class='btn' style='padding:5px 8px;font-size:12px;background:#047857'>🔑 Clave</button></form></td></tr>" % (pid, _esc((nom or "")[:3]+"***" if nom else "***"), _esc(_c48_mask_correo(cor)), _esc(_c48_mask_tel(tel)), _esc(_c48_modulo_info(mod or "")[1]), _esc(est or ""), pid, pid))
 
-    content = f"""
-<header class='role-hero'><div>
-  <h1>🌱 Convocatoria 48 h · Actualización de datos</h1>
-  <p><b>Flujo:</b> 1) Generas enlace → 2) Participante abre y ve PIN → 3) Te lo dicta →
-  4) Ingresas PIN y actualizas nombre/correo/celular → 5) Contraseña: botón aparte (solo el participante la define).</p>
-</div><a class='btn' href='/soporte_admin'>Volver</a></header>
-{"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
-{"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
-{nuevo_html}
-<section class='role-panel'><h2>Casos abiertos</h2>
-{''.join(casos_html) if casos_html else "<p class='mini-text'>No hay casos pendientes.</p>"}
-</section>
-<section class='role-panel'><h2>Participantes (enmascarados · sin cédula)</h2>
-<form method='GET' style='margin-bottom:10px'><input name='q' value='{_esc(q)}' placeholder='Buscar...' style='max-width:260px'>
-<button class='btn'>Buscar</button></form>
-<div style='overflow:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'>
-<tr style='text-align:left;background:#f1f5f9'><th>ID</th><th>Nombre</th><th>Correo</th><th>Celular</th><th>Módulo</th><th>Estado</th><th></th></tr>
-{''.join(rows) if rows else "<tr><td colspan='7'>Sin participantes</td></tr>"}
-</table></div></section>
-"""
+    content = "<header class='role-hero'><div><h1>🌱 Conv. 48h · Actualización</h1><p>1) Enlace → 2) Usuario ve PIN → 3) Te lo dicta → 4) Editas datos → 5) Clave en enlace aparte.</p></div><a class='btn' href='/soporte_admin'>Volver</a></header>" + (("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else "") + (("<div class='msg danger'>%s</div>" % _esc(err)) if err else "") + nuevo_html + "<section class='role-panel'><h2>Casos abiertos</h2>" + ("".join(casos_html) if casos_html else "<p class='mini-text'>Ninguno</p>") + "</section><section class='role-panel'><h2>Participantes (enmascarados)</h2><form method='GET'><input name='q' value='%s' placeholder='Buscar...' style='max-width:240px'><button class='btn'>Buscar</button></form><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'><tr style='background:#f1f5f9;text-align:left'><th>ID</th><th>Nombre</th><th>Correo</th><th>Cel</th><th>Módulo</th><th>Estado</th><th></th></tr>%s</table></div></section>" % (_esc(q), "".join(rows) if rows else "<tr><td colspan='7'>Sin datos</td></tr>")
     return page("Conv. 48h · Actualización", shell_soporte(content) if (session.get("rol") or "") == "Soporte" else shell(content))
-
 
 @app.route("/convocatoria48/actualizar/<token>", methods=["GET", "POST"])
 def c48_actualizar_datos(token):
-    """Participante abre el enlace: el sistema le MUESTRA el PIN para dictárselo a Soporte."""
+    """1) Valida identidad (nombre completo + CC) 2) Genera PIN para dictar a Soporte."""
     _c48_upd_init()
     token = (token or "").strip()
     if not token or len(token) < 20:
         return _c48_page("Enlace inválido", "<div class='c48-card'><h1>Enlace inválido</h1></div>")
+
     filas = _c48_q(
         "SELECT id, participante_id, token_hash, pin_plain, estado, vence_en FROM conv48_update_tokens "
         "WHERE prop='datos' AND estado IN ('GENERADO','PIN_LISTO','ACTIVO','USADO') ORDER BY id DESC LIMIT 100"
@@ -85319,100 +85133,127 @@ def c48_actualizar_datos(token):
             continue
     if not tok:
         return _c48_page("Enlace no válido", "<div class='c48-card'><h1>Enlace no válido o expirado</h1>"
-                         "<p>Pide uno nuevo a Soporte PROCSIS.</p></div>")
+                         "<p>Solicita uno nuevo a Soporte PROCSIS.</p></div>")
     if tok["vence_en"] and tok["vence_en"] < _c48_now() and tok["estado"] in ("GENERADO", "PIN_LISTO"):
         _c48_x("UPDATE conv48_update_tokens SET estado='VENCIDO', pin_plain='' WHERE id=:i", i=tok["id"])
         return _c48_page("Enlace vencido", "<div class='c48-card'><h1>Enlace vencido</h1></div>")
     if tok["estado"] in ("USADO", "CANCELADO", "VENCIDO"):
         return _c48_page("Enlace cerrado", "<div class='c48-card'><h1>Este enlace ya no está activo</h1></div>")
     if tok["estado"] == "ACTIVO":
-        return _c48_page("Verificación lista",
+        return _c48_page(
+            "Verificación lista",
             "<div class='c48-card' style='text-align:center'><h1>✅ Verificación en curso</h1>"
-            "<p>Soporte ya recibió tu PIN y actualiza tus datos. No debes hacer más en esta pantalla.</p></div>")
-    pin_mostrar = tok.get("pin_plain") or ""
-    if tok["estado"] == "GENERADO" or not pin_mostrar:
-        pin_mostrar = "%06d" % secrets.randbelow(1000000)
-        _c48_x(
-            "UPDATE conv48_update_tokens SET pin_plain=:pp, pin_hash=:ph, estado='PIN_LISTO' WHERE id=:i",
-            pp=pin_mostrar, ph=generate_password_hash(pin_mostrar), i=tok["id"],
+            "<p>Soporte ya recibió tu PIN y está actualizando tus datos.</p></div>",
         )
+
+    p = _c48_part(tok["pid"])
+    if not p:
+        return _c48_page("Error", "<div class='c48-card'><h1>Participante no encontrado</h1></div>")
+
+    def _norm_nombre(s):
+        s = " ".join((s or "").strip().lower().split())
+        # quitar tildes básicas
+        for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"), ("ü", "u"), ("ñ", "n")):
+            s = s.replace(a, b)
+        return s
+
+    def _norm_id(s):
+        return re.sub(r"\D", "", s or "")
+
+    error = ""
+    # Si ya hay PIN (identidad validada antes), mostrarlo
+    if tok["estado"] == "PIN_LISTO" and tok.get("pin_plain"):
+        pin_mostrar = tok["pin_plain"]
+        return _c48_page(
+            "PIN de verificación",
+            "<div class='c48-card' style='text-align:center'>"
+            "<h1>🔐 Tu PIN de verificación</h1>"
+            "<p>Identidad confirmada. Dicta este número a <b>Soporte PROCSIS</b>. "
+            "No lo compartas con nadie más.</p>"
+            "<p style='font-size:42px;font-weight:900;letter-spacing:10px;color:#0B2D57;margin:24px 0'>%s</p>"
+            "<p class='small'>La contraseña se cambia con otro enlace que te enviará Soporte.</p>"
+            "<p class='small' style='color:#64748b'>PROCSIS · Convocatoria de 48 Horas</p></div>"
+            % _esc(pin_mostrar),
+        )
+
+    # GENERADO: exigir nombre + CC antes de crear el PIN
+    if request.method == "POST":
+        nom_in = (request.form.get("nombres") or "").strip()
+        id_in = (request.form.get("num_id") or "").strip()
+        nom_ok = _norm_nombre(nom_in) == _norm_nombre(p.get("nombres") or "")
+        id_ok = _norm_id(id_in) and _norm_id(id_in) == _norm_id(p.get("num_id") or "")
+        if not nom_in or not id_in:
+            error = "Ingresa tu nombre completo y número de identificación."
+        elif not nom_ok or not id_ok:
+            error = "Los datos no coinciden con el registro. Verifica nombre completo y cédula/documento."
+        else:
+            pin_mostrar = "%06d" % secrets.randbelow(1000000)
+            _c48_x(
+                "UPDATE conv48_update_tokens SET pin_plain=:pp, pin_hash=:ph, estado='PIN_LISTO' WHERE id=:i",
+                pp=pin_mostrar, ph=generate_password_hash(pin_mostrar), i=tok["id"],
+            )
+            try:
+                registrar_auditoria("C48: identidad validada, PIN generado", "pid=%s tid=%s" % (p["id"], tok["id"]))
+            except Exception:
+                pass
+            return _c48_page(
+                "PIN de verificación",
+                "<div class='c48-card' style='text-align:center'>"
+                "<h1>🔐 Tu PIN de verificación</h1>"
+                "<p>Identidad confirmada. Dicta este número a <b>Soporte PROCSIS</b>.</p>"
+                "<p style='font-size:42px;font-weight:900;letter-spacing:10px;color:#0B2D57;margin:24px 0'>%s</p>"
+                "<p class='small'>No lo compartas con nadie más. La contraseña se cambia con otro enlace.</p></div>"
+                % _esc(pin_mostrar),
+            )
+
     cuerpo = (
-        "<div class='c48-card' style='text-align:center'>"
-        "<h1>🔐 Tu PIN de verificación</h1>"
-        "<p>Dicta este número al agente de <b>Soporte PROCSIS</b>. Ellos actualizarán tus datos básicos. "
-        "<b>No lo compartas con nadie más.</b></p>"
-        "<p style='font-size:42px;font-weight:900;letter-spacing:10px;color:#0B2D57;margin:24px 0'>%s</p>"
-        "<p class='small'>Si necesitas cambiar tu <b>contraseña</b>, Soporte te enviará otro enlace solo para eso.</p>"
-        "<p class='small' style='color:#64748b'>PROCSIS · Convocatoria de 48 Horas</p></div>"
-        % _esc(pin_mostrar)
+        "<div class='c48-card'><h1>Verificar identidad</h1>"
+        "<p>Por seguridad, antes de generar el PIN confirma tu <b>nombre completo</b> y "
+        "<b>número de documento</b> tal como te registraste en la Convocatoria de 48 Horas.</p>"
+        + ("<div class='c48-err'>%s</div>" % _esc(error) if error else "")
+        + "<form method='POST'>"
+        "<label>Nombres y apellidos *</label>"
+        "<input type='text' name='nombres' required maxlength='160' autocomplete='name' "
+        "placeholder='Como aparecen en tu registro'>"
+        "<label>Número de identificación (CC / documento) *</label>"
+        "<input type='text' name='num_id' required maxlength='20' inputmode='numeric' "
+        "autocomplete='off' placeholder='Solo números'>"
+        "<button class='c48-btn full'>Validar y generar PIN</button></form>"
+        "<p class='small' style='margin-top:12px'>Si los datos no coinciden, contacta a Soporte PROCSIS.</p></div>"
     )
-    return _c48_page("PIN de verificación · Convocatoria 48 Horas", cuerpo)
+    return _c48_page("Verificar identidad · Convocatoria 48 Horas", cuerpo)
 
 
 @app.route("/convocatoria48/nueva-clave/<token>", methods=["GET", "POST"])
 def c48_nueva_clave(token):
-    """Participante define contraseña solo (enlace de Soporte)."""
     _c48_upd_init()
     token = (token or "").strip()
-    filas = _c48_q(
-        "SELECT id, participante_id, token_hash, estado, vence_en FROM conv48_update_tokens "
-        "WHERE prop='clave' AND estado='GENERADO' ORDER BY id DESC LIMIT 80"
-    ) or []
+    filas = _c48_q("SELECT id, participante_id, token_hash, estado, vence_en FROM conv48_update_tokens WHERE prop='clave' AND estado='GENERADO' ORDER BY id DESC LIMIT 80") or []
     tok = None
     for r in filas:
         tid, pid, th, est, ven = r
         try:
             if check_password_hash(th or "", token):
-                tok = {"id": tid, "pid": pid, "vence_en": ven or ""}
-                break
-        except Exception:
-            continue
-    if not tok:
-        return _c48_page("Enlace no válido", "<div class='c48-card'><h1>Enlace no válido o ya usado</h1></div>")
+                tok = {"id": tid, "pid": pid, "vence_en": ven or ""}; break
+        except Exception: continue
+    if not tok: return _c48_page("Inválido", "<div class='c48-card'><h1>Enlace no válido</h1></div>")
     if tok["vence_en"] and tok["vence_en"] < _c48_now():
         _c48_x("UPDATE conv48_update_tokens SET estado='VENCIDO' WHERE id=:i", i=tok["id"])
-        return _c48_page("Enlace vencido", "<div class='c48-card'><h1>Enlace vencido</h1></div>")
+        return _c48_page("Vencido", "<div class='c48-card'><h1>Enlace vencido</h1></div>")
     p = _c48_part(tok["pid"])
-    if not p:
-        return _c48_page("Error", "<div class='c48-card'><h1>Participante no encontrado</h1></div>")
+    if not p: return _c48_page("Error", "<div class='c48-card'><h1>No encontrado</h1></div>")
     error = ""
     if request.method == "POST":
-        clave = request.form.get("clave") or ""
-        clave2 = request.form.get("clave2") or ""
+        clave = request.form.get("clave") or ""; clave2 = request.form.get("clave2") or ""
         politicas = request.form.get("acepto_politicas") == "1"
-        if not politicas:
-            error = "Debes aceptar las políticas de PROCSIS."
-        elif len(clave) < 8 or clave != clave2:
-            error = "Mínimo 8 caracteres y deben coincidir."
-        elif not _c48_clave_valida(clave):
-            error = "Usa letras y números (mín. 8)."
+        if not politicas: error = "Debes aceptar las políticas."
+        elif len(clave) < 8 or clave != clave2: error = "Mínimo 8 caracteres y deben coincidir."
+        elif not _c48_clave_valida(clave): error = "Usa letras y números."
         else:
-            _c48_x("UPDATE conv48_participantes SET password_hash=:h, intentos_login=0, bloqueo_hasta='' WHERE id=:i",
-                   h=generate_password_hash(clave), i=p["id"])
+            _c48_x("UPDATE conv48_participantes SET password_hash=:h, intentos_login=0, bloqueo_hasta='' WHERE id=:i", h=generate_password_hash(clave), i=p["id"])
             _c48_x("UPDATE conv48_update_tokens SET estado='USADO', usado_en=:n WHERE id=:i", n=_c48_now(), i=tok["id"])
-            try:
-                registrar_auditoria("C48: clave por enlace", "pid=%s" % p["id"])
-            except Exception:
-                pass
-            return _c48_page("Contraseña actualizada",
-                "<div class='c48-card' style='text-align:center'><h1>✅ Contraseña actualizada</h1>"
-                "<p><a class='c48-btn' href='/convocatoria48/ingresar'>Ingresar</a></p></div>")
-    cuerpo = (
-        "<div class='c48-card'><h1>Definir nueva contraseña</h1>"
-        "<p>Solo tú defines la contraseña. Soporte no la conoce.</p>"
-        + ("<div class='c48-err'>%s</div>" % _esc(error) if error else "")
-        + "<form method='POST'>"
-        "<label>Nueva contraseña *</label><input type='password' name='clave' minlength='8' required autocomplete='new-password'>"
-        "<label>Repetir *</label><input type='password' name='clave2' minlength='8' required autocomplete='new-password'>"
-        "<label style='display:flex;gap:8px;align-items:flex-start;margin-top:12px'>"
-        "<input type='checkbox' name='acepto_politicas' value='1' required style='width:auto'> "
-        "<span>Acepto <a href='/tratamiento-datos' target='_blank'>Tratamiento de Datos</a>, "
-        "<a href='/privacidad' target='_blank'>Privacidad</a> y "
-        "<a href='/convocatoria48/habeas-data' target='_blank'>Habeas Data</a> de PROCSIS.</span></label>"
-        "<button class='c48-btn full'>Guardar contraseña</button></form></div>"
-    )
-    return _c48_page("Nueva contraseña · Convocatoria 48 Horas", cuerpo)
-
+            return _c48_page("OK", "<div class='c48-card' style='text-align:center'><h1>✅ Contraseña actualizada</h1><a class='c48-btn' href='/convocatoria48/ingresar'>Ingresar</a></div>")
+    return _c48_page("Clave", "<div class='c48-card'><h1>Nueva contraseña</h1>" + (("<div class='c48-err'>%s</div>" % _esc(error)) if error else "") + "<form method='POST'><label>Contraseña *</label><input type='password' name='clave' minlength='8' required><label>Repetir *</label><input type='password' name='clave2' minlength='8' required><label class='c48-legal'><input type='checkbox' name='acepto_politicas' value='1' required><span>Acepto políticas de PROCSIS (tratamiento, privacidad y Habeas Data).</span></label><button class='c48-btn full'>Guardar</button></form></div>")
 
 
 if __name__ == "__main__":
