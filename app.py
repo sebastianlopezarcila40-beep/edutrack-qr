@@ -1576,8 +1576,6 @@ class PersonalLogix(db.Model):
     usuario_sistema = db.Column(db.String(120), default="")  # link opcional a Usuario.usuario
     activo = db.Column(db.Boolean, default=True)
     fecha_alta = db.Column(db.String(20), default="")
-    foto_path = db.Column(db.String(255), default="")  # foto formal para verificación QR
-    fecha_vencimiento = db.Column(db.String(20), default="")  # vigencia del carné
 
 
 class FeatureFlag(db.Model):
@@ -39559,9 +39557,8 @@ def soporte_equipo_logix():
     if request.method == "POST":
         accion = (request.form.get("accion") or "crear").strip()
         if accion == "crear":
-            _personal_ensure_cols()
             nombre = (request.form.get("nombre") or "").strip()
-            codigo = (request.form.get("codigo") or "").strip().upper() or _personal_codigo_unico()
+            codigo = (request.form.get("codigo") or "").strip().upper() or f"LW{random.randint(1000,9999)}"
             cargo = (request.form.get("cargo") or "").strip()
             area = (request.form.get("area") or "Soporte").strip()
             correo = (request.form.get("correo") or "").strip()
@@ -39570,45 +39567,33 @@ def soporte_equipo_logix():
             crear_user = request.form.get("crear_usuario") == "1"
             user_login = (request.form.get("usuario") or "").strip().lower()
             clave = (request.form.get("password") or "Logix2026*").strip() or "Logix2026*"
-            foto_f = request.files.get("foto")
             if not nombre:
                 mensaje = "Nombre obligatorio."
-            elif not foto_f or not getattr(foto_f, "filename", ""):
-                mensaje = "La foto formal del colaborador es obligatoria (se muestra al escanear el QR del carné)."
             elif PersonalLogix.query.filter_by(codigo=codigo).first():
                 mensaje = "Código de carné ya existe."
             else:
-                try:
-                    vence = (ahora() + timedelta(days=365)).strftime("%Y-%m-%d")
-                except Exception:
-                    vence = ""
-                foto_path = _personal_guardar_foto(foto_f, codigo)
-                if not foto_path:
-                    mensaje = "No se pudo procesar la foto. Usa JPG o PNG legible."
-                else:
-                    p = PersonalLogix(
-                        codigo=codigo, nombre=nombre, documento=doc, cargo=cargo, area=area,
-                        correo=correo, telefono=tel, fecha_alta=fecha_hoy(), activo=True,
-                        foto_path=foto_path, fecha_vencimiento=vence,
-                    )
-                    if crear_user and user_login:
-                        if Usuario.query.filter(func.lower(Usuario.usuario) == user_login).first():
-                            mensaje = f"El usuario {user_login} ya existe en el sistema."
-                        else:
-                            db.session.add(Usuario(
-                                usuario=user_login, password=crear_hash(clave), rol="Soporte",
-                                correo=correo, password_temporal=True, institucion_id=None,
-                            ))
-                            p.usuario_sistema = user_login
-                            db.session.add(p)
-                            db.session.commit()
-                            mensaje = f"Personal y usuario creados. Login: {user_login} / {clave} · Código {codigo}"
-                            registrar_auditoria("Equipo Procsis", f"Alta {nombre} + user {user_login}")
+                p = PersonalLogix(
+                    codigo=codigo, nombre=nombre, documento=doc, cargo=cargo, area=area,
+                    correo=correo, telefono=tel, fecha_alta=fecha_hoy(), activo=True,
+                )
+                if crear_user and user_login:
+                    if Usuario.query.filter(func.lower(Usuario.usuario) == user_login).first():
+                        mensaje = f"El usuario {user_login} ya existe en el sistema."
                     else:
+                        db.session.add(Usuario(
+                            usuario=user_login, password=crear_hash(clave), rol="Soporte",
+                            correo=correo, password_temporal=True, institucion_id=None,
+                        ))
+                        p.usuario_sistema = user_login
                         db.session.add(p)
                         db.session.commit()
-                        mensaje = f"Personal registrado: {nombre} · Carné {codigo}"
-                        registrar_auditoria("Equipo Procsis", f"Alta {nombre}")
+                        mensaje = f"Personal y usuario creados. Login: {user_login} / {clave}"
+                        registrar_auditoria("Equipo Procsis", f"Alta {nombre} + user {user_login}")
+                else:
+                    db.session.add(p)
+                    db.session.commit()
+                    mensaje = f"Personal registrado: {nombre} · Carné {codigo}"
+                    registrar_auditoria("Equipo Procsis", f"Alta {nombre}")
         elif accion == "reset_user":
             uid = request.form.get("user_login")
             nueva = (request.form.get("nueva") or "Logix2026*").strip() or "Logix2026*"
@@ -39662,20 +39647,15 @@ def soporte_equipo_logix():
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
 <section class="role-panel">
   <h2>Registrar colaborador</h2>
-  <form method="POST" enctype="multipart/form-data">
+  <form method="POST">
     <input type="hidden" name="accion" value="crear">
     <div class="form-row">
       <div><label>Nombre completo *</label><input name="nombre" required></div>
-      <div><label>Código empleado</label><input name="codigo" placeholder="Auto: PR-2026-01"></div>
+      <div><label>Código carné</label><input name="codigo" placeholder="Auto si vacío"></div>
     </div>
     <div class="form-row">
-      <div><label>Foto formal (obligatoria) *</label><input type="file" name="foto" accept="image/jpeg,image/png,image/webp" required>
-      <span class="mini-text">Se muestra al escanear el QR</span></div>
-      <div><label>Documento (CC)</label><input name="documento" inputmode="numeric"></div>
-    </div>
-    <div class="form-row">
-      <div><label>Cargo / Rol</label><input name="cargo" placeholder="Asesor de soporte"></div>
-      <div></div>
+      <div><label>Documento</label><input name="documento"></div>
+      <div><label>Cargo</label><input name="cargo" placeholder="Asesor de soporte"></div>
     </div>
     <div class="form-row">
       <div><label>Área</label>
@@ -39706,216 +39686,6 @@ def soporte_equipo_logix():
     return page("Equipo Procsis", shell(content))
 
 
-
-def _personal_ensure_cols():
-    """Columnas extra del carné de equipo (foto, vencimiento)."""
-    for col, typ in (
-        ("foto_path", "VARCHAR(255) DEFAULT ''"),
-        ("fecha_vencimiento", "VARCHAR(20) DEFAULT ''"),
-    ):
-        try:
-            with db.engine.begin() as conn:
-                try:
-                    conn.execute(text("ALTER TABLE personal_logix ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
-                except Exception:
-                    try:
-                        conn.execute(text("ALTER TABLE personal_logix ADD COLUMN %s %s" % (col, typ)))
-                    except Exception:
-                        pass
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-
-
-def _personal_codigo_unico():
-    """Código de empleado tipo PR-2026-04 (año + secuencia)."""
-    anio = ahora().strftime("%Y")
-    pref = "PR-%s-" % anio
-    try:
-        rows = PersonalLogix.query.filter(PersonalLogix.codigo.like(pref + "%")).all()
-        max_n = 0
-        for r in rows:
-            try:
-                max_n = max(max_n, int((r.codigo or "").split("-")[-1]))
-            except Exception:
-                pass
-        return "%s%02d" % (pref, max_n + 1)
-    except Exception:
-        return "PR-%s-%04d" % (anio, secrets.randbelow(9000) + 1000)
-
-
-def _personal_guardar_foto(file_storage, codigo):
-    """Guarda foto formal del colaborador (JPG ~400px). Devuelve ruta web o ''."""
-    if not file_storage or not getattr(file_storage, "filename", ""):
-        return ""
-    try:
-        from PIL import Image
-        from io import BytesIO
-        raw = file_storage.read()
-        if not raw or len(raw) > 5 * 1024 * 1024:
-            return ""
-        im = Image.open(BytesIO(raw))
-        if im.mode in ("RGBA", "P", "LA"):
-            bg = Image.new("RGB", im.size, (255, 255, 255))
-            if im.mode == "P":
-                im = im.convert("RGBA")
-            bg.paste(im, mask=im.split()[-1] if im.mode in ("RGBA", "LA") else None)
-            im = bg
-        elif im.mode != "RGB":
-            im = im.convert("RGB")
-        w, h = im.size
-        side = min(w, h)
-        left = (w - side) // 2
-        top = (h - side) // 2
-        im = im.crop((left, top, left + side, top + side)).resize((400, 400), Image.Resampling.LANCZOS)
-        folder = os.path.join(app.root_path, "static", "uploads", "equipo")
-        os.makedirs(folder, exist_ok=True)
-        safe = re.sub(r"[^A-Za-z0-9_-]", "", (codigo or "emp")[:30]) or "emp"
-        fname = "emp_%s.jpg" % safe
-        dest = os.path.join(folder, fname)
-        im.save(dest, "JPEG", quality=88, optimize=True)
-        return "/static/uploads/equipo/" + fname
-    except Exception as e:
-        print("foto equipo:", e)
-        return ""
-
-
-def _mask_documento_empleado(doc):
-    d = re.sub(r"\D", "", doc or "")
-    if len(d) <= 4:
-        return "****"
-    return "***" + d[-7:] if len(d) > 7 else ("***" + d[-4:])
-
-
-def _personal_url_verificacion(codigo):
-    try:
-        base = (request.url_root or "").rstrip("/")
-    except Exception:
-        base = ""
-    return "%s/verificar-empleado/%s" % (base, quote((codigo or "").strip()))
-
-
-@app.route("/verificar-empleado/<codigo>")
-def verificar_empleado_qr(codigo):
-    """Perfil de Verificación Seguro al escanear el QR del carné corporativo."""
-    _personal_ensure_cols()
-    codigo = (codigo or "").strip()
-    p = PersonalLogix.query.filter(func.upper(PersonalLogix.codigo) == codigo.upper()).first()
-    if not p:
-        # compat: a veces el QR viejo traía PROCSIS|codigo|doc|nombre
-        if "|" in codigo:
-            partes = codigo.split("|")
-            if len(partes) >= 2:
-                p = PersonalLogix.query.filter(func.upper(PersonalLogix.codigo) == partes[1].upper()).first()
-    logo = "/static/img/logo-procsis.svg"
-    if not p or not p.activo:
-        body = f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Verificación · PROCSIS</title>
-<style>
-body{{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-background:linear-gradient(165deg,#0B2D57 0%,#1e3a5f 50%,#0f172a 100%);color:#fff;display:flex;align-items:center;justify-content:center;padding:20px}}
-.card{{max-width:400px;width:100%;background:rgba(255,255,255,.1);backdrop-filter:blur(16px);border-radius:24px;padding:28px;text-align:center;border:1px solid rgba(255,255,255,.2)}}
-</style></head><body><div class="card">
-<img src="{logo}" alt="PROCSIS" style="height:48px;margin-bottom:16px" onerror="this.style.display='none'">
-<h1 style="font-size:20px;margin:0 0 8px">❌ No verificado</h1>
-<p style="opacity:.9;line-height:1.5">Este carné no está activo o el código no existe en PROCSIS.</p>
-</div></body></html>"""
-        return body
-
-    foto = (getattr(p, "foto_path", None) or "").strip()
-    if not foto:
-        foto = ""  # placeholder below
-    doc_mask = _mask_documento_empleado(p.documento)
-    alta = (p.fecha_alta or "")[:10] or "—"
-    vence = (getattr(p, "fecha_vencimiento", None) or "")[:10]
-    if not vence and p.fecha_alta:
-        try:
-            from datetime import datetime as _dt, timedelta as _td
-            d0 = _dt.strptime((p.fecha_alta or "")[:10], "%Y-%m-%d")
-            vence = (d0 + _td(days=365)).strftime("%Y-%m-%d")
-        except Exception:
-            vence = "—"
-    vigente = True
-    try:
-        if vence and vence not in ("—", ""):
-            from datetime import datetime as _dt
-            vigente = _dt.strptime(vence[:10], "%Y-%m-%d").date() >= _dt.now().date()
-    except Exception:
-        pass
-
-    estado_html = (
-        '<div class="badge ok"><span class="dot"></span> Miembro Verificado Activo</div>'
-        if p.activo and vigente else
-        '<div class="badge bad">⚠ Credencial no vigente</div>'
-    )
-    foto_html = (
-        f'<img class="foto" src="{_esc(foto)}" alt="Foto">'
-        if foto else
-        '<div class="foto ph">Sin foto</div>'
-    )
-
-    body = f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex,nofollow">
-<title>Perfil de Verificación · PROCSIS</title>
-<style>
-*{{box-sizing:border-box}}
-body{{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-background:linear-gradient(165deg,#0B2D57 0%,#123a6b 45%,#0f172a 100%);color:#0f172a;
-display:flex;align-items:flex-start;justify-content:center;padding:20px 14px 40px}}
-.wrap{{width:100%;max-width:420px}}
-.header{{text-align:center;margin-bottom:14px}}
-.header img{{height:52px;width:auto;filter:drop-shadow(0 2px 8px rgba(0,0,0,.25))}}
-.header .brand{{color:rgba(255,255,255,.85);font-size:12px;font-weight:600;margin-top:6px;letter-spacing:.04em}}
-.card{{background:rgba(255,255,255,.94);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-border-radius:24px;padding:22px 18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.5)}}
-.badge{{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:13px;padding:8px 14px;border-radius:999px;margin:0 auto 16px;width:fit-content}}
-.badge.ok{{background:#dcfce7;color:#166534}}
-.badge.bad{{background:#fee2e2;color:#991b1b}}
-.badge .dot{{width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:pulse 1.4s infinite}}
-@keyframes pulse{{0%{{box-shadow:0 0 0 0 rgba(34,197,94,.55)}}70%{{box-shadow:0 0 0 12px rgba(34,197,94,0)}}100%{{box-shadow:0 0 0 0 rgba(34,197,94,0)}}}}
-.foto{{width:140px;height:140px;border-radius:20px;object-fit:cover;display:block;margin:0 auto 16px;
-border:3px solid #0B2D57;box-shadow:0 8px 24px rgba(11,45,87,.25)}}
-.foto.ph{{display:flex;align-items:center;justify-content:center;background:#e2e8f0;color:#64748b;font-weight:700;font-size:13px}}
-h1{{margin:0 0 4px;font-size:clamp(18px,5vw,22px);color:#0B2D57;text-align:center;letter-spacing:-.02em}}
-.sub{{text-align:center;color:#64748b;font-size:12px;margin-bottom:16px;font-weight:600}}
-.grid{{display:grid;gap:10px}}
-.row{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px}}
-.row .k{{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}}
-.row .v{{font-size:15px;font-weight:700;color:#0f172a;word-break:break-word}}
-.sec-title{{font-size:12px;font-weight:800;color:#0b63ce;margin:16px 0 8px;text-transform:uppercase;letter-spacing:.06em}}
-.foot{{text-align:center;color:rgba(255,255,255,.65);font-size:11px;margin-top:16px;line-height:1.4}}
-.lock{{font-size:14px}}
-</style></head><body>
-<div class="wrap">
-  <div class="header">
-    <img src="{logo}" alt="PROCSIS" onerror="this.outerHTML='<div style=\\'color:#fff;font-weight:900;font-size:22px\\'>PROCSIS</div>'">
-    <div class="brand">PROCSIS · Perfil de Verificación Seguro</div>
-  </div>
-  <div class="card">
-    <div style="text-align:center">{estado_html}</div>
-    {foto_html}
-    <h1>{_esc(p.nombre)}</h1>
-    <div class="sub">Identificación: {_esc(doc_mask)}</div>
-    <div class="sec-title">🔒 Rol en la empresa</div>
-    <div class="grid">
-      <div class="row"><div class="k">Cargo / Rol</div><div class="v">{_esc(p.cargo or "Colaborador")}</div></div>
-      <div class="row"><div class="k">Departamento / Área</div><div class="v">{_esc(p.area or "—")}</div></div>
-    </div>
-    <div class="sec-title">Estado de seguridad</div>
-    <div class="grid">
-      <div class="row"><div class="k">Código de empleado</div><div class="v">{_esc(p.codigo)}</div></div>
-      <div class="row"><div class="k">Expedición</div><div class="v">{_esc(alta)}</div></div>
-      <div class="row"><div class="k">Vencimiento</div><div class="v">{_esc(vence or "—")}</div></div>
-    </div>
-  </div>
-  <div class="foot">Escaneo del carné corporativo PROCSIS<br>Los datos sensibles están parcialmente ocultos · {ahora().strftime("%d/%m/%Y %H:%M")}</div>
-</div>
-</body></html>"""
-    return body
-
 @app.route("/soporte/equipo/carnet/<int:id>")
 def soporte_equipo_carnet(id):
     """Carné corporativo Procsis — diseño ejecutivo legible (anverso + reverso)."""
@@ -39925,7 +39695,7 @@ def soporte_equipo_carnet(id):
     import io as _io
     import base64
     qr = qrcode.QRCode(version=1, box_size=8, border=1)
-    qr.add_data(_personal_url_verificacion(p.codigo))
+    qr.add_data(f"PROCSIS|{p.codigo}|{p.documento}|{p.nombre}")
     qr.make(fit=True)
     img = qr.make_image(fill_color="#0B2D57", back_color="white")
     buf = _io.BytesIO()
@@ -84037,17 +83807,13 @@ def _carne_equipo_de_usuario(u):
         doc = (r.documento if r else "") or ""
     except Exception:
         db.session.rollback()
-    try:
-        codigo = _personal_codigo_unico()
-    except Exception:
-        codigo = "PR-%s-%04d" % (ahora().strftime("%Y"), u.id)
-    try:
-        vence = (ahora() + timedelta(days=365)).strftime("%Y-%m-%d")
-    except Exception:
-        vence = ""
+    base = "PRC-%04d" % u.id
+    codigo, n = base, 1
+    while PersonalLogix.query.filter_by(codigo=codigo).first():
+        n += 1
+        codigo = "%s-%d" % (base, n)
     p = PersonalLogix(codigo=codigo, nombre=(u.nombre_completo or u.usuario or "").strip()[:160], documento=doc[:40], cargo=_CARNE_CARGO_POR_ROL.get(u.rol, u.rol or "")[:120],
-                      area=_CARNE_AREA_POR_ROL.get(u.rol, "Soporte"), correo=(u.correo or "")[:160], usuario_sistema=u.usuario, activo=True, fecha_alta=fecha_hoy(),
-                      fecha_vencimiento=vence)
+                      area=_CARNE_AREA_POR_ROL.get(u.rol, "Soporte"), correo=(u.correo or "")[:160], usuario_sistema=u.usuario, activo=True, fecha_alta=fecha_hoy())
     db.session.add(p)
     db.session.commit()
     return p, True
@@ -84319,7 +84085,8 @@ def _c48_enviar_pin(correo, prop):
     _c48_x("DELETE FROM conv48_pines WHERE correo=:c AND prop=:p", c=correo, p=prop)
     _c48_x("INSERT INTO conv48_pines (correo, prop, pin_hash, vence_en, intentos, creado_en) VALUES (:c,:p,:h,:v,0,:n)",
            c=correo, p=prop, h=generate_password_hash(pin), v=_c48_plus(10), n=_c48_now())
-    titulo = "Verifica tu registro" if prop == "registro" else "Recupera tu contraseña"
+    titulo = ("Verifica tu registro" if prop == "registro" else
+              "Confirma tu nuevo correo" if prop == _C48_PROP_UPD else "Recupera tu contraseña")
     texto = ("Tu PIN de verificación es: %s\n\nVence en 10 minutos. Si no fuiste tú, ignora este mensaje.\n\n"
              "Convocatoria de 48 Horas · PROCSIS" % pin)
     html = ("<div style='font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:20px'>"
@@ -85163,8 +84930,13 @@ def _c48_mask_tel(t):
     t = (t or "").strip()
     return "****" if len(t) <= 4 else (t[:3] + "****" + t[-2:])
 
+_C48_PROP_UPD = "actualiz"   # cabe en conv48_pines.prop VARCHAR(12) ("actualizacion" tiene 13 y rompía el INSERT)
+_c48_upd_estado = {"ok": False}
+
 def _c48_upd_init():
     _c48_init()
+    if _c48_upd_estado["ok"]:
+        return
     try:
         db.session.execute(text(
             "CREATE TABLE IF NOT EXISTS conv48_update_tokens ("
@@ -85179,16 +84951,52 @@ def _c48_upd_init():
         try: db.session.rollback()
         except Exception: pass
         print("c48 upd init:", e)
-    for col, typ in (("pin_plain", "VARCHAR(12) DEFAULT ''"), ("activado_en", "VARCHAR(20) DEFAULT ''")):
+    # Si la tabla ya existía de una versión anterior, agrega lo que falte (cada ALTER va aparte).
+    ddls = (
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS pin_hash VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS pin_plain VARCHAR(12) DEFAULT ''",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS prop VARCHAR(20) DEFAULT 'datos'",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS estado VARCHAR(16) DEFAULT 'GENERADO'",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS creado_por VARCHAR(80) DEFAULT ''",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS creado_en VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS vence_en VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS usado_en VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS activado_en VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS pin_fallos INTEGER DEFAULT 0",
+        "ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS token_sha VARCHAR(64) DEFAULT ''",
+        "ALTER TABLE conv48_pines ALTER COLUMN prop TYPE VARCHAR(30)",
+    )
+    for d in ddls:
         try:
-            with db.engine.begin() as conn:
-                try: conn.execute(text("ALTER TABLE conv48_update_tokens ADD COLUMN IF NOT EXISTS %s %s" % (col, typ)))
-                except Exception:
-                    try: conn.execute(text("ALTER TABLE conv48_update_tokens ADD COLUMN %s %s" % (col, typ)))
-                    except Exception: pass
-        except Exception:
+            db.session.execute(text(d))
+            db.session.commit()
+        except Exception as e:
             try: db.session.rollback()
             except Exception: pass
+            print("c48 upd init ddl:", d[:70], "->", e)
+    _c48_upd_estado["ok"] = True   # un solo intento por arranque: nada de DDL en cada petición
+
+def _c48_sha(token):
+    import hashlib
+    return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+
+def _c48_buscar_token(prop, token, estados):
+    """Busca el token por huella SHA-256 (rápido). Si hay tokens viejos sin huella, cae al
+    método anterior (check_password_hash), que es lento con muchas filas."""
+    marcas = ",".join("'%s'" % e for e in estados)
+    r = _c48_q("SELECT id, participante_id, token_hash, pin_plain, estado, vence_en FROM conv48_update_tokens "
+               "WHERE prop=:p AND token_sha=:s AND estado IN (" + marcas + ") ORDER BY id DESC LIMIT 1", p=prop, s=_c48_sha(token))
+    if r:
+        return r[0]
+    viejos = _c48_q("SELECT id, participante_id, token_hash, pin_plain, estado, vence_en FROM conv48_update_tokens "
+                    "WHERE prop=:p AND COALESCE(token_sha,'')='' AND estado IN (" + marcas + ") ORDER BY id DESC LIMIT 30", p=prop) or []
+    for row in viejos:
+        try:
+            if check_password_hash(row[2] or "", token):
+                return row
+        except Exception:
+            continue
+    return None
 
 def _c48_base_url():
     try: return (request.url_root or "").rstrip("/")
@@ -85206,6 +85014,20 @@ def _c48_tok_by_id(tid):
 
 @app.route("/soporte/convocatoria48-actualizacion", methods=["GET", "POST"])
 def soporte_c48_actualizacion():
+    try:
+        return _soporte_c48_actualizacion_impl()
+    except Exception as e:
+        try: db.session.rollback()
+        except Exception: pass
+        import traceback as _tb
+        print("ERROR c48 actualizacion:", repr(e), flush=True)
+        _tb.print_exc()
+        cuerpo = ("<section class='role-panel' style='border:2px solid #b91c1c'><h2 style='margin-top:0;color:#b91c1c'>No se pudo completar la acción</h2>"
+                  "<p>Detalle técnico (para Desarrollo): <code>%s</code></p>"
+                  "<p><a class='btn' href='/soporte/convocatoria48-actualizacion'>Volver a Actualización</a></p></section>") % _esc(str(e)[:400])
+        return page("Conv. 48h · Actualización", shell_soporte(cuerpo) if (session.get("rol") or "") == "Soporte" else shell(cuerpo))
+
+def _soporte_c48_actualizacion_impl():
     if not _soporte_o_gerencia():
         return redirect("/soporte-login" if not requiere_login() else "/")
     _c48_upd_init()
@@ -85224,8 +85046,8 @@ def soporte_c48_actualizacion():
             else:
                 token = secrets.token_urlsafe(32)
                 vence = (ahora() + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S")
-                _c48_x("INSERT INTO conv48_update_tokens (participante_id, token_hash, pin_hash, pin_plain, prop, estado, creado_por, creado_en, vence_en) VALUES (:p,:th,'','','datos','GENERADO',:u,:n,:v)",
-                       p=pid, th=generate_password_hash(token), u=usuario[:80], n=_c48_now(), v=vence)
+                _c48_x("INSERT INTO conv48_update_tokens (participante_id, token_hash, token_sha, pin_hash, pin_plain, prop, estado, creado_por, creado_en, vence_en) VALUES (:p,:th,:sh,'','','datos','GENERADO',:u,:n,:v)",
+                       p=pid, th=generate_password_hash(token), sh=_c48_sha(token), u=usuario[:80], n=_c48_now(), v=vence)
                 link = _c48_base_url() + "/convocatoria48/actualizar/" + token
                 nombre = (p.get("nombres") or "participante").split()[0]
                 texto = "Hola %s,\n\nAbre este enlace (4 h), anota el PIN de 6 dígitos y dictáselo a Soporte PROCSIS:\n%s\n\nPROCSIS" % (nombre, link)
@@ -85235,6 +85057,8 @@ def soporte_c48_actualizacion():
                 try: registrar_auditoria("C48: enlace verificación", "pid=%s" % pid)
                 except Exception: pass
                 return redirect("/soporte/convocatoria48-actualizacion")
+        elif accion in ("generar_enlace", "generar_clave") and not p:
+            err = "Participante no encontrado."
         elif accion == "activar_pin" and tid:
             tok = _c48_tok_by_id(tid)
             pin_in = re.sub(r"\D", "", request.form.get("pin") or "")
@@ -85270,7 +85094,7 @@ def soporte_c48_actualizacion():
                     correo_act = (p.get("correo") or "").strip().lower()
                     if correo_nuevo != correo_act:
                         session["c48_upd_correo_pend"] = {"tid": tid, "pid": p["id"], "nombres": nombres[:160], "telefono": telefono[:20], "correo": correo_nuevo}
-                        ok_pin, err_pin = _c48_enviar_pin(correo_nuevo, "actualizacion")
+                        ok_pin, err_pin = _c48_enviar_pin(correo_nuevo, _C48_PROP_UPD)
                         if not ok_pin: err = err_pin or "No se pudo enviar PIN al correo nuevo."
                         else: msg = "PIN enviado a %s." % correo_nuevo
                     else:
@@ -85283,20 +85107,18 @@ def soporte_c48_actualizacion():
             else:
                 pin_in = re.sub(r"\D", "", request.form.get("pin_correo") or "")
                 correo_n = pend.get("correo") or ""
-                rpin = _c48_q("SELECT id, pin_hash, vence_en FROM conv48_pines WHERE correo=:c AND prop='actualizacion' ORDER BY id DESC LIMIT 1", c=correo_n)
-                if not rpin or not check_password_hash(rpin[0][1] or "", pin_in): err = "PIN del correo nuevo incorrecto."
-                elif rpin[0][2] and rpin[0][2] < _c48_now(): err = "PIN vencido."
+                ok_pin, err_pin = _c48_validar_pin(correo_n, _C48_PROP_UPD, pin_in)
+                if not ok_pin: err = err_pin or "PIN del correo nuevo incorrecto."
                 else:
                     _c48_x("UPDATE conv48_participantes SET nombres=:n, telefono=:t, correo=:c WHERE id=:i", n=pend["nombres"][:160], t=pend["telefono"][:20], c=correo_n, i=pend["pid"])
                     _c48_x("UPDATE conv48_update_tokens SET estado='USADO', usado_en=:n, pin_plain='' WHERE id=:i", n=_c48_now(), i=tid)
-                    _c48_x("DELETE FROM conv48_pines WHERE correo=:c AND prop='actualizacion'", c=correo_n)
                     session.pop("c48_upd_correo_pend", None)
                     msg = "Correo y datos actualizados."
         elif accion == "generar_clave" and p:
             token = secrets.token_urlsafe(32)
             vence = (ahora() + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S")
-            _c48_x("INSERT INTO conv48_update_tokens (participante_id, token_hash, pin_hash, pin_plain, prop, estado, creado_por, creado_en, vence_en) VALUES (:p,:th,'','','clave','GENERADO',:u,:n,:v)",
-                   p=pid, th=generate_password_hash(token), u=usuario[:80], n=_c48_now(), v=vence)
+            _c48_x("INSERT INTO conv48_update_tokens (participante_id, token_hash, token_sha, pin_hash, pin_plain, prop, estado, creado_por, creado_en, vence_en) VALUES (:p,:th,:sh,'','','clave','GENERADO',:u,:n,:v)",
+                   p=pid, th=generate_password_hash(token), sh=_c48_sha(token), u=usuario[:80], n=_c48_now(), v=vence)
             link = _c48_base_url() + "/convocatoria48/nueva-clave/" + token
             nombre = (p.get("nombres") or "participante").split()[0]
             texto = "Hola %s,\n\nDefine tu nueva contraseña (4 h):\n%s\n\nPROCSIS" % (nombre, link)
@@ -85352,19 +85174,10 @@ def c48_actualizar_datos(token):
     if not token or len(token) < 20:
         return _c48_page("Enlace inválido", "<div class='c48-card'><h1>Enlace inválido</h1></div>")
 
-    filas = _c48_q(
-        "SELECT id, participante_id, token_hash, pin_plain, estado, vence_en FROM conv48_update_tokens "
-        "WHERE prop='datos' AND estado IN ('GENERADO','PIN_LISTO','ACTIVO','USADO') ORDER BY id DESC LIMIT 100"
-    ) or []
     tok = None
-    for r in filas:
-        tid, pid, th, pp, est, ven = r
-        try:
-            if check_password_hash(th or "", token):
-                tok = {"id": tid, "pid": pid, "pin_plain": pp or "", "estado": est, "vence_en": ven or ""}
-                break
-        except Exception:
-            continue
+    r = _c48_buscar_token("datos", token, ("GENERADO", "PIN_LISTO", "ACTIVO", "USADO"))
+    if r:
+        tok = {"id": r[0], "pid": r[1], "pin_plain": r[3] or "", "estado": r[4], "vence_en": r[5] or ""}
     if not tok:
         return _c48_page("Enlace no válido", "<div class='c48-card'><h1>Enlace no válido o expirado</h1>"
                          "<p>Solicita uno nuevo a Soporte PROCSIS.</p></div>")
@@ -85462,14 +85275,10 @@ def c48_actualizar_datos(token):
 def c48_nueva_clave(token):
     _c48_upd_init()
     token = (token or "").strip()
-    filas = _c48_q("SELECT id, participante_id, token_hash, estado, vence_en FROM conv48_update_tokens WHERE prop='clave' AND estado='GENERADO' ORDER BY id DESC LIMIT 80") or []
     tok = None
-    for r in filas:
-        tid, pid, th, est, ven = r
-        try:
-            if check_password_hash(th or "", token):
-                tok = {"id": tid, "pid": pid, "vence_en": ven or ""}; break
-        except Exception: continue
+    r = _c48_buscar_token("clave", token, ("GENERADO",))
+    if r:
+        tok = {"id": r[0], "pid": r[1], "vence_en": r[5] or ""}
     if not tok: return _c48_page("Inválido", "<div class='c48-card'><h1>Enlace no válido</h1></div>")
     if tok["vence_en"] and tok["vence_en"] < _c48_now():
         _c48_x("UPDATE conv48_update_tokens SET estado='VENCIDO' WHERE id=:i", i=tok["id"])
