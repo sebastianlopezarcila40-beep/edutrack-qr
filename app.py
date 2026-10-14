@@ -18939,6 +18939,188 @@ def reportes():
 def encabezado(): return [INST_NOMBRE, f"SEDE {INST_SEDE}", INST_RESOLUCION, f"DANE: {INST_DANE} | NIT: {INST_NIT}", f"Dirección: {INST_DIRECCION}", f"Fecha de impresión: {ahora().strftime('%Y-%m-%d %H:%M:%S')}"]
 
 
+# ============================================================
+#  EXPORTACIONES CON DISEÑO (Excel) — aplica a TODA descarga .xlsx / .csv del sistema
+#  · .xlsx sin diseño  → se le aplica encabezado corporativo, bordes, filas alternas, anchos, filtros e inmovilizado.
+#  · .csv              → se entrega como .xlsx con el mismo diseño (el CSV crudo se abre "todo en la columna A").
+#  Excepciones (formato oficial, no se tocan): SIMAT y la bitácora sellada. Un endpoint puede
+#  excluirse añadiendo el encabezado X-Export-Raw.
+# ============================================================
+_XLSX_MIME_DISENO = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_EXPORT_SIN_DISENO = ("simat", "sellada")
+_XL_AZUL = "0B2D57"
+_XL_ZEBRA = "EEF3FA"
+_XL_BORDE = "CBD5E1"
+_XL_MAX_CELDAS_ESTILO = 400000
+
+
+def _xl_valor(v):
+    """Texto de CSV → valor de celda. Solo convierte a número lo claramente numérico (sin ceros a la izquierda ni >9 dígitos)."""
+    if not isinstance(v, str):
+        return v
+    s = v.strip()
+    if re.fullmatch(r"-?[1-9]\d{0,8}|0", s):
+        return int(s)
+    if re.fullmatch(r"-?(0|[1-9]\d{0,8})\.\d{1,6}", s):
+        return float(s)
+    return v
+
+
+def _xlsx_disenar_hoja(ws):
+    from openpyxl.styles import Font as _F, PatternFill as _PF, Alignment as _Al, Border as _B, Side as _S
+    from openpyxl.utils import get_column_letter as _gcl
+    from openpyxl.worksheet.properties import PageSetupProperties as _PSP
+    if ws.max_row < 1 or ws.max_column < 1:
+        return
+    # Si la hoja ya trae diseño propio (relleno de color en las primeras filas), se respeta.
+    for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, 8)):
+        for c in row:
+            try:
+                if c.fill is not None and c.fill.fill_type == "solid":
+                    return
+            except Exception:
+                pass
+    maxr, maxc = ws.max_row, ws.max_column
+    hdr = None
+    for r in range(1, min(maxr, 15) + 1):
+        if sum(1 for c in ws[r] if c.value not in (None, "")) >= 2:
+            hdr = r
+            break
+    if hdr is None:
+        hdr = 1
+    lado = _S(style="thin", color=_XL_BORDE)
+    borde = _B(left=lado, right=lado, top=lado, bottom=lado)
+    f_hdr = _PF(start_color=_XL_AZUL, end_color=_XL_AZUL, fill_type="solid")
+    f_zebra = _PF(start_color=_XL_ZEBRA, end_color=_XL_ZEBRA, fill_type="solid")
+    # Filas de título (arriba del encabezado)
+    for r in range(1, hdr):
+        for c in ws[r]:
+            if c.value not in (None, ""):
+                c.font = _F(name="Calibri", bold=True, size=14 if r == 1 else 11, color=_XL_AZUL)
+    # Encabezado
+    for c in ws[hdr]:
+        c.fill = f_hdr
+        c.font = _F(name="Calibri", bold=True, color="FFFFFF", size=11)
+        c.alignment = _Al(horizontal="center", vertical="center", wrap_text=True)
+        c.border = borde
+    ws.row_dimensions[hdr].height = 28
+    # Cuerpo
+    if maxr * maxc <= _XL_MAX_CELDAS_ESTILO:
+        for i, row in enumerate(ws.iter_rows(min_row=hdr + 1, max_row=maxr), start=0):
+            zebra = (i % 2 == 1)
+            for c in row:
+                c.border = borde
+                if zebra:
+                    c.fill = f_zebra
+                v = c.value
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    c.alignment = _Al(horizontal="right", vertical="center")
+                    if isinstance(v, float) and v != int(v):
+                        c.number_format = "#,##0.00"
+                else:
+                    c.alignment = _Al(vertical="center", wrap_text=isinstance(v, str) and len(v) > 60)
+    # Anchos de columna
+    for ci in range(1, maxc + 1):
+        letra = _gcl(ci)
+        largo = 0
+        for r, row in enumerate(ws.iter_rows(min_col=ci, max_col=ci, min_row=1, max_row=min(maxr, 300))):
+            v = row[0].value
+            if v is None:
+                continue
+            if r + 1 < hdr and not isinstance(v, str):
+                continue
+            largo = max(largo, len(str(v)) if (r + 1 >= hdr) else min(len(str(v)), 12))
+        ws.column_dimensions[letra].width = max(10, min(largo + 3, 60))
+    if not ws.freeze_panes and maxr > hdr:
+        ws.freeze_panes = "A%d" % (hdr + 1)
+    if not ws.auto_filter.ref and maxr > hdr:
+        ws.auto_filter.ref = "A%d:%s%d" % (hdr, _gcl(maxc), maxr)
+    ws.sheet_view.showGridLines = False
+    ws.sheet_properties.tabColor = _XL_AZUL
+    try:
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr = _PSP(fitToPage=True)
+        ws.print_title_rows = "%d:%d" % (hdr, hdr)
+    except Exception:
+        pass
+
+
+def _xlsx_disenar_bytes(data):
+    from openpyxl import load_workbook as _lw
+    wb = _lw(BytesIO(data))
+    for ws in wb.worksheets:
+        _xlsx_disenar_hoja(ws)
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+def _csv_a_xlsx_bytes(texto, nombre_hoja="Datos"):
+    texto = (texto or "").lstrip("﻿")
+    primera = texto.split("\n", 1)[0]
+    delim = ","
+    cuentas = {d: primera.count(d) for d in (";", "|", "\t", ",")}
+    if max(cuentas.values()) > 0:
+        delim = max(cuentas, key=lambda k: cuentas[k])
+    from io import StringIO as _SIO
+    filas = list(csv.reader(_SIO(texto), delimiter=delim))
+    wb = Workbook()
+    ws = wb.active
+    ws.title = (re.sub(r"[\[\]\*\?/\\:]", "", nombre_hoja or "Datos")[:31]) or "Datos"
+    for fila in filas:
+        ws.append([_xl_valor(x) for x in fila])
+    for row in ws.iter_rows():
+        for c in row:
+            if isinstance(c.value, str) and c.value[:1] in ("=", "+", "-", "@"):
+                c.data_type = "s"   # nunca interpretar texto como fórmula
+    _xlsx_disenar_hoja(ws)
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+@app.after_request
+def _exportes_con_diseno(resp):
+    try:
+        if resp.status_code != 200:
+            return resp
+        cd = resp.headers.get("Content-Disposition", "") or ""
+        low = cd.lower()
+        if "attachment" not in low:
+            return resp
+        if resp.headers.get("X-Export-Raw"):
+            return resp
+        ruta = (request.path or "").lower()
+        if any(k in low or k in ruta for k in _EXPORT_SIN_DISENO):
+            return resp
+        mt = (resp.mimetype or "").lower()
+        es_xlsx = mt == _XLSX_MIME_DISENO or ".xlsx" in low
+        es_csv = (mt == "text/csv" or ".csv" in low) and not es_xlsx
+        if not (es_xlsx or es_csv):
+            return resp
+        resp.direct_passthrough = False
+        data = resp.get_data()
+        if es_xlsx:
+            nuevo = _xlsx_disenar_bytes(data)
+        else:
+            try:
+                texto = data.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                texto = data.decode("latin-1")
+            m = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+?)\.csv', cd, re.I)
+            nuevo = _csv_a_xlsx_bytes(texto, (m.group(1) if m else "Datos")[:31])
+            resp.headers["Content-Disposition"] = re.sub(r"\.csv(?=[\"';\s]|$)", ".xlsx", cd, flags=re.I)
+            resp.mimetype = _XLSX_MIME_DISENO
+        resp.set_data(nuevo)
+        resp.headers.pop("ETag", None)
+        return resp
+    except Exception as ex:
+        print("exportes_con_diseno:", ex)
+        return resp
+
+
 def estilo_excel(ws, header_row):
     amarillo = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid"); borde = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
     for row in ws.iter_rows():
@@ -86297,7 +86479,7 @@ def _c48_gerencia_html(tab, filtro):
         for pid_, act_, est_ in _c48_q("SELECT participante_id, actividad, estado FROM conv48_act_resp") or []:
             acts.setdefault(pid_, {})[act_] = est_
         icono_act = {"enviada": "⏳", "aprobada": "✅", "ajustes": "✏️"}
-        out.append("<div class='c48-card' style='overflow-x:auto'><p><a class='c48-btn sec' href='/gerencia/convocatoria48/export.csv'>⬇ Exportar CSV</a> <b>%d</b> participantes</p>"
+        out.append("<div class='c48-card' style='overflow-x:auto'><p><a class='c48-btn sec' href='/gerencia/convocatoria48/export.csv'>⬇ Exportar Excel</a> <b>%d</b> participantes</p>"
                    "<table style='width:100%%;border-collapse:collapse;font-size:13px;min-width:900px'><tr style='text-align:left'><th>Participante</th><th>Módulo</th><th>Contacto</th><th>Estado</th>"
                    "<th>Act. 1 · preguntas</th><th>Act. 2 · 3 · 4</th><th>Certificado</th><th></th></tr>" % len(filas))
         for i, nom, mod, cor, tel, mun, est, env, prog, err, resp, buenas, autor in filas:
