@@ -44,6 +44,72 @@ from modules.tenants import (
 
 app = Flask(__name__)
 
+# ===== Áreas PROCSIS: un portal interno por área (rol propio, home y esqueleto) =====
+AREAS_PROCSIS = {
+    "Finanzas": {
+        "slug": "finanzas", "titulo": "Finanzas y Tesorería", "icono": "💰", "color": "#0f766e",
+        "desc": "Presupuestos, flujo de caja, pagos, control de gastos, rentabilidad y planificación financiera. Se relaciona con Contabilidad, pero no es lo mismo.",
+        "funciones": [("Presupuestos", "Presupuesto anual y por área, con seguimiento de ejecución."),
+                      ("Flujo de caja", "Proyección de ingresos y egresos."),
+                      ("Pagos y tesorería", "Programación y control de pagos a proveedores y nómina."),
+                      ("Control de gastos", "Registro y aprobación de gastos por centro de costo."),
+                      ("Rentabilidad", "Margen por plan, cliente y línea de producto."),
+                      ("Planificación financiera", "Escenarios, metas y metas de recaudo.")],
+    },
+    "Talento": {
+        "slug": "talento", "titulo": "Recursos Humanos y Talento Humano", "icono": "🧑‍💼", "color": "#7c3aed",
+        "desc": "Selección y contratación, inducción, formación, bienestar, desempeño y documentación del personal.",
+        "funciones": [("Selección y contratación", "Vacantes, candidatos y contratación."),
+                      ("Inducción", "Plan de ingreso para cada nuevo integrante."),
+                      ("Formación", "Capacitaciones y su seguimiento."),
+                      ("Bienestar", "Actividades, novedades y clima laboral."),
+                      ("Desempeño", "Evaluaciones y metas por cargo."),
+                      ("Documentación del personal", "Hojas de vida, contratos y soportes.")],
+    },
+    "Marketing": {
+        "slug": "marketing", "titulo": "Marketing y Comunicaciones", "icono": "📣", "color": "#db2777",
+        "desc": "Publicidad, redes sociales, marca Procsis, campañas, contenido corporativo y posicionamiento.",
+        "funciones": [("Campañas", "Planeación y resultados de campañas."),
+                      ("Calendario de contenido", "Publicaciones por canal y fecha."),
+                      ("Redes sociales", "Seguimiento de canales y métricas."),
+                      ("Marca Procsis", "Logos, colores, plantillas y lineamientos."),
+                      ("Contenido corporativo", "Boletines, casos de éxito y piezas comerciales."),
+                      ("Posicionamiento", "Indicadores de alcance y reconocimiento.")],
+    },
+    "Juridica": {
+        "slug": "juridica", "titulo": "Jurídica y Cumplimiento", "icono": "⚖️", "color": "#1d4ed8",
+        "desc": "Contratos, protección de datos personales, propiedad intelectual, políticas, cumplimiento normativo y revisión legal. Puede contratarse externamente.",
+        "funciones": [("Contratos", "Revisión y control de contratos con clientes y proveedores."),
+                      ("Protección de datos", "Habeas Data, consentimientos y reclamos."),
+                      ("Propiedad intelectual", "Registro de marcas, software y licencias."),
+                      ("Políticas", "Políticas internas y términos legales."),
+                      ("Cumplimiento normativo", "Matriz de obligaciones y vencimientos."),
+                      ("Revisión legal", "Solicitudes de concepto de otras áreas.")],
+    },
+    "Operaciones": {
+        "slug": "operaciones", "titulo": "Operaciones y Administración", "icono": "🗂️", "color": "#b45309",
+        "desc": "Organización interna, proveedores, compras, recursos, procesos y coordinación del funcionamiento diario.",
+        "funciones": [("Proveedores", "Directorio y evaluación de proveedores."),
+                      ("Compras", "Solicitudes, cotizaciones y órdenes de compra."),
+                      ("Recursos y activos", "Equipos, licencias y suministros."),
+                      ("Procesos", "Procedimientos internos y responsables."),
+                      ("Coordinación diaria", "Tareas y pendientes entre áreas."),
+                      ("Administración", "Archivo, correspondencia y trámites.")],
+    },
+    "Calidad": {
+        "slug": "calidad", "titulo": "Calidad y Seguridad de la Información", "icono": "🛡️", "color": "#be123c",
+        "desc": "Pruebas de software, control de calidad, seguridad, gestión de accesos, respaldos y protección de los sistemas.",
+        "funciones": [("Pruebas de software", "Casos de prueba y resultados antes de cada versión."),
+                      ("Control de calidad", "Indicadores y hallazgos por proceso."),
+                      ("Seguridad de la información", "Incidentes, riesgos y controles."),
+                      ("Gestión de accesos", "Revisión de usuarios, roles y dispositivos."),
+                      ("Respaldos", "Verificación de copias y pruebas de restauración."),
+                      ("Protección de sistemas", "Vulnerabilidades y plan de remediación.")],
+    },
+}
+ROLES_AREAS = tuple(AREAS_PROCSIS)
+ROLES_GERENCIA_AREAS = ("Gerente", "Superadmin", "Administrador")
+
 _promo_cron_last = {"day": ""}
 
 
@@ -4019,6 +4085,9 @@ def _staff_module_title(path, rol=""):
         return "<strong>CONTABILIDAD</strong> · Libros y estados financieros"
     if path.startswith("/soluciones-procsis") or rol == "Soluciones":
         return "<strong>SOLUCIONES PROCSIS</strong> · Atención al cliente"
+    for _rk, _av in AREAS_PROCSIS.items():
+        if path.startswith("/" + _av["slug"]) or rol == _rk:
+            return "<strong>%s</strong> · Portal interno" % _av["titulo"].upper()
     if path.startswith("/proveedor-carnes") or rol == "Proveedor":
         return "<strong>PROVEEDOR DE CARNÉS</strong> · Producción física"
     if "dev" in path or rol in ("Desarrollador", "Developer"):
@@ -4150,6 +4219,8 @@ def _staff_nav_items(path, rol=""):
             ("/soluciones-procsis/auditoria", "Mi bitácora"),
             ("/logout", "Salir"),
         ]
+    elif rol in ROLES_AREAS:
+        items = _area_menu_items(rol)
     elif rol == "Cobranza":
         items = [
             ("/cobranza", "Dashboard"),
@@ -4538,6 +4609,8 @@ def menu_items_por_rol():
             ("/soluciones-procsis/auditoria", "Mi bitácora"),
             ("/logout", "Salir"),
         ]
+    if rol in ROLES_AREAS:
+        return _area_menu_items(rol)
     if rol in ("Contabilidad", "Proveedor"):
         _its = list(_cta_menu_items() if rol == "Contabilidad" else _prov_menu_items())
         if not any(h == "/perfil" for h, _ in _its):
@@ -8050,7 +8123,7 @@ def qr_texto(e):
 
 
 # ===== Seguridad de empleados =====
-ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Soluciones")
+ROLES_INTERNOS = ("Soporte", "Superadmin", "Administrador", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Soluciones") + ROLES_AREAS
 # Cuota de almacenamiento por colegio (GB)
 ALMACENAMIENTO_GB_POR_COLEGIO = 10
 ROLES_MFA_OBLIGATORIO = ("Soporte", "Administrador", "Superadmin", "Gerente", "Cobranza")
@@ -9833,7 +9906,7 @@ _ROLES_COLEGIO = frozenset({
     "Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador",
 })
 _ROLES_GLOBAL = frozenset({
-    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Developer", "Soluciones",
+    "Soporte", "Superadmin", "Gerente", "Comercial", "Cobranza", "Contabilidad", "Proveedor", "Desarrollador", "Developer", "Soluciones", *ROLES_AREAS,
 })
 # Quién puede EJECUTAR (no solo ver) cada capacidad crítica
 _CAPACIDAD_ROLES = {
@@ -12107,7 +12180,7 @@ def login():
             roles_staff_login = (
                 "Gerente", "Gerencia", "Superadmin", "Administrador",
                 "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones",
+                "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones", *ROLES_AREAS,
             )
             staff_user = None
             try:
@@ -12149,6 +12222,8 @@ def login():
                         registrar_auditoria("Login equipo PROCSIS", "%s · %s" % (staff_user.usuario, rol_staff))
                     except Exception:
                         pass
+                    if rol_staff in ROLES_AREAS:
+                        return redirect(_home_portal(rol_staff))
                     if rol_staff in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
                         return redirect("/gerencia/hq")
                     if rol_staff in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor"):
@@ -12871,7 +12946,7 @@ def cambiar_password():
     if not requiere_login(): return redirect("/login")
     mensaje = ""
     rol = rol_actual()
-    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones")
+    es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones") + ROLES_AREAS
     if request.method == "POST":
         nueva = request.form.get("password", "").strip()
         confirmar = request.form.get("confirmar", "").strip()
@@ -12892,7 +12967,7 @@ def cambiar_password():
             if es_staff:
                 destino = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Gerente": "/gerencia/hq",
                            "Administrador": "/gerencia/hq", "Superadmin": "/gerencia/hq", "Cobranza": "/cobranza/panel",
-                           "Soluciones": "/soluciones-procsis"}.get(rol, "/dashboard")
+                           "Soluciones": "/soluciones-procsis", **{k: "/" + v["slug"] for k, v in AREAS_PROCSIS.items()}}.get(rol, "/dashboard")
                 return redirect(destino)
             return redirect("/dashboard")
     campo_nombre = (
@@ -21194,6 +21269,7 @@ def _home_portal(rol=None):
         "Proveedor": "/proveedor-carnes",
         "Desarrollador": "/dev-console",
         "Developer": "/dev-console",
+        **{k: "/" + v["slug"] for k, v in AREAS_PROCSIS.items()},
     }.get(r, "/login")
 
 
@@ -21227,6 +21303,7 @@ _BIENVENIDA_ROLES = {
     "Contabilidad": ("Contabilidad", "Libro de movimientos, plan de cuentas, estados financieros y auditoría contable."),
     "Soluciones": ("Soluciones Procsis", "Atención al cliente: gestione PQRS, consulte instituciones y haga seguimiento a la satisfacción."),
     "Proveedor": ("Proveedor de carnés", "Producción física de carnés: descargue lotes, imprima y cierre cada tanda con su evidencia."),
+    **{k: (v["titulo"], v["desc"]) for k, v in AREAS_PROCSIS.items()},
     "Gerente": ("Gerencia", "Visión global de la operación: colegios, ventas, cartera, auditoría y control."),
     "Administrador": ("Gerencia", "Visión global de la operación: colegios, ventas, cartera, auditoría y control."),
     "Superadmin": ("Gerencia", "Visión global de la operación: colegios, ventas, cartera, auditoría y control."),
@@ -21529,6 +21606,19 @@ def _aislar_paneles_internos():
             return redirect("/cobranza/panel")
         if not ok_cob and (path.startswith("/gerencia") or path.startswith("/usuarios")):
             return redirect("/cobranza/panel")
+
+    elif rol in ROLES_AREAS:
+        _slug_area = "/" + AREAS_PROCSIS[rol]["slug"]
+        ok_area = (
+            path.startswith(_slug_area)
+            or path.startswith("/mi-perfil")
+            or path.startswith("/perfil")
+            or path.startswith("/cambiar_password")
+            or path.startswith("/interno/buscar")
+            or path.startswith("/static")
+        )
+        if not ok_area:
+            return redirect(_slug_area)
 
     elif rol in ("Desarrollador", "Developer"):
         ok_dev = (
@@ -23735,6 +23825,8 @@ puntualmente.</p>
 def _destino_por_rol_staff(rol):
     """Redirección automática tras login único de backoffice (RBAC)."""
     r = (rol or "").strip()
+    if r in ROLES_AREAS:
+        return _home_portal(r)
     if r in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
         return "/gerencia/hq"
     if r in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor"):
@@ -23907,7 +23999,7 @@ def _DEPRECATED_portal_backoffice_sin_ruta():
                         roles_staff = (
                             "Gerente", "Gerencia", "Superadmin", "Administrador",
                             "Comercial", "Ventas", "Supervisor de Ventas", "Supervisor",
-                            "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones",
+                            "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones", *ROLES_AREAS,
                         )
                         if rol not in roles_staff:
                             error = "Este acceso es solo para personal PROCSIS. Use el portal de instituciones (/login)."
@@ -23936,6 +24028,8 @@ def _DEPRECATED_portal_backoffice_sin_ruta():
                             except Exception:
                                 pass
                             # Destinos probados por rol
+                            if rol in ROLES_AREAS:
+                                return redirect(_home_portal(rol))
                             if rol in ("Gerente", "Gerencia", "Superadmin", "Administrador"):
                                 return redirect("/gerencia/hq")
                             if rol in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor"):
@@ -33978,7 +34072,7 @@ def gerencia_usuarios():
             usuario = (request.form.get("usuario") or "").strip().lower()
             password = (request.form.get("password") or "").strip()
             rol = (request.form.get("rol") or "Comercial").strip()
-            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Superadmin", "Desarrollador"):
+            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif not usuario or len(password) < 8:
                 error = "Usuario obligatorio y contraseña de al menos 8 caracteres."
@@ -33996,7 +34090,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo = (request.form.get("nuevo_usuario") or "").strip().lower()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Desarrollador"):
                 error = "Usuario no válido."
             elif not nuevo or len(nuevo) < 3:
                 error = "Nuevo nombre de usuario inválido."
@@ -34017,9 +34111,9 @@ def gerencia_usuarios():
             u = Usuario.query.get(uid) if uid else None
             if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
                 error = "Solo Gerencia puede cambiar roles de usuarios."
-            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Desarrollador"):
+            elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Desarrollador"):
                 error = "Usuario no válido."
-            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Superadmin", "Desarrollador"):
+            elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Superadmin", "Desarrollador"):
                 error = "Rol no permitido."
             elif session.get("uid") == u.id and nuevo_rol != u.rol:
                 error = "No puede cambiarse el rol a usted mismo — pídaselo a otro Gerente/Superadmin."
@@ -34033,7 +34127,7 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nueva_clave = (request.form.get("nueva_clave") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Desarrollador"):
                 error = "Usuario no válido."
             elif len(nueva_clave) < 8:
                 error = "La contraseña debe tener mínimo 8 caracteres."
@@ -34049,7 +34143,7 @@ def gerencia_usuarios():
         elif accion == "toggle_activo":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", "Desarrollador"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Desarrollador"):
                 error = "Usuario no válido."
             elif session.get("uid") == u.id:
                 error = "No puede desactivarse a sí mismo."
@@ -34064,7 +34158,7 @@ def gerencia_usuarios():
         elif accion == "eliminar":
             uid = request.form.get("uid", type=int)
             u = Usuario.query.get(uid) if uid else None
-            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones"):
+            if not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS):
                 error = "Usuario no válido o no se puede eliminar (protegido)."
             elif session.get("uid") == u.id:
                 error = "No puede eliminarse a sí mismo."
@@ -34086,7 +34180,7 @@ def gerencia_usuarios():
                 except Exception as ex:
                     db.session.rollback()
                     error = f"No se pudo eliminar: {ex}"
-    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones"])).order_by(Usuario.id.desc()).limit(80).all()
+    lista = Usuario.query.filter(Usuario.rol.in_(["Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS])).order_by(Usuario.id.desc()).limit(80).all()
     filas = ""
     for u in lista:
         activo = getattr(u, "activo", True)
@@ -34117,6 +34211,7 @@ def gerencia_usuarios():
                 <option value="Cobranza" {"selected" if u.rol=="Cobranza" else ""}>Cobranza</option>
                 <option value="Contabilidad" {"selected" if u.rol=="Contabilidad" else ""}>Contabilidad</option>
                 <option value="Soluciones" {"selected" if u.rol=="Soluciones" else ""}>Soluciones Procsis</option>
+                {_opciones_areas_rol(u.rol)}
                 <option value="Proveedor" {"selected" if u.rol=="Proveedor" else ""}>Proveedor de carnés</option>
                 <option value="Gerente" {"selected" if u.rol=="Gerente" else ""}>Gerente</option>
                 <option value="Superadmin" {"selected" if u.rol=="Superadmin" else ""}>Superadmin</option>
@@ -34164,6 +34259,7 @@ def gerencia_usuarios():
       <option value="Cobranza">Cobranza / Facturación</option>
       <option value="Contabilidad">Contabilidad</option>
       <option value="Soluciones">Soluciones Procsis (atención al cliente)</option>
+      {_opciones_areas_rol()}
       <option value="Proveedor">Proveedor de carnés</option>
       <option value="Gerente">Gerente</option>
       <option value="Superadmin">Superadmin</option>
@@ -54664,6 +54760,91 @@ def mfa_pagina():
   </div>
 </div>"""
     return page("Verificación de ingreso", body)
+
+
+# ---------- Portales internos por área (Finanzas, Talento, Marketing, Jurídica, Operaciones, Calidad) ----------
+def _area_menu_items(rol):
+    a = AREAS_PROCSIS.get(rol)
+    if not a:
+        return [("/logout", "Salir")]
+    return [("/" + a["slug"], "Inicio"), ("/perfil", "Mi perfil"), ("/logout", "Salir")]
+
+
+def _opciones_areas_rol(actual=""):
+    return "".join(
+        '<option value="%s"%s>%s</option>' % (k, " selected" if k == actual else "", _esc(v["titulo"]))
+        for k, v in AREAS_PROCSIS.items()
+    )
+
+
+def _area_guard(rol_area):
+    if not requiere_login():
+        return redirect("/login")
+    r = rol_actual()
+    if r == rol_area or r in ROLES_GERENCIA_AREAS:
+        return None
+    return acceso_denegado("Este módulo es exclusivo del área %s." % AREAS_PROCSIS[rol_area]["titulo"])
+
+
+def _area_home(rol_area):
+    g = _area_guard(rol_area)
+    if g is not None:
+        return g
+    a = AREAS_PROCSIS[rol_area]
+    try:
+        equipo = Usuario.query.filter(Usuario.rol == rol_area, Usuario.institucion_id.is_(None)).order_by(Usuario.usuario.asc()).all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        equipo = []
+    tarjetas = "".join(
+        "<div class='role-panel' style='border-left:6px solid %s'><div style='font-weight:800;color:#0f172a'>%s</div>"
+        "<div style='font-size:12px;color:#475569;margin-top:4px'>%s</div>"
+        "<div style='margin-top:8px'><span style='background:#f1f5f9;color:#64748b;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700'>En construcción</span></div></div>"
+        % (a["color"], _esc(n), _esc(d))
+        for n, d in a["funciones"]
+    )
+    filas = "".join(
+        "<tr><td><b>%s</b></td><td>%s</td><td>%s</td></tr>" % (
+            _esc(u.usuario), _esc(getattr(u, "nombre_completo", "") or "—"),
+            "✅ Activo" if getattr(u, "activo", True) else "⛔ Inactivo")
+        for u in equipo
+    )
+    vista_gerencia = ""
+    if rol_actual() != rol_area:
+        vista_gerencia = ("<div class='role-panel' style='margin-bottom:12px;background:#fffbeb;border:1px solid #fde68a'>"
+                          "Está viendo este portal como Gerencia (solo lectura).</div>")
+    content = f"""
+<header class="role-hero"><div><h1>{a["icono"]} {_esc(a["titulo"])}</h1><p>{_esc(a["desc"])}</p></div></header>
+{vista_gerencia}
+<h3 style="margin:14px 0 8px">Funciones del área</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:14px">{tarjetas}</div>
+<div class="role-panel"><h3 style="margin-top:0">Equipo del área</h3>
+<table><tr><th>Usuario</th><th>Nombre</th><th>Estado</th></tr>
+{filas or "<tr><td colspan=3>Aún no hay personas con este rol. Gerencia las crea en Usuarios internos.</td></tr>"}</table></div>
+"""
+    return page(a["titulo"], shell(content))
+
+
+def _registrar_portal_area(rol_area):
+    a = AREAS_PROCSIS[rol_area]
+
+    def vista():
+        return _area_home(rol_area)
+
+    def vista_login():
+        return redirect("/login")
+
+    vista.__name__ = "area_home_" + a["slug"]
+    vista_login.__name__ = "area_login_" + a["slug"]
+    app.add_url_rule("/" + a["slug"], endpoint=vista.__name__, view_func=vista)
+    app.add_url_rule("/" + a["slug"] + "-login", endpoint=vista_login.__name__, view_func=vista_login, methods=["GET", "POST"])
+
+
+for _rol_area in AREAS_PROCSIS:
+    _registrar_portal_area(_rol_area)
 
 
 # ---------- Estado de facturación (semáforo), pagos verificados y cruce para PQRS de cobro ----------
@@ -83539,7 +83720,7 @@ def _login_modo_host():
 
 
 _STAFF_ROLES_LOGIN = ("Gerente", "Gerencia", "Superadmin", "Administrador", "Comercial", "Ventas", "Supervisor de Ventas",
-                      "Supervisor", "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones")
+                      "Supervisor", "Cobranza", "Contabilidad", "Proveedor", "Soporte", "Desarrollador", "Developer", "Soluciones") + ROLES_AREAS
 
 
 def _login_resolver_unico(ident, password):
@@ -85024,8 +85205,9 @@ def _hl_gate_horario_asesores():
 #  · No se muestran IP, ubicación ni dispositivo de esas personas: solo qué cambió, quién (del colegio) y cuándo.
 # ══════════════════════════════════════════════════════════════════════════════
 _AUD_ROLES_NO_COLEGIO = ("Soporte", "Superadmin", "Administrador", "Gerente", "Gerencia", "Comercial", "Ventas", "Cobranza", "Contabilidad",
-                         "Proveedor", "Desarrollador", "Developer", "Soluciones")
-_AUD_RUTAS_INTERNAS = ("/soporte", "/gerencia", "/cobranza", "/ventas", "/contabilidad", "/soluciones-procsis", "/dev", "/proveedor", "/tickets-doc", "/interno",
+                         "Proveedor", "Desarrollador", "Developer", "Soluciones") + ROLES_AREAS
+_AUD_RUTAS_INTERNAS = ("/soporte", "/gerencia", "/cobranza", "/ventas", "/contabilidad", "/soluciones-procsis",
+                       "/finanzas", "/talento", "/marketing", "/juridica", "/operaciones", "/calidad", "/dev", "/proveedor", "/tickets-doc", "/interno",
                        "/backoffice", "/servidores", "/tenants", "/usuarios")
 
 
@@ -85108,9 +85290,13 @@ def soporte_auditoria_colegios():
 #  (antes solo estaba en «Equipo Procsis» de Soporte, y Gerencia no lo encontraba en Usuarios internos).
 # ══════════════════════════════════════════════════════════════════════════════
 _CARNE_AREA_POR_ROL = {"Soporte": "Soporte", "Comercial": "Comercial", "Gerente": "Gerencia", "Superadmin": "Gerencia", "Administrador": "Gerencia",
-                       "Cobranza": "Cartera", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor", "Desarrollador": "Desarrollo", "Soluciones": "Soluciones Procsis"}
+                       "Cobranza": "Cartera", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor", "Desarrollador": "Desarrollo", "Soluciones": "Soluciones Procsis",
+                       "Finanzas": "Finanzas y Tesorería", "Talento": "Talento Humano", "Marketing": "Marketing", "Juridica": "Jurídica",
+                       "Operaciones": "Operaciones", "Calidad": "Calidad y Seguridad"}
 _CARNE_CARGO_POR_ROL = {"Soporte": "Asesor de soporte", "Comercial": "Asesor comercial", "Gerente": "Gerente", "Superadmin": "Superadmin", "Administrador": "Administrador",
-                        "Cobranza": "Asesor de cobranza", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor de carnés", "Desarrollador": "Desarrollador", "Soluciones": "Atención al cliente"}
+                        "Cobranza": "Asesor de cobranza", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor de carnés", "Desarrollador": "Desarrollador", "Soluciones": "Atención al cliente",
+                        "Finanzas": "Analista financiero", "Talento": "Talento Humano", "Marketing": "Marketing y comunicaciones",
+                        "Juridica": "Jurídica y cumplimiento", "Operaciones": "Operaciones y administración", "Calidad": "Calidad y seguridad"}
 
 
 def _carne_equipo_de_usuario(u):
