@@ -2075,6 +2075,11 @@ class ClienteEtiqueta(db.Model):
     nota = db.Column(db.Text, default="")
     actualizado_por = db.Column(db.String(120), default="")
     actualizado_en = db.Column(db.String(30), default="")
+    # Estado de facturación (semáforo) administrado internamente: VERDE | AMARILLO | ROJO | "" (automático)
+    semaforo_manual = db.Column(db.String(12), default="")
+    semaforo_motivo = db.Column(db.Text, default="")
+    semaforo_por = db.Column(db.String(120), default="")
+    semaforo_en = db.Column(db.String(30), default="")
 
 
 class SieeDimension(db.Model):
@@ -4140,6 +4145,7 @@ def _staff_nav_items(path, rol=""):
             ("/soluciones-procsis/pqr", "Centro PQRS"),
             ("/soluciones-procsis/pqr/crear", "Radicar PQRS"),
             ("/soluciones-procsis/clientes", "Clientes"),
+            ("/tickets-doc", "Tickets"),
             ("/soluciones-procsis/fidelizacion", "Satisfacción CSAT"),
             ("/soluciones-procsis/auditoria", "Mi bitácora"),
             ("/logout", "Salir"),
@@ -4527,6 +4533,7 @@ def menu_items_por_rol():
             ("/soluciones-procsis/pqr", "Centro PQRS"),
             ("/soluciones-procsis/pqr/crear", "Radicar PQRS"),
             ("/soluciones-procsis/clientes", "Clientes"),
+            ("/tickets-doc", "Tickets"),
             ("/soluciones-procsis/fidelizacion", "Satisfacción CSAT"),
             ("/soluciones-procsis/auditoria", "Mi bitácora"),
             ("/logout", "Salir"),
@@ -50200,7 +50207,7 @@ def _notif_crear(roles, titulo, texto="", url="", institucion_id=None, nivel="in
 
 
 _ROLES_GERENCIA = ("Gerente", "Superadmin", "Administrador")
-_ROLES_TICKET = ("Soporte", "Cobranza", "Comercial", "Contabilidad", "Desarrollador", "Gerente", "Superadmin", "Administrador")
+_ROLES_TICKET = ("Soporte", "Cobranza", "Comercial", "Contabilidad", "Desarrollador", "Gerente", "Superadmin", "Administrador", "Soluciones")
 
 
 @app.route("/notificaciones/pendientes.json")
@@ -50678,6 +50685,8 @@ def _td_evento(t, accion, detalle=""):
 def _td_guard():
     if not requiere_login():
         return redirect("/login")
+    if session.get("mfa_pendiente"):
+        return redirect("/mfa")
     if rol_actual() not in _ROLES_TICKET:
         return acceso_denegado("Este módulo es para roles internos de PROCSIS.")
     _seg_ensure()
@@ -50694,6 +50703,7 @@ _TD_AREAS = {
     "Desarrollo": ("Desarrollo", ("Desarrollador", "Developer")),
     "Comercial": ("Comercial / Ventas", ("Comercial",)),
     "Gerencia": ("Gerencia", ("Gerente", "Superadmin", "Administrador")),
+    "Soluciones": ("Soluciones Procsis (atención al cliente)", ("Soluciones",)),
 }
 # Tipos por área (el formulario muestra solo los de la área elegida). Contabilidad usa los financieros de _TD_TIPOS.
 _TD_TIPOS_AREA = {
@@ -50702,6 +50712,7 @@ _TD_TIPOS_AREA = {
     "Desarrollo": (("bug", "Error en el sistema (bug)"), ("nueva_funcion", "Nueva funcionalidad"), ("mejora", "Mejora de algo existente"), ("otro_desarrollo", "Otro")),
     "Comercial": (("solicitud_comercial", "Solicitud comercial / cliente"), ("otro_comercial", "Otro")),
     "Gerencia": (("autorizacion", "Decisión o autorización"), ("otro_gerencia", "Otro")),
+    "Soluciones": (("solicitud_cliente", "Solicitud de atención al cliente"), ("verificacion_pqr", "Apoyo para resolver una PQRS"), ("otro_soluciones", "Otro")),
 }
 _TD_TIPOS_TODOS = dict(_TD_TIPOS)
 for _a, _ts_ in _TD_TIPOS_AREA.items():
@@ -50888,7 +50899,8 @@ def tickets_doc_nuevo():
                          "%s · %s" % (t.institucion_codigo or "sin colegio", titulo), "/tickets-doc/%d" % t.id, None, "alerta" if alta else "info")
             return redirect("/tickets-doc/%d" % t.id)
     insts = Institucion.query.order_by(Institucion.codigo).all()
-    opt_i = "<option value=''>— Sin colegio —</option>" + "".join("<option value='%d'>%s · %s</option>" % (i.id, _esc(i.codigo), _esc(i.nombre)) for i in insts)
+    sel_inst = f.get("institucion_id", type=int) if request.method == "POST" else request.args.get("institucion_id", type=int)
+    opt_i = "<option value=''>— Sin colegio —</option>" + "".join("<option value='%d' %s>%s · %s</option>" % (i.id, "selected" if i.id == sel_inst else "", _esc(i.codigo), _esc(i.nombre)) for i in insts)
     sel_area = f.get("area_destino", "") if request.method == "POST" else (request.args.get("area") or "")
     opt_a = "<option value=''>— Elige el área —</option>" + "".join("<option value='%s' %s>%s</option>" % (k, "selected" if k == sel_area else "", _esc(v[0])) for k, v in _TD_AREAS.items())
     opt_t = "".join("<option value='%s' data-area='Contabilidad'>%s</option>" % (k, _esc(v)) for k, v in _TD_TIPOS)
@@ -50920,8 +50932,8 @@ a.addEventListener('change',up);up();})();</script>"""
                "<p class='mini-text tk-fin'>Se marca automáticamente como ALTA si el descuento supera el %s %% o si es un cambio de contrato.</p>"
                "<div class='tk-fin'>%s</div>"
                "<button class='btn' style='margin-top:6px'>Enviar ticket</button></form></section>%s") % (
-        aviso, inp, opt_a, inp, opt_t, inp, opt_i, inp, inp, inp, _esc(f.get("titulo", "")) if request.method == "POST" else "", inp, inp,
-        _esc(f.get("justificacion", "")) if request.method == "POST" else "", inp, int(_TD_LIMITE_DESC), campos_su, js)
+        aviso, inp, opt_a, inp, opt_t, inp, opt_i, inp, inp, inp, _esc(f.get("titulo", "")) if request.method == "POST" else _esc((request.args.get("titulo") or "")[:220]), inp, inp,
+        _esc(f.get("justificacion", "")) if request.method == "POST" else _esc((request.args.get("justificacion") or "")[:1500]), inp, int(_TD_LIMITE_DESC), campos_su, js)
     return page("Nuevo ticket", shell(content))
 
 
@@ -53855,15 +53867,26 @@ def soporte_pqr_detalle(id):
         _sol_auditar("Consulta PQR", t.radicado)
     if request.method == "POST":
         accion_f = (request.form.get("accion") or "gestion").strip()
+        _F = request.form
+        _cobro = None
+        if accion_f == "resolver_cobro" and not (cerrado and not _pqr_puede_reabrir()):
+            _ok_c, _m_c, _cobro = _pqr_resolver_cobro_pre(t, request.form)
+            if _ok_c:
+                _F = {"estado": "RESUELTA", "respuesta": _cobro["respuesta"], "enviar_correo": "1"}
+            else:
+                mensaje = _m_c
+                accion_f = "__error__"
         # Bloqueo total si ya está cerrada/resuelta (solo consulta; Gerencia puede reabrir)
         if cerrado and not _pqr_puede_reabrir():
             mensaje = "Ticket cerrado/resuelto: no se permiten más cambios. Solo consulta."
+        elif accion_f == "__error__":
+            pass
         elif accion_f in ("nota", "escalar"):
             mensaje = _pqr_procesar_accion(t, accion_f, request.form)
             cerrado = (t.estado or "").upper() in ("CERRADA", "CERRADO", "RESUELTA")
         else:
-            nuevo = (request.form.get("estado") or t.estado).strip()
-            resp = (request.form.get("respuesta") or "").strip()
+            nuevo = (_F.get("estado") or t.estado).strip()
+            resp = (_F.get("respuesta") or "").strip()
             t.estado = nuevo
             if resp:
                 # Acumular respuesta (no borrar la anterior)
@@ -53899,7 +53922,7 @@ def soporte_pqr_detalle(id):
                             mensaje = (mensaje + " " if mensaje else "") + f"Link encuesta CSAT: {encuesta_url}"
                     except Exception as _ce:
                         print("csat on resolve:", _ce)
-                enviar_mail = (request.form.get("enviar_correo") or "") == "1" or cierra_caso
+                enviar_mail = (_F.get("enviar_correo") or "") == "1" or cierra_caso
                 mail_ok = False
                 if resp and t.email and enviar_mail:
                     try:
@@ -53929,6 +53952,15 @@ def soporte_pqr_detalle(id):
                     )
                 else:
                     mensaje = "Respuesta y estado guardados correctamente."
+                if _cobro:
+                    _narr = _pqr_narrativa_cobro(t, _cobro, mail_ok)
+                    _sol_auditar("Resolución PQR de cobro", _narr)
+                    try:
+                        registrar_historial_pqr(t.id, "RESOLUCIÓN COBRO", _narr, t.estado)
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                    mensaje += " " + ("Estado del cliente: " + ", ".join(_cobro["acciones"]) + "." if _cobro["acciones"] else "")
             except Exception as ex:
                 try:
                     db.session.rollback()
@@ -53985,7 +54017,7 @@ def soporte_pqr_detalle(id):
 """
 
     if puede_editar and not (cerrado and not _pqr_puede_reabrir()):
-        form_block += _pqr_forms_extra(t)
+        form_block = _pqr_panel_cobro(t, B) + form_block + _pqr_forms_extra(t)
     csat_box = ""
     try:
         if (t.estado or "").upper() in ("RESUELTA", "CERRADA", "CERRADO") or (getattr(t, "token_csat", None) or "").strip():
@@ -54053,6 +54085,19 @@ def _sol_asegurar_tablas():
         return
     try:
         db.create_all()
+        try:
+            from sqlalchemy import inspect as _insp
+            ins = _insp(db.engine)
+            if "clientes_etiquetas" in ins.get_table_names():
+                ex = {c["name"] for c in ins.get_columns("clientes_etiquetas")}
+                for col, ddl in (("semaforo_manual", "VARCHAR(12) DEFAULT ''"), ("semaforo_motivo", "TEXT DEFAULT ''"),
+                                 ("semaforo_por", "VARCHAR(120) DEFAULT ''"), ("semaforo_en", "VARCHAR(30) DEFAULT ''")):
+                    if col not in ex:
+                        db.session.execute(db.text("ALTER TABLE clientes_etiquetas ADD COLUMN %s %s" % (col, ddl)))
+                db.session.commit()
+        except Exception as _em:
+            db.session.rollback()
+            print("clientes_etiquetas cols:", _em)
         _sol_tablas_ok["ok"] = True
     except Exception as e:
         print("soluciones create_all:", e)
@@ -54370,6 +54415,251 @@ def mfa_pagina():
     return page("Verificación de ingreso", body)
 
 
+# ---------- Estado de facturación (semáforo), pagos verificados y cruce para PQRS de cobro ----------
+SEMAFORO = {
+    "VERDE": ("🟢", "Al día", "#16a34a"),
+    "AMARILLO": ("🟡", "Próximo a vencer", "#ca8a04"),
+    "ROJO": ("🔴", "En mora", "#dc2626"),
+}
+_MEDIOS_PAGO = ("PSE", "Transferencia bancaria", "Consignación", "Confirmado por Facturación / Cobranza",
+                "Confirmado por Gerencia", "Otro")
+_MESES_ABR = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+
+
+def _fecha_bitacora():
+    d = ahora()
+    return "%02d/%s/%d" % (d.day, _MESES_ABR[d.month - 1], d.year)
+
+
+def _sol_semaforo_auto(inst):
+    """(codigo, detalle) calculado con las facturas. Solo lectura: no toca facturación."""
+    try:
+        if es_donacion(inst):
+            return "VERDE", "Programa de donación Procsis Edu (sin cobro)"
+        if (inst.estado or "").upper() == "SUSPENDIDA" and (inst.tipo_bloqueo or "").upper() == "MORA":
+            return "ROJO", "Institución bloqueada por mora"
+        hoy = fecha_hoy()
+        limite = (ahora() + timedelta(days=7)).strftime("%Y-%m-%d")
+        venc = prox = 0
+        for f in FacturaCobro.query.filter(FacturaCobro.institucion_id == inst.id,
+                                           FacturaCobro.estado.in_(("PENDIENTE", "VENCIDO"))).all():
+            v = (f.vencimiento or "")
+            if (f.estado or "").upper() == "VENCIDO" or (v and v < hoy):
+                venc += 1
+            elif v and v <= limite:
+                prox += 1
+        if venc:
+            return "ROJO", "%d factura(s) vencida(s)" % venc
+        if prox:
+            return "AMARILLO", "%d factura(s) vencen en los próximos 7 días" % prox
+        return "VERDE", "Sin facturas vencidas ni próximas a vencer"
+    except Exception as ex:
+        print("semaforo auto:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return "VERDE", "Sin datos de facturación"
+
+
+def _sol_semaforo(inst, reg=None):
+    """Estado efectivo: el ajuste interno (si existe) manda sobre el automático."""
+    auto, det = _sol_semaforo_auto(inst)
+    if reg is not None and (reg.semaforo_manual or "") in SEMAFORO:
+        return reg.semaforo_manual, det, True, auto
+    return auto, det, False, auto
+
+
+def _sol_semaforo_html(codigo, grande=False):
+    ic, lab, col = SEMAFORO.get(codigo, ("⚪", "Sin datos", "#64748b"))
+    pad = "6px 16px;font-size:15px" if grande else "3px 10px;font-size:11px"
+    return "<span style='background:%s;color:#fff;padding:%s;border-radius:999px;font-weight:800'>%s %s</span>" % (col, pad, ic, lab)
+
+
+def _sol_reg_etiqueta(iid):
+    reg = ClienteEtiqueta.query.filter_by(institucion_id=iid).first()
+    if not reg:
+        reg = ClienteEtiqueta(institucion_id=iid, etiqueta="Sin clasificar")
+        db.session.add(reg)
+    return reg
+
+
+def _sol_fijar_semaforo(inst, codigo, motivo):
+    """codigo: VERDE/AMARILLO/ROJO o 'AUTO' (quita el ajuste)."""
+    reg = _sol_reg_etiqueta(inst.id)
+    reg.semaforo_manual = "" if codigo == "AUTO" else codigo
+    reg.semaforo_motivo = (motivo or "")[:400]
+    reg.semaforo_por = session.get("usuario", "")
+    reg.semaforo_en = ahora().strftime("%Y-%m-%d %H:%M")
+    reg.actualizado_por = session.get("usuario", "")
+    reg.actualizado_en = ahora().strftime("%Y-%m-%d %H:%M")
+
+
+def _sol_confirmar_pago(inst, medio, ref, set_verde, levantar):
+    """Valida todo antes de cambiar nada. Devuelve (ok, mensaje, acciones)."""
+    medio = (medio or "").strip()
+    ref = (ref or "").strip()[:80]
+    if medio not in _MEDIOS_PAGO:
+        return False, "Elija el medio con el que se verificó el pago.", []
+    if len(ref) < 3:
+        return False, "Escriba la referencia o soporte del pago verificado (n.º de transacción, comprobante, ticket de Facturación).", []
+    acciones = []
+    bloqueada = (inst.estado or "").upper() == "SUSPENDIDA"
+    if levantar and bloqueada:
+        if (inst.tipo_bloqueo or "").upper() != "MORA":
+            return False, "La institución está bloqueada por otro motivo (seguridad u otro): solo Gerencia puede levantarlo. Escale el caso.", []
+    if set_verde:
+        acciones.append("se actualizó el estado a 'Al día'")
+    if levantar and bloqueada:
+        acciones.append("se levantó el bloqueo por mora (acceso restablecido)")
+    if set_verde:
+        _sol_fijar_semaforo(inst, "VERDE", "Pago verificado en %s (ref. %s)" % (medio, ref))
+    if levantar and bloqueada:
+        inst.estado = "ACTIVA"
+        inst.tipo_bloqueo = ""
+        inst.fecha_suspension = ""
+        inst.motivo_bloqueo = ""
+    db.session.commit()
+    return True, "", acciones
+
+
+def _pqr_institucion(t, codigo_extra=""):
+    try:
+        i = None
+        if getattr(t, "institucion_id", None):
+            i = Institucion.query.get(t.institucion_id)
+        cod = (codigo_extra or t.codigo_colegio or "").strip()
+        if not i and cod:
+            i = Institucion.query.filter_by(codigo=cod).first()
+        for nit in ((t.nit_colegio or "").strip(), (t.numero_documento or "").strip()):
+            if not i and nit:
+                i = Institucion.query.filter(Institucion.nit == nit).first()
+        return i
+    except Exception as ex:
+        print("pqr_institucion:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+_PALABRAS_COBRO = ("pago", "cobro", "factur", "suspens", "mora", "bloqueo", "pagu")
+
+
+def _pqr_es_cobro(p):
+    txt = ("%s %s %s %s" % (p.tipo_pqr, p.subtipo, p.objeto, p.motivo)).lower()
+    return any(w in txt for w in _PALABRAS_COBRO)
+
+
+def _pqr_previas(t, inst):
+    if not inst:
+        return []
+    try:
+        conds = [TicketPQR.institucion_id == inst.id, TicketPQR.codigo_colegio == inst.codigo]
+        if (inst.nit or "").strip():
+            conds += [TicketPQR.nit_colegio == inst.nit, TicketPQR.numero_documento == inst.nit]
+        return TicketPQR.query.filter(or_(*conds), TicketPQR.id != t.id).order_by(TicketPQR.id.desc()).limit(10).all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return []
+
+
+def _pqr_resolver_cobro_pre(t, f):
+    """Valida y aplica los efectos en el cliente. Devuelve (ok, mensaje, ctx)."""
+    from urllib.parse import quote as _qq
+    inst = _pqr_institucion(t, (f.get("codigo_inst") or "").strip())
+    if not inst:
+        return False, "No se pudo vincular la PQR con una institución. Escriba el código del colegio en el formulario.", None
+    resp = (f.get("respuesta") or "").strip()
+    if len(resp) < 10:
+        return False, "Escriba la respuesta para el cliente (mínimo 10 caracteres).", None
+    set_verde = (f.get("set_verde") or "") == "1"
+    levantar = (f.get("levantar_bloqueo") or "") == "1"
+    ok, msg, acciones = _sol_confirmar_pago(inst, f.get("medio"), f.get("referencia"), set_verde, levantar)
+    if not ok:
+        return False, msg, None
+    if not getattr(t, "institucion_id", None):
+        t.institucion_id = inst.id
+    return True, "", {"inst": inst, "medio": (f.get("medio") or "").strip(), "ref": (f.get("referencia") or "").strip()[:80],
+                      "acciones": acciones, "respuesta": resp}
+
+
+def _pqr_narrativa_cobro(t, c, mail_ok):
+    if mail_ok:
+        cierre = "se notificó el cierre del ticket al usuario por correo"
+    elif (t.email or "").strip():
+        cierre = "se cerró el ticket (no se pudo enviar el correo de notificación)"
+    else:
+        cierre = "se cerró el ticket (el usuario no registró correo)"
+    pasos = c["acciones"] + [cierre]
+    return "%s - Se resuelve PQR %s de la institución %s. Se verificó soporte de pago en %s (ref. %s), %s." % (
+        _fecha_bitacora(), t.radicado, c["inst"].nombre[:80], c["medio"], c["ref"], (", ".join(pasos[:-1]) + " y " if len(pasos) > 1 else "") + pasos[-1])
+
+
+def _pqr_panel_cobro(t, B):
+    """Cruce de información + resolución de PQRS de cobro (solo roles que gestionan)."""
+    from urllib.parse import quote as _qq
+    inst = _pqr_institucion(t)
+    cab = "<div style='margin:14px 0;padding:14px;border:2px solid #0B2D57;border-radius:12px;background:#f8fafc'><h3 style='margin:0 0 8px;color:#0B2D57'>💳 PQRS de cobro · cruce de información</h3>"
+    if not inst:
+        return cab + f"""<p style="font-size:13px;color:#92400e">No se encontró la institución de esta PQR (sin código/NIT coincidente).
+        Puede vincularla escribiendo el código del colegio al resolver.</p>
+        <details><summary style="cursor:pointer;font-weight:700">Resolver como PQR de cobro</summary>{_pqr_form_resolver(t, None)}</details></div>"""
+    reg = ClienteEtiqueta.query.filter_by(institucion_id=inst.id).first()
+    cod, det, manual, auto = _sol_semaforo(inst, reg)
+    previas = _pqr_previas(t, inst)
+    cobro_prev = [p for p in previas if _pqr_es_cobro(p)]
+    alerta = ""
+    if len(cobro_prev) >= 2:
+        alerta = "<div class='msg danger' style='margin:8px 0'>⚠ Posible error repetitivo: este cliente tiene %d PQRS de cobro anteriores.</div>" % len(cobro_prev)
+    filas = "".join("<li><a href='%s/%d'>%s</a> · %s · <b>%s</b>%s</li>" % (
+        B, p.id, _esc(p.radicado), _esc("%s/%s" % (p.tipo_pqr, p.subtipo)), _esc(p.estado), " 💳" if _pqr_es_cobro(p) else "") for p in previas[:6])
+    bloqueo = ""
+    if (inst.estado or "").upper() == "SUSPENDIDA":
+        bloqueo = "<div class='msg danger' style='margin:8px 0'>Institución SUSPENDIDA · tipo de bloqueo: <b>%s</b> · %s</div>" % (
+            _esc(inst.tipo_bloqueo or "—"), _esc(inst.motivo_bloqueo or ""))
+    ref = "PQR %s" % t.radicado
+    def _tk(area, titulo, just):
+        return "/tickets-doc/nuevo?area=%s&institucion_id=%d&titulo=%s&justificacion=%s" % (area, inst.id, _qq(titulo), _qq(just))
+    just = "Verificar si el pago de %s (NIT %s) fue recibido. %s: %s" % (inst.nombre, inst.nit or "—", ref, (t.objeto or "")[:200])
+    return cab + f"""
+<p style="margin:0 0 6px"><b><a href="/soluciones-procsis/clientes/{inst.id}">{_esc(inst.nombre)}</a></b> · {_esc(inst.codigo)} · NIT {_esc(inst.nit or '—')}</p>
+<p style="margin:0 0 6px">Estado de facturación: {_sol_semaforo_html(cod, True)}
+<span class="mini-text">&nbsp;Según facturas: {SEMAFORO[auto][1]} · {_esc(det)}{" · ajuste interno vigente" if manual else ""}</span></p>
+{bloqueo}{alerta}
+<p style="margin:8px 0 4px;font-weight:700;font-size:13px">Historial de PQRS del cliente ({len(previas)}):</p>
+<ul style="margin:0 0 8px;font-size:13px">{filas or "<li>Sin PQRS anteriores</li>"}</ul>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+  <a class="btn" style="background:#b45309" href="{_tk('Cobranza', 'Verificar pago · ' + inst.nombre[:60] + ' · ' + ref, just)}">🧾 Consultar a Facturación / Cobranza</a>
+  <a class="btn" style="background:#475569" href="{_tk('Gerencia', 'Revisión · ' + inst.nombre[:60] + ' · ' + ref, just)}">🏛 Consultar a Gerencia</a>
+</div>
+<details><summary style="cursor:pointer;font-weight:800;color:#0B2D57">✅ Resolver PQR de cobro (pago verificado)</summary>{_pqr_form_resolver(t, inst)}</details></div>"""
+
+
+def _pqr_form_resolver(t, inst):
+    medios = "".join("<option>%s</option>" % _esc(m) for m in _MEDIOS_PAGO)
+    bloqueada_mora = bool(inst and (inst.estado or "").upper() == "SUSPENDIDA" and (inst.tipo_bloqueo or "").upper() == "MORA")
+    campo_cod = "" if inst else "<label>Código del colegio *</label><input name='codigo_inst' required placeholder='Código EduTrack'>"
+    chk_bloq = ("<label style='display:flex;gap:8px;margin:6px 0'><input type='checkbox' name='levantar_bloqueo' value='1' checked style='width:auto'> Levantar el bloqueo por mora y restablecer el acceso</label>"
+                if bloqueada_mora else "")
+    return f"""
+<form method="POST" style="margin-top:10px">
+  <input type="hidden" name="accion" value="resolver_cobro">
+  {campo_cod}
+  <label>Medio con el que se verificó el pago *</label><select name="medio">{medios}</select>
+  <label>Referencia / soporte del pago *</label><input name="referencia" required maxlength="80" placeholder="N.º de transacción PSE, comprobante, ticket de Facturación…">
+  <label style="display:flex;gap:8px;margin:6px 0"><input type="checkbox" name="set_verde" value="1" checked style="width:auto"> Actualizar el estado del cliente a «Al día»</label>
+  {chk_bloq}
+  <label>Respuesta para el cliente *</label><textarea name="respuesta" rows="4" required placeholder="Ya validamos su pago; su servicio quedó activo…"></textarea>
+  <p class="mini-text">Se cierra la PQR, se envía el aviso al correo del cliente y queda un registro firmado en «Mi bitácora». No se modifican facturas ni contratos.</p>
+  <button type="submit">Resolver y cerrar PQR</button>
+</form>"""
+
+
 # ---------- Panel ----------
 def _sol_etiqueta_html(txt):
     txt = txt or "Sin clasificar"
@@ -54458,6 +54748,13 @@ def soluciones_clientes():
     return page("Clientes", shell(content))
 
 
+def _fecha_dt(s):
+    try:
+        return datetime.strptime((s or "")[:10], "%Y-%m-%d")
+    except Exception:
+        return None
+
+
 @app.route("/soluciones-procsis/clientes/<int:iid>", methods=["GET", "POST"])
 def soluciones_cliente_detalle(iid):
     g = _sol_guard()
@@ -54465,29 +54762,56 @@ def soluciones_cliente_detalle(iid):
         return g
     inst = Institucion.query.get_or_404(iid)
     mensaje = ""
+    err = ""
     if request.method == "POST":
-        et = (request.form.get("etiqueta") or "").strip()
-        nota = (request.form.get("nota") or "").strip()[:600]
-        if et not in ETIQUETAS_CLIENTE:
-            mensaje = "Etiqueta no válida."
-        else:
-            try:
-                reg = ClienteEtiqueta.query.filter_by(institucion_id=iid).first()
-                ant = reg.etiqueta if reg else "Sin clasificar"
-                if not reg:
-                    reg = ClienteEtiqueta(institucion_id=iid)
-                    db.session.add(reg)
-                reg.etiqueta = et
-                reg.nota = nota
-                reg.actualizado_por = session.get("usuario", "")
-                reg.actualizado_en = ahora().strftime("%Y-%m-%d %H:%M")
-                db.session.commit()
-                _sol_auditar("Etiqueta de cliente", "%s: %s → %s" % (inst.codigo, ant, et))
-                mensaje = "Etiqueta actualizada."
-            except Exception as ex:
-                db.session.rollback()
-                print("etiqueta:", ex)
-                mensaje = "No se pudo guardar la etiqueta."
+        accion = (request.form.get("accion") or "etiqueta").strip()
+        try:
+            if accion == "etiqueta":
+                et = (request.form.get("etiqueta") or "").strip()
+                if et not in ETIQUETAS_CLIENTE:
+                    err = "Etiqueta no válida."
+                else:
+                    reg = _sol_reg_etiqueta(iid)
+                    ant = reg.etiqueta or "Sin clasificar"
+                    reg.etiqueta = et
+                    reg.nota = (request.form.get("nota") or "").strip()[:600]
+                    reg.actualizado_por = session.get("usuario", "")
+                    reg.actualizado_en = ahora().strftime("%Y-%m-%d %H:%M")
+                    db.session.commit()
+                    _sol_auditar("Etiqueta de cliente", "%s - %s: etiqueta '%s' → '%s'." % (_fecha_bitacora(), inst.nombre[:80], ant, et))
+                    mensaje = "Etiqueta actualizada."
+            elif accion == "semaforo":
+                cod = (request.form.get("semaforo") or "").strip().upper()
+                motivo = (request.form.get("motivo") or "").strip()
+                if cod not in ("AUTO", "VERDE", "AMARILLO", "ROJO"):
+                    err = "Estado no válido."
+                elif len(motivo) < 10:
+                    err = "Escriba el motivo del cambio (mínimo 10 caracteres)."
+                else:
+                    _sol_fijar_semaforo(inst, cod, motivo)
+                    db.session.commit()
+                    lab = "automático (según facturas)" if cod == "AUTO" else "'%s'" % SEMAFORO[cod][1]
+                    _sol_auditar("Estado de facturación del cliente",
+                                 "%s - Institución %s: estado de facturación ajustado a %s. Motivo: %s" % (_fecha_bitacora(), inst.nombre[:80], lab, motivo[:300]))
+                    mensaje = "Estado de facturación actualizado."
+            elif accion == "pago":
+                ok, msg, acciones = _sol_confirmar_pago(
+                    inst, request.form.get("medio"), request.form.get("referencia"),
+                    (request.form.get("set_verde") or "") == "1", (request.form.get("levantar_bloqueo") or "") == "1")
+                if not ok:
+                    err = msg
+                elif not acciones:
+                    err = "Marque al menos una acción (actualizar a «Al día» o levantar el bloqueo por mora)."
+                else:
+                    _sol_auditar("Pago verificado de cliente",
+                                 "%s - Institución %s: se verificó soporte de pago en %s (ref. %s) y %s." % (
+                                     _fecha_bitacora(), inst.nombre[:80], request.form.get("medio"), (request.form.get("referencia") or "")[:80], " y ".join(acciones)))
+                    mensaje = "Registrado: " + " y ".join(acciones) + "."
+        except Exception as ex:
+            db.session.rollback()
+            print("cliente post:", ex)
+            err = "No se pudo guardar el cambio."
+        inst = Institucion.query.get_or_404(iid)
     else:
         _sol_auditar("Consulta perfil institucional", "%s · %s" % (inst.codigo, inst.nombre[:80]))
 
@@ -54503,13 +54827,10 @@ def soluciones_cliente_detalle(iid):
             return []
 
     reg = _q(lambda: ClienteEtiqueta.query.filter_by(institucion_id=iid).first()) or None
+    cod_sem, det_sem, manual, auto = _sol_semaforo(inst, reg)
     facturas = _q(lambda: FacturaCobro.query.filter_by(institucion_id=iid).order_by(FacturaCobro.id.desc()).limit(8).all())
-    hoy = fecha_hoy()
-    mora = [f for f in facturas if (f.estado or "").upper() == "VENCIDO" or
-            ((f.estado or "").upper() == "PENDIENTE" and (f.vencimiento or "9999") < hoy)]
-    al_dia = ("<span style='color:#16a34a;font-weight:800'>✔ Al día</span>" if not mora
-              else "<span style='color:#dc2626;font-weight:800'>⚠ Con %d factura(s) en mora</span>" % len(mora))
-    contratos = _q(lambda: ContratoSaaSColegio.query.filter_by(institucion_id=iid).order_by(ContratoSaaSColegio.id.desc()).limit(5).all())
+    contratos = _q(lambda: ContratoSaaSColegio.query.filter_by(institucion_id=iid).order_by(ContratoSaaSColegio.id.desc()).limit(8).all())
+    donaciones = _q(lambda: Donacion.query.filter_by(institucion_id=iid).order_by(Donacion.id.desc()).limit(5).all())
     errores = _q(lambda: LogErrorSistema.query.filter_by(institucion_id=iid).order_by(LogErrorSistema.id.desc()).limit(6).all())
     n_err = _q(lambda: LogErrorSistema.query.filter_by(institucion_id=iid).count()) or 0
     incid = []
@@ -54522,19 +54843,41 @@ def soluciones_cliente_detalle(iid):
         TicketPQR.codigo_colegio == (inst.codigo or "#"),
         and_(TicketPQR.nit_colegio != "", TicketPQR.nit_colegio == (inst.nit or "#")),
     )).order_by(TicketPQR.id.desc()).limit(15).all())
+    # Datos de identificación y contacto (según registros del sistema)
+    rectores = _q(lambda: Usuario.query.filter(Usuario.institucion_id == iid, Usuario.rol == "Rectoría").limit(3).all())
+    nombre_rector = (inst.rector or "").strip() or (contratos[0].rector_nombre if contratos and contratos[0].rector_nombre else "") \
+        or next((r.nombre_completo for r in rectores if r.nombre_completo), "") or "—"
+    correos = []
+    for c_ in [r.correo for r in rectores] + [c.rector_email for c in contratos] + [d.correo_colegio for d in donaciones]:
+        c_ = (c_ or "").strip()
+        if c_ and c_.lower() not in [x.lower() for x in correos]:
+            correos.append(c_)
+    telefono = next((f.telefono_contacto for f in facturas if (f.telefono_contacto or "").strip()), "") or "—"
+    val = _q(lambda: ValidacionInst.query.filter_by(institucion_id=iid, estado="VALIDADA").order_by(ValidacionInst.id.desc()).first())
+    val_txt = ("<span style='color:#16a34a;font-weight:700'>✔ Identidad validada (%s)</span>" % _esc(val.creado_en or "")) if val else \
+              "<span style='color:#b45309;font-weight:700'>Sin validación de identidad registrada</span>"
 
     def tabla(cab, filas, vacio):
         return ("<table><tr>%s</tr>%s</table>" % ("".join("<th>%s</th>" % c for c in cab), filas)
                 if filas else "<p style='color:#64748b;font-size:13px'>%s</p>" % vacio)
 
+    # Historial de planes
+    filas_pl = "<tr><td>Actual</td><td>%s</td><td>%s</td><td>%s → %s</td><td>%s</td></tr>" % (
+        _esc(inst.plan or "—"), "Programa de donación Procsis Edu" if es_donacion(inst) else "Plan comercial",
+        _esc(inst.fecha_inicio_licencia or "—"), _esc(inst.fecha_vencimiento or "—"), _esc(inst.estado or "—"))
+    for c in contratos:
+        a, b = _fecha_dt(c.fecha_inicio), _fecha_dt(c.fecha_fin)
+        modal = ("Anual" if (b - a).days >= 300 else "Mensual") if (a and b) else "—"
+        filas_pl += "<tr><td>Contrato</td><td>%s</td><td>%s (estimado por vigencia) · $%s/mes</td><td>%s → %s</td><td>%s</td></tr>" % (
+            _esc(c.plan), modal, format(int(c.valor_mensual or 0), ","), _esc(c.fecha_inicio), _esc(c.fecha_fin), _esc(c.estado))
+    for d in donaciones:
+        filas_pl += "<tr><td>Donación</td><td>%s</td><td>Programa de donación Procsis Edu · %s meses</td><td>%s → %s</td><td>%s</td></tr>" % (
+            _esc(d.plan_nombre), _esc(d.meses), _esc(d.fecha_inicio), _esc(d.fecha_fin), _esc(d.estado))
+    t_pl = tabla(["Origen", "Plan", "Modalidad", "Vigencia", "Estado"], filas_pl, "")
     t_fact = tabla(["Recibo", "Concepto", "Valor", "Estado", "Vence"], "".join(
         "<tr><td>%s</td><td>%s</td><td>$%s</td><td>%s</td><td>%s</td></tr>" % (
             _esc(f.consecutivo), _esc(f.concepto), format(int(f.valor or 0), ","), _esc(f.estado), _esc(f.vencimiento))
         for f in facturas), "Sin facturas registradas.")
-    t_cont = tabla(["Plan", "Estado", "Inicio", "Fin", "Valor mensual"], "".join(
-        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>$%s</td></tr>" % (
-            _esc(c.plan), _esc(c.estado), _esc(c.fecha_inicio), _esc(c.fecha_fin), format(int(c.valor_mensual or 0), ","))
-        for c in contratos), "Sin contratos/convenios registrados.")
     t_err = tabla(["Fecha", "Nivel", "Mensaje"], "".join(
         "<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(e.ts), _esc(e.nivel), _esc((e.mensaje or "")[:140]))
         for e in errores), "Sin fallos registrados.")
@@ -54551,30 +54894,68 @@ def soluciones_cliente_detalle(iid):
             p.id, _esc(p.radicado), _esc("%s/%s" % (p.tipo_pqr, p.subtipo)), _esc(p.estado), _esc(p.fecha))
         for p in pqrs), "Sin PQRS asociadas.")
     bloqueo_actual = ""
-    if (inst.tipo_bloqueo or "").strip() or (inst.estado or "").upper() in ("SUSPENDIDA",):
+    bloq_mora = False
+    if (inst.tipo_bloqueo or "").strip() or (inst.estado or "").upper() == "SUSPENDIDA":
+        bloq_mora = (inst.tipo_bloqueo or "").upper() == "MORA"
         bloqueo_actual = "<div class='msg danger'>Bloqueo/suspensión actual: %s · %s · %s</div>" % (
             _esc(inst.estado), _esc(inst.tipo_bloqueo or "—"), _esc(inst.motivo_bloqueo or ""))
     opts = "".join('<option %s>%s</option>' % ("selected" if (reg and reg.etiqueta == e) else "", _esc(e)) for e in ETIQUETAS_CLIENTE)
-    et_actual = reg.etiqueta if reg else "Sin clasificar"
+    et_actual = (reg.etiqueta if reg else "") or "Sin clasificar"
+    medios = "".join("<option>%s</option>" % _esc(m) for m in _MEDIOS_PAGO)
+    chk_bloq = ("<label style='display:flex;gap:8px;align-items:center'><input type='checkbox' name='levantar_bloqueo' value='1' style='width:auto'> Levantar bloqueo por mora</label>"
+                if bloq_mora else "")
+    ajuste = ("<p class='mini-text'>Ajuste interno vigente: <b>%s</b> por %s (%s). Motivo: %s</p>" % (
+        SEMAFORO[reg.semaforo_manual][1], _esc(reg.semaforo_por), _esc(reg.semaforo_en), _esc(reg.semaforo_motivo)) if manual else "")
+    aviso = "".join("<div class='msg %s'>%s</div>" % (c, _esc(m)) for c, m in (("ok", mensaje), ("danger", err)) if m)
+    correos_txt = _esc(", ".join(correos)) if correos else "—"
     content = f"""
-<header class="role-hero"><div><h1>{_esc(inst.nombre)}</h1><p>Código {_esc(inst.codigo)} · NIT {_esc(inst.nit or '—')} · {_sol_etiqueta_html(et_actual)}</p></div>
+<header class="role-hero"><div><h1>{_esc(inst.nombre)}</h1><p>Código {_esc(inst.codigo)} · NIT {_esc(inst.nit or '—')} · {_sol_semaforo_html(cod_sem)} · {_sol_etiqueta_html(et_actual)}</p></div>
 <a class="btn" href="/soluciones-procsis/clientes">Volver</a></header>
-{"<div class='msg ok'>"+_esc(mensaje)+"</div>" if mensaje else ""}
+{aviso}
 {bloqueo_actual}
-<div class="role-panel"><h3 style="margin-top:0">Perfil institucional</h3>
-<p>Rector: <b>{_esc(inst.rector or '—')}</b> · Contacto: <b>{_esc(inst.contacto_facturacion or '—')}</b><br>
-{_esc(inst.direccion or '')} · {_esc(inst.municipio or '')} {_esc(inst.departamento or '')} · DANE {_esc(inst.dane or '—')}<br>
-Plan: <b>{_esc(inst.plan or '—')}</b> · Estado: <b>{_esc(inst.estado or '—')}</b> ·
-Vigencia: {_esc(inst.fecha_inicio_licencia or '—')} → {_esc(inst.fecha_vencimiento or '—')}<br>
-Estado de cuenta: {al_dia}</p>
+<div class="role-panel"><h3 style="margin-top:0">1 · Datos de identificación</h3>
+<table>
+<tr><th style="width:200px">Institución</th><td>{_esc(inst.nombre)}</td></tr>
+<tr><th>NIT</th><td>{_esc(inst.nit or '—')}</td></tr>
+<tr><th>Rector / Representante legal</th><td>{_esc(nombre_rector)}</td></tr>
+<tr><th>Correo(s) registrados</th><td>{correos_txt}</td></tr>
+<tr><th>Teléfono de contacto</th><td>{_esc(telefono)}</td></tr>
+<tr><th>Ubicación</th><td>{_esc(inst.direccion or '')} {_esc(inst.municipio or '')} {_esc(inst.departamento or '')} · DANE {_esc(inst.dane or '—')}</td></tr>
+<tr><th>Validación de datos</th><td>{val_txt}</td></tr>
+</table>
+<p class="mini-text" style="margin:8px 0 0">🔒 Datos personales tratados conforme a la Ley 1581 de 2012 (Habeas Data): úselos solo para la gestión de la PQRS. Cada consulta queda registrada con su firma en «Mi bitácora».</p>
+</div>
+<div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">2 · Estado de facturación</h3>
+<p style="margin:0 0 6px">{_sol_semaforo_html(cod_sem, True)} <span class="mini-text">&nbsp;Según facturas (automático): {SEMAFORO[auto][1]} · {_esc(det_sem)}</span></p>
+{ajuste}
+<form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:8px 0">
+  <input type="hidden" name="accion" value="semaforo">
+  <div><label style="font-size:12px;font-weight:700">Ajustar estado</label><br>
+  <select name="semaforo" style="padding:9px;border-radius:8px;border:1px solid #cbd5e1">
+    <option value="AUTO">Automático (según facturas)</option><option value="VERDE">🟢 Al día</option>
+    <option value="AMARILLO">🟡 Próximo a vencer</option><option value="ROJO">🔴 En mora</option></select></div>
+  <input name="motivo" required minlength="10" placeholder="Motivo del cambio (obligatorio)" style="flex:1;min-width:220px;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
+  <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar</button>
+</form>
+<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:800;color:#0B2D57">✅ Registrar pago verificado</summary>
 <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
-  <div><label style="font-size:12px;font-weight:700">Etiqueta de satisfacción (interna)</label><br>
-  <select name="etiqueta" style="padding:9px;border-radius:8px;border:1px solid #cbd5e1">{opts}</select></div>
+  <input type="hidden" name="accion" value="pago">
+  <select name="medio" style="padding:9px;border-radius:8px;border:1px solid #cbd5e1">{medios}</select>
+  <input name="referencia" required maxlength="80" placeholder="Referencia / soporte del pago" style="flex:1;min-width:200px;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
+  <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="set_verde" value="1" checked style="width:auto"> Pasar a «Al día»</label>
+  {chk_bloq}
+  <button style="padding:10px 16px;background:#16a34a;color:#fff;border:0;border-radius:8px;font-weight:700">Registrar</button>
+</form>
+<p class="mini-text">No modifica facturas ni contratos (eso lo aplica Facturación/Cobranza). Si necesita confirmar que el dinero ingresó, envíe un ticket a Facturación o Gerencia desde la PQRS.</p></details>
+<h4>Facturación (solo lectura)</h4>{t_fact}</div>
+<div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">3 · Historial de planes</h3>{t_pl}</div>
+<div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">Satisfacción del cliente</h3>
+<form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+  <input type="hidden" name="accion" value="etiqueta">
+  <select name="etiqueta" style="padding:9px;border-radius:8px;border:1px solid #cbd5e1">{opts}</select>
   <input name="nota" value="{_esc(reg.nota if reg else '')}" placeholder="Nota interna (opcional)" style="flex:1;min-width:200px;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
   <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar etiqueta</button>
 </form></div>
-<div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">Convenios / contratos (solo lectura)</h3>{t_cont}
-<h3>Facturación (solo lectura)</h3>{t_fact}</div>
 <div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">Historial de actividad de la cuenta</h3>
 <h4>Bloqueos y contenciones previas</h4>{t_blq}
 <h4>Fallos masivos / incidentes</h4>{t_inc}
@@ -54588,15 +54969,20 @@ def soluciones_auditoria():
     g = _sol_guard()
     if g:
         return g
-    rows = Auditoria.query.filter_by(usuario=session.get("usuario", "")).order_by(Auditoria.id.desc()).limit(150).all()
+    rows = Auditoria.query.filter_by(usuario=session.get("usuario", "")).order_by(Auditoria.id.desc()).limit(200).all()
     filas = ""
     for a in rows:
         v = _sol_firma_valida(a)
         sello = "<span style='color:#16a34a'>✔ firmada</span>" if v else ("<span style='color:#dc2626'>✖ no coincide</span>" if v is False else "<span style='color:#94a3b8'>—</span>")
-        filas += "<tr><td>%s %s</td><td>%s</td><td style='max-width:420px;word-break:break-word'>%s</td><td>%s</td></tr>" % (
-            _esc(a.fecha), _esc(a.hora), _esc(a.accion), _esc((a.detalle or "")[:220]), sello)
+        det = a.detalle or ""
+        m = re.match(r"^(.*?) \| TS:(\S+ \S+)", det, re.S)
+        texto = m.group(1) if m else det[:300]
+        ts = m.group(2) if m else ""
+        filas += ("<tr><td style='white-space:nowrap'>%s<br><span class='mini-text'>%s</span></td><td><b>%s</b></td>"
+                  "<td style='max-width:520px;word-break:break-word'>%s<br><span class='mini-text'>%s</span></td><td>%s</td></tr>") % (
+            _esc(a.fecha), _esc(a.hora), _esc(a.accion), _esc(texto), _esc(("Sello: %s · IP %s" % (ts, a.ip)) if ts else ""), sello)
     content = f"""
-<header class="role-hero"><div><h1>Mi bitácora firmada</h1><p>Acciones registradas con su firma digital (auditoría interna)</p></div>
+<header class="role-hero"><div><h1>Mi bitácora</h1><p>Registro de todo lo que hace con su firma digital (auditoría interna)</p></div>
 <a class="btn" href="/soluciones-procsis">Volver</a></header>
 <div class="role-panel" style="overflow:auto"><table><tr><th>Fecha</th><th>Acción</th><th>Detalle</th><th>Firma</th></tr>
 {filas or "<tr><td colspan=4>Sin registros</td></tr>"}</table></div>"""
