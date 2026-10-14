@@ -8687,7 +8687,16 @@ def _cargar_divipola():
                 return getattr(mod, "COLOMBIA_DEPARTAMENTOS", {}) or {}
     except Exception as e:
         print("divipola load:", e)
-    return {}
+    print("AVISO: no se encontró colombia_divipola.py; se usa la lista de departamentos sin municipios (el municipio se escribe a mano). Suba el archivo junto a app.py.")
+    return {d: [] for d in _DEPARTAMENTOS_CO}
+
+
+_DEPARTAMENTOS_CO = (
+    "Amazonas", "Antioquia", "Arauca", "Atlántico", "Bogotá, D.C.", "Bolívar", "Boyacá", "Caldas", "Caquetá", "Casanare",
+    "Cauca", "Cesar", "Chocó", "Córdoba", "Cundinamarca", "Guainía", "Guaviare", "Huila", "La Guajira", "Magdalena", "Meta",
+    "Nariño", "Norte de Santander", "Putumayo", "Quindío", "Risaralda", "San Andrés y Providencia", "Santander", "Sucre",
+    "Tolima", "Valle del Cauca", "Vaupés", "Vichada",
+)
 
 
 def _divipola_json():
@@ -8792,6 +8801,13 @@ def _script_divipola_subtipos():
         "window.SUBTIPOS_PQR=" + _subtipos_pqr_json() + ";"
         "function fillMun(depId,munId){var d=document.getElementById(depId),m=document.getElementById(munId);"
         "if(!d||!m)return;var list=(window.DIVIPOLA&&window.DIVIPOLA[d.value])||[];"
+        "var tx=document.getElementById(munId+'_txt');if(m.getAttribute('data-req')===null)m.setAttribute('data-req',m.required?'1':'0');"
+        "if(!list.length&&d.value){"  # sin datos de municipios para este departamento: campo de texto para poder radicar
+        "if(!tx){tx=document.createElement('input');tx.type='text';tx.id=munId+'_txt';tx.placeholder='Escriba su municipio / ciudad';tx.maxLength=80;"
+        "tx.setAttribute('name',m.getAttribute('name')||'ciudad');m.parentNode.insertBefore(tx,m.nextSibling);}"
+        "tx.disabled=false;tx.required=true;tx.style.display='';m.disabled=true;m.required=false;m.style.display='none';return;}"
+        "if(tx){tx.disabled=true;tx.required=false;tx.style.display='none';}"
+        "m.disabled=false;m.style.display='';m.required=(m.getAttribute('data-req')==='1');"
         "var cur=m.getAttribute('data-sel')||m.value||'';m.innerHTML='<option value=\"\">— Municipio —</option>';"
         "list.forEach(function(x){var o=document.createElement('option');o.value=x;o.textContent=x;if(x===cur)o.selected=true;m.appendChild(o);});}"
         "function fillSubtipos(tipoId,subId){var t=document.getElementById(tipoId),s=document.getElementById(subId);"
@@ -47241,6 +47257,7 @@ button{{width:100%;margin-top:14px;padding:12px;border:0;border-radius:12px;back
   <p style="color:#64748b;font-size:14px;margin:0 0 14px"><b>{inst.nombre}</b> — Quejas, peticiones y reclamos institucionales (docentes, convivencia, atención, etc.).</p>
   {"<div class='err'>"+mensaje+"</div>" if mensaje else ""}
   <form method="POST">
+  {_script_divipola_subtipos()}
     <div class="row">
       <div><label>Tipo documento *</label>
         <select name="tipo_documento"><option>CC</option><option>CE</option><option>TI</option><option>PAS</option><option>NIT</option></select></div>
@@ -47840,6 +47857,7 @@ a{{color:#1e40af}}
   <h1 style="margin-top:0;color:#0B2D57">Radicar PQR</h1>
   {"<div class='msg'>"+mensaje+"</div>" if mensaje else ""}
   <form method="POST">
+  {_script_divipola_subtipos()}
     <div class="row">
       <div><label>Tipo documento *</label>
         <select name="tipo_documento"><option>CC</option><option>NIT</option><option>CE</option><option>TI</option></select></div>
