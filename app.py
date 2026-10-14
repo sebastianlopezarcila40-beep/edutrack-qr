@@ -54482,6 +54482,16 @@ def _login_soluciones(user):
     session["uid"] = user.id
     session["password_temporal"] = pwd_temp
     session["panel"] = "backoffice"
+    # Equipo ya verificado una vez con PIN: no se vuelve a pedir en este dispositivo.
+    try:
+        if _sol_dispositivo_confiable(user):
+            return _mfa_completar_login(user, via_dispositivo=True)
+    except Exception as ex:
+        print("soluciones dispositivo confiable:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     try:
         registrar_auditoria("Login Soluciones: verificación por correo pendiente", user.usuario)
     except Exception:
@@ -54489,7 +54499,44 @@ def _login_soluciones(user):
     return redirect("/mfa")
 
 
-def _mfa_completar_login(u):
+def _sol_dispositivo_confiable(user):
+    """True si este navegador ya fue autorizado por PIN para el usuario Soluciones."""
+    try:
+        for m in (DispositivoAutorizado,):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+    except Exception:
+        pass
+    fila = _disp_buscar(user)
+    if not fila:
+        return False
+    fila.ultimo_uso = _acc_ts()
+    db.session.commit()
+    return True
+
+
+def _sol_autorizar_dispositivo(user, resp):
+    """Registra este navegador como autorizado y deja la cookie (1 año). Una sola vez."""
+    try:
+        DispositivoAutorizado.__table__.create(bind=db.engine, checkfirst=True)
+        token = secrets.token_urlsafe(32)
+        db.session.add(DispositivoAutorizado(
+            usuario_id=user.id, institucion_id=None,
+            token_hash=_acc_hashlib.sha256(token.encode("utf-8")).hexdigest(),
+            etiqueta=_disp_etiqueta(), ip=_client_ip()[:60], creado_en=_acc_ts(), ultimo_uso=_acc_ts()))
+        db.session.commit()
+        resp.set_cookie(_disp_cookie_nombre(user.id), token, max_age=60 * 60 * 24 * 365, httponly=True,
+                        samesite="Lax", secure=bool(app.config.get("SESSION_COOKIE_SECURE")), path="/")
+        registrar_auditoria("Soluciones: dispositivo autorizado por PIN", "%s · %s" % (user.usuario, _disp_etiqueta()))
+    except Exception as ex:
+        print("soluciones autorizar dispositivo:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return resp
+
+
+def _mfa_completar_login(u, via_dispositivo=False):
     rol = (u.rol or "").strip()
     for k in ("mfa_pendiente", "mfa_user_id", "mfa_pin_token", "mfa_correo", "mfa_intentos", "mfa_envios"):
         session.pop(k, None)
@@ -54503,7 +54550,8 @@ def _mfa_completar_login(u):
         registrar_sesion_empleado(u)
     except Exception:
         pass
-    registrar_auditoria("Login verificado por PIN de correo", "%s · %s" % (u.usuario, rol))
+    registrar_auditoria("Login desde dispositivo ya verificado" if via_dispositivo else "Login verificado por PIN de correo",
+                        "%s · %s" % (u.usuario, rol))
     return redirect(_home_portal(rol))
 
 
@@ -54582,7 +54630,10 @@ def mfa_pagina():
             if not registrado and session.get("mfa_correo"):
                 u.correo = session.get("mfa_correo")
             db.session.commit()
-            return _mfa_completar_login(u)
+            resp = _acc_make_response(_mfa_completar_login(u))
+            if (u.rol or "").strip() == ROL_SOLUCIONES:
+                resp = _sol_autorizar_dispositivo(u, resp)
+            return resp
 
     if ch and session.get("mfa_pin_token"):
         cuerpo = f"""
