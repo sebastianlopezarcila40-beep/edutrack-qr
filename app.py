@@ -52872,53 +52872,626 @@ def soporte_pqr_crear():
 @app.route("/soporte/pqr/consulta", methods=["GET", "POST"])
 @app.route("/soluciones-procsis/pqr/consulta", methods=["GET", "POST"])
 def soporte_pqr_consulta():
+    """Consulta validada (Soporte y Soluciones): búsqueda unificada + municipio obligatorio (anti-fraude)."""
     g = _pqr_guard("ver")
     if g:
         return g
     B = _pqr_base()
     info = ""
+    inst = None
+    opciones = []
+    buscar = ""
+    mun_txt = ""
     if request.method == "POST":
-        codigo = (request.form.get("codigo") or "").strip()
-        nit = (request.form.get("nit") or "").strip()
-        mun = (request.form.get("municipio") or "").strip().lower()
-        inst = None
-        if codigo:
-            inst = Institucion.query.filter_by(codigo=codigo).first()
-        if not inst and nit:
-            inst = Institucion.query.filter(Institucion.nit.ilike(f"%{nit}%")).first()
-        if inst and rol_actual() == "Soluciones":
-            _sol_auditar("Consulta validada de institución", "%s · %s" % (inst.codigo, inst.nombre[:80]))
-        if inst:
-            # anti-fraude simple: si envían municipio, validar
-            ok = True
-            if mun and (inst.municipio or "").lower() and mun not in (inst.municipio or "").lower():
-                ok = False
-            if ok:
+        buscar = (request.form.get("buscar") or "").strip()[:160]
+        mun_txt = (request.form.get("municipio") or "").strip()[:120]
+        inst_id = request.form.get("inst_id", type=int)
+        if inst_id:
+            inst = Institucion.query.get(inst_id)
+        if not inst and buscar:
+            inst, opciones = _aura_resolver_texto(buscar)
+        if opciones:
+            info = "<div class='msg danger'>Hay varias instituciones con ese dato. Elija la correcta:</div>" + "".join(
+                "<form method='POST' style='margin:6px 0'><input type='hidden' name='inst_id' value='%d'>"
+                "<input type='hidden' name='buscar' value='%s'><button type='submit' style='text-align:left'>%s · %s</button></form>"
+                % (o.id, _esc(o.nombre), _esc(o.nombre), _esc(o.codigo)) for o in opciones)
+            inst = None
+        elif not inst:
+            info = "<div class='msg danger'>Institución no encontrada. Revise el nombre, NIT o código.</div>"
+        elif not _aura_normalizar(mun_txt):
+            buscar = "%s (%s)" % (inst.nombre, inst.codigo)
+            info = "<div class='msg ok'>Institución seleccionada. Escriba el municipio para desbloquear los datos protegidos.</div>"
+        elif _aura_bloqueado_por_fallos():
+            info = "<div class='msg danger'>Demasiados intentos de validación fallidos. Espere unos minutos o escale a Gerencia.</div>"
+            inst = None
+        else:
+            ok_mun, motivo = _aura_municipio_coincide(inst, mun_txt)
+            if ok_mun:
+                _sol_auditar("Consulta validada de institución", "%s · %s" % (inst.codigo, (inst.nombre or "")[:80]))
                 info = f"""
                 <div class="msg ok">
-                  <b>{inst.nombre}</b><br>
-                  Código: {inst.codigo} · NIT: {inst.nit} · DANE: {inst.dane or '—'}<br>
-                  Plan: {inst.plan} · Estado: {inst.estado}<br>
-                  Vence: {inst.fecha_vencimiento or '—'} · Municipio: {inst.municipio or '—'}
+                  <b>{_esc(inst.nombre)}</b><br>
+                  Código: {_esc(inst.codigo)} · NIT: {_esc(inst.nit or '—')} · DANE: {_esc(inst.dane or '—')}<br>
+                  Plan: {_esc(inst.plan or '—')} · Estado: {_esc(inst.estado or '—')}<br>
+                  Vence: {_esc(inst.fecha_vencimiento or '—')} · Municipio: {_esc(inst.municipio or '—')}
                 </div>"""
+                buscar = "%s (%s)" % (inst.nombre, inst.codigo)
             else:
+                _aura_registrar_fallo()
+                _sol_auditar("Consulta validada FALLIDA", "%s · %s" % (inst.codigo, motivo))
                 info = "<div class='msg danger'>Validación fallida. No se muestra información (anti-fraude).</div>"
-        else:
-            info = "<div class='msg danger'>Institución no encontrada.</div>"
+                inst = None
+                buscar = ""
+    sel_id = inst.id if inst else ""
     content = f"""
 <header class="role-hero"><div><h1>Consulta validada</h1><p>Anti-fraude antes de entregar datos del colegio</p></div>
+<a class="btn" href="#" onclick="window.auraAbrir&&window.auraAbrir();return false" style="background:#7c3aed">✨ Pregúntale a Aura</a>
 <a class="btn" href="{B}">Volver</a></header>
 <div class="role-panel">
-<form method="POST">
-  <label>Código EduTrack</label><input name="codigo">
-  <label>NIT (parcial o completo)</label><input name="nit">
-  <label>Municipio (validación)</label><input name="municipio">
+<form method="POST" id="cv_form" autocomplete="off">
+  <label>Buscar institución (Nombre, NIT o Código EduTrack)</label>
+  <div style="position:relative">
+    <input name="buscar" id="cv_buscar" value="{_esc(buscar)}" placeholder="Empiece a escribir el nombre, NIT o código…" required>
+    <div id="cv_sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:20;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 24px rgba(15,23,42,.12);max-height:260px;overflow:auto"></div>
+  </div>
+  <input type="hidden" name="inst_id" id="cv_id" value="{sel_id}">
+  <div id="cv_mun_box" style="display:{'block' if sel_id else 'none'}">
+    <label>Municipio de la institución (validación anti-fraude)</label>
+    <input name="municipio" id="cv_mun" value="" placeholder="Pídaselo a quien consulta; no se sugiere por seguridad">
+  </div>
   <button>Validar y consultar</button>
 </form>
 {info}
 </div>
+<script>
+(function(){{
+  var inp=document.getElementById('cv_buscar'), box=document.getElementById('cv_sug'),
+      hid=document.getElementById('cv_id'), mb=document.getElementById('cv_mun_box'), mun=document.getElementById('cv_mun'), t=null;
+  function cerrar(){{box.style.display='none';box.innerHTML='';}}
+  inp.addEventListener('input',function(){{
+    hid.value=''; mb.style.display='none'; clearTimeout(t);
+    var q=inp.value.trim(); if(q.length<2){{cerrar();return;}}
+    t=setTimeout(function(){{
+      fetch('/api/interno/aura/instituciones?q='+encodeURIComponent(q),{{credentials:'same-origin'}})
+        .then(function(r){{return r.json();}}).then(function(d){{
+          var L=(d&&d.items)||[]; if(!L.length){{box.innerHTML='<div style="padding:10px;color:#64748b;font-size:13px">Sin coincidencias guardadas</div>';box.style.display='block';return;}}
+          box.innerHTML=''; L.forEach(function(it){{
+            var a=document.createElement('div'); a.style.cssText='padding:10px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:14px';
+            a.innerHTML='<b></b> <span style="color:#64748b;font-size:12px"></span>';
+            a.firstChild.textContent=it.nombre; a.lastChild.textContent='· '+it.codigo;
+            a.onmouseover=function(){{a.style.background='#f1f5f9';}}; a.onmouseout=function(){{a.style.background='#fff';}};
+            a.onclick=function(){{hid.value=it.id;inp.value=it.nombre+' ('+it.codigo+')';cerrar();mb.style.display='block';mun.focus();}};
+            box.appendChild(a);}}); box.style.display='block';
+        }}).catch(cerrar);
+    }},200);
+  }});
+  document.addEventListener('click',function(e){{if(!box.contains(e.target)&&e.target!==inp)cerrar();}});
+}})();
+</script>
 """
     return page("Consulta PQR", shell(content))
+
+
+# ======================================================================================
+#  EDUAURA · Asistente administrativo con control de acceso por rol (RBAC)
+#  Motor determinista: entiende la pregunta, comprueba el permiso del rol y consulta la
+#  base de datos. NO envía datos a ningún proveedor externo de IA y NUNCA modifica datos.
+# ======================================================================================
+AURA_VALIDA_DEPARTAMENTO = False   # True: en el chat, el departamento también desbloquea NIT/DANE
+_AURA_MAX_FALLOS = 8
+_AURA_VENTANA_FALLOS = 15 * 60
+_AURA_GERENCIA = ("Gerente", "Superadmin", "Administrador")
+_AURA_FIN_ROLES = _AURA_GERENCIA + ("Cobranza", "Contabilidad", "Finanzas")
+_AURA_PQR_CERRADAS = ("RESUELTA", "RESUELTO", "CERRADA", "CERRADO")
+
+_AURA_INTENTOS = {
+    "validar": ("Validar una institución (anti-fraude)", "Validar colegio Horizonte Andino de Caracolí"),
+    "estado": ("Estado general de una institución", "Estado de la I.E. Horizonte Andino y si tiene PQRS abiertas"),
+    "pqrs": ("Resumen de PQRS", "¿Cuántas PQRS abiertas hay?"),
+    "tickets": ("Tickets y errores del sistema", "Muéstrame los últimos tickets con errores de carga de archivos"),
+    "csat": ("Satisfacción CSAT del mes", "Dame el CSAT de este mes"),
+    "activas": ("Instituciones activas", "¿Cuántas instituciones de Antioquia están activas?"),
+    "cartera": ("Cartera pendiente y vencida", "¿Cómo va la cartera vencida?"),
+    "facturas": ("Facturas de una institución", "Facturas de la I.E. Horizonte Andino"),
+}
+_AURA_PERMISOS = {
+    "Soluciones": {"validar", "estado", "pqrs", "csat"},
+    "Soporte": {"validar", "estado", "pqrs", "tickets"},
+    "Gerente": set(_AURA_INTENTOS), "Superadmin": set(_AURA_INTENTOS), "Administrador": set(_AURA_INTENTOS),
+    "Comercial": {"estado"},
+    "Cobranza": {"estado", "cartera", "facturas"},
+    "Contabilidad": {"estado", "cartera", "facturas"},
+    "Finanzas": {"estado", "cartera", "facturas"},
+    "Desarrollador": {"tickets"}, "Developer": {"tickets"},
+    "Calidad": {"tickets"},
+}
+_AURA_MSG_FIN = ("Lo siento, no tengo permisos para mostrar información financiera confidencial. "
+                 "Tu rol solo permite visualización de estados de cuenta general.")
+_AURA_STOP = frozenset((
+    "de", "la", "el", "los", "las", "del", "en", "y", "colegio", "institucion", "educativa", "ie", "i", "e", "centro",
+    "escuela", "gimnasio", "liceo", "instituto", "validar", "validame", "estado", "dime", "si", "tienen", "tiene", "pqrs",
+    "pqr", "abiertas", "abierta", "buscame", "busca", "muestrame", "dame", "un", "una", "que", "cual", "cuales", "como",
+    "esta", "para", "con", "sin", "por", "su", "sus", "nit", "codigo", "edutrack", "municipio", "departamento", "aura",
+    "hola", "favor", "revisa", "consulta", "consultar", "ver", "facturas", "factura", "mi", "me", "al", "a", "o", "ese",
+    "esa", "este", "esta", "son", "esta", "esten", "esta", "aqui", "sobre", "cuantas", "cuantos", "hay",
+))
+_AURA_GEN = frozenset((
+    "ticket", "tickets", "ultimos", "ultimo", "errores", "error", "sistema", "muestrame", "tengan", "tenga", "que", "con", "de",
+    "los", "las", "el", "la", "del", "en", "relacionados", "relacionado", "sobre", "dame", "dime", "busca", "buscame", "ver",
+    "hay", "algun", "alguno", "algunos", "problemas", "problema", "fallas", "falla", "incidentes", "incidente", "y", "o", "un", "una",
+    "para", "por", "se", "han", "recientes", "reciente", "aura", "hola",
+))
+
+
+def _aura_normalizar(s):
+    t = _sin_tildes((s or "").lower())
+    t = re.sub(r"[^a-z0-9ñ]+", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _aura_staff():
+    try:
+        if not requiere_login() or session.get("mfa_pendiente") or session.get("institucion_id"):
+            return False
+        return rol_actual() in ROLES_INTERNOS
+    except Exception:
+        return False
+
+
+def _aura_puede(intento):
+    return intento in _AURA_PERMISOS.get(rol_actual(), set())
+
+
+def _aura_bloqueado_por_fallos():
+    import time as _t
+    lim = _t.time() - _AURA_VENTANA_FALLOS
+    fallos = [x for x in (session.get("aura_fallos") or []) if x > lim]
+    session["aura_fallos"] = fallos
+    return len(fallos) >= _AURA_MAX_FALLOS
+
+
+def _aura_registrar_fallo():
+    import time as _t
+    fallos = list(session.get("aura_fallos") or [])
+    fallos.append(_t.time())
+    session["aura_fallos"] = fallos[-_AURA_MAX_FALLOS * 2:]
+
+
+def _aura_municipio_coincide(inst, texto, permitir_departamento=False):
+    """(ok, motivo). Igualdad normalizada (tolera tildes, mayúsculas y un error de digitación)."""
+    import difflib as _dl
+    q = _aura_normalizar(texto)
+    mun = _aura_normalizar(inst.municipio)
+    if not q:
+        return False, "municipio no indicado"
+    if not mun:
+        return False, "la institución no tiene municipio registrado"
+    if q == mun or _dl.SequenceMatcher(None, q, mun).ratio() >= 0.9:
+        return True, ""
+    if permitir_departamento:
+        dep = _aura_normalizar(inst.departamento)
+        if dep and (q == dep or _dl.SequenceMatcher(None, q, dep).ratio() >= 0.9):
+            return True, ""
+    return False, "municipio no coincide"
+
+
+def _aura_todas_instituciones():
+    try:
+        return Institucion.query.with_entities(
+            Institucion.id, Institucion.nombre, Institucion.codigo, Institucion.nit,
+            Institucion.municipio, Institucion.departamento).limit(5000).all()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return []
+
+
+def _aura_resolver_texto(txt):
+    """Institución por código, NIT o nombre. Devuelve (inst, opciones)."""
+    n = _aura_normalizar(txt)
+    if not n:
+        return None, []
+    digitos = re.sub(r"\D", "", txt or "")
+    filas = _aura_todas_instituciones()
+    exactas = []
+    for f in filas:
+        if n == _aura_normalizar(f.codigo) or (len(digitos) >= 6 and digitos == re.sub(r"\D", "", f.nit or "")) or n == _aura_normalizar(f.nombre):
+            exactas.append(f.id)
+    if len(exactas) == 1:
+        return Institucion.query.get(exactas[0]), []
+    cand = [f for f in filas if n in _aura_normalizar(f.nombre) or n in _aura_normalizar(f.codigo)
+            or (len(digitos) >= 4 and digitos in re.sub(r"\D", "", f.nit or ""))]
+    if len(cand) == 1:
+        return Institucion.query.get(cand[0].id), []
+    if 1 < len(cand) <= 8:
+        return None, [Institucion.query.get(f.id) for f in cand]
+    return None, []
+
+
+@app.route("/api/interno/aura/instituciones")
+def api_aura_instituciones():
+    if not _aura_staff() or not _aura_puede("validar"):
+        return jsonify(items=[]), 403
+    q = _aura_normalizar(request.args.get("q") or "")
+    digitos = re.sub(r"\D", "", request.args.get("q") or "")
+    if len(q) < 2:
+        return jsonify(items=[])
+    out = []
+    for f in _aura_todas_instituciones():
+        if (q in _aura_normalizar(f.nombre) or q in _aura_normalizar(f.codigo)
+                or (len(digitos) >= 4 and digitos in re.sub(r"\D", "", f.nit or ""))):
+            out.append({"id": f.id, "nombre": f.nombre, "codigo": f.codigo})
+        if len(out) >= 8:
+            break
+    return jsonify(items=out)
+
+
+def _aura_buscar_en_mensaje(n):
+    """Institución mencionada en un mensaje normalizado. Devuelve (inst, ambiguas)."""
+    filas = _aura_todas_instituciones()
+    toks = set(n.split())
+    for f in filas:
+        cod = _aura_normalizar(f.codigo)
+        if cod and cod in toks:
+            return Institucion.query.get(f.id), []
+    for d in re.findall(r"\d{6,}", n.replace("-", "")):
+        for f in filas:
+            if d == re.sub(r"\D", "", f.nit or ""):
+                return Institucion.query.get(f.id), []
+    puntaje = []
+    for f in filas:
+        nt = [w for w in _aura_normalizar(f.nombre).split() if w not in _AURA_STOP]
+        if not nt:
+            continue
+        hit = [w for w in nt if w in toks]
+        if hit and any(len(w) >= 4 for w in hit):
+            puntaje.append((len(hit) / float(len(nt)), len(hit), f))
+    if not puntaje:
+        return None, []
+    puntaje.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    mejor = puntaje[0]
+    if mejor[0] < 0.67:
+        return None, []
+    empatadas = [p for p in puntaje if p[0] == mejor[0] and p[1] == mejor[1]]
+    if len(empatadas) > 1:
+        return None, [Institucion.query.get(p[2].id) for p in empatadas[:5]]
+    return Institucion.query.get(mejor[2].id), []
+
+
+def _aura_intencion(n):
+    if re.search(r"\b(cambia|cambiar|modifica|modificar|edita|editar|elimina|eliminar|borra|borrar|anula|anular|actualiza|actualizar|"
+                 r"responde|responder|cierra|cerrar|crea|crear|aprueba|aprobar|suspende|suspender|levanta|levantar|desbloquea|desbloquear|envia|enviar)\b", n):
+        return "modificar"
+    if re.search(r"cuenta bancaria|numero de cuenta|metodo de pago|medio de pago|forma de pago|tarjeta|banco|bancari|wompi|\bpse\b|contrasena|password|clave|token", n):
+        return "financiero"
+    if re.search(r"\b(ayuda|que puedes|que sabes|que haces|como funcionas|para que sirves)\b", n):
+        return "ayuda"
+    if re.search(r"\bvalid", n):
+        return "validar"
+    if re.search(r"csat|satisfaccion|encuesta", n):
+        return "csat"
+    if re.search(r"\b(cuantas|cuantos|numero|total)\b.*\b(instituciones|colegios)\b|\b(instituciones|colegios)\b.*\bactiv", n):
+        return "activas"
+    if re.search(r"ticket|\berror|\bfalla|incidente|carga de archivo", n):
+        return "tickets"
+    if re.search(r"cartera|vencid|\bmora\b|saldo pendiente|por cobrar|recaudo", n):
+        return "cartera"
+    if re.search(r"factura", n):
+        return "facturas"
+    if re.search(r"\bpqr|peticion|queja|reclamo", n):
+        return "pqrs"
+    return "estado"
+
+
+def _aura_auditar(intento, mensaje):
+    try:
+        _sol_auditar("EduAura consulta (%s)" % intento, "%s · %s" % (rol_actual(), (mensaje or "")[:160]))
+    except Exception:
+        pass
+
+
+def _aura_ayuda_html():
+    rol = rol_actual()
+    permitidos = [k for k in _AURA_INTENTOS if k in _AURA_PERMISOS.get(rol, set())]
+    if not permitidos:
+        return ("Por ahora tu rol (%s) no tiene consultas habilitadas en Aura. "
+                "Las irán habilitando según las funciones de tu área." % _esc(rol))
+    filas = "".join("<li><b>%s</b><br><i>%s</i></li>" % (_esc(_AURA_INTENTOS[k][0]), _esc(_AURA_INTENTOS[k][1])) for k in permitidos)
+    return ("Soy Aura. Con tu rol (%s) puedo ayudarte con:<ul style='margin:6px 0 6px 16px;padding:0'>%s</ul>"
+            "Solo consulto; no modifico datos." % (_esc(rol), filas))
+
+
+def _aura_estado_html(inst):
+    try:
+        cod, det = _sol_semaforo_auto(inst)
+    except Exception:
+        cod, det = "VERDE", ""
+    etiqueta = SEMAFORO.get(cod, ("", "Sin datos", ""))[1]
+    cerradas = list(_AURA_PQR_CERRADAS)
+    try:
+        abiertas = TicketPQR.query.filter(TicketPQR.institucion_id == inst.id, ~TicketPQR.estado.in_(cerradas)).count()
+        total = TicketPQR.query.filter(TicketPQR.institucion_id == inst.id).count()
+    except Exception:
+        db.session.rollback()
+        abiertas = total = 0
+    pq = ("No tiene PQRS abiertas" if not abiertas else "Tiene <b>%d</b> PQRS abierta(s)" % abiertas)
+    return ("La <b>%s</b> está <b>%s</b>. %s. %s (total histórico: %d). Su código EduTrack es <b>%s</b>. Plan %s · estado %s."
+            % (_esc(inst.nombre), _esc(etiqueta), _esc(det or "Sin novedades de facturación"), pq, total,
+               _esc(inst.codigo), _esc(inst.plan or "—"), _esc(inst.estado or "—")))
+
+
+def _aura_validar_html(inst, n):
+    fallo = ""
+    if _aura_bloqueado_por_fallos():
+        return "Demasiados intentos de validación fallidos. Espera unos minutos o escala a Gerencia."
+    mun = _aura_normalizar(inst.municipio)
+    ok = False
+    if mun:
+        patron = r"\b(?:de|del|en|municipio de|municipio)\s+(?:la\s+)?%s\b" % re.escape(mun)
+        veces = len(re.findall(patron, n))
+        minimo = 2 if mun in _aura_normalizar(inst.nombre) else 1
+        ok = veces >= minimo
+    if not ok and AURA_VALIDA_DEPARTAMENTO:
+        dep = _aura_normalizar(inst.departamento)
+        if dep:
+            patron = r"\b(?:de|del|en)\s+(?:la\s+)?%s\b" % re.escape(dep)
+            ok = len(re.findall(patron, n)) >= (2 if dep in _aura_normalizar(inst.nombre) else 1)
+    if not ok:
+        _aura_registrar_fallo()
+        return ("No pude validar la institución. Para desbloquear los datos protegidos indícame el <b>municipio</b> de la institución. "
+                "Ejemplo: «Validar colegio X de MUNICIPIO».")
+    return ("<b>Validación exitosa.</b> %s · NIT <b>%s</b> · DANE %s · Código <b>%s</b> · Municipio %s · Plan %s · Estado %s. "
+            "¿Deseas ver el perfil del cliente? "
+            % (_esc(inst.nombre), _esc(inst.nit or "—"), _esc(inst.dane or "—"), _esc(inst.codigo), _esc(inst.municipio or "—"),
+               _esc(inst.plan or "—"), _esc(inst.estado or "—")))
+
+
+def _aura_pqrs_global_html():
+    partes = []
+    for b, v in _PQR_BUCKETS.items():
+        try:
+            c = TicketPQR.query.filter(TicketPQR.estado.in_(v[0])).count()
+        except Exception:
+            db.session.rollback()
+            c = 0
+        partes.append("%s %s: <b>%d</b>" % (v[1], b.capitalize(), c))
+    return "PQRS por estado — " + " · ".join(partes) + "."
+
+
+def _aura_tickets_html(n):
+    kw = [w for w in n.split() if w not in _AURA_GEN and len(w) >= 4]
+    kw = [w[:-1] if w.endswith("s") and len(w) > 5 else w for w in kw][:4]
+    pqr_q = TicketPQR.query
+    doc_q = TicketDoc.query
+    if kw:
+        pqr_q = pqr_q.filter(or_(*[or_(TicketPQR.objeto.ilike("%" + k + "%"), TicketPQR.hechos.ilike("%" + k + "%"),
+                                       TicketPQR.subtipo.ilike("%" + k + "%")) for k in kw]))
+        doc_q = doc_q.filter(or_(*[or_(TicketDoc.titulo.ilike("%" + k + "%"), TicketDoc.justificacion.ilike("%" + k + "%")) for k in kw]))
+    try:
+        n_pqr, n_doc = pqr_q.count(), doc_q.count()
+        top_pqr = pqr_q.order_by(TicketPQR.id.desc()).limit(4).all()
+        top_doc = doc_q.order_by(TicketDoc.id.desc()).limit(3).all()
+    except Exception:
+        db.session.rollback()
+        return "No pude consultar los tickets en este momento."
+    if not (n_pqr or n_doc):
+        return "No encontré tickets%s." % ((" relacionados con «%s»" % _esc(" ".join(kw))) if kw else "")
+    lis = "".join("<li>%s · %s · %s — %s</li>" % (_esc(t.radicado), _esc(t.estado or ""), _esc(t.fecha or ""), _esc((t.objeto or "")[:70])) for t in top_pqr)
+    lis += "".join("<li>%s · %s · %s — %s</li>" % (_esc(t.codigo or ""), _esc(t.estado or ""), _esc((t.creado_en or "")[:10]), _esc((t.titulo or "")[:70])) for t in top_doc)
+    return ("Se encontraron <b>%d</b> ticket(s)%s: %d PQR y %d documentales.<ul style='margin:6px 0 0 16px;padding:0'>%s</ul>"
+            % (n_pqr + n_doc, (" relacionados con «%s»" % _esc(" ".join(kw))) if kw else "", n_pqr, n_doc, lis))
+
+
+def _aura_csat_html():
+    mes = ahora().strftime("%Y-%m")
+    try:
+        filas = EncuestaCSAT.query.filter(EncuestaCSAT.respondida.is_(True),
+                                          or_(EncuestaCSAT.respondida_en.like(mes + "%"), EncuestaCSAT.creada_en.like(mes + "%"))).all()
+    except Exception:
+        db.session.rollback()
+        filas = []
+    vals = [float(f.promedio or 0) for f in filas if (f.promedio or 0) > 0]
+    if not vals:
+        return "Este mes todavía no hay encuestas CSAT respondidas."
+    return "Este mes el CSAT está en <b>%.0f%%</b> (promedio %.2f de 5 con %d encuesta(s) respondida(s))." % (sum(vals) / len(vals) / 5.0 * 100, sum(vals) / len(vals), len(vals))
+
+
+def _aura_activas_html(n):
+    filas = _aura_todas_instituciones()
+    deptos = {_aura_normalizar(f.departamento): f.departamento for f in filas if f.departamento}
+    munis = {_aura_normalizar(f.municipio): f.municipio for f in filas if f.municipio}
+    dep = next((v for k, v in deptos.items() if k and re.search(r"\b%s\b" % re.escape(k), n)), "")
+    mun = next((v for k, v in munis.items() if k and re.search(r"\b%s\b" % re.escape(k), n)), "")
+    q = Institucion.query.filter(Institucion.estado == "ACTIVA")
+    tot = Institucion.query
+    if dep:
+        q = q.filter(func.lower(Institucion.departamento) == dep.lower())
+        tot = tot.filter(func.lower(Institucion.departamento) == dep.lower())
+    texto = "Hay <b>%d</b> instituciones activas%s (de %d registradas)." % (q.count(), (" en " + _esc(dep)) if dep else "", tot.count())
+    if mun:
+        qm = Institucion.query.filter(Institucion.estado == "ACTIVA", func.lower(Institucion.municipio) == mun.lower()).count()
+        texto += " En %s hay <b>%d</b> activa(s)." % (_esc(mun), qm)
+    return texto
+
+
+def _aura_cartera_html():
+    try:
+        rows = FacturaCobro.query.filter(FacturaCobro.estado.in_(("PENDIENTE", "VENCIDO"))).all()
+    except Exception:
+        db.session.rollback()
+        return "No pude consultar la cartera en este momento."
+    pend = sum(float(r.valor or 0) for r in rows)
+    venc = [r for r in rows if (r.estado or "").upper() == "VENCIDO" or ((r.vencimiento or "") and (r.vencimiento or "") < fecha_hoy())]
+    sv = sum(float(r.valor or 0) for r in venc)
+    por_inst = {}
+    for r in venc:
+        por_inst[r.colegio_snapshot or ("Institución %s" % r.institucion_id)] = por_inst.get(r.colegio_snapshot or ("Institución %s" % r.institucion_id), 0) + float(r.valor or 0)
+    top = sorted(por_inst.items(), key=lambda x: x[1], reverse=True)[:3]
+    lis = "".join("<li>%s: %s</li>" % (_esc(k), _esc(_cta_fmt(v))) for k, v in top)
+    return ("Cartera pendiente: <b>%s</b> en %d factura(s). Vencida: <b>%s</b> en %d factura(s).%s"
+            % (_esc(_cta_fmt(pend)), len(rows), _esc(_cta_fmt(sv)), len(venc), ("<ul style='margin:6px 0 0 16px;padding:0'>%s</ul>" % lis) if lis else ""))
+
+
+def _aura_facturas_html(inst):
+    try:
+        fs = FacturaCobro.query.filter(FacturaCobro.institucion_id == inst.id).order_by(FacturaCobro.id.desc()).limit(5).all()
+    except Exception:
+        db.session.rollback()
+        fs = []
+    if not fs:
+        return "La %s no tiene facturas registradas." % _esc(inst.nombre)
+    lis = "".join("<li>%s · %s · %s · %s · vence %s</li>" % (_esc(f.consecutivo or ""), _esc((f.concepto or "")[:40]), _esc(_cta_fmt(f.valor)),
+                                                              _esc(f.estado or ""), _esc(f.vencimiento or "—")) for f in fs)
+    return "Últimas facturas de la <b>%s</b>:<ul style='margin:6px 0 0 16px;padding:0'>%s</ul>" % (_esc(inst.nombre), lis)
+
+
+def _aura_responder(mensaje):
+    """Devuelve el HTML de respuesta de Aura para el rol de la sesión. Nunca modifica datos."""
+    rol = rol_actual()
+    n = _aura_normalizar(mensaje)
+    if not n:
+        return "Escríbeme tu consulta. Si necesitas ideas, pídeme «ayuda»."
+    if re.fullmatch(r"(hola|buenas|buenos dias|buenas tardes|buenas noches|hey)( aura)?", n):
+        return "Hola, soy Aura. " + _aura_ayuda_html()
+    intento = _aura_intencion(n)
+    if intento == "ayuda":
+        return _aura_ayuda_html()
+    if intento == "modificar":
+        _aura_auditar("modificar-bloqueado", mensaje)
+        extra = ""
+        if rol == "Soporte":
+            extra = " Soporte tampoco puede alterar facturación ni las respuestas institucionales de PQRS."
+        return ("Aura solo consulta información; no modifica datos.%s Hazlo desde el módulo correspondiente, donde queda firmado en la bitácora." % extra)
+    if intento == "financiero":
+        _aura_auditar("financiero", mensaje)
+        if rol not in _AURA_FIN_ROLES:
+            return _esc(_AURA_MSG_FIN)
+        return ("Por seguridad no muestro datos bancarios, claves ni medios de pago. "
+                "Puedo darte facturas y cartera: prueba «Facturas de [institución]» o «¿Cómo va la cartera vencida?».")
+    if (re.search(r"csat|satisfaccion|encuesta", n)
+            and re.search(r"\b(instituciones|colegios)\b.*\bactiv|\bactiv.*\b(instituciones|colegios)\b", n)):
+        partes = []
+        for it, fn in (("csat", _aura_csat_html), ("activas", lambda: _aura_activas_html(n))):
+            if _aura_puede(it):
+                _aura_auditar(it, mensaje)
+                partes.append(fn())
+            else:
+                _aura_auditar("denegado-" + it, mensaje)
+                partes.append("No tengo permisos para «%s» con tu rol (%s)." % (_esc(_AURA_INTENTOS[it][0]), _esc(rol)))
+        return "<br>".join(partes)
+    if not _aura_puede(intento):
+        _aura_auditar("denegado-" + intento, mensaje)
+        if intento in ("cartera", "facturas"):
+            return _esc(_AURA_MSG_FIN)
+        return ("Lo siento, tu rol (%s) no tiene permisos para esta consulta.<br>" % _esc(rol)) + _aura_ayuda_html()
+    _aura_auditar(intento, mensaje)
+    if intento == "csat":
+        return _aura_csat_html()
+    if intento == "activas":
+        return _aura_activas_html(n)
+    if intento == "tickets":
+        return _aura_tickets_html(n)
+    inst, ambiguas = _aura_buscar_en_mensaje(n)
+    if ambiguas:
+        return "Encontré varias instituciones parecidas. ¿Cuál es? " + " · ".join("<b>%s</b> (%s)" % (_esc(i.nombre), _esc(i.codigo)) for i in ambiguas)
+    if intento == "pqrs" and not inst:
+        return _aura_pqrs_global_html()
+    if intento == "cartera" and not inst:
+        return _aura_cartera_html()
+    if not inst:
+        return "No identifiqué la institución. Dime el nombre, el NIT o el código EduTrack. Ejemplo: «Estado de la I.E. Horizonte Andino»."
+    if intento == "validar":
+        return _aura_validar_html(inst, n)
+    if intento in ("facturas", "cartera"):
+        return _aura_facturas_html(inst)
+    return _aura_estado_html(inst)
+
+
+@app.route("/api/interno/aura/chat", methods=["POST"])
+def api_aura_chat():
+    if not _aura_staff():
+        return jsonify(ok=False, html="Tu sesión no puede usar Aura."), 403
+    data = request.get_json(silent=True) or {}
+    mensaje = str(data.get("mensaje") or "").strip()[:400]
+    try:
+        html = _aura_responder(mensaje)
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("aura chat:", repr(ex))
+        html = "No pude procesar la consulta. Intenta de nuevo."
+    return jsonify(ok=True, html=html)
+
+
+def _aura_widget_html():
+    rol = rol_actual()
+    ejemplos = [v[1] for k, v in _AURA_INTENTOS.items() if k in _AURA_PERMISOS.get(rol, set())][:4]
+    chips = json.dumps(ejemplos, ensure_ascii=False)
+    return """
+<div id="aura-root">
+<style>
+#aura-root{position:fixed;right:18px;bottom:18px;z-index:99999;font-family:Segoe UI,system-ui,sans-serif}
+#aura-btn{background:linear-gradient(135deg,#0B2D57,#7c3aed);color:#fff;border:0;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;box-shadow:0 8px 24px rgba(15,23,42,.3)}
+#aura-box{display:none;width:350px;max-width:calc(100vw - 28px);height:460px;max-height:calc(100vh - 100px);background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 18px 44px rgba(15,23,42,.28);flex-direction:column;overflow:hidden;margin-bottom:10px}
+#aura-head{background:linear-gradient(135deg,#0B2D57,#7c3aed);color:#fff;padding:12px 14px;font-weight:800;display:flex;justify-content:space-between;align-items:center}
+#aura-msgs{flex:1;overflow:auto;padding:12px;background:#f8fafc;font-size:13px;line-height:1.45}
+.aura-m{margin:0 0 10px;padding:9px 11px;border-radius:12px;max-width:92%}
+.aura-u{background:#0B2D57;color:#fff;margin-left:auto}
+.aura-a{background:#fff;border:1px solid #e2e8f0;color:#0f172a}
+#aura-chips{padding:6px 10px 0;display:flex;gap:6px;flex-wrap:wrap}
+#aura-chips button{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:4px 10px;font-size:11px;cursor:pointer;color:#334155}
+#aura-form{display:flex;gap:6px;padding:10px;border-top:1px solid #e2e8f0}
+#aura-in{flex:1;padding:9px 10px;border:1px solid #cbd5e1;border-radius:10px;font-size:13px}
+#aura-send{background:#0B2D57;color:#fff;border:0;border-radius:10px;padding:0 14px;font-weight:800;cursor:pointer}
+@media print{#aura-root{display:none}}
+</style>
+<div id="aura-box"><div id="aura-head"><span>✨ EduAura · asistente interno</span><span id="aura-x" style="cursor:pointer">✕</span></div>
+<div id="aura-msgs"><div class="aura-m aura-a">Hola, soy Aura. Consulto información según los permisos de tu rol. Escribe «ayuda» para ver qué puedo hacer.</div></div>
+<div id="aura-chips"></div>
+<form id="aura-form"><input id="aura-in" maxlength="400" placeholder="Escribe tu consulta…" autocomplete="off"><button id="aura-send">Enviar</button></form></div>
+<button id="aura-btn" type="button">✨ Aura</button>
+<script>
+(function(){
+  var box=document.getElementById('aura-box'),btn=document.getElementById('aura-btn'),msgs=document.getElementById('aura-msgs'),
+      inp=document.getElementById('aura-in'),chips=document.getElementById('aura-chips');
+  function abrir(){box.style.display='flex';btn.style.display='none';inp.focus();}
+  function cerrar(){box.style.display='none';btn.style.display='inline-block';}
+  window.auraAbrir=abrir; btn.onclick=abrir; document.getElementById('aura-x').onclick=cerrar;
+  function add(h,u){var d=document.createElement('div');d.className='aura-m '+(u?'aura-u':'aura-a');if(u)d.textContent=h;else d.innerHTML=h;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}
+  function enviar(t){t=(t||'').trim();if(!t)return;add(t,true);inp.value='';chips.innerHTML='';
+    fetch('/api/interno/aura/chat',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Requested-With':'aura'},body:JSON.stringify({mensaje:t})})
+      .then(function(r){return r.json();}).then(function(d){add(d.html||'Sin respuesta.');}).catch(function(){add('No pude conectar con el servidor.');});}
+  document.getElementById('aura-form').onsubmit=function(e){e.preventDefault();enviar(inp.value);};
+  var EJ=__CHIPS__; EJ.forEach(function(x){var b=document.createElement('button');b.type='button';b.textContent=x.length>38?x.slice(0,36)+'…':x;b.title=x;b.onclick=function(){enviar(x);};chips.appendChild(b);});
+})();
+</script>
+</div>
+""".replace("__CHIPS__", chips)
+
+
+@app.after_request
+def _aura_inyectar_widget(resp):
+    """Aura disponible en todas las pantallas del personal PROCSIS (no en colegios ni en el login)."""
+    try:
+        if resp.status_code != 200 or resp.direct_passthrough or not resp.is_sequence or resp.mimetype != "text/html":
+            return resp
+        p = request.path or ""
+        if p.startswith(("/api/", "/static", "/logout", "/login", "/mfa", "/validar", "/bienvenida", "/media")) or p.endswith(".pdf"):
+            return resp
+        if not _aura_staff():
+            return resp
+        body = resp.get_data(as_text=True)
+        i = body.rfind("</body>")
+        if i < 0 or 'id="aura-root"' in body:
+            return resp
+        resp.set_data(body[:i] + _aura_widget_html() + body[i:])
+    except Exception as ex:
+        print("aura inyectar:", repr(ex))
+    return resp
 
 
 
