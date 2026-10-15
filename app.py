@@ -10303,6 +10303,187 @@ def enviar_pin(correo_destino, pin):
         print("ERROR PIN:", e); return False
 
 
+# ══════════════════════════════════════════════════════════════════════════
+#  EDU AURA PÚBLICO · asistente de ayuda en la página de inicio (login)
+#  Responde dudas con la base de ayuda; si no entiende o piden asesor → WhatsApp.
+# ══════════════════════════════════════════════════════════════════════════
+import unicodedata as _au_ud
+import difflib as _au_dl
+
+_AURA_KB = [
+    ("acceso", "iniciar sesion ingresar ingreso ingresando entrar login acceso usuario cedula portal como ingreso como entro no puedo entrar",
+     "Entra por el <b>Portal de acceso</b> de esta misma página: elige tu institución, escribe tu usuario (cédula o ID) y tu contraseña. Si no tienes usuario, lo crea la secretaría o rectoría de tu colegio."),
+    ("clave", "olvide contrasena clave password recuperar restablecer cambiar contrasena",
+     "Por seguridad EduTrack no cambia claves desde un formulario público. El <b>rector o la secretaría</b> de tu colegio solicita el restablecimiento a la Mesa de Soporte PROCSIS."),
+    ("pqr", "pqr peticion queja reclamo sugerencia radicar denuncia solicitud",
+     "Puedes radicar una PQR en <a href='/pqr'>/pqr</a>. Recibirás un número de radicado y la fecha máxima de respuesta según la norma colombiana."),
+    ("pagos", "pagar factura licencia pago cartera cobro wompi mensualidad",
+     "Paga tu factura o licencia en <a href='/pagar'>/pagar</a> con el NIT o código del colegio. Si hay enlace Wompi configurado, podrás pagar en línea."),
+    ("qr", "asistencia codigo qr porteria carnet carne entrada salida lector",
+     "La portería usa el lector QR del portal para registrar entradas y salidas. Los padres ven los ingresos en el portal familiar si el plan del colegio lo incluye."),
+    ("notas", "notas planilla docente calificaciones boletin siee periodo",
+     "El docente solo ve las materias y grados que tiene asignados. Las notas se guardan automáticamente; usa punto decimal (por ejemplo 3.5). Los boletines los genera el colegio según su SIEE."),
+    ("familia", "padres acudiente familia portal familiar hijo estudiante ver notas",
+     "Los acudientes ingresan en <a href='/familia-login'>/familia-login</a> con su cédula. Ven el resumen de notas e ingresos QR según el plan de su colegio."),
+    ("planes", "planes precio costo tarifa cuanto vale cotizacion valor licencia plan",
+     "Puedes consultar los planes en <a href='/ventas'>/ventas</a>. La activación y las cotizaciones las gestiona el equipo comercial de PROCSIS; si quieres, te paso con un asesor."),
+    ("demo", "demo demostracion prueba piloto probar conocer agendar",
+     "Con gusto: puedes agendar una <b>demostración o prueba piloto</b> de EduTrack con el equipo de PROCSIS. Escríbenos por WhatsApp y te contactan."),
+    ("datos", "datos personales habeas data privacidad ley 1581 seguridad proteccion",
+     "EduTrack aplica habeas data (Ley 1581): accesos auditados, roles y tratamiento conforme a la política de privacidad de PROCSIS. Más en <a href='/legal'>/legal</a>."),
+    ("que_es", "que es edutrack para que sirve que hace procsis plataforma",
+     "<b>EduTrack</b> es la plataforma de gestión escolar de PROCSIS: notas, asistencia, carné digital, PQR, pagos y comunicación con familias en un solo acceso para rectoría, coordinación, secretaría y docentes."),
+    ("aura", "eduaura aura inteligencia artificial ia observaciones",
+     "<b>EduAura IA</b> es el módulo de analítica y observaciones inteligentes de EduTrack (según el plan del colegio). Dentro del sistema ayuda a detectar riesgos académicos y redactar observaciones."),
+    ("ayuda", "ayuda centro de ayuda soporte tecnico problema error falla",
+     "Puedes revisar el <a href='/ayuda'>Centro de ayuda</a>. Si tu problema es técnico y sigue, te paso con un asesor de soporte."),
+]
+_AURA_ASESOR = ("asesor", "humano", "agente", "persona", "hablar con alguien", "hablar con un", "whatsapp", "wasap",
+                "wsp", "ejecutivo", "operador", "llamar", "contactar", "comercial", "ventas", "soporte")
+_AURA_SALUDOS = ("hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hey", "saludos")
+_AURA_GRACIAS = ("gracias", "muchas gracias", "listo", "perfecto", "ok gracias")
+
+
+def _aura_norm(t):
+    t = _au_ud.normalize("NFKD", (t or "").lower())
+    t = "".join(c for c in t if not _au_ud.combining(c))
+    return re.sub(r"[^a-z0-9 ]+", " ", t).strip()
+
+
+def _aura_wa_link(pregunta=""):
+    """Enlace wa.me al número de soporte/ventas configurado en Gerencia (con la pregunta prellenada)."""
+    num = ""
+    try:
+        p = plataforma()
+        for attr in ("contacto_whatsapp_soporte", "contacto_whatsapp_ventas", "contacto_publico_tel", "telefono_soporte"):
+            num = "".join(c for c in (getattr(p, attr, None) or "") if c.isdigit())
+            if num:
+                break
+    except Exception:
+        num = ""
+    if not num:
+        num = "".join(c for c in str(globals().get("SOPORTE_TELEFONO") or "3105615621") if c.isdigit())
+    if len(num) == 10:
+        num = "57" + num
+    txt = "Hola, vengo de la página de EduTrack y necesito ayuda de un asesor."
+    if pregunta:
+        txt += " Mi consulta: " + pregunta[:300]
+    return "https://wa.me/%s?text=%s" % (num, quote(txt))
+
+
+def _aura_responder(msg):
+    """→ (html_respuesta, mostrar_boton_whatsapp)"""
+    q = _aura_norm(msg)
+    if not q:
+        return ("Escribe tu pregunta y con gusto te ayudo.", False)
+    pals = q.split()
+    # ¿pide un asesor / WhatsApp?
+    if any((k in q) for k in _AURA_ASESOR):
+        # si además es una pregunta concreta (ventas/soporte/planes), dejamos que la KB responda primero
+        solo_asesor = len(pals) <= 6 or any(k in q for k in ("asesor", "humano", "agente", "persona", "whatsapp", "wasap", "wsp", "ejecutivo", "operador"))
+        if solo_asesor:
+            return ("Claro, te comunico con un asesor de PROCSIS por WhatsApp. Toca el botón y escríbele directamente.", True)
+    if q in _AURA_GRACIAS or (len(pals) <= 3 and any(g in q for g in _AURA_GRACIAS)):
+        return ("¡Con mucho gusto! Si necesitas algo más, aquí estoy.", False)
+    mejor, mejor_p = None, 0.0
+    for _id, claves, resp in _AURA_KB:
+        ck = claves.split()
+        ptj = 0.0
+        for w in pals:
+            if len(w) < 3:
+                continue
+            if w in ck:
+                ptj += 1.0
+            elif len(w) >= 5:
+                m = _au_dl.get_close_matches(w, ck, n=1, cutoff=0.82)
+                if m:
+                    ptj += 0.7
+        # frases completas de la clave (ej. "olvide contrasena")
+        for frase in re.findall(r"\b\w+ \w+\b", claves):
+            if frase in q:
+                ptj += 1.2
+        if ptj > mejor_p:
+            mejor, mejor_p = resp, ptj
+    if mejor and mejor_p >= 1.0:
+        return (mejor, False)
+    if all(w in _AURA_SALUDOS or len(w) < 3 for w in pals):
+        return ("¡Hola! Soy <b>Edu Aura</b>, la asistente de EduTrack. Pregúntame por el acceso, contraseñas, pagos, PQR, planes o una demostración. Si prefieres, te paso con un asesor.", False)
+    return ("No entendí bien tu pregunta. Para no darte una respuesta equivocada, te paso con un asesor de PROCSIS: toca el botón y escríbele por WhatsApp.", True)
+
+
+@app.route("/api/public/aura", methods=["POST"])
+def api_public_aura():
+    d = request.get_json(silent=True) or {}
+    msg = str(d.get("mensaje") or "")[:400]
+    try:
+        html, wa = _aura_responder(msg)
+    except Exception as ex:
+        print("aura publica:", ex)
+        html, wa = ("Tuve un inconveniente al responder. Te paso con un asesor.", True)
+    out = {"html": html}
+    if wa:
+        out["wa"] = _aura_wa_link(msg)
+    return jsonify(out)
+
+
+def _html_aura_publica():
+    """Burbuja flotante 'Edu Aura' para la página de inicio (sin sesión)."""
+    chips = ["¿Cómo ingreso?", "Olvidé mi contraseña", "Quiero una demostración", "Planes y precios", "Hablar con un asesor"]
+    return (
+        "<style>"
+        "#eap-btn{position:fixed;right:20px;bottom:20px;z-index:9998;border:0;border-radius:999px;padding:13px 20px;"
+        "background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;font-weight:800;font-size:14px;cursor:pointer;"
+        "box-shadow:0 10px 28px rgba(0,60,160,.4);font-family:inherit}"
+        "#eap-box{position:fixed;right:20px;bottom:20px;z-index:9999;width:360px;max-width:calc(100vw - 24px);height:500px;"
+        "max-height:calc(100vh - 40px);display:none;flex-direction:column;background:#fff;border-radius:20px;overflow:hidden;"
+        "box-shadow:0 24px 60px rgba(7,28,56,.35);border:1px solid #e2e8f0;font-family:-apple-system,Segoe UI,system-ui,sans-serif}"
+        "#eap-head{background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;padding:13px 16px;display:flex;"
+        "justify-content:space-between;align-items:center;font-weight:800;font-size:14px}"
+        "#eap-head small{display:block;font-weight:500;opacity:.8;font-size:11px}"
+        "#eap-x{cursor:pointer;font-size:18px;padding:0 4px}"
+        "#eap-msgs{flex:1;overflow:auto;padding:12px;background:#f8fafc;font-size:13.5px;line-height:1.45}"
+        ".eap-m{margin:0 0 10px;padding:9px 12px;border-radius:14px;max-width:88%;word-wrap:break-word}"
+        ".eap-u{background:#0B2D57;color:#fff;margin-left:auto}"
+        ".eap-a{background:#fff;border:1px solid #e2e8f0;color:#0f172a}"
+        ".eap-wa{display:inline-block;margin-top:8px;background:#16a34a;color:#fff!important;text-decoration:none;"
+        "font-weight:800;padding:9px 16px;border-radius:999px;font-size:13px}"
+        "#eap-chips{padding:6px 10px 0;display:flex;gap:6px;flex-wrap:wrap;background:#f8fafc}"
+        "#eap-chips button{background:#fff;border:1px solid #cbd5e1;border-radius:999px;padding:5px 11px;font-size:11.5px;cursor:pointer;color:#334155}"
+        "#eap-form{display:flex;gap:6px;padding:10px;border-top:1px solid #e2e8f0;background:#fff}"
+        "#eap-in{flex:1;padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;font-size:14px}"
+        "#eap-send{background:#005BEA;color:#fff;border:0;border-radius:12px;padding:0 16px;font-weight:800;cursor:pointer}"
+        "</style>"
+        "<button id='eap-btn' type='button' aria-label='Abrir Edu Aura'>✨ Edu Aura · Ayuda</button>"
+        "<div id='eap-box' role='dialog' aria-label='Edu Aura'>"
+        "<div id='eap-head'><div>✨ Edu Aura<small>Asistente de ayuda · EduTrack</small></div><span id='eap-x'>✕</span></div>"
+        "<div id='eap-msgs'><div class='eap-m eap-a'>¡Hola! Soy <b>Edu Aura</b>. Te ayudo con el acceso, contraseñas, pagos, PQR y planes. "
+        "Si prefieres, te paso con un asesor por WhatsApp.</div></div>"
+        "<div id='eap-chips'></div>"
+        "<form id='eap-form'><input id='eap-in' maxlength='400' placeholder='Escribe tu duda…' autocomplete='off'>"
+        "<button id='eap-send'>Enviar</button></form></div>"
+        "<script>(function(){"
+        "var b=document.getElementById('eap-btn'),x=document.getElementById('eap-box'),m=document.getElementById('eap-msgs'),"
+        "i=document.getElementById('eap-in'),c=document.getElementById('eap-chips');"
+        "function ab(){x.style.display='flex';b.style.display='none';i.focus();}"
+        "function ce(){x.style.display='none';b.style.display='inline-block';}"
+        "b.onclick=ab;document.getElementById('eap-x').onclick=ce;"
+        "function add(h,u){var d=document.createElement('div');d.className='eap-m '+(u?'eap-u':'eap-a');"
+        "if(u)d.textContent=h;else d.innerHTML=h;m.appendChild(d);m.scrollTop=m.scrollHeight;return d;}"
+        "function env(t){t=(t||'').trim();if(!t)return;add(t,true);i.value='';c.innerHTML='';var w=add('Escribiendo…');"
+        "fetch('/api/public/aura',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:t})})"
+        ".then(function(r){return r.json();}).then(function(d){w.innerHTML=d.html||'Sin respuesta.';"
+        "if(d.wa){var a=document.createElement('a');a.className='eap-wa';a.href=d.wa;a.target='_blank';a.rel='noopener';"
+        "a.textContent='💬 Hablar con un asesor por WhatsApp';w.appendChild(document.createElement('br'));w.appendChild(a);}"
+        "m.scrollTop=m.scrollHeight;})"
+        ".catch(function(){w.innerHTML='No pude conectar. Intenta de nuevo en un momento.';});}"
+        "document.getElementById('eap-form').onsubmit=function(e){e.preventDefault();env(i.value);};"
+        "var EJ=" + json.dumps(chips, ensure_ascii=False) + ";"
+        "EJ.forEach(function(t){var k=document.createElement('button');k.type='button';k.textContent=t;k.onclick=function(){env(t);};c.appendChild(k);});"
+        "})();</script>"
+    )
+
+
+
 @app.route("/")
 def inicio():
     # Antes redirigía a /login; Google no indexa una URL que redirige. Ahora responde 200 con la
@@ -10503,13 +10684,19 @@ def _html_lideres_login():
     cards = []
     for L in rows:
         if L.foto_path:
-            foto = '<img src="%s" alt="%s" loading="lazy">' % (L.foto_path, (L.nombre or "").replace('"', ""))
+            _ini = ((L.nombre or "?").strip()[:1] or "?").upper().replace("<", "")
+            foto = ('<img src="%s" alt="" loading="lazy" '
+                    'onerror="this.outerHTML=\'<div class=ldr-ph>%s</div>\'">') % (L.foto_path, _ini)
         else:
             foto = '<div class="ldr-ph">%s</div>' % ((L.nombre or "?")[:1].upper())
         bio = (L.bio or "").strip()
-        if len(bio) > 280:
-            bio = bio[:277] + "…"
-        bio_html = ('<p class="ldr-bio">%s</p>' % bio.replace("<", "&lt;").replace("\n", "<br>")) if bio else ""
+        bio_html = ""
+        if bio:
+            _bio_esc = bio.replace("&", "&amp;").replace("<", "&lt;").replace("\n", "<br>")
+            _largo = len(bio) > 120
+            bio_html = ('<p class="ldr-bio%s">%s</p>' % (" ldr-clamp" if _largo else "", _bio_esc))
+            if _largo:
+                bio_html += '<button type="button" class="ldr-more" onclick="ldrToggle(this)">Leer más</button>'
         cards.append(
             '<article class="ldr-card">'
             '<div class="ldr-photo">%s</div>'
@@ -10530,31 +10717,38 @@ def _html_lideres_login():
         + "".join(cards)
         + "</div>"
         "<style>"
-        ".ldr-wrap{margin:28px auto 8px;padding:28px 20px 32px;max-width:960px;"
+        ".ldr-wrap{margin:20px auto 8px;padding:20px 16px 22px;max-width:760px;"
         "background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px solid #e2e8f0;"
         "border-radius:20px;box-shadow:0 8px 28px rgba(15,23,42,.06)}"
-        ".ldr-head{text-align:center;margin-bottom:22px}"
-        ".ldr-head h2{margin:0 0 6px;font-size:26px;font-weight:800;color:#0B2D57;"
+        ".ldr-head{text-align:center;margin-bottom:14px}"
+        ".ldr-head h2{margin:0 0 4px;font-size:22px;font-weight:800;color:#0B2D57;"
         "letter-spacing:-0.02em;font-family:Segoe UI,system-ui,sans-serif}"
-        ".ldr-sub{margin:0;font-size:14px;color:#64748b;font-weight:500}"
-        ".ldr-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:22px}"
-        ".ldr-card{width:200px;text-align:center;padding:16px 14px 18px;background:#fff;"
+        ".ldr-sub{margin:0;font-size:13px;color:#64748b;font-weight:500}"
+        ".ldr-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:14px}"
+        ".ldr-card{width:200px;text-align:center;padding:12px 12px 14px;background:#fff;"
         "border:1px solid #e8eef5;border-radius:16px;box-shadow:0 4px 14px rgba(15,23,42,.04);"
         "transition:transform .18s ease,box-shadow .18s ease}"
         ".ldr-card:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(15,23,42,.10)}"
-        ".ldr-photo{width:112px;height:112px;margin:0 auto 12px;border-radius:50%;overflow:hidden;"
+        ".ldr-photo{width:160px;height:160px;margin:0 auto 10px;border-radius:50%;overflow:hidden;"
         "background:#e2e8f0;border:3px solid #dbeafe;box-shadow:0 4px 12px rgba(11,45,87,.12)}"
         ".ldr-photo img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}"
         ".ldr-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;"
-        "font-size:34px;font-weight:800;color:#0B2D57;background:linear-gradient(135deg,#dbeafe,#e2e8f0)}"
-        ".ldr-name{font-size:13px;font-weight:800;color:#0B2D57;text-transform:uppercase;"
+        "font-size:56px;font-weight:800;color:#0B2D57;background:linear-gradient(135deg,#dbeafe,#e2e8f0)}"
+        ".ldr-name{font-size:12px;font-weight:800;color:#0B2D57;text-transform:uppercase;"
         "letter-spacing:.04em;line-height:1.3}"
-        ".ldr-role{font-size:12px;color:#334155;margin-top:4px;font-weight:600;line-height:1.35}"
+        ".ldr-role{font-size:11.5px;color:#334155;margin-top:4px;font-weight:600;line-height:1.35}"
         ".ldr-year{font-size:11px;color:#94a3b8;margin-top:4px;font-weight:500}"
-        ".ldr-bio{font-size:12px;color:#64748b;line-height:1.45;margin:10px 0 0;text-align:left;"
-        "padding-top:10px;border-top:1px solid #f1f5f9}"
-        "@media(max-width:520px){.ldr-card{width:100%;max-width:280px}}"
+        ".ldr-bio{font-size:11.5px;color:#64748b;line-height:1.45;margin:8px 0 0;text-align:left;"
+        "padding-top:8px;border-top:1px solid #f1f5f9}"
+        ".ldr-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}"
+        ".ldr-clamp.ldr-open{display:block;-webkit-line-clamp:unset;overflow:visible}"
+        ".ldr-more{margin-top:6px;background:none;border:0;padding:0;font-size:12px;font-weight:700;"
+        "color:#005BEA;cursor:pointer}"
+        ".ldr-more:hover{text-decoration:underline}"
+        "@media(max-width:520px){.ldr-card{width:100%;max-width:260px}}"
         "</style>"
+        "<script>function ldrToggle(b){var p=b.previousElementSibling;"
+        "var o=p.classList.toggle('ldr-open');b.textContent=o?'Leer menos':'Leer más';}</script>"
         "</section>"
     )
 
@@ -12361,6 +12555,11 @@ def login():
     
     nov = contenido_login_novedades()
     lideres_section = _html_lideres_login()
+    try:
+        aura_publica_html = _html_aura_publica()
+    except Exception as _ae:
+        print("aura publica html:", _ae)
+        aura_publica_html = ""
     nov_html = _txt_a_html_lista(nov["novedades"])
     faq_html = _txt_a_html_lista(nov["faq"])
     mant_html = _txt_a_html_lista(nov["mant"]) if nov["mant"] else ""
@@ -12442,14 +12641,18 @@ def login():
                 f'<div class="sinai-slide-veil"></div>'
             )
         elif slides_banners:
-            visual_html = f'<div class="sinai-slide-ph" style="background:{_CAR_FONDOS[i % 3]}"></div>'
+            visual_html = (
+                f'<div class="sinai-slide-ph" style="background:{_CAR_FONDOS[i % 3]}">'
+                f'<img src="{img}" alt="" aria-hidden="true" class="sinai-slide-bgblur" '
+                f'onerror="this.style.display=\'none\'"></div>'
+            )
         else:
             visual_html = f'<div class="sinai-slide-ph" style="background:{img}"></div>'
         slides_html += (
             f'<div class="sinai-slide" data-i="{i}">'
             f'{visual_html}'
             f'<div class="sinai-slide-brand">'
-            f'<div class="sinai-brand-tile{"" if _cc["fondo_logo"] else " sin-fondo"}"><img src="{logo_src}" alt="EduTrack" class="sinai-brand-logo"></div>'
+            f'<div class="sinai-brand-tile{"" if _cc["fondo_logo"] else " sin-fondo"}"><img src="{logo_src}" alt="EduTrack" class="sinai-brand-logo" onerror="this.onerror=null;this.src=\'/static/img/logo-edutrack.png\'"></div>'
             f'<p class="sinai-brand-slogan">{_esc(cap)}</p>'
             f'<span class="sinai-brand-sub">{_esc(cap2 or _cc["sub"])}</span>'
             f'</div>'
@@ -12509,7 +12712,8 @@ def login():
 .sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:40px 28px 92px;text-align:center;pointer-events:none}}
 .sinai-brand-tile{{background:rgba(255,255,255,.88);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.8);border-radius:36px;padding:26px 34px;box-shadow:0 30px 70px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.95);width:min(var(--car-logo,440px),80%);box-sizing:border-box}}
 .sinai-brand-tile.sin-fondo{{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-color:transparent;box-shadow:none}}
-.sinai-brand-logo{{display:block;width:100%;height:auto;max-height:320px;object-fit:contain}}
+.sinai-brand-logo{{display:block;width:100%;height:auto;max-height:400px;object-fit:contain}}
+.sinai-slide-bgblur{{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(26px) saturate(1.3) brightness(.55);opacity:.85;z-index:0}}
 .sinai-brand-slogan{{margin:0;font-size:clamp(20px,2.3vw,30px);font-weight:600;letter-spacing:-.02em;line-height:1.3;color:#fff;max-width:600px;padding:14px 28px;border-radius:26px;background:rgba(255,255,255,.14);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.4);text-shadow:0 1px 8px rgba(0,0,0,.25)}}
 .sinai-brand-sub{{font-size:13px;font-weight:600;color:rgba(255,255,255,.78);letter-spacing:.1em;text-transform:uppercase}}
 @keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.06)}}}}
@@ -12631,7 +12835,7 @@ def login():
 
   <section class="sinai-portal">
     <div class="sinai-grid">
-      <div class="sinai-carousel" id="sinai-carousel" style="--car-logo:440px">
+      <div class="sinai-carousel" id="sinai-carousel" style="--car-logo:560px">
         <div class="sinai-viewport">
           <div class="sinai-track" id="sinai-track">{slides_html}</div>
         </div>
@@ -12851,6 +13055,7 @@ def login():
     </section>
 
     {lideres_section}
+    {aura_publica_html}
   </div>
 
   {_html_login_pie_colegios()}
