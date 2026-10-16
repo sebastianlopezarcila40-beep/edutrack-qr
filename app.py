@@ -10632,6 +10632,12 @@ def _eap_publico_responder(msg):
     if not q:
         return ("Escribe tu pregunta y con gusto te ayudo.", False)
     pals = q.split()
+    try:
+        corp = _eap_corp_buscar(msg)      # Paso 1: información corporativa oficial (Gerencia)
+        if corp:
+            return (corp, False)
+    except Exception as ex:
+        print("eap corp publico:", repr(ex))
     if _EAP_RE_ASESOR_FUERTE.search(q) or (len(pals) <= 4 and _EAP_RE_ASESOR_DEBIL.search(q)):
         return ("Claro, te comunico con un asesor de PROCSIS por WhatsApp. Toca el botón y escríbele directamente.", True)
     r = _eap_buscar(msg)
@@ -10646,6 +10652,10 @@ def _eap_interno_responder(mensaje):
     """Aura de los módulos administrativos: primero su motor por rol; si es una duda de ayuda, usa la base de ayuda."""
     try:
         n = _aura_normalizar(mensaje)
+        if n and _aura_intencion(n) not in ("modificar", "financiero"):
+            corp = _eap_corp_buscar(mensaje)   # Paso 1: información corporativa oficial (Gerencia)
+            if corp:
+                return corp
         if n and _aura_intencion(n) == "estado":
             inst, amb = _aura_buscar_en_mensaje(n)
             if not inst and not amb:
@@ -10801,6 +10811,277 @@ def _eap_widget_html(ambito, chips=None, sub=""):
 def _html_aura_publica():
     """Burbuja flotante 'Edu Aura' para la página de inicio (sin sesión; estado aislado por visitante)."""
     return _eap_widget_html("publico", ["¿Cómo ingreso?", "Olvidé mi contraseña", "Quiero una demostración", "Planes y precios", "Hablar con un asesor"])
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  BASE DE CONOCIMIENTO DE AURA · información corporativa administrada por Gerencia
+#   Tabla: informacion_corporativa. Edu Aura la consulta PRIMERO (filtro institucional),
+#   antes de los manuales / artículos de ayuda, tanto en el login como en los módulos internos.
+# ══════════════════════════════════════════════════════════════════════════
+_EAP_CATEGORIAS = ("Institucional", "Soporte", "Comercial", "Legal")
+
+
+class InformacionCorporativa(db.Model):
+    __tablename__ = "informacion_corporativa"
+    id = db.Column(db.Integer, primary_key=True)
+    categoria = db.Column(db.String(50), default="Institucional", index=True)
+    # Palabras clave separadas por coma (portable entre PostgreSQL y SQLite): dueño, fundador, creador
+    palabras_clave = db.Column(db.Text, default="")
+    pregunta_referencia = db.Column(db.String(255), default="")
+    respuesta_oficial = db.Column(db.Text, default="")
+    activo = db.Column(db.Boolean, default=True)
+    actualizado_por = db.Column(db.String(120), default="")
+    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+_EAP_CORP = {"tabla": False, "t": 0.0, "filas": []}
+
+
+def _eap_corp_tabla():
+    if _EAP_CORP["tabla"]:
+        return
+    try:
+        InformacionCorporativa.__table__.create(bind=db.engine, checkfirst=True)
+        _EAP_CORP["tabla"] = True
+    except Exception as ex:
+        print("informacion_corporativa:", repr(ex))
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _eap_corp_filas():
+    """Entradas activas ya preparadas para comparar. Caché de 20 s (se invalida al guardar)."""
+    if _EAP_CORP["t"] and _eap_time.time() - _EAP_CORP["t"] < 20:
+        return _EAP_CORP["filas"]
+    _eap_corp_tabla()
+    out = []
+    try:
+        for r in InformacionCorporativa.query.filter_by(activo=True).order_by(InformacionCorporativa.id.asc()).all():
+            frases = []
+            for k in re.split(r"[,;\n]+", r.palabras_clave or ""):
+                k = _eap_norm(k)
+                if k:
+                    frases.append(k)
+            out.append({"id": r.id, "frases": frases, "preg": _eap_norm(r.pregunta_referencia or ""),
+                        "resp": r.respuesta_oficial or ""})
+    except Exception as ex:
+        print("eap corp filas:", repr(ex))
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return []          # un error no se guarda en caché
+    _EAP_CORP["t"], _EAP_CORP["filas"] = _eap_time.time(), out
+    return out
+
+
+def _eap_corp_html(txt):
+    h = _esc(txt or "").replace("\r\n", "\n").replace("\n", "<br>")
+    return re.sub(r"(https?://[^\s<]+)", r"<a href='\1' target='_blank' rel='noopener'>\1</a>", h)
+
+
+def _eap_corp_buscar(msg):
+    """Filtro institucional: mejor respuesta oficial de Gerencia o None.
+    Coincidencia por palabras clave (frase completa o palabra, con tolerancia a erratas) y,
+    como apoyo, similitud con la pregunta de referencia."""
+    q = _eap_norm(msg)
+    if not q:
+        return None
+    qw = q.split()
+    qset = set(qw)
+    qpad = " " + q + " "
+    mejor, mp = None, 0.0
+    for e in _eap_corp_filas():
+        pt = 0.0
+        for fr in e["frases"]:
+            fw = fr.split()
+            if (" " + fr + " ") in qpad:
+                pt = max(pt, 3.0 + len(fw))              # la frase completa pesa más
+            elif len(fw) == 1:
+                if len(fr) >= 5 and _au_dl.get_close_matches(fr, qw, n=1, cutoff=0.86):
+                    pt = max(pt, 2.6)                    # errata leve: «fundadro» ≈ «fundador»
+            elif all((w in qset) for w in fw):
+                pt = max(pt, 3.0 + len(fw) * 0.5)        # frase con palabras separadas
+        if e["preg"]:
+            r = _au_dl.SequenceMatcher(None, q, e["preg"]).ratio()
+            if r >= 0.75:
+                pt = max(pt, 2.8 + r)
+        if pt > mp:
+            mejor, mp = e, pt
+    return _eap_corp_html(mejor["resp"]) if (mejor and mp >= 2.6 and mejor["resp"].strip()) else None
+
+
+@app.route("/gerencia/base-conocimiento-aura", methods=["GET", "POST"])
+def gerencia_base_conocimiento_aura():
+    """Gerencia → Base de Conocimiento de Aura (información corporativa oficial). Solo rol Gerente."""
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    _eap_corp_tabla()
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        try:
+            rid = int(request.form.get("id") or 0)
+        except ValueError:
+            rid = 0
+        try:
+            if accion == "eliminar" and rid:
+                r = InformacionCorporativa.query.get(rid)
+                if r:
+                    db.session.delete(r)
+                    db.session.commit()
+                    msg = "Entrada eliminada."
+                    _sol_auditar("Base conocimiento Aura: eliminar", "id %s" % rid)
+            elif accion == "toggle" and rid:
+                r = InformacionCorporativa.query.get(rid)
+                if r:
+                    r.activo = not bool(r.activo)
+                    r.fecha_actualizacion = datetime.utcnow()
+                    db.session.commit()
+                    msg = "Entrada %s." % ("activada" if r.activo else "desactivada")
+            elif accion == "guardar":
+                cat = (request.form.get("categoria") or "Institucional").strip()
+                cat = cat if cat in _EAP_CATEGORIAS else "Institucional"
+                claves = ", ".join(k.strip() for k in re.split(r"[,;\n]+", request.form.get("palabras_clave") or "") if k.strip())[:600]
+                preg = (request.form.get("pregunta_referencia") or "").strip()[:255]
+                resp = (request.form.get("respuesta_oficial") or "").strip()[:4000]
+                if not claves:
+                    err = "Escribe al menos una palabra clave (ej: dueño, fundador, creador)."
+                elif not resp:
+                    err = "Escribe la respuesta oficial."
+                else:
+                    r = InformacionCorporativa.query.get(rid) if rid else None
+                    if r is None:
+                        r = InformacionCorporativa()
+                        db.session.add(r)
+                    r.categoria, r.palabras_clave, r.pregunta_referencia, r.respuesta_oficial = cat, claves, preg, resp
+                    r.activo = request.form.get("activo") == "1"
+                    r.actualizado_por = (session.get("usuario") or "")[:120]
+                    r.fecha_actualizacion = datetime.utcnow()
+                    db.session.commit()
+                    msg = "Información guardada. Edu Aura ya la usa."
+                    _sol_auditar("Base conocimiento Aura: guardar", "%s · %s" % (cat, claves[:120]))
+        except Exception as ex:
+            db.session.rollback()
+            print("base conocimiento aura:", repr(ex))
+            err = "No se pudo guardar. Intenta de nuevo."
+            msg = ""
+        _EAP_CORP["t"] = 0.0  # invalida la caché
+        if msg and not err:
+            return redirect("/gerencia/base-conocimiento-aura?ok=" + quote(msg))
+    if request.args.get("ok"):
+        msg = (request.args.get("ok") or "")[:120]
+
+    editar = None
+    try:
+        eid = int(request.args.get("editar") or 0)
+        editar = InformacionCorporativa.query.get(eid) if eid else None
+    except Exception:
+        editar = None
+    fcat = (request.args.get("cat") or "").strip()
+    try:
+        q = InformacionCorporativa.query
+        if fcat in _EAP_CATEGORIAS:
+            q = q.filter_by(categoria=fcat)
+        filas = q.order_by(InformacionCorporativa.categoria.asc(), InformacionCorporativa.id.desc()).all()
+    except Exception:
+        filas = []
+
+    # Probador: ¿qué respondería Edu Aura a esta pregunta?
+    prueba = (request.args.get("probar") or "").strip()[:300]
+    prueba_html = ""
+    if prueba:
+        _EAP_CORP["t"] = 0.0
+        r = _eap_corp_buscar(prueba)
+        if r:
+            prueba_html = ("<div style='background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px 12px;margin-top:8px'>"
+                           "<b style='color:#065f46'>Edu Aura respondería (información corporativa):</b><div style='margin-top:6px'>" + r + "</div></div>")
+        else:
+            prueba_html = ("<div style='background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-top:8px;color:#92400e'>"
+                           "No hay coincidencia corporativa: Edu Aura seguiría con los manuales y artículos de ayuda. "
+                           "Agrega una palabra clave que aparezca en esa pregunta.</div>")
+
+    def _opt(v, sel):
+        return "<option%s>%s</option>" % (" selected" if v == sel else "", _esc(v))
+    cat_sel = (editar.categoria if editar else "Institucional")
+    opts = "".join(_opt(c, cat_sel) for c in _EAP_CATEGORIAS)
+    chips = "".join(
+        "<a href='/gerencia/base-conocimiento-aura%s' style='padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;%s'>%s</a>"
+        % (("?cat=" + quote(c)) if c else "", "background:#0B2D57;color:#fff" if (fcat == c) else "background:#e2e8f0;color:#334155", _esc(c or "Todas"))
+        for c in ("",) + _EAP_CATEGORIAS)
+    filas_html = ""
+    for r in filas:
+        quien = (r.actualizado_por or "") + ((" · " + r.fecha_actualizacion.strftime("%Y-%m-%d %H:%M")) if r.fecha_actualizacion else "")
+        filas_html += (
+            "<div style='border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px;background:%s'>"
+            "<div style='display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap'>"
+            "<div><span style='background:#dbeafe;color:#1e40af;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700'>%s</span> "
+            "<b style='color:#0B2D57'>%s</b></div>"
+            "<span style='font-size:11px;color:#64748b'>%s · %s</span></div>"
+            "<div style='font-size:12px;color:#64748b;margin:6px 0'>🔑 %s</div>"
+            "<div style='font-size:13px;color:#334155;white-space:pre-wrap'>%s</div>"
+            "<div style='margin-top:8px;display:flex;gap:6px;flex-wrap:wrap'>"
+            "<a href='/gerencia/base-conocimiento-aura?editar=%d' style='background:#0B2D57;color:#fff;border-radius:6px;padding:5px 10px;font-size:12px;text-decoration:none'>Editar</a>"
+            "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='toggle'><input type='hidden' name='id' value='%d'>"
+            "<button style='background:#475569;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer'>%s</button></form>"
+            "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Eliminar esta entrada?')\"><input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%d'>"
+            "<button style='background:#b91c1c;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer'>Eliminar</button></form>"
+            "</div></div>"
+        ) % (
+            "#fff" if r.activo else "#f8fafc", _esc(r.categoria or ""), _esc(r.pregunta_referencia or "(sin pregunta de referencia)"),
+            "Activa" if r.activo else "Desactivada", _esc(quien),
+            _esc(r.palabras_clave or ""), _esc((r.respuesta_oficial or "")[:600]), r.id, r.id,
+            "Desactivar" if r.activo else "Activar", r.id)
+    inp = "width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:inherit;font-size:14px"
+    lab = "display:block;font-size:12px;font-weight:700;margin-top:10px;color:#0B2D57"
+    head = (
+        "<div style='background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px'><div style='max-width:860px;margin:0 auto'>"
+        "<a href='/gerencia/hq' style='color:#0B2D57;font-weight:700;text-decoration:none'>← HQ</a>"
+        "<h1 style='color:#0B2D57;margin:8px 0 4px'>📚 Base de conocimiento de Aura</h1>"
+        "<p style='color:#64748b;font-size:14px;margin-top:0'>Información corporativa oficial. Edu Aura la consulta <b>antes</b> que los manuales y artículos de ayuda, "
+        "en el login y en los módulos administrativos. Solo el rol Gerente puede editarla.</p>"
+    )
+    banners = (
+        (("<div style='background:#dcfce7;color:#166534;padding:9px 12px;border-radius:8px;margin:8px 0'>" + _esc(msg) + "</div>") if msg else "")
+        + (("<div style='background:#fee2e2;color:#991b1b;padding:9px 12px;border-radius:8px;margin:8px 0'>" + _esc(err) + "</div>") if err else "")
+    )
+    form = (
+        "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0'>"
+        "<h3 style='color:#0B2D57;margin-top:0'>%s</h3>"
+        "<form method='POST'><input type='hidden' name='accion' value='guardar'><input type='hidden' name='id' value='%d'>"
+        "<label style='%s'>Categoría</label><select name='categoria' style='%s'>%s</select>"
+        "<label style='%s'>Palabras clave (separadas por coma)</label>"
+        "<input name='palabras_clave' required value='%s' placeholder='dueño, fundador, creador, quién creó procsis, historia' style='%s'>"
+        "<label style='%s'>Pregunta de referencia (opcional)</label>"
+        "<input name='pregunta_referencia' value='%s' maxlength='255' placeholder='¿Quién es el dueño de Procsis?' style='%s'>"
+        "<label style='%s'>Respuesta oficial corporativa</label>"
+        "<textarea name='respuesta_oficial' rows='6' required maxlength='4000' placeholder='Texto exacto que Edu Aura responderá…' style='%s'>%s</textarea>"
+        "<label style='display:block;margin-top:10px;font-size:13px'><input type='checkbox' name='activo' value='1'%s> Activa (Edu Aura la usa)</label>"
+        "<button type='submit' style='margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:11px 18px;border-radius:8px;font-weight:800;cursor:pointer'>Guardar</button> %s"
+        "</form></div>"
+    ) % (
+        "Editar entrada" if editar else "Nueva información", (editar.id if editar else 0),
+        lab, inp, opts, lab, _esc(editar.palabras_clave if editar else ""), inp,
+        lab, _esc(editar.pregunta_referencia if editar else ""), inp,
+        lab, inp, _esc(editar.respuesta_oficial if editar else ""),
+        " checked" if (editar.activo if editar else True) else "",
+        "<a href='/gerencia/base-conocimiento-aura' style='margin-left:8px;color:#64748b;font-size:13px'>Cancelar</a>" if editar else "",
+    )
+    resto = (
+        "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0'>"
+        "<h3 style='color:#0B2D57;margin-top:0'>🧪 Probar a Edu Aura</h3>"
+        "<form method='GET' style='display:flex;gap:8px'><input name='probar' value='%s' placeholder='Escribe como lo haría un usuario: quién es el dueño de procsis' style='%s'>"
+        "<button style='background:#7c3aed;color:#fff;border:0;padding:0 16px;border-radius:8px;font-weight:700;cursor:pointer'>Probar</button></form>%s</div>"
+        "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px'>"
+        "<h3 style='color:#0B2D57;margin-top:0'>Información registrada (%d)</h3>"
+        "<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px'>%s</div>%s</div>"
+        "</div></div>"
+    ) % (_esc(prueba), inp, prueba_html, len(filas), chips,
+         filas_html or "<p style='color:#64748b'>Aún no hay información. Agrega la primera arriba (ej: quién es el dueño o fundador).</p>")
+    return page("Base de conocimiento de Aura", head + banners + form + resto)
 
 
 @app.route("/")
@@ -28277,6 +28558,7 @@ def gerencia_hq():
               <a class="hq-pill-primary" href="/gerencia/datos-empresa">🏢 Datos de la empresa</a>
               <a href="/soporte/marca">Marca y contacto (tel./correo)</a>
               <a class="hq-pill-primary" href="/gerencia/eduaura-ia">🧠 Conectores IA</a>
+              <a class="hq-pill-primary" href="/gerencia/base-conocimiento-aura">📚 Base de conocimiento de Aura</a>
               <a href="/gerencia/procsis-web">Noticias / productos</a>
               <a class="hq-pill-primary" href="/gerencia/login-banners">Banners Login / Salida segura</a>
               <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
@@ -39377,6 +39659,7 @@ def _modulos_por_rol(rol):
         ("📨 Notificaciones", "/gerencia/notificaciones", "#005BEA"),
         ("🔌 Mesa de Conexión API (WATI)", "/gerencia/wati-conexion", "#25D366"),
         ("🧠 Conectores IA (EduAura)", "/gerencia/eduaura-ia", "#7c3aed"),
+        ("📚 Base de conocimiento de Aura", "/gerencia/base-conocimiento-aura", "#7c3aed"),
         ("🏢 Datos de la empresa", "/gerencia/datos-empresa", "#0B2D57"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Facturación", "/gerencia/facturacion", "#0B2D57"),
