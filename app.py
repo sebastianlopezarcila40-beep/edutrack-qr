@@ -10304,54 +10304,309 @@ def enviar_pin(correo_destino, pin):
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  EDU AURA PÚBLICO · asistente de ayuda en la página de inicio (login)
-#  Responde dudas con la base de ayuda; si no entiende o piden asesor → WhatsApp.
+#  EDU AURA · NÚCLEO COMPARTIDO (login público + módulos administrativos)
+#   · Flujo de estados: INICIAL → ESPERANDO_ACEPTACION → ACTIVO | RECHAZADO
+#   · Auditoría en la tabla auditoria_edu_aura (una fila por sesión / persona)
+#   · Disparador de agradecimiento antes del motor
+#   · Base de ayuda = lo que ya existe en el sistema (Support, FAQ de Soporte, canales)
+#   · Widget estilo vidrio (glass). Al cerrar con ✕ se borra la conversación.
+#  Todo usa el prefijo _eap_ para no chocar con el Aura interno (_aura_*).
 # ══════════════════════════════════════════════════════════════════════════
 import unicodedata as _au_ud
 import difflib as _au_dl
+import time as _eap_time
 
-_AURA_KB = [
-    ("acceso", "iniciar sesion ingresar ingreso ingresando entrar login acceso usuario cedula portal como ingreso como entro no puedo entrar",
-     "Entra por el <b>Portal de acceso</b> de esta misma página: elige tu institución, escribe tu usuario (cédula o ID) y tu contraseña. Si no tienes usuario, lo crea la secretaría o rectoría de tu colegio."),
-    ("clave", "olvide contrasena clave password recuperar restablecer cambiar contrasena",
+_EAP_SALUDO = ("Hola, soy Aura, tu asistente virtual de Procsis. 😃 \n\n"
+               "Para ayudarte a consultar la información permitida de tu rol y módulos, necesito que aceptes "
+               "las políticas de uso de datos del sistema. ¿Los aceptas? 👇")
+_EAP_OK = "¡Perfecto! Validación completada con éxito. Ya puedes realizar tus consultas."
+_EAP_NO = ("Para garantizar la seguridad anti-fraude del sistema, es obligatorio aceptar los términos "
+           "para usar las funciones de Edu Aura.")
+_EAP_GRACIAS = ("😊 ¡Me encantó leerte! Recuerda que soy tu asistente virtual de Procsis y estaré por aquí "
+                "cuando lo necesites.")
+_EAP_RE_GRACIAS = re.compile(r"\b(gracias|agradecid[oa]s?)\b")
+# False = cada vez que se abre Edu Aura (tras ✕) se vuelve a pedir la aceptación.
+# True  = si ya aceptó en esta sesión, no se le vuelve a preguntar.
+_EAP_RECORDAR_ACEPTACION = False
+
+
+class AuditoriaEduAura(db.Model):
+    """Estado y auditoría de Edu Aura por persona/sesión (aislado por sesión; multicolegio vía institucion_id)."""
+    __tablename__ = "auditoria_edu_aura"
+    id_consulta = db.Column(db.Integer, primary_key=True)
+    id_usuario = db.Column(db.Integer, nullable=True, index=True)
+    usuario = db.Column(db.String(120), default="")
+    rol_usuario = db.Column(db.String(50), default="")
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    ambito = db.Column(db.String(12), default="interno", index=True)   # interno | publico
+    sesion_token = db.Column(db.String(64), index=True)
+    terminos_aceptados = db.Column(db.Boolean, default=False)
+    fecha_aceptacion = db.Column(db.DateTime, nullable=True)
+    ultimo_estado = db.Column(db.String(30), default="INICIAL")
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow)
+    actualizado_en = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+_EAP_TABLA_OK = {"ok": False}
+
+
+def _eap_tabla():
+    if _EAP_TABLA_OK["ok"]:
+        return
+    try:
+        AuditoriaEduAura.__table__.create(bind=db.engine, checkfirst=True)
+        _EAP_TABLA_OK["ok"] = True
+    except Exception as ex:
+        print("auditoria_edu_aura:", repr(ex))
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _eap_token():
+    t = session.get("eap_tok")
+    if not t:
+        t = secrets.token_hex(16)
+        session["eap_tok"] = t
+    return t
+
+
+def _eap_fila(ambito, crear=True):
+    _eap_tabla()
+    tok = _eap_token()
+    try:
+        f = AuditoriaEduAura.query.filter_by(ambito=ambito, sesion_token=tok).first()
+        if f is None and crear:
+            uid = session.get("user_id") or session.get("usuario_id")
+            try:
+                uid = int(uid) if uid is not None else None
+            except Exception:
+                uid = None
+            inst = session.get("institucion_id")
+            try:
+                inst = int(inst) if inst is not None else None
+            except Exception:
+                inst = None
+            f = AuditoriaEduAura(
+                id_usuario=uid, usuario=(session.get("usuario") or "")[:120] if ambito == "interno" else "",
+                rol_usuario=((rol_actual() if ambito == "interno" else "Visitante") or "")[:50],
+                institucion_id=inst, ambito=ambito, sesion_token=tok, ultimo_estado="INICIAL",
+            )
+            db.session.add(f)
+            db.session.commit()
+        return f
+    except Exception as ex:
+        print("eap fila:", repr(ex))
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _eap_estado(ambito):
+    f = _eap_fila(ambito, crear=False)
+    return (f.ultimo_estado if f is not None else None) or "INICIAL"
+
+
+def _eap_set(ambito, estado, aceptado=None):
+    f = _eap_fila(ambito)
+    if f is None:
+        return False
+    try:
+        f.ultimo_estado = estado
+        f.actualizado_en = datetime.utcnow()
+        if aceptado is not None:
+            f.terminos_aceptados = bool(aceptado)
+            if aceptado:
+                f.fecha_aceptacion = datetime.utcnow()
+        db.session.commit()
+        return True
+    except Exception as ex:
+        print("eap set:", repr(ex))
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def _eap_accion(ambito):
+    """abrir | aceptar | rechazar | cerrar  → máquina de estados del chat."""
+    d = request.get_json(silent=True) or {}
+    a = str(d.get("accion") or "")
+    if a == "abrir":
+        f = _eap_fila(ambito)
+        if _EAP_RECORDAR_ACEPTACION and f is not None and f.terminos_aceptados:
+            _eap_set(ambito, "ACTIVO")
+            return jsonify(ok=True, estado="ACTIVO", html="Hola, soy Aura. ¿En qué te puedo ayudar?")
+        _eap_set(ambito, "ESPERANDO_ACEPTACION", aceptado=False)
+        return jsonify(ok=True, estado="ESPERANDO_ACEPTACION", html=_EAP_SALUDO)
+    if a == "aceptar":
+        _eap_set(ambito, "ACTIVO", aceptado=True)
+        if ambito == "interno":
+            _sol_auditar("EduAura términos aceptados", rol_actual())
+        return jsonify(ok=True, estado="ACTIVO", html=_EAP_OK)
+    if a == "rechazar":
+        _eap_set(ambito, "RECHAZADO", aceptado=False)
+        if ambito == "interno":
+            _sol_auditar("EduAura términos rechazados", rol_actual())
+        return jsonify(ok=True, estado="RECHAZADO", html=_EAP_NO)
+    if a == "cerrar":
+        _eap_set(ambito, "INICIAL", aceptado=None if _EAP_RECORDAR_ACEPTACION else False)
+        return jsonify(ok=True, estado="INICIAL")
+    return jsonify(ok=False), 400
+
+
+def _eap_pre_motor(ambito, msg):
+    """Reglas previas al motor. → (respuesta_dict | None)."""
+    est = _eap_estado(ambito)
+    if est != "ACTIVO":
+        return {"ok": False, "estado": est, "html": _EAP_NO}
+    if _EAP_RE_GRACIAS.search(_eap_norm(msg)):
+        return {"ok": True, "estado": "ACTIVO", "html": _EAP_GRACIAS}
+    return None
+
+
+# ───────────────────────── Base de conocimiento (ayuda / soporte del sistema) ─────────────────────────
+_EAP_STOP = set("de la el los las un una unos unas que como para por con sin del al en y o a se mi me te tu su es son hay "
+                "puedo quiero necesito favor cual cuales donde cuando esta este esto eso aqui ya no si lo le les muy mas "
+                "pero hola aura buenas buenos dias tardes noches".split())
+
+# (titulo, palabras clave, respuesta HTML)
+_EAP_KB_BASE = [
+    ("Acceso e inicio de sesión", "iniciar sesion ingresar ingreso ingresando entrar login acceso usuario cedula portal como ingreso como entro no puedo entrar",
+     "Entra por el <b>Portal de acceso</b> de la página de inicio: elige tu institución, escribe tu usuario (cédula o ID) y tu contraseña. Si no tienes usuario, lo crea la secretaría o rectoría de tu colegio."),
+    ("Olvidé mi contraseña", "olvide contrasena clave password recuperar restablecer cambiar contrasena",
      "Por seguridad EduTrack no cambia claves desde un formulario público. El <b>rector o la secretaría</b> de tu colegio solicita el restablecimiento a la Mesa de Soporte PROCSIS."),
-    ("pqr", "pqr peticion queja reclamo sugerencia radicar denuncia solicitud",
+    ("Cómo radicar una PQR", "pqr peticion queja reclamo sugerencia radicar denuncia solicitud",
      "Puedes radicar una PQR en <a href='/pqr'>/pqr</a>. Recibirás un número de radicado y la fecha máxima de respuesta según la norma colombiana."),
-    ("pagos", "pagar factura licencia pago cartera cobro wompi mensualidad",
+    ("Pagar factura o licencia", "pagar factura licencia pago cartera cobro wompi mensualidad",
      "Paga tu factura o licencia en <a href='/pagar'>/pagar</a> con el NIT o código del colegio. Si hay enlace Wompi configurado, podrás pagar en línea."),
-    ("qr", "asistencia codigo qr porteria carnet carne entrada salida lector",
+    ("Asistencia y códigos QR", "asistencia codigo qr porteria carnet carne entrada salida lector",
      "La portería usa el lector QR del portal para registrar entradas y salidas. Los padres ven los ingresos en el portal familiar si el plan del colegio lo incluye."),
-    ("notas", "notas planilla docente calificaciones boletin siee periodo",
+    ("Planilla de notas del docente", "notas planilla docente calificaciones boletin siee periodo",
      "El docente solo ve las materias y grados que tiene asignados. Las notas se guardan automáticamente; usa punto decimal (por ejemplo 3.5). Los boletines los genera el colegio según su SIEE."),
-    ("familia", "padres acudiente familia portal familiar hijo estudiante ver notas",
+    ("Portal de padres", "padres acudiente familia portal familiar hijo estudiante ver notas",
      "Los acudientes ingresan en <a href='/familia-login'>/familia-login</a> con su cédula. Ven el resumen de notas e ingresos QR según el plan de su colegio."),
-    ("planes", "planes precio costo tarifa cuanto vale cotizacion valor licencia plan",
-     "Puedes consultar los planes en <a href='/ventas'>/ventas</a>. La activación y las cotizaciones las gestiona el equipo comercial de PROCSIS; si quieres, te paso con un asesor."),
-    ("demo", "demo demostracion prueba piloto probar conocer agendar",
-     "Con gusto: puedes agendar una <b>demostración o prueba piloto</b> de EduTrack con el equipo de PROCSIS. Escríbenos por WhatsApp y te contactan."),
-    ("datos", "datos personales habeas data privacidad ley 1581 seguridad proteccion",
+    ("Planes EduTrack y Solo QR", "planes plan precio costo tarifa cuanto vale cotizacion valor licencia",
+     "Consulta los planes en <a href='/ventas'>/ventas</a>. La activación y las cotizaciones las gestiona el equipo comercial de PROCSIS."),
+    ("Demostración y prueba piloto", "demo demostracion prueba piloto probar conocer agendar",
+     "Puedes agendar una <b>demostración o prueba piloto</b> de EduTrack con el equipo de PROCSIS. Escríbenos por WhatsApp y te contactan."),
+    ("Ley 1581 y datos personales", "datos personales habeas data privacidad ley 1581 seguridad proteccion politicas terminos",
      "EduTrack aplica habeas data (Ley 1581): accesos auditados, roles y tratamiento conforme a la política de privacidad de PROCSIS. Más en <a href='/legal'>/legal</a>."),
-    ("que_es", "que es edutrack para que sirve que hace procsis plataforma",
+    ("¿Qué es EduTrack?", "que es edutrack para que sirve que hace procsis plataforma sistema",
      "<b>EduTrack</b> es la plataforma de gestión escolar de PROCSIS: notas, asistencia, carné digital, PQR, pagos y comunicación con familias en un solo acceso para rectoría, coordinación, secretaría y docentes."),
-    ("aura", "eduaura aura inteligencia artificial ia observaciones",
-     "<b>EduAura IA</b> es el módulo de analítica y observaciones inteligentes de EduTrack (según el plan del colegio). Dentro del sistema ayuda a detectar riesgos académicos y redactar observaciones."),
-    ("ayuda", "ayuda centro de ayuda soporte tecnico problema error falla",
-     "Puedes revisar el <a href='/ayuda'>Centro de ayuda</a>. Si tu problema es técnico y sigue, te paso con un asesor de soporte."),
+    ("EduAura IA", "eduaura aura inteligencia artificial ia observaciones analitica",
+     "<b>EduAura IA</b> es el módulo de analítica y observaciones inteligentes de EduTrack (según el plan del colegio). Ayuda a detectar riesgos académicos y a redactar observaciones."),
+    ("Centro de ayuda", "ayuda centro de ayuda soporte tecnico problema error falla manual guia",
+     "Puedes revisar el <a href='/ayuda'>Centro de ayuda</a> y los artículos de <a href='/support'>Support</a>. Si tu problema es técnico y sigue, te paso con un asesor de soporte."),
 ]
-_AURA_ASESOR = ("asesor", "humano", "agente", "persona", "hablar con alguien", "hablar con un", "whatsapp", "wasap",
-                "wsp", "ejecutivo", "operador", "llamar", "contactar", "comercial", "ventas", "soporte")
-_AURA_SALUDOS = ("hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hey", "saludos")
-_AURA_GRACIAS = ("gracias", "muchas gracias", "listo", "perfecto", "ok gracias")
+_EAP_CACHE = {"t": 0.0, "docs": []}
 
 
-def _aura_norm(t):
+def _eap_norm(t):
     t = _au_ud.normalize("NFKD", (t or "").lower())
     t = "".join(c for c in t if not _au_ud.combining(c))
     return re.sub(r"[^a-z0-9 ]+", " ", t).strip()
 
 
-def _aura_wa_link(pregunta=""):
-    """Enlace wa.me al número de soporte/ventas configurado en Gerencia (con la pregunta prellenada)."""
+def _eap_toks(t):
+    return set(w for w in _eap_norm(t).split() if w not in _EAP_STOP and (len(w) >= 3 or w in ("qr", "ia")))
+
+
+def _eap_plano(h):
+    import html as _h
+    return _h.unescape(re.sub(r"<[^>]+>", " ", h or ""))
+
+
+def _eap_doc(titulo, claves, cuerpo, html):
+    return {"tk": _eap_toks(titulo) | _eap_toks(claves), "bk": _eap_toks(cuerpo), "html": html}
+
+
+def _eap_docs():
+    """Base de ayuda viva: respuestas base + Support publicado + FAQ de Soporte + canales. Caché 60 s."""
+    if _eap_time.time() - _EAP_CACHE["t"] < 60 and _EAP_CACHE["docs"]:
+        return _EAP_CACHE["docs"]
+    docs = []  # primero lo que publica Soporte (gana los empates); al final las respuestas base
+    # 1) Artículos publicados en /support (Soporte los administra)
+    try:
+        for a in ArticuloAyuda.query.filter_by(estado="PUBLICADO").order_by(ArticuloAyuda.id.desc()).limit(80).all():
+            cuerpo = (a.cuerpo or "").strip()
+            snippet = (a.resumen or cuerpo)[:380]
+            html = "<b>%s</b><br>%s<br><a href='/support/a/%s'>Leer el artículo completo</a>" % (
+                _esc(a.titulo or ""), _esc(snippet).replace("\n", "<br>"), _esc(a.slug or ""))
+            docs.append(_eap_doc(a.titulo or "", a.categoria or "", "%s %s" % (a.resumen or "", cuerpo[:2500]), html))
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    # 2) FAQ que Soporte publica desde «Actualizaciones / FAQ / Ayuda»
+    try:
+        p = plataforma()
+        faq = (getattr(p, "faq", None) or "").replace("\r\n", "\n").strip()
+        for bloque in [b.strip() for b in faq.split("\n\n") if b.strip()]:
+            lineas = [ln.strip().lstrip("•-* ").strip() for ln in bloque.split("\n") if ln.strip()]
+            tit = lineas[0]
+            resto = " ".join(lineas[1:]) or tit
+            html = "<b>%s</b><br>%s" % (_esc(tit), _esc(resto))
+            docs.append(_eap_doc(tit, "", bloque, html))
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    # 3) Canales de atención (teléfonos, correos y horarios configurados en Gerencia)
+    try:
+        p = plataforma()
+        ts = getattr(p, "telefono_soporte", None) or SOPORTE_TELEFONO
+        ms = getattr(p, "email_soporte", None) or SOPORTE_EMAIL
+        tc = getattr(p, "telefono_cartera", None) or CARTERA_TELEFONO
+        mc = getattr(p, "email_cartera", None) or CARTERA_EMAIL
+        hl = getattr(p, "horario_lunes", None) or ""
+        hs = getattr(p, "horario_semana", None) or ""
+        html = ("<b>Canales de atención</b><br>Soporte técnico: %s · %s<br>Cartera y facturación: %s · %s%s"
+                % (_esc(ts), _esc(ms), _esc(tc), _esc(mc),
+                   ("<br>Horario: lunes %s; martes a viernes %s." % (_esc(hl), _esc(hs))) if (hl or hs) else ""))
+        docs.append(_eap_doc("Canales de atención contacto teléfono correo horario soporte cartera",
+                             "telefono llamar correo email horario atencion cartera contacto numero", _eap_plano(html), html))
+    except Exception:
+        pass
+    docs.extend(_eap_doc(t, k, _eap_plano(h), h) for t, k, h in _EAP_KB_BASE)
+    _EAP_CACHE["t"], _EAP_CACHE["docs"] = _eap_time.time(), docs
+    return docs
+
+
+def _eap_buscar(msg):
+    """Mejor respuesta de la base de ayuda o None."""
+    q = _eap_toks(msg)
+    if not q:
+        return None
+    mejor, mp = None, 0.0
+    for d in _eap_docs():
+        pt = 0.0
+        for w in q:
+            if w in d["tk"]:
+                pt += 2.0
+            elif w in d["bk"]:
+                pt += 1.0
+            elif len(w) >= 5:
+                if _au_dl.get_close_matches(w, d["tk"], n=1, cutoff=0.84):
+                    pt += 1.4
+        if pt > mp:
+            mejor, mp = d, pt
+    return mejor["html"] if (mejor and mp >= 2.0) else None
+
+
+_EAP_RE_ASESOR_FUERTE = re.compile(r"\b(asesor|asesora|humano|agente|whatsapp|wasap|wsp|ejecutivo|operador|persona real|hablar con (un|una|alguien|el|la))\b")
+_EAP_RE_ASESOR_DEBIL = re.compile(r"\b(ventas|comercial|soporte|llamar|llamen|contactar|contactarme)\b")
+_EAP_SALUDOS = {"hola", "buenas", "buenos", "dias", "tardes", "noches", "hey", "saludos", "aura", "edu"}
+
+
+def _eap_wa_link(pregunta=""):
+    """Enlace wa.me al WhatsApp de soporte/ventas configurado en Gerencia, con la pregunta prellenada."""
     num = ""
     try:
         p = plataforma()
@@ -10362,126 +10617,190 @@ def _aura_wa_link(pregunta=""):
     except Exception:
         num = ""
     if not num:
-        num = "".join(c for c in str(globals().get("SOPORTE_TELEFONO") or "3105615621") if c.isdigit())
+        num = "".join(c for c in str(SOPORTE_TELEFONO or "3105615621") if c.isdigit())
     if len(num) == 10:
         num = "57" + num
-    txt = "Hola, vengo de la página de EduTrack y necesito ayuda de un asesor."
+    txt = "Hola, vengo de EduTrack y necesito ayuda de un asesor."
     if pregunta:
         txt += " Mi consulta: " + pregunta[:300]
     return "https://wa.me/%s?text=%s" % (num, quote(txt))
 
 
-def _aura_responder(msg):
-    """→ (html_respuesta, mostrar_boton_whatsapp)"""
-    q = _aura_norm(msg)
+def _eap_publico_responder(msg):
+    """→ (html, mostrar_boton_whatsapp)"""
+    q = _eap_norm(msg)
     if not q:
         return ("Escribe tu pregunta y con gusto te ayudo.", False)
     pals = q.split()
-    # ¿pide un asesor / WhatsApp?
-    if any((k in q) for k in _AURA_ASESOR):
-        # si además es una pregunta concreta (ventas/soporte/planes), dejamos que la KB responda primero
-        solo_asesor = len(pals) <= 6 or any(k in q for k in ("asesor", "humano", "agente", "persona", "whatsapp", "wasap", "wsp", "ejecutivo", "operador"))
-        if solo_asesor:
-            return ("Claro, te comunico con un asesor de PROCSIS por WhatsApp. Toca el botón y escríbele directamente.", True)
-    if q in _AURA_GRACIAS or (len(pals) <= 3 and any(g in q for g in _AURA_GRACIAS)):
-        return ("¡Con mucho gusto! Si necesitas algo más, aquí estoy.", False)
-    mejor, mejor_p = None, 0.0
-    for _id, claves, resp in _AURA_KB:
-        ck = claves.split()
-        ptj = 0.0
-        for w in pals:
-            if len(w) < 3:
-                continue
-            if w in ck:
-                ptj += 1.0
-            elif len(w) >= 5:
-                m = _au_dl.get_close_matches(w, ck, n=1, cutoff=0.82)
-                if m:
-                    ptj += 0.7
-        # frases completas de la clave (ej. "olvide contrasena")
-        for frase in re.findall(r"\b\w+ \w+\b", claves):
-            if frase in q:
-                ptj += 1.2
-        if ptj > mejor_p:
-            mejor, mejor_p = resp, ptj
-    if mejor and mejor_p >= 1.0:
-        return (mejor, False)
-    if all(w in _AURA_SALUDOS or len(w) < 3 for w in pals):
-        return ("¡Hola! Soy <b>Edu Aura</b>, la asistente de EduTrack. Pregúntame por el acceso, contraseñas, pagos, PQR, planes o una demostración. Si prefieres, te paso con un asesor.", False)
+    if _EAP_RE_ASESOR_FUERTE.search(q) or (len(pals) <= 4 and _EAP_RE_ASESOR_DEBIL.search(q)):
+        return ("Claro, te comunico con un asesor de PROCSIS por WhatsApp. Toca el botón y escríbele directamente.", True)
+    r = _eap_buscar(msg)
+    if r:
+        return (r, False)
+    if all(w in _EAP_SALUDOS or len(w) < 3 for w in pals):
+        return ("Dime en qué te puedo ayudar: acceso, contraseña, pagos, PQR, planes o una demostración. Si prefieres, te paso con un asesor.", False)
     return ("No entendí bien tu pregunta. Para no darte una respuesta equivocada, te paso con un asesor de PROCSIS: toca el botón y escríbele por WhatsApp.", True)
+
+
+def _eap_interno_responder(mensaje):
+    """Aura de los módulos administrativos: primero su motor por rol; si es una duda de ayuda, usa la base de ayuda."""
+    try:
+        n = _aura_normalizar(mensaje)
+        if n and _aura_intencion(n) == "estado":
+            inst, amb = _aura_buscar_en_mensaje(n)
+            if not inst and not amb:
+                r = _eap_buscar(mensaje)
+                if r:
+                    return r
+    except Exception as ex:
+        print("eap interno kb:", repr(ex))
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return _aura_responder(mensaje)
+
+
+@app.route("/api/public/aura/accion", methods=["POST"])
+def api_public_aura_accion():
+    return _eap_accion("publico")
 
 
 @app.route("/api/public/aura", methods=["POST"])
 def api_public_aura():
     d = request.get_json(silent=True) or {}
     msg = str(d.get("mensaje") or "")[:400]
+    pre = _eap_pre_motor("publico", msg)
+    if pre is not None:
+        return jsonify(pre), (200 if pre.get("ok") else 403)
     try:
-        html, wa = _aura_responder(msg)
+        html, wa = _eap_publico_responder(msg)
     except Exception as ex:
-        print("aura publica:", ex)
+        print("aura publica:", repr(ex))
         html, wa = ("Tuve un inconveniente al responder. Te paso con un asesor.", True)
-    out = {"html": html}
+    out = {"ok": True, "estado": "ACTIVO", "html": html}
     if wa:
-        out["wa"] = _aura_wa_link(msg)
+        out["wa"] = _eap_wa_link(msg)
     return jsonify(out)
 
 
-def _html_aura_publica():
-    """Burbuja flotante 'Edu Aura' para la página de inicio (sin sesión)."""
-    chips = ["¿Cómo ingreso?", "Olvidé mi contraseña", "Quiero una demostración", "Planes y precios", "Hablar con un asesor"]
-    return (
-        "<style>"
-        "#eap-btn{position:fixed;right:20px;bottom:20px;z-index:9998;border:0;border-radius:999px;padding:13px 20px;"
-        "background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;font-weight:800;font-size:14px;cursor:pointer;"
-        "box-shadow:0 10px 28px rgba(0,60,160,.4);font-family:inherit}"
-        "#eap-box{position:fixed;right:20px;bottom:20px;z-index:9999;width:360px;max-width:calc(100vw - 24px);height:500px;"
-        "max-height:calc(100vh - 40px);display:none;flex-direction:column;background:#fff;border-radius:20px;overflow:hidden;"
-        "box-shadow:0 24px 60px rgba(7,28,56,.35);border:1px solid #e2e8f0;font-family:-apple-system,Segoe UI,system-ui,sans-serif}"
-        "#eap-head{background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;padding:13px 16px;display:flex;"
-        "justify-content:space-between;align-items:center;font-weight:800;font-size:14px}"
-        "#eap-head small{display:block;font-weight:500;opacity:.8;font-size:11px}"
-        "#eap-x{cursor:pointer;font-size:18px;padding:0 4px}"
-        "#eap-msgs{flex:1;overflow:auto;padding:12px;background:#f8fafc;font-size:13.5px;line-height:1.45}"
-        ".eap-m{margin:0 0 10px;padding:9px 12px;border-radius:14px;max-width:88%;word-wrap:break-word}"
-        ".eap-u{background:#0B2D57;color:#fff;margin-left:auto}"
-        ".eap-a{background:#fff;border:1px solid #e2e8f0;color:#0f172a}"
-        ".eap-wa{display:inline-block;margin-top:8px;background:#16a34a;color:#fff!important;text-decoration:none;"
-        "font-weight:800;padding:9px 16px;border-radius:999px;font-size:13px}"
-        "#eap-chips{padding:6px 10px 0;display:flex;gap:6px;flex-wrap:wrap;background:#f8fafc}"
-        "#eap-chips button{background:#fff;border:1px solid #cbd5e1;border-radius:999px;padding:5px 11px;font-size:11.5px;cursor:pointer;color:#334155}"
-        "#eap-form{display:flex;gap:6px;padding:10px;border-top:1px solid #e2e8f0;background:#fff}"
-        "#eap-in{flex:1;padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;font-size:14px}"
-        "#eap-send{background:#005BEA;color:#fff;border:0;border-radius:12px;padding:0 16px;font-weight:800;cursor:pointer}"
-        "</style>"
-        "<button id='eap-btn' type='button' aria-label='Abrir Edu Aura'>✨ Edu Aura · Ayuda</button>"
-        "<div id='eap-box' role='dialog' aria-label='Edu Aura'>"
-        "<div id='eap-head'><div>✨ Edu Aura<small>Asistente de ayuda · EduTrack</small></div><span id='eap-x'>✕</span></div>"
-        "<div id='eap-msgs'><div class='eap-m eap-a'>¡Hola! Soy <b>Edu Aura</b>. Te ayudo con el acceso, contraseñas, pagos, PQR y planes. "
-        "Si prefieres, te paso con un asesor por WhatsApp.</div></div>"
-        "<div id='eap-chips'></div>"
-        "<form id='eap-form'><input id='eap-in' maxlength='400' placeholder='Escribe tu duda…' autocomplete='off'>"
-        "<button id='eap-send'>Enviar</button></form></div>"
-        "<script>(function(){"
-        "var b=document.getElementById('eap-btn'),x=document.getElementById('eap-box'),m=document.getElementById('eap-msgs'),"
-        "i=document.getElementById('eap-in'),c=document.getElementById('eap-chips');"
-        "function ab(){x.style.display='flex';b.style.display='none';i.focus();}"
-        "function ce(){x.style.display='none';b.style.display='inline-block';}"
-        "b.onclick=ab;document.getElementById('eap-x').onclick=ce;"
-        "function add(h,u){var d=document.createElement('div');d.className='eap-m '+(u?'eap-u':'eap-a');"
-        "if(u)d.textContent=h;else d.innerHTML=h;m.appendChild(d);m.scrollTop=m.scrollHeight;return d;}"
-        "function env(t){t=(t||'').trim();if(!t)return;add(t,true);i.value='';c.innerHTML='';var w=add('Escribiendo…');"
-        "fetch('/api/public/aura',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:t})})"
-        ".then(function(r){return r.json();}).then(function(d){w.innerHTML=d.html||'Sin respuesta.';"
-        "if(d.wa){var a=document.createElement('a');a.className='eap-wa';a.href=d.wa;a.target='_blank';a.rel='noopener';"
-        "a.textContent='💬 Hablar con un asesor por WhatsApp';w.appendChild(document.createElement('br'));w.appendChild(a);}"
-        "m.scrollTop=m.scrollHeight;})"
-        ".catch(function(){w.innerHTML='No pude conectar. Intenta de nuevo en un momento.';});}"
-        "document.getElementById('eap-form').onsubmit=function(e){e.preventDefault();env(i.value);};"
-        "var EJ=" + json.dumps(chips, ensure_ascii=False) + ";"
-        "EJ.forEach(function(t){var k=document.createElement('button');k.type='button';k.textContent=t;k.onclick=function(){env(t);};c.appendChild(k);});"
-        "})();</script>"
-    )
+# ───────────────────────── Widget (estilo vidrio · Apple) ─────────────────────────
+_EAP_CSS = """
+.eap-root{position:fixed;right:18px;bottom:18px;z-index:99999;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif}
+.eap-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:12px 20px;font-weight:700;font-size:14px;cursor:pointer;color:#fff;
+background:linear-gradient(135deg,rgba(11,45,87,.74),rgba(0,91,234,.62));backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+box-shadow:0 10px 30px rgba(0,40,120,.35),inset 0 1px 0 rgba(255,255,255,.5);font-family:inherit}
+.eap-btn:hover{filter:brightness(1.08)}
+.eap-box{display:none;flex-direction:column;width:372px;max-width:calc(100vw - 28px);height:540px;max-height:calc(100vh - 36px);border-radius:26px;overflow:hidden;
+background:rgba(255,255,255,.56);backdrop-filter:blur(32px) saturate(190%);-webkit-backdrop-filter:blur(32px) saturate(190%);
+border:1px solid rgba(255,255,255,.75);box-shadow:0 28px 70px rgba(7,28,56,.38),inset 0 1px 0 rgba(255,255,255,.85)}
+.eap-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;color:#fff;
+background:linear-gradient(135deg,rgba(11,45,87,.84),rgba(0,91,234,.72));border-bottom:1px solid rgba(255,255,255,.35)}
+.eap-ttl{display:flex;align-items:center;gap:10px}
+.eap-ttl .eap-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.45);font-size:16px}
+.eap-ttl b{display:block;font-size:15px;line-height:1.1}.eap-ttl small{display:block;font-size:11px;opacity:.82;font-weight:500;margin-top:2px}
+.eap-x{width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.18);color:#fff;font-size:15px;cursor:pointer;line-height:1;padding:0}
+.eap-x:hover{background:rgba(255,255,255,.34)}
+.eap-msgs{flex:1;overflow:auto;padding:14px 12px 6px;font-size:13.5px;line-height:1.45}
+.eap-m{margin:0 0 10px;max-width:88%;border-radius:18px;word-wrap:break-word;overflow:hidden}
+.eap-m .eap-c{padding:9px 13px 2px}
+.eap-a{background:rgba(255,255,255,.86);border:1px solid rgba(255,255,255,.9);color:#0f172a;border-bottom-left-radius:6px;box-shadow:0 2px 10px rgba(15,23,42,.08)}
+.eap-u{background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;margin-left:auto;border-bottom-right-radius:6px}
+.eap-time{display:block;text-align:right;font-size:10px;opacity:.55;padding:0 12px 6px}
+.eap-consent{background:#fff;min-width:230px}
+.eap-act{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;border:0;border-top:1px solid #f0f0f0;background:#fff;padding:12px 10px;font-size:14px;font-weight:600;color:#0a6b3d;cursor:pointer;font-family:inherit}
+.eap-act:hover{background:#f6fbf8}.eap-act:disabled{opacity:.45;cursor:default;background:#fff}
+.eap-act svg{flex:0 0 auto}
+.eap-wa{display:inline-block;margin:6px 0 4px;background:#16a34a;color:#fff!important;text-decoration:none;font-weight:700;padding:9px 16px;border-radius:999px;font-size:13px}
+.eap-chips{padding:4px 12px 2px;display:flex;gap:6px;flex-wrap:wrap}
+.eap-chips button{background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9);border-radius:999px;padding:5px 11px;font-size:11.5px;cursor:pointer;color:#1e3a5f;backdrop-filter:blur(8px)}
+.eap-form{display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.35)}
+.eap-in{flex:1;padding:10px 14px;border:1px solid rgba(148,163,184,.45);border-radius:999px;font-size:14px;background:rgba(255,255,255,.8);outline:none;font-family:inherit}
+.eap-in:focus{border-color:#005BEA;box-shadow:0 0 0 3px rgba(0,91,234,.15)}.eap-in:disabled{background:rgba(226,232,240,.7)}
+.eap-send{background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;border:0;border-radius:999px;padding:0 18px;font-weight:700;cursor:pointer;font-family:inherit}
+.eap-send:disabled{opacity:.5;cursor:default}
+@media print{.eap-root{display:none}}
+"""
 
+_EAP_JS = r"""
+(function(){
+var CHAT='__CHAT__',ACC='__ACC__',root=document.getElementById('__ROOT__');
+if(!root)return;
+var btn=root.querySelector('.eap-btn'),box=root.querySelector('.eap-box'),msgs=root.querySelector('.eap-msgs'),
+    inp=root.querySelector('.eap-in'),send=root.querySelector('.eap-send'),chips=root.querySelector('.eap-chips'),
+    xb=root.querySelector('.eap-x'),form=root.querySelector('.eap-form');
+var EJ=__CHIPS__,estado='INICIAL',gen=0;
+var ICON='<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>';
+function hora(){try{return new Date().toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit',hour12:true});}catch(e){return '';}}
+function post(u,b){return fetch(u,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Requested-With':'aura'},body:JSON.stringify(b||{})}).then(function(r){return r.json().catch(function(){return {};});});}
+function stamp(d){var t=document.createElement('span');t.className='eap-time';t.textContent=hora();d.appendChild(t);}
+function bajar(){msgs.scrollTop=msgs.scrollHeight;}
+function add(h,u,plano){var d=document.createElement('div');d.className='eap-m '+(u?'eap-u':'eap-a');var c=document.createElement('div');c.className='eap-c';
+  if(u||plano){c.textContent=h;if(plano)c.style.whiteSpace='pre-line';}else{c.innerHTML=h;}
+  d.appendChild(c);stamp(d);msgs.appendChild(d);bajar();return d;}
+function lock(on,ph){inp.disabled=on;send.disabled=on;inp.placeholder=on?(ph||'Acepta los términos para continuar'):'Escribe tu duda…';}
+function mostrarChips(){chips.innerHTML='';EJ.forEach(function(t){var k=document.createElement('button');k.type='button';k.textContent=t.length>38?t.slice(0,36)+'…':t;k.title=t;k.onclick=function(){enviar(t);};chips.appendChild(k);});}
+function consent(texto,solo){
+  var d=document.createElement('div');d.className='eap-m eap-a eap-consent';
+  var c=document.createElement('div');c.className='eap-c';c.style.whiteSpace='pre-line';c.textContent=texto;d.appendChild(c);stamp(d);
+  var items=solo?[['aceptar','Aceptar y continuar']]:[['aceptar','Aceptar'],['rechazar','Rechazar']];
+  items.forEach(function(it){var b=document.createElement('button');b.type='button';b.className='eap-act';b.innerHTML=ICON+'<span>'+it[1]+'</span>';
+    b.onclick=function(){decidir(it[0],d);};d.appendChild(b);});
+  msgs.appendChild(d);bajar();}
+function decidir(a,d){
+  var my=gen;Array.prototype.forEach.call(d.querySelectorAll('.eap-act'),function(b){b.disabled=true;});
+  post(ACC,{accion:a}).then(function(r){
+    if(my!==gen)return;estado=r.estado||estado;
+    if(a==='aceptar'){add(r.html||'Listo.',false,true);lock(false);mostrarChips();inp.focus();}
+    else{lock(true);consent(r.html||'',true);}
+  }).catch(function(){if(my===gen){add('No pude conectar. Intenta de nuevo.');Array.prototype.forEach.call(d.querySelectorAll('.eap-act'),function(b){b.disabled=false;});}});}
+function iniciar(){
+  var my=gen;lock(true,'Acepta los términos para continuar');
+  post(ACC,{accion:'abrir'}).then(function(r){
+    if(my!==gen)return;estado=r.estado||'ESPERANDO_ACEPTACION';
+    if(estado==='ACTIVO'){add(r.html||'Hola.',false,true);lock(false);mostrarChips();}else{consent(r.html||'');}
+  }).catch(function(){if(my===gen)add('No pude conectar con el servidor.');});}
+function abrir(){box.style.display='flex';btn.style.display='none';if(!msgs.children.length)iniciar();else inp.focus();}
+function cerrar(){gen++;msgs.innerHTML='';chips.innerHTML='';inp.value='';estado='INICIAL';lock(true);
+  box.style.display='none';btn.style.display='inline-flex';post(ACC,{accion:'cerrar'}).catch(function(){});}
+function enviar(t){t=(t||'').trim();if(!t||estado!=='ACTIVO')return;var my=gen;add(t,true);inp.value='';chips.innerHTML='';
+  var w=add('Escribiendo…');
+  post(CHAT,{mensaje:t}).then(function(d){if(my!==gen)return;
+    if(d.estado&&d.estado!=='ACTIVO'){estado=d.estado;lock(true);w.querySelector('.eap-c').textContent=d.html||'';return;}
+    var c=w.querySelector('.eap-c');c.innerHTML=d.html||'Sin respuesta.';
+    if(d.wa){var a=document.createElement('a');a.className='eap-wa';a.href=d.wa;a.target='_blank';a.rel='noopener';a.textContent='💬 Hablar con un asesor por WhatsApp';c.appendChild(document.createElement('br'));c.appendChild(a);}
+    bajar();}).catch(function(){if(my===gen)w.querySelector('.eap-c').textContent='No pude conectar. Intenta de nuevo en un momento.';});}
+btn.onclick=abrir;xb.onclick=cerrar;window.auraAbrir=abrir;
+form.onsubmit=function(e){e.preventDefault();enviar(inp.value);};
+lock(true);
+})();
+"""
+
+
+def _eap_widget_html(ambito, chips=None, sub=""):
+    """HTML del widget Edu Aura (vidrio). ambito: 'publico' | 'interno'."""
+    interno = ambito == "interno"
+    root = "aura-root" if interno else "eap-root"
+    chat = "/api/interno/aura/chat" if interno else "/api/public/aura"
+    acc = "/api/interno/aura/accion" if interno else "/api/public/aura/accion"
+    js = (_EAP_JS.replace("__CHAT__", chat).replace("__ACC__", acc).replace("__ROOT__", root)
+          .replace("__CHIPS__", json.dumps(chips or [], ensure_ascii=False)))
+    return (
+        '<div id="%s" class="eap-root"><style>%s</style>'
+        '<div class="eap-box" role="dialog" aria-label="Edu Aura">'
+        '<div class="eap-head"><div class="eap-ttl"><div class="eap-ic">✨</div><div><b>Edu Aura</b><small>%s</small></div></div>'
+        '<button type="button" class="eap-x" aria-label="Cerrar y borrar la conversación" title="Cerrar y borrar la conversación">✕</button></div>'
+        '<div class="eap-msgs"></div><div class="eap-chips"></div>'
+        '<form class="eap-form"><input class="eap-in" maxlength="400" placeholder="Escribe tu duda…" autocomplete="off">'
+        '<button class="eap-send">Enviar</button></form></div>'
+        '<button type="button" class="eap-btn" aria-label="Abrir Edu Aura">✨ Edu Aura · Ayuda</button>'
+        '<script>%s</script></div>'
+    ) % (root, _EAP_CSS, _esc(sub or ("Asistente virtual · Soporte interno" if interno else "Asistente virtual · Procsis")), js)
+
+
+def _html_aura_publica():
+    """Burbuja flotante 'Edu Aura' para la página de inicio (sin sesión; estado aislado por visitante)."""
+    return _eap_widget_html("publico", ["¿Cómo ingreso?", "Olvidé mi contraseña", "Quiero una demostración", "Planes y precios", "Hablar con un asesor"])
 
 
 @app.route("/")
@@ -12698,9 +13017,9 @@ def login():
 .sinai-portal{{background:radial-gradient(900px 520px at 15% 0%,#dbe8ff,transparent 60%),radial-gradient(700px 420px at 100% 8%,#e3eeff,transparent 60%),#f5f7fb;padding:28px 20px 36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .sinai-grid{{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:1.45fr .85fr;gap:30px;align-items:stretch}}
 @media(max-width:900px){{.sinai-grid{{grid-template-columns:1fr}}}}
-.sinai-carousel{{position:relative;border-radius:36px;overflow:hidden;height:600px;background:#071c38;box-shadow:0 30px 80px rgba(7,28,56,.35);border:1px solid rgba(255,255,255,.35);isolation:isolate}}
+.sinai-carousel{{position:relative;border-radius:30px;overflow:hidden;height:470px;background:#071c38;box-shadow:0 30px 80px rgba(7,28,56,.35);border:1px solid rgba(255,255,255,.35);isolation:isolate}}
 .sinai-carousel::after{{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,0) 38%,rgba(255,255,255,0) 70%,rgba(255,255,255,.08) 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.12)}}
-@media(max-width:900px){{.sinai-carousel{{height:470px;border-radius:28px}}.sinai-brand-slogan{{font-size:19px!important}}}}
+@media(max-width:900px){{.sinai-carousel{{height:400px;border-radius:26px}}.sinai-brand-slogan{{font-size:15px!important}}}}
 .sinai-viewport{{width:100%;height:100%;overflow:hidden}}
 .sinai-track{{display:flex;height:100%;width:100%;transition:transform .6s cubic-bezier(.22,1,.36,1)}}
 .sinai-slide{{position:relative;min-width:100%;width:100%;height:100%;flex-shrink:0;overflow:hidden;background:#000}}
@@ -12709,21 +13028,21 @@ def login():
 .sinai-slide-ph{{width:100%;height:100%;position:relative;overflow:hidden}}
 .sinai-slide-ph::before{{content:"";position:absolute;width:75%;height:75%;left:-15%;top:-20%;background:radial-gradient(circle,rgba(0,190,255,.5),rgba(0,190,255,0) 65%);filter:blur(12px)}}
 .sinai-slide-ph::after{{content:"";position:absolute;width:80%;height:80%;right:-20%;bottom:-30%;background:radial-gradient(circle,rgba(0,91,234,.7),rgba(0,91,234,0) 65%);filter:blur(12px)}}
-.sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:40px 28px 92px;text-align:center;pointer-events:none}}
-.sinai-brand-tile{{background:rgba(255,255,255,.88);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.8);border-radius:36px;padding:26px 34px;box-shadow:0 30px 70px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.95);width:min(var(--car-logo,440px),80%);box-sizing:border-box}}
+.sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px 16px 56px;text-align:center;pointer-events:none}}
+.sinai-brand-tile{{background:rgba(255,255,255,.88);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.8);border-radius:24px;padding:8px;box-shadow:0 24px 60px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.95);width:min(var(--car-logo,440px),94%);box-sizing:border-box}}
 .sinai-brand-tile.sin-fondo{{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-color:transparent;box-shadow:none}}
-.sinai-brand-logo{{display:block;width:100%;height:auto;max-height:400px;object-fit:contain}}
+.sinai-brand-logo{{display:block;width:100%;height:auto;max-height:290px;object-fit:contain;border-radius:16px}}
 .sinai-slide-bgblur{{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(26px) saturate(1.3) brightness(.55);opacity:.85;z-index:0}}
-.sinai-brand-slogan{{margin:0;font-size:clamp(20px,2.3vw,30px);font-weight:600;letter-spacing:-.02em;line-height:1.3;color:#fff;max-width:600px;padding:14px 28px;border-radius:26px;background:rgba(255,255,255,.14);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.4);text-shadow:0 1px 8px rgba(0,0,0,.25)}}
-.sinai-brand-sub{{font-size:13px;font-weight:600;color:rgba(255,255,255,.78);letter-spacing:.1em;text-transform:uppercase}}
+.sinai-brand-slogan{{margin:0;font-size:clamp(15px,1.6vw,21px);font-weight:600;letter-spacing:-.02em;line-height:1.25;color:#fff;max-width:600px;padding:8px 20px;border-radius:20px;background:rgba(255,255,255,.14);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.4);text-shadow:0 1px 8px rgba(0,0,0,.25)}}
+.sinai-brand-sub{{font-size:11px;font-weight:600;color:rgba(255,255,255,.78);letter-spacing:.1em;text-transform:uppercase}}
 @keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.06)}}}}
 .sinai-card{{animation:sinai-fade-in .5s ease}}
 @keyframes sinai-fade-in{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
 .sinai-visual-badge{{display:none}}
-.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:54px;height:54px;border-radius:50%;border:1px solid rgba(255,255,255,.42);background:rgba(255,255,255,.16);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);color:#fff;font-size:28px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.45);transition:background .2s;padding:0;display:flex;align-items:center;justify-content:center}}
+.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.42);background:rgba(255,255,255,.16);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);color:#fff;font-size:28px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.45);transition:background .2s;padding:0;display:flex;align-items:center;justify-content:center}}
 .sinai-nav:hover{{background:rgba(255,255,255,.3)}}
 .sinai-prev{{left:12px}}.sinai-next{{right:12px}}
-.sinai-dots{{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.16);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 8px 24px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.4)}}
+.sinai-dots{{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.16);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 8px 24px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.4)}}
 .sinai-dot{{width:8px;height:8px;border-radius:999px;border:0;background:rgba(255,255,255,.5);cursor:pointer;padding:0;opacity:1;transition:width .35s cubic-bezier(.25,.1,.25,1),background .35s}}
 .sinai-dot.is-on{{width:26px;background:#fff}}
 .sinai-access h1{{margin:0 0 6px;color:#1d1d1f;font-size:26px;font-weight:700;letter-spacing:-.02em}}
@@ -53614,14 +53933,24 @@ def _aura_responder(mensaje):
     return _aura_estado_html(inst)
 
 
+@app.route("/api/interno/aura/accion", methods=["POST"])
+def api_aura_accion():
+    if not _aura_staff():
+        return jsonify(ok=False, html="Tu sesión no puede usar Aura."), 403
+    return _eap_accion("interno")
+
+
 @app.route("/api/interno/aura/chat", methods=["POST"])
 def api_aura_chat():
     if not _aura_staff():
         return jsonify(ok=False, html="Tu sesión no puede usar Aura."), 403
     data = request.get_json(silent=True) or {}
     mensaje = str(data.get("mensaje") or "").strip()[:400]
+    pre = _eap_pre_motor("interno", mensaje)
+    if pre is not None:
+        return jsonify(pre), (200 if pre.get("ok") else 403)
     try:
-        html = _aura_responder(mensaje)
+        html = _eap_interno_responder(mensaje)
     except Exception as ex:
         try:
             db.session.rollback()
@@ -53629,53 +53958,13 @@ def api_aura_chat():
             pass
         print("aura chat:", repr(ex))
         html = "No pude procesar la consulta. Intenta de nuevo."
-    return jsonify(ok=True, html=html)
+    return jsonify(ok=True, estado="ACTIVO", html=html)
 
 
 def _aura_widget_html():
     rol = rol_actual()
     ejemplos = [v[1] for k, v in _AURA_INTENTOS.items() if k in _AURA_PERMISOS.get(rol, set())][:4]
-    chips = json.dumps(ejemplos, ensure_ascii=False)
-    return """
-<div id="aura-root">
-<style>
-#aura-root{position:fixed;right:18px;bottom:18px;z-index:99999;font-family:Segoe UI,system-ui,sans-serif}
-#aura-btn{background:linear-gradient(135deg,#0B2D57,#7c3aed);color:#fff;border:0;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;box-shadow:0 8px 24px rgba(15,23,42,.3)}
-#aura-box{display:none;width:350px;max-width:calc(100vw - 28px);height:460px;max-height:calc(100vh - 100px);background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 18px 44px rgba(15,23,42,.28);flex-direction:column;overflow:hidden;margin-bottom:10px}
-#aura-head{background:linear-gradient(135deg,#0B2D57,#7c3aed);color:#fff;padding:12px 14px;font-weight:800;display:flex;justify-content:space-between;align-items:center}
-#aura-msgs{flex:1;overflow:auto;padding:12px;background:#f8fafc;font-size:13px;line-height:1.45}
-.aura-m{margin:0 0 10px;padding:9px 11px;border-radius:12px;max-width:92%}
-.aura-u{background:#0B2D57;color:#fff;margin-left:auto}
-.aura-a{background:#fff;border:1px solid #e2e8f0;color:#0f172a}
-#aura-chips{padding:6px 10px 0;display:flex;gap:6px;flex-wrap:wrap}
-#aura-chips button{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:4px 10px;font-size:11px;cursor:pointer;color:#334155}
-#aura-form{display:flex;gap:6px;padding:10px;border-top:1px solid #e2e8f0}
-#aura-in{flex:1;padding:9px 10px;border:1px solid #cbd5e1;border-radius:10px;font-size:13px}
-#aura-send{background:#0B2D57;color:#fff;border:0;border-radius:10px;padding:0 14px;font-weight:800;cursor:pointer}
-@media print{#aura-root{display:none}}
-</style>
-<div id="aura-box"><div id="aura-head"><span>✨ EduAura · asistente interno</span><span id="aura-x" style="cursor:pointer">✕</span></div>
-<div id="aura-msgs"><div class="aura-m aura-a">Hola, soy Aura. Consulto información según los permisos de tu rol. Escribe «ayuda» para ver qué puedo hacer.</div></div>
-<div id="aura-chips"></div>
-<form id="aura-form"><input id="aura-in" maxlength="400" placeholder="Escribe tu consulta…" autocomplete="off"><button id="aura-send">Enviar</button></form></div>
-<button id="aura-btn" type="button">✨ Aura</button>
-<script>
-(function(){
-  var box=document.getElementById('aura-box'),btn=document.getElementById('aura-btn'),msgs=document.getElementById('aura-msgs'),
-      inp=document.getElementById('aura-in'),chips=document.getElementById('aura-chips');
-  function abrir(){box.style.display='flex';btn.style.display='none';inp.focus();}
-  function cerrar(){box.style.display='none';btn.style.display='inline-block';}
-  window.auraAbrir=abrir; btn.onclick=abrir; document.getElementById('aura-x').onclick=cerrar;
-  function add(h,u){var d=document.createElement('div');d.className='aura-m '+(u?'aura-u':'aura-a');if(u)d.textContent=h;else d.innerHTML=h;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}
-  function enviar(t){t=(t||'').trim();if(!t)return;add(t,true);inp.value='';chips.innerHTML='';
-    fetch('/api/interno/aura/chat',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Requested-With':'aura'},body:JSON.stringify({mensaje:t})})
-      .then(function(r){return r.json();}).then(function(d){add(d.html||'Sin respuesta.');}).catch(function(){add('No pude conectar con el servidor.');});}
-  document.getElementById('aura-form').onsubmit=function(e){e.preventDefault();enviar(inp.value);};
-  var EJ=__CHIPS__; EJ.forEach(function(x){var b=document.createElement('button');b.type='button';b.textContent=x.length>38?x.slice(0,36)+'…':x;b.title=x;b.onclick=function(){enviar(x);};chips.appendChild(b);});
-})();
-</script>
-</div>
-""".replace("__CHIPS__", chips)
+    return _eap_widget_html("interno", ejemplos)
 
 
 @app.after_request
