@@ -48507,36 +48507,93 @@ def formatear_radicado(rad):
 
 @app.route("/pqr")
 def pqr_portal():
-    """Portal público — Gestión PQR OnLine."""
+    """Portal público — Gestión PQR OnLine (diseño Liquid Glass)."""
     body = """
 <style>
-body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a}
-.top{background:linear-gradient(90deg,#0B2D57,#1e40af);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+html,body{margin:0;min-height:100vh;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;color:#fff}
+
+/* 1. Fondo del sistema */
+.fondo-sistema-pqr{
+  background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#3b82f6 100%);
+  min-height:100vh;display:flex;flex-direction:column;
+}
+
+/* Barra superior integrada al fondo */
+.top{background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(255,255,255,.18);color:#fff;padding:14px 20px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 .top h1{margin:0;font-size:18px;font-weight:800}
 .top a{color:#fff;text-decoration:none;font-size:13px;opacity:.9}
-.wrap{max-width:720px;margin:40px auto;padding:0 16px}
-.card{background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 4px 18px rgba(15,23,42,.08);overflow:hidden}
-.card-h{background:#0B2D57;color:#fff;padding:12px 18px;font-weight:800;font-size:15px}
-.card-b{padding:28px 22px;text-align:center}
-.btn-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:8px}
-.btn-pqr{display:inline-block;min-width:180px;padding:14px 20px;border-radius:6px;font-weight:800;font-size:14px;text-decoration:none;border:1px solid #0B2D57}
-.btn-presentar{background:#0B2D57;color:#fff}
-.btn-consultar{background:#fff;color:#0B2D57}
-.mini{margin-top:18px;font-size:12px;color:#64748b}
+.top a:hover{opacity:1;text-decoration:underline}
+
+.centro-pqr{flex:1;display:flex;justify-content:center;align-items:center;padding:32px 16px}
+
+/* 2. Tarjeta central Liquid Glass */
+.tarjeta-pqr-glass{
+  width:100%;max-width:560px;box-sizing:border-box;
+  background:rgba(255,255,255,.12);
+  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:24px;
+  box-shadow:0 12px 40px 0 rgba(0,0,0,.15);
+  padding:40px;color:#fff;text-align:center;
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .tarjeta-pqr-glass{background:rgba(15,23,42,.55)}
+}
+
+/* 3. Título interno */
+.titulo-header-glass{
+  background:rgba(255,255,255,.08);
+  border-bottom:1px solid rgba(255,255,255,.15);
+  padding:16px;margin:-40px -40px 30px -40px;
+  border-top-left-radius:24px;border-top-right-radius:24px;
+  font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.5px;
+}
+
+.texto-intro-pqr{margin:0 0 22px;font-size:16px;line-height:1.5;color:rgba(255,255,255,.92)}
+.btn-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* 4. Botones estilo Apple */
+.btn-presentar-apple,.btn-consultar-apple{
+  display:inline-block;min-width:170px;box-sizing:border-box;text-align:center;text-decoration:none;
+  border-radius:12px;padding:14px 28px;font-weight:600;font-size:15px;
+  transition:all .3s ease;cursor:pointer;
+}
+.btn-presentar-apple{
+  background:linear-gradient(135deg,#0071e3,#00c6ff);color:#fff;border:none;
+  box-shadow:0 4px 15px rgba(0,113,227,.3);
+}
+.btn-presentar-apple:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,113,227,.45)}
+.btn-consultar-apple{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.4)}
+.btn-consultar-apple:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.6);transform:translateY(-2px)}
+
+/* 5. Textos informativos y enlace */
+.mini{margin:20px 0 0;font-size:13px;color:rgba(255,255,255,.7)}
+.mini a{color:#67e8f9;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(103,232,249,.4)}
+.mini a:hover{color:#a5f3fc;border-bottom-color:#a5f3fc}
+
+@media(max-width:520px){
+  .tarjeta-pqr-glass{padding:28px 20px;border-radius:20px}
+  .titulo-header-glass{margin:-28px -20px 24px -20px;border-top-left-radius:20px;border-top-right-radius:20px}
+  .btn-presentar-apple,.btn-consultar-apple{width:100%}
+}
 </style>
-<div class="top"><h1>Gestión PQR OnLine</h1><a href="/">Inicio EduTrack</a></div>
-<div class="wrap"><div class="card">
-  <div class="card-h">Gestión PQR OnLine</div>
-  <div class="card-b">
-    <p style="margin:0 0 16px;color:#334155">Canal oficial de peticiones, quejas, reclamos y recursos.</p>
-    <div class="btn-row">
-      <a class="btn-pqr btn-presentar" href="/pqr/crear">Presentar PQR</a>
-      <a class="btn-pqr btn-consultar" href="/pqr/consulta">Consultar PQR</a>
+<div class="fondo-sistema-pqr">
+  <div class="top"><h1>Gestión PQR OnLine</h1><a href="/">Inicio EduTrack</a></div>
+  <div class="centro-pqr">
+    <div class="tarjeta-pqr-glass">
+      <div class="titulo-header-glass">Gestión PQR OnLine</div>
+      <p class="texto-intro-pqr">Canal oficial de peticiones, quejas, reclamos y recursos.</p>
+      <div class="btn-row">
+        <a class="btn-presentar-apple" href="/pqr/crear">Presentar PQR</a>
+        <a class="btn-consultar-apple" href="/pqr/consulta">Consultar PQR</a>
+      </div>
+      <p class="mini">Tiempo estimado de respuesta: aproximadamente 5 días hábiles.</p>
+      <p class="mini"><a href="/pqr-info">Información de interés: cómo radicar una PQR</a></p>
     </div>
-    <p class="mini">Tiempo estimado de respuesta: aproximadamente 5 días hábiles.</p>
-    <p class="mini"><a href="/pqr-info">Información de interés: cómo radicar una PQR</a></p>
   </div>
-</div></div>
+</div>
 """
     return page("Gestión PQR OnLine", body)
 
