@@ -48749,7 +48749,7 @@ def gerencia_editar_pqr_info():
     return page("Editar PQR / kit legal", shell(content))
 
 
-@app.route("/pqr/crear", methods=["GET", "POST"])
+@app.route("/pqr/formulario", methods=["GET", "POST"])
 def pqr_crear():
     mensaje = ""
     if request.method == "POST":
@@ -48872,6 +48872,475 @@ a{{color:#1e40af}}
 </div>
 """
     return page("Radicar PQR", body)
+
+
+_PQR_CHAT_TIPOS = ("Petición", "Queja", "Reclamo", "Recurso", "Reporte de pago", "Cancelación")
+_PQR_CHAT_SUBTIPOS = (
+    "Consulta", "Fallas del servicio", "Recibos / Facturación", "Solicitud estado de cuenta",
+    "Pago no aplicado", "Solicitud paz y salvo", "Cambio de plan / licencia",
+    "Cambio de titularidad de la institución", "Desactivación de módulos adicionales",
+    "Solicitud de reactivación del servicio", "Suspensión temporal del servicio",
+    "Protección de datos personales (Habeas Data)", "Otros",
+)
+_PQR_CHAT_PRIORIDADES = ("BAJA", "MEDIA", "ALTA", "CRITICA")
+
+_PQR_CHAT_HTML = r"""
+<style>
+html,body{margin:0;min-height:100vh;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;color:#fff}
+.fondo-sistema-pqr{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#3b82f6 100%);min-height:100vh;display:flex;flex-direction:column}
+.top{background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.18);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.top h1{margin:0;font-size:18px;font-weight:800}
+.top a{color:#fff;text-decoration:none;font-size:13px;opacity:.9}
+.top a:hover{opacity:1;text-decoration:underline}
+.centro-pqr{flex:1;display:flex;justify-content:center;align-items:center;padding:24px 14px}
+.chat-glass{width:100%;max-width:700px;height:min(82vh,680px);box-sizing:border-box;display:flex;flex-direction:column;background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.25);border-radius:24px;box-shadow:0 12px 40px rgba(0,0,0,.2);overflow:hidden}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.chat-glass{background:rgba(15,23,42,.7)}}
+.chat-head{padding:18px 22px 12px;border-bottom:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06)}
+.chat-head h2{margin:0;font-size:19px;font-weight:700}
+.chat-head p{margin:4px 0 10px;font-size:13px;color:rgba(255,255,255,.72)}
+.chat-nav{display:flex;gap:8px;flex-wrap:wrap}
+.chat-nav button{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.chat-nav button:hover{background:rgba(255,255,255,.22)}
+.prog{height:4px;background:rgba(255,255,255,.15);border-radius:4px;margin-top:12px;overflow:hidden}
+#progbar{height:100%;width:0;background:linear-gradient(90deg,#00c6ff,#0071e3);transition:width .4s ease}
+.chat-log{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.msg{max-width:86%;padding:11px 15px;border-radius:16px;font-size:14.5px;line-height:1.5;white-space:pre-line;word-wrap:break-word;overflow-wrap:anywhere;animation:pop .25s ease}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg.bot{align-self:flex-start;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.2);border-bottom-left-radius:4px}
+.msg.bot small{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:rgba(255,255,255,.65);margin-bottom:4px}
+.msg.user{align-self:flex-end;background:linear-gradient(135deg,#0071e3,#00a2ff);border-bottom-right-radius:4px;box-shadow:0 4px 14px rgba(0,113,227,.3)}
+.opts{display:flex;flex-direction:column;gap:8px;align-self:flex-start;max-width:92%;animation:pop .3s ease}
+.opt{text-align:left;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
+.opt:hover{background:rgba(255,255,255,.22);transform:translateX(3px)}
+.opt.go{background:linear-gradient(135deg,#0071e3,#00c6ff);border:none;box-shadow:0 4px 15px rgba(0,113,227,.35)}
+.opt.sug{border-color:#67e8f9}
+.chat-input{display:flex;gap:10px;padding:14px 16px;border-top:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06)}
+.chat-input input{flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.14);color:#fff;font-size:14.5px;outline:none}
+.chat-input input::placeholder{color:rgba(255,255,255,.6)}
+.chat-input input:focus{border-color:#67e8f9;background:rgba(255,255,255,.2)}
+.chat-input button{background:linear-gradient(135deg,#0071e3,#00c6ff);color:#fff;border:none;border-radius:12px;padding:0 22px;font-weight:700;font-size:14.5px;cursor:pointer;transition:all .2s}
+.chat-input button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,113,227,.45)}
+.chat-input button:disabled,.chat-input input:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.alt{text-align:center;font-size:12.5px;padding:0 0 12px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.06)}
+.alt a{color:#67e8f9;font-weight:700;text-decoration:none}
+.alt a:hover{text-decoration:underline}
+.lnk{display:inline-block;margin-top:8px;color:#67e8f9;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(103,232,249,.45)}
+@media(max-width:520px){.chat-glass{border-radius:18px;height:calc(100vh - 110px)}.msg{max-width:94%}.chat-head{padding:14px 16px 10px}.chat-head h2{font-size:17px}}
+</style>
+<div class="fondo-sistema-pqr">
+  <div class="top"><h1>Radicación de PQR</h1><a href="/pqr">← Volver al portal</a></div>
+  <div class="centro-pqr">
+    <div class="chat-glass">
+      <div class="chat-head">
+        <h2>Módulo de radicación de PQR</h2>
+        <p>Responde a las preguntas presentadas en el chat</p>
+        <div class="chat-nav">
+          <button type="button" id="nav-inicio">🏠 Inicio</button>
+          <button type="button" id="nav-resumen">📋 Resumen</button>
+          <button type="button" id="nav-atras">↩ Atrás</button>
+        </div>
+        <div class="prog"><div id="progbar"></div></div>
+      </div>
+      <div class="chat-log" id="log" aria-live="polite"></div>
+      <div class="chat-input">
+        <input id="txt" type="text" list="dl" autocomplete="off" placeholder="Haz clic sobre una opción o escribe aquí, usa Enter" maxlength="200">
+        <datalist id="dl"></datalist>
+        <button type="button" id="send">Enviar</button>
+      </div>
+      <div class="alt">¿Prefieres el formulario tradicional? <a href="/pqr/formulario">Radicar con formulario</a></div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+var DIVIPOLA = __DIVIPOLA__;
+var KEY = "pqr_chat_v1";
+var log = document.getElementById("log"), txt = document.getElementById("txt"), dl = document.getElementById("dl");
+var sendBtn = document.getElementById("send"), bar = document.getElementById("progbar");
+var answers = [], busy = false, finalMsg = null;
+var TOTAL = 15;
+
+function save(){ try{ sessionStorage.setItem(KEY, JSON.stringify(answers)); }catch(e){} }
+function load(){ try{ var s = sessionStorage.getItem(KEY); if(s){ var a = JSON.parse(s); if(Array.isArray(a)) answers = a; } }catch(e){} }
+function wipe(){ try{ sessionStorage.removeItem(KEY); }catch(e){} }
+function norm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim(); }
+
+var KW = [
+  ["falla",["no puedo ingresar","no carga","no abre","error","falla","no funciona","se cae","lento","login","contrasena","clave","no aparece la nota","pdf"]],
+  ["cert",["certificado","certificacion","constancia","curso","48 horas","diploma","participante"]],
+  ["fact",["factura","cobro","cobraron","pago","pague","recibo","paz y salvo","estado de cuenta"]],
+  ["plan",["plan","licencia","modulo adicional","titularidad","reactivar","suspension","suspender"]],
+  ["datos",["datos personales","habeas","privacidad","eliminar mis datos","actualizar mis datos"]]
+];
+function clasificar(t){
+  var n = norm(t), best = "otro", max = 0;
+  KW.forEach(function(p){ var c = 0; p[1].forEach(function(w){ if(n.indexOf(w) >= 0) c++; }); if(c > max){ max = c; best = p[0]; } });
+  return best;
+}
+function sugerirTipo(t){
+  var n = norm(t);
+  if(/recurso|reposicion|apelacion/.test(n)) return "Recurso";
+  if(/queja|mala atencion|maltrato|mal servicio/.test(n)) return "Queja";
+  if(/reclamo|cobro indebido|no funciona|no me aparece|incorrecto|error/.test(n)) return "Reclamo";
+  return "Petición";
+}
+var ASUNTOS = {
+  cert:{label:"Certificados / Cursos de 48 horas", sub:"Otros", pri:"MEDIA"},
+  falla:{label:"Falla de la plataforma", sub:"Fallas del servicio", pri:"ALTA"},
+  fact:{label:"Facturación, cobros o pagos", sub:"Recibos / Facturación", pri:"MEDIA"},
+  plan:{label:"Cambio de plan o licencia", sub:"Cambio de plan / licencia", pri:"MEDIA"},
+  datos:{label:"Protección de datos personales", sub:"Protección de datos personales (Habeas Data)", pri:"MEDIA"},
+  otro:{label:"Otro asunto", sub:"Consulta", pri:"MEDIA"}
+};
+var SKIP = "__skip";
+function skipOpt(t){ return [[SKIP, t]]; }
+function matchDep(raw){ var n = norm(raw); var ks = Object.keys(DIVIPOLA); for(var i=0;i<ks.length;i++){ if(norm(ks[i]) === n) return ks[i]; } return null; }
+
+var STEPS = {
+  perfil:{
+    ask:function(){ return {text:"¡Hola! 👋 Soy el asistente virtual de PQR de PROCSIS EduTrack. Para comenzar con tu solicitud, necesito saber: ¿con qué calidad la presentas?", opts:[["inst","Institución educativa / Rector"],["doc","Docente"],["est","Estudiante / Participante"],["otro","Otro"]]}; },
+    apply:function(d,v,l){ d.perfilKey = v; d.perfil = l; },
+    next:function(){ return "asunto"; }
+  },
+  asunto:{
+    ask:function(){ return {text:"Perfecto. ¿En qué te puedo ayudar hoy?\n💡 Puedes elegir una opción o describirlo con tus palabras.", opts:[["cert","Certificados / Cursos de 48 horas"],["falla","Falla de la plataforma"],["fact","Facturación, cobros o pagos"],["plan","Cambio de plan o licencia"],["datos","Protección de datos personales"],["otro","Otro asunto"]]}; },
+    apply:function(d,v,l){ if(v.indexOf("libre:") === 0){ d.asunto = v.slice(6); d.libre = l; } else { d.asunto = v; } },
+    next:function(d){ if(d.libre) return "tipo"; if(d.asunto === "cert") return "curso"; if(d.asunto === "falla") return "falla"; if(d.asunto === "otro") return "libre"; return "tipo"; }
+  },
+  curso:{
+    ask:function(){ return {text:"¿Cuál es el código del curso o programa de 48 horas?", ph:"Código o nombre del curso", max:80, opts:skipOpt("No lo recuerdo")}; },
+    apply:function(d,v,l){ if(v === SKIP){ d.curso = "No indicado"; return null; } if(l.length < 2) return "Escribe el código o nombre del curso."; d.curso = l.slice(0,80); return null; },
+    next:function(){ return "tipo"; }
+  },
+  falla:{
+    ask:function(){ return {text:"Entiendo. ¿En qué parte de la plataforma presentas la falla?", opts:[["Módulo de notas","Módulo de notas"],["Acceso / Login","Acceso / Login"],["Carga de PDFs","Carga de PDFs"],["Otro módulo","Otro módulo"]]}; },
+    apply:function(d,v){ d.modulo = v; },
+    next:function(){ return "tipo"; }
+  },
+  libre:{
+    ask:function(){ return {text:"Cuéntame brevemente qué necesitas (por ejemplo: «No me aparece mi certificado del curso de 48 horas»).", ph:"Describe tu necesidad en una frase", max:300}; },
+    apply:function(d,v,l){ if(l.length < 5) return "Cuéntame un poco más para poder clasificar tu solicitud."; d.libre = l; d.asunto = clasificar(l); return null; },
+    next:function(){ return "tipo"; }
+  },
+  tipo:{
+    ask:function(d){
+      var sug = sugerirTipo(d.libre || "");
+      var base = [["Petición","Petición"],["Queja","Queja"],["Reclamo","Reclamo"],["Recurso","Recurso de reposición"]];
+      return {text:"¿Qué tipo de solicitud es?" + (d.libre ? "\n💡 Por lo que describes, parece una «" + sug + "»." : ""), sug:sug, opts:base.map(function(o){ return [o[0], o[1] + (o[0] === sug && d.libre ? " (sugerido)" : "")]; })};
+    },
+    apply:function(d,v){ d.tipo = v; },
+    next:function(d){ return d.tipo === "Recurso" ? "radprev" : "doctipo"; }
+  },
+  radprev:{
+    ask:function(){ return {text:"Para un recurso necesito el número de radicado de la PQR que quieres recurrir.", ph:"Ej: 2026-11-000452", max:30, opts:skipOpt("No lo tengo")}; },
+    apply:function(d,v,l){ if(v === SKIP){ d.radprev = "No indicado"; return null; } if(l.length < 4) return "Escribe el número de radicado."; d.radprev = l.slice(0,30); return null; },
+    next:function(){ return "doctipo"; }
+  },
+  doctipo:{
+    ask:function(){ return {text:"Ahora tus datos. ¿Qué tipo de documento vas a ingresar?", opts:[["CC","Cédula de ciudadanía (CC)"],["NIT","NIT"],["CE","Cédula de extranjería (CE)"],["TI","Tarjeta de identidad (TI)"]]}; },
+    apply:function(d,v){ d.doctipo = v; },
+    next:function(){ return "docnum"; }
+  },
+  docnum:{
+    ask:function(d){ return {text:"Escribe tu número de " + (d.doctipo === "NIT" ? "NIT" : "documento") + ".", ph:"Solo números y guion si aplica", max:20}; },
+    apply:function(d,v,l){ var x = l.replace(/[\s\.]/g,""); if(!/^[A-Za-z0-9\-]{4,20}$/.test(x)) return "Ese número no parece válido. Revisa e inténtalo de nuevo."; d.docnum = x; return null; },
+    next:function(){ return "nombre"; }
+  },
+  nombre:{
+    ask:function(d){ return {text:(d.doctipo === "NIT" ? "¿Cuál es el nombre o razón social de la institución?" : "¿Cuáles son tus nombres?"), ph:"Nombre completo", max:100}; },
+    apply:function(d,v,l){ if(l.length < 2) return "Escribe al menos 2 caracteres."; d.nombre = l.slice(0,100); return null; },
+    next:function(d){ return d.doctipo === "NIT" ? "email" : "apellidos"; }
+  },
+  apellidos:{
+    ask:function(){ return {text:"¿Y tus apellidos?", ph:"Apellidos", max:100, opts:skipOpt("Omitir")}; },
+    apply:function(d,v,l){ d.apellidos = (v === SKIP) ? "" : l.slice(0,100); return null; },
+    next:function(){ return "email"; }
+  },
+  email:{
+    ask:function(){ return {text:"¿A qué correo electrónico te enviamos la respuesta y el número de radicado?", ph:"tucorreo@ejemplo.com", max:120}; },
+    apply:function(d,v,l){ if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(l)) return "Ese correo no parece válido. Ejemplo: nombre@dominio.com"; d.email = l.slice(0,120); return null; },
+    next:function(d){ return (d.perfilKey === "inst" || d.doctipo === "NIT") ? "dep" : "nitcol"; }
+  },
+  nitcol:{
+    ask:function(){ return {text:"Si tu solicitud es sobre un colegio, indícame su NIT (opcional).", ph:"NIT del colegio", max:20, opts:skipOpt("Omitir")}; },
+    apply:function(d,v,l){ if(v === SKIP){ d.nitcol = ""; return null; } var x = l.replace(/[\s\.]/g,""); if(!/^[A-Za-z0-9\-]{4,20}$/.test(x)) return "Ese NIT no parece válido. Puedes omitir este paso."; d.nitcol = x; return null; },
+    next:function(){ return "dep"; }
+  },
+  dep:{
+    ask:function(){ return {text:"¿En qué departamento estás?", ph:"Escribe o elige tu departamento", max:60, list:Object.keys(DIVIPOLA).sort()}; },
+    apply:function(d,v,l){ var k = matchDep(l); if(!k) return "No reconocí ese departamento. Elige uno de la lista que aparece al escribir."; d.dep = k; return null; },
+    next:function(){ return "mun"; }
+  },
+  mun:{
+    ask:function(d){ var ls = DIVIPOLA[d.dep] || []; return {text:"¿Y el municipio o ciudad?", ph:"Escribe o elige tu municipio", max:80, list:ls}; },
+    apply:function(d,v,l){
+      var ls = DIVIPOLA[d.dep] || [];
+      if(ls.length){ var n = norm(l), hit = null; for(var i=0;i<ls.length;i++){ if(norm(ls[i]) === n){ hit = ls[i]; break; } } if(!hit) return "No encontré ese municipio en " + d.dep + ". Elige uno de la lista."; d.mun = hit; return null; }
+      if(l.length < 2) return "Escribe tu municipio."; d.mun = l.slice(0,80); return null;
+    },
+    next:function(){ return "desc"; }
+  },
+  desc:{
+    ask:function(d){
+      var o = {text:"Cuéntame con el mayor detalle posible tu situación: qué pasó, cuándo y qué esperas que hagamos.", ph:"Describe tu solicitud (mínimo 15 caracteres)", max:1500};
+      if(d.libre){ o.text = "Ya me contaste: «" + d.libre + "».\nSi quieres agregar más detalles, escríbelos ahora; si no, usa lo que ya escribiste."; o.opts = [["__use","Usar lo que escribí"]]; }
+      return o;
+    },
+    apply:function(d,v,l){ if(v === "__use" && d.libre){ d.desc = d.libre; return null; } if(l.length < 15) return "Necesito un poco más de detalle (mínimo 15 caracteres)."; d.desc = l.slice(0,1500); return null; },
+    next:function(){ return "resumen"; }
+  },
+  resumen:{
+    ask:function(d){
+      var a = ASUNTOS[d.asunto] || ASUNTOS.otro;
+      var L = ["📋 Este es el resumen de lo que voy a radicar:", "", "• Calidad: " + d.perfil, "• Asunto: " + a.label, "• Tipo: " + d.tipo];
+      if(d.curso) L.push("• Curso/programa: " + d.curso);
+      if(d.modulo) L.push("• Módulo afectado: " + d.modulo);
+      if(d.radprev) L.push("• Radicado recurrido: " + d.radprev);
+      L.push("• Documento: " + d.doctipo + " " + d.docnum);
+      L.push("• Nombre: " + (d.nombre + " " + (d.apellidos || "")).trim());
+      L.push("• Correo: " + d.email);
+      L.push("• Ubicación: " + d.mun + ", " + d.dep);
+      L.push("• Descripción: " + d.desc);
+      L.push("", "¿Confirmas que quieres radicar esta PQR?");
+      return {text:L.join("\n"), opts:[["go","✅ Radicar PQR"],["back","↩ Corregir mi última respuesta"],["reset","🗑 Empezar de nuevo"]]};
+    }
+  }
+};
+
+function replay(){
+  var d = {}, step = "perfil";
+  for(var i=0;i<answers.length;i++){
+    var a = answers[i], st = STEPS[a.step];
+    if(!st || a.step !== step || !st.apply){ answers = answers.slice(0,i); break; }
+    var err = st.apply(d, a.value, a.label);
+    if(err){ answers = answers.slice(0,i); break; }
+    step = st.next(d);
+  }
+  return {d:d, step:step};
+}
+
+function addMsg(kind, text, label){
+  var m = document.createElement("div");
+  m.className = "msg " + kind;
+  if(kind === "bot"){ var s = document.createElement("small"); s.textContent = label || "Asistente IA"; m.appendChild(s); }
+  m.appendChild(document.createTextNode(text));
+  log.appendChild(m);
+  return m;
+}
+function addOpts(opts, sug){
+  var box = document.createElement("div"); box.className = "opts";
+  opts.forEach(function(o, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "opt" + (o[0] === "go" ? " go" : "") + (sug && o[0] === sug ? " sug" : "");
+    b.textContent = (o[0] === SKIP || o[0] === "__use" || o[0] === "go" || o[0] === "back" || o[0] === "reset") ? o[1] : ("👉 " + (i+1) + ". " + o[1]);
+    b.addEventListener("click", function(){ submit(o[0], o[1]); });
+    box.appendChild(b);
+  });
+  log.appendChild(box);
+}
+function setList(arr){ dl.innerHTML = ""; (arr || []).forEach(function(x){ var o = document.createElement("option"); o.value = x; dl.appendChild(o); }); }
+function scrollEnd(){ log.scrollTop = log.scrollHeight; }
+
+function render(extraNote){
+  var r = replay(), d = {}, step = "perfil";
+  log.innerHTML = "";
+  for(var i=0;i<answers.length;i++){
+    var a = answers[i], st = STEPS[a.step];
+    addMsg("bot", st.ask(d).text);
+    addMsg("user", a.label);
+    st.apply(d, a.value, a.label);
+    step = st.next(d);
+  }
+  bar.style.width = Math.min(100, Math.round(answers.length / TOTAL * 100)) + "%";
+  if(finalMsg){
+    var fm = addMsg("bot", finalMsg.text);
+    if(finalMsg.link){ var br = document.createElement("br"); fm.appendChild(br); var an = document.createElement("a"); an.className = "lnk"; an.href = "/pqr/consulta"; an.textContent = "Consultar el estado de mi PQR →"; fm.appendChild(an); }
+    addOpts([["reset","Radicar otra PQR"]]);
+    txt.disabled = true; sendBtn.disabled = true; scrollEnd(); return;
+  }
+  txt.disabled = false; sendBtn.disabled = false;
+  var q = STEPS[step].ask(d);
+  addMsg("bot", q.text);
+  if(extraNote) addMsg("bot", extraNote, "Aviso");
+  if(q.opts) addOpts(q.opts, q.sug);
+  setList(q.list);
+  txt.placeholder = q.ph || "Haz clic sobre una opción o escribe aquí, usa Enter";
+  txt.maxLength = q.max || 200;
+  scrollEnd();
+  if(window.innerWidth > 700) txt.focus();
+}
+
+function currentStep(){ return replay().step; }
+
+function submit(value, label){
+  if(busy) return;
+  var step = currentStep();
+  if(finalMsg){ if(value === "reset"){ finalMsg = null; answers = []; wipe(); render(); } return; }
+  if(step === "resumen"){
+    if(value === "go"){ radicar(); }
+    else if(value === "back"){ answers.pop(); save(); render(); }
+    else if(value === "reset"){ answers = []; wipe(); render(); }
+    return;
+  }
+  var d = replay().d, st = STEPS[step], err;
+  var snapshot = JSON.parse(JSON.stringify(d));
+  err = st.apply(snapshot, value, label);
+  if(err){ render(err); return; }
+  answers.push({step:step, value:value, label:label});
+  save(); render();
+}
+
+function handleInput(){
+  var raw = txt.value.trim();
+  if(!raw) return;
+  txt.value = "";
+  var step = currentStep(), st = STEPS[step], d = replay().d, q = st.ask(d);
+  if(step === "resumen"){ var n0 = norm(raw); if(/^(1|si|sí|ok|confirmo|radicar)/.test(n0)) submit("go","Radicar"); else if(/^2|atras|corregir/.test(n0)) submit("back","Atrás"); else if(/^3|nuevo|empezar/.test(n0)) submit("reset","Reiniciar"); else render("Elige una opción: 1) Radicar, 2) Corregir, 3) Empezar de nuevo."); return; }
+  if(q.opts){
+    var n = norm(raw), hit = null;
+    for(var i=0;i<q.opts.length;i++){
+      var o = q.opts[i];
+      if(n === String(i+1) || n === norm(o[1]) || (n.length > 3 && norm(o[1]).indexOf(n) >= 0)){ hit = o; break; }
+    }
+    if(hit){ submit(hit[0], hit[1]); return; }
+    if(step === "asunto"){ submit("libre:" + clasificar(raw), raw); return; }
+    if(step === "curso" || step === "radprev" || step === "nitcol" || step === "apellidos" || step === "desc"){ submit("txt", raw); return; }
+    render("Por favor elige una de las opciones de arriba (o escribe su número)."); return;
+  }
+  submit("txt", raw);
+}
+
+function radicar(){
+  var r = replay().d, a = ASUNTOS[r.asunto] || ASUNTOS.otro;
+  var hechos = ["Calidad del solicitante: " + r.perfil, "Asunto: " + a.label];
+  if(r.curso) hechos.push("Curso/programa 48 horas: " + r.curso);
+  if(r.modulo) hechos.push("Módulo afectado: " + r.modulo);
+  if(r.radprev) hechos.push("Radicado de la PQR recurrida: " + r.radprev);
+  hechos.push("Radicada mediante el asistente virtual de PQR.");
+  var payload = {
+    tipo_documento:r.doctipo, numero_documento:r.docnum, razon_social:r.nombre, apellidos:r.apellidos || "",
+    email:r.email, nit_colegio:r.nitcol || ((r.perfilKey === "inst" || r.doctipo === "NIT") ? r.docnum : ""),
+    departamento:r.dep, ciudad:r.mun, tipo_pqr:r.tipo, subtipo:a.sub, prioridad:a.pri,
+    objeto:r.desc, hechos:hechos.join("\n")
+  };
+  busy = true; sendBtn.disabled = true;
+  addMsg("bot", "Radicando tu PQR, un momento…");
+  scrollEnd();
+  fetch("/pqr/chat/radicar", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)})
+    .then(function(res){ return res.json().then(function(j){ return {s:res.status, j:j}; }); })
+    .then(function(o){
+      busy = false;
+      if(o.j && o.j.ok){
+        finalMsg = {link:true, text:"✅ ¡Listo! Tu PQR fue radicada correctamente.\n\n📄 Número de radicado: " + o.j.radicado + "\n📅 Fecha límite estimada de respuesta: " + (o.j.fecha_estimada || "15 días hábiles") + "\n\nGuarda este número: lo necesitas para consultar el estado. También te enviamos una copia al correo " + r.email + "."};
+        answers = []; wipe(); render();
+      } else {
+        render((o.j && o.j.error) || "No pude radicar tu solicitud. Inténtalo de nuevo en unos minutos.");
+      }
+    })
+    .catch(function(){ busy = false; render("Se perdió la conexión. Tus respuestas siguen aquí; intenta radicar de nuevo."); });
+}
+
+document.getElementById("send").addEventListener("click", handleInput);
+txt.addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); handleInput(); } });
+document.getElementById("nav-atras").addEventListener("click", function(){ if(busy || finalMsg) return; if(answers.length){ answers.pop(); save(); render(); } });
+document.getElementById("nav-inicio").addEventListener("click", function(){
+  if(busy) return;
+  if(answers.length && !window.confirm("¿Quieres empezar de nuevo? Se borrarán las respuestas de esta conversación.")) return;
+  finalMsg = null; answers = []; wipe(); render();
+});
+document.getElementById("nav-resumen").addEventListener("click", function(){
+  if(busy || finalMsg) return;
+  if(currentStep() === "resumen"){ render(); } else { render("Aún faltan datos para el resumen. Sigue respondiendo y lo verás al final."); }
+});
+
+load(); render();
+})();
+</script>
+
+"""
+
+
+@app.route("/pqr/crear")
+def pqr_crear_chat():
+    """Radicación de PQR mediante asistente de chat guiado (el formulario clásico sigue en /pqr/formulario)."""
+    try:
+        divipola = _divipola_json().replace("</", "<\\/")
+    except Exception:
+        divipola = "{}"
+    return page("Radicar PQR", _PQR_CHAT_HTML.replace("__DIVIPOLA__", divipola))
+
+
+@app.route("/pqr/chat/radicar", methods=["POST"])
+def pqr_chat_radicar():
+    """Recibe el paquete JSON armado por el asistente y radica la PQR (misma lógica que el formulario)."""
+    ok, espera = _rate_limit("pqr-chat-radicar", 6, 300)
+    if not ok:
+        return jsonify({"ok": False, "error": f"Demasiados intentos. Espera {espera} segundos e inténtalo de nuevo."}), 429
+    d = request.get_json(silent=True) or {}
+    if not isinstance(d, dict):
+        return jsonify({"ok": False, "error": "Solicitud no válida."}), 400
+
+    def g(k, n):
+        return str(d.get(k) or "").strip()[:n]
+
+    tipo_doc = g("tipo_documento", 20) or "CC"
+    nro = g("numero_documento", 40)
+    razon = g("razon_social", 220)
+    email = g("email", 160)
+    objeto = g("objeto", 1500)
+    hechos = g("hechos", 1500)
+    tipo_pqr = g("tipo_pqr", 60)
+    subtipo = g("subtipo", 80)
+    prioridad = g("prioridad", 20).upper()
+    if tipo_pqr not in _PQR_CHAT_TIPOS:
+        tipo_pqr = "Petición"
+    if subtipo not in _PQR_CHAT_SUBTIPOS:
+        subtipo = "Otros"
+    if prioridad not in _PQR_CHAT_PRIORIDADES:
+        prioridad = "MEDIA"
+    if not nro or not razon or not objeto:
+        return jsonify({"ok": False, "error": "Faltan datos obligatorios. Revisa tus respuestas e inténtalo de nuevo."}), 400
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email):
+        return jsonify({"ok": False, "error": "El correo electrónico no es válido."}), 400
+
+    rad, tick = _gen_radicado_pqr(tipo_canal="11")
+    try:
+        est_sol = _fecha_limite_pqr_habiles(fecha_hoy(), 15)
+    except Exception:
+        est_sol = ""
+    t = TicketPQR(
+        radicado=rad, ticket=tick,
+        tipo_documento=tipo_doc, numero_documento=nro,
+        razon_social=razon, apellidos=g("apellidos", 160),
+        email=email, autoriza_email=True,
+        departamento=g("departamento", 80), ciudad=g("ciudad", 80),
+        nit_colegio=(g("nit_colegio", 40) or nro),
+        tipo_pqr=tipo_pqr, subtipo=subtipo,
+        objeto=objeto, hechos=hechos, motivo=objeto[:255],
+        estado="RADICADA", prioridad=prioridad,
+        canal="ONLINE", medio_ingreso="ONLINE",
+        nro_cun=rad, fecha_estimada=est_sol, estado_cun="RADICADO",
+        fecha=fecha_hoy(), hora=hora_actual(),
+    )
+    db.session.add(t)
+    try:
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        print("pqr_chat_radicar commit:", ex)
+        return jsonify({"ok": False, "error": "No se pudo radicar tu solicitud. Inténtalo de nuevo en unos minutos."}), 500
+    try:
+        registrar_historial_pqr(t.id, "RADICACION", "Radicado por asistente virtual del portal público", "RADICADA")
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    try:
+        enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PUBLICO",
+                          fecha_limite=getattr(t, "fecha_estimada", "") or _fecha_limite_pqr_habiles())
+    except Exception:
+        pass
+    return jsonify({"ok": True, "radicado": formatear_radicado(rad), "fecha_estimada": est_sol})
 
 
 @app.route("/pqr/consulta", methods=["GET", "POST"])
