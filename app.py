@@ -3083,6 +3083,16 @@ class TurnoLaboral(db.Model):
 
 
 
+class DocumentoEmpleado(db.Model):
+    """Documento de identidad ÚNICO de cada asesor. Lo asigna Gerencia; el turno lo toma de aquí (nunca se digita)."""
+    __tablename__ = "documentos_empleado"
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    documento = db.Column(db.String(40), unique=True, nullable=False)
+    actualizado_en = db.Column(db.String(30), default="")
+    actualizado_por = db.Column(db.String(120), default="")
+
+
 class ContParte(db.Model):
     """Clientes, proveedores (servidores, dominios, etc.) y terceros comerciales."""
     __tablename__ = "cont_partes"
@@ -5469,6 +5479,7 @@ def migrar_columnas():
         ("verificaciones_rector", "val_exitosa", "ALTER TABLE verificaciones_rector ADD COLUMN val_exitosa BOOLEAN DEFAULT FALSE"),
         ("verificaciones_rector", "motivo_gerencia", "ALTER TABLE verificaciones_rector ADD COLUMN motivo_gerencia TEXT DEFAULT ''"),
         ("turnos_laborales", "_create", "CREATE TABLE IF NOT EXISTS turnos_laborales (id SERIAL PRIMARY KEY, usuario_id INTEGER, usuario_login VARCHAR(80), nombre_completo VARCHAR(160), documento VARCHAR(40), area VARCHAR(40), estado VARCHAR(20) DEFAULT 'ABIERTO', abierto_en VARCHAR(30), cerrado_en VARCHAR(30), ip VARCHAR(80), ubicacion VARCHAR(160), nota_apertura TEXT, nota_cierre TEXT)"),
+        ("documentos_empleado", "_create", "CREATE TABLE IF NOT EXISTS documentos_empleado (id SERIAL PRIMARY KEY, usuario_id INTEGER UNIQUE NOT NULL, documento VARCHAR(40) UNIQUE NOT NULL, actualizado_en VARCHAR(30) DEFAULT '', actualizado_por VARCHAR(120) DEFAULT '')"),
         ("tickets_pqr", "fecha_estimada", "ALTER TABLE tickets_pqr ADD COLUMN fecha_estimada VARCHAR(20) DEFAULT ''"),
         ("tickets_pqr", "estado_cun", "ALTER TABLE tickets_pqr ADD COLUMN estado_cun VARCHAR(40) DEFAULT ''"),
         ("tickets_pqr", "medio_ingreso", "ALTER TABLE tickets_pqr ADD COLUMN medio_ingreso VARCHAR(60) DEFAULT 'Web'"),
@@ -11120,6 +11131,9 @@ def _turnos_solo_asignados():
             return None  # gerencia gestiona
         if path.startswith("/gerencia/turnos"):
             return None
+        # Cada asesor abre su PROPIO turno (identidad tomada de la sesión, no digitada)
+        if path == "/abrir-turno" and r in ("Comercial", "Soporte", "Cobranza"):
+            return None
         # Empleados: solo pueden cerrar SU turno si existe uno abierto
         if path == "/cerrar-turno":
             try:
@@ -11129,7 +11143,7 @@ def _turnos_solo_asignados():
                     abierto = TurnoLaboral.query.filter_by(usuario_id=uid, estado="ABIERTO").first()
                 if not abierto and session.get("usuario"):
                     abierto = TurnoLaboral.query.filter(
-                        TurnoLaboral.usuario == session.get("usuario"),
+                        TurnoLaboral.usuario_login == session.get("usuario"),
                         TurnoLaboral.estado == "ABIERTO",
                     ).first()
                 if abierto:
@@ -59640,9 +59654,280 @@ def gerencia_facturacion_cron():
 
 
 
+_TURNOS_CSS = r"""
+<style>
+.panel-turnos-container{background:#f8fafc;border-radius:20px;padding:30px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin-bottom:18px;border:1px solid #e2e8f0}
+.panel-turnos-container h2{margin:0;font-size:17px;color:#0f172a}
+.panel-turnos-container h3{margin:24px 0 10px;font-size:14px;color:#334155}
+.pt-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px}
+.pt-head p{margin:4px 0 0;font-size:12.5px;color:#64748b;max-width:660px;line-height:1.45}
+.pt-count{background:#d1fae5;color:#065f46;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;margin-left:6px}
+.lnk-actualizar{color:#0071e3!important;font-weight:600;font-size:13px;text-decoration:none}
+.lnk-actualizar:hover{text-decoration:underline}
+.pt-vacio{color:#94a3b8;font-size:13px;margin:0 0 4px}
+.tarjeta-asesor-turno{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid #e2e8f0;border-left:5px solid #10b981;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 4px 6px -1px rgba(148,163,184,.05)}
+.tat-nombre{font-weight:700;color:#0f172a;font-size:14.5px}
+.tat-meta{font-size:12.5px;color:#64748b;margin-top:5px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tat-nota{font-size:12.5px;color:#334155;margin-top:6px}
+.tat-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0}
+.panel-turnos-container input.tat-motivo{width:190px;margin:0;padding:8px 10px;font-size:12.5px;color:#0f172a;background:#fff!important;border:1px solid #cbd5e1!important;border-radius:8px!important;box-shadow:none!important}
+.panel-turnos-container .btn-cierre-forzado{background:#fff!important;color:#b91c1c!important;border:1px solid #fecaca!important;box-shadow:none!important;border-radius:10px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;filter:none}
+.panel-turnos-container .btn-cierre-forzado:hover{background:#fef2f2!important;border-color:#b91c1c!important;transform:none;filter:none;box-shadow:none!important}
+.tbl-wrap-turnos{overflow-x:auto;border:1px solid #e2e8f0;border-radius:14px;background:#fff}
+.tabla-turnos-executive{width:100%;border-collapse:separate;border-spacing:0;margin:0}
+.tabla-turnos-executive th{background:#f1f5f9;color:#475569;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px;padding:14px;border-bottom:2px solid #e2e8f0;text-align:left;white-space:nowrap}
+.tabla-turnos-executive td{background:#ffffff;color:#334155;padding:14px;font-size:13.5px;border-bottom:1px solid #f1f5f9;text-align:left;vertical-align:top}
+.tabla-turnos-executive tr:last-child td{border-bottom:0}
+.tabla-turnos-executive .mini-text{color:#94a3b8;font-size:12px}
+.badge-abierto{background:#d1fae5;color:#065f46;padding:4px 10px;border-radius:20px;font-weight:600;font-size:12px;white-space:nowrap}
+.badge-cerrado{background:#f1f5f9;color:#475569;padding:4px 10px;border-radius:20px;font-weight:500;font-size:12px;white-space:nowrap}
+.chip-doc{display:inline-block;background:#f1f5f9;color:#475569;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600}
+.chip-doc-warn{background:#fef3c7;color:#92400e}
+details.panel-docs{margin-top:22px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:6px 16px}
+details.panel-docs>summary{cursor:pointer;font-weight:600;font-size:14px;color:#334155;padding:10px 0}
+details.panel-docs .nota-docs{font-size:12.5px;color:#64748b;margin:0 0 10px;line-height:1.45}
+.form-doc{display:flex;gap:8px;margin:0;flex-wrap:wrap}
+.panel-turnos-container input.input-doc{width:220px;margin:0;padding:8px 12px;font-size:13px;color:#0f172a;background:#f8fafc!important;border:1px solid #cbd5e1!important;border-radius:8px!important;box-shadow:none!important}
+.panel-turnos-container input.input-doc:focus{background:#fff!important;border-color:#0071e3!important;box-shadow:0 0 0 4px rgba(0,113,227,.1)!important}
+.panel-turnos-container .btn-guardar-doc{background:#0071e3!important;color:#fff!important;border:none!important;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;box-shadow:none!important;filter:none}
+.panel-turnos-container .btn-guardar-doc:hover{background:#0059b3!important;transform:none;filter:none}
+.tu-wrap .tu-tbl th{background:#f1f5f9;color:#475569;border:0;border-bottom:2px solid #e2e8f0;text-transform:uppercase;font-size:12px;font-weight:600;letter-spacing:.3px;position:sticky;top:0}
+.tu-wrap .tu-tbl td{color:#334155;text-align:left}
+.cola-light{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;margin-bottom:16px}
+.cola-light-head{background:#f8fafc;color:#0f172a;border-bottom:1px solid #e2e8f0;padding:14px 18px;font-weight:700;font-size:13px;letter-spacing:.4px}
+.tu-wrap .tu-filt a{color:#475569;border-radius:20px;border-color:#cbd5e1}
+.tu-wrap .tu-filt a.on{background:#0071e3!important;border-color:#0071e3!important;color:#fff!important}
+.turno-wrap{max-width:520px;margin:40px auto;padding:0 14px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.turno-card{background:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid #e2e8f0;border-radius:20px;padding:30px 26px;box-shadow:0 10px 30px rgba(148,163,184,.14);text-align:center;color:#334155}
+.turno-marca{font-size:11px;letter-spacing:.12em;color:#64748b;font-weight:700;margin-bottom:14px}
+.turno-estado{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:999px;font-weight:700;font-size:13.5px}
+.turno-fuera{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+.turno-card h1{margin:16px 0 6px;font-size:22px;color:#0f172a;font-weight:700}
+.turno-card p.sub{margin:0 0 18px;font-size:13.5px;color:#64748b;line-height:1.5}
+.turno-id{display:flex;flex-direction:column;gap:6px;text-align:left;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin:0 0 16px;font-size:13px}
+.turno-id div{display:flex;justify-content:space-between;gap:10px}
+.turno-id span{color:#64748b}
+.turno-id b{color:#0f172a;text-align:right}
+.turno-aviso{background:#fef3c7;color:#92400e;border-radius:10px;padding:10px 12px;font-size:12.5px;margin:0 0 14px;text-align:left}
+.turno-error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;font-size:13px;margin:0 0 14px;text-align:left}
+.turno-card details{text-align:left;margin:0 0 14px}
+.turno-card details summary{cursor:pointer;font-size:13px;font-weight:600;color:#0071e3}
+.turno-card textarea{margin:10px 0 0;width:100%;box-sizing:border-box;padding:10px 12px;font-size:13.5px;color:#0f172a;background:#f8fafc!important;border:1px solid #cbd5e1!important;border-radius:10px!important;box-shadow:none!important}
+.turno-card .btn-apertura-turno{width:100%;background:#0071e3!important;color:#fff!important;border:none!important;border-radius:12px;padding:15px;font-size:15px;font-weight:700;box-shadow:0 4px 14px rgba(0,113,227,.25)!important;cursor:pointer;filter:none}
+.turno-card .btn-apertura-turno:hover{background:#0059b3!important;transform:translateY(-1px);filter:none}
+.turno-pie{font-size:11.5px;color:#94a3b8;margin:14px 0 0;line-height:1.5}
+@media(max-width:560px){.panel-turnos-container{padding:18px}.tat-form{width:100%}.panel-turnos-container input.tat-motivo{flex:1;width:auto}}
+</style>
+"""
+
+_ROLES_CON_TURNO = ("Comercial", "Soporte", "Cobranza")
+_ROLES_GERENCIA = ("Gerente", "Superadmin", "Administrador", "Gerencia")
+
+
+def documento_empleado(usuario_id):
+    """Documento de identidad ÚNICO del asesor (lo asigna Gerencia). Vacío si aún no está registrado."""
+    try:
+        r = DocumentoEmpleado.query.filter_by(usuario_id=int(usuario_id)).first()
+        return (r.documento or "") if r else ""
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return ""
+
+
+def _turnos_gerencia_accion(accion, form, usuario_nom, rol, uid_actual, ahora_txt):
+    """Acciones de supervisión de turnos (solo Gerencia). Devuelve (mensaje, error)."""
+    if rol not in _ROLES_GERENCIA:
+        return "", "No autorizado."
+    try:
+        if accion == "cierre_forzado":
+            try:
+                tid = int(form.get("turno_id") or 0)
+            except (TypeError, ValueError):
+                tid = 0
+            motivo = (form.get("motivo") or "").strip()[:200]
+            tv = TurnoLaboral.query.get(tid) if tid else None
+            if not tv or tv.estado != "ABIERTO":
+                return "", "Ese turno ya no está abierto."
+            tv.estado = "CERRADO"
+            tv.cerrado_en = ahora_txt
+            tv.nota_cierre = "CIERRE FORZADO por %s (%s)" % (usuario_nom, rol) + ((" · Motivo: " + motivo) if motivo else "")
+            db.session.commit()
+            # Revocar la sesión del asesor (mismo mecanismo de "sesión revocada" que ya usa la app)
+            revocada = False
+            try:
+                u = Usuario.query.get(int(tv.usuario_id)) if tv.usuario_id else None
+                if u and (u.rol or "").strip() in _ROLES_CON_TURNO and u.id != uid_actual:
+                    u.session_token = _generar_token_sesion()
+                    SesionEmpleado.query.filter_by(usuario_id=u.id, activa=True).update({"activa": False})
+                    db.session.commit()
+                    revocada = True
+            except Exception:
+                db.session.rollback()
+            try:
+                registrar_auditoria(
+                    "Cierre forzado de turno",
+                    "id=%s asesor=%s login=%s por=%s motivo=%s sesion_revocada=%s"
+                    % (tv.id, tv.nombre_completo, tv.usuario_login, usuario_nom, motivo or "-", revocada),
+                )
+            except Exception:
+                pass
+            return "Turno de %s cerrado por la administración%s." % (
+                tv.nombre_completo or tv.usuario_login or "asesor",
+                " y su sesión fue revocada" if revocada else "",
+            ), ""
+        if accion == "asignar_documento":
+            try:
+                uid_t = int(form.get("usuario_id") or 0)
+            except (TypeError, ValueError):
+                uid_t = 0
+            doc = re.sub(r"[\s\.]", "", (form.get("documento") or "")).strip()
+            u = Usuario.query.get(uid_t) if uid_t else None
+            if not u or (u.rol or "").strip() not in _ROLES_CON_TURNO:
+                return "", "Asesor no válido."
+            reg = DocumentoEmpleado.query.filter_by(usuario_id=uid_t).first()
+            if not doc:
+                if reg:
+                    db.session.delete(reg)
+                    db.session.commit()
+                return "Documento de %s eliminado." % (u.nombre_completo or u.usuario), ""
+            if not re.match(r"^[A-Za-z0-9\-]{5,20}$", doc):
+                return "", "Documento inválido: use 5 a 20 caracteres (letras, números o guion)."
+            otro = DocumentoEmpleado.query.filter(
+                DocumentoEmpleado.documento == doc, DocumentoEmpleado.usuario_id != uid_t
+            ).first()
+            if otro:
+                return "", "Ese documento ya está asignado a otro asesor. Cada asesor debe tener el suyo."
+            if reg:
+                reg.documento = doc
+                reg.actualizado_en = ahora_txt
+                reg.actualizado_por = usuario_nom
+            else:
+                db.session.add(DocumentoEmpleado(usuario_id=uid_t, documento=doc, actualizado_en=ahora_txt, actualizado_por=usuario_nom))
+            db.session.commit()
+            try:
+                registrar_auditoria("Documento de asesor", "asesor=%s por=%s" % (u.usuario, usuario_nom))
+            except Exception:
+                pass
+            return "Documento de %s guardado." % (u.nombre_completo or u.usuario), ""
+    except Exception as ex:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print("turnos accion:", ex)
+        return "", "No se pudo completar la acción. Inténtelo de nuevo."
+    return "", ""
+
+
+def _turnos_supervision_html():
+    """Tablero de supervisión de turnos: en turno ahora, historial y documentos (solo lectura + cierre forzado)."""
+    turnos_list = TurnoLaboral.query.order_by(TurnoLaboral.id.desc()).limit(40).all()
+    abiertos = TurnoLaboral.query.filter_by(estado="ABIERTO").order_by(TurnoLaboral.id.desc()).limit(50).all()
+
+    # Documentos compartidos por asesores distintos = alerta de seguridad / Habeas Data
+    docs_logins = {}
+    for tt in list(turnos_list) + list(abiertos):
+        if tt.documento:
+            docs_logins.setdefault(tt.documento, set()).add(tt.usuario_login or tt.nombre_completo or "")
+    repetidos = {d for d, ls in docs_logins.items() if len(ls) > 1}
+
+    def doc_chip(doc):
+        if not doc:
+            return '<span class="chip-doc chip-doc-warn">Sin documento</span>'
+        if doc in repetidos:
+            return '<span class="chip-doc chip-doc-warn">⚠ ' + _esc(doc) + " · repetido</span>"
+        return '<span class="chip-doc">' + _esc(doc) + "</span>"
+
+    cards = []
+    for tv in abiertos:
+        meta = (
+            "<span>" + _esc(tv.area or "—") + "</span>" + doc_chip(tv.documento)
+            + "<span>Desde " + _esc(tv.abierto_en or "—") + "</span>"
+            + (("<span>IP " + _esc(tv.ip) + "</span>") if tv.ip else "")
+        )
+        nota = (('<div class="tat-nota"><b>Nota:</b> ' + _esc((tv.nota_apertura or "")[:160]) + "</div>") if tv.nota_apertura else "")
+        cards.append(
+            '<div class="tarjeta-asesor-turno"><div>'
+            '<div class="tat-nombre">' + _esc(tv.nombre_completo or tv.usuario_login or "—")
+            + ' <span class="badge-abierto">EN TURNO</span></div>'
+            '<div class="tat-meta">' + meta + "</div>" + nota + "</div>"
+            '<form method="POST" class="tat-form" '
+            'onsubmit="return confirm(\'¿Forzar el cierre de este turno? Se cerrará también la sesión del asesor.\');">'
+            '<input type="hidden" name="accion" value="cierre_forzado">'
+            '<input type="hidden" name="turno_id" value="' + str(int(tv.id)) + '">'
+            '<input type="text" name="motivo" class="tat-motivo" maxlength="200" placeholder="Motivo (opcional)">'
+            '<button type="submit" class="btn-cierre-forzado">Cierre forzado por Administrador</button>'
+            "</form></div>"
+        )
+
+    filas = []
+    for t in turnos_list:
+        badge = ('<span class="badge-abierto">ABIERTO</span>' if t.estado == "ABIERTO" else '<span class="badge-cerrado">CERRADO</span>')
+        cierre = _esc(t.cerrado_en or "—")
+        if "CIERRE FORZADO" in (t.nota_cierre or ""):
+            cierre += '<br><span class="chip-doc chip-doc-warn">Cierre forzado</span>'
+        filas.append(
+            "<tr><td>" + _esc(t.abierto_en or "") + "</td>"
+            "<td><b>" + _esc(t.nombre_completo or "") + '</b><br><span class="mini-text">' + _esc(t.usuario_login or "") + "</span></td>"
+            "<td>" + doc_chip(t.documento) + "</td>"
+            "<td>" + _esc(t.area or "") + "</td>"
+            "<td>" + badge + "</td>"
+            '<td><span class="mini-text">' + _esc(t.ip or "") + "<br>" + _esc(t.ubicacion or "") + "</span></td>"
+            "<td>" + _esc((t.nota_apertura or "")[:80]) + "</td>"
+            "<td>" + cierre + "</td></tr>"
+        )
+    if not filas:
+        filas = ['<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:18px">Sin turnos registrados aún. Se crean cuando cada asesor abre su turno.</td></tr>']
+
+    # Documentos únicos por asesor
+    asesores = Usuario.query.filter(Usuario.rol.in_(_ROLES_CON_TURNO)).order_by(Usuario.usuario).all()
+    docs_map = {d.usuario_id: d.documento for d in DocumentoEmpleado.query.all()}
+    sin_doc = 0
+    filas_doc = []
+    for a in asesores:
+        doc = docs_map.get(a.id, "")
+        if not doc:
+            sin_doc += 1
+        filas_doc.append(
+            "<tr><td><b>" + _esc(a.nombre_completo or a.usuario) + '</b><br><span class="mini-text">' + _esc(a.usuario) + "</span></td>"
+            "<td>" + _esc(a.rol) + "</td><td>"
+            '<form method="POST" class="form-doc"><input type="hidden" name="accion" value="asignar_documento">'
+            '<input type="hidden" name="usuario_id" value="' + str(int(a.id)) + '">'
+            '<input type="text" name="documento" class="input-doc" value="' + _esc(doc) + '" maxlength="20" placeholder="Cédula o código único">'
+            '<button type="submit" class="btn-guardar-doc">Guardar</button></form></td></tr>'
+        )
+    if not filas_doc:
+        filas_doc = ['<tr><td colspan="3" style="color:#94a3b8;padding:14px">No hay asesores (Ventas, Soporte o Cobranza) registrados.</td></tr>']
+    aviso = (' <span class="chip-doc chip-doc-warn">%d sin registrar</span>' % sin_doc) if sin_doc else ""
+    docs_box = (
+        '<details class="panel-docs"' + (" open" if sin_doc else "") + "><summary>Documento de identidad de cada asesor" + aviso + "</summary>"
+        '<p class="nota-docs">El documento es único por asesor y se asigna aquí. Al abrir turno el sistema lo toma de este registro; '
+        "el asesor no lo digita.</p>"
+        '<div class="tbl-wrap-turnos"><table class="tabla-turnos-executive"><thead><tr><th>Asesor</th><th>Rol</th><th>Documento</th></tr></thead><tbody>'
+        + "".join(filas_doc) + "</tbody></table></div></details>"
+    )
+
+    return (
+        '<section class="panel-turnos-container">'
+        '<div class="pt-head"><div><h2>🟢 En turno ahora <span class="pt-count">' + str(len(abiertos)) + "</span></h2>"
+        "<p>Tablero de supervisión y auditoría (solo lectura). Cada asesor abre y cierra su propio turno desde su sesión; "
+        "aquí solo puede forzar el cierre si alguien olvidó cerrarlo.</p></div>"
+        '<a class="lnk-actualizar" href="/gerencia/turnos">Actualizar vista</a></div>'
+        + ("".join(cards) or '<p class="pt-vacio">Nadie con turno abierto en este momento.</p>')
+        + "<h3>Historial de turnos</h3>"
+        '<div class="tbl-wrap-turnos"><table class="tabla-turnos-executive"><thead><tr>'
+        "<th>Apertura</th><th>Nombre</th><th>Documento</th><th>Área</th><th>Estado</th><th>IP / Ubicación</th><th>Nota</th><th>Cierre</th>"
+        "</tr></thead><tbody>" + "".join(filas) + "</tbody></table></div>"
+        + docs_box + "</section>"
+    )
+
+
 @app.route("/abrir-turno", methods=["GET", "POST"])
 def abrir_turno_laboral():
-    """Tras login Ventas/Soporte: formulario obligatorio de apertura de turno (nombre + CC/código)."""
+    """Apertura de turno de UN clic. Usuario, nombre, documento asignado e IP salen de la sesión: el asesor no digita nada."""
     if not requiere_login():
         return redirect("/login")
     try:
@@ -59650,7 +59935,10 @@ def abrir_turno_laboral():
     except Exception:
         pass
     rol = (rol_actual() or "").strip()
-    if rol not in ("Comercial", "Soporte", "Cobranza", "Gerente", "Superadmin", "Administrador"):
+    if rol not in _ROLES_CON_TURNO:
+        # Gerencia supervisa (solo lectura): no abre ni cierra turnos manuales
+        if rol in _ROLES_GERENCIA:
+            return redirect("/gerencia/turnos")
         return redirect("/dashboard")
     area = "Ventas" if rol == "Comercial" else ("Cobranza" if rol == "Cobranza" else "Soporte")
     dest = session.get("turno_pending_redirect") or (
@@ -59658,47 +59946,32 @@ def abrir_turno_laboral():
     )
     uid = session.get("uid")
     login = session.get("usuario") or ""
-    # Ya tiene turno abierto → panel
-    try:
-        t_ab = turno_abierto_actual(usuario_id=uid, area=area)
-        if t_ab and request.method == "GET" and not request.args.get("forzar"):
-            return redirect(dest)
-    except Exception:
-        t_ab = None
+    # Ya tiene turno abierto → directo a su panel (evita turnos duplicados por doble clic o segunda pestaña)
+    t_ab = turno_abierto_actual(usuario_id=uid, area=area)
+    if t_ab:
+        return redirect(dest)
 
-    error = msg = ""
-    # Prefill
-    nombre_pref = ""
-    doc_pref = ""
+    nombre = login
     try:
         u = Usuario.query.get(int(uid)) if uid else None
         if u:
-            nombre_pref = (u.nombre_completo or u.usuario or "")[:160]
+            nombre = (u.nombre_completo or u.usuario or login)[:160]
     except Exception:
         pass
+    documento = documento_empleado(uid) if uid else ""
 
+    error = ""
     if request.method == "POST":
-        nombre = (request.form.get("nombre_completo") or "").strip()[:160]
-        documento = (request.form.get("documento") or "").strip()[:40]
         nota = (request.form.get("nota_apertura") or "").strip()[:500]
-        if not nombre or not documento:
-            error = "Nombre completo y cédula o código interno son obligatorios."
-        else:
-            ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:80]
-            ubica = ""
-            try:
-                if "capturar_geo_cliente" in globals():
-                    g = capturar_geo_cliente() or {}
-                    ubica = ((g.get("ciudad") or "") + " · " + (g.get("isp") or ""))[:160]
-            except Exception:
-                pass
-            # Cerrar turnos abiertos previos del mismo usuario
-            try:
-                TurnoLaboral.query.filter_by(usuario_id=int(uid or 0), estado="ABIERTO").update(
-                    {"estado": "CERRADO", "cerrado_en": fecha_hoy() + " " + hora_actual(), "nota_cierre": "Cerrado al abrir nuevo turno"}
-                )
-            except Exception:
-                pass
+        ip = _client_ip()
+        ubica = ""
+        try:
+            if "capturar_geo_cliente" in globals():
+                g = capturar_geo_cliente() or {}
+                ubica = ((g.get("ciudad") or "") + " · " + (g.get("isp") or ""))[:160]
+        except Exception:
+            pass
+        try:
             t = TurnoLaboral(
                 usuario_id=int(uid or 0),
                 usuario_login=login,
@@ -59720,36 +59993,41 @@ def abrir_turno_laboral():
             try:
                 registrar_auditoria(
                     "Apertura de turno",
-                    "area=%s nombre=%s doc=%s login=%s ip=%s id=%s"
-                    % (area, nombre, documento, login, ip, t.id),
+                    "area=%s nombre=%s doc=%s login=%s ip=%s id=%s" % (area, nombre, documento or "-", login, ip, t.id),
                 )
             except Exception:
                 pass
             session.pop("turno_pending_redirect", None)
             return redirect(dest)
+        except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            print("abrir turno:", ex)
+            error = "No se pudo abrir el turno. Inténtelo de nuevo."
 
     content = (
-        '<div style="max-width:480px;margin:40px auto;font-family:Segoe UI,system-ui,sans-serif">'
-        '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px 24px;'
-        'box-shadow:0 12px 40px rgba(15,23,42,.08)">'
-        '<div style="font-size:11px;letter-spacing:.12em;color:#64748b;font-weight:700">PROCSIS · CONTROL DE TURNO</div>'
-        '<h1 style="margin:8px 0 6px;font-size:22px;color:#0B2D57">Abrir turno de trabajo</h1>'
-        '<p style="font-size:13px;color:#64748b;margin:0 0 16px">Área: <b>' + area + '</b> · Usuario: <b>' + _esc(login) + '</b></p>'
-        + (('<div class="msg danger">' + _esc(error) + "</div>") if error else "")
-        + '<form method="POST" style="display:grid;gap:12px">'
-        '<div><label style="font-size:12px;font-weight:700">Nombre completo *</label>'
-        '<input name="nombre_completo" required value="' + _esc(nombre_pref) + '" '
-        'style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" placeholder="Como figura en cédula"></div>'
-        '<div><label style="font-size:12px;font-weight:700">Cédula o código interno *</label>'
-        '<input name="documento" required value="' + _esc(doc_pref) + '" '
-        'style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" placeholder="CC o código interno PROCSIS"></div>'
-        '<div><label style="font-size:12px;font-weight:700">Nota de apertura (opcional)</label>'
-        '<textarea name="nota_apertura" rows="2" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px" '
-        'placeholder="Ej. Turno mañana mesa de ventas"></textarea></div>'
-        '<button type="submit" style="background:#0B2D57;color:#fff;border:0;border-radius:10px;padding:12px;font-weight:800;cursor:pointer">'
-        "Confirmar y abrir turno</button>"
-        "</form>"
-        '<p style="font-size:11px;color:#94a3b8;margin:14px 0 0">Queda registrado en auditoría y en el módulo Turnos y notas (Gerencia).</p>'
+        _TURNOS_CSS
+        + '<div class="turno-wrap"><div class="turno-card">'
+        '<div class="turno-marca">PROCSIS · CONTROL DE TURNO</div>'
+        '<span class="turno-estado turno-fuera">🔴 Fuera de turno</span>'
+        "<h1>Te encuentras fuera de turno</h1>"
+        '<p class="sub">Presiona el botón para iniciar tu jornada. Se registrarán automáticamente tu usuario, '
+        "la hora exacta de entrada y tu dirección IP.</p>"
+        + (('<div class="turno-error">' + _esc(error) + "</div>") if error else "")
+        + '<div class="turno-id">'
+        "<div><span>Nombre</span><b>" + _esc(nombre) + "</b></div>"
+        "<div><span>Usuario</span><b>" + _esc(login) + "</b></div>"
+        "<div><span>Área</span><b>" + _esc(area) + "</b></div>"
+        "<div><span>Documento</span><b>" + (_esc(documento) if documento else "No registrado") + "</b></div></div>"
+        + ("" if documento else '<div class="turno-aviso">Tu documento de identidad aún no está registrado. Puedes abrir tu turno igualmente; '
+           "pídele a Gerencia que lo asigne.</div>")
+        + '<form method="POST">'
+        "<details><summary>Agregar nota de apertura (opcional)</summary>"
+        '<textarea name="nota_apertura" rows="2" maxlength="500" placeholder="Ej. Turno mañana, pendientes de ventas"></textarea></details>'
+        '<button type="submit" class="btn-apertura-turno">Apertura de Turno</button></form>'
+        '<p class="turno-pie">Queda registrado en auditoría y en el tablero de turnos de Gerencia.</p>'
         "</div></div>"
     )
     return page("Abrir turno", content)
@@ -59914,6 +60192,10 @@ def modulo_turnos():
                 c.actualizado_en = ahora_txt
                 db.session.commit()
                 msg = f"Caso #{c.id} → {est}."
+        elif accion in ("cierre_forzado", "asignar_documento"):
+            _m, _e = _turnos_gerencia_accion(accion, request.form, usuario_nom, rol, int(session.get("uid") or 0), ahora_txt)
+            msg = _m or msg
+            error = _e or error
 
     f_estado = (request.args.get("estado") or "").strip().upper()
     f_asignado = (request.args.get("asignado") or "").strip()
@@ -60012,76 +60294,15 @@ def modulo_turnos():
 
     volver = _home_portal(rol)
 
-    # Panel de turnos laborales abiertos / recientes
-    turnos_html = ""
+    # Panel de turnos: tablero de supervisión (solo lectura) + cierre forzado + documentos únicos
     try:
-        q_t = TurnoLaboral.query
-        if area in ("Ventas", "Soporte", "Cobranza") and rol not in ("Gerente", "Superadmin", "Administrador"):
-            q_t = q_t.filter_by(area=area)
-        elif area != "Gerencia" and rol not in ("Gerente", "Superadmin", "Administrador"):
-            q_t = q_t.filter_by(area=area)
-        turnos_list = q_t.order_by(TurnoLaboral.id.desc()).limit(40).all()
-        filas_t = []
-        for t in turnos_list:
-            color = "#16a34a" if t.estado == "ABIERTO" else "#64748b"
-            filas_t.append(
-                "<tr>"
-                "<td style='font-size:12px'>" + _esc(t.abierto_en or "") + "</td>"
-                "<td><b>" + _esc(t.nombre_completo or "") + "</b><br><span class='mini-text'>" + _esc(t.usuario_login or "") + "</span></td>"
-                "<td>" + _esc(t.documento or "") + "</td>"
-                "<td>" + _esc(t.area or "") + "</td>"
-                "<td style='color:" + color + ";font-weight:700'>" + _esc(t.estado or "") + "</td>"
-                "<td style='font-size:11px;color:#64748b'>" + _esc(t.ip or "") + "<br>" + _esc(t.ubicacion or "") + "</td>"
-                "<td style='font-size:11px'>" + _esc((t.nota_apertura or "")[:80]) + "</td>"
-                "<td style='font-size:11px'>" + _esc(t.cerrado_en or "—") + "</td>"
-                "</tr>"
-            )
-        if not filas_t:
-            filas_t = ["<tr><td colspan='8' style='text-align:center;color:#94a3b8;padding:12px'>Sin turnos registrados aún. Se crean al iniciar sesión en Ventas/Soporte.</td></tr>"]
-        # En vivo: quién tiene turno ABIERTO ahora
-        en_vivo = []
-        try:
-            for tv in TurnoLaboral.query.filter_by(estado="ABIERTO").order_by(TurnoLaboral.id.desc()).limit(50).all():
-                en_vivo.append(
-                    '<div style="background:#ecfdf5;border:1px solid #86efac;border-radius:10px;padding:10px 12px;margin:0 0 8px">'
-                    '<b style="color:#166534">' + _esc(tv.nombre_completo or tv.usuario_login or "—") + "</b>"
-                    ' <span style="background:#16a34a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px">EN TURNO</span>'
-                    '<div style="font-size:12px;color:#334155;margin-top:4px">'
-                    + _esc(tv.area or "") + " · Doc: " + _esc(tv.documento or "—")
-                    + " · Desde " + _esc(tv.abierto_en or "—")
-                    + (" · IP " + _esc(tv.ip or "") if tv.ip else "")
-                    + "</div></div>"
-                )
-        except Exception:
-            pass
-        if not en_vivo:
-            en_vivo = ['<p style="color:#94a3b8;font-size:13px;margin:0">Nadie con turno abierto en este momento.</p>']
-        live_box = ""
-        if area == "Gerencia" or (request.path or "").startswith("/gerencia"):
-            live_box = (
-                '<div style="background:#fff;border:2px solid #16a34a;border-radius:12px;padding:14px 16px;margin-bottom:14px">'
-                '<h2 style="margin:0 0 6px;font-size:15px;color:#166534">TOTALMENTE EN TURNO</h2>'
-                '<p style="margin:0 0 10px;font-size:12px;color:#64748b">Estado en vivo de quienes tienen turno abierto. Ventas, Soporte y Cobranza.</p>'
-                + "".join(en_vivo)
-                + '<p style="margin:8px 0 0;font-size:12px"><a href="/gerencia/turnos" style="font-weight:700">Actualizar vista →</a></p>'
-                "</div>"
-            )
-        turnos_html = (
-            live_box
-            + '<section class="role-panel" style="margin-bottom:16px;overflow:auto">'
-            '<h2 style="margin-top:0;font-size:16px;color:#0B2D57">Turnos laborales (apertura con CC / código)</h2>'
-            '<p class="mini-text">Cada asesor al ingresar confirma nombre y documento. Queda auditado.</p>'
-            '<table style="width:100%;border-collapse:collapse;font-size:13px">'
-            '<tr style="background:#0B2D57;color:#fff">'
-            "<th>Apertura</th><th>Nombre</th><th>CC / Código</th><th>Área</th><th>Estado</th><th>IP / Ubicación</th><th>Nota</th><th>Cierre</th></tr>"
-            + "".join(filas_t)
-            + "</table>"
-            '<p style="margin-top:10px"><a class="btn" href="/abrir-turno?forzar=1">Abrir / renovar mi turno</a> '
-            '<a class="btn" href="/cerrar-turno" style="background:#b91c1c;color:#fff">Cerrar mi turno</a></p>'
-            "</section>"
-        )
+        turnos_html = _turnos_supervision_html()
     except Exception as _th:
         print("turnos panel:", _th)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         turnos_html = ""
 
     content = f"""
@@ -60094,6 +60315,7 @@ def modulo_turnos():
 .tu-filt a{{display:inline-block;padding:6px 12px;margin:2px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;border:1px solid #cbd5e1;color:#0B2D57}}
 .tu-filt a.on{{background:#0B2D57;color:#fff;border-color:#0B2D57}}
 </style>
+{_TURNOS_CSS}
 <div class="tu-wrap">
 <header class="role-hero"><div>
   <h1>👥 Turnos · {area}</h1>
@@ -60116,8 +60338,8 @@ def modulo_turnos():
   </form>
 </section>
 
-<section style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin-bottom:16px">
-  <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE {area.upper()} · COLA DE TURNOS</div>
+<section class="cola-light">
+  <div class="cola-light-head">DETALLE {area.upper()} · COLA DE TURNOS</div>
   <div style="overflow-x:auto;max-height:520px">
     <table class="tu-tbl">
       <tr>
