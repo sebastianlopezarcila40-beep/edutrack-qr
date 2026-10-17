@@ -9126,6 +9126,7 @@ body{{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:#f1f5f
         <h3 style="margin:0 0 10px;font-size:14px;color:#0B2D57">Archivos adjuntos</h3>
         <a href="/pqr/notificacion/{token}/pdf" target="_blank" rel="noopener">📄 Descargar respuesta oficial (PDF)</a>
       </div>
+      {_rec_box_publico(t, token)}
       <p class="foot">Este espacio se usa únicamente para acceder al documento de respuesta.
       Información protegida (Ley 1581 de 2012). No comparta este enlace.
       {empresa} · {producto}</p>
@@ -28559,6 +28560,7 @@ def gerencia_hq():
               <a href="/soporte/marca">Marca y contacto (tel./correo)</a>
               <a class="hq-pill-primary" href="/gerencia/eduaura-ia">🧠 Conectores IA</a>
               <a class="hq-pill-primary" href="/gerencia/base-conocimiento-aura">📚 Base de conocimiento de Aura</a>
+              <a class="hq-pill-primary" href="/gerencia/pqr-apelaciones">⚖️ Recursos y apelaciones PQRS</a>
               <a href="/gerencia/procsis-web">Noticias / productos</a>
               <a class="hq-pill-primary" href="/gerencia/login-banners">Banners Login / Salida segura</a>
               <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
@@ -39660,6 +39662,7 @@ def _modulos_por_rol(rol):
         ("🔌 Mesa de Conexión API (WATI)", "/gerencia/wati-conexion", "#25D366"),
         ("🧠 Conectores IA (EduAura)", "/gerencia/eduaura-ia", "#7c3aed"),
         ("📚 Base de conocimiento de Aura", "/gerencia/base-conocimiento-aura", "#7c3aed"),
+        ("⚖️ Recursos y apelaciones PQRS", "/gerencia/pqr-apelaciones", "#5b21b6"),
         ("🏢 Datos de la empresa", "/gerencia/datos-empresa", "#0B2D57"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
         ("Facturación", "/gerencia/facturacion", "#0B2D57"),
@@ -53371,6 +53374,7 @@ _PQR_BUCKETS = {
     "proceso": (["ASIGNADA", "EN PROCESO", "PENDIENTE DEL CLIENTE"], "🟡", "#ca8a04"),
     "escalados": (["ESCALADA A DESARROLLO", "ESCALADA A SOPORTE", "ESCALADA A GERENCIA"], "🔵", "#2563eb"),
     "cerrados": (["RESUELTA", "CERRADA"], "🟢", "#16a34a"),
+    "recursos": (["RECURSO_REPOSICION_PENDIENTE", "APELACION_ESCALADA_GERENCIA"], "⚖️", "#7c3aed"),
 }
 
 
@@ -53525,6 +53529,7 @@ def soporte_pqr_centro():
   {('<a class="btn" href="/gerencia/pqr-limpieza" style="background:#b91c1c">🧹 Limpieza PQR</a>') if rol_actual() in _ROLES_GERENCIA_PQR else ""}
   <a class="btn" href="{"/soluciones-procsis/fidelizacion" if puede_editar else "/soporte/fidelizacion"}" style="background:#0d9488">💙 CSAT</a>
 </header>
+{_rec_banner_alertas()}
 <div class="role-panel" style="margin-bottom:12px">
   {_script_divipola_subtipos()}
   <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end">
@@ -55515,7 +55520,7 @@ def soporte_pqr_detalle(id):
         accion_f = (request.form.get("accion") or "gestion").strip()
         _F = request.form
         _cobro = None
-        if accion_f == "resolver_cobro" and not (cerrado and not _pqr_puede_reabrir()):
+        if accion_f == "resolver_cobro" and not (cerrado and not _pqr_puede_reabrir()) and (t.estado or "") not in _REC_ACTIVOS:
             _ok_c, _m_c, _cobro = _pqr_resolver_cobro_pre(t, request.form)
             if _ok_c:
                 _F = {"estado": "RESUELTA", "respuesta": _cobro["respuesta"], "enviar_correo": "1"}
@@ -55523,10 +55528,15 @@ def soporte_pqr_detalle(id):
                 mensaje = _m_c
                 accion_f = "__error__"
         # Bloqueo total si ya está cerrada/resuelta (solo consulta; Gerencia puede reabrir)
-        if cerrado and not _pqr_puede_reabrir():
+        if cerrado and not _pqr_puede_reabrir() and not accion_f.startswith("recurso_"):
             mensaje = "Ticket cerrado/resuelto: no se permiten más cambios. Solo consulta."
         elif accion_f == "__error__":
             pass
+        elif accion_f.startswith("recurso_"):
+            mensaje = _rec_procesar(t, accion_f, request.form)
+            cerrado = (t.estado or "").upper() in ("CERRADA", "CERRADO", "RESUELTA")
+        elif (t.estado or "") in _REC_ACTIVOS and accion_f != "nota":
+            mensaje = "Caso con recurso en trámite: solo se gestiona desde el panel de recursos (el formulario normal está bloqueado)."
         elif accion_f in ("nota", "escalar"):
             mensaje = _pqr_procesar_accion(t, accion_f, request.form)
             cerrado = (t.estado or "").upper() in ("CERRADA", "CERRADO", "RESUELTA")
@@ -55664,6 +55674,14 @@ def soporte_pqr_detalle(id):
 
     if puede_editar and not (cerrado and not _pqr_puede_reabrir()):
         form_block = _pqr_panel_cobro(t, B) + form_block + _pqr_forms_extra(t)
+    try:
+        rec_panel = _rec_panel_staff(t, B)
+    except Exception as _rp_ex:
+        db.session.rollback()
+        print("rec panel:", repr(_rp_ex))
+        rec_panel = ""
+    if (t.estado or "") in _REC_ACTIVOS:
+        form_block = ""   # recurso en trámite: se gestiona solo desde el panel de recursos
     csat_box = ""
     try:
         if (t.estado or "").upper() in ("RESUELTA", "CERRADA", "CERRADO") or (getattr(t, "token_csat", None) or "").strip():
@@ -55697,6 +55715,7 @@ def soporte_pqr_detalle(id):
     <b>Respuesta registrada:</b><br>
     {resp_html if resp_html else "<span style='color:#64748b'>Aún sin respuesta guardada</span>"}
   </div>
+  {rec_panel}
   {form_block}
   <h3>Historial</h3>
   <ul>{htm if htm else "<li>Sin movimientos</li>"}</ul>
@@ -55895,6 +55914,796 @@ def _pqr_forms_extra(t):
     <button type="submit" style="margin-top:8px">Aplicar</button>
   </form>
 </div>"""
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  RECURSOS DE REPOSICIÓN Y APELACIÓN EN SUBSIDIO (PQRS)
+#   · El cliente interpone el recurso desde el enlace seguro de su respuesta (/pqr/recurso/<token>)
+#     dentro del plazo legal (días HÁBILES colombianos, con festivos).
+#   · Estados del ticket: RECURSO_REPOSICION_PENDIENTE → APELACION_ESCALADA_GERENCIA → CERRADA.
+#     (RESPUESTA_INICIAL_NOTIFICADA es la fase legal derivada de la respuesta ya notificada; no se
+#      guarda como estado para no romper el cierre/CSAT/listados existentes.)
+#   · Mientras hay recurso en trámite el asesor NO puede editar el caso por el formulario normal.
+#   · Cada resolución genera un PDF protegido, guardado con su huella SHA-256 y la fecha/hora del envío.
+#  ⚠ Plazos y efectos jurídicos configurables: validar con asesor legal (ver variables de entorno).
+# ══════════════════════════════════════════════════════════════════════════
+import datetime as _dtm
+import hashlib as _hl
+
+PQR_RECURSO_DIAS_CLIENTE = int(os.environ.get("PQR_RECURSO_DIAS_CLIENTE", "5") or 5)    # días hábiles para interponer
+PQR_RECURSO_DIAS_EMPRESA = int(os.environ.get("PQR_RECURSO_DIAS_EMPRESA", "15") or 15)  # días hábiles para resolver y notificar
+_REC_ACTIVOS = ("RECURSO_REPOSICION_PENDIENTE", "APELACION_ESCALADA_GERENCIA")
+_REC_TIPOS = {
+    "REPOSICION": "Recurso de reposición",
+    "REPOSICION_SUBSIDIO_APELACION": "Recurso de reposición y, en subsidio, de apelación",
+}
+_REC_DECISIONES = {
+    "REVOCA": "Revoca la decisión inicial",
+    "MODIFICA": "Modifica la decisión inicial",
+    "CONFIRMA": "Confirma (ratifica) la decisión inicial",
+}
+
+
+# ───────────────────────── Calendario hábil de Colombia ─────────────────────────
+_CO_FEST = {}
+
+
+def _co_pascua(y):
+    a, b, c = y % 19, y // 100, y % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = ((h + l - 7 * m + 114) % 31) + 1
+    return _dtm.date(y, mes, dia)
+
+
+def _co_festivos(y):
+    """Festivos nacionales de Colombia (Ley 51 de 1983 / Emiliani + Semana Santa)."""
+    if y in _CO_FEST:
+        return _CO_FEST[y]
+    D, td = _dtm.date, _dtm.timedelta
+
+    def lun(d):                       # traslada al lunes siguiente (o se queda si ya es lunes)
+        return d + td(days=(7 - d.weekday()) % 7)
+    p = _co_pascua(y)
+    f = {D(y, 1, 1), D(y, 5, 1), D(y, 7, 20), D(y, 8, 7), D(y, 12, 8), D(y, 12, 25),
+         lun(D(y, 1, 6)), lun(D(y, 3, 19)), lun(D(y, 6, 29)), lun(D(y, 8, 15)),
+         lun(D(y, 10, 12)), lun(D(y, 11, 1)), lun(D(y, 11, 11)),
+         p - td(days=3), p - td(days=2),
+         lun(p + td(days=39)), lun(p + td(days=60)), lun(p + td(days=68))}
+    _CO_FEST[y] = f
+    return f
+
+
+def _co_es_habil(d):
+    return d.weekday() < 5 and d not in _co_festivos(d.year)
+
+
+def _co_sumar_habiles(desde, n):
+    """Fecha resultante de sumar n días hábiles (el conteo inicia el día hábil siguiente)."""
+    cur, c = desde, 0
+    while c < int(n):
+        cur += _dtm.timedelta(days=1)
+        if _co_es_habil(cur):
+            c += 1
+    return cur
+
+
+def _co_habiles_restantes(hoy, limite):
+    """Días hábiles entre hoy y el límite (negativo si ya venció)."""
+    if limite >= hoy:
+        cur, c = hoy, 0
+        while cur < limite:
+            cur += _dtm.timedelta(days=1)
+            if _co_es_habil(cur):
+                c += 1
+        return c
+    cur, c = limite, 0
+    while cur < hoy:
+        cur += _dtm.timedelta(days=1)
+        if _co_es_habil(cur):
+            c += 1
+    return -c
+
+
+def _rec_d(v):
+    try:
+        return _dtm.datetime.strptime(str(v or "")[:10], "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def _rec_hoy():
+    return ahora().date()
+
+
+def _rec_now():
+    return ahora().replace(tzinfo=None)
+
+
+# ───────────────────────── Modelos ─────────────────────────
+class RecursoPQR(db.Model):
+    __tablename__ = "recursos_pqr"
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("tickets_pqr.id"), nullable=False, index=True)
+    institucion_id = db.Column(db.Integer, nullable=True, index=True)
+    radicado_recurso = db.Column(db.String(60), unique=True, index=True)
+    tipo = db.Column(db.String(40), default="REPOSICION")
+    estado = db.Column(db.String(40), default="RECURSO_REPOSICION_PENDIENTE", index=True)
+    # RECURSO_REPOSICION_PENDIENTE | APELACION_ESCALADA_GERENCIA | RESUELTO_REPOSICION | RESUELTO_APELACION
+    canal = db.Column(db.String(20), default="PUBLICO")           # PUBLICO | INTERNO
+    fundamentos = db.Column(db.Text, default="")
+    pretension = db.Column(db.Text, default="")
+    fecha_notificacion_inicial = db.Column(db.String(10), default="")
+    fecha_limite_interposicion = db.Column(db.String(10), default="")
+    radicado_en = db.Column(db.DateTime, default=_rec_now)
+    fecha_limite_resolucion = db.Column(db.String(10), default="")
+    decision_reposicion = db.Column(db.String(20), default="")
+    resolucion_reposicion = db.Column(db.Text, default="")
+    resuelto_reposicion_por = db.Column(db.String(120), default="")
+    resuelto_reposicion_en = db.Column(db.DateTime, nullable=True)
+    escalado_en = db.Column(db.DateTime, nullable=True)
+    decision_apelacion = db.Column(db.String(20), default="")
+    resolucion_apelacion = db.Column(db.Text, default="")
+    resuelto_apelacion_por = db.Column(db.String(120), default="")
+    resuelto_apelacion_en = db.Column(db.DateTime, nullable=True)
+
+
+class RecursoPQRNotificacion(db.Model):
+    """Soporte de notificación: PDF original (inmutable) + huella SHA-256 + fecha/hora de generación y de envío."""
+    __tablename__ = "recursos_pqr_notificaciones"
+    id = db.Column(db.Integer, primary_key=True)
+    recurso_id = db.Column(db.Integer, db.ForeignKey("recursos_pqr.id"), nullable=False, index=True)
+    etapa = db.Column(db.String(20), default="REPOSICION")        # REPOSICION | APELACION
+    pdf = db.Column(db.LargeBinary)
+    sha256 = db.Column(db.String(64), default="")
+    generado_en = db.Column(db.DateTime, default=_rec_now)
+    generado_por = db.Column(db.String(120), default="")
+    enviado_en = db.Column(db.DateTime, nullable=True)
+    enviado_a = db.Column(db.String(160), default="")
+    envio_ok = db.Column(db.Boolean, default=False)
+    intentos = db.Column(db.Integer, default=0)
+
+
+_REC_TABLAS = {"ok": False}
+
+
+def _rec_tablas():
+    if _REC_TABLAS["ok"]:
+        return
+    try:
+        RecursoPQR.__table__.create(bind=db.engine, checkfirst=True)
+        RecursoPQRNotificacion.__table__.create(bind=db.engine, checkfirst=True)
+        _REC_TABLAS["ok"] = True
+    except Exception as ex:
+        print("recursos_pqr tablas:", repr(ex))
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _rec_de_ticket(t):
+    _rec_tablas()
+    try:
+        return RecursoPQR.query.filter_by(ticket_id=t.id).order_by(RecursoPQR.id.desc()).first()
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def _rec_activo_inst(institucion_id):
+    """True si la institución tiene un recurso en trámite (congela suspensiones por mora)."""
+    if not institucion_id:
+        return False
+    _rec_tablas()
+    try:
+        return RecursoPQR.query.filter(RecursoPQR.institucion_id == institucion_id,
+                                       RecursoPQR.estado.in_(_REC_ACTIVOS)).count() > 0
+    except Exception:
+        db.session.rollback()
+        return False
+
+
+def _rec_fecha_notificacion(t):
+    """Fecha en que se notificó la respuesta inicial (ancla del plazo del cliente)."""
+    for v in (t.notificacion_enviada_en, t.fecha_respuesta, t.fecha_cierre):
+        d = _rec_d(v)
+        if d:
+            return d
+    return None
+
+
+def _rec_plazo_cliente(t):
+    """→ (fecha_notificacion, fecha_limite, dias_restantes) o (None, None, None)."""
+    n = _rec_fecha_notificacion(t)
+    if not n or not ((t.respuesta or "").strip() or (t.descripcion_cierre or "").strip()):
+        return None, None, None
+    lim = _co_sumar_habiles(n, PQR_RECURSO_DIAS_CLIENTE)
+    return n, lim, _co_habiles_restantes(_rec_hoy(), lim)
+
+
+def _rec_semaforo(rec):
+    """(texto, color, días_hábiles_restantes) del plazo de la empresa para resolver."""
+    lim = _rec_d(rec.fecha_limite_resolucion)
+    if rec.estado not in _REC_ACTIVOS or not lim:
+        return ("", "#64748b", None)
+    d = _co_habiles_restantes(_rec_hoy(), lim)
+    if d < 0:
+        return ("VENCIDO hace %d día(s) hábil(es)" % (-d), "#b91c1c", d)
+    if d == 0:
+        return ("Vence HOY", "#b91c1c", d)
+    if d <= 2:
+        return ("CRÍTICO · quedan %d día(s) hábil(es)" % d, "#ea580c", d)
+    if d <= 5:
+        return ("ALERTA · quedan %d día(s) hábiles" % d, "#ca8a04", d)
+    return ("En plazo · quedan %d días hábiles" % d, "#16a34a", d)
+
+
+def _rec_fase(t, rec):
+    if rec is not None:
+        return rec.estado
+    if _rec_plazo_cliente(t)[0]:
+        return "RESPUESTA_INICIAL_NOTIFICADA"
+    return t.estado or ""
+
+
+# ───────────────────────── Correo y PDF ─────────────────────────
+def _rec_enviar_correo(destino, asunto, texto, html, adjunto=None, nombre_adj="documento.pdf"):
+    if not destino:
+        return False
+    try:
+        correo_envio, password = _credenciales_smtp("soporte")
+        if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not correo_envio or not password):
+            print("recurso correo: falta RESEND_API_KEY o SOPORTE_EMAIL/PASSWORD")
+            return False
+        if not correo_envio:
+            correo_envio = (os.environ.get("RESEND_FROM") or "EduTrack <onboarding@resend.dev>").strip()
+        msg = EmailMessage()
+        msg["Subject"] = asunto
+        msg["From"] = correo_envio
+        msg["To"] = destino
+        msg.set_content(texto)
+        msg.add_alternative(html, subtype="html")
+        if adjunto:
+            msg.add_attachment(adjunto, maintype="application", subtype="pdf", filename=nombre_adj)
+        _smtp_enviar(msg, correo_envio, password)
+        return True
+    except Exception as ex:
+        print("recurso correo error:", repr(ex))
+        return False
+
+
+def _rec_html_correo(titulo, cuerpo_html):
+    return (
+        "<div style='font-family:Segoe UI,Arial,sans-serif;max-width:620px;margin:0 auto;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden'>"
+        "<div style='background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:20px 24px'>"
+        "<div style='font-size:11px;letter-spacing:1.2px;opacity:.9'>PROCSIS · EDUTRACK</div>"
+        "<h1 style='margin:8px 0 0;font-size:19px'>" + _esc(titulo) + "</h1></div>"
+        "<div style='padding:22px 24px;color:#0f172a;font-size:14px;line-height:1.55'>" + cuerpo_html + "</div>"
+        "<div style='background:#0f172a;color:#94a3b8;padding:12px 24px;font-size:11px'>Comunicación oficial · Mesa de Soluciones PROCSIS</div></div>"
+    )
+
+
+def _rec_pdf(rec, t, etapa, decision, texto, firmante, rol, emitido):
+    """PDF de la resolución. Protegido contra edición (owner password aleatoria) y con su huella guardada aparte."""
+    from reportlab.lib.utils import simpleSplit
+    b = BytesIO()
+    try:
+        from reportlab.lib.pdfencrypt import StandardEncryption
+        enc = StandardEncryption("", ownerPassword=secrets.token_hex(16), canPrint=1, canModify=0, canCopy=1, canAnnotate=0)
+        c = canvas.Canvas(b, pagesize=letter, encrypt=enc)
+    except Exception:
+        c = canvas.Canvas(b, pagesize=letter)
+    W, H = letter
+    M = 54
+    st = {"y": H - 54}
+
+    def nueva():
+        c.showPage()
+        st["y"] = H - 54
+
+    def linea(txt, size=10.5, bold=False, gap=15, color=(0.06, 0.09, 0.16)):
+        c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+        c.setFillColorRGB(*color)
+        for ln in (simpleSplit(txt, "Helvetica-Bold" if bold else "Helvetica", size, W - 2 * M) or [""]):
+            if st["y"] < 70:
+                nueva()
+                c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+                c.setFillColorRGB(*color)
+            c.drawString(M, st["y"], ln)
+            st["y"] -= gap
+
+    c.setFillColorRGB(0.043, 0.176, 0.341)
+    c.rect(0, H - 78, W, 78, stroke=0, fill=1)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(M, H - 38, "PROCSIS · EduTrack")
+    c.setFont("Helvetica", 10)
+    c.drawString(M, H - 56, "Mesa de Soluciones · Resolución de recursos PQRS")
+    st["y"] = H - 110
+    es_ap = etapa == "APELACION"
+    linea("RESOLUCIÓN DEL RECURSO DE %s" % ("APELACIÓN" if es_ap else "REPOSICIÓN"), 14, True, 22, (0.043, 0.176, 0.341))
+    for k, v in (
+        ("Fecha y hora de emisión", emitido.strftime("%Y-%m-%d %H:%M:%S") + " (hora de Colombia)"),
+        ("Radicado PQR", formatear_radicado(t.radicado or "") or "-"),
+        ("Ticket", t.ticket or "-"),
+        ("Radicado del recurso", rec.radicado_recurso or "-"),
+        ("Solicitante", ("%s %s" % (t.razon_social or "", t.apellidos or "")).strip() or "-"),
+        ("Tipo de recurso", _REC_TIPOS.get(rec.tipo, rec.tipo)),
+    ):
+        linea("%s: %s" % (k, v), 10.5, False, 15)
+    st["y"] -= 8
+    linea("DECISIÓN: %s" % _REC_DECISIONES.get(decision, decision), 12, True, 20)
+    linea("Fundamentos de la decisión", 11, True, 16)
+    for par in (texto or "").split("\n"):
+        linea(par or " ", 10.5, False, 14.5)
+    st["y"] -= 8
+    linea("Efectos", 11, True, 16)
+    if es_ap:
+        linea("La presente decisión resuelve de manera definitiva el recurso de apelación y pone fin a la actuación.", 10.5)
+    elif decision == "CONFIRMA" and rec.tipo == "REPOSICION_SUBSIDIO_APELACION":
+        linea("Al confirmarse la decisión inicial, y por haberse interpuesto el recurso de apelación en subsidio, el expediente "
+              "se remite a la Gerencia General / representación legal para la decisión definitiva. Se le notificará por este mismo medio.", 10.5)
+    elif decision == "CONFIRMA":
+        linea("La decisión inicial queda en firme.", 10.5)
+    else:
+        linea("Se modifica o revoca la decisión inicial; el recurso de apelación en subsidio, si fue interpuesto, queda sin objeto.", 10.5)
+    st["y"] -= 14
+    linea("Firma: %s · %s" % (firmante or "-", rol or "-"), 10.5, True, 16)
+    st["y"] -= 10
+    linea("Documento generado electrónicamente por EduTrack · PROCSIS. El sistema conserva el archivo original y su huella "
+          "SHA-256, junto con la fecha y hora de emisión y de envío, como soporte de la notificación.", 8.5, False, 11, (0.4, 0.45, 0.52))
+    c.save()
+    b.seek(0)
+    return b.read()
+
+
+def _rec_enviar_notificacion(n, rec, t):
+    """Envía por correo el PDF almacenado y deja la fecha/hora exacta del envío como rastro."""
+    destino = (t.email or "").strip()
+    token = _asegurar_token_pqr(t)
+    link = "%s/pqr/recurso/%s" % (_base_publica(), token)
+    etapa_txt = "apelación" if n.etapa == "APELACION" else "reposición"
+    cuerpo = (
+        "<p>Estimado(a) <b>%s</b>,</p><p>Le notificamos la <b>resolución del recurso de %s</b> correspondiente al radicado "
+        "<b>%s</b>. La encuentra adjunta en PDF.</p>"
+        "<p style='font-size:12px;color:#475569'>Huella de integridad (SHA-256) del documento:<br><code>%s</code></p>"
+        "<p><a href='%s' style='display:inline-block;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:8px'>Ver seguimiento del caso</a></p>"
+        % (_esc((t.razon_social or "usuario")), etapa_txt, _esc(rec.radicado_recurso), n.sha256, _esc(link))
+    )
+    ok = _rec_enviar_correo(
+        destino, "Resolución del recurso de %s · %s" % (etapa_txt, rec.radicado_recurso),
+        "Adjuntamos la resolución del recurso de %s (%s). Seguimiento: %s\nSHA-256: %s" % (etapa_txt, rec.radicado_recurso, link, n.sha256),
+        _rec_html_correo("Resolución del recurso de %s" % etapa_txt, cuerpo), n.pdf,
+        "Resolucion_%s_%s.pdf" % (n.etapa.lower(), rec.radicado_recurso))
+    try:
+        n.intentos = int(n.intentos or 0) + 1
+        if ok:
+            n.enviado_en = _rec_now()
+            n.enviado_a = destino[:160]
+            n.envio_ok = True
+        db.session.commit()
+        registrar_historial_pqr(
+            t.id, "NOTIFICACIÓN %s" % ("ENVIADA" if ok else "PENDIENTE"),
+            ("PDF resolución %s enviado a %s el %s (SHA-256 %s)" % (etapa_txt, destino, n.enviado_en.strftime("%Y-%m-%d %H:%M:%S"), n.sha256[:16] + "…"))
+            if ok else ("No se pudo enviar la resolución %s por correo (%s). Reintentar desde el panel." % (etapa_txt, destino or "sin correo")),
+            t.estado or "")
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return ok
+
+
+def _rec_emitir(rec, t, etapa, decision, texto):
+    """Genera el PDF, lo guarda de forma inmutable con su huella y lo envía. Devuelve (notificacion, enviado)."""
+    ahora_dt = _rec_now()
+    pdf = _rec_pdf(rec, t, etapa, decision, texto, session.get("usuario") or "", rol_actual() or "", ahora_dt)
+    n = RecursoPQRNotificacion(recurso_id=rec.id, etapa=etapa, pdf=pdf, sha256=_hl.sha256(pdf).hexdigest(),
+                               generado_en=ahora_dt, generado_por=(session.get("usuario") or "")[:120])
+    db.session.add(n)
+    db.session.commit()
+    return n, _rec_enviar_notificacion(n, rec, t)
+
+
+# ───────────────────────── Radicación ─────────────────────────
+def _rec_radicar(t, tipo, fundamentos, pretension, canal, usuario=""):
+    """→ (ok, mensaje, recurso). Valida existencia y plazo del cliente."""
+    _rec_tablas()
+    if tipo not in _REC_TIPOS:
+        return False, "Seleccione el tipo de recurso.", None
+    fundamentos = (fundamentos or "").strip()[:4000]
+    if len(fundamentos) < 30:
+        return False, "Explique los motivos del recurso (mínimo 30 caracteres).", None
+    if _rec_de_ticket(t) is not None:
+        return False, "Este caso ya tiene un recurso radicado.", None
+    n, lim, dias = _rec_plazo_cliente(t)
+    if not n:
+        return False, "Aún no se ha notificado una respuesta a este caso: no procede el recurso.", None
+    if dias is not None and dias < 0:
+        return False, "El plazo para interponer recursos venció el %s (%d días hábiles desde la notificación)." % (lim.isoformat(), PQR_RECURSO_DIAS_CLIENTE), None
+    ahora_dt = _rec_now()
+    rec = RecursoPQR(
+        ticket_id=t.id, institucion_id=t.institucion_id, tipo=tipo, estado="RECURSO_REPOSICION_PENDIENTE", canal=canal,
+        fundamentos=fundamentos, pretension=(pretension or "").strip()[:2000],
+        fecha_notificacion_inicial=n.isoformat(), fecha_limite_interposicion=lim.isoformat(), radicado_en=ahora_dt,
+        fecha_limite_resolucion=_co_sumar_habiles(_rec_hoy(), PQR_RECURSO_DIAS_EMPRESA).isoformat(),
+        radicado_recurso="REC-%s" % (t.ticket or t.id))
+    try:
+        db.session.add(rec)
+        t.estado = "RECURSO_REPOSICION_PENDIENTE"
+        db.session.commit()
+        registrar_historial_pqr(
+            t.id, "RECURSO RADICADO",
+            "%s (%s). Resolver y notificar a más tardar el %s (%d días hábiles)." % (
+                _REC_TIPOS[tipo], canal, rec.fecha_limite_resolucion, PQR_RECURSO_DIAS_EMPRESA), t.estado)
+        db.session.commit()
+        _sol_auditar("PQR recurso radicado", "%s · %s" % (t.radicado, tipo))
+    except Exception as ex:
+        db.session.rollback()
+        print("rec radicar:", repr(ex))
+        return False, "No se pudo radicar el recurso. Intente de nuevo.", None
+    token = _asegurar_token_pqr(t)
+    link = "%s/pqr/recurso/%s" % (_base_publica(), token)
+    cuerpo = (
+        "<p>Estimado(a) <b>%s</b>,</p><p>Recibimos su <b>%s</b>.</p>"
+        "<p><b>Radicado del recurso:</b> %s<br><b>Fecha y hora de radicación:</b> %s<br>"
+        "<b>Resolveremos y notificaremos a más tardar el:</b> %s (%d días hábiles)</p>"
+        "<p><a href='%s' style='display:inline-block;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:8px'>Ver seguimiento</a></p>"
+        % (_esc(t.razon_social or "usuario"), _esc(_REC_TIPOS[tipo].lower()), _esc(rec.radicado_recurso),
+           ahora_dt.strftime("%Y-%m-%d %H:%M:%S"), rec.fecha_limite_resolucion, PQR_RECURSO_DIAS_EMPRESA, _esc(link)))
+    _rec_enviar_correo((t.email or "").strip(), "Recibimos su recurso · %s" % rec.radicado_recurso,
+                       "Recibimos su %s. Radicado %s. Respuesta a más tardar el %s. Seguimiento: %s" % (
+                           _REC_TIPOS[tipo].lower(), rec.radicado_recurso, rec.fecha_limite_resolucion, link),
+                       _rec_html_correo("Recibimos su recurso", cuerpo))
+    return True, "Recurso radicado. Radicado: %s." % rec.radicado_recurso, rec
+
+
+# ───────────────────────── Acciones del personal ─────────────────────────
+def _rec_cerrar_ticket(t):
+    t.estado = "CERRADA"
+    t.cerrado_por = session.get("usuario", "")
+    t.fecha_cierre = fecha_hoy()
+    t.estado_cun = "CERRADO"
+
+
+def _rec_procesar(t, accion, f):
+    """Acciones recurso_* del panel. Devuelve el mensaje para el usuario."""
+    _rec_tablas()
+    rec = _rec_de_ticket(t)
+    try:
+        if accion == "recurso_radicar":
+            if not _pqr_puede_editar():
+                return "No tiene permiso para radicar recursos."
+            ok, m, _r = _rec_radicar(t, (f.get("tipo") or "").strip(), f.get("fundamentos"), f.get("pretension"),
+                                     "INTERNO", session.get("usuario") or "")
+            return m
+        if rec is None:
+            return "Este caso no tiene recurso."
+        if accion == "recurso_reenviar":
+            if not _pqr_puede_editar():
+                return "No tiene permiso."
+            n = RecursoPQRNotificacion.query.filter_by(recurso_id=rec.id, envio_ok=False).order_by(RecursoPQRNotificacion.id.desc()).first()
+            if not n:
+                return "No hay notificaciones pendientes de envío."
+            return "Notificación enviada." if _rec_enviar_notificacion(n, rec, t) else "No se pudo enviar. Verifique el correo del solicitante y la configuración de correo."
+        decision = (f.get("decision") or "").strip().upper()
+        texto = (f.get("resolucion") or "").strip()[:6000]
+        if decision not in _REC_DECISIONES:
+            return "Seleccione la decisión."
+        if len(texto) < 40:
+            return "Escriba los fundamentos de la decisión (mínimo 40 caracteres)."
+        if accion == "recurso_resolver_reposicion":
+            if not _pqr_puede_editar():
+                return "No tiene permiso para resolver."
+            if rec.estado != "RECURSO_REPOSICION_PENDIENTE":
+                return "La reposición ya fue resuelta."
+            rec.decision_reposicion, rec.resolucion_reposicion = decision, texto
+            rec.resuelto_reposicion_por, rec.resuelto_reposicion_en = (session.get("usuario") or "")[:120], _rec_now()
+            escala = decision == "CONFIRMA" and rec.tipo == "REPOSICION_SUBSIDIO_APELACION"
+            if escala:
+                rec.estado, rec.escalado_en = "APELACION_ESCALADA_GERENCIA", _rec_now()
+                t.estado, t.asignado_a = "APELACION_ESCALADA_GERENCIA", "Gerencia (apelación)"
+            else:
+                rec.estado = "RESUELTO_REPOSICION"
+                _rec_cerrar_ticket(t)
+            db.session.commit()
+            registrar_historial_pqr(t.id, "REPOSICIÓN RESUELTA",
+                                    "%s%s" % (_REC_DECISIONES[decision], " · remitido a Gerencia por apelación en subsidio" if escala else ""), t.estado)
+            db.session.commit()
+            _sol_auditar("PQR reposición resuelta", "%s → %s" % (t.radicado, decision))
+            n, ok = _rec_emitir(rec, t, "REPOSICION", decision, texto)
+            base = "Reposición resuelta. " + ("El caso se escaló a Gerencia (apelación en subsidio) y quedó bloqueado para edición. " if escala else "Caso cerrado. ")
+            return base + ("PDF enviado y registrado." if ok else "PDF generado y guardado; el correo NO se pudo enviar: use «Reintentar envío».")
+        if accion == "recurso_resolver_apelacion":
+            if not _pqr_puede_reabrir():
+                return "La apelación solo la resuelve Gerencia."
+            if rec.estado != "APELACION_ESCALADA_GERENCIA":
+                return "No hay apelación pendiente."
+            rec.decision_apelacion, rec.resolucion_apelacion = decision, texto
+            rec.resuelto_apelacion_por, rec.resuelto_apelacion_en = (session.get("usuario") or "")[:120], _rec_now()
+            rec.estado = "RESUELTO_APELACION"
+            _rec_cerrar_ticket(t)
+            db.session.commit()
+            registrar_historial_pqr(t.id, "APELACIÓN RESUELTA", _REC_DECISIONES[decision], t.estado)
+            db.session.commit()
+            _sol_auditar("PQR apelación resuelta", "%s → %s" % (t.radicado, decision))
+            n, ok = _rec_emitir(rec, t, "APELACION", decision, texto)
+            return "Apelación resuelta y caso cerrado. " + ("PDF enviado y registrado." if ok else "PDF guardado; el correo NO se pudo enviar: use «Reintentar envío».")
+    except Exception as ex:
+        db.session.rollback()
+        print("rec procesar:", repr(ex))
+        return "No se pudo completar la acción. Intente de nuevo."
+    return ""
+
+
+_REC_CSS = ("<style>.rec-box{border:2px solid #7c3aed;border-radius:14px;background:#faf5ff;padding:14px;margin:12px 0}"
+            ".rec-box h3{margin:0 0 8px;color:#5b21b6}.rec-chip{display:inline-block;color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700}"
+            ".rec-f{background:#fff;border:1px solid #e9d5ff;border-radius:10px;padding:10px;margin:8px 0;font-size:13px;white-space:pre-wrap}"
+            ".rec-box label{display:block;font-size:12px;font-weight:700;margin-top:8px}.rec-box select,.rec-box textarea,.rec-box input{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd5e1;border-radius:8px}"
+            ".rec-box button{margin-top:8px;background:#5b21b6;color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer}</style>")
+
+
+def _rec_panel_staff(t, B):
+    """Panel «Recursos de reposición y apelación» dentro del detalle de la PQR."""
+    rec = _rec_de_ticket(t)
+    fase = _rec_fase(t, rec)
+    h = _REC_CSS + "<div class='rec-box'><h3>⚖️ Recursos de reposición y apelación</h3>"
+    h += "<p style='margin:0 0 6px'>Fase legal: <span class='rec-chip' style='background:#5b21b6'>%s</span></p>" % _esc(fase or "—")
+    token = _asegurar_token_pqr(t)
+    link = "%s/pqr/recurso/%s" % (_base_publica(), token)
+    if rec is None:
+        n, lim, dias = _rec_plazo_cliente(t)
+        if not n:
+            return h + "<p style='font-size:13px;color:#64748b'>Aún no hay una respuesta notificada: el plazo para recursos no ha comenzado.</p></div>"
+        abierto = dias is not None and dias >= 0
+        h += ("<p style='font-size:13px'>Respuesta notificada el <b>%s</b>. El cliente puede interponer recurso hasta el <b>%s</b> (%d días hábiles) — %s.</p>"
+              % (n.isoformat(), lim.isoformat(), PQR_RECURSO_DIAS_CLIENTE, ("quedan %d día(s) hábil(es)" % dias) if abierto else "<b style='color:#b91c1c'>plazo vencido</b>"))
+        if abierto:
+            h += ("<p style='font-size:12px;margin:4px 0'>Enlace seguro para el cliente: <input readonly value='%s' onclick='this.select()' style='font-size:12px'></p>" % _esc(link))
+            if _pqr_puede_editar():
+                h += ("<details style='margin-top:8px'><summary style='cursor:pointer;font-weight:700;font-size:13px'>Radicar recurso a nombre del cliente (recibido por otro canal)</summary>"
+                      "<form method='POST'><input type='hidden' name='accion' value='recurso_radicar'>"
+                      "<label>Tipo</label><select name='tipo'><option value='REPOSICION'>Recurso de reposición</option>"
+                      "<option value='REPOSICION_SUBSIDIO_APELACION'>Reposición y, en subsidio, apelación</option></select>"
+                      "<label>Fundamentos del cliente</label><textarea name='fundamentos' rows='4' required></textarea>"
+                      "<label>Pretensión (opcional)</label><input name='pretension'><button>Radicar recurso</button></form></details>")
+        return h + "</div>"
+    txt, color, dias = _rec_semaforo(rec)
+    h += ("<p style='font-size:13px;margin:4px 0'><b>%s</b> · %s · radicado %s</p>"
+          % (_esc(rec.radicado_recurso), _esc(_REC_TIPOS.get(rec.tipo, rec.tipo)), rec.radicado_en.strftime("%Y-%m-%d %H:%M:%S") if rec.radicado_en else ""))
+    if txt:
+        h += "<p style='margin:4px 0'><span class='rec-chip' style='background:%s'>%s</span> <span style='font-size:12px;color:#475569'>Límite para resolver y notificar: <b>%s</b></span></p>" % (color, _esc(txt), rec.fecha_limite_resolucion)
+        if dias is not None and dias < 0:
+            h += ("<div style='background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 10px;font-size:12px;margin:6px 0'>⚠️ El plazo legal para responder se venció. "
+                  "Según la norma aplicable a su caso puede operar el silencio administrativo positivo. <b>Escale de inmediato a su asesor jurídico</b>; el sistema no lo declara automáticamente.</div>")
+    h += "<div class='rec-f'><b>Fundamentos del cliente</b>\n%s%s</div>" % (_esc(rec.fundamentos), ("\n\n<b>Pretensión:</b> " + _esc(rec.pretension)) if rec.pretension else "")
+    if rec.resolucion_reposicion:
+        h += "<div class='rec-f'><b>Reposición — %s</b> (%s, %s)\n%s</div>" % (
+            _esc(_REC_DECISIONES.get(rec.decision_reposicion, "")), _esc(rec.resuelto_reposicion_por),
+            rec.resuelto_reposicion_en.strftime("%Y-%m-%d %H:%M") if rec.resuelto_reposicion_en else "", _esc(rec.resolucion_reposicion))
+    if rec.resolucion_apelacion:
+        h += "<div class='rec-f'><b>Apelación — %s</b> (%s, %s)\n%s</div>" % (
+            _esc(_REC_DECISIONES.get(rec.decision_apelacion, "")), _esc(rec.resuelto_apelacion_por),
+            rec.resuelto_apelacion_en.strftime("%Y-%m-%d %H:%M") if rec.resuelto_apelacion_en else "", _esc(rec.resolucion_apelacion))
+    # Soportes de notificación (PDF inmutable + fecha/hora de envío)
+    try:
+        notis = RecursoPQRNotificacion.query.filter_by(recurso_id=rec.id).order_by(RecursoPQRNotificacion.id.asc()).all()
+    except Exception:
+        db.session.rollback()
+        notis = []
+    pend = False
+    for n in notis:
+        pend = pend or not n.envio_ok
+        h += ("<div class='rec-f'>📄 <b>Resolución de %s</b> · generada %s · %s<br>SHA-256: <code style='font-size:11px'>%s</code><br><a href='/pqr/recurso/%s/pdf/%s' target='_blank'>Descargar PDF</a></div>"
+              % ("apelación" if n.etapa == "APELACION" else "reposición", n.generado_en.strftime("%Y-%m-%d %H:%M:%S"),
+                 ("<span style='color:#166534'>enviado %s a %s</span>" % (n.enviado_en.strftime("%Y-%m-%d %H:%M:%S"), _esc(n.enviado_a))) if n.envio_ok else "<b style='color:#b91c1c'>envío pendiente</b>",
+                 n.sha256, _esc(token), n.etapa))
+    if pend and _pqr_puede_editar():
+        h += "<form method='POST'><input type='hidden' name='accion' value='recurso_reenviar'><button>Reintentar envío al cliente</button></form>"
+    opts = "".join("<option value='%s'>%s</option>" % (k, _esc(v)) for k, v in _REC_DECISIONES.items())
+    if rec.estado == "RECURSO_REPOSICION_PENDIENTE":
+        if _pqr_puede_editar():
+            h += ("<form method='POST'><input type='hidden' name='accion' value='recurso_resolver_reposicion'>"
+                  "<label>Decisión sobre la reposición</label><select name='decision' required>%s</select>"
+                  "<label>Fundamentos (se incluyen en el PDF que recibe el cliente)</label><textarea name='resolucion' rows='6' required minlength='40'></textarea>"
+                  "<p style='font-size:12px;color:#6b21a8;margin:6px 0 0'>Al guardar se genera y envía el PDF obligatorio. %s</p><button>Resolver y notificar</button></form>"
+                  % (opts, "Si se <b>confirma</b>, el caso pasa a Gerencia por la apelación en subsidio." if rec.tipo == "REPOSICION_SUBSIDIO_APELACION" else "Si se confirma, la decisión queda en firme."))
+    elif rec.estado == "APELACION_ESCALADA_GERENCIA":
+        if _pqr_puede_reabrir():
+            h += ("<form method='POST'><input type='hidden' name='accion' value='recurso_resolver_apelacion'>"
+                  "<label>Decisión definitiva (apelación)</label><select name='decision' required>%s</select>"
+                  "<label>Fundamentos de la decisión</label><textarea name='resolucion' rows='6' required minlength='40'></textarea>"
+                  "<button>Resolver apelación y notificar</button></form>" % opts)
+        else:
+            h += "<div class='rec-f' style='background:#fef3c7'>🔒 Caso en <b>apelación ante Gerencia</b>. La edición está bloqueada para el asesor; solo Gerencia puede decidir.</div>"
+    return h + "</div>"
+
+
+def _rec_banner_alertas():
+    """Franja en el Centro PQR con recursos vencidos o por vencer."""
+    _rec_tablas()
+    try:
+        activos = RecursoPQR.query.filter(RecursoPQR.estado.in_(_REC_ACTIVOS)).all()
+    except Exception:
+        db.session.rollback()
+        return ""
+    if not activos:
+        return ""
+    venc = crit = 0
+    for r in activos:
+        d = _rec_semaforo(r)[2]
+        if d is not None and d < 0:
+            venc += 1
+        elif d is not None and d <= 2:
+            crit += 1
+    color = "#b91c1c" if venc else ("#ea580c" if crit else "#5b21b6")
+    return ("<div style='border-left:5px solid %s;background:#fff;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:13px'>"
+            "⚖️ <b>%d recurso(s) en trámite</b> · <span style='color:#b91c1c'>%d vencido(s)</span> · <span style='color:#ea580c'>%d por vencer (≤2 días hábiles)</span> "
+            "— <a href='?bucket=recursos'>ver recursos</a></div>" % (color, len(activos), venc, crit))
+
+
+# ───────────────────────── Página pública del cliente ─────────────────────────
+_REC_PUB_CSS = ("<style>body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a}"
+                ".rp-top{background:#0B2D57;color:#fff;padding:14px 22px;font-weight:700}.rp-w{max-width:720px;margin:0 auto;padding:22px 16px 40px}"
+                ".rp-c{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 8px 24px rgba(15,23,42,.06)}"
+                ".rp-c h2{margin:0 0 10px;color:#0B2D57;font-size:20px}.rp-c label{display:block;font-weight:700;font-size:13px;margin:12px 0 4px}"
+                ".rp-c textarea,.rp-c input[type=text]{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit}"
+                ".rp-opt{display:block;border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;margin:6px 0;font-weight:400!important;cursor:pointer}"
+                ".rp-b{margin-top:14px;background:#0B2D57;color:#fff;border:0;border-radius:10px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:15px}"
+                ".rp-m{background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px;margin-bottom:12px}.rp-ok{background:#dcfce7;color:#166534;border-radius:8px;padding:10px;margin-bottom:12px}"
+                ".rp-s{font-size:13px;color:#475569;line-height:1.55}.rp-l{border-left:3px solid #cbd5e1;padding:2px 0 2px 12px;margin:10px 0;font-size:14px}</style>")
+
+
+def _rec_box_publico(t, token):
+    """Bloque que se inserta en la landing de la respuesta: botón «Interponer recurso» o su seguimiento."""
+    try:
+        rec = _rec_de_ticket(t)
+        if rec is not None:
+            return ("<div style='margin-top:18px;padding:14px;border:1px solid #ddd6fe;border-radius:10px;background:#f5f3ff'>"
+                    "<b>Su recurso %s</b> está en estado <b>%s</b>. <a href='/pqr/recurso/%s'>Ver seguimiento →</a></div>"
+                    % (_esc(rec.radicado_recurso), _esc(rec.estado.replace("_", " ").lower()), _esc(token)))
+        n, lim, dias = _rec_plazo_cliente(t)
+        if not n:
+            return ""
+        if dias is not None and dias >= 0:
+            return ("<div style='margin-top:18px;padding:14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff'>"
+                    "<b>¿No está de acuerdo con la respuesta?</b><br><span style='font-size:13px;color:#334155'>Puede interponer un recurso de reposición "
+                    "(y, en subsidio, de apelación) hasta el <b>%s</b> (%d días hábiles desde la notificación).</span><br>"
+                    "<a href='/pqr/recurso/%s' style='display:inline-block;margin-top:8px;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:9px 16px;border-radius:8px'>Interponer recurso</a></div>"
+                    % (lim.isoformat(), PQR_RECURSO_DIAS_CLIENTE, _esc(token)))
+        return "<p style='margin-top:18px;font-size:12px;color:#64748b'>El plazo para interponer recursos venció el %s.</p>" % lim.isoformat()
+    except Exception as ex:
+        print("rec box publico:", repr(ex))
+        db.session.rollback()
+        return ""
+
+
+@app.route("/pqr/recurso/<token>", methods=["GET", "POST"])
+def pqr_recurso_publico(token):
+    t = TicketPQR.query.filter_by(token_notificacion=token).first()
+    if not t:
+        return page("Enlace no válido", "<div style='max-width:480px;margin:60px auto;font-family:Segoe UI,Arial;text-align:center'><h1>Enlace no válido</h1><p>Verifique el enlace de su correo.</p></div>")
+    _rec_tablas()
+    msg_err = msg_ok = ""
+    rec = _rec_de_ticket(t)
+    if request.method == "POST" and rec is None:
+        ok, m, rec = _rec_radicar(t, (request.form.get("tipo") or "").strip(), request.form.get("fundamentos"),
+                                  request.form.get("pretension"), "PUBLICO", t.razon_social or "")
+        if ok:
+            msg_ok = m
+        else:
+            msg_err = m
+    rad = formatear_radicado(t.radicado or "")
+    body = _REC_PUB_CSS + "<div class='rp-top'>EduTrack | PROCSIS · Recursos</div><div class='rp-w'>"
+    if msg_err:
+        body += "<div class='rp-m'>%s</div>" % _esc(msg_err)
+    if msg_ok:
+        body += "<div class='rp-ok'>%s Le enviamos la constancia a su correo.</div>" % _esc(msg_ok)
+    if rec is None:
+        n, lim, dias = _rec_plazo_cliente(t)
+        body += "<div class='rp-c'><h2>Recurso sobre la respuesta al radicado %s</h2>" % _esc(rad)
+        if not n:
+            body += "<p class='rp-s'>Este caso aún no tiene una respuesta notificada, por lo que todavía no procede un recurso.</p>"
+        elif dias is not None and dias < 0:
+            body += "<p class='rp-s'>El plazo para interponer recursos venció el <b>%s</b> (%d días hábiles desde la notificación del %s).</p>" % (lim.isoformat(), PQR_RECURSO_DIAS_CLIENTE, n.isoformat())
+        else:
+            body += (
+                "<p class='rp-s'>Notificamos la respuesta el <b>%s</b>. Puede interponer el recurso hasta el <b>%s</b> (quedan %d día(s) hábil(es)). "
+                "Resolveremos y le notificaremos dentro de %d días hábiles contados desde la radicación del recurso.</p>"
+                "<form method='POST'><label>Tipo de recurso</label>"
+                "<label class='rp-opt'><input type='radio' name='tipo' value='REPOSICION' required> <b>Recurso de reposición</b>: que revisemos y, si corresponde, cambiemos nuestra decisión.</label>"
+                "<label class='rp-opt'><input type='radio' name='tipo' value='REPOSICION_SUBSIDIO_APELACION'> <b>Reposición y, en subsidio, apelación</b>: si ratificamos la decisión, el caso pasa a una instancia superior (Gerencia) para la decisión definitiva.</label>"
+                "<label>¿Por qué no está de acuerdo? (fundamentos)</label><textarea name='fundamentos' rows='6' required minlength='30'></textarea>"
+                "<label>¿Qué solicita? (opcional)</label><input type='text' name='pretension' maxlength='500'>"
+                "<button class='rp-b'>Radicar recurso</button></form>" % (n.isoformat(), lim.isoformat(), dias, PQR_RECURSO_DIAS_EMPRESA))
+        body += "</div>"
+    else:
+        txt, color, _d = _rec_semaforo(rec)
+        body += ("<div class='rp-c'><h2>Seguimiento de su recurso</h2><p class='rp-s'><b>Radicado:</b> %s<br><b>Tipo:</b> %s<br><b>Radicado el:</b> %s<br>"
+                 "<b>Resolveremos y notificaremos a más tardar el:</b> %s</p>" % (
+                     _esc(rec.radicado_recurso), _esc(_REC_TIPOS.get(rec.tipo, rec.tipo)),
+                     rec.radicado_en.strftime("%Y-%m-%d %H:%M:%S") if rec.radicado_en else "", rec.fecha_limite_resolucion))
+        body += "<div class='rp-l'>✅ Recurso radicado</div>"
+        if rec.resuelto_reposicion_en:
+            body += "<div class='rp-l'>✅ Reposición resuelta (%s) el %s</div>" % (_esc(_REC_DECISIONES.get(rec.decision_reposicion, "")), rec.resuelto_reposicion_en.strftime("%Y-%m-%d"))
+        else:
+            body += "<div class='rp-l'>⏳ Reposición en revisión</div>"
+        if rec.tipo == "REPOSICION_SUBSIDIO_APELACION":
+            if rec.resuelto_apelacion_en:
+                body += "<div class='rp-l'>✅ Apelación resuelta (%s) el %s</div>" % (_esc(_REC_DECISIONES.get(rec.decision_apelacion, "")), rec.resuelto_apelacion_en.strftime("%Y-%m-%d"))
+            elif rec.estado == "APELACION_ESCALADA_GERENCIA":
+                body += "<div class='rp-l'>⏳ Apelación en estudio de Gerencia</div>"
+        try:
+            for n in RecursoPQRNotificacion.query.filter_by(recurso_id=rec.id, envio_ok=True).order_by(RecursoPQRNotificacion.id.asc()).all():
+                body += "<p><a href='/pqr/recurso/%s/pdf/%s' target='_blank'>📄 Descargar resolución de %s (PDF)</a><br><span class='rp-s'>Enviada el %s</span></p>" % (
+                    _esc(token), n.etapa, "apelación" if n.etapa == "APELACION" else "reposición", n.enviado_en.strftime("%Y-%m-%d %H:%M:%S") if n.enviado_en else "")
+        except Exception:
+            db.session.rollback()
+        body += "</div>"
+    body += "<p class='rp-s'>Información protegida (Ley 1581 de 2012). No comparta este enlace.</p></div>"
+    return "<!doctype html><html lang='es'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Recurso · PROCSIS</title></head><body>" + body + "</body></html>"
+
+
+@app.route("/pqr/recurso/<token>/pdf/<etapa>")
+def pqr_recurso_pdf(token, etapa):
+    t = TicketPQR.query.filter_by(token_notificacion=token).first()
+    etapa = (etapa or "").upper()
+    rec = _rec_de_ticket(t) if t else None
+    if not rec or etapa not in ("REPOSICION", "APELACION"):
+        return Response("No encontrado", status=404)
+    n = RecursoPQRNotificacion.query.filter_by(recurso_id=rec.id, etapa=etapa).order_by(RecursoPQRNotificacion.id.desc()).first()
+    if not n or not n.pdf:
+        return Response("No encontrado", status=404)
+    if _hl.sha256(n.pdf).hexdigest() != (n.sha256 or ""):
+        print("ALERTA integridad PDF recurso", rec.radicado_recurso)
+        return Response("El documento no supera la verificación de integridad.", status=500)
+    return send_file(BytesIO(n.pdf), mimetype="application/pdf", as_attachment=False,
+                     download_name="Resolucion_%s_%s.pdf" % (etapa.lower(), rec.radicado_recurso))
+
+
+# ───────────────────────── Panel de Gerencia ─────────────────────────
+@app.route("/gerencia/pqr-apelaciones")
+def gerencia_pqr_apelaciones():
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    _rec_tablas()
+    try:
+        recs = RecursoPQR.query.order_by(RecursoPQR.id.desc()).limit(200).all()
+    except Exception:
+        db.session.rollback()
+        recs = []
+    activos = [r for r in recs if r.estado in _REC_ACTIVOS]
+    activos.sort(key=lambda r: (0 if r.estado == "APELACION_ESCALADA_GERENCIA" else 1, r.fecha_limite_resolucion or ""))
+    resueltos = [r for r in recs if r.estado not in _REC_ACTIVOS][:30]
+
+    def fila(r):
+        t = TicketPQR.query.get(r.ticket_id)
+        txt, color, _d = _rec_semaforo(r)
+        return ("<tr><td><a href='/soluciones-procsis/pqr/%d'>%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            r.ticket_id, _esc(r.radicado_recurso), _esc((t.razon_social if t else "") or ""), _esc(r.estado.replace("_", " ")),
+            _esc(_REC_TIPOS.get(r.tipo, r.tipo)),
+            ("<span style='color:%s;font-weight:700'>%s</span><br><span style='font-size:11px;color:#64748b'>límite %s</span>" % (color, _esc(txt), r.fecha_limite_resolucion)) if txt else _esc(r.decision_apelacion or r.decision_reposicion or "")))
+    th = "<tr><th>Recurso</th><th>Solicitante</th><th>Estado</th><th>Tipo</th><th>Plazo / decisión</th></tr>"
+    body = (
+        "<div style='background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px'><div style='max-width:980px;margin:0 auto'>"
+        "<a href='/gerencia/hq' style='color:#0B2D57;font-weight:700;text-decoration:none'>← HQ</a>"
+        "<h1 style='color:#0B2D57;margin:8px 0 4px'>⚖️ Recursos y apelaciones PQRS</h1>"
+        "<p style='color:#64748b;font-size:14px'>Reposiciones en trámite y apelaciones escaladas a Gerencia. Plazo del cliente: %d días hábiles · plazo de la empresa: %d días hábiles (calendario con festivos de Colombia).</p>"
+        "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0;overflow:auto'><h3 style='margin-top:0'>En trámite (%d)</h3>"
+        "<table style='width:100%%;border-collapse:collapse;font-size:13px'>%s%s</table></div>"
+        "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;overflow:auto'><h3 style='margin-top:0'>Resueltos recientes</h3>"
+        "<table style='width:100%%;border-collapse:collapse;font-size:13px'>%s%s</table></div></div></div>"
+    ) % (PQR_RECURSO_DIAS_CLIENTE, PQR_RECURSO_DIAS_EMPRESA, len(activos), th,
+         "".join(fila(r) for r in activos) or "<tr><td colspan=5 style='color:#64748b'>Sin recursos en trámite.</td></tr>",
+         th, "".join(fila(r) for r in resueltos) or "<tr><td colspan=5 style='color:#64748b'>Aún no hay recursos resueltos.</td></tr>")
+    return page("Recursos y apelaciones", body)
 
 
 # ---------- Verificación de ingreso por PIN al correo ----------
@@ -57747,6 +58556,12 @@ def _suspender_por_factura_vencida(inst, factura=None):
         return False
     if (inst.estado or "").upper() in ("ARCHIVADA",):
         return False
+    try:
+        if _rec_activo_inst(getattr(inst, "id", None)):
+            print("suspensión por mora aplazada: recurso PQR en trámite (inst %s)" % inst.id)
+            return False
+    except Exception:
+        pass
     cons = (factura.consecutivo if factura else "") or ""
     inst.estado = "SUSPENDIDA"
     try:
