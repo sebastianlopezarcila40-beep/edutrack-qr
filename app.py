@@ -48507,87 +48507,45 @@ def formatear_radicado(rad):
 
 @app.route("/pqr")
 def pqr_portal():
-    """Portal público — Gestión PQR OnLine (diseño Liquid Glass)."""
+    """Portal público — Gestión PQR OnLine (diseño White Liquid Glass)."""
     body = """
 <style>
-html,body{margin:0;min-height:100vh;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;color:#fff}
-
-/* 1. Fondo del sistema */
-.fondo-sistema-pqr{
-  background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#3b82f6 100%);
-  min-height:100vh;display:flex;flex-direction:column;
-}
-
-/* Barra superior integrada al fondo */
-.top{background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
-  border-bottom:1px solid rgba(255,255,255,.18);color:#fff;padding:14px 20px;
-  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
-.top h1{margin:0;font-size:18px;font-weight:800}
-.top a{color:#fff;text-decoration:none;font-size:13px;opacity:.9}
-.top a:hover{opacity:1;text-decoration:underline}
-
+html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#334155}
+.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,113,227,.10),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.12),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.navbar-light-glass{background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid rgba(226,232,240,.8);color:#0f172a;position:sticky;top:0;z-index:5}
+.top{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.top h1{margin:0;font-size:18px;font-weight:800;color:#0f172a}
+.top a{color:#0071e3;text-decoration:none;font-size:13px;font-weight:600}
+.top a:hover{text-decoration:underline}
 .centro-pqr{flex:1;display:flex;justify-content:center;align-items:center;padding:32px 16px}
-
-/* 2. Tarjeta central Liquid Glass */
-.tarjeta-pqr-glass{
-  width:100%;max-width:560px;box-sizing:border-box;
-  background:rgba(255,255,255,.12);
-  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
-  border:1px solid rgba(255,255,255,.25);
-  border-radius:24px;
-  box-shadow:0 12px 40px 0 rgba(0,0,0,.15);
-  padding:40px;color:#fff;text-align:center;
-}
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  .tarjeta-pqr-glass{background:rgba(15,23,42,.55)}
-}
-
-/* 3. Título interno */
-.titulo-header-glass{
-  background:rgba(255,255,255,.08);
-  border-bottom:1px solid rgba(255,255,255,.15);
-  padding:16px;margin:-40px -40px 30px -40px;
-  border-top-left-radius:24px;border-top-right-radius:24px;
-  font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.5px;
-}
-
-.texto-intro-pqr{margin:0 0 22px;font-size:16px;line-height:1.5;color:rgba(255,255,255,.92)}
+.tarjeta-corporativa-white{width:100%;max-width:560px;box-sizing:border-box;background:rgba(255,255,255,.65);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.7);border-radius:20px;box-shadow:0 10px 30px rgba(148,163,184,.12);color:#334155;padding:40px;text-align:center}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.tarjeta-corporativa-white{background:rgba(255,255,255,.95)}}
+.titulo-header-glass{background:rgba(241,245,249,.7);border-bottom:1px solid #e2e8f0;padding:16px;margin:-40px -40px 30px -40px;border-top-left-radius:20px;border-top-right-radius:20px;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:#0f172a}
+.texto-intro-pqr{margin:0 0 22px;font-size:16px;line-height:1.5;color:#334155}
 .btn-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-
-/* 4. Botones estilo Apple */
-.btn-presentar-apple,.btn-consultar-apple{
-  display:inline-block;min-width:170px;box-sizing:border-box;text-align:center;text-decoration:none;
-  border-radius:12px;padding:14px 28px;font-weight:600;font-size:15px;
-  transition:all .3s ease;cursor:pointer;
-}
-.btn-presentar-apple{
-  background:linear-gradient(135deg,#0071e3,#00c6ff);color:#fff;border:none;
-  box-shadow:0 4px 15px rgba(0,113,227,.3);
-}
-.btn-presentar-apple:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,113,227,.45)}
-.btn-consultar-apple{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.4)}
-.btn-consultar-apple:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.6);transform:translateY(-2px)}
-
-/* 5. Textos informativos y enlace */
-.mini{margin:20px 0 0;font-size:13px;color:rgba(255,255,255,.7)}
-.mini a{color:#67e8f9;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(103,232,249,.4)}
-.mini a:hover{color:#a5f3fc;border-bottom-color:#a5f3fc}
-
+.btn-presentar-light,.btn-consultar-light{display:inline-block;min-width:170px;box-sizing:border-box;text-align:center;text-decoration:none;border-radius:10px;padding:14px 28px;font-weight:600;font-size:15px;transition:all .2s ease;cursor:pointer}
+.btn-presentar-light{background:#0071e3;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,113,227,.25)}
+.btn-presentar-light:hover{background:#0059b3;transform:translateY(-1px)}
+.btn-consultar-light{background:#fff;color:#475569;border:1px solid #cbd5e1}
+.btn-consultar-light:hover{background:#f8fafc;border-color:#94a3b8}
+.mini{margin:20px 0 0;font-size:13px;color:#64748b}
+.mini a{color:#0071e3;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(0,113,227,.4)}
+.mini a:hover{color:#0059b3;border-bottom-color:#0059b3}
 @media(max-width:520px){
-  .tarjeta-pqr-glass{padding:28px 20px;border-radius:20px}
-  .titulo-header-glass{margin:-28px -20px 24px -20px;border-top-left-radius:20px;border-top-right-radius:20px}
-  .btn-presentar-apple,.btn-consultar-apple{width:100%}
+  .tarjeta-corporativa-white{padding:28px 20px;border-radius:18px}
+  .titulo-header-glass{margin:-28px -20px 24px -20px;border-top-left-radius:18px;border-top-right-radius:18px}
+  .btn-presentar-light,.btn-consultar-light{width:100%}
 }
 </style>
-<div class="fondo-sistema-pqr">
-  <div class="top"><h1>Gestión PQR OnLine</h1><a href="/">Inicio EduTrack</a></div>
+<div class="fondo-corporativo-light">
+  <div class="top navbar-light-glass"><h1>Gestión PQR OnLine</h1><a href="/">Inicio EduTrack</a></div>
   <div class="centro-pqr">
-    <div class="tarjeta-pqr-glass">
+    <div class="tarjeta-corporativa-white">
       <div class="titulo-header-glass">Gestión PQR OnLine</div>
       <p class="texto-intro-pqr">Canal oficial de peticiones, quejas, reclamos y recursos.</p>
       <div class="btn-row">
-        <a class="btn-presentar-apple" href="/pqr/crear">Presentar PQR</a>
-        <a class="btn-consultar-apple" href="/pqr/consulta">Consultar PQR</a>
+        <a class="btn-presentar-light" href="/pqr/crear">Presentar PQR</a>
+        <a class="btn-consultar-light" href="/pqr/consulta">Consultar PQR</a>
       </div>
       <p class="mini">Tiempo estimado de respuesta: aproximadamente 5 días hábiles.</p>
       <p class="mini"><a href="/pqr-info">Información de interés: cómo radicar una PQR</a></p>
@@ -48886,51 +48844,54 @@ _PQR_CHAT_PRIORIDADES = ("BAJA", "MEDIA", "ALTA", "CRITICA")
 
 _PQR_CHAT_HTML = r"""
 <style>
-html,body{margin:0;min-height:100vh;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;color:#fff}
-.fondo-sistema-pqr{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#3b82f6 100%);min-height:100vh;display:flex;flex-direction:column}
-.top{background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.18);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
-.top h1{margin:0;font-size:18px;font-weight:800}
-.top a{color:#fff;text-decoration:none;font-size:13px;opacity:.9}
-.top a:hover{opacity:1;text-decoration:underline}
+html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#334155}
+.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,113,227,.10),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.12),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.navbar-light-glass{background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid rgba(226,232,240,.8);color:#0f172a;position:sticky;top:0;z-index:5}
+.top{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.top h1{margin:0;font-size:18px;font-weight:800;color:#0f172a}
+.top a{color:#0071e3;text-decoration:none;font-size:13px;font-weight:600}
+.top a:hover{text-decoration:underline}
 .centro-pqr{flex:1;display:flex;justify-content:center;align-items:center;padding:24px 14px}
-.chat-glass{width:100%;max-width:700px;height:min(82vh,680px);box-sizing:border-box;display:flex;flex-direction:column;background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.25);border-radius:24px;box-shadow:0 12px 40px rgba(0,0,0,.2);overflow:hidden}
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.chat-glass{background:rgba(15,23,42,.7)}}
-.chat-head{padding:18px 22px 12px;border-bottom:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06)}
-.chat-head h2{margin:0;font-size:19px;font-weight:700}
-.chat-head p{margin:4px 0 10px;font-size:13px;color:rgba(255,255,255,.72)}
+.tarjeta-corporativa-white{background:rgba(255,255,255,.65);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.7);border-radius:20px;box-shadow:0 10px 30px rgba(148,163,184,.12);color:#334155}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.tarjeta-corporativa-white{background:rgba(255,255,255,.95)}}
+.chat-glass{width:100%;max-width:700px;height:min(82vh,680px);box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+.chat-head{padding:18px 22px 12px;border-bottom:1px solid #e2e8f0;background:rgba(255,255,255,.5)}
+.chat-head h2{margin:0;font-size:19px;font-weight:700;color:#0f172a}
+.chat-head p{margin:4px 0 10px;font-size:13px;color:#64748b}
 .chat-nav{display:flex;gap:8px;flex-wrap:wrap}
-.chat-nav button{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
-.chat-nav button:hover{background:rgba(255,255,255,.22)}
-.prog{height:4px;background:rgba(255,255,255,.15);border-radius:4px;margin-top:12px;overflow:hidden}
-#progbar{height:100%;width:0;background:linear-gradient(90deg,#00c6ff,#0071e3);transition:width .4s ease}
+.chat-nav button{background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.chat-nav button:hover{background:#f8fafc;border-color:#94a3b8}
+.prog{height:4px;background:#e2e8f0;border-radius:4px;margin-top:12px;overflow:hidden}
+#progbar{height:100%;width:0;background:linear-gradient(90deg,#00a9e0,#0071e3);transition:width .4s ease}
 .chat-log{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
-.msg{max-width:86%;padding:11px 15px;border-radius:16px;font-size:14.5px;line-height:1.5;white-space:pre-line;word-wrap:break-word;overflow-wrap:anywhere;animation:pop .25s ease}
+.msg{max-width:86%;padding:11px 15px;font-size:14.5px;line-height:1.5;white-space:pre-line;word-wrap:break-word;overflow-wrap:anywhere;animation:pop .25s ease}
 @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.msg.bot{align-self:flex-start;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.2);border-bottom-left-radius:4px}
-.msg.bot small{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:rgba(255,255,255,.65);margin-bottom:4px}
-.msg.user{align-self:flex-end;background:linear-gradient(135deg,#0071e3,#00a2ff);border-bottom-right-radius:4px;box-shadow:0 4px 14px rgba(0,113,227,.3)}
+.globo-asistente-light{align-self:flex-start;background:#f1f5f9;border:1px solid #e2e8f0;color:#1e293b;border-radius:16px 16px 16px 4px}
+.globo-asistente-light small{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#64748b;margin-bottom:4px}
+.globo-usuario-light{align-self:flex-end;background:#00a9e0;color:#fff;font-weight:500;border-radius:16px 16px 4px 16px;box-shadow:0 4px 12px rgba(0,169,224,.2)}
 .opts{display:flex;flex-direction:column;gap:8px;align-self:flex-start;max-width:92%;animation:pop .3s ease}
-.opt{text-align:left;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
-.opt:hover{background:rgba(255,255,255,.22);transform:translateX(3px)}
-.opt.go{background:linear-gradient(135deg,#0071e3,#00c6ff);border:none;box-shadow:0 4px 15px rgba(0,113,227,.35)}
-.opt.sug{border-color:#67e8f9}
-.chat-input{display:flex;gap:10px;padding:14px 16px;border-top:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06)}
-.chat-input input{flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.14);color:#fff;font-size:14.5px;outline:none}
-.chat-input input::placeholder{color:rgba(255,255,255,.6)}
-.chat-input input:focus{border-color:#67e8f9;background:rgba(255,255,255,.2)}
-.chat-input button{background:linear-gradient(135deg,#0071e3,#00c6ff);color:#fff;border:none;border-radius:12px;padding:0 22px;font-weight:700;font-size:14.5px;cursor:pointer;transition:all .2s}
-.chat-input button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,113,227,.45)}
+.opt{text-align:left;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:10px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s ease}
+.opt:hover{background:#f8fafc;border-color:#94a3b8;transform:translateX(3px)}
+.opt.go{background:#0071e3;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,113,227,.25)}
+.opt.go:hover{background:#0059b3;transform:translateY(-1px)}
+.opt.sug{border-color:#00a9e0;box-shadow:0 0 0 3px rgba(0,169,224,.12)}
+.chat-input{display:flex;gap:10px;padding:14px 16px;border-top:1px solid #e2e8f0;background:rgba(255,255,255,.5)}
+.input-chat-light{flex:1;min-width:0;padding:12px 14px;font-size:14.5px;outline:none;background:rgba(255,255,255,.9);border:1px solid #cbd5e1;color:#0f172a;border-radius:12px;transition:all .2s}
+.input-chat-light::placeholder{color:#94a3b8}
+.input-chat-light:focus{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.1)}
+.chat-input button{background:#0071e3;color:#fff;border:none;border-radius:10px;padding:0 22px;font-weight:600;font-size:14.5px;cursor:pointer;box-shadow:0 4px 14px rgba(0,113,227,.25);transition:all .2s ease}
+.chat-input button:hover{background:#0059b3;transform:translateY(-1px)}
 .chat-input button:disabled,.chat-input input:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.alt{text-align:center;font-size:12.5px;padding:0 0 12px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.06)}
-.alt a{color:#67e8f9;font-weight:700;text-decoration:none}
+.alt{text-align:center;font-size:12.5px;padding:0 0 12px;color:#64748b;background:rgba(255,255,255,.5)}
+.alt a{color:#0071e3;font-weight:700;text-decoration:none}
 .alt a:hover{text-decoration:underline}
-.lnk{display:inline-block;margin-top:8px;color:#67e8f9;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(103,232,249,.45)}
-@media(max-width:520px){.chat-glass{border-radius:18px;height:calc(100vh - 110px)}.msg{max-width:94%}.chat-head{padding:14px 16px 10px}.chat-head h2{font-size:17px}}
+.lnk{display:inline-block;margin-top:8px;color:#0071e3;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(0,113,227,.4)}
+@media(max-width:520px){.chat-glass{border-radius:16px;height:calc(100vh - 110px)}.msg{max-width:94%}.chat-head{padding:14px 16px 10px}.chat-head h2{font-size:17px}}
 </style>
-<div class="fondo-sistema-pqr">
-  <div class="top"><h1>Radicación de PQR</h1><a href="/pqr">← Volver al portal</a></div>
+<div class="fondo-corporativo-light">
+  <div class="top navbar-light-glass"><h1>Radicación de PQR</h1><a href="/pqr">← Volver al portal</a></div>
   <div class="centro-pqr">
-    <div class="chat-glass">
+    <div class="chat-glass tarjeta-corporativa-white">
       <div class="chat-head">
         <h2>Módulo de radicación de PQR</h2>
         <p>Responde a las preguntas presentadas en el chat</p>
@@ -48943,7 +48904,7 @@ html,body{margin:0;min-height:100vh;background:#0f172a;font-family:-apple-system
       </div>
       <div class="chat-log" id="log" aria-live="polite"></div>
       <div class="chat-input">
-        <input id="txt" type="text" list="dl" autocomplete="off" placeholder="Haz clic sobre una opción o escribe aquí, usa Enter" maxlength="200">
+        <input id="txt" class="input-chat-light" type="text" list="dl" autocomplete="off" placeholder="Haz clic sobre una opción o escribe aquí, usa Enter" maxlength="200">
         <datalist id="dl"></datalist>
         <button type="button" id="send">Enviar</button>
       </div>
@@ -49121,7 +49082,7 @@ function replay(){
 
 function addMsg(kind, text, label){
   var m = document.createElement("div");
-  m.className = "msg " + kind;
+  m.className = "msg " + kind + (kind === "bot" ? " globo-asistente-light" : " globo-usuario-light");
   if(kind === "bot"){ var s = document.createElement("small"); s.textContent = label || "Asistente IA"; m.appendChild(s); }
   m.appendChild(document.createTextNode(text));
   log.appendChild(m);
