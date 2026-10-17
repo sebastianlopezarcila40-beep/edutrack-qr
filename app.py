@@ -48859,8 +48859,6 @@ html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system
 .chat-head h2{margin:0;font-size:19px;font-weight:700;color:#0f172a}
 .chat-head p{margin:4px 0 10px;font-size:13px;color:#64748b}
 .chat-nav{display:flex;gap:8px;flex-wrap:wrap}
-.chat-nav button{background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
-.chat-nav button:hover{background:#f8fafc;border-color:#94a3b8}
 .prog{height:4px;background:#e2e8f0;border-radius:4px;margin-top:12px;overflow:hidden}
 #progbar{height:100%;width:0;background:linear-gradient(90deg,#00a9e0,#0071e3);transition:width .4s ease}
 .chat-log{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
@@ -48870,18 +48868,22 @@ html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system
 .globo-asistente-light small{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#64748b;margin-bottom:4px}
 .globo-usuario-light{align-self:flex-end;background:#00a9e0;color:#fff;font-weight:500;border-radius:16px 16px 4px 16px;box-shadow:0 4px 12px rgba(0,169,224,.2)}
 .opts{display:flex;flex-direction:column;gap:8px;align-self:flex-start;max-width:92%;animation:pop .3s ease}
-.opt{text-align:left;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:10px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s ease}
-.opt:hover{background:#f8fafc;border-color:#94a3b8;transform:translateX(3px)}
-.opt.go{background:#0071e3;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,113,227,.25)}
-.opt.go:hover{background:#0059b3;transform:translateY(-1px)}
-.opt.sug{border-color:#00a9e0;box-shadow:0 0 0 3px rgba(0,169,224,.12)}
 .chat-input{display:flex;gap:10px;padding:14px 16px;border-top:1px solid #e2e8f0;background:rgba(255,255,255,.5)}
-.input-chat-light{flex:1;min-width:0;padding:12px 14px;font-size:14.5px;outline:none;background:rgba(255,255,255,.9);border:1px solid #cbd5e1;color:#0f172a;border-radius:12px;transition:all .2s}
-.input-chat-light::placeholder{color:#94a3b8}
-.input-chat-light:focus{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.1)}
-.chat-input button{background:#0071e3;color:#fff;border:none;border-radius:10px;padding:0 22px;font-weight:600;font-size:14.5px;cursor:pointer;box-shadow:0 4px 14px rgba(0,113,227,.25);transition:all .2s ease}
-.chat-input button:hover{background:#0059b3;transform:translateY(-1px)}
-.chat-input button:disabled,.chat-input input:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.msg{font-weight:400}
+.chat-glass .pestana-navegacion-light{display:inline-block;background:rgba(255,255,255,.8)!important;border:1px solid #cbd5e1!important;color:#1e293b!important;font-weight:500;font-size:13px;border-radius:20px;padding:6px 16px;box-shadow:none!important;filter:none;transform:none;cursor:pointer}
+.chat-glass .pestana-navegacion-light:hover{background:#f0f7ff!important;border-color:#0071e3!important;color:#0071e3!important;box-shadow:none!important;filter:none;transform:none}
+.chat-glass .btn-seleccion-light{display:block;text-align:left;background:#ffffff!important;color:#0f172a!important;border:1px solid #e2e8f0!important;border-radius:12px;padding:14px 20px;font-weight:600;font-size:14px;box-shadow:0 4px 6px -1px rgba(0,0,0,.05)!important;filter:none;transition:all .2s ease;cursor:pointer}
+.chat-glass .btn-seleccion-light:hover{background:#f0f7ff!important;border-color:#0071e3!important;color:#0071e3!important;box-shadow:0 4px 6px -1px rgba(0,0,0,.05)!important;filter:none;transform:translateX(4px)}
+.chat-glass .btn-seleccion-light.sug{border-color:#00a9e0!important;box-shadow:0 0 0 3px rgba(0,169,224,.14)!important}
+.chat-glass .btn-seleccion-light.go{background:#0071e3!important;color:#fff!important;border:none!important;box-shadow:0 4px 14px rgba(0,113,227,.25)!important}
+.chat-glass .btn-seleccion-light.go:hover{background:#0059b3!important;color:#fff!important;border:none!important;transform:translateY(-1px)}
+.chat-glass .input-chat-light{flex:1;min-width:0;width:auto;margin:0;padding:12px 14px;font-size:14.5px;outline:none;color:#0f172a;background:rgba(255,255,255,.9)!important;border:1px solid #cbd5e1!important;border-radius:12px!important;box-shadow:none!important}
+.chat-glass .input-chat-light::placeholder{color:#94a3b8}
+.chat-glass .input-chat-light:focus{border-color:#0071e3!important;box-shadow:0 0 0 4px rgba(0,113,227,.1)!important}
+.chat-glass .chat-input{align-items:center}
+.chat-glass .chat-input button{align-self:stretch;background:#0071e3!important;color:#fff!important;border:none!important;border-radius:10px;padding:0 22px;font-weight:600;font-size:14.5px;box-shadow:0 4px 14px rgba(0,113,227,.25)!important;filter:none;cursor:pointer}
+.chat-glass .chat-input button:hover{background:#0059b3!important;transform:translateY(-1px)}
+.chat-glass .chat-input button:disabled,.chat-glass .chat-input input:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .alt{text-align:center;font-size:12.5px;padding:0 0 12px;color:#64748b;background:rgba(255,255,255,.5)}
 .alt a{color:#0071e3;font-weight:700;text-decoration:none}
 .alt a:hover{text-decoration:underline}
@@ -48896,9 +48898,9 @@ html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system
         <h2>Módulo de radicación de PQR</h2>
         <p>Responde a las preguntas presentadas en el chat</p>
         <div class="chat-nav">
-          <button type="button" id="nav-inicio">🏠 Inicio</button>
-          <button type="button" id="nav-resumen">📋 Resumen</button>
-          <button type="button" id="nav-atras">↩ Atrás</button>
+          <button type="button" class="pestana-navegacion-light" id="nav-inicio">🏠 Inicio</button>
+          <button type="button" class="pestana-navegacion-light" id="nav-resumen">📋 Resumen</button>
+          <button type="button" class="pestana-navegacion-light" id="nav-atras">↩ Atrás</button>
         </div>
         <div class="prog"><div id="progbar"></div></div>
       </div>
@@ -49093,7 +49095,7 @@ function addOpts(opts, sug){
   opts.forEach(function(o, i){
     var b = document.createElement("button");
     b.type = "button";
-    b.className = "opt" + (o[0] === "go" ? " go" : "") + (sug && o[0] === sug ? " sug" : "");
+    b.className = "btn-seleccion-light" + (o[0] === "go" ? " go" : "") + (sug && o[0] === sug ? " sug" : "");
     b.textContent = (o[0] === SKIP || o[0] === "__use" || o[0] === "go" || o[0] === "back" || o[0] === "reset") ? o[1] : ("👉 " + (i+1) + ". " + o[1]);
     b.addEventListener("click", function(){ submit(o[0], o[1]); });
     box.appendChild(b);
@@ -49304,9 +49306,92 @@ def pqr_chat_radicar():
     return jsonify({"ok": True, "radicado": formatear_radicado(rad), "fecha_estimada": est_sol})
 
 
+_PQR_CONSULTA_HTML = r"""
+<style>
+html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#334155}
+.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,113,227,.08),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.10),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh}
+.header-consulta-light{background:#ffffff;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:700;font-size:14px;letter-spacing:.5px;padding:16px 24px}
+.box-consulta{max-width:1400px;margin:0 auto;padding:24px 20px 40px}
+.panel-busqueda-light{background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,.02)}
+.panel-busqueda-light .titulo-filtro{font-size:14px;font-weight:700;color:#0f172a;margin:0 0 12px}
+.opciones-consulta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.opcion-consulta{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#475569;font-size:13.5px;font-weight:600;cursor:pointer;margin:0;transition:all .2s ease}
+.opcion-consulta:hover{background:#f8fafc;border-color:#94a3b8}
+.opcion-consulta:has(input:checked){background:#f0f7ff;border-color:#0071e3;color:#0071e3}
+.opcion-consulta input[type=radio]{width:16px!important;height:16px!important;min-height:0!important;margin:0!important;padding:0!important;accent-color:#0071e3;box-shadow:none!important;flex:none}
+.fila-busqueda{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.panel-busqueda-light .input-busqueda-ticket{flex:1 1 260px;width:100%;max-width:400px;margin:0;padding:10px 16px;font-size:14px;color:#0f172a;outline:none;background:#f8fafc!important;border:1px solid #cbd5e1!important;border-radius:8px!important;box-shadow:none!important}
+.panel-busqueda-light .input-busqueda-ticket::placeholder{color:#94a3b8}
+.panel-busqueda-light .input-busqueda-ticket:focus{background:#ffffff!important;border-color:#0071e3!important;box-shadow:0 0 0 4px rgba(0,113,227,.1)!important}
+.panel-busqueda-light .btn-buscar-light{background:#0071e3!important;color:#fff!important;border:none!important;border-radius:10px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,113,227,.25)!important;filter:none}
+.panel-busqueda-light .btn-buscar-light:hover{background:#0059b3!important;transform:translateY(-1px);filter:none}
+.panel-busqueda-light .lnk-regresar{color:#475569;font-weight:600;font-size:13.5px;text-decoration:none;padding:10px 6px}
+.panel-busqueda-light .lnk-regresar:hover{color:#0071e3;text-decoration:underline}
+.tbl-wrap{overflow-x:auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,.02);margin-top:20px}
+.pqr-tbl{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;margin:0}
+.pqr-tbl .tabla-pqr-headers{background:#f1f5f9!important}
+.pqr-tbl .tabla-pqr-headers th{background:#f1f5f9!important;color:#475569!important;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px;padding:12px 10px;white-space:nowrap;text-align:left;border-top:0;border-bottom:1px solid #e2e8f0}
+.pqr-tbl .tabla-pqr-fila{background:#ffffff;transition:background .2s ease}
+.pqr-tbl .tabla-pqr-fila:hover{background:#f8fafc}
+.pqr-tbl .tabla-pqr-fila td{color:#334155;font-size:13px;padding:14px 10px;border-bottom:1px solid #f1f5f9;text-align:left;vertical-align:top;max-width:200px;word-break:break-word}
+.pqr-tbl .tabla-pqr-fila:last-child td{border-bottom:0}
+.pqr-tbl td.vacio-tabla{text-align:center;padding:28px 10px;color:#64748b;max-width:none}
+.pqr-tbl td.cierre-full{max-width:420px;white-space:pre-wrap;line-height:1.4}
+.chip-estado{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.chip-ok{background:#dcfce7;color:#166534}.chip-wip{background:#fef3c7;color:#92400e}.chip-new{background:#e0f2fe;color:#075985}.chip-neu{background:#f1f5f9;color:#475569}
+.aviso-sin-datos{margin-top:20px;padding:16px 20px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;color:#b91c1c;font-weight:600;font-size:14px}
+@media(max-width:560px){.box-consulta{padding:16px 12px 32px}.header-consulta-light{padding:14px 16px}.panel-busqueda-light{padding:18px}.panel-busqueda-light .btn-buscar-light{width:100%}}
+</style>
+<div class="fondo-corporativo-light">
+  <div class="header-consulta-light">CONSULTA INFORMACIÓN DEL TICKET</div>
+  <div class="box-consulta">
+    <form class="panel-busqueda-light" method="POST">
+      <div class="titulo-filtro">Seleccione el tipo de consulta</div>
+      <div class="opciones-consulta">
+        <label class="opcion-consulta"><input type="radio" name="tipo_consulta" value="ticket" __CHK_T__><span>Por número de radicado / ticket</span></label>
+        <label class="opcion-consulta"><input type="radio" name="tipo_consulta" value="documento" __CHK_D__><span>Por Nro. de documento</span></label>
+      </div>
+      <div class="fila-busqueda">
+        <input class="input-busqueda-ticket" type="text" name="clave" value="__CLAVE__" placeholder="Ticket, Número de Radicado o documento" required>
+        <button type="submit" class="btn-buscar-light">Consultar</button>
+        <a href="/pqr" class="lnk-regresar">Regresar</a>
+      </div>
+    </form>
+    __RESULTADO__
+  </div>
+</div>
+"""
+
+_PQR_CONSULTA_COLS = (
+    "Nro ticket", "Número de Radicado", "Cliente", "Tipo Requerimiento", "SubTipo",
+    "Petición / Queja / Recurso", "Motivo", "Fecha Creación", "Fecha Estimada Solución",
+    "Estado", "Estado del Radicado", "Medio de Ingreso", "Canal de Ingreso", "Descripción Cierre",
+)
+
+
+def _pqr_consulta_thead():
+    return ('<thead class="tabla-pqr-headers"><tr>'
+            + "".join("<th>%s</th>" % c for c in _PQR_CONSULTA_COLS)
+            + "</tr></thead>")
+
+
+def _pqr_chip_estado(txt):
+    """Estado como etiqueta de color (solo presentación)."""
+    t = (txt or "").lower()
+    if any(k in t for k in ("cerr", "respond", "resuel", "solucion")):
+        cls = "ok"
+    elif any(k in t for k in ("proceso", "asign", "tramit", "trámit", "revis")):
+        cls = "wip"
+    elif "radic" in t:
+        cls = "new"
+    else:
+        cls = "neu"
+    return '<span class="chip-estado chip-%s">%s</span>' % (cls, _esc(txt or "—"))
+
+
 @app.route("/pqr/consulta", methods=["GET", "POST"])
 def pqr_consulta():
-    """Consulta estilo operatoria: tabla con todas las columnas del ticket."""
+    """Consulta pública de tickets: panel de búsqueda + tabla de resultados."""
     resultado = ""
     tipo_consulta = (request.values.get("tipo_consulta") or "ticket").strip()
     clave = (request.values.get("clave") or "").strip()
@@ -49324,7 +49409,7 @@ def pqr_consulta():
             )
         tickets = q.order_by(TicketPQR.id.desc()).limit(50).all()
         if not tickets:
-            resultado = '<div style="padding:12px;color:#b91c1c;font-weight:700">No se encontró información del ticket.</div>'
+            resultado = '<div class="aviso-sin-datos">No se encontró información del ticket.</div>'
         else:
             filas = []
             for t in tickets:
@@ -49333,84 +49418,41 @@ def pqr_consulta():
                 cierre = (t.descripcion_cierre or t.respuesta or "")
                 cun = formatear_radicado(t.nro_cun or t.radicado)
                 filas.append(
-                    "<tr>"
-                    f"<td>{t.ticket or '—'}</td>"
-                    f"<td>{cun}</td>"
-                    f"<td>{cliente}</td>"
-                    f"<td>{t.tipo_pqr or '—'}</td>"
-                    f"<td>{t.subtipo or '—'}</td>"
-                    f"<td>{t.tipo_pqr or '—'}</td>"
-                    f"<td>{motivo or '—'}</td>"
-                    f"<td>{t.fecha or '—'} {t.hora or ''}</td>"
-                    f"<td>{t.fecha_estimada or '—'}</td>"
-                    f"<td><b>{t.estado or '—'}</b></td>"
-                    f"<td>{t.estado_cun or t.estado or '—'}</td>"
-                    f"<td>{t.medio_ingreso or 'Web'}</td>"
-                    f"<td>{t.canal or '—'}</td>"
-                    f"<td class=\"cierre-full\">{(cierre or '—').replace('<','&lt;').replace(chr(10),'<br>')}</td>"
+                    '<tr class="tabla-pqr-fila">'
+                    f"<td>{_esc(t.ticket or '—')}</td>"
+                    f"<td>{_esc(cun)}</td>"
+                    f"<td>{_esc(cliente)}</td>"
+                    f"<td>{_esc(t.tipo_pqr or '—')}</td>"
+                    f"<td>{_esc(t.subtipo or '—')}</td>"
+                    f"<td>{_esc(t.tipo_pqr or '—')}</td>"
+                    f"<td>{_esc(motivo or '—')}</td>"
+                    f"<td>{_esc(t.fecha or '—')} {_esc(t.hora or '')}</td>"
+                    f"<td>{_esc(t.fecha_estimada or '—')}</td>"
+                    f"<td>{_pqr_chip_estado(t.estado)}</td>"
+                    f"<td>{_esc(t.estado_cun or t.estado or '—')}</td>"
+                    f"<td>{_esc(t.medio_ingreso or 'Web')}</td>"
+                    f"<td>{_esc(t.canal or '—')}</td>"
+                    f'<td class="cierre-full">{_esc(cierre or "—").replace(chr(10), "<br>")}</td>'
                     "</tr>"
                 )
             resultado = (
-                '<div class="tbl-wrap"><table class="pqr-tbl"><thead><tr>'
-                "<th>Nro ticket</th><th>Número de Radicado</th><th>Cliente</th>"
-                "<th>Tipo Requerimiento</th><th>SubTipo</th>"
-                "<th>Petición / Queja / Recurso</th><th>Motivo</th>"
-                "<th>Fecha Creación</th><th>Fecha Estimada Solución</th>"
-                "<th>Estado</th><th>Estado del Radicado</th>"
-                "<th>Medio de Ingreso</th><th>Canal de Ingreso</th>"
-                "<th>Descripción Cierre</th>"
-                "</tr></thead><tbody>"
-                + "".join(filas)
-                + "</tbody></table></div>"
+                '<div class="tbl-wrap"><table class="pqr-tbl">' + _pqr_consulta_thead()
+                + "<tbody>" + "".join(filas) + "</tbody></table></div>"
             )
-    chk_t = "checked" if tipo_consulta != "documento" else ""
-    chk_d = "checked" if tipo_consulta == "documento" else ""
-    clave_safe = clave.replace('"', "")
-    empty_table = (
-        '<div class="tbl-wrap"><table class="pqr-tbl"><thead><tr>'
-        "<th>Nro ticket</th><th>Número de Radicado</th><th>Cliente</th>"
-        "<th>Tipo Requerimiento</th><th>SubTipo</th>"
-        "<th>Petición / Queja / Recurso</th><th>Motivo</th>"
-        "<th>Fecha Creación</th><th>Fecha Estimada Solución</th>"
-        "<th>Estado</th><th>Estado del Radicado</th>"
-        "<th>Medio de Ingreso</th><th>Canal de Ingreso</th>"
-        "<th>Descripción Cierre</th></tr></thead>"
-        '<tbody><tr><td colspan="14" style="text-align:center;padding:16px;color:#64748b">'
-        "Seleccione el tipo de consulta e ingrese el dato.</td></tr></tbody></table></div>"
-    )
-    body = f"""
-<style>
-body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#fff;color:#111}}
-.bar{{background:linear-gradient(90deg,#1e3a5f,#2563eb);color:#fff;padding:8px 14px;font-weight:800;font-size:13px}}
-.box{{padding:16px 14px 24px}}
-.filt{{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0}}
-.filt input[type=text]{{padding:6px 10px;border:1px solid #94a3b8;min-width:200px}}
-.filt button{{background:#0B2D57;color:#fff;border:0;padding:7px 14px;font-weight:700;cursor:pointer}}
-.tbl-wrap{{overflow-x:auto;border:1px solid #94a3b8}}
-.pqr-tbl{{border-collapse:collapse;width:max-content;min-width:100%;font-size:11px}}
-.pqr-tbl th{{background:#9ca3af;color:#111;border:1px solid #6b7280;padding:6px 8px;white-space:nowrap}}
-.pqr-tbl td{{border:1px solid #9ca3af;padding:5px 7px;vertical-align:top;max-width:160px}}
-.pqr-tbl tbody tr:nth-child(even){{background:#f3f4f6}}
-.cierre-full{{max-width:420px!important;white-space:pre-wrap;word-break:break-word;text-align:left;line-height:1.35;font-size:11px}}
-</style>
-<div class="bar">CONSULTA INFORMACIÓN DEL TICKET</div>
-<div class="box">
-  <form class="filt" method="POST">
-    <div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:6px">Seleccione el Tipo de Consulta</div>
-      <label><input type="radio" name="tipo_consulta" value="ticket" {chk_t}> por Número de Radicado / Ticket</label>
-      &nbsp;
-      <label><input type="radio" name="tipo_consulta" value="documento" {chk_d}> por Nro Documento</label>
-    </div>
-    <div>
-      <input type="text" name="clave" value="{clave_safe}" placeholder="Ticket, Número de Radicado o documento" required>
-      <button type="submit">Consultar</button>
-      <a href="/pqr" style="margin-left:8px;font-size:13px">Regresar</a>
-    </div>
-  </form>
-  {resultado if resultado else empty_table}
-</div>
-"""
+    if not resultado:
+        resultado = (
+            '<div class="tbl-wrap"><table class="pqr-tbl">' + _pqr_consulta_thead()
+            + '<tbody><tr class="tabla-pqr-fila"><td class="vacio-tabla" colspan="%d">'
+            "Seleccione el tipo de consulta e ingrese el dato.</td></tr></tbody></table></div>"
+            % len(_PQR_CONSULTA_COLS)
+        )
+    mapa = {
+        "CHK_T": "checked" if tipo_consulta != "documento" else "",
+        "CHK_D": "checked" if tipo_consulta == "documento" else "",
+        "CLAVE": _esc(clave),
+        "RESULTADO": resultado,
+    }
+    body = re.sub(r"__(CHK_T|CHK_D|CLAVE|RESULTADO)__", lambda m: mapa[m.group(1)], _PQR_CONSULTA_HTML)
     return page("Consultar PQR", body)
 
 
