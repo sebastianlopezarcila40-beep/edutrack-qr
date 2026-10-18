@@ -8095,6 +8095,47 @@ def buscar_estudiante_por_codigo_doc_nombre(valor):
     )).first()
 
 
+def _norm_busq(t):
+    """Minúsculas y sin tildes, para comparar nombres."""
+    import unicodedata as _ud
+    return "".join(c for c in _ud.normalize("NFD", (t or "").lower()) if _ud.category(c) != "Mn")
+
+
+def _buscar_estudiantes_texto(base_query, texto, limite=80):
+    """Búsqueda tolerante: varias palabras (nombre y apellido en cualquier orden), código, documento y sin tildes."""
+    texto = (texto or "").strip()
+    if not texto:
+        return []
+    tokens = [t for t in re.split(r"\s+", texto) if t]
+    cols = [Estudiante.codigo, Estudiante.documento, Estudiante.nombre, Estudiante.apellido]
+    for extra in ("nombre1", "nombre2", "apellido1", "apellido2"):
+        if hasattr(Estudiante, extra):
+            cols.append(getattr(Estudiante, extra))
+    qy = base_query
+    for t in tokens:
+        like = "%" + t + "%"
+        qy = qy.filter(or_(*[c.ilike(like) for c in cols]))
+    res = []
+    try:
+        res = qy.order_by(Estudiante.apellido.asc()).limit(limite).all()
+    except Exception as ex:
+        print("buscar estudiantes sql:", ex)
+        db.session.rollback()
+    if not res:
+        nt = [_norm_busq(t) for t in tokens]
+        try:
+            for e in base_query.order_by(Estudiante.apellido.asc()).limit(4000).all():
+                blob = _norm_busq(" ".join(str(getattr(e, c, "") or "") for c in
+                                           ("codigo", "documento", "nombre", "apellido", "nombre1", "nombre2", "apellido1", "apellido2")))
+                if all(t in blob for t in nt):
+                    res.append(e)
+                    if len(res) >= limite:
+                        break
+        except Exception as ex:
+            print("buscar estudiantes py:", ex)
+    return res
+
+
 def limpiar_codigo(texto):
     texto = (texto or "").strip()
     texto = texto.replace("\r", "\n")
@@ -9428,7 +9469,7 @@ def generar_pdf_respuesta_pqr(t):
 
 
 
-def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO", fecha_limite=""):
+def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO", fecha_limite="", inst=None):
     """Correo de confirmación al radicar una PQR (padre, colegio o público).
     Usa Resend en Railway Hobby. Incluye fecha máxima de respuesta (15 días hábiles)."""
     if not destino:
@@ -9460,6 +9501,48 @@ def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO
         return f or "—"
     fecha_rad_v = _fmt_fecha(fecha_rad)
     fecha_lim_v = _fmt_fecha(fecha_limite)
+    # PQR de padres de familia: el correo lleva el CUN y la marca del COLEGIO (nada de PROCSIS)
+    if canal == "PADRES_COLEGIO":
+        try:
+            if inst is None and ticket:
+                _tk = TicketPQR.query.filter_by(ticket=ticket).first()
+                if _tk and _tk.institucion_id:
+                    inst = Institucion.query.get(_tk.institucion_id)
+            colegio = ((getattr(inst, "nombre", "") or "").strip() or "Institución educativa")
+            h_col = f"""
+<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
+  <div style="background:#0B2D57;color:#fff;padding:22px 26px">
+    <div style="font-size:19px;font-weight:800">{_esc(colegio)}</div>
+    <div style="font-size:12px;opacity:.85;margin-top:2px">Atención a padres de familia y acudientes · PQR</div>
+  </div>
+  <div style="padding:22px 26px;color:#0f172a;font-size:14px;line-height:1.65">
+    <p>Apreciado(a) padre, madre o acudiente,</p>
+    <p><b>{_esc(colegio)}</b> recibió correctamente su solicitud. Conserve este número para consultar el estado de su caso.</p>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;margin:18px 0">
+      <p style="margin:0 0 8px"><span style="background:#facc15;color:#0f172a;font-weight:800;padding:4px 10px;border-radius:4px">CUN: {radicado_fmt}</span></p>
+      <p style="margin:0 0 8px"><b>Tipo / asunto:</b> {_esc((subtipo or "PQR")[:80])}</p>
+      <p style="margin:0 0 8px"><b>Fecha de radicación:</b> {fecha_rad_v}</p>
+      <p style="margin:0"><b>Fecha máxima de respuesta:</b> {fecha_lim_v} <span style="color:#64748b">(15 días hábiles)</span></p>
+    </div>
+    <p style="margin-top:20px">Cordialmente,<br><b>{_esc(colegio)}</b></p>
+  </div>
+  <div style="padding:12px 26px;font-size:11px;color:#94a3b8;text-align:center">
+    Mensaje informativo enviado por {_esc(colegio)}. No responda a este correo.
+  </div>
+</div>"""
+            msg = EmailMessage()
+            msg["Subject"] = f"Hemos recibido su solicitud · CUN {radicado_fmt} · {colegio}"
+            msg["From"] = '"%s" <%s>' % (colegio.replace('"', ""), correo_envio)
+            msg["To"] = destino
+            msg.set_content(f"Apreciado(a) padre, madre o acudiente,\n\n{colegio} recibió su solicitud.\n"
+                            f"CUN: {radicado_fmt}\nFecha de radicación: {fecha_rad_v}\n"
+                            f"Fecha máxima de respuesta: {fecha_lim_v} (15 días hábiles).\n\n{colegio}")
+            msg.add_alternative(h_col, subtype="html")
+            _smtp_enviar(msg, correo_envio, password)
+            return True
+        except Exception as e:
+            print("PQR padres email error:", e)
+            return False
     # Centro de Notificaciones: si la automatización «pqr_creada» está activa, se envía la plantilla configurada
     try:
         if _nt_auto("pqr_creada", destino, {
@@ -9834,7 +9917,8 @@ def _aislamiento_roles_tenant():
             # Forzar el rol de sesión; no aceptar override
             pass
         # Congelar rol de login
-        if session.get("rol_fijo") and session.get("rol") and session.get("rol") != session.get("rol_fijo"):
+        if (session.get("rol_fijo") and session.get("rol") and session.get("rol") != session.get("rol_fijo")
+                and not session.get("impersonate")):
             session["rol"] = session["rol_fijo"]
         r = rol_actual()
         if r in _ROLES_COLEGIO or r == "Docente":
@@ -17418,7 +17502,7 @@ def usuarios():
                 mensaje = "Los usuarios de Soporte, Ventas y Gerencia se gestionan solo desde el portal de Gerencia."
                 tipo_msg = "danger"
                 rol = ""  # abort create below
-            temp = request.form.get("password", "Colegio2026*").strip() or "Colegio2026*"
+            temp = request.form.get("password", "").strip() or _clave_temporal()
             correo = request.form.get("correo", "").strip()
             grupo = request.form.get("grupo_docente", "").strip()
             grados = request.form.get("grados_clase", "").strip()
@@ -17429,31 +17513,35 @@ def usuarios():
                 inst_new = filt_inst or iid
             if not rol:
                 pass  # mensaje ya asignado (roles internos solo Gerencia)
-            elif not usuario:
-                mensaje = "Escribe un nombre de usuario."
-                tipo_msg = "danger"
-            elif rol != "Soporte" and not inst_new:
+            elif not inst_new:
                 mensaje = "Selecciona la institución del usuario."
                 tipo_msg = "danger"
-            elif Usuario.query.filter(func.lower(Usuario.usuario) == usuario.lower()).first():
-                mensaje = f"El usuario '{usuario}' ya existe."
+            elif not _acc_cedula_valida(request.form.get("cedula")):
+                mensaje = "La cédula es obligatoria (solo números, 5 a 12 dígitos): será el ID de acceso."
+                tipo_msg = "danger"
+            elif not (request.form.get("nombre_completo") or "").strip():
+                mensaje = "Escribe el nombre completo."
+                tipo_msg = "danger"
+            elif not _NT_EMAIL_RE.match(correo):
+                mensaje = "El correo es obligatorio y válido: allí se envía el ID y la clave temporal."
                 tipo_msg = "danger"
             else:
                 try:
-                    db.session.add(Usuario(
-                        usuario=usuario,
-                        password=crear_hash(temp),
-                        rol=rol,
-                        correo=correo,
-                        grupo_docente=grupo,
-                        grados_clase=grados,
-                        password_temporal=True,
-                        institucion_id=(None if rol == "Soporte" else inst_new),
-                    ))
-                    db.session.commit()
-                    mensaje = f"Usuario creado · ID de acceso: {id_acceso_de_usuario(usuario) or '—'} · Rol: {rol} · Clave temporal: {temp}"
-                    tipo_msg = "ok"
-                    registrar_auditoria("Crear usuario", f"{usuario} rol {rol} inst {inst_new}")
+                    _inst_u = Institucion.query.get(inst_new)
+                    _nu, _eu = _crear_usuario_colegio(_inst_u, rol, request.form.get("cedula"),
+                                                      request.form.get("nombre_completo"), correo, temp, grupo, grados)
+                    if _eu:
+                        db.session.rollback()
+                        mensaje = _eu
+                        tipo_msg = "danger"
+                    else:
+                        db.session.commit()
+                        _ced_ok = _acc_cedula_valida(request.form.get("cedula"))
+                        _env = _enviar_credenciales_usuario(correo, _nu.nombre_completo, _ced_ok, temp, rol, _inst_u)
+                        mensaje = (f"Usuario creado · ID de acceso (cédula): {_ced_ok} · Rol: {rol} · Clave temporal: {temp} · "
+                                   + ("correo enviado." if _env else "no se pudo enviar el correo: entrégale la clave manualmente."))
+                        tipo_msg = "ok"
+                        registrar_auditoria("Crear usuario", f"{_ced_ok} rol {rol} inst {inst_new}")
                 except Exception as ex:
                     db.session.rollback()
                     mensaje = f"Error al guardar: {ex}"
@@ -17650,7 +17738,8 @@ def usuarios():
   <form method="POST">
     <input type="hidden" name="accion" value="crear">
     <div class="form-row">
-      <div><label>Usuario *</label><input name="usuario" required placeholder="ej. nelson_sj"></div>
+      <div><label>Cédula * (será el ID de acceso)</label><input name="cedula" required inputmode="numeric" pattern="[0-9]{5,12}" placeholder="Solo números"></div>
+      <div><label>Nombre completo *</label><input name="nombre_completo" required></div>
       <div><label>Rol *</label>
         <select name="rol">
           <option>Rectoría</option>
@@ -17663,10 +17752,10 @@ def usuarios():
     </div>
     <div class="form-row">
       <div><label>Institución</label><select name="institucion_id">{opts_inst}</select></div>
-      <div><label>Clave temporal</label><input name="password" value="Colegio2026*"></div>
+      <div><label>Clave temporal</label><input name="password" placeholder="Vacío = se genera automática"></div>
     </div>
     <div class="form-row">
-      <div><label>Correo</label><input name="correo" type="email"></div>
+      <div><label>Correo * (recibe ID y clave)</label><input name="correo" type="email" required></div>
       <div><label>Grupo docente</label><input name="grupo_docente" placeholder="Ej. 8-A"></div>
     </div>
     <label>Grados que dicta (docente)</label>
@@ -20724,6 +20813,7 @@ def eduaura():
 
     es_docente = rol_actual() == "Docente"
     grado = (request.args.get("grado") or "").strip()
+    q_busq = (request.args.get("q") or "").strip()
     asignatura = (request.args.get("asignatura") or "").strip()
     periodo = (request.args.get("periodo") or periodo_actual() or "Periodo 1").strip()
     rango = request.args.get("rango", "30")
@@ -20753,6 +20843,8 @@ def eduaura():
             grado = (lista_grados[0] if lista_grados else "")
         if asignatura and lista_mats and asignatura not in lista_mats:
             asignatura = lista_mats[0] if lista_mats else ""
+        if not grado and not q_busq and lista_grados:
+            grado = lista_grados[0]  # sin grado elegido, mostrar el primero para que la lista nunca salga vacía
     else:
         lista_grados = grados_disponibles()
         lista_mats = todas_materias() if not grado else (materias_para_grado(grado) or todas_materias())
@@ -20760,17 +20852,25 @@ def eduaura():
     # --- Panel DOCENTE: KPIs + lista de clase ---
     if es_docente:
         ests = []
-        if grado:
+        if grado or q_busq:
             try:
-                ests = (
-                    q_estudiantes()
-                    .filter(Estudiante.grado == grado)
-                    .order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc())
-                    .limit(200)
-                    .all()
-                )
+                def _cond_grado(g):
+                    gn = (g or "").replace("°", "").strip()
+                    return or_(Estudiante.grado == g, Estudiante.grado == gn,
+                               Estudiante.grado.like(gn + "%"), Estudiante.grado.like(gn + "°%"))
+                _qb = q_estudiantes().filter(or_(Estudiante.estado.is_(None),
+                                                 Estudiante.estado.notin_(["RETIRADO", "RETIRADA", "INACTIVO"])))
+                if grado:
+                    _qb = _qb.filter(_cond_grado(grado))
+                elif lista_grados:
+                    _qb = _qb.filter(or_(*[_cond_grado(g) for g in lista_grados]))
+                if q_busq:
+                    _ids_b = [x.id for x in _buscar_estudiantes_texto(_qb, q_busq, 200)]
+                    _qb = _qb.filter(Estudiante.id.in_(_ids_b or [0]))
+                ests = _qb.order_by(Estudiante.apellido.asc(), Estudiante.nombre.asc()).limit(200).all()
             except Exception as _eq:
                 print("eduaura ests:", _eq)
+                db.session.rollback()
                 ests = []
         # Promedios y faltas por estudiante (aunque no haya notas aún)
         iid = institucion_id_actual()
@@ -20880,7 +20980,7 @@ def eduaura():
                 </td>
                 </tr>"""
             )
-        filas_html = "".join(filas) or '<tr><td colspan="5">Seleccione grado (y materia si desea promedios por asignatura). Si ya eligió grado, la lista de estudiantes debe aparecer abajo aunque aún no tengan notas.</td></tr>'
+        filas_html = "".join(filas) or '<tr><td colspan="5">No se encontraron estudiantes con esos filtros. Pruebe con otro grado o borre el texto de búsqueda.</td></tr>'
 
         kpi_prom = f"{prom_grupo:.1f} / 5.0" if prom_grupo is not None else "—"
         content = f"""
@@ -20917,9 +21017,10 @@ def eduaura():
   <p>Filtra por grado y materia. La IA redacta observaciones, planes de mejoramiento y alertas Saber 11 con base en notas y faltas reales.</p>
 </div>
 <form class="ea-filters" method="GET" action="/eduaura">
-  <div><label>Grado / grupo *</label><select name="grado" required>
-    <option value="">— Seleccionar grado —</option>{grados_opts}
+  <div><label>Grado / grupo</label><select name="grado">
+    <option value="">— Todos mis grados —</option>{grados_opts}
   </select></div>
+  <div><label>Buscar estudiante</label><input name="q" value="{_esc(q_busq)}" placeholder="Nombre, apellido, código o documento" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;min-width:200px"></div>
   <div><label>Materia (opcional para listar)</label><select name="asignatura">
     <option value="">— Todas / sin filtro de materia —</option>{mats_opts}
   </select></div>
@@ -23870,7 +23971,7 @@ def ventas_comprar():
         rector = (request.form.get("rector") or "").strip()
         telefono = (request.form.get("telefono") or "").strip()
         correo = (request.form.get("correo") or "").strip()
-        asesor = (request.form.get("asesor") or session.get("usuario") or "").strip()
+        asesor = (session.get("usuario") or request.form.get("asesor") or "").strip()
         foto = request.files.get("logo_colegio")
         rector_nombre = (request.form.get("rector_nombre") or rector or "").strip()
         secretaria_nombre = (request.form.get("secretaria_nombre") or "").strip() or ("Secretaria " + (nombre[:40] if nombre else "IE"))
@@ -24015,8 +24116,16 @@ def ventas_comprar():
                             ("Coordinación", (coord_usuario or "").strip().lower(),
                              (coord_nombre or "").strip()),
                         ]
+                        _campos_u = {"Rectoría": ("rector_doc", "rector_correo"),
+                                     "Secretaría": ("secretaria_doc", "secretaria_correo"),
+                                     "Coordinación": ("coord_doc", "coord_correo")}
+                        _por_correo = []
                         for rol_u, uname, nom_completo in pares:
                             uname = "".join(ch for ch in uname if ch.isalnum() or ch in "._-")[:40]
+                            _cdoc, _ccor = _campos_u[rol_u]
+                            _ced_u = _acc_cedula_valida(request.form.get(_cdoc))
+                            if _ced_u:
+                                uname = _ced_u  # el usuario de ingreso es la cédula
                             if not uname:
                                 continue
                             if Usuario.query.filter_by(usuario=uname).first():
@@ -24038,16 +24147,25 @@ def ventas_comprar():
                                     nu.nombre = nom_completo[:120]
                                 except Exception:
                                     pass
+                            nu.correo = ((request.form.get(_ccor) or (correo if rol_u == "Rectoría" else "")) or "").strip()[:160]
+                            try:
+                                nu.nombre_completo = (nom_completo or "")[:160]
+                            except Exception:
+                                pass
                             db.session.add(nu)
-                            if rol_u == "Rectoría":
-                                _acc_asignar_cedula(nu, request.form.get("rector_doc"))  # si falla, queda ID provisional
+                            _acc_asignar_cedula(nu, request.form.get(_cdoc))  # si falla, queda ID provisional
                             try:
                                 db.session.flush()
                             except Exception:
                                 pass
                             creds_creadas.append(f"{rol_u}: {uname} ({nom_completo or '—'})")
                             creds_ids.append(f"{rol_u}: ID {id_acceso_plano(nu) or '—'} ({nom_completo or '—'})")
+                            _por_correo.append((nu, rol_u))
                         db.session.commit()
+                        for _nu2, _rol2 in _por_correo:
+                            if (_nu2.correo or "").strip():
+                                _enviar_credenciales_usuario(_nu2.correo, _nu2.nombre_completo or "", id_acceso_plano(_nu2) or _nu2.usuario,
+                                                             temp_pass, _rol2, inst)
                         if creds_creadas:
                             registrar_auditoria(
                                 "Alta usuarios colegio",
@@ -24244,18 +24362,22 @@ def ventas_comprar():
 
         <label>Rector(a) — nombre completo *</label>
         <input form="form-activar-plan" name="rector_nombre" placeholder="Nombre del rector o rectora">
-        <label>Usuario de ingreso Rectoría *</label>
-        <input form="form-activar-plan" name="rector_usuario" placeholder="Ej: rector.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+        <label>Correo de Rectoría * (recibe ID y clave)</label>
+        <input form="form-activar-plan" name="rector_correo" type="email" placeholder="correo del rector(a)">
 
         <label>Secretaria(o) — nombre completo *</label>
         <input form="form-activar-plan" name="secretaria_nombre" placeholder="Nombre de secretaría académica">
-        <label>Usuario de ingreso Secretaría *</label>
-        <input form="form-activar-plan" name="secretaria_usuario" placeholder="Ej: secretaria.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+        <label>Cédula de Secretaría * (será su ID de acceso)</label>
+        <input form="form-activar-plan" name="secretaria_doc" inputmode="numeric" placeholder="Solo números">
+        <label>Correo de Secretaría * (recibe ID y clave)</label>
+        <input form="form-activar-plan" name="secretaria_correo" type="email" placeholder="correo de secretaría">
 
         <label>Coordinador(a) — nombre completo *</label>
         <input form="form-activar-plan" name="coord_nombre" placeholder="Nombre de coordinación">
-        <label>Usuario de ingreso Coordinación *</label>
-        <input form="form-activar-plan" name="coord_usuario" placeholder="Ej: coord.sanmartin" pattern="[A-Za-z0-9._-]{{3,40}}">
+        <label>Cédula de Coordinación * (será su ID de acceso)</label>
+        <input form="form-activar-plan" name="coord_doc" inputmode="numeric" placeholder="Solo números">
+        <label>Correo de Coordinación * (recibe ID y clave)</label>
+        <input form="form-activar-plan" name="coord_correo" type="email" placeholder="correo de coordinación">
 
         <label>Clave temporal compartida (mín. 8 caracteres) *</label>
         <input form="form-activar-plan" name="clave_temporal" minlength="8" value="Colegio2026*" placeholder="La cambiarán al entrar">
@@ -32744,6 +32866,9 @@ def soporte_impersonar():
             session["institucion_id"] = u.institucion_id
             session["grupo_docente"] = getattr(u, "grupo_docente", None) or ""
             session["impersonating"] = True
+            session["impersonate"] = True
+            session["rol_fijo"] = u.rol  # los filtros de seguridad devolvían el rol a Soporte
+            session.pop("ultimo_movimiento", None)
             try:
                 sincronizar_inst_globals()
             except Exception:
@@ -32795,8 +32920,10 @@ def soporte_dejar_impersonar():
     session["rol"] = imp.get("rol")
     session["user_id"] = imp.get("user_id")
     session["institucion_id"] = imp.get("institucion_id")
+    session["rol_fijo"] = imp.get("rol")
     session.pop("impersonator", None)
     session.pop("impersonating", None)
+    session.pop("impersonate", None)
     try:
         sincronizar_inst_globals()
     except Exception:
@@ -40618,34 +40745,40 @@ def soporte_usuarios_institucion(id):
     mensaje = session.pop("flash_usuarios", "") or ""
     tipo = "ok" if mensaje and "Error" not in mensaje and "ya existe" not in mensaje else ("danger" if mensaje else "ok")
     if request.method == "POST":
-        usuario = (request.form.get("usuario") or "").strip()
-        password = (request.form.get("password") or "Colegio2026*").strip() or "Colegio2026*"
+        password = (request.form.get("password") or "").strip() or _clave_temporal()
         rol = (request.form.get("rol") or "Docente").strip()
         correo = (request.form.get("correo") or "").strip()
         grupo = (request.form.get("grupo_docente") or "").strip()
         grados = (request.form.get("grados_clase") or "").strip()
-        if not usuario:
-            mensaje = "Escribe un usuario."
+        _ced = _acc_cedula_valida(request.form.get("cedula"))
+        if request.form.get("accion") in ("activar", "desactivar"):
+            pass  # se procesa más abajo
+        elif rol in ROLES_INTERNOS:
+            mensaje = "Los roles internos se gestionan solo desde Gerencia."
             tipo = "danger"
-        elif Usuario.query.filter(func.lower(Usuario.usuario) == usuario.lower()).first():
-            mensaje = f"El usuario '{usuario}' ya existe. Prueba con {usuario}_{inst.codigo.lower()}."
+        elif not _ced:
+            mensaje = "La cédula es obligatoria (solo números, 5 a 12 dígitos): será el ID de acceso."
+            tipo = "danger"
+        elif not (request.form.get("nombre_completo") or "").strip():
+            mensaje = "Escribe el nombre completo."
+            tipo = "danger"
+        elif not _NT_EMAIL_RE.match(correo):
+            mensaje = "El correo es obligatorio y válido: allí se envía el ID y la clave temporal."
             tipo = "danger"
         else:
             try:
-                db.session.add(Usuario(
-                    usuario=usuario,
-                    password=crear_hash(password),
-                    rol=rol,
-                    correo=correo,
-                    grupo_docente=grupo,
-                    grados_clase=grados,
-                    institucion_id=inst.id,
-                    password_temporal=True,
-                ))
-                db.session.commit()
-                mensaje = f"Creado · ID de acceso: {id_acceso_de_usuario(usuario) or '—'} · {rol} · clave {password} · colegio {inst.codigo}"
-                tipo = "ok"
-                registrar_auditoria("Soporte crear usuario", f"{usuario} → {inst.codigo}")
+                _nu, _eu = _crear_usuario_colegio(inst, rol, _ced, request.form.get("nombre_completo"), correo, password, grupo, grados)
+                if _eu:
+                    db.session.rollback()
+                    mensaje = _eu
+                    tipo = "danger"
+                else:
+                    db.session.commit()
+                    _env = _enviar_credenciales_usuario(correo, _nu.nombre_completo, _ced, password, rol, inst)
+                    mensaje = (f"Creado · ID de acceso (cédula): {_ced} · {rol} · clave temporal {password} · colegio {inst.codigo} · "
+                               + ("correo enviado." if _env else "no se pudo enviar el correo: entrégale la clave manualmente."))
+                    tipo = "ok"
+                    registrar_auditoria("Soporte crear usuario", f"{_ced} → {inst.codigo}")
             except Exception as ex:
                 db.session.rollback()
                 mensaje = f"Error: {ex}"
@@ -40705,12 +40838,13 @@ def soporte_usuarios_institucion(id):
 <section class='role-panel'>
 <form method='POST'>
   <div class='form-row'>
-    <div><label><b>Usuario</b></label><input name='usuario' required placeholder='docente_sanjose'></div>
-    <div><label><b>Contraseña temporal</b></label><input name='password' value='Colegio2026*'></div>
+    <div><label><b>Cédula (ID de acceso)</b></label><input name='cedula' required inputmode='numeric' pattern='[0-9]{5,12}' placeholder='Solo números'></div>
+    <div><label><b>Nombre completo</b></label><input name='nombre_completo' required></div>
+    <div><label><b>Contraseña temporal</b></label><input name='password' placeholder='Vacío = se genera automática'></div>
   </div>
   <div class='form-row'>
     <div><label><b>Rol</b></label><select name='rol'>{opts}</select></div>
-    <div><label><b>Correo</b></label><input name='correo' type='email'></div>
+    <div><label><b>Correo (recibe ID y clave)</b></label><input name='correo' type='email' required></div>
   </div>
   <div class='form-row'>
     <div><label><b>Director de grupo</b></label><input name='grupo_docente' placeholder='10'></div>
@@ -41808,6 +41942,14 @@ def eliminar_institucion(id):
                 except Exception:
                     pass
             print("replication_role delete:", e_rep)
+
+        # 5b) Usuarios del colegio: borrado garantizado por SQL (no deben quedar huérfanos)
+        try:
+            db.session.execute(text("DELETE FROM usuarios WHERE institucion_id = :iid AND COALESCE(rol,'') <> 'Soporte'"), {"iid": iid})
+            db.session.commit()
+        except Exception as _eu:
+            db.session.rollback()
+            print("usuarios sql delete:", _eu)
 
         # 6) Institución
         inst2 = Institucion.query.get(iid)
@@ -43975,16 +44117,14 @@ def notas_boletin_pdf(id):
         y -= 14
 
         # Juicios (texto tipo Cognitivo / R)
-        juicios = [
-            ("Cognitivo", "Desarrolla procesos con operaciones básicas"),
-            ("Cognitivo R", "No cumple con todas las tareas y algunas las desarrolla incorrectamente"),
-            ("Cognitivo R", "Algunas veces incumple con frecuencia los horarios establecidos"),
-        ]
-        # Si hay observación en planilla, usarla
+        # Solo se imprime lo que escribió el DOCENTE en la planilla; el sistema no inventa observaciones.
+        juicios = []
         try:
             obs_r = [rr for rr in regs if _match_asig(rr.asignatura, r["asig"]) and (rr.observacion or "").strip()]
             if obs_r:
-                juicios = [("Observación", (obs_r[0].observacion or "")[:90])]
+                _t = " ".join((obs_r[0].observacion or "").split())
+                _trozos = [_t[i:i + 100] for i in range(0, min(len(_t), 300), 100)]
+                juicios = [("Observación" if i == 0 else "", tr) for i, tr in enumerate(_trozos)]
         except Exception:
             pass
 
@@ -46299,13 +46439,8 @@ def secretaria_retirar_estudiante():
         if iid is not None:
             query = query.filter(Estudiante.institucion_id == iid)
         if q:
-            like = f"%{q}%"
-            query = query.filter(or_(
-                Estudiante.codigo.ilike(like),
-                Estudiante.documento.ilike(like),
-                Estudiante.nombre.ilike(like),
-                Estudiante.apellido.ilike(like),
-            ))
+            _ids_q = [x.id for x in _buscar_estudiantes_texto(query, q, 400)]
+            query = query.filter(Estudiante.id.in_(_ids_q or [0]))
         if grado_f:
             g_norm = grado_f.replace("°", "").strip()
             query = query.filter(or_(
@@ -48136,7 +48271,7 @@ def colegio_pqr(codigo):
                 except Exception:
                     db.session.rollback()
                 try:
-                    enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PADRES_COLEGIO", fecha_limite=_fecha_limite_pqr_habiles())
+                    enviar_correo_pqr(email, rad, tick, subtipo, objeto, "PADRES_COLEGIO", fecha_limite=_fecha_limite_pqr_habiles(), inst=inst)
                 except Exception:
                     pass
                 try:
@@ -58774,8 +58909,8 @@ def planilla_notas_faltas_pdf():
 
     y = encabezado(y0)
     # Cabecera de tabla
-    cols = ["N°", "CÓDIGO", "ESTUDIANTE", "DOC.", "N1", "N2", "N3", "N4", "N5", "FALTAS", "OBS."]
-    widths = [28, 70, 180, 70, 40, 40, 40, 40, 40, 50, 120]
+    cols = ["N°", "CÓDIGO", "ESTUDIANTE", "N1", "N2", "N3", "N4", "N5", "FALTAS", "OBS."]
+    widths = [28, 70, 250, 40, 40, 40, 40, 40, 50, 120]
     x0 = 30
 
     def fila_header(y):
@@ -58802,8 +58937,7 @@ def planilla_notas_faltas_pdf():
         vals = [
             str(idx),
             (e.codigo or "")[:14],
-            nombre[:42],
-            (e.documento or "")[:12],
+            nombre[:55],
             "", "", "", "", "",
             "",
             "",
@@ -83583,7 +83717,7 @@ def ventas_activaciones():
     _act_ensure()
     q = ActCaso.query.order_by(ActCaso.id.desc())
     if not _act_es_gerencia():
-        q = q.filter(ActCaso.asesor == (session.get("usuario") or ""))
+        q = q.filter(func.lower(func.trim(ActCaso.asesor)) == (session.get("usuario") or "").strip().lower())
     filas = "".join("<tr><td><a href='/ventas/activacion/%d'>%s</a><br><span class='mono'>%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
         c.id, _esc(c.nombre), _esc(c.codigo), _esc(c.plan), _act_chip(c.estado), _esc(c.actualizado_en)) for c in q.limit(200).all())
     cuerpo = (_ACT_CSS + "<div class='ac'><h1>Activaciones en proceso</h1><p class='sub'>Cada colegio pasa por verificación en entidades, contrato y aceptación antes de activarse.</p>"
@@ -83599,7 +83733,7 @@ def ventas_activacion(cid):
         return g
     _act_ensure()
     c = ActCaso.query.get_or_404(cid)
-    if not _act_es_gerencia() and c.asesor != (session.get("usuario") or ""):
+    if not _act_es_gerencia() and (c.asesor or "").strip().lower() != (session.get("usuario") or "").strip().lower():
         return acceso_denegado("Este caso pertenece a otro asesor.")
     msg = err = enlace = ""
     if request.method == "POST":
@@ -84152,6 +84286,72 @@ def _acc_asignar_cedula(u, cedula):
     u.id_acceso_hash = h
     u.id_acceso_enc = _acc_enc(d)
     return d, ""
+
+
+def _clave_temporal():
+    """Clave temporal aleatoria y legible (se envía por correo; se cambia al primer ingreso)."""
+    return "Pro" + secrets.token_urlsafe(6).replace("_", "x").replace("-", "y") + "*1"
+
+
+def _enviar_credenciales_usuario(correo, nombre, id_acc, clave, rol, inst=None):
+    """Correo con ID de acceso (la cédula) y clave temporal. Lleva el nombre del COLEGIO, no el de PROCSIS."""
+    try:
+        correo = (correo or "").strip()
+        if not correo:
+            return False
+        corr, pw = _credenciales_smtp("soporte")
+        colegio = (getattr(inst, "nombre", "") or "").strip() or "su institución educativa"
+        try:
+            enlace = _base_publica().rstrip("/") + "/login"
+        except Exception:
+            enlace = "/login"
+        msg = EmailMessage()
+        msg["Subject"] = "Sus datos de acceso · " + colegio
+        msg["From"] = '"%s" <%s>' % (colegio.replace('"', ""), corr)
+        msg["To"] = correo
+        msg.set_content("Hola %s,\n\nSe creó su acceso como %s en %s.\n\nID de acceso (su cédula): %s\nClave temporal: %s\n\n"
+                        "Ingrese en %s y cambie la clave en su primer ingreso.\n\n%s" % (nombre or "", rol, colegio, id_acc, clave, enlace, colegio))
+        msg.add_alternative(
+            "<div style='font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden'>"
+            "<div style='background:#0B2D57;color:#fff;padding:18px 22px'><div style='font-size:18px;font-weight:700'>%s</div>"
+            "<div style='font-size:12px;opacity:.85'>Acceso a la plataforma académica</div></div>"
+            "<div style='padding:22px;color:#1d1d1f;font-size:14px;line-height:1.55'>"
+            "<p>Hola <b>%s</b>,</p><p>Se creó su acceso como <b>%s</b>.</p>"
+            "<table style='border-collapse:collapse;margin:12px 0'>"
+            "<tr><td style='padding:6px 14px 6px 0;color:#64748b'>ID de acceso (su cédula)</td><td style='font-weight:700;font-size:16px'>%s</td></tr>"
+            "<tr><td style='padding:6px 14px 6px 0;color:#64748b'>Clave temporal</td><td style='font-weight:700;font-size:16px'>%s</td></tr></table>"
+            "<p><a href='%s' style='background:#0B2D57;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:600'>Ingresar</a></p>"
+            "<p style='color:#64748b;font-size:12px'>Por seguridad, el sistema le pedirá cambiar la clave en su primer ingreso.</p></div></div>"
+            % (_esc(colegio), _esc(nombre or ""), _esc(rol), _esc(id_acc), _esc(clave), _esc(enlace)), subtype="html")
+        _smtp_enviar(msg, corr, pw)
+        return True
+    except Exception as ex:
+        print("enviar_credenciales_usuario:", repr(ex)[:200], flush=True)
+        return False
+
+
+def _crear_usuario_colegio(inst, rol, cedula, nombre, correo, clave, grupo="", grados=""):
+    """Crea un usuario de colegio con ID de acceso = cédula. No hace commit. Devuelve (usuario, error)."""
+    ced = _acc_cedula_valida(cedula)
+    if not ced:
+        return None, "Escribe una cédula válida (solo números, de 5 a 12 dígitos)."
+    if not inst:
+        return None, "Selecciona la institución del usuario."
+    nombre = (nombre or "").strip()
+    login = ced
+    otro = Usuario.query.filter(func.lower(Usuario.usuario) == login.lower()).first()
+    if otro:
+        if otro.institucion_id == inst.id:
+            return None, "Ya existe un usuario con esa cédula en este colegio."
+        login = ("%s-%s" % (ced, (inst.codigo or str(inst.id)).lower()))[:80]
+    u = Usuario(usuario=login, password=crear_hash(clave), rol=rol, correo=(correo or "").strip()[:160],
+                nombre_completo=nombre[:160], grupo_docente=grupo or "", grados_clase=grados or "",
+                password_temporal=True, institucion_id=inst.id)
+    _, err = _acc_asignar_cedula(u, ced)
+    if err:
+        return None, err
+    db.session.add(u)
+    return u, ""
 
 
 def _acc_ensure():
@@ -85261,6 +85461,9 @@ def gerencia_donaciones_nueva():
         nombre, codigo = (f.get("nombre") or "").strip(), (f.get("codigo") or "").strip().upper()
         rector, doc = (f.get("rector") or "").strip(), re.sub(r"\D", "", f.get("rector_doc") or "")
         correo, seduca = (f.get("correo") or "").strip(), (f.get("correo_seduca") or "").strip()
+        _sec_doc, _coo_doc = re.sub(r"\D", "", f.get("secretaria_doc") or ""), re.sub(r"\D", "", f.get("coord_doc") or "")
+        _sec_cor, _coo_cor = (f.get("secretaria_correo") or "").strip(), (f.get("coord_correo") or "").strip()
+        _rec_cor = (f.get("rector_correo") or correo).strip()
         if not _don_csrf_ok():
             error = "La página caducó. Recárgala e intenta de nuevo."
         elif not plan:
@@ -85271,6 +85474,14 @@ def gerencia_donaciones_nueva():
             error = "La cédula del rector es obligatoria (5 a 12 dígitos): será su ID de acceso."
         elif not _NT_EMAIL_RE.match(correo):
             error = "El correo del colegio es obligatorio y válido: recibe el PIN del dispositivo y la factura."
+        elif not (f.get("secretaria_nombre") or "").strip() or not (5 <= len(_sec_doc) <= 12) or not _NT_EMAIL_RE.match(_sec_cor):
+            error = "Secretaría: nombre, cédula (5 a 12 dígitos) y correo válido son obligatorios."
+        elif not (f.get("coord_nombre") or "").strip() or not (5 <= len(_coo_doc) <= 12) or not _NT_EMAIL_RE.match(_coo_cor):
+            error = "Coordinación: nombre, cédula (5 a 12 dígitos) y correo válido son obligatorios."
+        elif not _NT_EMAIL_RE.match(_rec_cor):
+            error = "El correo del rector no es válido."
+        elif len({doc, _sec_doc, _coo_doc}) < 3:
+            error = "Rectoría, Secretaría y Coordinación deben tener cédulas distintas."
         elif seduca and not _NT_EMAIL_RE.match(seduca):
             error = "El correo de SEDUCA no es válido."
         elif Institucion.query.filter((Institucion.codigo == codigo) | (Institucion.nombre == nombre)).first():
@@ -85281,6 +85492,9 @@ def gerencia_donaciones_nueva():
                      "dane": (f.get("dane") or "").strip(), "sede": "PRINCIPAL", "ciudad": (f.get("ciudad") or "").strip(),
                      "departamento": (f.get("departamento") or "Antioquia").strip(), "rector": rector, "rector_nombre": rector,
                      "rector_doc": doc, "telefono": (f.get("telefono") or "").strip(), "correo": correo,
+                     "secretaria_nombre": (f.get("secretaria_nombre") or "").strip(), "secretaria_doc": _sec_doc, "secretaria_correo": _sec_cor,
+                     "coord_nombre": (f.get("coord_nombre") or "").strip(), "coord_doc": _coo_doc, "coord_correo": _coo_cor,
+                     "rector_correo": _rec_cor,
                      "asesor": "Gerencia · Donaciones", "clave_temporal": clave, "modalidad": "PRESENCIAL",
                      "firma_acepta": "1", "num_periodos": "3"}
             html = ""
@@ -85360,6 +85574,13 @@ def gerencia_donaciones_nueva():
             '<div><label>Rector / representante legal *</label><input name="rector" required></div>'
             '<div><label>Cédula del rector * (será su ID de acceso)</label><input name="rector_doc" required inputmode="numeric"></div>'
             '<div><label>Correo del colegio * (PIN y factura)</label><input name="correo" type="email" required></div>'
+            '<div><label>Correo del rector (recibe ID y clave)</label><input name="rector_correo" type="email" placeholder="Si se deja vacío, el del colegio"></div>'
+            '<div><label>Secretaria(o) — nombre *</label><input name="secretaria_nombre" required></div>'
+            '<div><label>Cédula de Secretaría * (ID de acceso)</label><input name="secretaria_doc" required inputmode="numeric"></div>'
+            '<div><label>Correo de Secretaría *</label><input name="secretaria_correo" type="email" required></div>'
+            '<div><label>Coordinador(a) — nombre *</label><input name="coord_nombre" required></div>'
+            '<div><label>Cédula de Coordinación * (ID de acceso)</label><input name="coord_doc" required inputmode="numeric"></div>'
+            '<div><label>Correo de Coordinación *</label><input name="coord_correo" type="email" required></div>'
             '<div><label>Teléfono</label><input name="telefono"></div>'
             '<div><label>Correo de SEDUCA (recibe la factura)</label><input name="correo_seduca" type="email" value="%s"></div>'
             '<div><label>Concepto del convenio</label><input name="convenio" value="%s"></div></div>'
@@ -86318,6 +86539,24 @@ def _riesgo_senales_auto(iid):
     return [(eid, p, "; ".join(razones.get(eid, []))) for p, eid in top]
 
 
+def _riesgo_perdiendo(iid, limite=80):
+    """Estudiantes que van perdiendo materias en el periodo actual (promedio de la materia < 3.0)."""
+    por_est = {}
+    try:
+        filas = db.session.query(NotaRegistro.estudiante_id, NotaRegistro.asignatura, func.avg(NotaRegistro.valor)).filter(
+            NotaRegistro.institucion_id == iid, NotaRegistro.periodo == periodo_actual(),
+            NotaRegistro.valor.isnot(None)).group_by(NotaRegistro.estudiante_id, NotaRegistro.asignatura).all()
+        for eid, asig, prom in filas:
+            if prom is not None and float(prom) < 3.0 and (asig or "").strip():
+                por_est.setdefault(eid, []).append((asig.strip(), float(prom)))
+    except Exception as ex:
+        print("riesgo perdiendo:", ex)
+        db.session.rollback()
+        return []
+    orden = sorted(por_est.items(), key=lambda kv: (-len(kv[1]), min(x[1] for x in kv[1])))
+    return orden[:limite]
+
+
 @app.route("/riesgo-escolar", methods=["GET", "POST"])
 def riesgo_escolar():
     if not requiere_login():
@@ -86402,7 +86641,23 @@ def riesgo_escolar():
                 f"<td>{_esc(c.descripcion[:220])}<div class='nx-small'>{_esc((c.seguimiento or '')[-260:])}</div></td>"
                 f"<td><span class='nx-tag nx-t-gray'>{_esc(c.estado.replace('_', ' '))}</span><div class='nx-small'>{_esc(c.registrado_por)} · {_esc(c.creado_en[:10])}</div></td><td>{acc}</td></tr>")
     auto_html = ""
-    if gestiona:
+    if rol in _RIESGO_VER:
+        try:
+            _perd = _riesgo_perdiendo(iid)
+            if _perd:
+                _emp = {e.id: e for e in Estudiante.query.filter(Estudiante.id.in_([x[0] for x in _perd])).all()}
+                _fp = "".join(
+                    "<tr><td>%s<div class='nx-small'>%s</div></td><td><b>%d</b></td><td>%s</td><td><a class='btn nx-btn-sm' href='/riesgo-escolar?est=%s#nuevo'>Abrir caso</a></td></tr>" % (
+                        _esc(estudiante_nombre(_emp.get(eid))), _esc(getattr(_emp.get(eid), "grado", "")), len(mats),
+                        _esc("; ".join("%s (%.1f)" % (a, pr) for a, pr in mats[:6])), _esc(getattr(_emp.get(eid), "codigo", "")))
+                    for eid, mats in _perd if _emp.get(eid))
+                auto_html += (f"<section class='nx-card'><h2>📉 Estudiantes que van perdiendo ({periodo_actual()})</h2>"
+                              f"<p class='nx-small'>Promedio actual por materia menor a 3.0, según las notas que han cargado los docentes.</p>"
+                              f"<div class='nx-scroll'><table><tr><th>Estudiante</th><th>Materias perdiendo</th><th>Detalle</th><th></th></tr>{_fp}</table></div></section>")
+            else:
+                auto_html += "<section class='nx-card'><h2>📉 Estudiantes que van perdiendo</h2><p class='nx-small'>Aún no hay estudiantes con promedio menor a 3.0 en este periodo.</p></section>"
+        except Exception as ex:
+            print("riesgo perdiendo ui:", ex)
         try:
             senales = _riesgo_senales_auto(iid)
         except Exception as ex:
@@ -86414,7 +86669,7 @@ def riesgo_escolar():
                 "<tr><td>%s<div class='nx-small'>%s</div></td><td><b>%d</b></td><td>%s</td><td><a class='btn nx-btn-sm' href='/riesgo-escolar?est=%s#nuevo'>Abrir caso</a></td></tr>" % (
                     _esc(estudiante_nombre(em.get(eid))), _esc(getattr(em.get(eid), "grado", "")), p, _esc(rz), _esc(getattr(em.get(eid), "codigo", "")))
                 for eid, p, rz in senales if em.get(eid))
-            auto_html = f"""<section class='nx-card'><h2>⚠️ Alerta temprana automática</h2>
+            auto_html += f"""<section class='nx-card'><h2>⚠️ Alerta temprana automática</h2>
 <p class='nx-small'>Estudiantes con señales acumuladas (ausencias, faltas de convivencia y notas bajas). Es un apoyo para priorizar, no un diagnóstico.</p>
 <div class='nx-scroll'><table><tr><th>Estudiante</th><th>Puntaje</th><th>Señales</th><th></th></tr>{filas}</table></div></section>"""
     pre = _esc(request.args.get("est", ""))
