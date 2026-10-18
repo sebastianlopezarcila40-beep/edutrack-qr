@@ -17891,7 +17891,7 @@ def usuarios():
   <form method="POST">
     <input type="hidden" name="accion" value="crear">
     <div class="form-row">
-      <div><label>Cédula * (será el ID de acceso)</label><input name="cedula" required inputmode="numeric" pattern="[0-9]{5,12}" placeholder="Solo números"></div>
+      <div><label>Cédula * (será el ID de acceso)</label><input name="cedula" required inputmode="numeric" pattern="[0-9]{{5,12}}" placeholder="Solo números"></div>
       <div><label>Nombre completo *</label><input name="nombre_completo" required></div>
       <div><label>Rol *</label>
         <select name="rol">
@@ -41081,7 +41081,7 @@ def soporte_usuarios_institucion(id):
 <section class='role-panel'>
 <form method='POST'>
   <div class='form-row'>
-    <div><label><b>Cédula (ID de acceso)</b></label><input name='cedula' required inputmode='numeric' pattern='[0-9]{5,12}' placeholder='Solo números'></div>
+    <div><label><b>Cédula (ID de acceso)</b></label><input name='cedula' required inputmode='numeric' pattern='[0-9]{{5,12}}' placeholder='Solo números'></div>
     <div><label><b>Nombre completo</b></label><input name='nombre_completo' required></div>
     <div><label><b>Contraseña temporal</b></label><input name='password' placeholder='Vacío = se genera automática'></div>
   </div>
@@ -85799,7 +85799,7 @@ def gerencia_kit_donacion():
         "<option value='citacion'>👪 Bloque 3 · Formato B: Citación a padres (solo casos con alertas)</option></select></div>"
         "<div><label>Kit</label><select name='kit'>" + kit_sel + "</select></div></div>"
         "<div class='g2'><div><label>Cantidad de copias (vacío = según el kit)</label><input type='number' name='n' min='1' max='500'></div>"
-        "<div><label>Filas de la planilla de notas (solo Bloque 1)</label><select name='filas'><option value='35'>35 filas</option><option value='40'>40 filas</option></select></div></div>"
+        "<div><label>Filas de la planilla de notas (solo Bloque 1)</label><select name='filas'><option value='40'>40 filas</option><option value='35'>35 filas</option></select></div></div>"
         "<p><button class='bt'>Descargar PDF</button></p></form></div>")
     cuerpo = (_DON_CSS + "<div class='dn'><h1>📦 Kit de donación</h1><div class='sub'>Material impreso del programa Procsis Edu: calcule cuántas hojas imprimir por kit y prepare el despacho. "
               "<a href='/gerencia/donaciones'>← Proyectos y Donaciones</a> · <a href='/gerencia/envios'>Envíos</a></div>"
@@ -85812,47 +85812,69 @@ _KIT_FECHA_TXT = "Leticia, Amazonas, Octubre de 2026"
 
 
 def _kit_pdf_notas(pdf, filas):
-    """Bloque 1: planilla de notas de recuperación, horizontal tamaño Oficio, con espacios en blanco para el docente."""
+    """Bloque 1: planilla de notas de recuperación, horizontal tamaño Oficio, estilo Excel en blanco y negro."""
     from reportlab.lib.pagesizes import landscape as _ls
     w, h = _ls((612, 936))   # Oficio 8,5 x 13 in
     pdf.setPageSize((w, h))
     mx = 24
-    pdf.setFillColorRGB(0.1, 0.1, 0.1)
+    negro = (0, 0, 0)
+
+    # --- Encabezado membretado: logo + títulos ---
+    lx, ly, ls = mx, h - 54, 34
+    pdf.setStrokeColorRGB(*negro)
+    pdf.setFillColorRGB(1, 1, 1)
+    pdf.setLineWidth(1.2)
+    pdf.roundRect(lx, ly, ls, ls, 5, stroke=1, fill=0)
+    pdf.setFillColorRGB(*negro)
+    pdf.setFont("Helvetica-Bold", 17)
+    pdf.drawCentredString(lx + ls / 2, ly + 11, "P")
     pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(mx, h - 30, "PROCSIS.  |  EduTrack - Sistema Académico")
+    pdf.drawString(lx + ls + 10, h - 31, "PROCSIS S.A.S.  |  EduTrack - Sistema Académico")
     pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawString(mx, h - 47, "PROGRAMA DE NIVELACIÓN Y RECUPERACIÓN – AMAZONAS 2026")
-    pdf.setFont("Helvetica", 9)
-    renglones = [("Institución Educativa:", 120, "Sede:", 560), ("Docente:", 120, "Grado / Grupo:", 560), ("Asignatura:", 120, "Periodo Académico:", 560)]
-    y = h - 68
-    for a, xa, b, xb in renglones:
+    pdf.drawString(lx + ls + 10, h - 47, "PROGRAMA DE NIVELACIÓN Y RECUPERACIÓN – AMAZONAS 2026")
+
+    # --- Datos para escribir a mano ---
+    renglones = [("Institución Educativa:", "Sede:"), ("Docente:", "Grado / Grupo:"), ("Asignatura:", "Periodo Académico:")]
+    y = h - 74
+    xb = 500
+    pdf.setLineWidth(0.6)
+    for a, b in renglones:
         pdf.setFont("Helvetica-Bold", 9)
         pdf.drawString(mx, y, a)
-        pdf.drawString(500, y, b)
-        pdf.setStrokeColorRGB(0.5, 0.5, 0.5)
-        pdf.setLineWidth(0.6)
-        pdf.line(mx + pdf.stringWidth(a, "Helvetica-Bold", 9) + 4, y - 2, 490, y - 2)
-        pdf.line(500 + pdf.stringWidth(b, "Helvetica-Bold", 9) + 4, y - 2, w - mx, y - 2)
-        y -= 17
-    cols = [("N°", 28), ("Código Estudiante", 84), ("Nombre Completo del Estudiante", 0), ("Nota Inicial", 66),
-            ("Taller (50%)", 70), ("Sustentación (50%)", 92), ("Nota Final", 66)]
+        pdf.drawString(xb, y, b)
+        pdf.line(mx + pdf.stringWidth(a, "Helvetica-Bold", 9) + 4, y - 2, xb - 10, y - 2)
+        pdf.line(xb + pdf.stringWidth(b, "Helvetica-Bold", 9) + 4, y - 2, w - mx, y - 2)
+        y -= 16
+
+    # --- Tabla estilo Excel ---
+    cols = [("N°", 28), ("Código ID", 78), ("Nombre Completo del Estudiante", 0), ("Nota Inicial", 66),
+            ("Taller / Actividad (50%)", 100), ("Sustentación / Evaluación (50%)", 120), ("Nota Final Definitiva", 90)]
     fijo = sum(c[1] for c in cols)
     cols[2] = (cols[2][0], (w - 2 * mx) - fijo)
-    colores = ["#4472C4", "#4472C4", "#5B9BD5", "#ED7D31", "#E91E63", "#E91E63", "#00B050"]
-    y_top = y - 4
+    grises = [0.80, 0.80, 0.80, 0.88, 0.88, 0.88, 0.70]
+    y_top = y - 2
     alto_enc = 24
+    pdf.setLineWidth(0.6)
+    pdf.setStrokeColorRGB(*negro)
     x = mx
-    for (t, cw), col in zip(cols, colores):
-        r, g, b = (int(col[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
-        pdf.setFillColorRGB(r, g, b)
-        pdf.rect(x, y_top - alto_enc, cw, alto_enc, stroke=0, fill=1)
-        pdf.setFillColorRGB(1, 1, 1)
-        pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 9, t)
+    for (t, cw), g in zip(cols, grises):
+        pdf.setFillColorRGB(g, g, g)
+        pdf.rect(x, y_top - alto_enc, cw, alto_enc, stroke=1, fill=1)
+        pdf.setFillColorRGB(*negro)
+        pdf.setFont("Helvetica-Bold", 7.5)
+        if len(t) > 22 and " (" in t:
+            t1, t2 = t.split(" (", 1)
+            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 14, t1)
+            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 5, "(" + t2)
+        elif t == "Nota Final Definitiva":
+            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 14, "Nota Final")
+            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 5, "Definitiva")
+        else:
+            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 9, t)
         x += cw
+
     y_fin = 48
     alto_f = (y_top - alto_enc - y_fin) / float(filas)
-    pdf.setStrokeColorRGB(0.7, 0.7, 0.7)
     pdf.setLineWidth(0.5)
     yy = y_top - alto_enc
     for i in range(filas):
@@ -85860,21 +85882,27 @@ def _kit_pdf_notas(pdf, filas):
         x = mx
         for k, (t, cw) in enumerate(cols):
             if k == 0:
-                pdf.setFillColorRGB(0.93, 0.93, 0.93)
+                pdf.setFillColorRGB(0.90, 0.90, 0.90)
                 pdf.rect(x, yy, cw, alto_f, stroke=1, fill=1)
-                pdf.setFillColorRGB(0.1, 0.1, 0.1)
+                pdf.setFillColorRGB(*negro)
                 pdf.setFont("Helvetica-Bold", 7)
                 pdf.drawCentredString(x + cw / 2, yy + alto_f / 2 - 2.5, str(i + 1))
             else:
+                pdf.setFillColorRGB(1, 1, 1)
                 pdf.rect(x, yy, cw, alto_f, stroke=1, fill=0)
             x += cw
-    pdf.setFillColorRGB(0.1, 0.1, 0.1)
-    pdf.setStrokeColorRGB(0.3, 0.3, 0.3)
+
+    # --- Firma legal del docente ---
+    pdf.setFillColorRGB(*negro)
+    pdf.setStrokeColorRGB(*negro)
+    pdf.setLineWidth(0.8)
     pdf.setFont("Helvetica-Bold", 9)
     pdf.drawString(mx, 26, "Firma del Docente:")
     pdf.line(mx + 90, 24, mx + 330, 24)
-    pdf.drawString(500, 26, "Fecha de Entrega:")
-    pdf.drawString(590, 26, "_____ / _____ / 2026")
+    pdf.drawString(mx + 345, 26, "C.C.:")
+    pdf.line(mx + 370, 24, mx + 500, 24)
+    pdf.drawString(660, 26, "Fecha de Entrega:")
+    pdf.drawString(750, 26, "_____ / _____ / 2026")
     pdf.showPage()
 
 
