@@ -8115,6 +8115,35 @@ def nombre_completo_estudiante(e):
     return estudiante_nombre(e)
 
 
+def _ap_no_estudiante(e):
+    """(apellidos, nombres) del estudiante; usa el desglose SIMAT si faltan los campos principales."""
+    ap = (getattr(e, "apellido", None) or "").strip()
+    no = (getattr(e, "nombre", None) or "").strip()
+    if (not ap or ap.lower() in ("sin apellido", "sin apellidos")) and getattr(e, "apellido1", None):
+        ap = ("%s %s" % ((e.apellido1 or "").strip(), (getattr(e, "apellido2", None) or "").strip())).strip()
+    if (not no or no.lower() in ("sin nombre", "sin nombres")) and getattr(e, "nombre1", None):
+        no = ("%s %s" % ((e.nombre1 or "").strip(), (getattr(e, "nombre2", None) or "").strip())).strip()
+    return ap or "SIN APELLIDO", no or "SIN NOMBRE"
+
+
+def estudiante_apellidos_nombres(e):
+    """'Apellidos, Nombres' (primero apellidos): formato de las planillas físicas y el SIMAT."""
+    if e is None:
+        return ""
+    ap, no = _ap_no_estudiante(e)
+    return "%s, %s" % (ap, no)
+
+
+def _clave_orden_estudiante(e):
+    """Orden alfabético estricto por apellido y luego nombre, sin distinguir tildes ni mayúsculas."""
+    import unicodedata
+    def _n(s):
+        s = unicodedata.normalize("NFD", (s or "").strip().lower())
+        return "".join(c for c in s if unicodedata.category(c) != "Mn")
+    ap, no = _ap_no_estudiante(e)
+    return (_n(ap), _n(no))
+
+
 def buscar_estudiante_por_codigo_doc_nombre(valor):
     valor = (valor or "").strip()
     if not valor:
@@ -15520,7 +15549,7 @@ def _pdf_hoja_evaluacion(pdf, nom_inst, docente_nombre, asignatura, grado, grupo
         pdf.setFillColorRGB(*_hexrgb("#5B9BD5"))
         pdf.rect(mx + dia_w, y1 - alto_d, nom_w, alto_d, stroke=0, fill=1)
         pdf.setFillColorRGB(1, 1, 1)
-        pdf.drawCentredString(mx + dia_w + nom_w / 2, y1 - alto_d + 4, "Nombre de Alumno")
+        pdf.drawCentredString(mx + dia_w + nom_w / 2, y1 - alto_d + 4, "Apellidos y Nombres")
         x = mx + dia_w + nom_w
         pdf.setFillColorRGB(0.2, 0.2, 0.2)
         for _b in range(4):
@@ -15546,7 +15575,7 @@ def _pdf_hoja_evaluacion(pdf, nom_inst, docente_nombre, asignatura, grado, grupo
             if i < len(lote):
                 e = lote[i]
                 pdf.setFont("Helvetica", 7)
-                pdf.drawString(mx + dia_w + 3, y + 4.5, ("%s %s" % (e.apellido or "", e.nombre or "")).strip()[:40])
+                pdf.drawString(mx + dia_w + 3, y + 4.5, estudiante_apellidos_nombres(e)[:40])
             xx = mx + dia_w + nom_w
             for _c in range(20):
                 pdf.rect(xx, y, col_w, alto_f, stroke=1, fill=0)
@@ -15712,6 +15741,7 @@ def secretaria_planilla_grupo_generar():
                 if eg != str(grupo).strip() and eg.lstrip("0") != str(grupo).strip().lstrip("0"):
                     continue
             estudiantes.append(e)
+        estudiantes.sort(key=_clave_orden_estudiante)
         if tipo == "notas":
             # Diseño "Hoja de evaluación" tipo Excel (carta vertical), con docente, asignatura, grado y mes.
             _asig = asignatura_f
@@ -15777,7 +15807,7 @@ def secretaria_planilla_grupo_generar():
             pdf.rect(x_codigo, y, col_codigo_w, alto_fila)
             if i < len(estudiantes):
                 e = estudiantes[i]
-                pdf.drawString(x_nombre + 2, y + 3, f"{(e.apellido or '')} {(e.nombre or '')}"[:42])
+                pdf.drawString(x_nombre + 2, y + 3, estudiante_apellidos_nombres(e)[:42])
                 pdf.drawString(x_codigo + 2, y + 3, str(e.codigo or "")[:12])
             for c in range(n_cols_grid):
                 cx = x_grid + c * col_w
@@ -45798,7 +45828,7 @@ def notas_planilla():
             estudiantes_all = filtrados
         estudiantes_all = sorted(
             estudiantes_all,
-            key=lambda e: ((getattr(e, "apellido", None) or ""), (getattr(e, "nombre", None) or "")),
+            key=_clave_orden_estudiante,
         )[:250]
         if not estudiantes_all:
             print("planilla sin estudiantes grado=%r gk=%r asig=%r grupo=%r tenant=%s" % (grado, gk, asignatura, grupo_f, len(todos_tmp)))
@@ -46037,7 +46067,7 @@ def notas_planilla():
             f'<tr class="{row_cls}" data-est="{e.id}">'
             f'<td class="st st-n">{ri + 1}</td>'
             f'<td class="st st-cod">{e.codigo}</td>'
-            f'<td class="st st-est">{nombre_completo_estudiante(e).upper()}{(" · "+str(e.grupo)) if (getattr(e,"grupo",None) or "").strip() else ""}</td>'
+            f'<td class="st st-est">{estudiante_apellidos_nombres(e).upper()}{(" · "+str(e.grupo)) if (getattr(e,"grupo",None) or "").strip() else ""}</td>'
             f'<td class="st st-def" id="def-{e.id}">—</td>'
             f'<td class="st st-des" id="des-{e.id}">—</td>'
             f'<td class="st st-nm" id="nm-{e.id}">—</td>'
@@ -85812,97 +85842,147 @@ _KIT_FECHA_TXT = "Leticia, Amazonas, Octubre de 2026"
 
 
 def _kit_pdf_notas(pdf, filas):
-    """Bloque 1: planilla de notas de recuperación, horizontal tamaño Oficio, estilo Excel en blanco y negro."""
+    """Bloque 1 (Kit de donación): planilla de calificaciones compacta.
+    Oficio horizontal, márgenes de 0,5 cm, estilo Excel en blanco y negro.
+    Columnas: N° | Código ID | Apellidos y Nombres | T1-T5 | E1-E5 | P1-P5 | Nota Final Definitiva."""
     from reportlab.lib.pagesizes import landscape as _ls
     w, h = _ls((612, 936))   # Oficio 8,5 x 13 in
     pdf.setPageSize((w, h))
-    mx = 24
+    mx = 14.2                # margen estrecho: 0,5 cm
+    top = h - 14.2
     negro = (0, 0, 0)
 
-    # --- Encabezado membretado: logo + títulos ---
-    lx, ly, ls = mx, h - 54, 34
+    def _fit(txt, ancho, fnt="Helvetica-Bold", fs=7.0, minfs=4.8):
+        while fs > minfs and pdf.stringWidth(txt, fnt, fs) > ancho - 3:
+            fs -= 0.25
+        return fs
+
+    # --- Membrete compacto en dos líneas ---
+    ls = 24
+    lx, ly = mx, top - ls
     pdf.setStrokeColorRGB(*negro)
-    pdf.setFillColorRGB(1, 1, 1)
-    pdf.setLineWidth(1.2)
-    pdf.roundRect(lx, ly, ls, ls, 5, stroke=1, fill=0)
     pdf.setFillColorRGB(*negro)
-    pdf.setFont("Helvetica-Bold", 17)
-    pdf.drawCentredString(lx + ls / 2, ly + 11, "P")
-    pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(lx + ls + 10, h - 31, "PROCSIS S.A.S.  |  EduTrack - Sistema Académico")
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawString(lx + ls + 10, h - 47, "PROGRAMA DE NIVELACIÓN Y RECUPERACIÓN – AMAZONAS 2026")
-
-    # --- Datos para escribir a mano ---
-    renglones = [("Institución Educativa:", "Sede:"), ("Docente:", "Grado / Grupo:"), ("Asignatura:", "Periodo Académico:")]
-    y = h - 74
-    xb = 500
+    pdf.setLineWidth(1.2)
+    pdf.roundRect(lx, ly, ls, ls, 4, stroke=1, fill=0)
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawCentredString(lx + ls / 2, ly + 7, "P")
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(lx + ls + 8, top - 10, "PROCSIS  |  EduTrack - PLANILLA DE CALIFICACIONES")
+    xp = w - mx - 150
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(xp, top - 10, "PERIODO")
     pdf.setLineWidth(0.6)
-    for a, b in renglones:
-        pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(mx, y, a)
-        pdf.drawString(xb, y, b)
-        pdf.line(mx + pdf.stringWidth(a, "Helvetica-Bold", 9) + 4, y - 2, xb - 10, y - 2)
-        pdf.line(xb + pdf.stringWidth(b, "Helvetica-Bold", 9) + 4, y - 2, w - mx, y - 2)
-        y -= 16
+    pdf.line(xp + pdf.stringWidth("PERIODO", "Helvetica-Bold", 10) + 4, top - 12, w - mx, top - 12)
 
-    # --- Tabla estilo Excel ---
-    cols = [("N°", 28), ("Código ID", 78), ("Nombre Completo del Estudiante", 0), ("Nota Inicial", 66),
-            ("Taller / Actividad (50%)", 100), ("Sustentación / Evaluación (50%)", 120), ("Nota Final Definitiva", 90)]
-    fijo = sum(c[1] for c in cols)
-    cols[2] = (cols[2][0], (w - 2 * mx) - fijo)
-    grises = [0.80, 0.80, 0.80, 0.88, 0.88, 0.88, 0.70]
-    y_top = y - 2
-    alto_enc = 24
+    campos = [("IE:", 4.0), ("Sede:", 2.4), ("Grado / Grupo:", 1.7), ("Asignatura:", 2.6), ("Docente:", 3.2)]
+    fs2 = 8.5
+    x0 = lx + ls + 8
+    gap = 10
+    anchos_lab = [pdf.stringWidth(t, "Helvetica-Bold", fs2) + 4 for t, _ in campos]
+    libre = (w - mx - x0) - sum(anchos_lab) - gap * (len(campos) - 1)
+    peso = sum(pp for _, pp in campos)
+    y2 = top - 22
+    x = x0
+    pdf.setFont("Helvetica-Bold", fs2)
+    for (t, pp), aw in zip(campos, anchos_lab):
+        lw = libre * pp / peso
+        pdf.drawString(x, y2, t)
+        pdf.line(x + aw, y2 - 2, x + aw + lw, y2 - 2)
+        x += aw + lw + gap
+
+    # --- Estructura de columnas ---
+    n_nota, w_nota = 5, 24
+    w_n, w_cod, w_final = 20, 66, 52
+    ancho_tot = w - 2 * mx
+    w_nombre = ancho_tot - w_n - w_cod - 3 * n_nota * w_nota - w_final
+    x_n = mx
+    x_cod = x_n + w_n
+    x_nom = x_cod + w_cod
+    x_not0 = x_nom + w_nombre
+    x_fin = x_not0 + 3 * n_nota * w_nota
+    bloques = [("Tareas y Talleres (Cognitivo)", "T"),
+               ("Evaluaciones y Quices (Procedimental)", "E"),
+               ("Proyectos y Sustentaciones (Actitudinal)", "P")]
+
+    y_top = top - 30
+    alto_band, alto_enc = 11, 23
+    y_bot_enc = y_top - alto_enc
     pdf.setLineWidth(0.6)
     pdf.setStrokeColorRGB(*negro)
-    x = mx
-    for (t, cw), g in zip(cols, grises):
-        pdf.setFillColorRGB(g, g, g)
-        pdf.rect(x, y_top - alto_enc, cw, alto_enc, stroke=1, fill=1)
-        pdf.setFillColorRGB(*negro)
-        pdf.setFont("Helvetica-Bold", 7.5)
-        if len(t) > 22 and " (" in t:
-            t1, t2 = t.split(" (", 1)
-            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 14, t1)
-            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 5, "(" + t2)
-        elif t == "Nota Final Definitiva":
-            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 14, "Nota Final")
-            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 5, "Definitiva")
-        else:
-            pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 9, t)
-        x += cw
 
-    y_fin = 48
-    alto_f = (y_top - alto_enc - y_fin) / float(filas)
+    def celda(x, y, cw, ch, gris):
+        pdf.setFillColorRGB(gris, gris, gris)
+        pdf.rect(x, y, cw, ch, stroke=1, fill=1)
+        pdf.setFillColorRGB(*negro)
+
+    # Celdas combinadas (alto completo): N°, Código ID, Apellidos y Nombres, Nota Final
+    celda(x_n, y_bot_enc, w_n, alto_enc, 0.80)
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.drawCentredString(x_n + w_n / 2, y_bot_enc + alto_enc / 2 - 2.5, "N°")
+    celda(x_cod, y_bot_enc, w_cod, alto_enc, 0.80)
+    pdf.setFont("Helvetica-Bold", 7.5)
+    pdf.drawCentredString(x_cod + w_cod / 2, y_bot_enc + alto_enc / 2 - 2.5, "Código ID")
+    celda(x_nom, y_bot_enc, w_nombre, alto_enc, 0.80)
+    pdf.setFont("Helvetica-Bold", 8)
+    pdf.drawCentredString(x_nom + w_nombre / 2, y_bot_enc + 13, "Apellidos y Nombres del Estudiante")
+    pdf.setFont("Helvetica", 6.5)
+    pdf.drawCentredString(x_nom + w_nombre / 2, y_bot_enc + 4, "(Primero Apellidos, luego Nombres)")
+    celda(x_fin, y_bot_enc, w_final, alto_enc, 0.65)
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.drawCentredString(x_fin + w_final / 2, y_bot_enc + 13, "Nota Final")
+    pdf.drawCentredString(x_fin + w_final / 2, y_bot_enc + 4, "Definitiva")
+
+    # Bandas de bloque y sub-encabezados T1..P5
+    for b, (titulo_b, letra) in enumerate(bloques):
+        bx = x_not0 + b * n_nota * w_nota
+        bw = n_nota * w_nota
+        celda(bx, y_top - alto_band, bw, alto_band, 0.80)
+        pdf.setFont("Helvetica-Bold", _fit(titulo_b, bw, fs=6.8))
+        pdf.drawCentredString(bx + bw / 2, y_top - alto_band + 3.2, titulo_b)
+        for k in range(n_nota):
+            cx = bx + k * w_nota
+            celda(cx, y_bot_enc, w_nota, alto_enc - alto_band, 0.90)
+            pdf.setFont("Helvetica-Bold", 7)
+            pdf.drawCentredString(cx + w_nota / 2, y_bot_enc + 3.5, "%s%d" % (letra, k + 1))
+
+    # --- Filas de estudiantes ---
+    y_fin = 34
+    alto_f = (y_bot_enc - y_fin) / float(filas)
     pdf.setLineWidth(0.5)
-    yy = y_top - alto_enc
+    yy = y_bot_enc
     for i in range(filas):
         yy -= alto_f
-        x = mx
-        for k, (t, cw) in enumerate(cols):
-            if k == 0:
-                pdf.setFillColorRGB(0.90, 0.90, 0.90)
+        x = x_n
+        for cw, gris in ([(w_n, 0.90), (w_cod, None), (w_nombre, None)]
+                         + [(w_nota, None)] * (3 * n_nota) + [(w_final, 0.94)]):
+            if gris is not None:
+                pdf.setFillColorRGB(gris, gris, gris)
                 pdf.rect(x, yy, cw, alto_f, stroke=1, fill=1)
-                pdf.setFillColorRGB(*negro)
-                pdf.setFont("Helvetica-Bold", 7)
-                pdf.drawCentredString(x + cw / 2, yy + alto_f / 2 - 2.5, str(i + 1))
             else:
-                pdf.setFillColorRGB(1, 1, 1)
                 pdf.rect(x, yy, cw, alto_f, stroke=1, fill=0)
             x += cw
+        pdf.setFillColorRGB(*negro)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawCentredString(x_n + w_n / 2, yy + alto_f / 2 - 2.8, str(i + 1))
+
+    # Líneas gruesas que separan los bloques y borde exterior
+    y_fondo = yy
+    pdf.setStrokeColorRGB(*negro)
+    pdf.setLineWidth(1.2)
+    for xv in (x_cod, x_nom, x_not0, x_not0 + n_nota * w_nota, x_not0 + 2 * n_nota * w_nota, x_fin):
+        pdf.line(xv, y_top, xv, y_fondo)
+    pdf.rect(mx, y_fondo, ancho_tot, y_top - y_fondo, stroke=1, fill=0)
+    pdf.line(mx, y_bot_enc, mx + ancho_tot, y_bot_enc)
 
     # --- Firma legal del docente ---
-    pdf.setFillColorRGB(*negro)
-    pdf.setStrokeColorRGB(*negro)
     pdf.setLineWidth(0.8)
     pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(mx, 26, "Firma del Docente:")
-    pdf.line(mx + 90, 24, mx + 330, 24)
-    pdf.drawString(mx + 345, 26, "C.C.:")
-    pdf.line(mx + 370, 24, mx + 500, 24)
-    pdf.drawString(660, 26, "Fecha de Entrega:")
-    pdf.drawString(750, 26, "_____ / _____ / 2026")
+    pdf.drawString(mx, 22, "Firma del Docente:")
+    pdf.line(mx + 90, 20, mx + 330, 20)
+    pdf.drawString(mx + 345, 22, "C.C.:")
+    pdf.line(mx + 372, 20, mx + 500, 20)
+    pdf.drawString(w - mx - 190, 22, "Fecha de Entrega:")
+    pdf.drawString(w - mx - 100, 22, "____ / ____ / 2026")
     pdf.showPage()
 
 
