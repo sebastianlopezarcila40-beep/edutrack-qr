@@ -4117,7 +4117,7 @@ _NAV_GRUPOS = {
                                "/gerencia/firmas-corporativas", "/gerencia/retractos", "/gerencia/retractos/config", "/gerencia/retractos/reembolsos")),
         ("Correos", ("/gerencia/correo-soporte", "/gerencia/correo-notificaciones", "/gerencia/correo-extra/1", "/gerencia/correo-extra/2", "/gerencia/correo-extra/3")),
         ("Empresa y web", ("/gerencia/datos-empresa", "/gerencia/web-corporativa", "/gerencia/web-menu", "/gerencia/pie-login")),
-        ("Reportes", ("/gerencia/reportes", "/gerencia/indicadores")),
+        ("Reportes", ("/gerencia/reportes", "/gerencia/indicadores", "/gerencia/historial-validaciones")),
     ],
     "soporte": [
         ("Inicio", ("/soporte_admin",)),
@@ -4226,6 +4226,7 @@ def _staff_nav_items(path, rol=""):
             ("/soluciones-procsis/clientes", "Clientes"),
             ("/tickets-doc", "Tickets"),
             ("/soluciones-procsis/fidelizacion", "Satisfacción CSAT"),
+            ("/gerencia/historial-validaciones", "Pruebas de validación"),
             ("/soluciones-procsis/auditoria", "Mi bitácora"),
             ("/logout", "Salir"),
         ]
@@ -4236,6 +4237,8 @@ def _staff_nav_items(path, rol=""):
             ("/cobranza", "Dashboard"),
             ("/cobranza/contabilidad", "Contabilidad"),
             ("/cobranza/panel", "Cartera"),
+            ("/gerencia/planes", "Planes y facturación"),
+            ("/gerencia/activaciones", "Activaciones"),
             ("/tickets-doc", "Tickets"),
             ("/logout", "Salir"),
         ]
@@ -4243,6 +4246,13 @@ def _staff_nav_items(path, rol=""):
         items = _cta_menu_items()
     elif rol == "Proveedor" or (path or "").startswith("/proveedor-carnes"):
         items = _prov_menu_items()
+    elif rol in ("Gerente", "Administrador", "Gerencia"):
+        items = [
+            ("/gerencia/hq", "Dashboard"),
+            ("/gerencia/reportes", "Reportes"),
+            ("/gerencia/historial-validaciones", "Historial técnico de validaciones"),
+            ("/logout", "Salir"),
+        ]
     elif rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         items = [
             ("/gerencia/donaciones", "🎗️ Proyectos y Donaciones"),
@@ -4616,6 +4626,7 @@ def menu_items_por_rol():
             ("/soluciones-procsis/clientes", "Clientes"),
             ("/tickets-doc", "Tickets"),
             ("/soluciones-procsis/fidelizacion", "Satisfacción CSAT"),
+            ("/gerencia/historial-validaciones", "Pruebas de validación"),
             ("/soluciones-procsis/auditoria", "Mi bitácora"),
             ("/logout", "Salir"),
         ]
@@ -8222,12 +8233,17 @@ def _dentro_horario_laboral(u):
     rol = (u.rol or "").strip()
     # Horario definido por Gerencia (módulo «Horarios de asesores»): manda sobre las reglas anteriores.
     if rol not in ("Gerente", "Superadmin", "Administrador"):
+        _hl_err = False
         try:
             _est = _hl_eval(u.id)
         except Exception:
             _est = None
+            _hl_err = True
         if _est is not None:
             return True if _est else _tiene_acceso_extraordinario(u.id)
+        # Sin filas de horario = "Sin restricción (24/7)": NO se aplican los días/horas por defecto antiguos.
+        if not _hl_err and rol in _HL_ROLES:
+            return True
     # Soporte y Superadmin: acceso 24/7 (operación crítica)
     if rol in ("Soporte", "Superadmin", "Gerente", "Comercial"):
         return True
@@ -11365,11 +11381,7 @@ def seguridad_empleados_gate():
         session.clear()
         registrar_auditoria("Sesión revocada", f"Intento con token inválido {u.usuario}")
         return redirect(_login_portal(rol))
-    # horario
-    if not _dentro_horario_laboral(u):
-        session.clear()
-        registrar_auditoria("Acceso fuera de horario", f"Bloqueado {u.usuario}")
-        return redirect(_login_portal(rol) + "?error=horario")
+    # horario: el rol siempre está abierto. Fuera de jornada aplica el modo consulta (ver _freno_modo_lectura).
     # MFA pendiente
     if session.get("mfa_pendiente"):
         if path not in ("/mfa", "/mfa/verificar", "/biometria/app", "/logout"):
@@ -22052,10 +22064,42 @@ def _guard_soporte():
             return acceso_denegado("Su cuenta de Soporte no tiene permiso para esta acción.")
     return None
 
+# prefijo de ruta -> (roles que OPERAN, roles que solo VEN). Gerente/Administrador siempre solo ven (GET); Superadmin conserva acceso total.
+_MODULOS_POR_AREA = {
+    "/gerencia/planes": (("Cobranza",), ()),
+    "/gerencia/activaciones": (("Cobranza", "Operaciones"), ("Calidad",)),
+    "/gerencia/donaciones": (("Finanzas",), ()),
+    "/gerencia/datos-rut": (("Juridica",), ()),
+    "/gerencia/fondo-formalizacion": (("Juridica",), ()),
+    "/gerencia/firmas-corporativas": (("Juridica",), ()),
+    "/gerencia/usuarios": (("Operaciones",), ()),
+    "/gerencia/rectores": (("Operaciones",), ()),
+    "/gerencia/auditoria-total": (("Calidad",), ()),
+}
+
+
+def _modulo_area_de_ruta(path):
+    mejor = None
+    for pref in _MODULOS_POR_AREA:
+        if (path or "").startswith(pref) and (mejor is None or len(pref) > len(mejor)):
+            mejor = pref
+    return _MODULOS_POR_AREA.get(mejor) if mejor else None
+
+
 def _guard_gerencia():
     if not requiere_login():
         return redirect("/gerencia-login")
     rol = rol_actual()
+    _mod = _modulo_area_de_ruta(request.path)
+    if _mod:
+        _opera, _ve = _mod
+        if rol in _opera or rol == "Superadmin":
+            return None
+        if rol in ("Gerente", "Administrador", *_ve):
+            if request.method in ("GET", "HEAD"):
+                return None
+            return acceso_denegado("Gerencia solo puede visualizar este módulo. Lo operan: %s." % ", ".join(
+                AREAS_PROCSIS[r]["titulo"] if r in AREAS_PROCSIS else r for r in _opera))
     if rol not in ("Gerente", "Superadmin", "Administrador"):
         # Soporte y otros roles: 403, no deben ver RUT, nómina, contratos, etc.
         if rol in ("Soporte", "Comercial", "Cobranza", "Ventas"):
@@ -22072,15 +22116,16 @@ _TALENTO_RUTAS = ("/gerencia/hojas-vida", "/gerencia/nomina", "/gerencia/contrat
 
 _AREA_RUTAS_EXTRA = {
     "Talento": ("/gerencia/talento-legal", "/gerencia/matriz-epp", "/gerencia/equipo", "/gerencia/contabilidad/trabajador"),
-    "Finanzas": ("/gerencia/tesoreria", "/gerencia/gastos", "/gerencia/comisiones-ventas", "/gerencia/proveedores", "/gerencia/retractos/reembolsos"),
+    "Finanzas": ("/gerencia/tesoreria", "/gerencia/gastos", "/gerencia/comisiones-ventas", "/gerencia/proveedores", "/gerencia/retractos/reembolsos",
+                 "/gerencia/donaciones"),
     "Juridica": ("/gerencia/contratos-saas", "/gerencia/paginas-legales", "/gerencia/textos-legales", "/gerencia/libro-actas",
                  "/gerencia/boveda-legal", "/gerencia/requerimientos-autoridades", "/gerencia/retractos", "/gerencia/certificados-apoyo",
-                 "/gerencia/pie-login"),
+                 "/gerencia/pie-login", "/gerencia/datos-rut", "/gerencia/fondo-formalizacion", "/gerencia/firmas-corporativas"),
     "Marketing": ("/gerencia/web-menu", "/gerencia/casos-exito", "/gerencia/login-banners", "/gerencia/web-corporativa", "/gerencia/procsis-web",
                   "/gerencia/landing-ventas", "/gerencia/alianzas-clientes", "/gerencia/diseno-login",
                   "/gerencia/backoffice-branding"),
-    "Operaciones": ("/gerencia/colegios-config",),
-    "Calidad": ("/gerencia/sesiones-tecnicas", "/gerencia/auditoria-instituciones"),
+    "Operaciones": ("/gerencia/colegios-config", "/gerencia/usuarios", "/gerencia/rectores", "/gerencia/activaciones", "/gerencia/historial-validaciones"),
+    "Calidad": ("/gerencia/sesiones-tecnicas", "/gerencia/auditoria-instituciones", "/gerencia/auditoria-total", "/gerencia/activaciones", "/gerencia/historial-validaciones"),
 }
 
 
@@ -22552,6 +22597,7 @@ def _aislar_paneles_internos():
             or path.startswith("/cambiar_password")
             or path.startswith("/mfa")
             or path.startswith("/pqr/pdf")
+            or path.startswith("/gerencia/historial-validaciones")
         )
         if not ok_sol:
             return redirect("/soluciones-procsis")
@@ -22571,6 +22617,8 @@ def _aislar_paneles_internos():
             path.startswith("/cobranza")
             or path.startswith("/gerencia/facturacion")
             or path.startswith("/gerencia/plazos-cuotas")
+            or path.startswith("/gerencia/planes")
+            or path.startswith("/gerencia/activaciones")
             or path.startswith("/interno/buscar")
             or path.startswith("/interno/turnos")
             or path.startswith("/cobranza/turnos")
@@ -22587,7 +22635,7 @@ def _aislar_paneles_internos():
             return redirect("/cobranza/panel")
         if path.startswith("/soporte_admin") or path.startswith("/ventas") or path.startswith("/contabilidad"):
             return redirect("/cobranza/panel")
-        if path.startswith("/gerencia/") and not path.startswith("/gerencia/facturacion"):
+        if path.startswith("/gerencia/") and not path.startswith(("/gerencia/facturacion", "/gerencia/planes", "/gerencia/activaciones")):
             return redirect("/cobranza/panel")
         if not ok_cob and (path.startswith("/gerencia") or path.startswith("/usuarios")):
             return redirect("/cobranza/panel")
@@ -26703,7 +26751,9 @@ def modulo_rectores():
     if not requiere_login():
         return redirect("/login")
     rol = rol_actual() or ""
-    roles_ger = ("Gerente", "Gerencia", "Administrador", "Superadmin")
+    roles_ger = ("Gerente", "Gerencia", "Administrador", "Superadmin", "Operaciones")
+    if rol in ("Gerente", "Gerencia", "Administrador") and request.method not in ("GET", "HEAD"):
+        return acceso_denegado("Gerencia solo puede visualizar este módulo. Lo opera Operaciones y Administración.")
     if rol in roles_ger:
         pass
     elif rol == "Soporte":
@@ -35124,8 +35174,8 @@ def gerencia_usuarios():
             uid = request.form.get("uid", type=int)
             nuevo_rol = (request.form.get("nuevo_rol") or "").strip()
             u = Usuario.query.get(uid) if uid else None
-            if rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
-                error = "Solo Gerencia puede cambiar roles de usuarios."
+            if rol_actual() not in ("Operaciones", "Superadmin"):
+                error = "Solo Operaciones y Administración puede cambiar roles de usuarios."
             elif not u or u.rol not in ("Comercial", "Soporte", "Gerente", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Desarrollador"):
                 error = "Usuario no válido."
             elif nuevo_rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Superadmin", "Desarrollador"):
@@ -57684,12 +57734,16 @@ _AREA_MODULOS_EXTRA = {
                 ("/gerencia/matriz-epp", "Matriz EPP", "Elementos de protección y seguridad."),
                 ("/gerencia/contabilidad/trabajadores", "Trabajadores y memos", "Fichas, memos, constancias y certificaciones."),
                 ("/gerencia/equipo-carnes", "Carnés del equipo", "Carnés del personal.")],
-    "Finanzas": [("/gerencia/tesoreria", "Tesorería", "Caja, bancos y movimientos."),
+    "Finanzas": [("/gerencia/donaciones", "Donaciones", "Dinero entrante del programa social Procsis Edu."),
+                 ("/gerencia/tesoreria", "Tesorería", "Caja, bancos y movimientos."),
                  ("/gerencia/gastos", "Gastos", "Registro y control de gastos."),
                  ("/gerencia/proveedores", "Pagos a proveedores", "Cobros y pagos a proveedores."),
                  ("/gerencia/comisiones-ventas", "Comisiones de ventas", "Liquidación de comisiones."),
                  ("/gerencia/retractos/reembolsos", "Reembolsos", "Reembolsos por retracto.")],
-    "Juridica": [("/gerencia/contratos-saas", "Contratos SaaS", "Contratos con los colegios."),
+    "Juridica": [("/gerencia/datos-rut", "RUT", "Datos del RUT y documentación ante los entes de control."),
+                 ("/gerencia/fondo-formalizacion", "Fondo de formalización", "Ingresos congelados para la matrícula mercantil."),
+                 ("/gerencia/firmas-corporativas", "Firmas corporativas", "Llaves digitales, tokens y certificados para firmar contratos."),
+                 ("/gerencia/contratos-saas", "Contratos SaaS", "Contratos con los colegios."),
                  ("/gerencia/requerimientos-autoridades", "Requerimientos de autoridades", "Respuestas y actas."),
                  ("/gerencia/retractos", "Retractos", "Solicitudes de retracto."),
                  ("/gerencia/libro-actas", "Libro de actas", "Actas corporativas."),
@@ -57705,8 +57759,14 @@ _AREA_MODULOS_EXTRA = {
                   ("/gerencia/alianzas-clientes", "Alianzas y clientes", "Alianzas comerciales."),
                   ("/gerencia/diseno-login", "Diseño del login", "Aspecto del login."),
                   ("/gerencia/backoffice-branding", "Marca del backoffice", "Logos y colores.")],
-    "Operaciones": [("/gerencia/colegios-config", "Configuración de colegios", "Parámetros operativos por colegio.")],
-    "Calidad": [("/gerencia/sesiones-tecnicas", "Sesiones técnicas", "Seguimiento de sesiones técnicas."),
+    "Operaciones": [("/gerencia/usuarios", "Usuarios internos", "Crear asesores, restablecer contraseñas y asignar roles."),
+                    ("/gerencia/rectores", "Rectores", "Base de rectores y sus accesos iniciales."),
+                    ("/gerencia/activaciones", "Activaciones y validaciones", "Aprobar validaciones y seguir la activación de cada colegio."),
+                    ("/gerencia/historial-validaciones", "Historial de validaciones", "Quién validó qué, cuándo y con qué evidencia."),
+                    ("/gerencia/colegios-config", "Configuración de colegios", "Parámetros operativos por colegio.")],
+    "Calidad": [("/gerencia/auditoria-total", "Auditoría general", "Logs de actividad: qué cambió cada usuario."),
+                ("/gerencia/historial-validaciones", "Historial de validaciones", "Quién validó qué, cuándo y con qué evidencia."),
+                ("/gerencia/sesiones-tecnicas", "Sesiones técnicas", "Seguimiento de sesiones técnicas."),
                 ("/gerencia/auditoria-instituciones", "Auditoría de instituciones", "Cambios hechos en los colegios.")],
 }
 
@@ -84099,6 +84159,41 @@ def gerencia_activaciones():
     return page("Activaciones y verificación", shell(cuerpo))
 
 
+@app.route("/gerencia/historial-validaciones")
+def gerencia_historial_validaciones():
+    """Historial técnico de validaciones/activaciones: quién, qué, cuándo y evidencia (cadena de auditoría de solo-agregar)."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ("Gerente", "Administrador", "Superadmin", "Calidad", "Operaciones", "Cobranza", "Soluciones"):
+        return acceso_denegado("Este historial es solo para Gerencia, Calidad, Operaciones, Cobranza y Soluciones.")
+    _act_ensure()
+    q = (request.args.get("q") or "").strip()[:80]
+    sql = ("SELECT a.ts, a.actor, a.accion, a.detalle, a.caso_id, a.hash, c.nombre FROM act_aud a "
+           "LEFT JOIN act_casos c ON c.id = a.caso_id ")
+    par = {}
+    if q:
+        sql += "WHERE c.nombre LIKE :q OR a.actor LIKE :q OR a.accion LIKE :q "
+        par["q"] = "%" + q + "%"
+    sql += "ORDER BY a.id DESC LIMIT 300"
+    try:
+        filas = db.session.execute(text(sql), par).fetchall()
+    except Exception:
+        db.session.rollback()
+        filas = []
+    puede_ver_caso = rol_actual() != "Soluciones"
+    tr = ""
+    for ts, actor, accion, detalle, cid, h, nombre in filas:
+        evid = ("<a class='btn' href='/gerencia/activaciones/%d'>Ver evidencia</a>" % cid) if (puede_ver_caso and cid) else "<span class='mono'>%s</span>" % _esc((h or "")[:12])
+        tr += ("<tr><td>%s</td><td><b>%s</b></td><td>%s<br><span style='color:#64748b;font-size:12px'>%s · %s</span></td><td>%s</td></tr>" % (
+            _esc(ts or ""), _esc(actor or ""), _esc(accion or ""), _esc(nombre or "—"), _esc((detalle or "")[:160]), evid))
+    cuerpo = ("<div class='role-panel'><h1 style='margin-top:0'>🧾 Historial técnico de validaciones</h1>"
+              "<p style='color:#64748b'>Registro inmutable (cadena de hashes): quién, qué, cuándo y evidencia. Solo lectura.</p>"
+              "<form method='GET' style='margin-bottom:12px'><input name='q' value='%s' placeholder='Colegio, asesor o acción'> <button class='btn'>Buscar</button></form>"
+              "<div class='nx-scroll'><table><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Evidencia</th></tr>%s</table></div></div>") % (
+        _esc(q), tr or "<tr><td colspan='4'>Sin registros.</td></tr>")
+    return page("Historial de validaciones", shell(cuerpo))
+
+
 @app.route("/gerencia/activaciones/<int:cid>", methods=["GET", "POST"])
 def gerencia_activacion_detalle(cid):
     g = _guard_gerencia()
@@ -88481,15 +88576,102 @@ def _hl_gate_horario_asesores():
         if not uid:
             u0 = Usuario.query.filter_by(usuario=usuario, rol=rol).first()
             uid = u0.id if u0 else None
-        if not uid or _hl_eval(uid) is not False or _tiene_acceso_extraordinario(uid):
-            return None
-        registrar_auditoria("Acceso fuera de horario", "Bloqueado %s (%s) en %s · horario: %s" % (usuario, rol, path[:80], _hl_resumen(uid)))
-        session.clear()
-        return redirect("/login?error=horario")
+        return None   # ya no se expulsa al usuario: fuera de horario queda en modo consulta (_freno_modo_lectura)
     except Exception as ex:
         print("hl_gate:", ex)
         return None
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  MODO CONSULTA FUERA DE HORARIO
+#  · El login nunca se bloquea. Fuera de la jornada el usuario operativo solo lee: no crea, modifica ni elimina.
+#  · Gerente, Superadmin, Administrador y Desarrollador ignoran el reloj (24/7).
+#  · Los módulos más sensibles no se visualizan fuera de horario (confidencialidad).
+# ══════════════════════════════════════════════════════════════════════════════
+ROLES_SIN_RELOJ = ("Gerente", "Superadmin", "Administrador", "Desarrollador", "Developer")
+MSG_MODO_CONSULTA = "Modo de consulta activo fuera de la jornada laboral"
+_RUTAS_ESCRITURA_LIBRES = ("/logout", "/salir", "/login", "/mfa", "/biometria", "/cambiar_password", "/mi-perfil", "/perfil",
+                           "/abrir-turno", "/cerrar-turno", "/api/sesion-estado", "/api/public", "/api/webhooks")
+_RUTAS_SENSIBLES_FUERA_HORARIO = (
+    "/gerencia/nomina", "/gerencia/hojas-vida", "/gerencia/contratos-personal", "/gerencia/planillas-pila",
+    "/gerencia/admision-personal", "/gerencia/talento-legal", "/gerencia/contabilidad", "/gerencia/datos-rut",
+    "/gerencia/fondo-formalizacion", "/gerencia/firmas-corporativas", "/gerencia/boveda-legal", "/gerencia/tesoreria",
+    "/gerencia/gastos", "/gerencia/comisiones-ventas", "/gerencia/usuarios", "/gerencia/rectores",
+    "/gerencia/auditoria-total", "/cobranza/contabilidad", "/contabilidad",
+)
+
+
+def _modo_lectura_ahora():
+    """True si el usuario interno actual está fuera de su horario (sin acceso extraordinario) y no es de rango estratégico."""
+    try:
+        c = request.environ.get("procsis.modo_lectura")
+        if c is not None:
+            return c
+        res = False
+        rol = (session.get("rol") or "").strip()
+        if session.get("usuario") and _es_empleado_interno(rol) and rol not in ROLES_SIN_RELOJ:
+            u = None
+            uid = session.get("uid")
+            if uid:
+                u = Usuario.query.get(uid)
+            if not u:
+                u = Usuario.query.filter_by(usuario=session.get("usuario"), rol=rol).first()
+            if u:
+                res = not _dentro_horario_laboral(u)
+        request.environ["procsis.modo_lectura"] = res
+        return res
+    except Exception:
+        return False
+
+
+@app.before_request
+def _freno_modo_lectura():
+    """Fuera de horario: frena en seco crear/modificar/eliminar y oculta módulos sensibles."""
+    try:
+        path = request.path or ""
+        if path.startswith(("/static", "/media")) or not session.get("usuario"):
+            return None
+        if not _modo_lectura_ahora():
+            return None
+        escribe = request.method in ("POST", "PUT", "PATCH", "DELETE")
+        if escribe and not path.startswith(_RUTAS_ESCRITURA_LIBRES):
+            registrar_auditoria("Acción bloqueada fuera de horario", "%s %s" % (request.method, path[:120]))
+            if path.startswith("/api/") or request.is_json or "application/json" in (request.headers.get("Accept") or ""):
+                return jsonify({"ok": False, "modo_lectura": True, "error": MSG_MODO_CONSULTA}), 403
+            return page("Modo de consulta", shell(
+                "<div class='role-panel' style='border-left:6px solid #b45309;max-width:640px;margin:40px auto'>"
+                "<h2 style='margin:0 0 8px'>🔒 " + MSG_MODO_CONSULTA + "</h2>"
+                "<p style='color:#475569;margin:0 0 12px'>Puede consultar la información, pero la acción no se procesó. "
+                "Vuelva a intentarlo dentro de su horario o pida a Gerencia un acceso extraordinario.</p>"
+                "<a class='btn' href='javascript:history.back()'>← Volver</a></div>")), 403
+        if (not escribe) and path.startswith(_RUTAS_SENSIBLES_FUERA_HORARIO):
+            registrar_auditoria("Módulo sensible bloqueado fuera de horario", path[:120])
+            return page("Módulo no disponible", shell(
+                "<div class='role-panel' style='border-left:6px solid #be123c;max-width:640px;margin:40px auto'>"
+                "<h2 style='margin:0 0 8px'>🔒 Módulo confidencial</h2>"
+                "<p style='color:#475569;margin:0'>Este módulo contiene información sensible y no se puede visualizar fuera de la jornada laboral.</p></div>")), 403
+    except Exception as ex:
+        print("freno_modo_lectura:", ex)
+    return None
+
+
+@app.after_request
+def _banner_modo_lectura(resp):
+    """Avisa en pantalla que la plataforma está en modo consulta."""
+    try:
+        if resp.status_code != 200 or resp.direct_passthrough or (resp.mimetype or "") != "text/html":
+            return resp
+        if not session.get("usuario") or not _modo_lectura_ahora():
+            return resp
+        html = resp.get_data(as_text=True)
+        banner = ("<div style='position:sticky;top:0;z-index:99999;background:#fef3c7;color:#92400e;border-bottom:1px solid #fde68a;"
+                  "padding:8px 14px;font:700 13px system-ui,sans-serif;text-align:center'>🔒 " + MSG_MODO_CONSULTA + "</div>")
+        nuevo = re.sub(r"(<body[^>]*>)", lambda m: m.group(1) + banner, html, count=1, flags=re.I)
+        if nuevo != html:
+            resp.set_data(nuevo)
+    except Exception:
+        pass
+    return resp
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  AUDITORÍA PARA SOPORTE: solo CAMBIOS que hacen los roles de los colegios
