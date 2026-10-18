@@ -6411,9 +6411,26 @@ def sincronizar_inst_globals(c=None):
 
 
 def logo_fs():
-    """Ruta en disco del logo (para PDF/Word)."""
+    """Logo para PDF/Word: ruta en disco, o un BytesIO si el logo está guardado como data URI en la BD.
+    Reportlab y python-docx no pueden abrir un data URI como archivo; por eso el logo no salía en boletines."""
     web = logo_actual()
-    return web.lstrip("/").replace("\\", "/")
+    _fallback = "static/img/logo-edutrack.png"
+    if web.startswith("data:"):
+        try:
+            import base64 as _b64, io as _io
+            cab, _, datos = web.partition(",")
+            if "svg" in cab.lower():
+                return _fallback
+            raw = _b64.b64decode(datos) if "base64" in cab.lower() else None
+            return _io.BytesIO(raw) if raw else _fallback
+        except Exception:
+            return _fallback
+    if web.startswith("http"):
+        return _fallback
+    ruta = web.lstrip("/").replace("\\", "/")
+    if ruta.lower().endswith(".svg"):
+        return _fallback
+    return ruta
 
 
 def logo_actual(inst_id=None):
@@ -22049,6 +22066,53 @@ def _guard_gerencia():
         return redirect("/gerencia-login")
     return None
 
+_TALENTO_RUTAS = ("/gerencia/hojas-vida", "/gerencia/nomina", "/gerencia/contratos-personal", "/gerencia/planillas-pila",
+                  "/gerencia/admision-personal", "/gerencia/turnos", "/gerencia/horarios-asesores", "/interno/turnos")
+
+
+_AREA_RUTAS_EXTRA = {
+    "Talento": ("/gerencia/talento-legal", "/gerencia/matriz-epp", "/gerencia/equipo", "/gerencia/contabilidad/trabajador"),
+    "Finanzas": ("/gerencia/tesoreria", "/gerencia/gastos", "/gerencia/comisiones-ventas", "/gerencia/proveedores", "/gerencia/retractos/reembolsos"),
+    "Juridica": ("/gerencia/contratos-saas", "/gerencia/paginas-legales", "/gerencia/textos-legales", "/gerencia/libro-actas",
+                 "/gerencia/boveda-legal", "/gerencia/requerimientos-autoridades", "/gerencia/retractos", "/gerencia/certificados-apoyo",
+                 "/gerencia/pie-login"),
+    "Marketing": ("/gerencia/web-menu", "/gerencia/casos-exito", "/gerencia/login-banners", "/gerencia/web-corporativa", "/gerencia/procsis-web",
+                  "/gerencia/landing-ventas", "/gerencia/alianzas-clientes", "/gerencia/diseno-login",
+                  "/gerencia/backoffice-branding"),
+    "Operaciones": ("/gerencia/colegios-config",),
+    "Calidad": ("/gerencia/sesiones-tecnicas", "/gerencia/auditoria-instituciones"),
+}
+
+
+def _guard_area(rol_area):
+    """El área opera; Gerencia solo visualiza (GET)."""
+    if not requiere_login():
+        return redirect("/login")
+    r = rol_actual()
+    if r == rol_area:
+        return None
+    if r in ("Gerente", "Superadmin", "Administrador"):
+        if request.method in ("GET", "HEAD"):
+            return None
+        return acceso_denegado("Gerencia solo puede visualizar este módulo. Lo gestiona el área de %s." % AREAS_PROCSIS[rol_area]["titulo"])
+    return acceso_denegado("Este módulo es exclusivo del área de %s." % AREAS_PROCSIS[rol_area]["titulo"])
+
+
+def _guard_talento():
+    """Módulos de personal (nómina, hojas de vida, contratos, PILA, turnos, horarios):
+    los OPERA Talento Humano; Gerencia solo los visualiza (GET)."""
+    if not requiere_login():
+        return redirect("/login")
+    r = rol_actual()
+    if r == "Talento":
+        return None
+    if r in ("Gerente", "Superadmin", "Administrador"):
+        if request.method in ("GET", "HEAD"):
+            return None
+        return acceso_denegado("Gerencia solo puede visualizar este módulo. Lo gestiona el área de Talento Humano.")
+    return acceso_denegado("Este módulo es exclusivo del área de Talento Humano.")
+
+
 def _guard_ventas():
     if not requiere_login():
         return redirect("/ventas-login")
@@ -22532,6 +22596,8 @@ def _aislar_paneles_internos():
         _slug_area = "/" + AREAS_PROCSIS[rol]["slug"]
         ok_area = (
             path.startswith(_slug_area)
+            or (rol == "Talento" and path.startswith(_TALENTO_RUTAS))
+            or path.startswith(_AREA_RUTAS_EXTRA.get(rol, ("/\0",)))
             or path.startswith("/mi-perfil")
             or path.startswith("/perfil")
             or path.startswith("/cambiar_password")
@@ -25212,7 +25278,7 @@ def _file_to_data_uri(fs, max_bytes=2_500_000):
 @app.route("/gerencia/login-banners", methods=["GET", "POST"])
 def gerencia_backoffice_branding():
     """Gestor de banners del login interno + salida segura (hasta 4 activos)."""
-    g = _guard_gerencia()
+    g = _guard_area("Marketing")
     if g is not None:
         return g
     # Crear tabla si no existe (evita InFailedSqlTransaction)
@@ -25453,7 +25519,7 @@ def gerencia_backoffice_branding():
 @app.route("/gerencia/web-menu", methods=["GET", "POST"])
 def gerencia_web_menu():
     """Editor de textos del mega-menú público (Procsis, Soluciones, Planes, Ayuda)."""
-    g = _guard_gerencia()
+    g = _guard_area("Marketing")
     if g is not None:
         return g
     try:
@@ -25593,7 +25659,7 @@ def gerencia_web_menu():
 @app.route("/gerencia/casos-exito", methods=["GET", "POST"])
 def gerencia_casos_exito():
     """Crear y editar casos de éxito públicos."""
-    g = _guard_gerencia()
+    g = _guard_area("Marketing")
     if g is not None:
         return g
     try:
@@ -28110,7 +28176,7 @@ def contrato_detalle(cid):
 @app.route("/gerencia/pie-login", methods=["GET", "POST"])
 def gerencia_pie_login():
     """Editar textos del pie legal del login de colegios (estilo Apple)."""
-    _g = _guard_gerencia()
+    _g = _guard_area("Juridica")
     if _g is not None:
         return _g
     try:
@@ -30113,7 +30179,7 @@ def _doc_word_bytes(titulo, html_body, confidencial=True, lugar=None):
 @app.route("/gerencia/talento-legal")
 def gerencia_talento_legal():
     """Guía legal Colombia: esquemas de contrato, PILA, afiliaciones y SG-SST."""
-    _g = _guard_gerencia()
+    _g = _guard_area("Talento")
     if _g is not None:
         return _g
     body = """
@@ -30189,7 +30255,7 @@ def gerencia_talento_legal():
 
 @app.route("/gerencia/contratos-personal", methods=["GET", "POST"])
 def gerencia_contratos_personal():
-    _g = _guard_gerencia()
+    _g = _guard_talento()
     if _g is not None:
         return _g
     try:
@@ -30343,7 +30409,7 @@ def gerencia_contratos_personal():
 @app.route("/gerencia/contratos-personal/<int:cid>/pdf")
 def gerencia_contrato_pdf(cid):
     """Siempre regenera el PDF limpio (sin cuadritos negros ni líneas viejas)."""
-    _g = _guard_gerencia()
+    _g = _guard_talento()
     if _g is not None:
         return _g
     c = ContratoPersonal.query.get_or_404(cid)
@@ -30383,7 +30449,7 @@ def gerencia_contrato_pdf(cid):
 
 @app.route("/gerencia/planillas-pila", methods=["GET", "POST"])
 def gerencia_planillas_pila():
-    _g = _guard_gerencia()
+    _g = _guard_talento()
     if _g is not None:
         return _g
     try:
@@ -30489,7 +30555,7 @@ def gerencia_planillas_pila():
 
 @app.route("/gerencia/planillas-pila/<int:pid>/archivo")
 def gerencia_pila_archivo(pid):
-    _g = _guard_gerencia()
+    _g = _guard_talento()
     if _g is not None:
         return _g
     r = PlanillaPILA.query.get_or_404(pid)
@@ -30511,7 +30577,7 @@ def gerencia_pila_archivo(pid):
 
 @app.route("/gerencia/matriz-epp", methods=["GET", "POST"])
 def gerencia_matriz_epp():
-    _g = _guard_gerencia()
+    _g = _guard_area("Talento")
     if _g is not None:
         return _g
     try:
@@ -33099,7 +33165,7 @@ def _capturar_error_sistema(e):
 @app.route("/gerencia/web-corporativa", methods=["GET", "POST"])
 def gerencia_web_corporativa():
     """Editar textos y contactos de la página pública /procsis y /portafolio (solo Gerencia)."""
-    _g = _guard_gerencia()
+    _g = _guard_area("Marketing")
     if _g is not None:
         return _g
     p = plataforma()
@@ -33693,7 +33759,7 @@ def gerencia_correo_notificaciones():
 @app.route("/gerencia/tesoreria", methods=["GET", "POST"])
 def gerencia_tesoreria():
     """Cuentas bancarias y pasarelas — solo gerencia."""
-    _g = _guard_gerencia()
+    _g = _guard_area("Finanzas")
     if _g is not None:
         return _g
     msg = ""
@@ -34839,7 +34905,7 @@ def gerencia_limpieza():
 
 @app.route("/gerencia/gastos", methods=["GET", "POST"])
 def gerencia_gastos():
-    _g = _guard_gerencia()
+    _g = _guard_area("Finanzas")
     if _g is not None:
         return _g
     msg = ""
@@ -35570,7 +35636,7 @@ def gerencia_datos_empresa():
 def gerencia_admision_personal():
     """Genera el certificado de admisión de personal (PDF con logo) para el equipo de Procsis
     (Soporte, Ventas, Gerencia)."""
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Desarrollador", "Cobranza"]
@@ -35656,7 +35722,7 @@ def gerencia_admision_personal():
 @app.route("/gerencia/procsis-web", methods=["GET", "POST"])
 def gerencia_procsis_web():
     """Administrar los productos y noticias que se muestran en la página pública /procsis."""
-    g = _guard_gerencia()
+    g = _guard_area("Marketing")
     if g:
         return g
     mensaje = ""
@@ -40647,6 +40713,8 @@ def soporte_institucion(id):
         if not cfg:
             cfg = Configuracion(institucion_id=inst.id)
             db.session.add(cfg)
+            if (inst.logo or "").strip():
+                cfg.logo_path = inst.logo
         cfg.inst_nombre = inst.nombre
         cfg.inst_sede = inst.sede
         cfg.inst_dane = inst.dane
@@ -52950,7 +53018,7 @@ def _prov_actividad(limite=400):
 
 @app.route("/gerencia/proveedores")
 def gerencia_proveedores():
-    g = _guard_gerencia()
+    g = _guard_area("Finanzas")
     if g is not None:
         return g
     _seg_ensure()
@@ -52983,7 +53051,7 @@ def gerencia_proveedores():
 
 @app.route("/gerencia/proveedores/cobrado/<int:rid>", methods=["POST"])
 def gerencia_proveedores_cobrado(rid):
-    g = _guard_gerencia()
+    g = _guard_area("Finanzas")
     if g is not None:
         return g
     r = CarneReimpresion.query.get(rid)
@@ -52999,7 +53067,7 @@ def gerencia_proveedores_cobrado(rid):
 
 @app.route("/gerencia/proveedores/pdf")
 def gerencia_proveedores_pdf():
-    g = _guard_gerencia()
+    g = _guard_area("Finanzas")
     if g is not None:
         return g
     q = (request.args.get("q") or "").strip().lower()
@@ -53199,7 +53267,7 @@ def _track_sesiones_tecnicas():
 @app.route("/gerencia/sesiones-tecnicas")
 def gerencia_sesiones_tecnicas():
     """Gerencia: SOLO VISUALIZACIÓN de sesiones activas de Desarrollo y Soporte."""
-    _g = _guard_gerencia()
+    _g = _guard_area("Calidad")
     if _g is not None:
         return _g
     filas_bd = ""
@@ -57600,11 +57668,55 @@ def mfa_pagina():
 
 
 # ---------- Portales internos por área (Finanzas, Talento, Marketing, Jurídica, Operaciones, Calidad) ----------
+_TALENTO_MODULOS = [
+    ("/gerencia/hojas-vida", "Hojas de vida", "Registro y documentación del personal."),
+    ("/gerencia/contratos-personal", "Contratos del personal", "Contratos laborales, edición y PDF."),
+    ("/gerencia/nomina", "Nómina", "Liquidación, Excel y colillas en PDF."),
+    ("/gerencia/planillas-pila", "Planillas PILA", "Seguridad social y aportes."),
+    ("/gerencia/admision-personal", "Admisión de personal", "Ingreso de nuevos integrantes."),
+    ("/gerencia/turnos", "Turnos", "Quién trabaja, qué día y en qué horario."),
+    ("/gerencia/horarios-asesores", "Horarios de asesores", "Horario de ingreso al sistema por rol y persona."),
+]
+
+
+_AREA_MODULOS_EXTRA = {
+    "Talento": [("/gerencia/talento-legal", "Talento legal", "Documentación legal del personal."),
+                ("/gerencia/matriz-epp", "Matriz EPP", "Elementos de protección y seguridad."),
+                ("/gerencia/contabilidad/trabajadores", "Trabajadores y memos", "Fichas, memos, constancias y certificaciones."),
+                ("/gerencia/equipo-carnes", "Carnés del equipo", "Carnés del personal.")],
+    "Finanzas": [("/gerencia/tesoreria", "Tesorería", "Caja, bancos y movimientos."),
+                 ("/gerencia/gastos", "Gastos", "Registro y control de gastos."),
+                 ("/gerencia/proveedores", "Pagos a proveedores", "Cobros y pagos a proveedores."),
+                 ("/gerencia/comisiones-ventas", "Comisiones de ventas", "Liquidación de comisiones."),
+                 ("/gerencia/retractos/reembolsos", "Reembolsos", "Reembolsos por retracto.")],
+    "Juridica": [("/gerencia/contratos-saas", "Contratos SaaS", "Contratos con los colegios."),
+                 ("/gerencia/requerimientos-autoridades", "Requerimientos de autoridades", "Respuestas y actas."),
+                 ("/gerencia/retractos", "Retractos", "Solicitudes de retracto."),
+                 ("/gerencia/libro-actas", "Libro de actas", "Actas corporativas."),
+                 ("/gerencia/boveda-legal", "Bóveda legal", "Documentos legales."),
+                 ("/gerencia/paginas-legales", "Páginas legales", "Términos, privacidad y políticas."),
+                 ("/gerencia/textos-legales", "Textos legales", "Textos y cláusulas."),
+                 ("/gerencia/certificados-apoyo", "Certificados de apoyo", "Certificados y su PDF.")],
+    "Marketing": [("/gerencia/web-menu", "Menú web", "Menú de la web corporativa."),
+                  ("/gerencia/web-corporativa", "Web corporativa", "Contenido del sitio."),
+                  ("/gerencia/casos-exito", "Casos de éxito", "Casos de clientes."),
+                  ("/gerencia/login-banners", "Banners del login", "Comunicados en el login."),
+                  ("/gerencia/landing-ventas", "Landing de ventas", "Página de ventas."),
+                  ("/gerencia/alianzas-clientes", "Alianzas y clientes", "Alianzas comerciales."),
+                  ("/gerencia/diseno-login", "Diseño del login", "Aspecto del login."),
+                  ("/gerencia/backoffice-branding", "Marca del backoffice", "Logos y colores.")],
+    "Operaciones": [("/gerencia/colegios-config", "Configuración de colegios", "Parámetros operativos por colegio.")],
+    "Calidad": [("/gerencia/sesiones-tecnicas", "Sesiones técnicas", "Seguimiento de sesiones técnicas."),
+                ("/gerencia/auditoria-instituciones", "Auditoría de instituciones", "Cambios hechos en los colegios.")],
+}
+
+
 def _area_menu_items(rol):
     a = AREAS_PROCSIS.get(rol)
     if not a:
         return [("/logout", "Salir")]
-    return [("/" + a["slug"], "Inicio"), ("/perfil", "Mi perfil"), ("/logout", "Salir")]
+    extra = [(u, t) for u, t, _d in ((_TALENTO_MODULOS if rol == "Talento" else []) + _AREA_MODULOS_EXTRA.get(rol, []))]
+    return [("/" + a["slug"], "Inicio")] + extra + [("/perfil", "Mi perfil"), ("/logout", "Salir")]
 
 
 def _opciones_areas_rol(actual=""):
@@ -57643,6 +57755,14 @@ def _area_home(rol_area):
         % (a["color"], _esc(n), _esc(d))
         for n, d in a["funciones"]
     )
+    if rol_area in _AREA_MODULOS_EXTRA or rol_area == "Talento":
+        _lista_mod = (_TALENTO_MODULOS if rol_area == "Talento" else []) + _AREA_MODULOS_EXTRA.get(rol_area, [])
+        _tm = "".join(
+            "<a href='%s' class='role-panel' style='border-left:6px solid %s;text-decoration:none;display:block'>"
+            "<div style='font-weight:800;color:#0f172a'>%s</div><div style='font-size:12px;color:#475569;margin-top:4px'>%s</div>"
+            "<div style='margin-top:8px'><span style='background:#ede9fe;color:#5b21b6;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700'>Abrir</span></div></a>"
+            % (u, a["color"], _esc(t), _esc(d)) for u, t, d in _lista_mod)
+        tarjetas = _tm
     filas = "".join(
         "<tr><td><b>%s</b></td><td>%s</td><td>%s</td></tr>" % (
             _esc(u.usuario), _esc(getattr(u, "nombre_completo", "") or "—"),
@@ -60221,19 +60341,21 @@ def modulo_turnos():
     path = request.path or ""
     # Solo Gerencia administra turnos del equipo
     if path.startswith(("/cobranza/turnos", "/soporte/turnos", "/ventas/turnos")):
-        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia", "Talento"):
             return acceso_denegado(
-                "Los turnos los asigna Gerencia. No hay módulo de turnos en Ventas, Soporte ni Cobranza."
+                "Los turnos los asigna Talento Humano. No hay módulo de turnos en Ventas, Soporte ni Cobranza."
             )
         return redirect("/gerencia/turnos")
     if path.startswith("/gerencia/turnos") or path.startswith("/interno/turnos"):
-        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
-            return acceso_denegado("Solo Gerencia puede crear y asignar turnos del equipo.")
+        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia", "Talento"):
+            return acceso_denegado("Solo Talento Humano puede crear y asignar turnos del equipo.")
         area = "Gerencia"
     else:
         area = "Gerencia"
-        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+        if rol not in ("Gerente", "Superadmin", "Administrador", "Gerencia", "Talento"):
             return redirect("/login")
+    if request.method == "POST" and rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+        return acceso_denegado("Gerencia solo puede visualizar los turnos. Los gestiona Talento Humano.")
 
     try:
         db.create_all()
@@ -60344,7 +60466,7 @@ def modulo_turnos():
     roles_area = {
         "Cobranza": ["Cobranza", "Gerente"],
         "Soporte": ["Soporte"],
-        "Gerencia": ["Gerente", "Administrador", "Superadmin"],
+        "Gerencia": ["Gerente", "Administrador", "Superadmin", *ROLES_AREAS],
         "Ventas": ["Comercial"],
     }.get(area, list(ROLES_INTERNOS))
     asesores = Usuario.query.filter(Usuario.rol.in_(roles_area)).order_by(Usuario.usuario).all()
@@ -65589,7 +65711,7 @@ def _ensure_cont_trabajadores_cols():
 @app.route("/gerencia/contabilidad/trabajadores", methods=["GET", "POST"])
 def contabilidad_trabajadores():
     """Listado de trabajadores (activos / inactivos / historial). El alta solo se hace desde Hojas de vida → CONTRATADO."""
-    g = _guard_contabilidad()
+    g = _guard_area("Talento")
     if g is not None:
         return g
     try:
@@ -66211,7 +66333,7 @@ def contabilidad_export_partes_pdf():
 
 @app.route("/gerencia/contabilidad/export/trabajadores.xlsx")
 def contabilidad_export_trab_excel():
-    g = _guard_contabilidad()
+    g = _guard_area("Talento")
     if g is not None:
         return g
     meta = _cont_empresa_meta()
@@ -66255,7 +66377,7 @@ def contabilidad_export_trab_excel():
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/memos", methods=["GET", "POST"])
 def contabilidad_trabajador_memos(tid):
     """Memos e historial de notas del trabajador. RBAC: Gerencia total; Supervisor solo lectura propia."""
-    g = _guard_contabilidad()
+    g = _guard_area("Talento")
     if g is not None:
         return g
     rol = (rol_actual() or "").strip()
@@ -66409,7 +66531,7 @@ def contabilidad_trabajador_memos(tid):
 @app.route("/gerencia/contabilidad/trabajador/<int:tid>/certificacion.pdf", methods=["GET", "POST"])
 def contabilidad_constancia_laboral(tid):
     """Formulario + PDF de Certificación Laboral (distinta de constancia simple)."""
-    g = _guard_contabilidad()
+    g = _guard_area("Talento")
     if g is not None:
         return g
     # Limpiar transacción abortada de PostgreSQL (InFailedSqlTransaction)
@@ -67239,7 +67361,7 @@ def _req_auth_audit(req_id, accion, detalle="", hash_archivo=""):
 
 @app.route("/gerencia/requerimientos-autoridades", methods=["GET", "POST"])
 def gerencia_req_autoridades():
-    g = _guard_gerencia()
+    g = _guard_area("Juridica")
     if g:
         return g
     try:
@@ -67459,7 +67581,7 @@ def gerencia_req_autoridades():
 
 @app.route("/gerencia/requerimientos-autoridades/<int:rid>", methods=["GET", "POST"])
 def gerencia_req_autoridad_detalle(rid):
-    g = _guard_gerencia()
+    g = _guard_area("Juridica")
     if g:
         return g
     r = ReqAutoridad.query.get_or_404(rid)
@@ -67548,7 +67670,7 @@ def gerencia_req_autoridad_detalle(rid):
 @app.route("/gerencia/requerimientos-autoridades/<int:rid>/acta.pdf")
 def gerencia_req_acta_pdf(rid):
     """Acta formal de entrega controlada — cadena de custodia digital."""
-    g = _guard_gerencia()
+    g = _guard_area("Juridica")
     if g:
         return g
     r = ReqAutoridad.query.get_or_404(rid)
@@ -68384,7 +68506,7 @@ def _hv_draw_header(c, W, H, meta, subtitulo="REG-TH-001 · Gestión de Talento 
 
 @app.route("/gerencia/hojas-vida", methods=["GET", "POST"])
 def gerencia_hojas_vida():
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     try:
@@ -68565,7 +68687,7 @@ def gerencia_hojas_vida():
 
 @app.route("/gerencia/hojas-vida/nueva", methods=["GET", "POST"])
 def gerencia_hv_nueva():
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     # POST handled on list route via redirect pattern — use same registrar on this URL
@@ -68685,7 +68807,7 @@ def gerencia_hv_nueva():
 
 @app.route("/gerencia/hojas-vida/<int:hid>", methods=["GET", "POST"])
 def gerencia_hv_detalle(hid):
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     h = HojaVida.query.get_or_404(hid)
@@ -68779,7 +68901,7 @@ def gerencia_hv_detalle(hid):
 @app.route("/gerencia/hojas-vida/formato.pdf")
 def gerencia_hv_formato_pdf():
     """Formato HV una sola hoja — espaciado equilibrado, casillas legibles."""
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     meta = _hv_meta()
@@ -69005,7 +69127,7 @@ def gerencia_hv_formato_pdf():
 
 @app.route("/gerencia/hojas-vida/<int:hid>/pdf")
 def gerencia_hv_pdf(hid):
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     h = HojaVida.query.get_or_404(hid)
@@ -69135,7 +69257,7 @@ def gerencia_hv_pdf(hid):
 @app.route("/gerencia/hojas-vida/<int:hid>/constancia.pdf")
 def gerencia_hv_constancia_pdf(hid):
     """Constancia del estado del proceso de selección (cualquier decisión)."""
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     h = HojaVida.query.get_or_404(hid)
@@ -69298,7 +69420,7 @@ def gerencia_hv_constancia_pdf(hid):
 @app.route("/gerencia/hojas-vida/<int:hid>/contrato", methods=["GET", "POST"])
 def gerencia_hv_contrato(hid):
     """Editar texto del contrato, subir firma digital y regenerar PDF al marcar CONTRATADO."""
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     h = HojaVida.query.get_or_404(hid)
@@ -69527,7 +69649,7 @@ def gerencia_hv_contrato(hid):
 @app.route("/gerencia/contratos-personal/<int:cid>/editar", methods=["GET", "POST"])
 def gerencia_contrato_editar(cid):
     """Atajo: redirige al editor de contrato vinculado a HV o muestra el mismo formulario."""
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     c = ContratoPersonal.query.get_or_404(cid)
@@ -69692,7 +69814,7 @@ def gerencia_contrato_editar(cid):
 @app.route("/gerencia/nomina", methods=["GET", "POST"])
 def gerencia_nomina():
     """Registro de pagos de nómina con seguridad social, parafiscales y prestaciones."""
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     try:
@@ -70470,7 +70592,7 @@ def gerencia_contratos_firmas():
 @app.route("/gerencia/nomina/excel")
 def gerencia_nomina_excel():
     """Exportar liquidaciones de nómina a Excel."""
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     periodo_f = (request.args.get("periodo") or "").strip()[:7]
@@ -70521,7 +70643,7 @@ def gerencia_nomina_excel():
 @app.route("/gerencia/nomina/<int:nid>/pdf")
 def gerencia_nomina_pdf(nid):
     """PDF de pre-liquidación (PENDIENTE) o comprobante de pago (PAGADO)."""
-    g = _guard_gerencia()
+    g = _guard_talento()
     if g:
         return g
     p = NominaPago.query.get_or_404(nid)
@@ -71275,7 +71397,7 @@ def _texto_contrato_saas_default(colegio, rector, nit_col, plan, valor, prov_nom
 @app.route("/gerencia/contratos-saas", methods=["GET", "POST"])
 def gerencia_contratos_saas():
     """Contratos de licenciamiento SaaS EduTrack para colegios (firma rector + datos RUT)."""
-    g = _guard_gerencia()
+    g = _guard_area("Juridica")
     if g:
         return g
     try:
@@ -71421,7 +71543,7 @@ def gerencia_contratos_saas():
 
 @app.route("/gerencia/contratos-saas/<int:cid>", methods=["GET", "POST"])
 def gerencia_contratos_saas_detalle(cid):
-    g = _guard_gerencia()
+    g = _guard_area("Juridica")
     if g:
         return g
     c = ContratoSaaSColegio.query.get_or_404(cid)
@@ -71479,7 +71601,7 @@ def certificados_apoyo_familiar():
     # Permitir gerencia o cobranza
     rol = (session.get("rol") or "").strip()
     if rol not in ("Gerente", "Administrador", "Superadmin", "Cobranza", "gerente", "cobranza"):
-        g = _guard_gerencia()
+        g = _guard_area("Juridica")
         if g:
             return g
     try:
@@ -71615,7 +71737,7 @@ def certificados_apoyo_familiar():
 @app.route("/cobranza/certificados-apoyo/<int:cid>/pdf")
 def certificados_apoyo_pdf(cid):
     """PDF: CERTIFICADO DE MANDATO AD HONOREM centrado + fecha/hora sistema + firma sin línea."""
-    g = _guard_gerencia()
+    g = _guard_area("Juridica")
     if g and (session.get("rol") or "") not in ("Cobranza", "cobranza"):
         # intentar no bloquear cobranza si guard redirige
         try:
@@ -71735,7 +71857,7 @@ def certificados_apoyo_pdf(cid):
 @app.route("/gerencia/comisiones-ventas", methods=["GET", "POST"])
 def gerencia_comisiones_ventas():
     """Configurar comisión por cierre de colegio y ver historial por asesor."""
-    g = _guard_gerencia()
+    g = _guard_area("Finanzas")
     if g:
         return g
     try:
@@ -71853,7 +71975,7 @@ def gerencia_comisiones_ventas():
 @app.route("/gerencia/libro-actas", methods=["GET", "POST"])
 def gerencia_libro_actas():
     """Libro de actas y decisiones societarias con consecutivo ACTA-YYYY-NNN."""
-    g = _guard_gerencia()
+    g = _guard_area("Juridica")
     if g:
         return g
     try:
@@ -71936,7 +72058,7 @@ def gerencia_libro_actas():
 @app.route("/gerencia/boveda-legal", methods=["GET", "POST"])
 def gerencia_boveda_legal():
     """Bóveda de documentación legal externa (RUT, banco, registro mercantil)."""
-    g = _guard_gerencia()
+    g = _guard_area("Juridica")
     if g:
         return g
     try:
@@ -73301,7 +73423,7 @@ def _landing_get(attr, default=""):
 @app.route("/gerencia/landing-ventas", methods=["GET", "POST"])
 def gerencia_landing_ventas():
     """Editor del panel público /ventas (hero, precio desde, textos de planes). No es el login."""
-    g = _guard_gerencia()
+    g = _guard_area("Marketing")
     if g:
         return g
     _ensure_ventas_landing_cols()
@@ -73477,7 +73599,7 @@ def _ensure_inst_auto_suspender():
 @app.route("/gerencia/colegios-config", methods=["GET", "POST"])
 def gerencia_colegios_config():
     """Configuración de licencia, corte, estado y auto-suspensión por colegio."""
-    g = _guard_gerencia()
+    g = _guard_area("Operaciones")
     if g:
         return g
     _ensure_inst_auto_suspender()
@@ -73644,7 +73766,7 @@ def gerencia_colegios_config():
 @app.route("/gerencia/diseno-login", methods=["GET", "POST"])
 def gerencia_diseno_login():
     """Personalizar colores y textos de los portales de login (colegio, gerencia, ventas, soporte, cobranza)."""
-    g = _guard_gerencia()
+    g = _guard_area("Marketing")
     if g:
         return g
     _ensure_ventas_landing_cols()
@@ -75647,7 +75769,7 @@ def coordinacion_retiro_medico():
 
 @app.route("/gerencia/alianzas-clientes", methods=["GET", "POST"])
 def gerencia_alianzas_clientes():
-    g = _guard_gerencia()
+    g = _guard_area("Marketing")
     if g:
         return g
     msg = err = ""
@@ -76417,7 +76539,7 @@ def _pdf_doc_corporativo_retracto(cfg):
 @app.route("/gerencia/retractos")
 def gerencia_retractos_lista():
     try:
-        g = _guard_gerencia()
+        g = _guard_area("Juridica")
         if g:
             return g
     except Exception:
@@ -76445,7 +76567,7 @@ def gerencia_retractos_lista():
 @app.route("/gerencia/retractos/<int:cid>", methods=["GET", "POST"])
 def gerencia_retracto_caso(cid):
     try:
-        g = _guard_gerencia()
+        g = _guard_area("Juridica")
         if g:
             return g
     except Exception:
@@ -76503,7 +76625,7 @@ def gerencia_retracto_caso(cid):
 @app.route("/gerencia/retractos/config", methods=["GET", "POST"])
 def gerencia_retractos_config():
     try:
-        g = _guard_gerencia()
+        g = _guard_area("Juridica")
         if g:
             return g
     except Exception:
@@ -76581,7 +76703,7 @@ def gerencia_retractos_config():
 @app.route("/gerencia/retractos/config/pdf")
 def gerencia_retractos_config_pdf():
     try:
-        g = _guard_gerencia()
+        g = _guard_area("Juridica")
         if g:
             return g
     except Exception:
@@ -76599,7 +76721,7 @@ def gerencia_retractos_config_pdf():
 @app.route("/gerencia/retractos/reembolsos", methods=["GET", "POST"])
 def gerencia_retractos_reembolsos():
     try:
-        g = _guard_gerencia()
+        g = _guard_area("Finanzas")
         if g:
             return g
     except Exception:
@@ -81833,7 +81955,7 @@ def soporte_institucion_ficha(iid):
 
 @app.route("/gerencia/auditoria-instituciones", methods=["GET", "POST"])
 def gerencia_auditoria_instituciones():
-    _g = _guard_gerencia()
+    _g = _guard_area("Calidad")
     if _g is not None:
         return _g
     _vin_ensure()
@@ -82470,7 +82592,7 @@ def legal_texto_publico(clave):
 
 @app.route("/gerencia/textos-legales", methods=["GET", "POST"])
 def gerencia_textos_legales():
-    _g = _guard_gerencia()
+    _g = _guard_area("Juridica")
     if _g is not None:
         return _g
     _legal_ensure()
@@ -88050,7 +88172,7 @@ def soporte_cambios_ver(cid):
 #  · Gerencia/Superadmin/Administrador nunca se bloquean (evita que Gerencia se quede fuera).
 #  · Acceso extraordinario temporal (tabla existente) = excepción autorizada y registrada.
 # ══════════════════════════════════════════════════════════════════════════════
-_HL_ROLES = ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Proveedor", "Soluciones")
+_HL_ROLES = ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Proveedor", "Soluciones") + tuple(ROLES_AREAS)
 _HL_DIAS = {1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves", 5: "Viernes", 6: "Sábado", 7: "Domingo"}
 _HL_DIA_CORTO = {1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb", 7: "Dom"}
 _HL_HORA_RE = _re_hl = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -88158,7 +88280,7 @@ def _hl_texto_extra_dt(v):
 
 @app.route("/gerencia/horarios-asesores", methods=["GET", "POST"])
 def gerencia_horarios_asesores():
-    g_ = _guard_gerencia()
+    g_ = _guard_talento()
     if g_ is not None:
         return g_
     _hl_ensure()
@@ -88495,7 +88617,7 @@ def _carne_equipo_de_usuario(u):
 
 @app.route("/gerencia/equipo-carnes", methods=["GET", "POST"])
 def gerencia_equipo_carnes():
-    g_ = _guard_gerencia()
+    g_ = _guard_area("Talento")
     if g_ is not None:
         return g_
     try:
@@ -88557,7 +88679,7 @@ def gerencia_equipo_carnes():
 
 @app.route("/gerencia/equipo/carnet/<int:id>")
 def gerencia_equipo_carnet(id):
-    g_ = _guard_gerencia()
+    g_ = _guard_area("Talento")
     if g_ is not None:
         return g_
     try:
