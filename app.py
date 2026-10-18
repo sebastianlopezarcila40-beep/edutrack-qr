@@ -85787,10 +85787,305 @@ def gerencia_kit_donacion():
         "<li><b>Peso y volumen:</b> el transportador cobra el mayor entre el peso real y el volumétrico. Use cajas de cartón selladas con plástico transparente contra la humedad.</li>"
         "<li><b>Guía única:</b> destinatario completo y contenido «Documentos Académicos - Material Educativo Procsis Edu». Imprima el rótulo desde Envíos.</li>"
         "<li><b>Acta de entrega por duplicado:</b> una copia firmada y sellada por quien recibe vuelve como prueba legal. Imprímala desde cada kit.</li></ul></div>")
+    kit_sel = "<option value=''>— Sin kit (cantidad manual) —</option>" + "".join("<option value='%d'>%s</option>" % (k.id, _esc(k.nombre)) for k in kits)
+    descargas = (
+        "<div class='dn-c'><h3 style='margin:0 0 6px'>⬇️ Descargar planillas (PDF para imprimir)</h3>"
+        "<div class='sub'>Elija el formato y el kit: la cantidad se llena sola (docentes, fichas o núcleos familiares); también puede escribirla.</div>"
+        "<form method='GET' action='/gerencia/donaciones/kit/planillas' target='_blank'>"
+        "<div class='g2'><div><label>Formato</label><select name='bloque'>"
+        "<option value='notas'>📄 Bloque 1 · Planilla de notas de recuperación (horizontal, Oficio)</option>"
+        "<option value='ficha'>👥 Bloque 2 · Ficha individual de comprensión lectora (con código y QR)</option>"
+        "<option value='circular'>👪 Bloque 3 · Formato A: Circular + carta de compromiso</option>"
+        "<option value='citacion'>👪 Bloque 3 · Formato B: Citación a padres (solo casos con alertas)</option></select></div>"
+        "<div><label>Kit</label><select name='kit'>" + kit_sel + "</select></div></div>"
+        "<div class='g2'><div><label>Cantidad de copias (vacío = según el kit)</label><input type='number' name='n' min='1' max='500'></div>"
+        "<div><label>Filas de la planilla de notas (solo Bloque 1)</label><select name='filas'><option value='35'>35 filas</option><option value='40'>40 filas</option></select></div></div>"
+        "<p><button class='bt'>Descargar PDF</button></p></form></div>")
     cuerpo = (_DON_CSS + "<div class='dn'><h1>📦 Kit de donación</h1><div class='sub'>Material impreso del programa Procsis Edu: calcule cuántas hojas imprimir por kit y prepare el despacho. "
               "<a href='/gerencia/donaciones'>← Proyectos y Donaciones</a> · <a href='/gerencia/envios'>Envíos</a></div>"
-              + _env_msg_html(msg, err) + resumen + (tarjetas or "<div class='dn-c'>Aún no hay kits. Cree el primero abajo.</div>") + form + lista_log + "</div>")
+              + _env_msg_html(msg, err) + resumen + descargas + (tarjetas or "<div class='dn-c'>Aún no hay kits. Cree el primero abajo.</div>") + form + lista_log + "</div>")
     return page("Kit de donación", shell(cuerpo))
+
+
+# ---------- Planillas imprimibles del Kit de donación (PDF) ----------
+_KIT_FECHA_TXT = "Leticia, Amazonas, Octubre de 2026"
+
+
+def _kit_pdf_notas(pdf, filas):
+    """Bloque 1: planilla de notas de recuperación, horizontal tamaño Oficio, con espacios en blanco para el docente."""
+    from reportlab.lib.pagesizes import landscape as _ls
+    w, h = _ls((612, 936))   # Oficio 8,5 x 13 in
+    pdf.setPageSize((w, h))
+    mx = 24
+    pdf.setFillColorRGB(0.1, 0.1, 0.1)
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(mx, h - 30, "PROCSIS.  |  EduTrack - Sistema Académico")
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(mx, h - 47, "PROGRAMA DE NIVELACIÓN Y RECUPERACIÓN – AMAZONAS 2026")
+    pdf.setFont("Helvetica", 9)
+    renglones = [("Institución Educativa:", 120, "Sede:", 560), ("Docente:", 120, "Grado / Grupo:", 560), ("Asignatura:", 120, "Periodo Académico:", 560)]
+    y = h - 68
+    for a, xa, b, xb in renglones:
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(mx, y, a)
+        pdf.drawString(500, y, b)
+        pdf.setStrokeColorRGB(0.5, 0.5, 0.5)
+        pdf.setLineWidth(0.6)
+        pdf.line(mx + pdf.stringWidth(a, "Helvetica-Bold", 9) + 4, y - 2, 490, y - 2)
+        pdf.line(500 + pdf.stringWidth(b, "Helvetica-Bold", 9) + 4, y - 2, w - mx, y - 2)
+        y -= 17
+    cols = [("N°", 28), ("Código Estudiante", 84), ("Nombre Completo del Estudiante", 0), ("Nota Inicial", 66),
+            ("Taller (50%)", 70), ("Sustentación (50%)", 92), ("Nota Final", 66)]
+    fijo = sum(c[1] for c in cols)
+    cols[2] = (cols[2][0], (w - 2 * mx) - fijo)
+    colores = ["#4472C4", "#4472C4", "#5B9BD5", "#ED7D31", "#E91E63", "#E91E63", "#00B050"]
+    y_top = y - 4
+    alto_enc = 24
+    x = mx
+    for (t, cw), col in zip(cols, colores):
+        r, g, b = (int(col[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
+        pdf.setFillColorRGB(r, g, b)
+        pdf.rect(x, y_top - alto_enc, cw, alto_enc, stroke=0, fill=1)
+        pdf.setFillColorRGB(1, 1, 1)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawCentredString(x + cw / 2, y_top - alto_enc + 9, t)
+        x += cw
+    y_fin = 48
+    alto_f = (y_top - alto_enc - y_fin) / float(filas)
+    pdf.setStrokeColorRGB(0.7, 0.7, 0.7)
+    pdf.setLineWidth(0.5)
+    yy = y_top - alto_enc
+    for i in range(filas):
+        yy -= alto_f
+        x = mx
+        for k, (t, cw) in enumerate(cols):
+            if k == 0:
+                pdf.setFillColorRGB(0.93, 0.93, 0.93)
+                pdf.rect(x, yy, cw, alto_f, stroke=1, fill=1)
+                pdf.setFillColorRGB(0.1, 0.1, 0.1)
+                pdf.setFont("Helvetica-Bold", 7)
+                pdf.drawCentredString(x + cw / 2, yy + alto_f / 2 - 2.5, str(i + 1))
+            else:
+                pdf.rect(x, yy, cw, alto_f, stroke=1, fill=0)
+            x += cw
+    pdf.setFillColorRGB(0.1, 0.1, 0.1)
+    pdf.setStrokeColorRGB(0.3, 0.3, 0.3)
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(mx, 26, "Firma del Docente:")
+    pdf.line(mx + 90, 24, mx + 330, 24)
+    pdf.drawString(500, 26, "Fecha de Entrega:")
+    pdf.drawString(590, 26, "_____ / _____ / 2026")
+    pdf.showPage()
+
+
+def _kit_codigo(kit_id, idx):
+    import hmac as _hm, hashlib as _hl
+    firma = _hm.new(str(app.secret_key or "procsis").encode("utf-8"), ("ficha|%s|%s" % (kit_id, idx)).encode("utf-8"), _hl.sha256).hexdigest()[:8].upper()
+    return "PE-%s-%04d-%s" % (kit_id or 0, idx, firma)
+
+
+def _kit_pdf_ficha(pdf, kit_id, idx):
+    """Bloque 2: ficha individual de comprensión lectora (plantilla con código único + QR; los resultados se diligencian)."""
+    from reportlab.lib.pagesizes import letter as _letter
+    from reportlab.graphics.barcode import qr as _qr
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.graphics import renderPDF
+    w, h = _letter
+    pdf.setPageSize(_letter)
+    mx = 40
+    cod = _kit_codigo(kit_id, idx)
+    pdf.setFillColorRGB(0.043, 0.176, 0.341)
+    pdf.rect(0, h - 70, w, 70, stroke=0, fill=1)
+    pdf.setFillColorRGB(1, 1, 1)
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawString(mx, h - 32, "PROCSIS EDU  |  Ficha de Cumplimiento Técnico")
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(mx, h - 52, "en Comprensión Lectora")
+    pdf.setFillColorRGB(0, 0, 0)
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(mx, h - 92, "CÓDIGO DE VERIFICACIÓN ÚNICO:")
+    pdf.setFont("Courier-Bold", 13)
+    pdf.drawString(mx + 160, h - 92, cod)
+    try:
+        widget = _qr.QrCodeWidget(cod)
+        b = widget.getBounds()
+        d = Drawing(70, 70, transform=[70.0 / (b[2] - b[0]), 0, 0, 70.0 / (b[3] - b[1]), 0, 0])
+        d.add(widget)
+        renderPDF.draw(d, pdf, w - mx - 70, h - 168)
+    except Exception:
+        pass
+    def linea(rot, y, x0=mx, x1=None):
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(x0, y, rot)
+        pdf.setStrokeColorRGB(0.5, 0.5, 0.5)
+        pdf.line(x0 + pdf.stringWidth(rot, "Helvetica-Bold", 10) + 4, y - 2, x1 or (w - mx - 90), y - 2)
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.setFillColorRGB(0.043, 0.176, 0.341)
+    pdf.drawString(mx, h - 122, "DATOS DEL ESTUDIANTE")
+    pdf.setFillColorRGB(0, 0, 0)
+    y = h - 144
+    for rot in ("• Nombre:", "• Código (ID):", "• Grado:", "• Institución:"):
+        linea(rot, y)
+        y -= 22
+    y -= 10
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.setFillColorRGB(0.043, 0.176, 0.341)
+    pdf.drawString(mx, y, "HISTORIAL DE VALIDACIONES EN PLATAFORMA")
+    pdf.setFillColorRGB(0, 0, 0)
+    y -= 24
+    def caja(x, yy, txt):
+        pdf.rect(x, yy - 2, 9, 9)
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(x + 14, yy, txt)
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(mx, y, "Validación 1 (Rector):")
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(mx + 20, y - 14, "Institución autorizada / vinculada en sistema.")
+    caja(w - mx - 90, y - 14, "APROBADO")
+    y -= 44
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(mx, y, "Validación 2 (Preguntas de Comprensión):")
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(mx + 20, y - 14, "Evaluación de lecturas basadas en PDF.")
+    for k, nom in enumerate(("Lectura 1 (Resumen e Ideas Principales)", "Lectura 2 (Análisis Crítico)")):
+        yy = y - 32 - k * 20
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(mx + 34, yy, "• " + nom + "   Nota: ________")
+        caja(w - mx - 90, yy, "COMPLETADO")
+    y -= 86
+    for tit, desc, est in (("Validación 3 (Seguridad Biométrica):", "Identidad del usuario verificada en dispositivo.", "EXITOSO"),
+                           ("Validación 4 (Seguridad por PIN):", "Transacción y cargue de datos firmado por PIN.", "AUTORIZADO")):
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(mx, y, tit)
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(mx + 20, y - 14, desc)
+        caja(w - mx - 90, y - 14, est)
+        y -= 44
+    pdf.setStrokeColorRGB(0.5, 0.5, 0.5)
+    pdf.line(mx, 96, mx + 220, 96)
+    pdf.line(w - mx - 220, 96, w - mx, 96)
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(mx, 84, "Firma del docente / responsable")
+    pdf.drawString(w - mx - 220, 84, "Sello institucional")
+    pdf.setFillColorRGB(0.4, 0.4, 0.45)
+    pdf.drawCentredString(w / 2, 40, "Marque cada validación cumplida y anote las notas. El código identifica esta ficha.")
+    pdf.setFillColorRGB(0, 0, 0)
+    pdf.showPage()
+
+
+def _kit_pdf_parrafos(pdf, bloques, y_ini, w, mx):
+    from reportlab.platypus import Paragraph as _P
+    from reportlab.lib.styles import ParagraphStyle as _PS
+    st = _PS("k", fontName="Helvetica", fontSize=10.5, leading=15, alignment=4)
+    y = y_ini
+    for txt in bloques:
+        p = _P(txt, st)
+        _w, ph = p.wrap(w - 2 * mx, 1000)
+        y -= ph
+        p.drawOn(pdf, mx, y)
+        y -= 10
+    return y
+
+
+def _kit_pdf_circular(pdf):
+    """Bloque 3 · Formato A: circular informativa + carta de compromiso familiar."""
+    from reportlab.lib.pagesizes import letter as _letter
+    w, h = _letter
+    pdf.setPageSize(_letter)
+    mx = 54
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(mx, h - 50, "PROCSIS.  |  EduTrack - Ventana de Acompañamiento Familiar")
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(mx, h - 70, _KIT_FECHA_TXT)
+    y = _kit_pdf_parrafos(pdf, [
+        "Estimado Padre de Familia / Acudiente,",
+        "La Institución Educativa, en alianza con el programa de innovación digital PROCSIS EDU, le informa que su hijo(a) "
+        "___________________________________________ del grado _______ ha sido seleccionado(a) para participar en el plan de fortalecimiento "
+        "académico y comprensión lectora a través de la plataforma interactiva EduTrack.",
+        "Este programa busca nivelar sus competencias escolares utilizando herramientas tecnológicas avanzadas, evaluaciones automatizadas y "
+        "lecturas especializadas, garantizando que el estudiante alcance los objetivos del año escolar.",
+        "Para lograr el éxito de este proceso, solicitamos su apoyo vigilando el cumplimiento de los talleres y manteniendo una comunicación "
+        "constante con los docentes.",
+        "Atentamente,<br/><b>DIRECCIÓN DE CONTROL Y CALIDAD – PROCSIS.</b>"], h - 100, w, mx)
+    y -= 14
+    pdf.setDash(3, 3)
+    pdf.line(mx, y, w - mx, y)
+    pdf.setDash()
+    pdf.setFont("Helvetica-Oblique", 8.5)
+    pdf.drawCentredString(w / 2, y - 12, "(Desprenda y entregue firmado al docente)")
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawCentredString(w / 2, y - 38, "CARTA DE COMPROMISO FAMILIAR")
+    y = _kit_pdf_parrafos(pdf, [
+        "Yo, ___________________________________________, identificado con C.C. ___________________, en calidad de acudiente del estudiante "
+        "___________________________________________, hago constar que he sido notificado del proceso de nivelación académica y me comprometo "
+        "a acompañar y supervisar activamente su desarrollo escolar en casa."], y - 50, w, mx)
+    pdf.setFont("Helvetica", 10.5)
+    pdf.drawString(mx, y - 30, "Firma del Acudiente: ___________________________")
+    pdf.drawString(w - mx - 190, y - 30, "Teléfono: _____________________")
+    pdf.showPage()
+
+
+def _kit_pdf_citacion(pdf):
+    """Bloque 3 · Formato B: citación prioritaria a padres (casos con alertas o memos acumulados)."""
+    from reportlab.lib.pagesizes import letter as _letter
+    w, h = _letter
+    pdf.setPageSize(_letter)
+    mx = 54
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(mx, h - 50, "PROCSIS.  |  EduTrack - Citación Prioritaria de Acudiente")
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(mx, h - 70, _KIT_FECHA_TXT)
+    _kit_pdf_parrafos(pdf, [
+        "Estimado Padre de Familia / Acudiente,",
+        "Por medio de la presente, se le solicita presentarse de manera prioritaria en las instalaciones de la Institución Educativa el día "
+        "_____ de ____________________ de 2026 a las _________ AM/PM, con el fin de atender una entrevista con el Docente / Coordinador de área.",
+        "<b>Motivo de la citación:</b> Revisión de alertas en el sistema EduTrack respecto al rendimiento en el plan de nivelación, incidencias en "
+        "las evaluaciones de comprensión y firmas de actas de seguimiento especial.",
+        "Su asistencia es de carácter obligatorio según los lineamientos de la Secretaría de Educación Departamental para garantizar la "
+        "continuidad del proceso educativo del menor.",
+        "Agradecemos su puntualidad y compromiso.",
+        "Atentamente,<br/><b>DIRECCIÓN DE OPERACIONES E INSTITUCIONES – PROCSIS.</b>"], h - 100, w, mx)
+    pdf.setFont("Helvetica", 9.5)
+    pdf.drawString(mx, 150, "Estudiante: ___________________________________   Grado: _______")
+    pdf.drawString(mx, 124, "Recibido por (acudiente): ___________________________   C.C.: ________________")
+    pdf.drawString(mx, 98, "Firma: ___________________________")
+    pdf.showPage()
+
+
+@app.route("/gerencia/donaciones/kit/planillas")
+def gerencia_kit_planillas():
+    """Descarga de planillas imprimibles del Kit de donación (PDF)."""
+    g = _guard_gerencia()
+    if g:
+        return g
+    _env_ensure()
+    bloque = (request.args.get("bloque") or "notas").strip()
+    if bloque not in ("notas", "ficha", "circular", "citacion"):
+        return acceso_denegado("Formato no válido.")
+    k = KitDonacion.query.get(request.args.get("kit", type=int) or 0)
+    c = _kit_calc(k) if k else None
+    defecto = {"notas": (c or {}).get("planillas") or 1, "ficha": (c or {}).get("fichas") or 1,
+               "circular": (c or {}).get("notif") or 1, "citacion": 1}[bloque]
+    n = request.args.get("n", type=int) or defecto
+    n = max(1, min(500, n))
+    filas = 40 if request.args.get("filas", type=int) == 40 else 35
+    from reportlab.pdfgen import canvas as _canvas
+    buf = BytesIO()
+    pdf = _canvas.Canvas(buf, pagesize=(612, 792))
+    for i in range(1, n + 1):
+        if bloque == "notas":
+            _kit_pdf_notas(pdf, filas)
+        elif bloque == "ficha":
+            _kit_pdf_ficha(pdf, k.id if k else 0, i)
+        elif bloque == "circular":
+            _kit_pdf_circular(pdf)
+        else:
+            _kit_pdf_citacion(pdf)
+    pdf.save()
+    buf.seek(0)
+    registrar_auditoria("Planillas de kit descargadas", "%s × %d%s" % (bloque, n, (" · " + k.nombre) if k else ""))
+    nombres = {"notas": "planilla_notas_recuperacion", "ficha": "fichas_comprension_lectora", "circular": "circular_carta_compromiso", "citacion": "citacion_padres"}
+    return send_file(buf, as_attachment=True, download_name="%s_x%d.pdf" % (nombres[bloque], n), mimetype="application/pdf")
 
 
 @app.route("/gerencia/donaciones/kit/<int:kid>/acta")
