@@ -4108,6 +4108,7 @@ def _staff_module_title(path, rol=""):
 _NAV_GRUPOS = {
     "gerencia": [
         ("Inicio", ("/gerencia/hq", "/gerencia/hub")),
+        ("Donaciones y envíos", ("/gerencia/donaciones", "/gerencia/donaciones/kit", "/gerencia/convocatoria48", "/gerencia/envios")),
         ("Equipo y seguridad", ("/gerencia/usuarios", "/gerencia/equipo-carnes", "/gerencia/horarios-asesores", "/gerencia/turnos", "/seguridad", "/gerencia/validaciones-identidad")),
         ("Auditoría", ("/gerencia/auditoria", "/gerencia/auditoria-total", "/gerencia/auditoria-instituciones")),
         ("Tickets y soporte", ("/tickets-doc", "/gerencia/support", "/support", "/gerencia/notificaciones")),
@@ -4248,6 +4249,10 @@ def _staff_nav_items(path, rol=""):
         items = _prov_menu_items()
     elif rol in ("Gerente", "Administrador", "Gerencia"):
         items = [
+            ("/gerencia/donaciones", "🎗️ Proyectos y Donaciones"),
+            ("/gerencia/donaciones/kit", "📦 Kit de donación"),
+            ("/gerencia/envios", "🚚 Envíos"),
+            ("/gerencia/convocatoria48", "🌱 Convocatoria 48 h"),
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/reportes", "Reportes"),
             ("/gerencia/historial-validaciones", "Historial técnico de validaciones"),
@@ -4257,6 +4262,8 @@ def _staff_nav_items(path, rol=""):
         items = [
             ("/gerencia/donaciones", "🎗️ Proyectos y Donaciones"),
             ("/gerencia/convocatoria48", "🌱 Convocatoria 48 h"),
+            ("/gerencia/donaciones/kit", "📦 Kit de donación"),
+            ("/gerencia/envios", "🚚 Envíos"),
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/usuarios", "Usuarios internos"),
             ("/gerencia/equipo-carnes", "Carnés del equipo"),
@@ -15454,6 +15461,105 @@ def _grupos_de_docente(usuario_id, iid, grado_filtro=None, grupo_filtro=None):
     return combos
 
 
+def _hexrgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+
+
+def _pdf_hoja_evaluacion(pdf, nom_inst, docente_nombre, asignatura, grado, grupo, mes, anio, estudiantes):
+    """Hoja de evaluación semanal tipo Excel (carta vertical): Tareas, Participación, Conducta y Puntualidad (L-M-M-J-V) + %.
+    Se generan páginas de 40 alumnos; siempre al menos una."""
+    from reportlab.lib.pagesizes import letter as _letter
+    w, h = _letter
+    mx = 24
+    dia_w, nom_w, pct_w = 24, 190, 26
+    col_w = (w - 2 * mx - dia_w - nom_w - pct_w) / 20.0
+    alto_f, alto_g, alto_d = 15, 16, 14
+    bloques = [("Tareas", "#E91E63"), ("Participación", "#ED7D31"), ("Conducta", "#FFC000"), ("Puntualidad", "#70AD47")]
+    letras = ["L", "M", "M", "J", "V"]
+    grupos_pag = [estudiantes[i:i + 40] for i in range(0, len(estudiantes), 40)] or [[]]
+    total_pag = len(grupos_pag)
+    for pag, lote in enumerate(grupos_pag, 1):
+        pdf.setPageSize(_letter)
+        pdf.setFillColorRGB(0.4, 0.4, 0.45)
+        pdf.setFont("Helvetica", 8)
+        pdf.drawCentredString(w / 2, h - 22, str(nom_inst)[:90])
+        pdf.setFillColorRGB(0, 0, 0)
+        pdf.setFont("Helvetica-Bold", 20)
+        pdf.drawCentredString(w / 2, h - 50, "HOJA DE EVALUACIÓN")
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawCentredString(w / 2, h - 68, ("%s %s" % (mes, anio)).strip())
+        pdf.setFont("Helvetica", 9)
+        pdf.drawCentredString(w / 2, h - 84, ("Asignatura: %s   ·   Grado: %s%s" % (asignatura or "—", grado, (" - %s" % grupo) if grupo else ""))[:110])
+        y0 = h - 104  # borde superior de la tabla
+        # fila 1: encabezado de grupos
+        pdf.setFillColorRGB(*_hexrgb("#4472C4"))
+        pdf.rect(mx, y0 - alto_g, dia_w + nom_w, alto_g, stroke=0, fill=1)
+        pdf.setFillColorRGB(1, 1, 1)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(mx + 4, y0 - alto_g + 5, ("Docente: %s" % docente_nombre)[:48])
+        x = mx + dia_w + nom_w
+        for nombre, color in bloques:
+            pdf.setFillColorRGB(*_hexrgb(color))
+            pdf.rect(x, y0 - alto_g, col_w * 5, alto_g, stroke=0, fill=1)
+            pdf.setFillColorRGB(1, 1, 1)
+            pdf.setFont("Helvetica-Bold", 8)
+            pdf.drawCentredString(x + col_w * 2.5, y0 - alto_g + 5, nombre)
+            x += col_w * 5
+        pdf.setFillColorRGB(*_hexrgb("#00B050"))
+        pdf.rect(x, y0 - alto_g - alto_d, pct_w, alto_g + alto_d, stroke=0, fill=1)
+        pdf.setFillColorRGB(1, 1, 1)
+        pdf.drawCentredString(x + pct_w / 2, y0 - alto_g - 4, "%")
+        # fila 2: Día / Nombre / L M M J V
+        y1 = y0 - alto_g
+        pdf.setFillColorRGB(*_hexrgb("#D9D9D9"))
+        pdf.rect(mx, y1 - alto_d, dia_w, alto_d, stroke=0, fill=1)
+        pdf.setFillColorRGB(0.1, 0.1, 0.1)
+        pdf.setFont("Helvetica-Bold", 7)
+        pdf.drawCentredString(mx + dia_w / 2, y1 - alto_d + 4, "Día")
+        pdf.setFillColorRGB(*_hexrgb("#5B9BD5"))
+        pdf.rect(mx + dia_w, y1 - alto_d, nom_w, alto_d, stroke=0, fill=1)
+        pdf.setFillColorRGB(1, 1, 1)
+        pdf.drawCentredString(mx + dia_w + nom_w / 2, y1 - alto_d + 4, "Nombre de Alumno")
+        x = mx + dia_w + nom_w
+        pdf.setFillColorRGB(0.2, 0.2, 0.2)
+        for _b in range(4):
+            for L in letras:
+                pdf.setFillColorRGB(0.93, 0.93, 0.93)
+                pdf.rect(x, y1 - alto_d, col_w, alto_d, stroke=0, fill=1)
+                pdf.setFillColorRGB(0.2, 0.2, 0.2)
+                pdf.setFont("Helvetica-Bold", 7)
+                pdf.drawCentredString(x + col_w / 2, y1 - alto_d + 4, L)
+                x += col_w
+        # filas de alumnos (40)
+        y = y1 - alto_d
+        pdf.setStrokeColorRGB(0.75, 0.75, 0.75)
+        pdf.setLineWidth(0.5)
+        for i in range(40):
+            y -= alto_f
+            pdf.setFillColorRGB(0.93, 0.93, 0.93)
+            pdf.rect(mx, y, dia_w, alto_f, stroke=1, fill=1)
+            pdf.setFillColorRGB(0.1, 0.1, 0.1)
+            pdf.setFont("Helvetica-Bold", 7)
+            pdf.drawCentredString(mx + dia_w / 2, y + 4.5, str((pag - 1) * 40 + i + 1))
+            pdf.rect(mx + dia_w, y, nom_w, alto_f, stroke=1, fill=0)
+            if i < len(lote):
+                e = lote[i]
+                pdf.setFont("Helvetica", 7)
+                pdf.drawString(mx + dia_w + 3, y + 4.5, ("%s %s" % (e.apellido or "", e.nombre or "")).strip()[:40])
+            xx = mx + dia_w + nom_w
+            for _c in range(20):
+                pdf.rect(xx, y, col_w, alto_f, stroke=1, fill=0)
+                xx += col_w
+            pdf.rect(xx, y, pct_w, alto_f, stroke=1, fill=0)
+        pdf.setStrokeColorRGB(0, 0, 0)
+        pdf.setFillColorRGB(0.4, 0.4, 0.45)
+        pdf.setFont("Helvetica", 7)
+        pdf.drawCentredString(w / 2, 20, "EduTrack / PROCSIS · Uso institucional · Hoja %d de %d" % (pag, total_pag))
+        pdf.setFillColorRGB(0, 0, 0)
+        pdf.showPage()
+
+
 @app.route("/secretaria/planilla-grupo", methods=["GET", "POST"])
 def secretaria_planilla_grupo():
     g = _guard_secretaria_docs()
@@ -15519,8 +15625,11 @@ def secretaria_planilla_grupo():
     <label style="margin-top:12px;display:block"><b>Tipo de planilla</b></label>
     <select name="tipo" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
       <option value="asistencia">Asistencia (casillas por día del mes)</option>
-      <option value="notas">Notas (columnas en blanco por periodo)</option>
+      <option value="notas">Notas — Hoja de evaluación tipo Excel (Tareas, Participación, Conducta, Puntualidad)</option>
     </select>
+
+    <label style="margin-top:12px;display:block"><b>Asignatura / clase</b> (opcional; si la deja vacía se toma de la carga del docente)</label>
+    <input name="asignatura" maxlength="80" placeholder="Ej. Matemáticas" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
       <div><label><b>Mes</b></label><input name="mes" placeholder="Ej. Marzo" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
@@ -15554,6 +15663,7 @@ def secretaria_planilla_grupo_generar():
     anio = (request.args.get("anio") or "").strip()[:10]
     grado_f = (request.args.get("grado") or "").strip()
     grupo_f = (request.args.get("grupo") or "").strip()
+    asignatura_f = (request.args.get("asignatura") or "").strip()[:80]
     docente = Usuario.query.get(usuario_id) if usuario_id else None
     if not docente or (docente.rol or "") not in ("Docente", "DOCENTE"):
         return page("Planilla", shell("<div class='msg err'>Docente no válido. <a href='/secretaria/planilla-grupo'>Volver</a></div>"))
@@ -15602,6 +15712,20 @@ def secretaria_planilla_grupo_generar():
                 if eg != str(grupo).strip() and eg.lstrip("0") != str(grupo).strip().lstrip("0"):
                     continue
             estudiantes.append(e)
+        if tipo == "notas":
+            # Diseño "Hoja de evaluación" tipo Excel (carta vertical), con docente, asignatura, grado y mes.
+            _asig = asignatura_f
+            if not _asig:
+                try:
+                    _nombres = []
+                    for _a in AsignacionDocente.query.filter_by(usuario_id=docente.id, activa=True).all():
+                        if _norm_grado_key(_a.grado) == gk and (_a.asignatura or "").strip() and _a.asignatura.strip() not in _nombres:
+                            _nombres.append(_a.asignatura.strip())
+                    _asig = ", ".join(_nombres)
+                except Exception:
+                    _asig = ""
+            _pdf_hoja_evaluacion(pdf, nom_inst, (docente.nombre_completo or docente.usuario), _asig, grado, grupo, mes, anio, estudiantes)
+            continue
         # --- Encabezado compacto ---
         pdf.setFont("Helvetica-Bold", 11)
         pdf.drawCentredString(w / 2, h - 22, str(nom_inst)[:80])
@@ -22068,7 +22192,8 @@ def _guard_soporte():
 _MODULOS_POR_AREA = {
     "/gerencia/planes": (("Cobranza",), ()),
     "/gerencia/activaciones": (("Cobranza", "Operaciones"), ("Calidad",)),
-    "/gerencia/donaciones": (("Finanzas",), ()),
+    "/gerencia/donaciones": (("Finanzas", "Gerente", "Administrador"), ()),
+    "/gerencia/envios": (("Gerente", "Administrador", "Operaciones", "Finanzas"), ()),
     "/gerencia/datos-rut": (("Juridica",), ()),
     "/gerencia/fondo-formalizacion": (("Juridica",), ()),
     "/gerencia/firmas-corporativas": (("Juridica",), ()),
@@ -22117,14 +22242,14 @@ _TALENTO_RUTAS = ("/gerencia/hojas-vida", "/gerencia/nomina", "/gerencia/contrat
 _AREA_RUTAS_EXTRA = {
     "Talento": ("/gerencia/talento-legal", "/gerencia/matriz-epp", "/gerencia/equipo", "/gerencia/contabilidad/trabajador"),
     "Finanzas": ("/gerencia/tesoreria", "/gerencia/gastos", "/gerencia/comisiones-ventas", "/gerencia/proveedores", "/gerencia/retractos/reembolsos",
-                 "/gerencia/donaciones"),
+                 "/gerencia/donaciones", "/gerencia/envios"),
     "Juridica": ("/gerencia/contratos-saas", "/gerencia/paginas-legales", "/gerencia/textos-legales", "/gerencia/libro-actas",
                  "/gerencia/boveda-legal", "/gerencia/requerimientos-autoridades", "/gerencia/retractos", "/gerencia/certificados-apoyo",
                  "/gerencia/pie-login", "/gerencia/datos-rut", "/gerencia/fondo-formalizacion", "/gerencia/firmas-corporativas"),
     "Marketing": ("/gerencia/web-menu", "/gerencia/casos-exito", "/gerencia/login-banners", "/gerencia/web-corporativa", "/gerencia/procsis-web",
                   "/gerencia/landing-ventas", "/gerencia/alianzas-clientes", "/gerencia/diseno-login",
                   "/gerencia/backoffice-branding"),
-    "Operaciones": ("/gerencia/colegios-config", "/gerencia/usuarios", "/gerencia/rectores", "/gerencia/activaciones", "/gerencia/historial-validaciones"),
+    "Operaciones": ("/gerencia/colegios-config", "/gerencia/usuarios", "/gerencia/rectores", "/gerencia/activaciones", "/gerencia/historial-validaciones", "/gerencia/envios"),
     "Calidad": ("/gerencia/sesiones-tecnicas", "/gerencia/auditoria-instituciones", "/gerencia/auditoria-total", "/gerencia/activaciones", "/gerencia/historial-validaciones"),
 }
 
@@ -57735,6 +57860,8 @@ _AREA_MODULOS_EXTRA = {
                 ("/gerencia/contabilidad/trabajadores", "Trabajadores y memos", "Fichas, memos, constancias y certificaciones."),
                 ("/gerencia/equipo-carnes", "Carnés del equipo", "Carnés del personal.")],
     "Finanzas": [("/gerencia/donaciones", "Donaciones", "Dinero entrante del programa social Procsis Edu."),
+                 ("/gerencia/donaciones/kit", "Kit de donación", "Planillas, fichas y comunicaciones a padres del programa."),
+                 ("/gerencia/envios", "Envíos", "Despachos por Interrapidísimo, Servientrega y otros."),
                  ("/gerencia/tesoreria", "Tesorería", "Caja, bancos y movimientos."),
                  ("/gerencia/gastos", "Gastos", "Registro y control de gastos."),
                  ("/gerencia/proveedores", "Pagos a proveedores", "Cobros y pagos a proveedores."),
@@ -57761,6 +57888,7 @@ _AREA_MODULOS_EXTRA = {
                   ("/gerencia/backoffice-branding", "Marca del backoffice", "Logos y colores.")],
     "Operaciones": [("/gerencia/usuarios", "Usuarios internos", "Crear asesores, restablecer contraseñas y asignar roles."),
                     ("/gerencia/rectores", "Rectores", "Base de rectores y sus accesos iniciales."),
+                    ("/gerencia/envios", "Envíos", "Despachos por Interrapidísimo, Servientrega y otros."),
                     ("/gerencia/activaciones", "Activaciones y validaciones", "Aprobar validaciones y seguir la activación de cada colegio."),
                     ("/gerencia/historial-validaciones", "Historial de validaciones", "Quién validó qué, cuándo y con qué evidencia."),
                     ("/gerencia/colegios-config", "Configuración de colegios", "Parámetros operativos por colegio.")],
@@ -85439,6 +85567,420 @@ def _don_slug(txt):
     return ("don-" + s)[:40]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  KIT DE DONACIÓN (Proyectos y Donaciones) + ENVÍOS POR TRANSPORTADOR
+#  Kit = planillas de notas de recuperación + fichas académicas + comunicaciones a padres.
+#  Envíos = despacho por Interrapidísimo / Servientrega: fecha de envío, estimado de entrega, estado y acta de entrega.
+# ══════════════════════════════════════════════════════════════════════════════
+class KitDonacion(db.Model):
+    __tablename__ = "kits_donacion"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), default="")
+    destino = db.Column(db.String(200), default="")
+    n_docentes = db.Column(db.Integer, default=0)          # docentes (o asignaturas) que reportan recuperaciones
+    n_estudiantes = db.Column(db.Integer, default=0)      # estudiantes priorizados
+    reportes_x_est = db.Column(db.Integer, default=1)     # reportes impresos por estudiante
+    n_familias = db.Column(db.Integer, default=0)         # núcleos familiares
+    hojas_extra = db.Column(db.Integer, default=0)
+    largo_cm = db.Column(db.Integer, default=0)
+    ancho_cm = db.Column(db.Integer, default=0)
+    alto_cm = db.Column(db.Integer, default=0)
+    estado = db.Column(db.String(20), default="PREPARANDO")  # PREPARANDO | LISTO | DESPACHADO
+    notas = db.Column(db.Text, default="")
+    creado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
+class EnvioDespacho(db.Model):
+    __tablename__ = "envios_despacho"
+    id = db.Column(db.Integer, primary_key=True)
+    kit_id = db.Column(db.Integer, nullable=True, index=True)
+    proveedor = db.Column(db.String(40), default="Interrapidísimo")
+    guia = db.Column(db.String(60), default="")
+    origen = db.Column(db.String(120), default="")
+    remitente = db.Column(db.String(160), default="")
+    destinatario = db.Column(db.String(200), default="")
+    direccion = db.Column(db.String(240), default="")
+    ciudad_destino = db.Column(db.String(120), default="")
+    contenido = db.Column(db.String(240), default="")
+    cajas = db.Column(db.Integer, default=1)
+    peso_kg = db.Column(db.Float, default=0.0)
+    valor_declarado = db.Column(db.Integer, default=0)
+    fecha_envio = db.Column(db.String(10), default="")
+    dias_estimados = db.Column(db.Integer, default=0)
+    fecha_estimada = db.Column(db.String(10), default="")
+    fecha_entrega = db.Column(db.String(10), default="")
+    estado = db.Column(db.String(20), default="PREPARANDO")  # PREPARANDO | DESPACHADO | EN_TRANSITO | ENTREGADO | NOVEDAD
+    acta_devuelta = db.Column(db.Boolean, default=False)
+    novedad = db.Column(db.Text, default="")
+    creado_por = db.Column(db.String(120), default="")
+    creado_en = db.Column(db.String(30), default="")
+
+
+# Días hábiles (lun-sáb) de referencia por transportador. Son valores EDITABLES por envío: confirme con el transportador.
+ENVIO_PROVEEDORES = {
+    "Interrapidísimo": {"normal": 3, "remoto": 7},
+    "Servientrega": {"normal": 3, "remoto": 7},
+    "Otro": {"normal": 5, "remoto": 8},
+}
+_ENVIO_ESTADOS = (("PREPARANDO", "Preparando", "#475569"), ("DESPACHADO", "Despachado", "#1d4ed8"),
+                  ("EN_TRANSITO", "En tránsito", "#b45309"), ("ENTREGADO", "Entregado", "#166534"), ("NOVEDAD", "Novedad", "#b91c1c"))
+_DESTINOS_REMOTOS = ("amazonas", "leticia", "guainia", "guainía", "inirida", "inírida", "vaupes", "vaupés", "mitu", "mitú",
+                     "vichada", "puerto carreño", "guaviare", "san jose del guaviare", "putumayo", "mocoa", "san andres", "san andrés")
+_KIT_ESTADOS = ("PREPARANDO", "LISTO", "DESPACHADO")
+_ENV_LISTO = {"ok": False}
+
+
+def _env_ensure():
+    if _ENV_LISTO["ok"]:
+        return
+    try:
+        for m in (KitDonacion, EnvioDespacho):
+            m.__table__.create(bind=db.engine, checkfirst=True)
+        _ENV_LISTO["ok"] = True
+    except Exception as ex:
+        db.session.rollback()
+        print("ERROR envios ensure:", repr(ex), flush=True)
+
+
+def _env_int(nombre, defecto=0, lo=0, hi=1000000):
+    try:
+        return max(lo, min(hi, int(float((request.form.get(nombre) or "").replace(",", ".").strip() or defecto))))
+    except Exception:
+        return defecto
+
+
+def _env_fecha(nombre):
+    v = (request.form.get(nombre) or "").strip()[:10]
+    return v if re.match(r"^\d{4}-\d{2}-\d{2}$", v) else ""
+
+
+def _env_sumar_habiles(fecha, dias):
+    """Suma días hábiles (lunes a sábado; se omiten domingos) a una fecha AAAA-MM-DD."""
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        d = _dt.strptime(fecha, "%Y-%m-%d")
+    except Exception:
+        return ""
+    n = 0
+    while n < max(0, dias):
+        d += _td(days=1)
+        if d.isoweekday() != 7:
+            n += 1
+    return d.strftime("%Y-%m-%d")
+
+
+def _env_dias_default(proveedor, ciudad):
+    cfg = ENVIO_PROVEEDORES.get(proveedor) or ENVIO_PROVEEDORES["Otro"]
+    c = (ciudad or "").lower()
+    return cfg["remoto"] if any(x in c for x in _DESTINOS_REMOTOS) else cfg["normal"]
+
+
+def _kit_calc(k):
+    """Cantidades a imprimir y peso/volumen estimados (papel carta 75 g/m² ≈ 4,5 g por hoja)."""
+    planillas = max(0, k.n_docentes or 0)
+    fichas = max(0, k.n_estudiantes or 0) * max(1, k.reportes_x_est or 1)
+    notif = max(0, k.n_familias or 0)
+    hojas = planillas + fichas + notif + max(0, k.hojas_extra or 0)
+    peso_papel = hojas * 0.0045
+    vol_cm3 = (k.largo_cm or 0) * (k.ancho_cm or 0) * (k.alto_cm or 0)
+    peso_vol = vol_cm3 / 2500.0 if vol_cm3 else 0.0   # referencia 1 m³ = 400 kg; confirme el factor con el transportador
+    return {"planillas": planillas, "fichas": fichas, "notif": notif, "hojas": hojas, "resmas": hojas / 500.0,
+            "peso_papel": peso_papel, "vol_cm3": vol_cm3, "peso_vol": peso_vol, "cobrable": max(peso_papel, peso_vol)}
+
+
+def _env_msg_html(msg, err):
+    return (("<div class='ok'>%s</div>" % _esc(msg)) if msg else "") + (("<div class='er'>%s</div>" % _esc(err)) if err else "")
+
+
+@app.route("/gerencia/donaciones/kit", methods=["GET", "POST"])
+def gerencia_kit_donacion():
+    g = _guard_gerencia()
+    if g:
+        return g
+    _env_ensure()
+    from urllib.parse import quote as _q
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            return redirect("/gerencia/donaciones/kit?e=" + _q("Formulario inválido, intente de nuevo."))
+        acc = (request.form.get("accion") or "").strip()
+        try:
+            if acc == "crear":
+                nombre = (request.form.get("nombre") or "").strip()[:120]
+                if not nombre:
+                    return redirect("/gerencia/donaciones/kit?e=" + _q("Escriba el nombre del kit."))
+                k = KitDonacion(nombre=nombre, destino=(request.form.get("destino") or "").strip()[:200],
+                                n_docentes=_env_int("n_docentes"), n_estudiantes=_env_int("n_estudiantes"),
+                                reportes_x_est=_env_int("reportes_x_est", 1, 1, 50), n_familias=_env_int("n_familias"),
+                                hojas_extra=_env_int("hojas_extra"), largo_cm=_env_int("largo_cm"), ancho_cm=_env_int("ancho_cm"),
+                                alto_cm=_env_int("alto_cm"), notas=(request.form.get("notas") or "").strip()[:1000],
+                                creado_por=session.get("usuario") or "", creado_en=_n_ahora())
+                db.session.add(k)
+                db.session.commit()
+                registrar_auditoria("Kit de donación creado", "%s (id %s)" % (nombre, k.id))
+                return redirect("/gerencia/donaciones/kit?m=" + _q("Kit creado."))
+            kid = _env_int("kit_id")
+            k = KitDonacion.query.get(kid) if kid else None
+            if not k:
+                return redirect("/gerencia/donaciones/kit?e=" + _q("Kit no encontrado."))
+            if acc == "estado":
+                nuevo = (request.form.get("estado") or "").strip()
+                if nuevo in _KIT_ESTADOS:
+                    k.estado = nuevo
+                    db.session.commit()
+                    registrar_auditoria("Kit de donación: estado", "%s → %s" % (k.nombre, nuevo))
+                return redirect("/gerencia/donaciones/kit?m=" + _q("Estado actualizado."))
+            if acc == "eliminar":
+                registrar_auditoria("Kit de donación eliminado", k.nombre)
+                db.session.delete(k)
+                db.session.commit()
+                return redirect("/gerencia/donaciones/kit?m=" + _q("Kit eliminado."))
+        except Exception as ex:
+            db.session.rollback()
+            return redirect("/gerencia/donaciones/kit?e=" + _q("No se pudo guardar: %s" % str(ex)[:120]))
+    csrf = _n_csrf()
+    msg, err = request.args.get("m", ""), request.args.get("e", "")
+    kits = KitDonacion.query.order_by(KitDonacion.id.desc()).all()
+    tarjetas = ""
+    tot = {"planillas": 0, "fichas": 0, "notif": 0, "hojas": 0}
+    for k in kits:
+        c = _kit_calc(k)
+        for t in tot:
+            tot[t] += c[t]
+        opts = "".join("<option value='%s'%s>%s</option>" % (e, " selected" if e == k.estado else "", e.title()) for e in _KIT_ESTADOS)
+        tarjetas += (
+            "<div class='dn-c'><b style='font-size:16px'>📦 %s</b> <span class='tag'>%s</span><div class='sub'>Destino: %s</div>"
+            "<div class='dn-k'><div><b>%d</b><span>📄 Planillas de notas (1 por docente/asignatura)</span></div>"
+            "<div><b>%d</b><span>👥 Fichas académicas (%d est. × %d)</span></div>"
+            "<div><b>%d</b><span>👪 Hojas a padres (1 por núcleo familiar)</span></div>"
+            "<div><b>%d</b><span>Total hojas ≈ %.1f resmas</span></div>"
+            "<div><b>%.2f kg</b><span>Peso del papel (sin embalaje)</span></div>"
+            "<div><b>%.2f kg</b><span>Peso volumétrico caja %d×%d×%d cm (ref. 1 m³ = 400 kg)</span></div></div>"
+            "<div class='sub'>Peso a cobrar estimado: <b>%.2f kg</b> (el mayor entre real y volumen; confirme con el transportador). %s</div>"
+            "<form method='POST' style='display:inline'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='estado'>"
+            "<input type='hidden' name='kit_id' value='%d'><select name='estado' style='width:auto;display:inline-block'>%s</select> <button class='bt s'>Guardar estado</button></form> "
+            "<a class='bt s' href='/gerencia/donaciones/kit/%d/acta' target='_blank'>🖨️ Acta de entrega (duplicado)</a> "
+            "<a class='bt s' href='/gerencia/envios?kit=%d'>🚚 Envíos de este kit</a> "
+            "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Eliminar este kit?')\"><input type='hidden' name='csrf' value='%s'>"
+            "<input type='hidden' name='accion' value='eliminar'><input type='hidden' name='kit_id' value='%d'><button class='bt s r'>Eliminar</button></form></div>"
+        ) % (_esc(k.nombre), _esc(k.estado), _esc(k.destino or "—"), c["planillas"], c["fichas"], k.n_estudiantes or 0, k.reportes_x_est or 1,
+             c["notif"], c["hojas"], c["resmas"], c["peso_papel"], c["peso_vol"], k.largo_cm or 0, k.ancho_cm or 0, k.alto_cm or 0,
+             c["cobrable"], _esc(k.notas or ""), csrf, k.id, opts, k.id, k.id, csrf, k.id)
+    resumen = ("<div class='dn-k'><div><b>%d</b><span>Kits</span></div><div><b>%d</b><span>Planillas de notas</span></div>"
+               "<div><b>%d</b><span>Fichas académicas</span></div><div><b>%d</b><span>Hojas a padres</span></div>"
+               "<div><b>%d</b><span>Hojas en total</span></div></div>") % (len(kits), tot["planillas"], tot["fichas"], tot["notif"], tot["hojas"])
+    form = (
+        "<div class='dn-c'><h3 style='margin:0 0 6px'>➕ Nuevo kit</h3><form method='POST'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='crear'>"
+        "<div class='g2'><div><label>Nombre del kit</label><input name='nombre' maxlength='120' required placeholder='Ej. Kit 1 · Colegio ...'></div>"
+        "<div><label>Destino</label><input name='destino' maxlength='200' value='Gobernación del Amazonas - Secretaría de Educación Departamental, Leticia, Amazonas'></div></div>"
+        "<div class='g2'><div><label>📄 Docentes (o asignaturas) que reportan recuperaciones</label><input name='n_docentes' type='number' min='0' value='0'></div>"
+        "<div><label>👥 Estudiantes priorizados en el programa</label><input name='n_estudiantes' type='number' min='0' value='0'></div></div>"
+        "<div class='g2'><div><label>Reportes impresos por estudiante</label><input name='reportes_x_est' type='number' min='1' value='1'></div>"
+        "<div><label>👪 Núcleos familiares (1 hoja de notificación c/u)</label><input name='n_familias' type='number' min='0' value='0'></div></div>"
+        "<div class='g2'><div><label>Hojas extra (circulares, cartas de compromiso, citaciones)</label><input name='hojas_extra' type='number' min='0' value='0'></div>"
+        "<div><label>Medidas de la caja (cm): largo × ancho × alto</label><div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px'>"
+        "<input name='largo_cm' type='number' min='0' placeholder='largo'><input name='ancho_cm' type='number' min='0' placeholder='ancho'><input name='alto_cm' type='number' min='0' placeholder='alto'></div></div></div>"
+        "<label>Notas</label><textarea name='notas' rows='2' maxlength='1000' placeholder='Ej. Caja de cartón sellada con plástico transparente por la humedad.'></textarea>"
+        "<p><button class='bt'>Guardar kit</button></p></form></div>") % csrf
+    lista_log = (
+        "<div class='dn-c'><h3 style='margin:0 0 6px'>🚚 Checklist de despacho</h3><ul style='margin:0;padding-left:18px;font-size:13px;color:#334155;line-height:1.6'>"
+        "<li><b>Peso y volumen:</b> el transportador cobra el mayor entre el peso real y el volumétrico. Use cajas de cartón selladas con plástico transparente contra la humedad.</li>"
+        "<li><b>Guía única:</b> destinatario completo y contenido «Documentos Académicos - Material Educativo Procsis Edu». Imprima el rótulo desde Envíos.</li>"
+        "<li><b>Acta de entrega por duplicado:</b> una copia firmada y sellada por quien recibe vuelve como prueba legal. Imprímala desde cada kit.</li></ul></div>")
+    cuerpo = (_DON_CSS + "<div class='dn'><h1>📦 Kit de donación</h1><div class='sub'>Material impreso del programa Procsis Edu: calcule cuántas hojas imprimir por kit y prepare el despacho. "
+              "<a href='/gerencia/donaciones'>← Proyectos y Donaciones</a> · <a href='/gerencia/envios'>Envíos</a></div>"
+              + _env_msg_html(msg, err) + resumen + (tarjetas or "<div class='dn-c'>Aún no hay kits. Cree el primero abajo.</div>") + form + lista_log + "</div>")
+    return page("Kit de donación", shell(cuerpo))
+
+
+@app.route("/gerencia/donaciones/kit/<int:kid>/acta")
+def gerencia_kit_acta(kid):
+    g = _guard_gerencia()
+    if g:
+        return g
+    _env_ensure()
+    k = KitDonacion.query.get_or_404(kid)
+    env = EnvioDespacho.query.filter_by(kit_id=k.id).order_by(EnvioDespacho.id.desc()).first()
+    c = _kit_calc(k)
+    dest = (env.destinatario if env else "") or k.destino or ""
+    dire = ((env.direccion + " · ") if env and env.direccion else "") + ((env.ciudad_destino) if env else "")
+    def copia(etiqueta):
+        return ("<section class='pg'><div class='et'>%s</div><h1>ACTA DE ENTREGA DE DOCUMENTACIÓN</h1>"
+                "<p>Radicado N.º: ____________________ &nbsp;&nbsp; Fecha de entrega: ____ / ____ / ________</p>"
+                "<table><tr><th>Remitente</th><td>PROCSIS · Procsis Edu%s</td></tr><tr><th>Destinatario</th><td>%s</td></tr>"
+                "<tr><th>Dirección</th><td>%s</td></tr><tr><th>Transportador / Guía</th><td>%s</td></tr><tr><th>Contenido</th><td>Documentos Académicos - Material Educativo Procsis Edu · Kit: %s · Cajas: %s</td></tr></table>"
+                "<h3>Detalle de la documentación</h3><table><tr><th>Concepto</th><th>Cantidad</th></tr>"
+                "<tr><td>Planillas de notas de recuperación</td><td>%d</td></tr><tr><td>Fichas académicas de estudiantes</td><td>%d</td></tr>"
+                "<tr><td>Comunicaciones y notificaciones a padres</td><td>%d</td></tr><tr><td><b>Total de hojas (aprox.)</b></td><td><b>%d</b></td></tr></table>"
+                "<p style='margin-top:26px'>Recibido por (nombre y cargo): ______________________________________</p>"
+                "<p style='margin-top:26px'>Firma: ______________________ &nbsp;&nbsp; Sello:</p>"
+                "<p class='mini'>Firmar y sellar esta copia y devolverla a PROCSIS como prueba de entrega.</p></section>") % (
+            etiqueta, (" · " + _esc(env.origen)) if env and env.origen else "", _esc(dest), _esc(dire or "—"),
+            _esc(((env.proveedor + " · " + env.guia) if env else "—")), _esc(k.nombre), (env.cajas if env else 1),
+            c["planillas"], c["fichas"], c["notif"], c["hojas"])
+    html = ("<!doctype html><html lang='es'><meta charset='utf-8'><title>Acta de entrega</title><style>"
+            "body{font-family:Arial,sans-serif;color:#0f172a;margin:0}.pg{padding:36px 44px;page-break-after:always;min-height:900px}"
+            "h1{font-size:19px;text-align:center;margin:8px 0 18px}.et{float:right;border:1px solid #0f172a;padding:3px 10px;font-weight:700;font-size:12px}"
+            "table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}th,td{border:1px solid #94a3b8;padding:7px;text-align:left;vertical-align:top}th{background:#f1f5f9;width:30%}"
+            ".mini{font-size:11px;color:#64748b}.no{position:fixed;top:8px;right:8px}@media print{.no{display:none}}</style>"
+            "<button class='no' onclick='window.print()'>Imprimir</button>" + copia("ORIGINAL · PROCSIS") + copia("COPIA · ENTIDAD RECEPTORA (devolver firmada y sellada)") + "</html>")
+    registrar_auditoria("Acta de entrega generada", k.nombre)
+    return Response(html, mimetype="text/html")
+
+
+@app.route("/gerencia/envios", methods=["GET", "POST"])
+def gerencia_envios():
+    g = _guard_gerencia()
+    if g:
+        return g
+    _env_ensure()
+    from urllib.parse import quote as _q
+    if request.method == "POST":
+        if not _n_csrf_ok():
+            return redirect("/gerencia/envios?e=" + _q("Formulario inválido, intente de nuevo."))
+        acc = (request.form.get("accion") or "").strip()
+        try:
+            if acc == "crear":
+                prov = (request.form.get("proveedor") or "").strip()
+                prov = prov if prov in ENVIO_PROVEEDORES else "Otro"
+                ciudad = (request.form.get("ciudad_destino") or "").strip()[:120]
+                fecha = _env_fecha("fecha_envio")
+                dias = _env_int("dias_estimados", 0, 0, 60) or _env_dias_default(prov, ciudad)
+                kid = _env_int("kit_id")
+                e = EnvioDespacho(
+                    kit_id=kid or None, proveedor=prov, guia=(request.form.get("guia") or "").strip()[:60],
+                    origen=(request.form.get("origen") or "").strip()[:120], remitente=(request.form.get("remitente") or "").strip()[:160],
+                    destinatario=(request.form.get("destinatario") or "").strip()[:200], direccion=(request.form.get("direccion") or "").strip()[:240],
+                    ciudad_destino=ciudad, contenido=(request.form.get("contenido") or "").strip()[:240], cajas=_env_int("cajas", 1, 1, 500),
+                    peso_kg=float(_env_int("peso_dg", 0)) / 10.0, valor_declarado=_env_int("valor_declarado"),
+                    fecha_envio=fecha, dias_estimados=dias, fecha_estimada=_env_sumar_habiles(fecha, dias) if fecha else "",
+                    estado="DESPACHADO" if fecha else "PREPARANDO", creado_por=session.get("usuario") or "", creado_en=_n_ahora())
+                if not e.destinatario:
+                    return redirect("/gerencia/envios?e=" + _q("Escriba el destinatario."))
+                db.session.add(e)
+                db.session.commit()
+                registrar_auditoria("Envío creado", "%s · %s · %s" % (prov, e.destinatario, ciudad))
+                return redirect("/gerencia/envios?m=" + _q("Envío registrado."))
+            eid = _env_int("envio_id")
+            e = EnvioDespacho.query.get(eid) if eid else None
+            if not e:
+                return redirect("/gerencia/envios?e=" + _q("Envío no encontrado."))
+            if acc == "actualizar":
+                est = (request.form.get("estado") or "").strip()
+                if est in [x[0] for x in _ENVIO_ESTADOS]:
+                    e.estado = est
+                e.guia = (request.form.get("guia") or "").strip()[:60]
+                fe = _env_fecha("fecha_envio")
+                if fe:
+                    e.fecha_envio = fe
+                dias = _env_int("dias_estimados", e.dias_estimados or 0, 0, 60)
+                if dias:
+                    e.dias_estimados = dias
+                if e.fecha_envio:
+                    e.fecha_estimada = _env_sumar_habiles(e.fecha_envio, e.dias_estimados or 0)
+                e.fecha_entrega = _env_fecha("fecha_entrega")
+                if e.estado == "ENTREGADO" and not e.fecha_entrega:
+                    e.fecha_entrega = fecha_hoy()
+                e.acta_devuelta = bool(request.form.get("acta_devuelta"))
+                e.novedad = (request.form.get("novedad") or "").strip()[:1000]
+                db.session.commit()
+                registrar_auditoria("Envío actualizado", "id %s → %s" % (e.id, e.estado))
+                return redirect("/gerencia/envios?m=" + _q("Envío actualizado."))
+            if acc == "eliminar":
+                registrar_auditoria("Envío eliminado", "id %s · %s" % (e.id, e.destinatario))
+                db.session.delete(e)
+                db.session.commit()
+                return redirect("/gerencia/envios?m=" + _q("Envío eliminado."))
+        except Exception as ex:
+            db.session.rollback()
+            return redirect("/gerencia/envios?e=" + _q("No se pudo guardar: %s" % str(ex)[:120]))
+    csrf = _n_csrf()
+    msg, err = request.args.get("m", ""), request.args.get("e", "")
+    filtro_kit = request.args.get("kit", type=int)
+    q = EnvioDespacho.query.order_by(EnvioDespacho.id.desc())
+    if filtro_kit:
+        q = q.filter(EnvioDespacho.kit_id == filtro_kit)
+    envios = q.limit(200).all()
+    kits = {k.id: k for k in KitDonacion.query.all()}
+    hoy = fecha_hoy()
+    est_map = {a: (b, c) for a, b, c in _ENVIO_ESTADOS}
+    filas = ""
+    n_tr = n_ent = n_ret = 0
+    for e in envios:
+        etq, col = est_map.get(e.estado, (e.estado, "#475569"))
+        retrasado = bool(e.fecha_estimada and e.estado not in ("ENTREGADO",) and e.fecha_estimada < hoy)
+        if e.estado == "ENTREGADO":
+            n_ent += 1
+        else:
+            n_tr += 1
+        if retrasado:
+            n_ret += 1
+        opts = "".join("<option value='%s'%s>%s</option>" % (a, " selected" if a == e.estado else "", b) for a, b, _c in _ENVIO_ESTADOS)
+        kit_txt = (" · Kit: %s" % _esc(kits[e.kit_id].nombre)) if e.kit_id in kits else ""
+        filas += (
+            "<div class='dn-c'><b>%s</b> · Guía: <b>%s</b> <span class='tag' style='background:%s;color:#fff'>%s</span>%s"
+            "<div class='sub'>%s → %s, %s%s</div>"
+            "<div class='dn-k'><div><b>%s</b><span>Fecha de envío</span></div><div><b>%s</b><span>Entrega estimada (%d días hábiles lun–sáb)</span></div>"
+            "<div><b>%s</b><span>Entrega real</span></div><div><b>%s</b><span>Acta firmada devuelta</span></div></div>"
+            "<div class='sub'>Contenido: %s · Cajas: %d · Peso: %.1f kg · Valor declarado: $%s%s</div>"
+            "<form method='POST'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='actualizar'><input type='hidden' name='envio_id' value='%d'>"
+            "<div class='g2'><div><label>Estado</label><select name='estado'>%s</select></div><div><label>N.º de guía</label><input name='guia' maxlength='60' value='%s'></div></div>"
+            "<div class='g2'><div><label>Fecha de envío</label><input type='date' name='fecha_envio' value='%s'></div><div><label>Días hábiles estimados</label><input type='number' min='0' max='60' name='dias_estimados' value='%d'></div></div>"
+            "<div class='g2'><div><label>Fecha de entrega real</label><input type='date' name='fecha_entrega' value='%s'></div>"
+            "<div><label>&nbsp;</label><label style='font-weight:600'><input type='checkbox' name='acta_devuelta' value='1' style='width:auto'%s> Acta de entrega firmada y sellada recibida</label></div></div>"
+            "<label>Novedad</label><input name='novedad' maxlength='1000' value='%s'>"
+            "<p><button class='bt s'>Actualizar</button> <a class='bt s' href='/gerencia/envios/%d/rotulo' target='_blank'>🏷️ Rótulo / guía</a></p></form>"
+            "<form method='POST' onsubmit=\"return confirm('¿Eliminar este envío?')\"><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='eliminar'>"
+            "<input type='hidden' name='envio_id' value='%d'><button class='bt s r'>Eliminar</button></form></div>"
+        ) % (_esc(e.proveedor), _esc(e.guia or "sin guía"), col, _esc(etq),
+             (" <span class='tag' style='background:#fee2e2;color:#991b1b'>⚠ Retrasado (estimado %s)</span>" % _esc(e.fecha_estimada)) if retrasado else "", _esc(e.origen or "—"), _esc(e.destinatario),
+             _esc(e.ciudad_destino or "—"), kit_txt, _esc(e.fecha_envio or "—"), _esc(e.fecha_estimada or "—"), e.dias_estimados or 0,
+             _esc(e.fecha_entrega or "—"), "Sí" if e.acta_devuelta else "No", _esc(e.contenido or "—"), e.cajas or 1, e.peso_kg or 0,
+             "{:,}".format(e.valor_declarado or 0).replace(",", "."), (" · Novedad: %s" % _esc(e.novedad)) if e.novedad else "", csrf, e.id, opts, _esc(e.guia or ""),
+             _esc(e.fecha_envio or ""), e.dias_estimados or 0, _esc(e.fecha_entrega or ""), " checked" if e.acta_devuelta else "", _esc(e.novedad or ""), e.id, csrf, e.id)
+    prov_ref = "".join("<tr><td>%s</td><td>%d</td><td>%d</td></tr>" % (_esc(k), v["normal"], v["remoto"]) for k, v in ENVIO_PROVEEDORES.items())
+    kit_opts = "<option value=''>— Sin kit —</option>" + "".join(
+        "<option value='%d'%s>%s</option>" % (k.id, " selected" if filtro_kit == k.id else "", _esc(k.nombre)) for k in kits.values())
+    prov_opts = "".join("<option>%s</option>" % _esc(k) for k in ENVIO_PROVEEDORES)
+    resumen = ("<div class='dn-k'><div><b>%d</b><span>Envíos en curso</span></div><div><b>%d</b><span>Entregados</span></div><div><b>%d</b><span>Retrasados</span></div></div>") % (n_tr, n_ent, n_ret)
+    form = (
+        "<div class='dn-c'><h3 style='margin:0 0 6px'>➕ Registrar envío</h3><form method='POST'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='crear'>"
+        "<div class='g2'><div><label>Transportador</label><select name='proveedor'>%s</select></div><div><label>Kit</label><select name='kit_id'>%s</select></div></div>"
+        "<div class='g2'><div><label>Origen</label><input name='origen' maxlength='120' value='Caracolí'></div><div><label>Remitente</label><input name='remitente' maxlength='160' value='PROCSIS · Procsis Edu'></div></div>"
+        "<label>Destinatario</label><input name='destinatario' maxlength='200' required value='Gobernación del Amazonas - Secretaría de Educación Departamental'>"
+        "<div class='g2'><div><label>Dirección</label><input name='direccion' maxlength='240' placeholder='Dirección de la Secretaría'></div><div><label>Ciudad de destino</label><input name='ciudad_destino' maxlength='120' value='Leticia, Amazonas'></div></div>"
+        "<label>Contenido declarado</label><input name='contenido' maxlength='240' value='Documentos Académicos - Material Educativo Procsis Edu'>"
+        "<div class='g2'><div><label>Cajas</label><input type='number' name='cajas' min='1' value='1'></div><div><label>Peso total (décimas de kg, ej. 125 = 12,5 kg)</label><input type='number' name='peso_dg' min='0' value='0'></div></div>"
+        "<div class='g2'><div><label>Valor declarado ($)</label><input type='number' name='valor_declarado' min='0' value='0'></div><div><label>N.º de guía (si ya la tiene)</label><input name='guia' maxlength='60'></div></div>"
+        "<div class='g2'><div><label>Fecha de envío</label><input type='date' name='fecha_envio'></div>"
+        "<div><label>Días hábiles estimados (vacío = referencia del transportador)</label><input type='number' name='dias_estimados' min='0' max='60'></div></div>"
+        "<p><button class='bt'>Guardar envío</button></p></form></div>") % (csrf, prov_opts, kit_opts)
+    ref = ("<div class='dn-c'><h3 style='margin:0 0 6px'>⏱️ Tiempos de referencia (días hábiles lun–sáb)</h3><table><tr><th>Transportador</th><th>Destino normal</th><th>Zona remota (Amazonas, etc.)</th></tr>%s</table>"
+           "<div class='sub' style='margin-top:6px'>Son valores de referencia editables en cada envío; confirme el tiempo real con el transportador antes de prometer fechas.</div></div>") % prov_ref
+    cuerpo = (_DON_CSS + "<div class='dn'><h1>🚚 Envíos</h1><div class='sub'>Despachos por Interrapidísimo, Servientrega y otros: fecha de envío, estimado de entrega, estado y acta firmada. "
+              "<a href='/gerencia/donaciones'>← Proyectos y Donaciones</a> · <a href='/gerencia/donaciones/kit'>Kit de donación</a></div>"
+              + _env_msg_html(msg, err) + resumen + (filas or "<div class='dn-c'>Aún no hay envíos registrados.</div>") + form + ref + "</div>")
+    return page("Envíos", shell(cuerpo))
+
+
+@app.route("/gerencia/envios/<int:eid>/rotulo")
+def gerencia_envio_rotulo(eid):
+    g = _guard_gerencia()
+    if g:
+        return g
+    _env_ensure()
+    e = EnvioDespacho.query.get_or_404(eid)
+    html = ("<!doctype html><html lang='es'><meta charset='utf-8'><title>Rótulo de envío</title><style>"
+            "body{font-family:Arial,sans-serif;margin:24px}.r{border:3px solid #0f172a;padding:18px;max-width:560px}"
+            ".r h2{margin:0 0 4px;font-size:15px;text-transform:uppercase;color:#475569}.r p{margin:0 0 14px;font-size:20px;font-weight:700}"
+            ".no{margin-bottom:12px}@media print{.no{display:none}}</style><button class='no' onclick='window.print()'>Imprimir</button>"
+            "<div class='r'><h2>Transportador</h2><p>%s · Guía %s</p><h2>Destinatario</h2><p>%s<br>%s<br>%s</p>"
+            "<h2>Remitente</h2><p>%s · %s</p><h2>Contenido</h2><p>%s</p><h2>Cajas / Peso</h2><p>%d caja(s) · %.1f kg</p></div></html>") % (
+        _esc(e.proveedor), _esc(e.guia or "—"), _esc(e.destinatario), _esc(e.direccion or ""), _esc(e.ciudad_destino or ""),
+        _esc(e.remitente or ""), _esc(e.origen or ""), _esc(e.contenido or ""), e.cajas or 1, e.peso_kg or 0)
+    return Response(html, mimetype="text/html")
+
+
 @app.route("/gerencia/donaciones")
 def gerencia_donaciones():
     g = _guard_gerencia()
@@ -85507,7 +86049,10 @@ def gerencia_donaciones():
           "<div><b>$0</b><span>Cobrado a estos colegios</span></div>"
           "<div><b>%d</b><span>Facturas con novedad</span></div></div>" % (n_act, _cop(total_comercial), n_err)
         + '<p><a class="bt" href="/gerencia/donaciones/nueva">➕ Activar colegio por donación</a> '
-          '<a class="bt s" href="/gerencia/donaciones/plan">Crear plan de donación</a></p>'
+          '<a class="bt s" href="/gerencia/donaciones/plan">Crear plan de donación</a> '
+          '<a class="bt s" href="/gerencia/donaciones/kit">📦 Kit de donación</a> '
+          '<a class="bt s" href="/gerencia/envios">🚚 Envíos</a> '
+          '<a class="bt s" href="/gerencia/convocatoria48">🌱 Convocatoria 48 h</a></p>'
         + "<div class='dn-c'><h3 style='margin-top:0'>Colegios</h3><div style='overflow-x:auto'><table><tr><th>Colegio</th><th>Plan</th>"
           "<th>Convenio</th><th>Factura $0 (Alegra)</th><th>Estado</th><th>Acciones</th></tr>%s</table></div></div>" % (
               filas or "<tr><td colspan='6' style='color:#64748b'>Aún no hay colegios por donación.</td></tr>")
