@@ -1568,6 +1568,7 @@ class Institucion(db.Model):
     flag_tarifa_plena_aplicada = db.Column(db.Boolean, default=False)
     nombre_promo_aplicada = db.Column(db.String(100), default="")
     porcentaje_promo_aplicada = db.Column(db.Float, default=0.0)
+    almacenamiento_gb = db.Column(db.Integer, default=0)  # cuota propia del colegio en GB (0 = cuota base)
     fecha_creacion = db.Column(db.String(20), default="")
     notas = db.Column(db.Text, default="")
     # Licencia / facturación comercial
@@ -4105,10 +4106,78 @@ def _staff_module_title(path, rol=""):
     return "<strong>PROCSIS</strong> · Backoffice"
 
 
+_MODULOS_GERENCIA = [
+    ('Talento humano', [
+        ('/gerencia/talento-legal', 'Talento / legal laboral'),
+        ('/gerencia/contratos-personal', 'Contratos de personal'),
+        ('/gerencia/contratos-firmas', 'Firmas de contratos'),
+        ('/gerencia/nomina', 'Nómina'),
+        ('/gerencia/hojas-vida', 'Hojas de vida'),
+        ('/gerencia/matriz-epp', 'Matriz EPP'),
+        ('/gerencia/planillas-pila', 'Planillas PILA'),
+        ('/gerencia/certificaciones', 'Certificaciones laborales'),
+        ('/gerencia/certificados-apoyo', 'Certificados de apoyo'),
+        ('/gerencia/requerimientos-autoridades', 'Requerimientos de autoridades'),
+        ('/gerencia/admision-personal', 'Admisión de personal'),
+        ('/gerencia/datos-rut', 'Datos RUT'),
+    ]),
+    ('Legal corporativo', [
+        ('/gerencia/libro-actas', 'Libro de actas'),
+        ('/gerencia/boveda-legal', 'Bóveda legal'),
+        ('/gerencia/firmas-corporativas', 'Firmas corporativas'),
+        ('/gerencia/contratos-saas', 'Contratos SaaS (colegios)'),
+        ('/gerencia/contratos', 'Contratos'),
+        ('/gerencia/contrato-plantilla', 'Plantilla de contrato (colegios)'),
+        ('/gerencia/plantilla-contrato', 'Plantilla de contrato (personal)'),
+        ('/gerencia/retractos', 'Retractos / reembolsos'),
+        ('/gerencia/legal/consentimientos', 'Consentimientos (Habeas Data)'),
+        ('/gerencia/paginas-legales', 'Páginas legales públicas'),
+        ('/gerencia/pie-login', 'Pie de página del login'),
+    ]),
+    ('Ventas y comercial', [
+        ('/gerencia/ventas', 'Panel de ventas'),
+        ('/gerencia/validaciones-ventas', 'Validaciones de ventas'),
+        ('/gerencia/comisiones-ventas', 'Comisiones de ventas'),
+        ('/gerencia/planes-vendidos', 'Planes vendidos'),
+        ('/gerencia/descuentos', 'Descuentos'),
+        ('/gerencia/alianzas-clientes', 'Alianzas y clientes'),
+        ('/gerencia/autorizar-soporte-rectores', 'Autorizar soporte a rectores'),
+        ('/gerencia/solicitudes-plan', 'Solicitudes de cambio de plan'),
+    ]),
+    ('Sistema y configuración', [
+        ('/gerencia/roles', 'Roles y permisos'),
+        ('/gerencia/usuarios', 'Usuarios internos'),
+        ('/gerencia/empresa', 'Datos de la empresa (alterno)'),
+        ('/gerencia/finanzas/promociones', 'Promociones financieras'),
+        ('/gerencia/dev-console', 'Consola de desarrollador'),
+        ('/gerencia/sesiones-tecnicas', 'Sesiones técnicas (solo ver)'),
+        ('/gerencia/carnes', 'Carnés · proveedor'),
+        ('/gerencia/proveedores', 'Proveedores · actividad y cobros'),
+        ('/tickets-doc', 'Tickets documentales'),
+        ('/gerencia/mi-token', 'Mi token de autorización (CEO)'),
+        ('/gerencia/api-conexiones', 'Conexión API · QGIS'),
+        ('/gerencia/diseno-login', 'Diseño del login'),
+        ('/gerencia/backoffice-branding', 'Branding del backoffice'),
+        ('/gerencia/changelog', 'Historial de cambios'),
+        ('/gerencia/limpieza', 'Limpieza de datos'),
+        ('/gerencia/facturacion-auto-test', 'Test facturación automática'),
+        ('/gerencia/facturacion-cobranza', 'Facturación y cobranza'),
+        ('/gerencia/recursos-financieros', 'Recursos financieros'),
+        ('/gerencia/notas', 'Notas internas'),
+        ('/gerencia/cancelaciones', 'Cancelaciones'),
+        ('/gerencia/pqr-info', 'Información PQR'),
+        ('/gerencia/support', 'Soporte interno'),
+        ('/gerencia/metas', 'Metas comerciales'),
+    ]),
+]
+_GRUPOS_MODULOS_GERENCIA = [(g, tuple(h for h, _l in its)) for g, its in _MODULOS_GERENCIA]
+
+
 _NAV_GRUPOS = {
     "gerencia": [
         ("Inicio", ("/gerencia/hq", "/gerencia/hub")),
         ("Donaciones y envíos", ("/gerencia/donaciones", "/gerencia/donaciones/kit", "/gerencia/convocatoria48", "/gerencia/envios")),
+        *_GRUPOS_MODULOS_GERENCIA,
         ("Equipo y seguridad", ("/gerencia/usuarios", "/gerencia/equipo-carnes", "/gerencia/horarios-asesores", "/gerencia/turnos", "/seguridad", "/gerencia/validaciones-identidad")),
         ("Auditoría", ("/gerencia/auditoria", "/gerencia/auditoria-total", "/gerencia/auditoria-instituciones")),
         ("Tickets y soporte", ("/tickets-doc", "/gerencia/support", "/support", "/gerencia/notificaciones")),
@@ -4318,6 +4387,16 @@ def _staff_nav_items(path, rol=""):
         # Fallback mínimo
         items = [("/login", "Portal de acceso"), ("/logout", "Salir")]
 
+    if rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
+        # Todos los módulos de Gerencia viven en el menú lateral (antes eran un panel al final del dashboard).
+        _ya = {h for h, _l in items}
+        _extra = []
+        for _g, _its in _MODULOS_GERENCIA:
+            for _h, _l in _its:
+                if _h not in _ya:
+                    _ya.add(_h)
+                    _extra.append((_h, _l))
+        items = [x for x in items if x[0] != "/logout"] + _extra + [x for x in items if x[0] == "/logout"]
     html = []
     filas_nav = []
     try:
@@ -5926,6 +6005,7 @@ def inicializar_bd():
                 ("instituciones", "flag_tarifa_plena_aplicada", "BOOLEAN DEFAULT FALSE"),
                 ("instituciones", "nombre_promo_aplicada", "VARCHAR(100) DEFAULT ''"),
                 ("instituciones", "porcentaje_promo_aplicada", "DOUBLE PRECISION DEFAULT 0"),
+                ("instituciones", "almacenamiento_gb", "INTEGER DEFAULT 0"),
             ]
             for table, col, typedef in patches:
                 try:
@@ -29084,85 +29164,6 @@ def gerencia_hq():
       </div>
     </div>
 
-    <div class="sec" style="border:1px solid #e2e8f0;border-radius:4px;padding:18px 16px;background:#fafbfc">
-      <h2 style="margin:0 0 6px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0B2D57;font-weight:800;border-left:3px solid #0B2D57;padding-left:10px">
-        📂 Todos los módulos (antes sin acceso directo)
-      </h2>
-      <p style="font-size:12px;color:#64748b;margin:0 0 14px;line-height:1.5;max-width:760px">
-        Estos módulos ya existían en el sistema pero no tenían un botón en este panel. Se agregan aquí para que
-        ningún módulo quede oculto para Gerencia.
-      </p>
-
-      <h3 style="margin:14px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#0f6b3c">Talento humano</h3>
-      <div class="hq-pills">
-        <a href="/gerencia/talento-legal">Talento / legal laboral</a>
-        <a href="/gerencia/contratos-personal">Contratos de personal</a>
-        <a href="/gerencia/contratos-firmas">Firmas de contratos</a>
-        <a href="/gerencia/nomina">Nómina</a>
-        <a href="/gerencia/hojas-vida">Hojas de vida</a>
-        <a href="/gerencia/matriz-epp">Matriz EPP</a>
-        <a href="/gerencia/planillas-pila">Planillas PILA</a>
-        <a href="/gerencia/certificaciones">Certificaciones laborales</a>
-        <a href="/gerencia/certificados-apoyo">Certificados de apoyo</a>
-        <a href="/gerencia/requerimientos-autoridades">Requerimientos de autoridades</a>
-        <a href="/gerencia/admision-personal">Admisión de personal</a>
-        <a href="/gerencia/datos-rut">Datos RUT</a>
-      </div>
-
-      <h3 style="margin:16px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#7c2d12">Legal corporativo</h3>
-      <div class="hq-pills">
-        <a href="/gerencia/libro-actas">Libro de actas</a>
-        <a href="/gerencia/boveda-legal">Bóveda legal</a>
-        <a href="/gerencia/firmas-corporativas">Firmas corporativas</a>
-        <a href="/gerencia/contratos-saas">Contratos SaaS (colegios)</a>
-        <a href="/gerencia/contratos">Contratos</a>
-        <a href="/gerencia/contrato-plantilla">Plantilla de contrato (colegios)</a>
-        <a href="/gerencia/plantilla-contrato">Plantilla de contrato (personal)</a>
-        <a href="/gerencia/retractos">Retractos / reembolsos</a>
-        <a href="/gerencia/legal/consentimientos">Consentimientos (Habeas Data)</a>
-        <a href="/gerencia/paginas-legales">Páginas legales públicas</a>
-        <a href="/gerencia/pie-login">Pie de página del login</a>
-      </div>
-
-      <h3 style="margin:16px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#1e3a5f">Ventas y comercial</h3>
-      <div class="hq-pills">
-        <a href="/gerencia/ventas">Panel de ventas</a>
-        <a href="/gerencia/validaciones-ventas">Validaciones de ventas</a>
-        <a href="/gerencia/comisiones-ventas">Comisiones de ventas</a>
-        <a href="/gerencia/planes-vendidos">Planes vendidos</a>
-        <a href="/gerencia/descuentos">Descuentos</a>
-        <a href="/gerencia/alianzas-clientes">Alianzas y clientes</a>
-        <a href="/gerencia/autorizar-soporte-rectores">Autorizar soporte a rectores</a>
-        <a href="/gerencia/solicitudes-plan">Solicitudes de cambio de plan</a>
-      </div>
-
-      <h3 style="margin:16px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#1f2937">Sistema y configuración</h3>
-      <div class="hq-pills">
-        <a href="/gerencia/roles">Roles y permisos</a>
-        <a href="/gerencia/usuarios">Usuarios internos</a>
-        <a href="/gerencia/empresa">Datos de la empresa (alterno)</a>
-        <a href="/gerencia/finanzas/promociones">Promociones financieras</a>
-        <a href="/gerencia/dev-console">Consola de desarrollador</a>
-        <a href="/gerencia/sesiones-tecnicas">Sesiones técnicas (solo ver)</a>
-        <a href="/gerencia/carnes">Carnés · proveedor</a>
-        <a href="/gerencia/proveedores">Proveedores · actividad y cobros</a>
-        <a href="/tickets-doc">Tickets documentales</a>
-        <a href="/gerencia/mi-token">Mi token de autorización (CEO)</a>
-        <a href="/gerencia/api-conexiones">Conexión API · QGIS</a>
-        <a href="/gerencia/diseno-login">Diseño del login</a>
-        <a href="/gerencia/backoffice-branding">Branding del backoffice</a>
-        <a href="/gerencia/changelog">Historial de cambios</a>
-        <a href="/gerencia/limpieza">Limpieza de datos</a>
-        <a href="/gerencia/facturacion-auto-test">Test facturación automática</a>
-        <a href="/gerencia/facturacion-cobranza">Facturación y cobranza</a>
-        <a href="/gerencia/recursos-financieros">Recursos financieros</a>
-        <a href="/gerencia/notas">Notas internas</a>
-        <a href="/gerencia/cancelaciones">Cancelaciones</a>
-        <a href="/gerencia/pqr-info">Información PQR</a>
-        <a href="/gerencia/support">Soporte interno</a>
-        <a href="/gerencia/metas">Metas comerciales</a>
-      </div>
-    </div>
 
   </div>
 </div>
@@ -60864,58 +60865,163 @@ def _bytes_dir(path):
     return total
 
 
-def _uso_almacenamiento_colegio(inst):
-    """Estima bytes usados por un colegio (logos, fotos, uploads con id)."""
+_USO_COLEGIOS_CACHE = {"t": 0.0, "datos": {}}
+
+
+def _tam_archivo_local(ruta):
+    """Bytes de un archivo guardado como /static/... (0 si no existe o no es local)."""
+    try:
+        r = (ruta or "").strip().replace("\\", "/").lstrip("/")
+        if not r.startswith("static/"):
+            return 0
+        pth = os.path.join(app.root_path, r)
+        return os.path.getsize(pth) if os.path.isfile(pth) else 0
+    except Exception:
+        return 0
+
+
+def _fmt_bytes(n):
+    n = float(n or 0)
+    if n >= 1024 ** 3:
+        return "%.2f GB" % (n / 1024 ** 3)
+    if n >= 1024 ** 2:
+        return "%.1f MB" % (n / 1024 ** 2)
+    return "%d KB" % round(n / 1024.0)
+
+
+def _uso_colegios_en_vivo(forzar=False, ttl=20):
+    """Consumo REAL en disco de cada colegio, atribuido por la base de datos
+    (fotos de estudiantes, PIAR, archivos de entregas, logo propio y BD del tenant).
+    Resultado en caché de pocos segundos para que el monitoreo sea en vivo sin recorrer el disco en cada clic."""
+    import time as _t
+    ahora = _t.time()
+    if not forzar and _USO_COLEGIOS_CACHE["datos"] and ahora - _USO_COLEGIOS_CACHE["t"] < ttl:
+        return _USO_COLEGIOS_CACHE["datos"]
+    datos = {}
+
+    def _acum(iid, clave, n):
+        if not iid or not n:
+            return
+        d = datos.setdefault(int(iid), {"fotos": 0, "piar": 0, "entregas": 0, "logo": 0, "bd": 0})
+        d[clave] += int(n)
+
     root = app.root_path
-    used = 0
-    candidates = [
-        os.path.join(root, "static", "uploads", "logos", str(inst.id)),
-        os.path.join(root, "static", "uploads", "fotos_estudiantes"),
-        os.path.join(root, "static", "uploads", "excusas", str(inst.id)),
-        os.path.join(root, "static", "uploads", "piar"),
-        os.path.join(root, "static", "uploads", f"inst_{inst.id}"),
-        os.path.join(root, "static", "uploads", "colegios", str(inst.id)),
-    ]
-    # logo path if local
+    fotos = {}
     try:
-        logo = (inst.logo or "") if hasattr(inst, "logo") else ""
-        if logo.startswith("/static/"):
-            lp = os.path.join(root, logo.lstrip("/"))
-            if os.path.isfile(lp):
-                used += os.path.getsize(lp)
-    except Exception:
-        pass
-    for p in candidates:
-        if os.path.isdir(p):
-            # fotos: filtrar por prefijo si es carpeta compartida
-            if p.endswith("fotos_estudiantes"):
-                try:
-                    for fn in os.listdir(p):
-                        # no hay inst id en nombre siempre; contar solo si hay tenant path
-                        fp = os.path.join(p, fn)
-                        if os.path.isfile(fp):
-                            # aproximación: no atribuir todas las fotos a un colegio en carpeta compartida
+        carpeta = os.path.join(root, "static", "uploads", "fotos_estudiantes")
+        if os.path.isdir(carpeta):
+            with os.scandir(carpeta) as it:
+                for ent in it:
+                    if ent.is_file() and ent.name.startswith("est_"):
+                        try:
+                            fotos[int(ent.name[4:].split(".")[0])] = ent.stat().st_size
+                        except Exception:
                             pass
-                except Exception:
-                    pass
-            else:
-                used += _bytes_dir(p)
-    # tenant db file if multi-tenant files
-    try:
-        tdb = os.path.join(root, "database", "tenants", f"{inst.codigo}.db")
-        if os.path.isfile(tdb):
-            used += os.path.getsize(tdb)
     except Exception:
         pass
-    quota = float(ALMACENAMIENTO_GB_POR_COLEGIO) * (1024 ** 3)
+    try:
+        for eid, iid, piar, fpath in db.session.query(
+                Estudiante.id, Estudiante.institucion_id, Estudiante.piar_pdf, Estudiante.foto_path).all():
+            if eid in fotos:
+                _acum(iid, "fotos", fotos[eid])
+            elif fpath:
+                _acum(iid, "fotos", _tam_archivo_local(fpath))
+            if piar:
+                _acum(iid, "piar", _tam_archivo_local(piar))
+    except Exception:
+        db.session.rollback()
+    try:
+        filas = (db.session.query(EntregaEstudiante.institucion_id, db.func.coalesce(db.func.sum(EntregaArchivo.tamano), 0))
+                 .join(EntregaArchivo, EntregaArchivo.entrega_id == EntregaEstudiante.id)
+                 .group_by(EntregaEstudiante.institucion_id).all())
+        for iid, n in filas:
+            _acum(iid, "entregas", n)
+    except Exception:
+        db.session.rollback()
+    try:
+        for inst in Institucion.query.all():
+            logo = (inst.logo or "")
+            if "/uploads/" in logo:   # el logo por defecto de la plataforma no cuenta para el colegio
+                _acum(inst.id, "logo", _tam_archivo_local(logo))
+            tdb = os.path.join(root, "database", "tenants", "%s.db" % inst.codigo)
+            if os.path.isfile(tdb):
+                _acum(inst.id, "bd", os.path.getsize(tdb))
+    except Exception:
+        db.session.rollback()
+    for d in datos.values():
+        d["total"] = d["fotos"] + d["piar"] + d["entregas"] + d["logo"] + d["bd"]
+    _USO_COLEGIOS_CACHE["t"] = ahora
+    _USO_COLEGIOS_CACHE["datos"] = datos
+    return datos
+
+
+def _cuota_gb_colegio(inst):
+    """Cuota de almacenamiento propia del colegio (GB). Si no se ha fijado, aplica la cuota base."""
+    try:
+        gb = int(getattr(inst, "almacenamiento_gb", 0) or 0)
+    except Exception:
+        gb = 0
+    return gb if gb > 0 else ALMACENAMIENTO_GB_POR_COLEGIO
+
+
+def _uso_almacenamiento_colegio(inst, ttl=20):
+    """Consumo en vivo y cuota propia de un colegio."""
+    d = _uso_colegios_en_vivo(ttl=ttl).get(int(inst.id), {})
+    used = int(d.get("total", 0))
+    quota_gb = _cuota_gb_colegio(inst)
+    quota = float(quota_gb) * (1024 ** 3)
     return {
         "used_bytes": used,
         "quota_bytes": quota,
         "used_gb": round(used / (1024 ** 3), 3),
-        "quota_gb": ALMACENAMIENTO_GB_POR_COLEGIO,
+        "quota_gb": quota_gb,
         "free_gb": max(0, round((quota - used) / (1024 ** 3), 3)),
+        "free_bytes": max(0, quota - used),
         "pct": min(100, round((used / quota) * 100, 1)) if quota else 0,
+        "desglose": d,
     }
+
+
+@app.before_request
+def _bloquear_subidas_sin_espacio():
+    """Si el colegio agotó su cuota de almacenamiento, no recibe archivos nuevos.
+    El resto del sistema sigue funcionando; el personal interno de PROCSIS no consume la cuota del colegio."""
+    try:
+        if request.method != "POST" or not request.files:
+            return None
+        if not any(getattr(f, "filename", "") for _k, f in request.files.items(multi=True)):
+            return None
+        if (session.get("rol") or "").strip() in ROLES_INTERNOS:
+            return None
+        iid = institucion_id_actual()
+        if not iid:
+            return None
+        inst = Institucion.query.get(int(iid))
+        if not inst:
+            return None
+        u = _uso_almacenamiento_colegio(inst, ttl=10)
+        if u["used_bytes"] >= u["quota_bytes"]:
+            return page("Almacenamiento lleno", shell(
+                "<div class='msg err'><b>Almacenamiento lleno.</b> Su institución alcanzó el espacio contratado "
+                "(%s de %s GB). No se pueden subir archivos nuevos hasta ampliar el plan; el resto del sistema "
+                "sigue funcionando. Comuníquese con soporte de PROCSIS.</div>" % (_fmt_bytes(u["used_bytes"]), u["quota_gb"]))), 413
+    except Exception:
+        pass
+    return None
+
+
+@app.route("/api/almacenamiento")
+def api_almacenamiento_colegio():
+    """Consumo en vivo del colegio de la sesión (para mostrarlo en cualquier panel del colegio)."""
+    if not requiere_login():
+        return jsonify({"error": "login"}), 401
+    iid = institucion_id_actual()
+    inst = Institucion.query.get(int(iid)) if iid else None
+    if not inst:
+        return jsonify({"error": "sin_colegio"}), 404
+    u = _uso_almacenamiento_colegio(inst, ttl=8)
+    return jsonify({"colegio": inst.nombre, "usado": _fmt_bytes(u["used_bytes"]), "libre": _fmt_bytes(u["free_bytes"]),
+                    "cuota_gb": u["quota_gb"], "porcentaje": u["pct"], "usado_bytes": u["used_bytes"]})
 
 
 # CSS Win32 classic tables (reusable)
@@ -60940,10 +61046,8 @@ WIN32_TABLE_CSS = """
 
 @app.route("/gerencia/recursos-financieros")
 def modulo_almacenamiento():
-    """Módulo de Recursos Financieros y Consumo — GB por colegio + historial de
-    mensualidades/mora. Exclusivo para Cobranza y Gerencia (Soporte no debe ver ni
-    alterar esto; si un colegio se queda sin espacio o en mora, Soporte escala el
-    caso aquí, no lo resuelve directamente)."""
+    """Recursos financieros y consumo: almacenamiento EN VIVO por colegio (cuota propia, ajustable por Gerencia)
+    + historial de mensualidades/mora. Exclusivo para Cobranza y Gerencia."""
     if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
         if rol_actual() == "Soporte":
             return redirect(_home_portal(rol_actual()))
@@ -60951,12 +61055,14 @@ def modulo_almacenamiento():
     q = (request.args.get("q") or "").strip()
     insts = Institucion.query.order_by(Institucion.nombre.asc()).all()
     if q:
-        like = f"%{q}%"
         insts = [i for i in insts if q.lower() in (i.nombre or "").lower() or q.lower() in (i.codigo or "").lower() or q in (i.nit or "")]
+    puede_editar = rol_actual() in ("Gerente", "Superadmin", "Administrador")
+    csrf = _acc_csrf() if puede_editar else ""
+    _uso_colegios_en_vivo(ttl=5)
     filas = ""
     total_used = 0
     for i, inst in enumerate(insts[:200]):
-        u = _uso_almacenamiento_colegio(inst)
+        u = _uso_almacenamiento_colegio(inst, ttl=5)
         total_used += u["used_bytes"]
         bar = int(u["pct"])
         pend = FacturaCobro.query.filter_by(institucion_id=inst.id, estado="PENDIENTE").all()
@@ -60966,31 +61072,47 @@ def modulo_almacenamiento():
             f"<span style='color:#b91c1c;font-weight:700'>{_cop(saldo_mora)}</span>"
             if saldo_mora else "<span style='color:#166534'>$ 0</span>"
         )
+        if puede_editar:
+            cuota_html = (
+                f"<form method='POST' action='/gerencia/recursos-financieros/cuota' style='display:inline;margin:0'>"
+                f"<input type='hidden' name='csrf' value='{csrf}'><input type='hidden' name='inst_id' value='{inst.id}'>"
+                f"<input class='w32-input' type='number' name='gb' min='10' max='10000' value='{u['quota_gb']}' style='width:62px'> GB "
+                f"<button type='submit' class='w32-btn'>Guardar</button></form>"
+            )
+        else:
+            cuota_html = f"{u['quota_gb']} GB"
         filas += (
             f"<tr>"
             f"<td>{i+1}</td>"
             f"<td style='font-weight:700'>{_esc(inst.codigo)}</td>"
             f"<td>{_esc(inst.nombre)[:45]}</td>"
             f"<td>{_esc(inst.estado or '')}</td>"
-            f"<td>{u['quota_gb']} GB</td>"
-            f"<td>{u['used_gb']} GB</td>"
-            f"<td>{u['free_gb']} GB</td>"
-            f"<td>{u['pct']}%"
+            f"<td>{cuota_html}</td>"
+            f"<td id='u-{inst.id}'>{_fmt_bytes(u['used_bytes'])}</td>"
+            f"<td id='f-{inst.id}'>{_fmt_bytes(u['free_bytes'])}</td>"
+            f"<td><span id='p-{inst.id}'>{u['pct']}%</span>"
             f"<div style='height:10px;background:#c0c0c0;border:1px solid #808080;width:80px;display:inline-block;vertical-align:middle;margin-left:6px'>"
-            f"<div style='height:100%;width:{bar}%;background:{'#c00' if bar>90 else '#000080'}'></div></div></td>"
+            f"<div id='b-{inst.id}' style='height:100%;width:{bar}%;background:{'#c00' if bar>90 else '#000080'}'></div></div></td>"
             f"<td>{mora_txt}</td>"
             f"<td><a href='/gerencia/recursos-financieros/{inst.id}/historial'>Ver historial</a></td>"
             f"</tr>"
         )
     if not filas:
-        filas = "<tr><td colspan='9'>Sin colegios</td></tr>"
-    total_gb = round(total_used / (1024**3), 3)
+        filas = "<tr><td colspan='10'>Sin colegios</td></tr>"
     volver = _home_portal()
+    js = """<script>(function(){
+function tick(){fetch('/gerencia/recursos-financieros/en-vivo',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){
+(d.colegios||[]).forEach(function(c){var u=document.getElementById('u-'+c.id);if(!u)return;
+u.textContent=c.usado;document.getElementById('f-'+c.id).textContent=c.libre;document.getElementById('p-'+c.id).textContent=c.pct+'%';
+var b=document.getElementById('b-'+c.id);b.style.width=Math.min(100,c.pct)+'%';b.style.background=c.pct>90?'#c00':'#000080';});
+var t=document.getElementById('tot-vivo');if(t)t.textContent=d.total;
+var s=document.getElementById('st-vivo');if(s)s.textContent='En vivo · actualizado '+new Date().toLocaleTimeString();}).catch(function(){});}
+setInterval(tick,15000);})();</script>"""
     content = f"""
 <style>{WIN32_TABLE_CSS}</style>
 <header class="role-hero"><div>
   <h1>💾 Recursos Financieros y Consumo</h1>
-  <p>Cuota fija: <b>{ALMACENAMIENTO_GB_POR_COLEGIO} GB</b> por institución · Consumo de almacenamiento + mensualidades/mora</p>
+  <p>Almacenamiento <b>en vivo</b> por institución · cuota base <b>{ALMACENAMIENTO_GB_POR_COLEGIO} GB</b>, ajustable por colegio (más de {ALMACENAMIENTO_GB_POR_COLEGIO} GB) · mensualidades/mora</p>
 </div><a class="btn" href="{volver}">Volver</a></header>
 <div class="w32-box">
   <div class="w32-title">Recursos financieros · EduTrack</div>
@@ -60999,7 +61121,7 @@ def modulo_almacenamiento():
       <input class="w32-input" name="q" value="{_esc(q)}" placeholder="Buscar código o nombre">
       <button type="submit" class="w32-btn">Buscar</button>
     </form>
-    <span style="margin-left:12px;font-size:11px">Total usado (aprox): <b>{total_gb} GB</b> · Colegios listados: {len(insts[:200])}</span>
+    <span style="margin-left:12px;font-size:11px">Total usado: <b id="tot-vivo">{_fmt_bytes(total_used)}</b> · Colegios listados: {len(insts[:200])}</span>
   </div>
   <div class="w32-tbl-wrap">
     <table class="w32-tbl">
@@ -61007,10 +61129,49 @@ def modulo_almacenamiento():
       {filas}
     </table>
   </div>
-  <div class="w32-status">Listo · Cuota por colegio = {ALMACENAMIENTO_GB_POR_COLEGIO} GB</div>
+  <div class="w32-status" id="st-vivo">En vivo · se actualiza cada 15 s · Si un colegio llega a su cuota se bloquean las subidas nuevas (el sistema sigue funcionando)</div>
 </div>
+{js}
 """
     return page("Recursos financieros", shell(content))
+
+
+@app.route("/gerencia/recursos-financieros/en-vivo")
+def modulo_almacenamiento_en_vivo():
+    """JSON con el consumo actual de cada colegio (lo consulta la tabla de Recursos financieros cada 15 s)."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
+        return jsonify({"error": "no autorizado"}), 403
+    total = 0
+    out = []
+    for inst in Institucion.query.order_by(Institucion.nombre.asc()).limit(200).all():
+        u = _uso_almacenamiento_colegio(inst, ttl=5)
+        total += u["used_bytes"]
+        out.append({"id": inst.id, "usado": _fmt_bytes(u["used_bytes"]), "libre": _fmt_bytes(u["free_bytes"]),
+                    "pct": u["pct"], "cuota_gb": u["quota_gb"]})
+    return jsonify({"colegios": out, "total": _fmt_bytes(total)})
+
+
+@app.route("/gerencia/recursos-financieros/cuota", methods=["POST"])
+def gerencia_cuota_almacenamiento():
+    """Gerencia fija la cuota de almacenamiento propia de un colegio (mínimo 10 GB)."""
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador"):
+        return redirect("/login")
+    import hmac as _hm
+    if not _hm.compare_digest(str(request.form.get("csrf") or ""), str(session.get("_acc_csrf") or "x")):
+        return page("Cuota de almacenamiento", shell("<div class='msg err'>Sesión de formulario inválida. <a href='/gerencia/recursos-financieros'>Volver</a></div>")), 400
+    try:
+        iid = int(request.form.get("inst_id") or 0)
+        gb = int(request.form.get("gb") or 0)
+    except Exception:
+        iid, gb = 0, 0
+    inst = Institucion.query.get(iid) if iid else None
+    if not inst or not (10 <= gb <= 10000):
+        return page("Cuota de almacenamiento", shell("<div class='msg err'>Colegio no válido o cuota fuera de rango (10 a 10.000 GB). <a href='/gerencia/recursos-financieros'>Volver</a></div>")), 400
+    antes = _cuota_gb_colegio(inst)
+    inst.almacenamiento_gb = gb
+    db.session.commit()
+    registrar_auditoria("Cuota de almacenamiento", "%s: %s GB -> %s GB (%s)" % (inst.codigo, antes, gb, session.get("usuario")))
+    return redirect("/gerencia/recursos-financieros")
 
 
 @app.route("/gerencia/recursos-financieros/<int:iid>/historial")
