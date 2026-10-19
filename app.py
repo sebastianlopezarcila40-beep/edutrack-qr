@@ -4389,6 +4389,12 @@ def _staff_nav_items(path, rol=""):
         # Fallback mínimo
         items = [("/login", "Portal de acceso"), ("/logout", "Salir")]
 
+    _rol_menu = "Comercial" if rol in ("Ventas", "Supervisor de Ventas") else rol
+    if _rol_menu not in ROLES_AREAS and _REPARTO_MENU_EXTRA.get(_rol_menu):
+        _ya0 = {h for h, _l in items}
+        _add = [(h, l) for h, l in _REPARTO_MENU_EXTRA[_rol_menu] if h not in _ya0]
+        if _add:
+            items = [x for x in items if x[0] != "/logout"] + _add + [x for x in items if x[0] == "/logout"]
     if rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         # Todos los módulos de Gerencia viven en el menú lateral (antes eran un panel al final del dashboard).
         _ya = {h for h, _l in items}
@@ -4399,6 +4405,8 @@ def _staff_nav_items(path, rol=""):
                     _ya.add(_h)
                     _extra.append((_h, _l))
         items = [x for x in items if x[0] != "/logout"] + _extra + [x for x in items if x[0] == "/logout"]
+    if rol in _REPARTO_VISTAS:
+        items = [(h, (l + " · solo ver") if _reparto_solo_ver(h, rol) else l) for h, l in items]
     html = []
     filas_nav = []
     try:
@@ -22784,6 +22792,8 @@ def _aislar_paneles_internos():
             return redirect(home)
 
     # —— Aislamiento estricto por rol ——
+    if _reparto_es_operador(rol, path):
+        return None   # módulo asignado a este rol en el reparto de módulos
     if rol == "Comercial":
         permitido = (
             path.startswith("/ventas/panel")
@@ -22956,7 +22966,13 @@ def _no_cache_portales_internos(resp):
 def requiere_gerencia():
     if not requiere_login():
         return False
-    return rol_actual() in ["Gerente", "Superadmin", "Administrador"]
+    r = rol_actual()
+    if r in ["Gerente", "Superadmin", "Administrador"]:
+        return True
+    try:   # el área/rol que opera este módulo también entra
+        return _reparto_es_operador(r, request.path)
+    except Exception:
+        return False
 
 
 @app.route("/instituciones")
@@ -57939,6 +57955,146 @@ def _area_menu_items(rol):
         return [("/logout", "Salir")]
     extra = [(u, t) for u, t, _d in ((_TALENTO_MODULOS if rol == "Talento" else []) + _AREA_MODULOS_EXTRA.get(rol, []))]
     return [("/" + a["slug"], "Inicio")] + extra + [("/perfil", "Mi perfil"), ("/logout", "Salir")]
+
+
+# ══════════════════════════════════════════════════════════════════
+# REPARTO DE MÓDULOS POR ROL (una sola fuente de verdad)
+# Cada módulo lo OPERA el rol/área que le corresponde; Gerente y Administrador solo lo VEN (nunca editan ni cargan),
+# Superadmin conserva el acceso total. El menú lateral de cada rol muestra los módulos que le tocan.
+# ══════════════════════════════════════════════════════════════════
+_REPARTO_NUEVOS = {
+    # Talento Humano
+    "/gerencia/contratos-firmas": ("Talento",),
+    "/gerencia/certificaciones": ("Talento",),
+    "/gerencia/plantilla-contrato": ("Talento", "Juridica"),
+    # Jurídica y Cumplimiento
+    "/gerencia/contratos": ("Juridica",),
+    "/gerencia/contrato-plantilla": ("Juridica",),
+    "/gerencia/legal/consentimientos": ("Juridica",),
+    "/gerencia/empresa": ("Juridica",),
+    # Cobranza / Finanzas (Gerencia también decide aquí)
+    "/gerencia/facturacion-cobranza": ("Cobranza", "Gerente", "Administrador"),
+    "/gerencia/finanzas/promociones": ("Cobranza", "Finanzas", "Gerente", "Administrador"),
+    "/gerencia/descuentos": ("Cobranza", "Gerente", "Administrador"),
+    "/gerencia/recursos-financieros": ("Cobranza", "Finanzas", "Gerente", "Administrador"),
+    # Ventas, Soporte y Soluciones (módulos compartidos con Gerencia)
+    "/gerencia/planes-vendidos": ("Comercial", "Cobranza", "Soporte", "Gerente", "Administrador"),
+    "/gerencia/validaciones-ventas": ("Comercial", "Soporte", "Gerente", "Administrador"),
+    "/gerencia/notas": ("Comercial", "Soporte", "Gerente", "Administrador"),
+    "/gerencia/pqr-info": ("Soporte", "Soluciones", "Comercial", "Gerente", "Administrador"),
+    # Técnico
+    "/gerencia/changelog": ("Desarrollador", "Calidad", "Soporte", "Gerente", "Administrador"),
+    "/gerencia/api-conexiones": ("Calidad", "Desarrollador"),
+    "/gerencia/dev-console": ("Desarrollador",),
+    "/gerencia/carnes": ("Operaciones",),
+}
+_REPARTO_ETIQUETAS = {h: l for _g, _its in _MODULOS_GERENCIA for h, l in _its}
+_REPARTO_MENU_EXTRA = {}   # rol sin área propia (Soporte, Comercial, Cobranza, Desarrollador, Soluciones...) -> [(href, etiqueta)]
+_REPARTO_VISTAS = ("Gerente", "Administrador")
+
+
+def _reparto_construir():
+    ops = {}
+    for h, _t, _d in _TALENTO_MODULOS:
+        ops.setdefault(h, set()).add("Talento")
+    for pr in _TALENTO_RUTAS:
+        if pr.startswith("/gerencia"):
+            ops.setdefault(pr, set()).add("Talento")
+    for rol, lista in _AREA_MODULOS_EXTRA.items():
+        for h, _t, _d in lista:
+            ops.setdefault(h, set()).add(rol)
+    for rol, prefijos in _AREA_RUTAS_EXTRA.items():
+        for pr in prefijos:
+            ops.setdefault(pr, set()).add(rol)
+    for h, roles in _REPARTO_NUEVOS.items():
+        ops.setdefault(h, set()).update(roles)
+    for h, roles in ops.items():
+        if h not in _MODULOS_POR_AREA:          # lo que ya estaba definido explícitamente manda
+            _MODULOS_POR_AREA[h] = (tuple(sorted(roles)), ())
+    conocidos = {h for h, _t, _d in _TALENTO_MODULOS}
+    for lista in _AREA_MODULOS_EXTRA.values():
+        conocidos |= {h for h, _t, _d in lista}
+    for h, roles in _REPARTO_NUEVOS.items():
+        etiqueta = _REPARTO_ETIQUETAS.get(h) or h
+        for r in roles:
+            if r in AREAS_PROCSIS:
+                if h not in {x[0] for x in _AREA_MODULOS_EXTRA.get(r, [])} and not (r == "Talento" and h in {x[0] for x in _TALENTO_MODULOS}):
+                    _AREA_MODULOS_EXTRA.setdefault(r, []).append((h, etiqueta, "Módulo asignado a su área."))
+            elif r not in ("Gerente", "Administrador", "Superadmin"):
+                if h not in {x[0] for x in _REPARTO_MENU_EXTRA.get(r, [])}:
+                    _REPARTO_MENU_EXTRA.setdefault(r, []).append((h, etiqueta))
+
+
+_reparto_construir()
+
+
+def _reparto_es_operador(rol, path):
+    """True si el rol (que no es de Gerencia) opera el módulo de esa ruta."""
+    m = _modulo_area_de_ruta(path)
+    return bool(m) and rol in m[0] and rol not in ("Gerente", "Administrador", "Superadmin")
+
+
+def _reparto_solo_ver(href, rol):
+    m = _modulo_area_de_ruta(href)
+    return bool(m) and rol in _REPARTO_VISTAS and rol not in m[0]
+
+
+def _reparto_titulos(roles):
+    return ", ".join(AREAS_PROCSIS[r]["titulo"] if r in AREAS_PROCSIS else r for r in roles)
+
+
+@app.before_request
+def _reparto_bloquear_escritura_gerencia():
+    """Gerente/Administrador no editan, cargan ni borran en módulos que opera otra área (solo consulta)."""
+    try:
+        if request.method in ("GET", "HEAD", "OPTIONS") or not session.get("usuario"):
+            return None
+        rol = (rol_actual() or "").strip()
+        if rol not in _REPARTO_VISTAS:
+            return None
+        m = _modulo_area_de_ruta(request.path)
+        if m and rol not in m[0]:
+            return acceso_denegado("Gerencia solo puede visualizar este módulo. Lo opera: %s." % _reparto_titulos(m[0]))
+    except Exception:
+        return None
+    return None
+
+
+_FORM_POST_RE = re.compile(r"<form\b[^>]*\bmethod\s*=\s*[\"']?post[\"']?[^>]*>.*?</form>", re.I | re.S)
+_FORMS_SIEMPRE = ("/logout", "/cerrar-turno", "/abrir-turno", "/cambiar_password", "/mfa", "/mi-perfil", "/notificaciones", "/perfil")
+
+
+@app.after_request
+def _reparto_modo_lectura(resp):
+    """En módulos de otra área, Gerencia ve la información pero sin formularios de edición/carga."""
+    try:
+        if request.method != "GET" or resp.status_code != 200 or resp.mimetype != "text/html" or resp.direct_passthrough:
+            return resp
+        if not session.get("usuario"):
+            return resp
+        rol = (rol_actual() or "").strip()
+        if rol not in _REPARTO_VISTAS:
+            return resp
+        m = _modulo_area_de_ruta(request.path)
+        if not m or rol in m[0]:
+            return resp
+        html = resp.get_data(as_text=True)
+
+        def _quitar(mo):
+            tag = mo.group(0)[:mo.group(0).find(">") + 1]
+            ac = re.search(r"action\s*=\s*[\"']?([^\"'\s>]*)", tag, re.I)
+            if ac and ac.group(1).startswith(_FORMS_SIEMPRE):
+                return mo.group(0)
+            return ""
+        nuevo = _FORM_POST_RE.sub(_quitar, html)
+        banner = ("<div style=\"position:sticky;top:0;z-index:99999;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:9px 16px;"
+                  "font:600 13px system-ui,sans-serif;color:#78350f\">👁 Modo solo lectura: este módulo lo opera <b>%s</b>. "
+                  "Gerencia puede consultarlo, no editarlo ni cargar archivos.</div>" % _esc(_reparto_titulos(m[0])))
+        nuevo, n = re.subn(r"(<body\b[^>]*>)", lambda mo: mo.group(1) + banner, nuevo, count=1, flags=re.I)
+        resp.set_data(nuevo)
+    except Exception as e:
+        print("reparto lectura:", e)
+    return resp
 
 
 def _opciones_areas_rol(actual=""):
