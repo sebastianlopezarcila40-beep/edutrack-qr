@@ -4176,7 +4176,7 @@ _GRUPOS_MODULOS_GERENCIA = [(g, tuple(h for h, _l in its)) for g, its in _MODULO
 _NAV_GRUPOS = {
     "gerencia": [
         ("Inicio", ("/gerencia/hq", "/gerencia/hub")),
-        ("Donaciones y envíos", ("/gerencia/donaciones", "/gerencia/donaciones/kit", "/gerencia/convocatoria48", "/gerencia/envios")),
+        ("Donaciones y envíos", ("/gerencia/donaciones", "/gerencia/donaciones/kit", "/gerencia/convocatoria48", "/gerencia/reconocimientos", "/gerencia/envios")),
         *_GRUPOS_MODULOS_GERENCIA,
         ("Equipo y seguridad", ("/gerencia/usuarios", "/gerencia/equipo-carnes", "/gerencia/horarios-asesores", "/gerencia/turnos", "/seguridad", "/gerencia/validaciones-identidad")),
         ("Auditoría", ("/gerencia/auditoria", "/gerencia/auditoria-total", "/gerencia/auditoria-instituciones")),
@@ -4322,6 +4322,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/donaciones/kit", "📦 Kit de donación"),
             ("/gerencia/envios", "🚚 Envíos"),
             ("/gerencia/convocatoria48", "🌱 Convocatoria 48 h"),
+            ("/gerencia/reconocimientos", "🏅 Certificados de reconocimiento"),
             ("/gerencia/hq", "Dashboard"),
             ("/gerencia/reportes", "Reportes"),
             ("/gerencia/historial-validaciones", "Historial técnico de validaciones"),
@@ -4331,6 +4332,7 @@ def _staff_nav_items(path, rol=""):
         items = [
             ("/gerencia/donaciones", "🎗️ Proyectos y Donaciones"),
             ("/gerencia/convocatoria48", "🌱 Convocatoria 48 h"),
+            ("/gerencia/reconocimientos", "🏅 Certificados de reconocimiento"),
             ("/gerencia/donaciones/kit", "📦 Kit de donación"),
             ("/gerencia/envios", "🚚 Envíos"),
             ("/gerencia/hq", "Dashboard"),
@@ -6305,6 +6307,7 @@ def ruta_publica():
         or p.startswith("/docs/")
         or p.startswith("/politicas")
         or p.startswith("/convocatoria48")
+        or p.startswith("/reconocimiento/")
     )
 
 
@@ -80689,7 +80692,7 @@ def gerencia_correo_extra(n):
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
 _RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/media/login-banner/", "/contrato-activacion/", "/verificar-certificado/", "/demo/invitar/",
-                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal", "/convocatoria48")
+                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal", "/convocatoria48", "/reconocimiento/")
 
 
 @app.before_request
@@ -92076,6 +92079,715 @@ def c48_nueva_clave(token):
             _c48_x("UPDATE conv48_update_tokens SET estado='USADO', usado_en=:n WHERE id=:i", n=_c48_now(), i=tok["id"])
             return _c48_page("OK", "<div class='c48-card' style='text-align:center'><h1>✅ Contraseña actualizada</h1><a class='c48-btn' href='/convocatoria48/ingresar'>Ingresar</a></div>")
     return _c48_page("Clave", "<div class='c48-card'><h1>Nueva contraseña</h1>" + (("<div class='c48-err'>%s</div>" % _esc(error)) if error else "") + "<form method='POST'><label>Contraseña *</label><input type='password' name='clave' minlength='8' required><label>Repetir *</label><input type='password' name='clave2' minlength='8' required><label class='c48-legal'><input type='checkbox' name='acepto_politicas' value='1' required><span>Acepto políticas de PROCSIS (tratamiento, privacidad y Habeas Data).</span></label><button class='c48-btn full'>Guardar</button></form></div>")
+
+
+# ══════════════════════════════════════════════════════════════════
+# CERTIFICADOS DE RECONOCIMIENTO (Gerencia)
+# Diseño propio (guinda y dorado, sello de honor) distinto al certificado de la Convocatoria 48 h.
+# Panel de métricas · Emisión con auditoría previa y aprobación masiva · Firmas y textos configurables ·
+# Registro histórico con revocación · Verificación pública por código/QR.
+# ══════════════════════════════════════════════════════════════════
+_RC_INIT = {"ok": False}
+_RC_MODULOS_BASE = ("Ambiental", "Educación", "Tecnología", "Apoyo estratégico", "Reconocimiento institucional")
+_RC_COLS = ("id, codigo, nombre, tipo_id, num_id, ciudad, correo, modulo, motivo, horas, fecha_emision, estado, origen, nota, "
+            "creado_en, aprobado_por, aprobado_en, revocado_por, revocado_en, motivo_revocacion, enviado_en")
+_RC_DEF = {
+    "entidad": "PROCSIS",
+    "programa": "Programa Procsis Edu · Alianzas y Apoyo",
+    "titulo": "CERTIFICADO DE RECONOCIMIENTO",
+    "encabezado": "Procsis expresa su gratitud y otorga el presente reconocimiento a:",
+    "linea_id": "Identificado(a) con {tipo_id} No. {cedula} de {ciudad}, Colombia.",
+    "cuerpo": ("Por su valioso apoyo y compromiso, evidenciado en {motivo}, con una dedicación de {horas} horas, "
+               "en el marco de la iniciativa de Cero Papel y Cero Contaminación a través de la plataforma académica EduTrack."),
+    "cierre": "En testimonio de gratitud, se expide el presente reconocimiento en Colombia, {fecha}.",
+    "firma1_nombre": "MARÍA DUBER LÓPEZ ARCILA", "firma1_cargo": "Representante Legal\nPROCSIS",
+    "firma2_nombre": "SEBASTIÁN LÓPEZ ARCILA", "firma2_cargo": "Gerente General\nPROCSIS EDU",
+    "causal_defecto": "la culminación satisfactoria de su proceso de formación y apoyo",
+    "horas_defecto": "48", "regla_fecha": "inmediata", "fecha_fija": "",
+}
+_RC_IMG_C48 = {"img_firma1": "img_firma1", "img_firma2": "img_firma2", "img_logo": "img_encabezado", "img_fondo": "img_fondo"}
+
+
+def _rc_init():
+    if _RC_INIT["ok"]:
+        return
+    pk = "INTEGER PRIMARY KEY AUTOINCREMENT" if db.engine.dialect.name == "sqlite" else "SERIAL PRIMARY KEY"
+    ddls = (
+        "CREATE TABLE IF NOT EXISTS reconocimientos (id %s, codigo VARCHAR(24) DEFAULT '', nombre VARCHAR(160), "
+        "tipo_id VARCHAR(40) DEFAULT '', num_id VARCHAR(30) DEFAULT '', ciudad VARCHAR(120) DEFAULT '', correo VARCHAR(160) DEFAULT '', "
+        "modulo VARCHAR(60) DEFAULT '', motivo TEXT DEFAULT '', horas INTEGER DEFAULT 0, fecha_emision VARCHAR(20) DEFAULT '', "
+        "estado VARCHAR(12) DEFAULT 'PENDIENTE', origen VARCHAR(12) DEFAULT 'manual', nota VARCHAR(10) DEFAULT '', "
+        "creado_por VARCHAR(80) DEFAULT '', creado_en VARCHAR(20) DEFAULT '', aprobado_por VARCHAR(80) DEFAULT '', "
+        "aprobado_en VARCHAR(20) DEFAULT '', revocado_por VARCHAR(80) DEFAULT '', revocado_en VARCHAR(20) DEFAULT '', "
+        "motivo_revocacion TEXT DEFAULT '', enviado_en VARCHAR(20) DEFAULT '')" % pk,
+        "CREATE TABLE IF NOT EXISTS reconocimientos_config (clave VARCHAR(40) PRIMARY KEY, valor TEXT)",
+    )
+    for d in ddls:
+        try:
+            db.session.execute(text(d))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print("rc init:", e)
+    _RC_INIT["ok"] = True
+
+
+def _rc_cfg(clave, defecto=""):
+    r = _c48_q("SELECT valor FROM reconocimientos_config WHERE clave=:c", c=clave)
+    if r and r[0][0] not in (None, ""):
+        return r[0][0]
+    return _RC_DEF.get(clave, defecto) if defecto == "" else defecto
+
+
+def _rc_cfg_set(clave, valor):
+    n = _c48_x("UPDATE reconocimientos_config SET valor=:v WHERE clave=:c", v=str(valor), c=clave)
+    if not n:
+        _c48_x("INSERT INTO reconocimientos_config (clave, valor) VALUES (:c, :v)", c=clave, v=str(valor))
+
+
+def _rc_img_bytes(clave):
+    """Imagen configurada en este módulo; si no hay, usa la de la Convocatoria 48 h. El valor '-' significa 'quitada'."""
+    try:
+        v = _rc_cfg(clave, "")
+        if v == "-":
+            return None
+        if not v and clave in _RC_IMG_C48:
+            v = _c48_cfg(_RC_IMG_C48[clave], "")
+        return _c48_b64.b64decode(v) if v else None
+    except Exception:
+        return None
+
+
+def _rc_csrf_ok():
+    import hmac as _hm
+    return _hm.compare_digest(str(request.form.get("csrf") or ""), str(session.get("_acc_csrf") or "x"))
+
+
+def _rc_codigo_nuevo():
+    alfa = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    for _ in range(25):
+        cod = "REC-" + "".join(secrets.choice(alfa) for _ in range(8))
+        if not _c48_q("SELECT 1 FROM reconocimientos WHERE codigo=:c", c=cod):
+            return cod
+    return "REC-" + secrets.token_hex(5).upper()
+
+
+def _rc_row(r):
+    return dict(zip([x.strip() for x in _RC_COLS.split(",")], r))
+
+
+def _rc_fecha_txt(iso):
+    try:
+        f = datetime.strptime((iso or "")[:10], "%Y-%m-%d")
+    except Exception:
+        f = ahora()
+    return "a los %d días del mes de %s de %d" % (f.day, _MESES_ES[f.month - 1], f.year)
+
+
+def _rc_texto(plantilla, d):
+    vals = {"nombre_completo": " ".join((d.get("nombre") or "").split()), "cedula": d.get("num_id") or "",
+            "tipo_id": d.get("tipo_id") or "Cédula de Ciudadanía", "ciudad": d.get("ciudad") or "Colombia",
+            "motivo": d.get("motivo") or "", "horas": str(d.get("horas") or ""), "modulo": d.get("modulo") or "",
+            "fecha": _rc_fecha_txt(d.get("fecha_emision"))}
+    return re.sub(r"\{(\w+)\}", lambda m: vals.get(m.group(1), m.group(0)), plantilla or "")
+
+
+def _rc_pdf(d, prueba=False):
+    """PDF del certificado de reconocimiento (A4 horizontal, guinda y dorado, sello de honor)."""
+    from reportlab.lib.utils import simpleSplit, ImageReader
+    from reportlab.lib.pagesizes import A4
+    buf = BytesIO()
+    W, H = landscape(A4)
+    c = canvas.Canvas(buf, pagesize=(W, H))
+    G, O = colors.HexColor("#6B1E2E"), colors.HexColor("#B8892B")
+    CR, TX, GR = colors.HexColor("#FFFBF0"), colors.HexColor("#3B2A2A"), colors.HexColor("#6b5b5b")
+    cfg = lambda k: _rc_cfg(k, _RC_DEF.get(k, ""))
+
+    def imagen(clave):
+        b = _rc_img_bytes(clave)
+        if not b:
+            return None
+        try:
+            return ImageReader(BytesIO(b))
+        except Exception as e:
+            print("rc imagen", clave, e)
+            return None
+
+    def poner(img, cx, y, max_w, max_h):
+        iw, ih = img.getSize()
+        esc = min(max_w / float(iw), max_h / float(ih))
+        c.drawImage(img, cx - iw * esc / 2, y, width=iw * esc, height=ih * esc, mask="auto")
+
+    def espaciado(txt, fuente, tam, cx, y, sp):
+        w = c.stringWidth(txt, fuente, tam) + sp * (len(txt) - 1)
+        c.saveState()   # el espaciado de letras no debe filtrarse al resto del texto
+        t = c.beginText()
+        t.setFont(fuente, tam)
+        t.setCharSpace(sp)
+        t.setTextOrigin(cx - w / 2.0, y)
+        t.textOut(txt)
+        c.drawText(t)
+        c.restoreState()
+
+    import math
+    # fondo crema y banda lateral guinda
+    c.setFillColor(CR); c.rect(0, 0, W, H, stroke=0, fill=1)
+    c.setFillColor(G); c.rect(0, 0, 74, H, stroke=0, fill=1)
+    c.setStrokeColor(O); c.setLineWidth(2.2); c.line(74, 0, 74, H)
+    c.setLineWidth(0.8); c.line(80, 0, 80, H)
+    c.setFillColor(O)
+    for yy in range(48, int(H) - 150, 34):
+        c.saveState(); c.translate(37, yy); c.rotate(45); c.rect(-3, -3, 6, 6, stroke=0, fill=1); c.restoreState()
+    # sello de honor (cintas + medalla dorada con estrella)
+    sx, sy, sr = 37, H - 78, 25
+    c.setFillColor(colors.HexColor("#E9D7A1"))
+    for sg in (-1, 1):
+        p = c.beginPath()
+        p.moveTo(sx + sg * 4, sy - 10); p.lineTo(sx + sg * 22, sy - 10); p.lineTo(sx + sg * 28, sy - 62)
+        p.lineTo(sx + sg * 15, sy - 52); p.lineTo(sx + sg * 5, sy - 62); p.close()
+        c.drawPath(p, stroke=0, fill=1)
+    c.setFillColor(O)
+    for k in range(28):
+        a = 2 * math.pi * k / 28
+        c.circle(sx + (sr + 1) * math.cos(a), sy + (sr + 1) * math.sin(a), 3.4, stroke=0, fill=1)
+    c.circle(sx, sy, sr, stroke=0, fill=1)
+    c.setStrokeColor(CR); c.setLineWidth(1); c.circle(sx, sy, sr - 4, stroke=1, fill=0)
+    c.setFillColor(G); c.circle(sx, sy, sr - 6.5, stroke=0, fill=1)
+    c.setFillColor(O)
+    est = c.beginPath()
+    for k in range(10):
+        rr = 12.5 if k % 2 == 0 else 5.2
+        a = math.pi / 2 + k * math.pi / 5
+        x, y = sx + rr * math.cos(a), sy + 2.5 + rr * math.sin(a)
+        est.moveTo(x, y) if k == 0 else est.lineTo(x, y)
+    est.close(); c.drawPath(est, stroke=0, fill=1)
+    c.setFont("Helvetica-Bold", 4.6); c.drawCentredString(sx, sy - 14.5, "PROCSIS")
+    # marco dorado con adornos en las esquinas
+    fx0, fy0, fx1, fy1 = 96, 26, W - 26, H - 26
+    c.setStrokeColor(O); c.setLineWidth(2); c.rect(fx0, fy0, fx1 - fx0, fy1 - fy0, stroke=1, fill=0)
+    c.setLineWidth(0.7); c.rect(fx0 + 6, fy0 + 6, fx1 - fx0 - 12, fy1 - fy0 - 12, stroke=1, fill=0)
+    c.setFillColor(G)
+    for (px, py) in ((fx0, fy0), (fx1, fy0), (fx0, fy1), (fx1, fy1)):
+        c.saveState(); c.translate(px, py); c.rotate(45); c.rect(-6, -6, 12, 12, stroke=0, fill=1)
+        c.setFillColor(O); c.rect(-2.5, -2.5, 5, 5, stroke=0, fill=1); c.restoreState(); c.setFillColor(G)
+    cx = (fx0 + fx1) / 2.0
+    # marca de agua
+    fondo = imagen("img_fondo")
+    if fondo:
+        c.saveState(); c.setFillAlpha(0.06); poner(fondo, cx, H / 2 - 150, 330, 300); c.restoreState()
+    # encabezado
+    y = H - 46
+    logo = imagen("img_logo")
+    if logo:
+        poner(logo, cx, y - 44, 140, 44); y -= 54
+    c.setFillColor(G); c.setFont("Times-Bold", 24); c.drawCentredString(cx, y - 16, cfg("entidad"))
+    c.setFillColor(GR); c.setFont("Times-Italic", 11); c.drawCentredString(cx, y - 33, cfg("programa"))
+    c.setFillColor(O); espaciado(cfg("titulo").upper(), "Helvetica-Bold", 17, cx, y - 64, 2.2)
+    c.setStrokeColor(O); c.setLineWidth(1)
+    c.line(cx - 190, y - 78, cx - 12, y - 78); c.line(cx + 12, y - 78, cx + 190, y - 78)
+    c.saveState(); c.translate(cx, y - 78); c.rotate(45); c.setFillColor(G); c.rect(-3.5, -3.5, 7, 7, stroke=0, fill=1); c.restoreState()
+    # cuerpo
+    c.setFillColor(TX); c.setFont("Times-Italic", 13.5); c.drawCentredString(cx, y - 104, _rc_texto(cfg("encabezado"), d))
+    nombre = " ".join((d.get("nombre") or "").split()).upper()
+    tam = 30
+    while tam > 14 and c.stringWidth(nombre, "Times-BoldItalic", tam) > 640:
+        tam -= 1
+    c.setFillColor(G); c.setFont("Times-BoldItalic", tam); c.drawCentredString(cx, y - 142, nombre)
+    nw = c.stringWidth(nombre, "Times-BoldItalic", tam)
+    c.setStrokeColor(O); c.setLineWidth(1.4); c.line(cx - nw / 2 - 8, y - 151, cx + nw / 2 + 8, y - 151)
+    c.setFillColor(GR); c.setFont("Times-Italic", 12.5); c.drawCentredString(cx, y - 172, _rc_texto(cfg("linea_id"), d))
+    c.setFillColor(TX); c.setFont("Times-Roman", 13.5)
+    yy = y - 204
+    lineas = []
+    for parr in _rc_texto(cfg("cuerpo"), d).replace("\r", "").split("\n"):
+        lineas += simpleSplit(parr, "Times-Roman", 13.5, 610) or [""]
+    for ln in lineas[:5]:
+        c.drawCentredString(cx, yy, ln); yy -= 18
+    cierre = _rc_texto(cfg("cierre"), d)
+    cs = 11.5
+    while cs > 8 and c.stringWidth(cierre, "Times-Italic", cs) > 660:
+        cs -= 0.5
+    c.setFillColor(GR); c.setFont("Times-Italic", cs); c.drawCentredString(cx, yy - 10, cierre)
+    # firmas
+    base = 118
+    for i, fx in ((1, cx - 175), (2, cx + 175)):
+        im = imagen("img_firma%d" % i)
+        if im:
+            poner(im, fx, base + 6, 190, 58)
+        c.setStrokeColor(colors.HexColor("#7a6a6a")); c.setLineWidth(0.8); c.line(fx - 110, base, fx + 110, base)
+        c.setFillColor(G); c.setFont("Times-Bold", 11.5); c.drawCentredString(fx, base - 14, cfg("firma%d_nombre" % i).replace("\r", "").strip())
+        c.setFillColor(GR); c.setFont("Times-Roman", 9.5)
+        y3 = base - 26
+        for ln in cfg("firma%d_cargo" % i).replace("\r", "").split("\n")[:3]:
+            c.drawCentredString(fx, y3, ln.strip()); y3 -= 11
+    # pie y verificación
+    url = "%s/reconocimiento/validar/%s" % (_base_publica().rstrip("/"), d.get("codigo") or "REC-MUESTRA")
+    c.setFillColor(colors.HexColor("#7a6a6a")); c.setFont("Times-Roman", 8.2)
+    c.drawString(fx0 + 16, 60, "Documento digital emitido por %s · Reconocimiento 100%% digital, política de cero papel." % cfg("entidad"))
+    c.drawString(fx0 + 16, 49, "Código de verificación: %s · Verifique su autenticidad en: %s" % (d.get("codigo") or "REC-MUESTRA", url))
+    try:
+        from reportlab.graphics.barcode import qr
+        from reportlab.graphics.shapes import Drawing
+        from reportlab.graphics import renderPDF
+        w = qr.QrCodeWidget(url); bb = w.getBounds(); size = 56
+        dr = Drawing(size, size, transform=[size / (bb[2] - bb[0]), 0, 0, size / (bb[3] - bb[1]), 0, 0]); dr.add(w)
+        renderPDF.draw(dr, c, fx1 - 20 - size, 36)
+    except Exception as e:
+        print("rc qr:", e)
+    # marcas de agua de estado
+    marca = None
+    if (d.get("estado") or "") == "REVOCADO":
+        marca = ("REVOCADO", colors.HexColor("#c62828"))
+    elif prueba or (d.get("estado") or "") == "PENDIENTE":
+        marca = ("VISTA PREVIA · SIN VALIDEZ", colors.HexColor("#9e9e9e"))
+    if marca:
+        c.saveState(); c.setFillColor(marca[1]); c.setFillAlpha(0.22); c.translate(W / 2, H / 2 - 20); c.rotate(28)
+        c.setFont("Helvetica-Bold", 58 if len(marca[0]) < 12 else 36); c.drawCentredString(0, 0, marca[0]); c.restoreState()
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf.read()
+
+
+def _rc_enviar(d):
+    """Envía el certificado en PDF al correo del receptor (reutiliza el correo de Soporte de la plataforma)."""
+    if not d.get("correo"):
+        return False
+    url = "%s/reconocimiento/validar/%s" % (_base_publica().rstrip("/"), d["codigo"])
+    texto = ("Hola %s,\n\nPROCSIS le comparte su certificado de reconocimiento (adjunto en PDF).\n"
+             "Puede verificar su autenticidad en: %s\n\nCódigo: %s\n\nEquipo PROCSIS EDU" % (d["nombre"], url, d["codigo"]))
+    html = ("<div style='font-family:Georgia,serif;max-width:560px;margin:auto;border:2px solid #B8892B;padding:22px'>"
+            "<h2 style='color:#6B1E2E;margin:0 0 8px'>Certificado de reconocimiento</h2>"
+            "<p>Hola <b>%s</b>,</p><p>PROCSIS le comparte su certificado de reconocimiento (adjunto en PDF).</p>"
+            "<p>Código de verificación: <b>%s</b><br><a href='%s'>Verificar autenticidad</a></p>"
+            "<p style='color:#777;font-size:12px'>Equipo PROCSIS EDU · Documento 100%% digital (cero papel).</p></div>"
+            % (_esc(d["nombre"]), _esc(d["codigo"]), _esc(url)))
+    ok = _c48_enviar_correo(d["correo"], "Su certificado de reconocimiento – PROCSIS", texto, html, _rc_pdf(d), "Reconocimiento_%s.pdf" % d["codigo"])
+    if ok:
+        _c48_x("UPDATE reconocimientos SET enviado_en=:n WHERE id=:i", n=_c48_now(), i=d["id"])
+    return ok
+
+
+_RC_CSS = """<style>
+.rc{max-width:1180px;margin:0 auto;padding:6px 4px 30px;font-family:Georgia,'Times New Roman',serif;color:#3b2a2a}
+.rc h1{color:#6B1E2E;margin:4px 0 2px;font-size:26px}.rc h2{color:#6B1E2E;font-size:18px;margin:0 0 10px;border-bottom:2px solid #B8892B;padding-bottom:5px}
+.rc p.sub{color:#6b5b5b;margin:0 0 12px}.rc-tabs a{display:inline-block;padding:8px 16px;margin:0 6px 8px 0;border:1px solid #B8892B;border-radius:4px;color:#6B1E2E;text-decoration:none;background:#fffbf0;font-weight:700}
+.rc-tabs a.on{background:#6B1E2E;color:#fff;border-color:#6B1E2E}
+.rc-card{background:#fffbf0;border:1px solid #d9c590;border-radius:6px;padding:16px 18px;margin:0 0 16px}
+.rc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+.rc-kpi{background:#6B1E2E;color:#fff;border-radius:6px;padding:14px 16px;border-bottom:4px solid #B8892B}.rc-kpi b{display:block;font-size:30px;color:#f3dfa2}.rc-kpi span{font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.rc label{display:block;font-weight:700;margin:10px 0 3px;font-size:13px}.rc input[type=text],.rc input[type=number],.rc input[type=date],.rc input[type=email],.rc select,.rc textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #c9b57a;border-radius:4px;font:inherit;background:#fff}
+.rc-btn{display:inline-block;background:#6B1E2E;color:#fff;border:0;border-radius:4px;padding:8px 16px;cursor:pointer;font:inherit;font-weight:700;text-decoration:none}.rc-btn.s{padding:4px 10px;font-size:12px}.rc-btn.o{background:#B8892B}.rc-btn.r{background:#b42318}
+.rc table{width:100%;border-collapse:collapse;font-size:13px}.rc th{background:#6B1E2E;color:#fff;text-align:left;padding:7px 8px}.rc td{padding:7px 8px;border-bottom:1px solid #e6d9ad;vertical-align:middle}
+.rc-b{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700}.rc-b.a{background:#dcfce7;color:#166534}.rc-b.v{background:#fee2e2;color:#991b1b}.rc-b.p{background:#fef3c7;color:#92400e}
+.rc-bar{height:16px;background:#e9d7a1;border-radius:3px;overflow:hidden}.rc-bar i{display:block;height:100%;background:#6B1E2E}
+.rc-ok{background:#dcfce7;border:1px solid #86efac;padding:9px 12px;border-radius:4px;margin-bottom:12px}.rc-err{background:#fee2e2;border:1px solid #fca5a5;padding:9px 12px;border-radius:4px;margin-bottom:12px}
+.rc form.in{display:inline;margin:0}.rc-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:800px){.rc-2{grid-template-columns:1fr}}
+.rc-fir{max-height:60px;max-width:200px;background:#fff;border:1px dashed #c9b57a;padding:3px}
+</style>"""
+
+
+def _rc_html_panel(q, mod, est):
+    def n1(sql, **p):
+        r = _c48_q(sql, **p)
+        return int((r[0][0] if r and r[0][0] is not None else 0))
+    tot = n1("SELECT COUNT(*) FROM reconocimientos WHERE estado IN ('ACTIVO','REVOCADO')")
+    vig = n1("SELECT COUNT(*) FROM reconocimientos WHERE estado='ACTIVO'")
+    rev = n1("SELECT COUNT(*) FROM reconocimientos WHERE estado='REVOCADO'")
+    pen = n1("SELECT COUNT(*) FROM reconocimientos WHERE estado='PENDIENTE'")
+    _c48_init()
+    t48 = _c48_q("SELECT COUNT(*), SUM(CASE WHEN estado IN ('aprobado','certificado') THEN 1 ELSE 0 END) FROM conv48_participantes")
+    reg48 = int((t48[0][0] if t48 and t48[0][0] else 0)); apr48 = int((t48[0][1] if t48 and t48[0][1] else 0))
+    tasa = ("%.1f%%" % (100.0 * apr48 / reg48)) if reg48 else "—"
+    por_mod = _c48_q("SELECT modulo, COUNT(*) FROM reconocimientos WHERE estado IN ('ACTIVO','REVOCADO') GROUP BY modulo ORDER BY 2 DESC")
+    mx = max([int(x[1]) for x in por_mod] or [1])
+    barras = "".join("<div style='display:grid;grid-template-columns:170px 1fr 40px;gap:8px;align-items:center;margin:5px 0'><span>%s</span>"
+                     "<div class='rc-bar'><i style='width:%d%%'></i></div><b>%d</b></div>" % (_esc(m or "Sin módulo"), int(100 * int(n) / mx), int(n))
+                     for m, n in por_mod) or "<p class='sub'>Aún no hay certificados emitidos.</p>"
+    out = ["<div class='rc-grid'>"
+           "<div class='rc-kpi'><span>Total emitidos</span><b>%d</b></div>"
+           "<div class='rc-kpi'><span>Vigentes</span><b>%d</b></div>"
+           "<div class='rc-kpi'><span>Revocados</span><b>%d</b></div>"
+           "<div class='rc-kpi'><span>En auditoría</span><b>%d</b></div>"
+           "<div class='rc-kpi'><span>Tasa de aprobación · Conv. 48 h</span><b>%s</b><small>%d de %d registrados</small></div></div>"
+           % (tot, vig, rev, pen, tasa, apr48, reg48),
+           "<div class='rc-card'><h2>Emitidos por tipo de módulo</h2>%s</div>" % barras]
+    sql = "SELECT " + _RC_COLS + " FROM reconocimientos WHERE estado IN ('ACTIVO','REVOCADO')"
+    prm = {}
+    if q:
+        sql += " AND (LOWER(nombre) LIKE :q OR num_id LIKE :q OR LOWER(codigo) LIKE :q)"
+        prm["q"] = "%" + q.lower() + "%"
+    if mod:
+        sql += " AND modulo=:m"; prm["m"] = mod
+    if est in ("ACTIVO", "REVOCADO"):
+        sql += " AND estado=:e"; prm["e"] = est
+    sql += " ORDER BY id DESC LIMIT 200"
+    filas = [_rc_row(r) for r in _c48_q(sql, **prm)]
+    csrf = _acc_csrf()
+    trs = []
+    for d in filas:
+        b = "<span class='rc-b a'>Activo</span>" if d["estado"] == "ACTIVO" else "<span class='rc-b v' title='%s'>Revocado</span>" % _esc(d["motivo_revocacion"] or "")
+        acc = "<a class='rc-btn s' target='_blank' href='/gerencia/reconocimientos/%d/pdf'>⬇ PDF</a> " % d["id"]
+        if d["estado"] == "ACTIVO":
+            if d["correo"]:
+                acc += ("<form class='in' method='POST' action='/gerencia/reconocimientos/accion'><input type='hidden' name='csrf' value='%s'>"
+                        "<input type='hidden' name='accion' value='reenviar'><input type='hidden' name='id' value='%d'>"
+                        "<button class='rc-btn s o'>✉ Reenviar</button></form> " % (csrf, d["id"]))
+            acc += ("<form class='in' method='POST' action='/gerencia/reconocimientos/accion' onsubmit=\"var m=prompt('Motivo de la revocación (obligatorio):');"
+                    "if(!m||m.length<5){return false;}this.motivo.value=m;return true;\"><input type='hidden' name='csrf' value='%s'>"
+                    "<input type='hidden' name='accion' value='revocar'><input type='hidden' name='id' value='%d'><input type='hidden' name='motivo' value=''>"
+                    "<button class='rc-btn s r'>⛔ Revocar</button></form>" % (csrf, d["id"]))
+        trs.append("<tr><td><code>%s</code></td><td>%s</td><td>%s %s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+                   % (_esc(d["codigo"]), _esc(d["nombre"]), _esc(d["tipo_id"] or ""), _esc(d["num_id"]), _esc(d["modulo"]),
+                      _esc((d["fecha_emision"] or "")[:10]), b, acc))
+    mods = sorted({(x[0] or "") for x in _c48_q("SELECT DISTINCT modulo FROM reconocimientos") if x[0]} | set(_RC_MODULOS_BASE))
+    opt_m = "<option value=''>Todos los módulos</option>" + "".join("<option%s>%s</option>" % (" selected" if m == mod else "", _esc(m)) for m in mods)
+    opt_e = "".join("<option value='%s'%s>%s</option>" % (v, " selected" if v == est else "", t) for v, t in (("", "Todos los estados"), ("ACTIVO", "Activo"), ("REVOCADO", "Revocado")))
+    out.append("<div class='rc-card'><h2>Registro histórico y auditoría</h2>"
+               "<form method='GET' style='display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:8px;align-items:end;margin-bottom:12px'>"
+               "<div><label>Buscar (nombre, identificación o código)</label><input type='text' name='q' value='%s'></div>"
+               "<div><label>Módulo</label><select name='m'>%s</select></div><div><label>Estado</label><select name='e'>%s</select></div>"
+               "<button class='rc-btn'>Filtrar</button><a class='rc-btn o' href='/gerencia/reconocimientos/export.csv'>⬇ CSV</a></form>"
+               "<div style='overflow-x:auto'><table><tr><th>ID de certificado</th><th>Estudiante</th><th>Identificación</th><th>Módulo</th><th>Emisión</th><th>Estado</th><th>Acciones</th></tr>%s</table></div></div>"
+               % (_esc(q), opt_m, opt_e, "".join(trs) or "<tr><td colspan='7'>Sin resultados.</td></tr>"))
+    return "".join(out)
+
+
+def _rc_html_emitir():
+    csrf = _acc_csrf()
+    hdef, causal = _rc_cfg("horas_defecto", "48"), _rc_cfg("causal_defecto", "")
+    regla, ffija = _rc_cfg("regla_fecha", "inmediata"), _rc_cfg("fecha_fija", "")
+    dl = "".join("<option value='%s'>" % _esc(m) for m in _RC_MODULOS_BASE)
+    pend = [_rc_row(r) for r in _c48_q("SELECT " + _RC_COLS + " FROM reconocimientos WHERE estado='PENDIENTE' ORDER BY id ASC LIMIT 500")]
+    trs = "".join("<tr><td><input type='checkbox' class='rc-chk' name='ids' value='%d' checked></td><td>%s</td><td>%s %s</td><td>%s</td><td>%s</td><td style='max-width:280px'>%s</td><td>%s</td></tr>"
+                  % (d["id"], _esc(d["nombre"]), _esc(d["tipo_id"] or ""), _esc(d["num_id"]), _esc(d["modulo"]),
+                     _esc(d["nota"] and ("Nota %s/5.0" % d["nota"]) or "—"), _esc(d["motivo"] or ""), "✔" if d["correo"] else "—") for d in pend)
+    regla_txt = ("Se expide el <b>%s</b>." % _esc(ffija)) if (regla == "fecha" and ffija) else "Se expide <b>de inmediato</b> al aprobar."
+    return (
+        "<div class='rc-2'><div class='rc-card'><h2>1 · Definir reglas de logro y agregar receptores</h2>"
+        "<form method='POST' action='/gerencia/reconocimientos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='agregar'>"
+        "<div class='rc-2'><div><label>Tipo de módulo / línea</label><input type='text' name='modulo' list='rc-mods' required placeholder='Ambiental, Tecnología…'><datalist id='rc-mods'>%s</datalist></div>"
+        "<div><label>Intensidad horaria</label><input type='number' name='horas' min='1' max='999' value='%s' required></div></div>"
+        "<label>Causal de emisión (el «por qué»)</label><textarea name='motivo' rows='2' required>%s</textarea>"
+        "<label>Fecha de expedición (opcional)</label><input type='date' name='fecha'><small>Si la deja vacía: %s</small>"
+        "<label>Receptores (uno por línea): Nombre completo | Tipo ID | Número | Ciudad | Correo</label>"
+        "<textarea name='lote' rows='6' required placeholder='María Fernanda Pérez Gómez | CC | 1000000000 | Medellín | maria@correo.com'></textarea>"
+        "<p><button class='rc-btn'>➕ Agregar a la auditoría</button></p></form></div>"
+        "<div class='rc-card'><h2>Importar aprobados de la Convocatoria 48 h</h2><p class='sub'>Trae a los participantes aprobados que aún no tienen este reconocimiento "
+        "(con su nota sobre 5.0) para revisarlos en la auditoría antes de firmar.</p>"
+        "<form method='POST' action='/gerencia/reconocimientos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='importar_c48'>"
+        "<button class='rc-btn o'>⬇ Cargar aprobados de la Convocatoria 48 h</button></form></div></div>"
+        "<div class='rc-card'><h2>2 · Auditoría previa y firma digital (%d pendientes)</h2>"
+        "<form method='POST' action='/gerencia/reconocimientos/accion'><input type='hidden' name='csrf' value='%s'>"
+        "<div style='overflow-x:auto'><table><tr><th><input type='checkbox' checked onclick=\"var s=this.checked;document.querySelectorAll('.rc-chk').forEach(function(x){x.checked=s;});\"></th>"
+        "<th>Nombre</th><th>Identificación</th><th>Módulo</th><th>Nota</th><th>Causal</th><th>Correo</th></tr>%s</table></div>"
+        "<p><label style='display:inline'><input type='checkbox' name='enviar_correo' value='1' checked> Enviar el certificado por correo al aprobar (máx. 10 por vez)</label></p>"
+        "<p><button class='rc-btn' name='accion' value='aprobar' onclick=\"return confirm('¿Aprobar y firmar la emisión de los certificados seleccionados?');\">✔ Aprobar y firmar emisión</button> "
+        "<button class='rc-btn r' name='accion' value='quitar' onclick=\"return confirm('¿Quitar de la lista los seleccionados?');\">🗑 Quitar de la lista</button></p></form>"
+        "<p class='sub'>3 · Al aprobar, el sistema genera el código de verificación único y el QR enlazados a la consulta pública. %s</p></div>"
+        % (csrf, dl, _esc(hdef), _esc(causal), regla_txt, csrf, len(pend), csrf,
+           trs or "<tr><td colspan='7'>No hay receptores en auditoría.</td></tr>", regla_txt))
+
+
+def _rc_html_config():
+    csrf = _acc_csrf()
+    g = lambda k: _esc(_rc_cfg(k, _RC_DEF.get(k, "")))
+    regla = _rc_cfg("regla_fecha", "inmediata")
+    def fir(i):
+        b = _rc_img_bytes("img_firma%d" % i)
+        prev = ""
+        if b:
+            prev = "<img class='rc-fir' src='data:%s;base64,%s'>" % (_c48_img_mime(b) or "image/png", _c48_b64.b64encode(b).decode())
+        return ("<div class='rc-card'><h2>Firma %d</h2><label>Nombre</label><input type='text' name='firma%d_nombre' value='%s'>"
+                "<label>Cargo (una línea por renglón)</label><textarea name='firma%d_cargo' rows='2'>%s</textarea>"
+                "<label>Imagen de la firma (PNG o JPG, máx. 1,5 MB)</label>%s<input type='file' name='img_firma%d' accept='image/png,image/jpeg'>"
+                "<label style='font-weight:400'><input type='checkbox' name='quitar_img_firma%d' value='1'> Quitar la firma actual</label></div>"
+                % (i, i, g("firma%d_nombre" % i), i, g("firma%d_cargo" % i), prev, i, i))
+    return (
+        "<form method='POST' action='/gerencia/reconocimientos/config' enctype='multipart/form-data'><input type='hidden' name='csrf' value='%s'>"
+        "<div class='rc-2'>%s%s</div>"
+        "<div class='rc-card'><h2>Reglas de emisión</h2><div class='rc-2'><div><label>Causal por defecto</label><textarea name='causal_defecto' rows='2'>%s</textarea></div>"
+        "<div><label>Intensidad horaria por defecto</label><input type='number' name='horas_defecto' min='1' max='999' value='%s'>"
+        "<label>Fecha de expedición</label><select name='regla_fecha'><option value='inmediata'%s>Inmediata al aprobar</option><option value='fecha'%s>Programada en una fecha fija</option></select>"
+        "<label>Fecha fija (si aplica)</label><input type='date' name='fecha_fija' value='%s'></div></div></div>"
+        "<div class='rc-card'><h2>Editor de textos base</h2><p class='sub'>Campos automáticos: <code>{nombre_completo}</code> <code>{cedula}</code> <code>{tipo_id}</code> "
+        "<code>{ciudad}</code> <code>{motivo}</code> <code>{horas}</code> <code>{modulo}</code> <code>{fecha}</code></p>"
+        "<div class='rc-2'><div><label>Entidad</label><input type='text' name='entidad' value='%s'></div><div><label>Programa (subtítulo)</label><input type='text' name='programa' value='%s'></div></div>"
+        "<label>Título del certificado</label><input type='text' name='titulo' value='%s'>"
+        "<label>Frase antes del nombre</label><input type='text' name='encabezado' value='%s'>"
+        "<label>Línea de identificación</label><input type='text' name='linea_id' value='%s'>"
+        "<label>Cuerpo del texto</label><textarea name='cuerpo' rows='4'>%s</textarea>"
+        "<label>Frase de cierre</label><input type='text' name='cierre' value='%s'>"
+        "<label>Logo del encabezado (opcional; si no hay, usa el de la Convocatoria 48 h)</label><input type='file' name='img_logo' accept='image/png,image/jpeg'>"
+        "<label style='font-weight:400'><input type='checkbox' name='quitar_img_logo' value='1'> Quitar el logo</label></div>"
+        "<p><button class='rc-btn'>💾 Guardar configuración</button> <a class='rc-btn o' target='_blank' href='/gerencia/reconocimientos/muestra'>👁 Vista previa en PDF</a></p></form>"
+        % (csrf, fir(1), fir(2), g("causal_defecto"), g("horas_defecto"), " selected" if regla == "inmediata" else "", " selected" if regla == "fecha" else "",
+           g("fecha_fija"), g("entidad"), g("programa"), g("titulo"), g("encabezado"), g("linea_id"), g("cuerpo"), g("cierre")))
+
+
+@app.route("/gerencia/reconocimientos")
+def gerencia_reconocimientos():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _rc_init()
+    t = request.args.get("t") or "panel"
+    if t not in ("panel", "emitir", "config"):
+        t = "panel"
+    msg = session.pop("rc_msg", None)
+    aviso = ("<div class='%s'>%s</div>" % ("rc-ok" if msg[0] == "ok" else "rc-err", _esc(msg[1]))) if isinstance(msg, (list, tuple)) and len(msg) == 2 else ""
+    tabs = "".join("<a class='%s' href='/gerencia/reconocimientos?t=%s'>%s</a>" % ("on" if t == k else "", k, n)
+                   for k, n in (("panel", "📊 Panel y registro"), ("emitir", "✍️ Emitir y firmar"), ("config", "⚙️ Plantilla y firmas")))
+    if t == "panel":
+        cuerpo = _rc_html_panel((request.args.get("q") or "").strip()[:80], (request.args.get("m") or "")[:60], request.args.get("e") or "")
+    elif t == "emitir":
+        cuerpo = _rc_html_emitir()
+    else:
+        cuerpo = _rc_html_config()
+    html = ("<div class='rc'><h1>🏅 Certificados de reconocimiento</h1><p class='sub'>Reconocimientos y certificados de apoyo con firma digital, "
+            "código de verificación y QR público.</p><div class='rc-tabs'>%s</div>%s%s</div>" % (tabs, aviso, cuerpo))
+    return page("Certificados de reconocimiento", shell(_RC_CSS + html))
+
+
+@app.route("/gerencia/reconocimientos/accion", methods=["POST"])
+def gerencia_reconocimientos_accion():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _rc_init()
+    if not _rc_csrf_ok():
+        session["rc_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect("/gerencia/reconocimientos")
+    f = request.form
+    a = f.get("accion") or ""
+    usuario = session.get("usuario") or "Gerencia"
+    destino = "/gerencia/reconocimientos?t=emitir"
+    hoy = fecha_hoy()
+    tipos = {"CC": "Cédula de Ciudadanía", "TI": "Tarjeta de Identidad", "CE": "Cédula de Extranjería", "PPT": "Permiso por Protección Temporal", "PA": "Pasaporte"}
+    try:
+        if a == "agregar":
+            modulo = " ".join((f.get("modulo") or "").split())[:60]
+            motivo = " ".join((f.get("motivo") or "").split())[:400]
+            try:
+                horas = max(1, min(999, int(f.get("horas") or 0)))
+            except Exception:
+                horas = 0
+            fecha = (f.get("fecha") or "").strip()[:10]
+            if fecha and not re.match(r"^\d{4}-\d{2}-\d{2}$", fecha):
+                fecha = ""
+            if not modulo or not motivo or not horas:
+                session["rc_msg"] = ("err", "Complete módulo, causal e intensidad horaria.")
+                return redirect(destino)
+            ok_n = dup = mal = 0
+            for linea in (f.get("lote") or "").splitlines()[:300]:
+                partes = [x.strip() for x in linea.split("|")]
+                if len(partes) < 3 or not partes[0]:
+                    if linea.strip():
+                        mal += 1
+                    continue
+                nombre = " ".join(partes[0].split())[:160]
+                tipo = tipos.get(partes[1].upper(), partes[1] or "Cédula de Ciudadanía")[:40] if len(partes) > 1 else "Cédula de Ciudadanía"
+                num = re.sub(r"\D", "", partes[2] if len(partes) > 2 else "")
+                ciudad = (partes[3] if len(partes) > 3 else "")[:120] or "Colombia"
+                correo = (partes[4] if len(partes) > 4 else "").lower()[:160]
+                if correo and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
+                    correo = ""
+                if len(nombre) < 3 or not (5 <= len(num) <= 12):
+                    mal += 1
+                    continue
+                if _c48_q("SELECT 1 FROM reconocimientos WHERE num_id=:n AND modulo=:m AND motivo=:t AND estado IN ('PENDIENTE','ACTIVO')", n=num, m=modulo, t=motivo):
+                    dup += 1
+                    continue
+                _c48_x("INSERT INTO reconocimientos (nombre, tipo_id, num_id, ciudad, correo, modulo, motivo, horas, fecha_emision, estado, origen, creado_por, creado_en) "
+                       "VALUES (:a,:b,:c,:d,:e,:f,:g,:h,:i,'PENDIENTE','manual',:j,:k)",
+                       a=nombre, b=tipo, c=num, d=ciudad, e=correo, f=modulo, g=motivo, h=horas, i=fecha, j=usuario, k=_c48_now())
+                ok_n += 1
+            session["rc_msg"] = ("ok" if ok_n else "err", "Agregados a la auditoría: %d · Repetidos omitidos: %d · Líneas inválidas: %d." % (ok_n, dup, mal))
+        elif a == "importar_c48":
+            _c48_init()
+            causal = _rc_cfg("causal_defecto", "")
+            try:
+                horas = max(1, min(999, int(_rc_cfg("horas_defecto", "48"))))
+            except Exception:
+                horas = 48
+            n_ok = 0
+            for nom, tid, num, mun, cor, mod, aci, tot, fin in _c48_q(
+                    "SELECT nombres, tipo_id, num_id, municipio, correo, modulo, aciertos, total, COALESCE(NULLIF(cert_fecha_en,''), dia2_fin) "
+                    "FROM conv48_participantes WHERE estado IN ('aprobado','certificado')"):
+                modn = _c48_modulo_info(mod)[1]
+                if _c48_q("SELECT 1 FROM reconocimientos WHERE num_id=:n AND modulo=:m AND origen='c48' AND estado<>'REVOCADO'", n=num, m=modn):
+                    continue
+                _c48_x("INSERT INTO reconocimientos (nombre, tipo_id, num_id, ciudad, correo, modulo, motivo, horas, estado, origen, nota, creado_por, creado_en) "
+                       "VALUES (:a,:b,:c,:d,:e,:f,:g,:h,'PENDIENTE','c48',:n,:j,:k)",
+                       a=_c48_nombre_pdf(nom)[:160], b=(tid or "Cédula de Ciudadanía")[:40], c=num or "", d=(mun or "Colombia")[:120], e=(cor or "")[:160],
+                       f=modn, g=causal, h=horas, n=_c48_nota({"aciertos": aci, "total": tot}), j=usuario, k=_c48_now())
+                n_ok += 1
+            session["rc_msg"] = ("ok", "Se cargaron %d aprobados de la Convocatoria 48 h a la auditoría." % n_ok)
+        elif a == "aprobar":
+            ids = [int(x) for x in f.getlist("ids") if str(x).isdigit()][:500]
+            regla, ffija = _rc_cfg("regla_fecha", "inmediata"), _rc_cfg("fecha_fija", "")
+            n_ap, n_mail, n_mail_ok = 0, 0, 0
+            for i in ids:
+                r = _c48_q("SELECT " + _RC_COLS + " FROM reconocimientos WHERE id=:i AND estado='PENDIENTE'", i=i)
+                if not r:
+                    continue
+                d = _rc_row(r[0])
+                fecha = d["fecha_emision"] or (ffija if (regla == "fecha" and re.match(r"^\d{4}-\d{2}-\d{2}$", ffija or "")) else hoy)
+                cod = _rc_codigo_nuevo()
+                _c48_x("UPDATE reconocimientos SET estado='ACTIVO', codigo=:c, fecha_emision=:f, aprobado_por=:u, aprobado_en=:n WHERE id=:i AND estado='PENDIENTE'",
+                       c=cod, f=fecha, u=usuario, n=_c48_now(), i=i)
+                n_ap += 1
+                if f.get("enviar_correo") and d["correo"] and fecha[:10] <= hoy and n_mail < 10:
+                    d.update({"codigo": cod, "fecha_emision": fecha, "estado": "ACTIVO"})
+                    n_mail += 1
+                    n_mail_ok += 1 if _rc_enviar(d) else 0
+            if n_ap:
+                registrar_auditoria("Reconocimientos", "%s aprobó y firmó %d certificados" % (usuario, n_ap))
+            session["rc_msg"] = ("ok" if n_ap else "err", "Certificados emitidos: %d · Correos enviados: %d de %d." % (n_ap, n_mail_ok, n_mail) if n_ap else "No seleccionó ningún receptor.")
+            destino = "/gerencia/reconocimientos"
+        elif a == "quitar":
+            ids = [int(x) for x in f.getlist("ids") if str(x).isdigit()][:500]
+            for i in ids:
+                _c48_x("DELETE FROM reconocimientos WHERE id=:i AND estado='PENDIENTE'", i=i)
+            session["rc_msg"] = ("ok", "Se quitaron %d receptores de la lista." % len(ids))
+        elif a == "revocar":
+            motivo = " ".join((f.get("motivo") or "").split())[:300]
+            i = int(f.get("id") or 0)
+            if len(motivo) < 5:
+                session["rc_msg"] = ("err", "Escriba el motivo de la revocación.")
+            else:
+                n = _c48_x("UPDATE reconocimientos SET estado='REVOCADO', revocado_por=:u, revocado_en=:n, motivo_revocacion=:m WHERE id=:i AND estado='ACTIVO'",
+                           u=usuario, n=_c48_now(), m=motivo, i=i)
+                if n:
+                    registrar_auditoria("Reconocimientos", "%s revocó el certificado #%d: %s" % (usuario, i, motivo))
+                session["rc_msg"] = ("ok" if n else "err", "Certificado revocado." if n else "No se pudo revocar (¿ya estaba revocado?).")
+            destino = "/gerencia/reconocimientos"
+        elif a == "reenviar":
+            ts = _c48_time.time()
+            if ts - float(session.get("rc_mail_ts") or 0) < 8:
+                session["rc_msg"] = ("err", "Espere unos segundos antes de reenviar otro certificado.")
+            else:
+                session["rc_mail_ts"] = ts
+                r = _c48_q("SELECT " + _RC_COLS + " FROM reconocimientos WHERE id=:i AND estado='ACTIVO'", i=int(f.get("id") or 0))
+                ok = bool(r) and _rc_enviar(_rc_row(r[0]))
+                session["rc_msg"] = ("ok" if ok else "err", "Certificado reenviado al correo del estudiante." if ok else "No se pudo enviar (¿sin correo o sin credenciales de correo?).")
+            destino = "/gerencia/reconocimientos"
+    except Exception as e:
+        db.session.rollback()
+        print("rc accion:", e)
+        session["rc_msg"] = ("err", "No se pudo completar la acción. Intente de nuevo.")
+    return redirect(destino)
+
+
+@app.route("/gerencia/reconocimientos/config", methods=["POST"])
+def gerencia_reconocimientos_config():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _rc_init()
+    if not _rc_csrf_ok():
+        session["rc_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect("/gerencia/reconocimientos?t=config")
+    f = request.form
+    try:
+        for k in ("entidad", "programa", "titulo", "encabezado", "linea_id", "cuerpo", "cierre", "firma1_nombre", "firma1_cargo", "firma2_nombre", "firma2_cargo", "causal_defecto"):
+            if k in f:
+                _rc_cfg_set(k, (f.get(k) or "").replace("\r", "").strip()[:1200])
+        if f.get("horas_defecto", "").isdigit():
+            _rc_cfg_set("horas_defecto", max(1, min(999, int(f["horas_defecto"]))))
+        if f.get("regla_fecha") in ("inmediata", "fecha"):
+            _rc_cfg_set("regla_fecha", f["regla_fecha"])
+        if "fecha_fija" in f:
+            ff = (f.get("fecha_fija") or "").strip()
+            _rc_cfg_set("fecha_fija", ff if re.match(r"^\d{4}-\d{2}-\d{2}$", ff) else "")
+        errores = []
+        for clave in ("img_firma1", "img_firma2", "img_logo"):
+            if f.get("quitar_" + clave):
+                _rc_cfg_set(clave, "-")
+            arch = request.files.get(clave)
+            if arch and arch.filename:
+                datos = arch.read(1500001)
+                if len(datos) <= 1500000 and _c48_img_mime(datos):
+                    _rc_cfg_set(clave, _c48_b64.b64encode(datos).decode())
+                else:
+                    errores.append(arch.filename)
+        registrar_auditoria("Reconocimientos", "%s actualizó la plantilla/firmas de certificados de reconocimiento" % (session.get("usuario") or "Gerencia"))
+        session["rc_msg"] = ("err", "Guardado, pero estas imágenes no son PNG/JPG válidas o superan 1,5 MB: %s" % ", ".join(errores)) if errores else ("ok", "Configuración guardada.")
+    except Exception as e:
+        db.session.rollback()
+        print("rc config:", e)
+        session["rc_msg"] = ("err", "No se pudo guardar la configuración.")
+    return redirect("/gerencia/reconocimientos?t=config")
+
+
+@app.route("/gerencia/reconocimientos/<int:rid>/pdf")
+def gerencia_reconocimientos_pdf(rid):
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _rc_init()
+    r = _c48_q("SELECT " + _RC_COLS + " FROM reconocimientos WHERE id=:i", i=rid)
+    if not r:
+        return redirect("/gerencia/reconocimientos")
+    d = _rc_row(r[0])
+    return Response(_rc_pdf(d), mimetype="application/pdf", headers={"Content-Disposition": "inline; filename=Reconocimiento_%s.pdf" % (d["codigo"] or rid)})
+
+
+@app.route("/gerencia/reconocimientos/muestra")
+def gerencia_reconocimientos_muestra():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _rc_init()
+    try:
+        horas = int(_rc_cfg("horas_defecto", "48"))
+    except Exception:
+        horas = 48
+    d = {"nombre": "María Fernanda Pérez Gómez", "tipo_id": "Cédula de Ciudadanía", "num_id": "1000000000", "ciudad": "Medellín",
+         "modulo": "Ambiental", "motivo": _rc_cfg("causal_defecto", ""), "horas": horas, "fecha_emision": fecha_hoy(), "codigo": "REC-MUESTRA", "estado": "PENDIENTE"}
+    return Response(_rc_pdf(d, prueba=True), mimetype="application/pdf", headers={"Content-Disposition": "inline; filename=reconocimiento_muestra.pdf"})
+
+
+@app.route("/gerencia/reconocimientos/export.csv")
+def gerencia_reconocimientos_csv():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _rc_init()
+    import csv
+    out = _c48_io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["id_certificado", "nombre", "tipo_id", "identificacion", "ciudad", "modulo", "motivo", "horas", "fecha_emision", "estado", "aprobado_por", "revocado_en", "motivo_revocacion"])
+    for r in _c48_q("SELECT codigo, nombre, tipo_id, num_id, ciudad, modulo, motivo, horas, fecha_emision, estado, aprobado_por, revocado_en, motivo_revocacion "
+                    "FROM reconocimientos WHERE estado IN ('ACTIVO','REVOCADO') ORDER BY id DESC"):
+        w.writerow(list(r))
+    return Response("\ufeff" + out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=reconocimientos_emitidos.csv"})
+
+
+@app.route("/reconocimiento/validar/<codigo>")
+def rc_validar(codigo):
+    """Verificación pública (la abre el QR del certificado)."""
+    ok, espera = _rate_limit("rc-validar", 40, 60)
+    if not ok:
+        return _rate_limit_response(espera)
+    _rc_init()
+    r = _c48_q("SELECT nombre, num_id, modulo, motivo, horas, fecha_emision, estado, motivo_revocacion FROM reconocimientos "
+               "WHERE codigo=:c AND estado IN ('ACTIVO','REVOCADO')", c=(codigo or "").strip().upper()[:24])
+    estilo = "<style>.rc-pub{max-width:560px;margin:40px auto;padding:26px;background:#fffbf0;border:3px double #B8892B;border-radius:6px;font-family:Georgia,serif;color:#3b2a2a}.rc-pub h1{color:#6B1E2E;font-size:24px}</style>"
+    if not r:
+        cuerpo = "<h1>❌ Certificado no encontrado</h1><p>El código no corresponde a un certificado de reconocimiento emitido por PROCSIS.</p>"
+    else:
+        nom, num, mod, motivo, horas, fecha, estado, mrev = r[0]
+        if estado == "REVOCADO":
+            cuerpo = "<h1 style='color:#b42318'>⛔ Certificado revocado</h1><p>Este certificado fue <b>revocado</b> por PROCSIS y ya no es válido.</p>"
+        elif (fecha or "")[:10] > fecha_hoy():
+            cuerpo = "<h1>⏳ Certificado programado</h1><p>Este reconocimiento será válido a partir del <b>%s</b>.</p>" % _esc((fecha or "")[:10])
+        else:
+            cuerpo = ("<h1>✅ Certificado válido</h1><p><b>%s</b>, identificación terminada en <b>%s</b>, recibió un reconocimiento de PROCSIS "
+                      "(módulo: %s, %s horas), expedido el <b>%s</b>.</p><p>Estado: <b>Activo / Vigente</b></p>"
+                      % (_esc(" ".join((nom or "").split())), _esc((num or "")[-3:]), _esc(mod or ""), int(horas or 0), _esc((fecha or "")[:10])))
+    return page("Verificar reconocimiento", estilo + "<div class='rc-pub'>" + cuerpo + "</div>")
+
 
 
 if __name__ == "__main__":
