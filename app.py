@@ -106,6 +106,16 @@ AREAS_PROCSIS = {
                       ("Respaldos", "Verificación de copias y pruebas de restauración."),
                       ("Protección de sistemas", "Vulnerabilidades y plan de remediación.")],
     },
+    "Tecnologia": {
+        "slug": "tecnologia", "titulo": "Tecnología y Soporte de TI", "icono": "💻", "color": "#0f766e",
+        "desc": "Mesa de ayuda, accesos e identidades, infraestructura y redes, seguridad de la información, sistemas de negocio y proyectos de software.",
+        "funciones": [("Soporte técnico (mesa de ayuda)", "Tickets de fallas de equipos, correo, impresión y software."),
+                      ("Gestión de accesos e identidades", "Cuentas, bajas inmediatas, cierre de sesiones y MFA."),
+                      ("Infraestructura y redes", "Wi-Fi, internet, servidores, nube y VPN."),
+                      ("Seguridad de la información", "Incidentes, antivirus, políticas y doble factor."),
+                      ("Sistemas y aplicaciones de negocio", "ERP, CRM, EduTrack, bases de datos y respaldos."),
+                      ("Proyectos y desarrollo de software", "Herramientas propias e innovación tecnológica.")],
+    },
 }
 ROLES_AREAS = tuple(AREAS_PROCSIS)
 ROLES_GERENCIA_AREAS = ("Gerente", "Superadmin", "Administrador")
@@ -4168,6 +4178,15 @@ _MODULOS_GERENCIA = [
         ('/gerencia/pqr-info', 'Información PQR'),
         ('/gerencia/support', 'Soporte interno'),
         ('/gerencia/metas', 'Metas comerciales'),
+    ]),
+    ('Tecnología y TI', [
+        ('/tecnologia/mesa-ayuda', '🎧 Soporte técnico (mesa de ayuda)'),
+        ('/tecnologia/accesos', '🔐 Gestión de accesos e identidades'),
+        ('/tecnologia/infraestructura', '🌐 Infraestructura y redes'),
+        ('/tecnologia/seguridad', '🛡️ Seguridad de la información'),
+        ('/tecnologia/sistemas', '📊 Sistemas y aplicaciones de negocio'),
+        ('/tecnologia/proyectos', '🚀 Proyectos y desarrollo de software'),
+        ('/ti/reportar', '🎫 Reportar un problema a TI'),
     ]),
 ]
 _GRUPOS_MODULOS_GERENCIA = [(g, tuple(h for h, _l in its)) for g, its in _MODULOS_GERENCIA]
@@ -54786,7 +54805,7 @@ _AURA_PERMISOS = {
     "Contabilidad": {"estado", "cartera", "facturas"},
     "Finanzas": {"estado", "cartera", "facturas"},
     "Desarrollador": {"tickets"}, "Developer": {"tickets"},
-    "Calidad": {"tickets"},
+    "Calidad": {"tickets"}, "Tecnologia": {"tickets"},
 }
 _AURA_MSG_FIN = ("Lo siento, no tengo permisos para mostrar información financiera confidencial. "
                  "Tu rol solo permite visualización de estados de cuenta general.")
@@ -58026,6 +58045,24 @@ def _reparto_construir():
                     _REPARTO_MENU_EXTRA.setdefault(r, []).append((h, etiqueta))
 
 
+_AREA_MODULOS_EXTRA["Tecnologia"] = [
+    ("/tecnologia/mesa-ayuda", "🎧 Soporte técnico (mesa de ayuda)", "Tickets: computadores, correo, impresión, bloqueos de cuenta y software."),
+    ("/tecnologia/accesos", "🔐 Gestión de accesos e identidades", "Cuentas del equipo, bajas inmediatas, cierre de sesiones y MFA."),
+    ("/tecnologia/infraestructura", "🌐 Infraestructura y redes", "Wi-Fi, internet, servidores, nube y VPN, con estado en vivo."),
+    ("/tecnologia/seguridad", "🛡️ Seguridad de la información", "Incidentes, remediación y control de políticas de acceso."),
+    ("/tecnologia/sistemas", "📊 Sistemas y aplicaciones de negocio", "ERP, CRM, EduTrack, bases de datos, respaldos y licencias."),
+    ("/tecnologia/proyectos", "🚀 Proyectos y desarrollo de software", "Herramientas propias e innovación para automatizar procesos."),
+]
+_REPARTO_NUEVOS.update({
+    "/tecnologia/mesa-ayuda": ("Tecnologia",),
+    "/tecnologia/accesos": ("Tecnologia",),
+    "/tecnologia/infraestructura": ("Tecnologia",),
+    "/tecnologia/seguridad": ("Tecnologia",),
+    "/tecnologia/sistemas": ("Tecnologia", "Desarrollador"),
+    "/tecnologia/proyectos": ("Tecnologia", "Desarrollador"),
+    "/ti/reportar": ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Soluciones", "Gerente", "Administrador") + tuple(AREAS_PROCSIS),
+})
+_REPARTO_NUEVOS["/gerencia/api-conexiones"] = ("Calidad", "Desarrollador", "Tecnologia")
 _reparto_construir()
 _MODULOS_POR_AREA["/gerencia/empresa"] = _MODULOS_POR_AREA["/gerencia/datos-empresa"]   # misma pantalla, segunda dirección
 
@@ -90037,11 +90074,11 @@ def soporte_auditoria_colegios():
 _CARNE_AREA_POR_ROL = {"Soporte": "Soporte", "Comercial": "Comercial", "Gerente": "Gerencia", "Superadmin": "Gerencia", "Administrador": "Gerencia",
                        "Cobranza": "Cartera", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor", "Desarrollador": "Desarrollo", "Soluciones": "Soluciones Procsis",
                        "Finanzas": "Finanzas y Tesorería", "Talento": "Talento Humano", "Marketing": "Marketing", "Juridica": "Jurídica",
-                       "Operaciones": "Operaciones", "Calidad": "Calidad y Seguridad"}
+                       "Operaciones": "Operaciones", "Calidad": "Calidad y Seguridad", "Tecnologia": "Tecnología y TI"}
 _CARNE_CARGO_POR_ROL = {"Soporte": "Asesor de soporte", "Comercial": "Asesor comercial", "Gerente": "Gerente", "Superadmin": "Superadmin", "Administrador": "Administrador",
                         "Cobranza": "Asesor de cobranza", "Contabilidad": "Contabilidad", "Proveedor": "Proveedor de carnés", "Desarrollador": "Desarrollador", "Soluciones": "Atención al cliente",
                         "Finanzas": "Analista financiero", "Talento": "Talento Humano", "Marketing": "Marketing y comunicaciones",
-                        "Juridica": "Jurídica y cumplimiento", "Operaciones": "Operaciones y administración", "Calidad": "Calidad y seguridad"}
+                        "Juridica": "Jurídica y cumplimiento", "Operaciones": "Operaciones y administración", "Calidad": "Calidad y seguridad", "Tecnologia": "Soporte de TI"}
 
 
 def _carne_equipo_de_usuario(u):
@@ -92945,6 +92982,449 @@ def rc_validar(codigo):
                       "(módulo: %s, %s horas), expedido el <b>%s</b>.</p><p>Estado: <b>Activo / Vigente</b></p>"
                       % (_esc(" ".join((nom or "").split())), _esc((num or "")[-3:]), _esc(mod or ""), int(horas or 0), _esc((fecha or "")[:10])))
     return page("Verificar reconocimiento", estilo + "<div class='rc-pub'>" + cuerpo + "</div>")
+
+
+
+# ══════════════════════════════════════════════════════════════════
+# TECNOLOGÍA Y SOPORTE DE TI (área nueva)
+# 1 Soporte técnico (mesa de ayuda) · 2 Gestión de accesos e identidades · 3 Infraestructura y redes
+# 4 Seguridad de la información · 5 Sistemas y aplicaciones de negocio · 6 Proyectos y desarrollo de software
+# Opera el rol "Tecnologia". Gerente y Administrador solo ven; Superadmin conserva el acceso total.
+# Cualquier persona del equipo interno puede reportar un problema a TI desde /ti/reportar.
+# ══════════════════════════════════════════════════════════════════
+_TI_INIT = {"ok": False}
+_TI_CSS = (_RC_CSS.replace("rc-", "ti-").replace(".rc", ".ti")
+           .replace("Georgia,'Times New Roman',serif", "system-ui,-apple-system,'Segoe UI',sans-serif")
+           .replace("#6B1E2E", "#0f766e").replace("#B8892B", "#14b8a6").replace("#fffbf0", "#f0fdfa")
+           .replace("#d9c590", "#99f6e4").replace("#c9b57a", "#5eead4").replace("#e9d7a1", "#ccfbf1")
+           .replace("#e6d9ad", "#ccfbf1").replace("#f3dfa2", "#99f6e4").replace("#3b2a2a", "#0f172a"))
+_TI_CATEGORIAS = ("Computador lento o bloqueado", "Correo electrónico", "Impresión", "Bloqueo de cuenta o contraseña",
+                  "Monitor, mouse o laptop (hardware)", "Instalación de software", "Internet / Wi-Fi / VPN", "Otro")
+_TI_PRIORIDADES = ("Baja", "Media", "Alta", "Urgente")
+_TI_TIPOS_INFRA = ("Servidor / Nube", "Red / Wi-Fi", "Internet corporativo", "VPN / Acceso remoto", "Equipo de cómputo", "Impresora / Periférico")
+_TI_TIPOS_SIS = ("ERP", "CRM", "Aplicación propia (EduTrack)", "Base de datos", "Respaldo (copia de seguridad)", "Licencia de software")
+_TI_TABLAS = {
+    "ti_tickets": ("categoria", "prioridad", "asunto", "detalle", "solicitante"),
+    "ti_activos": ("tipo", "nombre", "ubicacion", "responsable", "detalle"),
+    "ti_incidentes": ("tipo", "severidad", "titulo", "detalle", "accion"),
+    "ti_proyectos": ("nombre", "prioridad", "responsable", "fecha_objetivo", "detalle"),
+}
+_TI_SPECS = {
+    "mesa-ayuda": dict(
+        tabla="ti_tickets", titulo="🎧 Soporte técnico · Mesa de ayuda",
+        intro="Reportes del equipo (tickets, chats o llamadas): computadores lentos, correo, impresión, bloqueos de cuenta, mantenimiento de hardware e instalación de software.",
+        campos=(("categoria", "Categoría", "select", _TI_CATEGORIAS), ("prioridad", "Prioridad", "select", _TI_PRIORIDADES),
+                ("asunto", "Asunto", "text", None), ("detalle", "Detalle del problema", "area", None)),
+        estados=("Abierto", "En proceso", "Resuelto", "Cerrado"), mostrar=("asunto", "categoria", "prioridad", "solicitante"),
+        tipos=None, boton="➕ Registrar ticket"),
+    "infraestructura": dict(
+        tabla="ti_activos", titulo="🌐 Infraestructura y redes",
+        intro="Conectividad de la empresa: Wi-Fi, red cableada, internet corporativo, servidores físicos o en la nube, equipos y redes VPN para trabajo remoto.",
+        campos=(("tipo", "Tipo", "select", _TI_TIPOS_INFRA), ("nombre", "Nombre o identificador", "text", None),
+                ("ubicacion", "Ubicación o dirección (sede, IP, proveedor de nube)", "text", None), ("responsable", "Responsable", "text", None),
+                ("detalle", "Configuración / detalle", "area", None)),
+        estados=("Operativo", "En mantenimiento", "Fuera de servicio", "Dado de baja"), mostrar=("nombre", "tipo", "ubicacion", "responsable"),
+        tipos=_TI_TIPOS_INFRA, boton="➕ Registrar recurso"),
+    "seguridad": dict(
+        tabla="ti_incidentes", titulo="🛡️ Seguridad de la información",
+        intro="Protección contra ataques, virus y robo de datos: registro de incidentes, remediación y control de las políticas de acceso.",
+        campos=(("tipo", "Tipo de incidente", "select", ("Malware / virus", "Phishing", "Acceso no autorizado", "Pérdida o fuga de datos", "Vulnerabilidad", "Otro")),
+                ("severidad", "Severidad", "select", ("Baja", "Media", "Alta", "Crítica")), ("titulo", "Título del incidente", "text", None),
+                ("detalle", "Qué ocurrió", "area", None), ("accion", "Acción tomada o plan de remediación", "area", None)),
+        estados=("Abierto", "En contención", "Resuelto", "Cerrado"), mostrar=("titulo", "tipo", "severidad"),
+        tipos=None, boton="➕ Reportar incidente"),
+    "sistemas": dict(
+        tabla="ti_activos", titulo="📊 Sistemas y aplicaciones de negocio",
+        intro="Plataformas grandes de la empresa (ERP, CRM, EduTrack), bases de datos, respaldos y licencias: quién las administra y en qué estado están.",
+        campos=(("tipo", "Tipo", "select", _TI_TIPOS_SIS), ("nombre", "Sistema o aplicación", "text", None),
+                ("ubicacion", "Dirección web, servidor o proveedor", "text", None), ("responsable", "Administrador responsable", "text", None),
+                ("detalle", "Versión, vencimiento de licencia, último respaldo…", "area", None)),
+        estados=("Operativo", "En mantenimiento", "Fuera de servicio", "Dado de baja"), mostrar=("nombre", "tipo", "ubicacion", "responsable"),
+        tipos=_TI_TIPOS_SIS, boton="➕ Registrar sistema"),
+    "proyectos": dict(
+        tabla="ti_proyectos", titulo="🚀 Proyectos y desarrollo de software",
+        intro="Herramientas propias y mejoras tecnológicas para automatizar tareas y acelerar los procesos de PROCSIS.",
+        campos=(("nombre", "Proyecto", "text", None), ("prioridad", "Prioridad", "select", _TI_PRIORIDADES), ("responsable", "Responsable", "text", None),
+                ("fecha_objetivo", "Fecha objetivo", "date", None), ("detalle", "Descripción y alcance", "area", None)),
+        estados=("Idea", "Planeado", "En desarrollo", "En pruebas", "En producción", "Cancelado"), mostrar=("nombre", "prioridad", "responsable", "fecha_objetivo"),
+        tipos=None, boton="➕ Crear proyecto"),
+}
+
+
+def _ti_init():
+    if _TI_INIT["ok"]:
+        return
+    pk = "INTEGER PRIMARY KEY AUTOINCREMENT" if db.engine.dialect.name == "sqlite" else "SERIAL PRIMARY KEY"
+    for tabla, cols in _TI_TABLAS.items():
+        ddl = ("CREATE TABLE IF NOT EXISTS %s (id %s, %s, estado VARCHAR(24) DEFAULT '', asignado_a VARCHAR(80) DEFAULT '', nota TEXT DEFAULT '', "
+               "creado_por VARCHAR(80) DEFAULT '', creado_en VARCHAR(20) DEFAULT '', actualizado_en VARCHAR(20) DEFAULT '')"
+               % (tabla, pk, ", ".join("%s TEXT DEFAULT ''" % c for c in cols)))
+        try:
+            db.session.execute(text(ddl))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print("ti init:", e)
+    _TI_INIT["ok"] = True
+
+
+def _ti_guard():
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() in ("Superadmin", "Gerente", "Administrador"):
+        return None
+    m = _modulo_area_de_ruta(request.path)
+    if m and rol_actual() in m[0]:
+        return None
+    return acceso_denegado("Este módulo es exclusivo del área de Tecnología y Soporte de TI.")
+
+
+def _ti_puede_escribir():
+    r = rol_actual()
+    if r == "Superadmin":
+        return True
+    m = _modulo_area_de_ruta(request.path)
+    return bool(m) and r in m[0] and r not in ("Gerente", "Administrador")
+
+
+def _ti_csrf_ok():
+    import hmac as _hm
+    return _hm.compare_digest(str(request.form.get("csrf") or ""), str(session.get("_acc_csrf") or "x"))
+
+
+def _ti_pagina(titulo, cuerpo):
+    msg = session.pop("ti_msg", None)
+    aviso = ("<div class='%s'>%s</div>" % ("ti-ok" if msg[0] == "ok" else "ti-err", _esc(msg[1]))) if isinstance(msg, (list, tuple)) and len(msg) == 2 else ""
+    tabs = "".join("<a class='%s' href='%s'>%s</a>" % ("on" if request.path.startswith(h) else "", h, n) for h, n in (
+        ("/tecnologia/mesa-ayuda", "🎧 Mesa de ayuda"), ("/tecnologia/accesos", "🔐 Accesos"), ("/tecnologia/infraestructura", "🌐 Infraestructura"),
+        ("/tecnologia/seguridad", "🛡️ Seguridad"), ("/tecnologia/sistemas", "📊 Sistemas"), ("/tecnologia/proyectos", "🚀 Proyectos")))
+    return page(titulo, shell(_TI_CSS + "<div class='ti'><div class='ti-tabs'>%s</div>%s%s</div>" % (tabs, aviso, cuerpo)))
+
+
+def _ti_salud():
+    """Estado en vivo de los servicios: base de datos, disco y consumo de los colegios."""
+    import shutil, time as _t
+    s = {}
+    t0 = _t.time()
+    try:
+        db.session.execute(text("SELECT 1"))
+        s["bd"] = "Operativa · %d ms" % int((_t.time() - t0) * 1000)
+    except Exception:
+        db.session.rollback()
+        s["bd"] = "Sin respuesta"
+    try:
+        du = shutil.disk_usage(app.root_path)
+        s["disco"] = "%s libres de %s" % (_fmt_bytes(du.free), _fmt_bytes(du.total))
+    except Exception:
+        s["disco"] = "No disponible"
+    try:
+        uso = _uso_colegios_en_vivo(ttl=30)
+        s["colegios"] = "%s en %d colegios" % (_fmt_bytes(sum(v.get("total", 0) for v in uso.values())), len(uso))
+    except Exception:
+        s["colegios"] = "No disponible"
+    s["motor"] = db.engine.dialect.name
+    return s
+
+
+def _ti_panel_extra(modulo):
+    """Panel superior propio de cada módulo (indicadores en vivo)."""
+    if modulo in ("infraestructura", "sistemas"):
+        s = _ti_salud()
+        return ("<div class='ti-grid'><div class='ti-kpi'><span>Base de datos (%s)</span><b style='font-size:18px'>%s</b></div>"
+                "<div class='ti-kpi'><span>Disco del servidor</span><b style='font-size:18px'>%s</b></div>"
+                "<div class='ti-kpi'><span>Archivos de colegios</span><b style='font-size:18px'>%s</b></div>%s</div>"
+                % (_esc(s["motor"]), _esc(s["bd"]), _esc(s["disco"]), _esc(s["colegios"]),
+                   "<div class='ti-kpi'><span>Conexiones API</span><b style='font-size:15px'><a style='color:#99f6e4' href='/gerencia/api-conexiones'>Abrir →</a></b></div>" if modulo == "sistemas" else ""))
+    if modulo == "seguridad":
+        us = _ti_usuarios_internos()
+        tot = len(us)
+        con_mfa = sum(1 for u in us if getattr(u, "mfa_habilitado", False))
+        bloq = sum(1 for u in us if not getattr(u, "activo", True))
+        temp = sum(1 for u in us if getattr(u, "password_temporal", False))
+        abiertos = (_c48_q("SELECT COUNT(*) FROM ti_incidentes WHERE estado IN ('Abierto','En contención')") or [(0,)])[0][0]
+        return ("<div class='ti-grid'><div class='ti-kpi'><span>Con doble factor (MFA)</span><b>%d / %d</b></div>"
+                "<div class='ti-kpi'><span>Cuentas bloqueadas</span><b>%d</b></div>"
+                "<div class='ti-kpi'><span>Contraseñas temporales sin cambiar</span><b>%d</b></div>"
+                "<div class='ti-kpi'><span>Incidentes abiertos</span><b>%d</b></div></div>" % (con_mfa, tot, bloq, temp, int(abiertos or 0)))
+    return ""
+
+
+def _ti_usuarios_internos():
+    try:
+        return Usuario.query.filter(Usuario.institucion_id.is_(None), Usuario.rol.in_(list(ROLES_INTERNOS))).order_by(Usuario.rol.asc(), Usuario.usuario.asc()).all()
+    except Exception:
+        db.session.rollback()
+        return []
+
+
+def _ti_vista_modulo(modulo):
+    sp = _TI_SPECS[modulo]
+    _ti_init()
+    escribe = _ti_puede_escribir()
+    csrf = _acc_csrf()
+    tabla, cols = sp["tabla"], _TI_TABLAS[sp["tabla"]]
+    q = (request.args.get("q") or "").strip()[:80]
+    est = request.args.get("e") or ""
+    sql = "SELECT id, " + ", ".join(cols) + ", estado, asignado_a, nota, creado_en FROM " + tabla + " WHERE 1=1"
+    prm = {}
+    if sp["tipos"]:
+        sql += " AND tipo IN (" + ",".join(":t%d" % i for i in range(len(sp["tipos"]))) + ")"
+        prm.update({"t%d" % i: t for i, t in enumerate(sp["tipos"])})
+    if q:
+        sql += " AND (" + " OR ".join("LOWER(%s) LIKE :q" % c for c in sp["mostrar"]) + ")"
+        prm["q"] = "%" + q.lower() + "%"
+    if est in sp["estados"]:
+        sql += " AND estado=:e"
+        prm["e"] = est
+    sql += " ORDER BY id DESC LIMIT 300"
+    filas = [dict(zip(("id",) + cols + ("estado", "asignado_a", "nota", "creado_en"), r)) for r in _c48_q(sql, **prm)]
+    conteo = {}
+    for r in _c48_q("SELECT estado, COUNT(*) FROM " + tabla + (" WHERE tipo IN (" + ",".join(":t%d" % i for i in range(len(sp["tipos"]))) + ")" if sp["tipos"] else "") + " GROUP BY estado",
+                    **({"t%d" % i: t for i, t in enumerate(sp["tipos"])} if sp["tipos"] else {})):
+        conteo[r[0]] = int(r[1])
+    kpis = "<div class='ti-grid'>" + "".join("<div class='ti-kpi'><span>%s</span><b>%d</b></div>" % (_esc(e), conteo.get(e, 0)) for e in sp["estados"]) + "</div>"
+    etiquetas = {c[0]: c[1] for c in sp["campos"]}
+    base = "/tecnologia/" + modulo
+    trs = []
+    for d in filas:
+        det = "".join("<div><b>%s:</b> %s</div>" % (_esc(etiquetas.get(c, c)), _esc(d.get(c) or "—")) for c in cols if c not in sp["mostrar"] and c in etiquetas and (d.get(c) or ""))
+        principal = " · ".join(_esc(d.get(c) or "—") for c in sp["mostrar"])
+        acc = ""
+        if escribe:
+            opts = "".join("<option%s>%s</option>" % (" selected" if x == d["estado"] else "", _esc(x)) for x in sp["estados"])
+            acc = ("<form class='in' method='POST' action='%s/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
+                   "<select name='estado' style='width:auto'>%s</select> <input type='text' name='nota' placeholder='Nota o solución' style='width:160px' value=''> "
+                   "<button class='ti-btn s' name='accion' value='estado'>Actualizar</button> <button class='ti-btn s o' name='accion' value='tomar'>Asignarme</button>%s</form>"
+                   % (base, csrf, d["id"], opts,
+                      (" <button class='ti-btn s r' name='accion' value='eliminar' onclick=\"return confirm('¿Eliminar este registro?');\">🗑</button>" if tabla in ("ti_activos", "ti_proyectos") else "")))
+        cls = {"Abierto": "p", "En proceso": "p", "En contención": "p", "Idea": "p", "Planeado": "p"}.get(d["estado"], "v" if d["estado"] in ("Fuera de servicio", "Dado de baja", "Cancelado") else "a")
+        trs.append("<tr><td>#%d</td><td>%s<details><summary style='cursor:pointer;color:#0f766e'>Ver detalle</summary>%s<div><b>Nota:</b> %s</div></details></td>"
+                   "<td><span class='ti-b %s'>%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>"
+                   % (d["id"], principal, det, _esc(d.get("nota") or "—"), cls, _esc(d["estado"]), _esc(d.get("asignado_a") or "—"), _esc((d.get("creado_en") or "")[:10]), acc or "—"))
+    form_nuevo = ""
+    if escribe:
+        campos_html = ""
+        for nombre, etq, tipo, opts in sp["campos"]:
+            if tipo == "select":
+                campos_html += "<label>%s</label><select name='%s'>%s</select>" % (_esc(etq), nombre, "".join("<option>%s</option>" % _esc(o) for o in opts))
+            elif tipo == "area":
+                campos_html += "<label>%s</label><textarea name='%s' rows='3'></textarea>" % (_esc(etq), nombre)
+            else:
+                campos_html += "<label>%s</label><input type='%s' name='%s'%s>" % (_esc(etq), "date" if tipo == "date" else "text", nombre, " required" if nombre in ("asunto", "nombre", "titulo") else "")
+        if tabla == "ti_tickets":
+            campos_html += "<label>Solicitante (si lo reporta alguien por llamada o chat)</label><input type='text' name='solicitante' placeholder='Usuario o nombre'>"
+        form_nuevo = ("<div class='ti-card'><h2>%s</h2><form method='POST' action='%s/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='crear'>"
+                      "%s<p><button class='ti-btn'>%s</button></p></form></div>" % (_esc(sp["boton"]), base, csrf, campos_html, _esc(sp["boton"])))
+    opt_e = "<option value=''>Todos los estados</option>" + "".join("<option%s>%s</option>" % (" selected" if x == est else "", _esc(x)) for x in sp["estados"])
+    lista = ("<div class='ti-card'><h2>Registros</h2><form method='GET' style='display:grid;grid-template-columns:2fr 1fr auto;gap:8px;align-items:end;margin-bottom:12px'>"
+             "<div><label>Buscar</label><input type='text' name='q' value='%s'></div><div><label>Estado</label><select name='e'>%s</select></div><button class='ti-btn'>Filtrar</button></form>"
+             "<div style='overflow-x:auto'><table><tr><th>#</th><th>Registro</th><th>Estado</th><th>Asignado a</th><th>Fecha</th><th>Gestión</th></tr>%s</table></div></div>"
+             % (_esc(q), opt_e, "".join(trs) or "<tr><td colspan='6'>Sin registros.</td></tr>"))
+    extra_links = ""
+    if modulo == "proyectos":
+        extra_links = "<p class='sub'>Relacionado: <a href='/gerencia/changelog'>Historial de cambios</a> · <a href='/gerencia/api-conexiones'>Conexiones API</a></p>"
+    cuerpo = "<h1>%s</h1><p class='sub'>%s</p>%s%s%s%s%s" % (_esc(sp["titulo"]), _esc(sp["intro"]), extra_links, _ti_panel_extra(modulo), kpis, form_nuevo, lista)
+    return _ti_pagina(sp["titulo"], cuerpo)
+
+
+@app.route("/tecnologia/<modulo>")
+def tecnologia_modulo(modulo):
+    g = _ti_guard()
+    if g is not None:
+        return g
+    if modulo not in _TI_SPECS:
+        return redirect("/tecnologia")
+    return _ti_vista_modulo(modulo)
+
+
+@app.route("/tecnologia/<modulo>/accion", methods=["POST"])
+def tecnologia_modulo_accion(modulo):
+    g = _ti_guard()
+    if g is not None:
+        return g
+    if modulo not in _TI_SPECS or not _ti_puede_escribir():
+        return acceso_denegado("Solo el área de Tecnología y Soporte de TI puede modificar este módulo.")
+    _ti_init()
+    destino = "/tecnologia/" + modulo
+    if not _ti_csrf_ok():
+        session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect(destino)
+    sp = _TI_SPECS[modulo]
+    tabla, cols = sp["tabla"], _TI_TABLAS[sp["tabla"]]
+    f = request.form
+    a = f.get("accion") or ""
+    usuario = session.get("usuario") or "TI"
+    try:
+        if a == "crear":
+            vals = {}
+            for nombre, _etq, tipo, opts in sp["campos"]:
+                v = " ".join((f.get(nombre) or "").split()) if tipo != "area" else (f.get(nombre) or "").replace("\r", "").strip()
+                v = v[:1500 if tipo == "area" else 200]
+                if tipo == "select" and v not in opts:
+                    v = opts[0]
+                if tipo == "date" and v and not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+                    v = ""
+                vals[nombre] = v
+            clave = next((c[0] for c in sp["campos"] if c[0] in ("asunto", "nombre", "titulo")), None)
+            if clave and not vals.get(clave):
+                session["ti_msg"] = ("err", "Complete el campo principal.")
+                return redirect(destino)
+            if tabla == "ti_tickets":
+                vals["solicitante"] = " ".join((f.get("solicitante") or "").split())[:80] or usuario
+            for c in cols:
+                vals.setdefault(c, "")
+            lista = list(cols)
+            _c48_x("INSERT INTO %s (%s, estado, creado_por, creado_en, actualizado_en) VALUES (%s, :est, :cp, :ce, :ce)"
+                   % (tabla, ", ".join(lista), ", ".join(":v%d" % i for i in range(len(lista)))),
+                   **dict({"v%d" % i: vals[c] for i, c in enumerate(lista)}, est=sp["estados"][0], cp=usuario, ce=_c48_now()))
+            session["ti_msg"] = ("ok", "Registro creado.")
+        elif a in ("estado", "tomar", "eliminar"):
+            rid = int(f.get("id") or 0)
+            if a == "eliminar":
+                if tabla in ("ti_activos", "ti_proyectos"):
+                    _c48_x("DELETE FROM %s WHERE id=:i" % tabla, i=rid)
+                    registrar_auditoria("Tecnología", "%s eliminó un registro de %s (#%d)" % (usuario, tabla, rid))
+                    session["ti_msg"] = ("ok", "Registro eliminado.")
+            elif a == "tomar":
+                _c48_x("UPDATE %s SET asignado_a=:u, actualizado_en=:n, estado=CASE WHEN estado=:e0 THEN :e1 ELSE estado END WHERE id=:i" % tabla,
+                       u=usuario, n=_c48_now(), e0=sp["estados"][0], e1=sp["estados"][1], i=rid)
+                session["ti_msg"] = ("ok", "Registro asignado a usted.")
+            else:
+                nuevo = f.get("estado") or ""
+                if nuevo not in sp["estados"]:
+                    session["ti_msg"] = ("err", "Estado no válido.")
+                else:
+                    nota = " ".join((f.get("nota") or "").split())[:400]
+                    _c48_x("UPDATE %s SET estado=:s, actualizado_en=:n, asignado_a=CASE WHEN asignado_a='' THEN :u ELSE asignado_a END, "
+                           "nota=CASE WHEN :t<>'' THEN :t ELSE nota END WHERE id=:i" % tabla, s=nuevo, n=_c48_now(), u=usuario, t=nota, i=rid)
+                    session["ti_msg"] = ("ok", "Registro actualizado.")
+    except Exception as e:
+        db.session.rollback()
+        print("ti accion:", e)
+        session["ti_msg"] = ("err", "No se pudo completar la acción.")
+    return redirect(destino)
+
+
+@app.route("/tecnologia/accesos")
+def tecnologia_accesos():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    escribe = _ti_puede_escribir()
+    csrf = _acc_csrf()
+    yo = (session.get("usuario") or "")
+    trs = []
+    for u in _ti_usuarios_internos():
+        activo = bool(getattr(u, "activo", True))
+        protegido = u.rol in ("Superadmin", "Gerente", "Administrador") and rol_actual() != "Superadmin"
+        acc = "—"
+        if escribe and not protegido and u.usuario != yo:
+            def boton(accion, txt, cls=""):
+                return ("<form class='in' method='POST' action='/tecnologia/accesos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
+                        "<button class='ti-btn s %s' name='accion' value='%s'%s>%s</button></form> "
+                        % (csrf, u.id, cls, accion, (" onclick=\"return confirm('¿Confirmar esta acción sobre %s?');\"" % _esc(u.usuario)) if accion in ("bloquear",) else "", txt))
+            acc = (boton("reactivar", "✔ Reactivar", "o") if not activo else boton("bloquear", "⛔ Bloquear (baja)", "r")) + boton("cerrar_sesiones", "Cerrar sesiones") + \
+                  (boton("quitar_mfa", "MFA opcional") if getattr(u, "forzar_mfa", False) else boton("forzar_mfa", "Exigir MFA"))
+        mfa = "✔ Activo" if getattr(u, "mfa_habilitado", False) else ("Obligatorio (pendiente)" if getattr(u, "forzar_mfa", False) else "No")
+        trs.append("<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td><span class='ti-b %s'>%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>"
+                   % (_esc(u.usuario), _esc(getattr(u, "nombre_completo", "") or "—"), _esc(u.rol), "a" if activo else "v", "Activo" if activo else "Bloqueado", _esc(mfa),
+                      _esc((getattr(u, "ultimo_acceso", "") or "—")[:16]), acc))
+    cuerpo = ("<h1>🔐 Gestión de accesos e identidades</h1><p class='sub'>Control de quién entra a qué: revisión de cuentas del equipo, bajas inmediatas al retirarse una persona, "
+              "cierre de sesiones y doble factor (MFA). La creación de usuarios y la asignación de roles se hace en <i>Usuarios internos</i> y <i>Roles y permisos</i>.</p>"
+              "<div class='ti-card'><h2>Cuentas internas</h2><div style='overflow-x:auto'><table><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>MFA</th><th>Último acceso</th><th>Acciones</th></tr>%s</table></div></div>"
+              % ("".join(trs) or "<tr><td colspan='7'>No hay cuentas internas.</td></tr>"))
+    return _ti_pagina("Gestión de accesos", cuerpo)
+
+
+@app.route("/tecnologia/accesos/accion", methods=["POST"])
+def tecnologia_accesos_accion():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    if not _ti_puede_escribir():
+        return acceso_denegado("Solo el área de Tecnología y Soporte de TI puede gestionar accesos.")
+    if not _ti_csrf_ok():
+        session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect("/tecnologia/accesos")
+    f = request.form
+    try:
+        u = Usuario.query.get(int(f.get("id") or 0))
+        quien = session.get("usuario") or "TI"
+        if not u or u.institucion_id is not None or u.rol not in ROLES_INTERNOS or u.usuario == quien:
+            session["ti_msg"] = ("err", "Cuenta no válida para esta acción.")
+        elif u.rol in ("Superadmin", "Gerente", "Administrador") and rol_actual() != "Superadmin":
+            session["ti_msg"] = ("err", "Las cuentas de Gerencia solo las gestiona Superadmin.")
+        else:
+            a = f.get("accion") or ""
+            if a == "bloquear":
+                desactivar_empleado(u.id, quien)
+                session["ti_msg"] = ("ok", "Cuenta de %s bloqueada y sesiones cerradas." % u.usuario)
+            elif a == "reactivar":
+                u.activo = True
+                registrar_auditoria("Reactivar empleado", "Usuario %s reactivado por %s (TI)" % (u.usuario, quien))
+                db.session.commit()
+                session["ti_msg"] = ("ok", "Cuenta de %s reactivada." % u.usuario)
+            elif a == "cerrar_sesiones":
+                u.session_token = ""
+                revocar_sesiones_usuario(u.id)
+                registrar_auditoria("Cerrar sesiones", "Sesiones de %s cerradas por %s (TI)" % (u.usuario, quien))
+                db.session.commit()
+                session["ti_msg"] = ("ok", "Sesiones de %s cerradas." % u.usuario)
+            elif a in ("forzar_mfa", "quitar_mfa"):
+                u.forzar_mfa = (a == "forzar_mfa")
+                registrar_auditoria("MFA", "%s: MFA %s para %s (TI)" % (quien, "obligatorio" if u.forzar_mfa else "opcional", u.usuario))
+                db.session.commit()
+                session["ti_msg"] = ("ok", "MFA %s para %s." % ("obligatorio" if u.forzar_mfa else "opcional", u.usuario))
+    except Exception as e:
+        db.session.rollback()
+        print("ti accesos:", e)
+        session["ti_msg"] = ("err", "No se pudo completar la acción.")
+    return redirect("/tecnologia/accesos")
+
+
+@app.route("/ti/reportar", methods=["GET", "POST"])
+def ti_reportar():
+    """Mesa de ayuda: cualquier persona del equipo interno reporta un problema a TI y sigue su ticket."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ROLES_INTERNOS:
+        return acceso_denegado("Solo el equipo interno puede reportar a TI.")
+    _ti_init()
+    usuario = session.get("usuario") or ""
+    csrf = _acc_csrf()
+    if request.method == "POST":
+        if not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+            return redirect("/ti/reportar")
+        f = request.form
+        asunto = " ".join((f.get("asunto") or "").split())[:200]
+        detalle = (f.get("detalle") or "").replace("\r", "").strip()[:1500]
+        cat = f.get("categoria") if f.get("categoria") in _TI_CATEGORIAS else _TI_CATEGORIAS[-1]
+        pri = f.get("prioridad") if f.get("prioridad") in _TI_PRIORIDADES else "Media"
+        recientes = (_c48_q("SELECT COUNT(*) FROM ti_tickets WHERE creado_por=:u AND creado_en>=:d", u=usuario, d=(ahora() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")) or [(0,)])[0][0]
+        if not asunto:
+            session["ti_msg"] = ("err", "Escriba un asunto para el reporte.")
+        elif int(recientes or 0) >= 10:
+            session["ti_msg"] = ("err", "Ya envió varios reportes en la última hora. Espere la respuesta de TI.")
+        else:
+            _c48_x("INSERT INTO ti_tickets (categoria, prioridad, asunto, detalle, solicitante, estado, creado_por, creado_en, actualizado_en) VALUES (:a,:b,:c,:d,:e,'Abierto',:e,:f,:f)",
+                   a=cat, b=pri, c=asunto, d=detalle, e=usuario, f=_c48_now())
+            session["ti_msg"] = ("ok", "Su reporte llegó a Tecnología y Soporte de TI. Aquí puede seguir su estado.")
+        return redirect("/ti/reportar")
+    mis = _c48_q("SELECT id, asunto, categoria, prioridad, estado, asignado_a, nota, creado_en FROM ti_tickets WHERE solicitante=:u ORDER BY id DESC LIMIT 30", u=usuario)
+    trs = "".join("<tr><td>#%d</td><td>%s<br><small>%s · %s</small></td><td><span class='ti-b %s'>%s</span></td><td>%s</td><td>%s</td></tr>"
+                  % (r[0], _esc(r[1]), _esc(r[2]), _esc(r[3]), "p" if r[4] in ("Abierto", "En proceso") else "a", _esc(r[4]), _esc(r[5] or "—"), _esc(r[6] or "—")) for r in mis)
+    msg = session.pop("ti_msg", None)
+    aviso = ("<div class='%s'>%s</div>" % ("ti-ok" if msg[0] == "ok" else "ti-err", _esc(msg[1]))) if isinstance(msg, (list, tuple)) and len(msg) == 2 else ""
+    cuerpo = ("<div class='ti'><h1>🎫 Reportar un problema a TI</h1><p class='sub'>Computador lento, correo, impresión, bloqueo de cuenta, hardware o instalación de software: cuéntenos y TI le responde.</p>%s"
+              "<div class='ti-card'><h2>Nuevo reporte</h2><form method='POST'><input type='hidden' name='csrf' value='%s'>"
+              "<div class='ti-2'><div><label>Categoría</label><select name='categoria'>%s</select></div><div><label>Prioridad</label><select name='prioridad'>%s</select></div></div>"
+              "<label>Asunto</label><input type='text' name='asunto' required><label>Detalle</label><textarea name='detalle' rows='4'></textarea>"
+              "<p><button class='ti-btn'>Enviar reporte</button></p></form></div>"
+              "<div class='ti-card'><h2>Mis reportes</h2><div style='overflow-x:auto'><table><tr><th>#</th><th>Reporte</th><th>Estado</th><th>Atiende</th><th>Respuesta</th></tr>%s</table></div></div></div>"
+              % (aviso, csrf, "".join("<option>%s</option>" % _esc(c) for c in _TI_CATEGORIAS), "".join("<option%s>%s</option>" % (" selected" if p == "Media" else "", p) for p in _TI_PRIORIDADES),
+                 trs or "<tr><td colspan='5'>Aún no ha enviado reportes.</td></tr>"))
+    return page("Reportar a TI", shell(_TI_CSS + cuerpo))
 
 
 
