@@ -57971,7 +57971,7 @@ _REPARTO_NUEVOS = {
     "/gerencia/contratos": ("Juridica",),
     "/gerencia/contrato-plantilla": ("Juridica",),
     "/gerencia/legal/consentimientos": ("Juridica",),
-    "/gerencia/empresa": ("Juridica",),
+    "/gerencia/datos-empresa": ("Juridica",),   # NIT, dirección, logo y CIIU de PROCSIS (también abre como /gerencia/empresa)
     # Cobranza / Finanzas (Gerencia también decide aquí)
     "/gerencia/facturacion-cobranza": ("Cobranza", "Gerente", "Administrador"),
     "/gerencia/finanzas/promociones": ("Cobranza", "Finanzas", "Gerente", "Administrador"),
@@ -57989,6 +57989,7 @@ _REPARTO_NUEVOS = {
     "/gerencia/carnes": ("Operaciones",),
 }
 _REPARTO_ETIQUETAS = {h: l for _g, _its in _MODULOS_GERENCIA for h, l in _its}
+_REPARTO_ETIQUETAS["/gerencia/datos-empresa"] = "Datos de la empresa"
 _REPARTO_MENU_EXTRA = {}   # rol sin área propia (Soporte, Comercial, Cobranza, Desarrollador, Soluciones...) -> [(href, etiqueta)]
 _REPARTO_VISTAS = ("Gerente", "Administrador")
 
@@ -58026,6 +58027,7 @@ def _reparto_construir():
 
 
 _reparto_construir()
+_MODULOS_POR_AREA["/gerencia/empresa"] = _MODULOS_POR_AREA["/gerencia/datos-empresa"]   # misma pantalla, segunda dirección
 
 
 def _reparto_es_operador(rol, path):
