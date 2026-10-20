@@ -149,14 +149,44 @@ def _auto_promo_cron_diario():
         pass
 
 _DEFAULT_SECRET = "edutrack_secret_2026_CHANGE_IN_PROD"
-app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET_KEY") or _DEFAULT_SECRET
-if app.secret_key == _DEFAULT_SECRET:
+_SECRETO_ENV = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET_KEY") or ""
+# Clave HISTÓRICA: la usan las derivaciones (ID de acceso, cifrados, firmas de QR). No cambiarla sin migrar esos datos.
+_SECRETO_LEGADO = _SECRETO_ENV or _DEFAULT_SECRET
+
+
+def _clave_firma_sesiones():
+    """Clave con la que se firman las cookies de sesión. Nunca el valor público del código:
+    SECRET_KEY si existe; si no, una derivada de DATABASE_URL (secreta y estable entre despliegues); si no, un archivo local aleatorio."""
+    if _SECRETO_ENV:
+        return _SECRETO_ENV
+    import hmac as _h, hashlib as _hl2
+    base = os.environ.get("DATABASE_URL") or os.environ.get("DATABASE_PRIVATE_URL") or os.environ.get("DATABASE_PUBLIC_URL") or ""
+    if base:
+        return _h.new(base.encode("utf-8"), b"edutrack-session-signing-v1", _hl2.sha256).hexdigest()
+    ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".session_secret")
+    for _ in range(3):
+        try:
+            if os.path.isfile(ruta):
+                with open(ruta, "r") as fh:
+                    v = fh.read().strip()
+                if len(v) >= 32:
+                    return v
+            fd = os.open(ruta, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w") as fh:
+                fh.write(secrets.token_hex(32))
+        except FileExistsError:
+            continue
+        except Exception:
+            break
+    return secrets.token_hex(32)
+
+
+app.secret_key = _clave_firma_sesiones()
+if not _SECRETO_ENV:
     print(
-        "\n*** ADVERTENCIA DE SEGURIDAD ***\n"
-        "SECRET_KEY no está configurada por variable de entorno: se está usando el valor por defecto,\n"
-        "el cual es público (está en este código). Cualquiera que lo conozca puede falsificar sesiones\n"
-        "de login. Antes de salir al público, agregue SECRET_KEY en las variables de entorno del hosting\n"
-        "(Railway: Variables) con un valor largo y aleatorio.\n"
+        "\n*** AVISO DE SEGURIDAD ***\n"
+        "SECRET_KEY no está configurada: las sesiones se firman con una clave privada derivada del servidor (ya no con el valor público del código).\n"
+        "Recomendado: agregue SECRET_KEY, ID_ACCESO_PEPPER y VI_ENC_KEY como variables de entorno del hosting con valores largos y aleatorios.\n"
     )
 # Sesión endurecida (anti-robo de cookie / XSS parcial) — datos sensibles Ley 1581/2012
 app.config.update(
@@ -170,6 +200,43 @@ app.config.update(
     EDUTRACK_PAGE_SIZE=int(os.environ.get("EDUTRACK_PAGE_SIZE", "50")),
     JSON_SORT_KEYS=False,
 )
+from flask.sessions import SecureCookieSessionInterface as _SCSI
+
+
+def _es_https():
+    try:
+        return bool(request.is_secure) or (request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower() == "https")
+    except RuntimeError:
+        return False
+
+
+class _SesionSegura(_SCSI):
+    """Marca la cookie de sesión como Secure automáticamente cuando el sitio se sirve por HTTPS."""
+    def get_cookie_secure(self, app):
+        return bool(app.config.get("SESSION_COOKIE_SECURE")) or _es_https()
+
+
+app.session_interface = _SesionSegura()
+
+
+def _destino_interno(url, defecto="/"):
+    """Solo permite volver a rutas de este mismo sitio (evita redirecciones abiertas)."""
+    u = (url or "").strip()
+    if not u or "\\" in u or "\r" in u or "\n" in u:
+        return defecto
+    from urllib.parse import urlparse
+    pr = urlparse(u)
+    if pr.scheme or pr.netloc:
+        try:
+            if pr.scheme in ("http", "https") and (pr.hostname or "").lower() == (urlparse("//" + request.host).hostname or "").lower():
+                return (pr.path or "/") + (("?" + pr.query) if pr.query else "")
+        except RuntimeError:
+            pass
+        return defecto
+    if not u.startswith("/") or u.startswith("//"):
+        return defecto
+    return u
+
 
 @app.route("/static/img/<path:fname>")
 def serve_static_img(fname):
@@ -345,6 +412,42 @@ def _parse_cop(valor):
             return 0.0
 
 
+_CSRF_GET_DESTRUCTIVO = ("/eliminar", "/borrar", "/delete", "/desactivar", "/reset_usuario", "/revocar")
+
+
+def _host_limpio(url):
+    from urllib.parse import urlparse
+    h = (urlparse(url if "//" in url else "//" + url).hostname or "").lower()
+    return h[4:] if h.startswith("www.") else h
+
+
+@app.before_request
+def _proteccion_origen():
+    """Defensa contra CSRF: con sesión iniciada, bloquea las peticiones que cambian datos si vienen de otro sitio.
+    Se puede desactivar con CSRF_ORIGEN=0 y ampliar con ORIGENES_PERMITIDOS. Webhooks y APIs con token no usan la sesión."""
+    try:
+        if os.environ.get("CSRF_ORIGEN", "1") == "0" or not session.get("usuario"):
+            return None
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            if not any(x in request.path.lower() for x in _CSRF_GET_DESTRUCTIVO):
+                return None
+        bloquear = (request.headers.get("Sec-Fetch-Site") or "").lower() == "cross-site"
+        if not bloquear:
+            fuente = request.headers.get("Origin") or request.headers.get("Referer") or ""
+            if fuente and fuente.lower() != "null":
+                permitidos = {_host_limpio(request.host)} | {x.strip().lower() for x in (os.environ.get("ORIGENES_PERMITIDOS") or "").split(",") if x.strip()}
+                bloquear = _host_limpio(fuente) not in permitidos
+        if bloquear:
+            try:
+                _seg_registrar_evento("CSRF_BLOQUEADO", request.path[:60])
+            except Exception:
+                pass
+            return acceso_denegado("Solicitud bloqueada por seguridad: no proviene de este sitio.")
+    except Exception:
+        return None
+    return None
+
+
 @app.after_request
 def _security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
@@ -352,6 +455,7 @@ def _security_headers(resp):
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     resp.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
     resp.headers["X-XSS-Protection"] = "1; mode=block"
+    resp.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     # No filtrar CSP agresivo en planilla (inline JS); baseline:
     if not request.path.startswith("/static"):
         resp.headers.setdefault(
@@ -360,7 +464,7 @@ def _security_headers(resp):
             "font-src 'self' data: https://fonts.gstatic.com; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; "
             "worker-src 'self' blob:; media-src 'self' blob: data:; "
-            "connect-src 'self'; frame-ancestors 'self'",
+            "connect-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
         )
     return resp
 
@@ -482,10 +586,10 @@ def _shutdown_db_session(exception=None):
 @app.after_request
 def _security_headers_extra(resp):
     """Cabeceras de seguridad para datos sensibles (estudiantes / acudientes)."""
-    if os.environ.get("SESSION_COOKIE_SECURE", "0") == "1":
+    if os.environ.get("SESSION_COOKIE_SECURE", "0") == "1" or _es_https():
         resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     # No cachear páginas con datos personales
-    if session.get("usuario") and request.path.startswith(("/estudiantes", "/notas", "/radar", "/eduaura", "/reportes")):
+    if session.get("usuario") and request.path.startswith(("/estudiantes", "/notas", "/radar", "/eduaura", "/reportes", "/gerencia", "/tecnologia", "/ti/", "/usuarios", "/soporte", "/interno")):
         resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
         resp.headers["Pragma"] = "no-cache"
     return resp
@@ -977,7 +1081,7 @@ SOPORTE_TELEFONO = "3105615621"
 # Multi-inquilino: cada colegio puede tener hasta 20 sedes
 MAX_SEDES_POR_COLEGIO = int(os.environ.get("MAX_SEDES_POR_COLEGIO", "40"))  # por colegio; sistema 50+ colegios / 250+ sedes
 # Si no existe, se usa este código temporal de pruebas: Auditoria2026*
-AUDITORIA_DELETE_HASH = os.getenv("AUDITORIA_DELETE_HASH", generate_password_hash("Auditoria2026*"))
+AUDITORIA_DELETE_HASH = os.getenv("AUDITORIA_DELETE_HASH") or generate_password_hash(secrets.token_urlsafe(32))   # sin variable: borrar auditoría queda deshabilitado (antes había una clave pública)
 HORA_INICIO_ASISTENCIA = "06:00"
 HORA_FIN_ASISTENCIA_DOCENTE = "07:20"
 UPLOAD_DIR = os.path.join("static", "uploads", "excusas")
@@ -4187,6 +4291,7 @@ _MODULOS_GERENCIA = [
         ('/tecnologia/sistemas', '📊 Sistemas y aplicaciones de negocio'),
         ('/tecnologia/proyectos', '🚀 Proyectos y desarrollo de software'),
         ('/ti/reportar', '🎫 Reportar un problema a TI'),
+        ('/gerencia/ti-acceso-inicial', '🔑 Acceso inicial de TI (una sola vez)'),
     ]),
 ]
 _GRUPOS_MODULOS_GERENCIA = [(g, tuple(h for h, _l in its)) for g, its in _MODULOS_GERENCIA]
@@ -5156,7 +5261,8 @@ def crear_hash(password):
 def verificar_password(password_guardada, password_ingresada):
     if es_hash_password(password_guardada):
         return check_password_hash(password_guardada, password_ingresada or "")
-    return (password_guardada or "").strip() == (password_ingresada or "").strip()
+    import hmac as _hm_pw
+    return _hm_pw.compare_digest((password_guardada or "").strip().encode("utf-8"), (password_ingresada or "").strip().encode("utf-8"))
 
 
 def migrar_columnas():
@@ -14529,7 +14635,7 @@ _QR_VENTANA_SEG = 30  # el código del carné digital cambia cada 30 s
 def _qr_firma(inst, codigo, bucket):
     import hmac, hashlib
     msg = ("%s.%s.%s" % (inst or 0, codigo, bucket)).encode("utf-8")
-    return hmac.new(str(app.secret_key).encode("utf-8"), msg, hashlib.sha256).hexdigest()[:12]
+    return hmac.new(str(_SECRETO_LEGADO).encode("utf-8"), msg, hashlib.sha256).hexdigest()[:12]
 
 
 def qr_token_payload(e):
@@ -18080,11 +18186,11 @@ def reset_usuario(id):
     iid = institucion_id_actual()
     if rol_actual() != "Soporte" and iid is not None and u.institucion_id is not None and int(u.institucion_id) != int(iid):
         return acceso_denegado("No puedes restablecer usuarios de otro colegio.")
-    nueva = "Colegio2026*"
+    nueva = _ti_clave_temporal()   # aleatoria: ya no se restablece con una clave por defecto conocida
     if request.method == "POST":
         nueva = (request.form.get("password") or nueva).strip() or nueva
     u.password = crear_hash(nueva)
-    u.password_temporal = False  # puede entrar de una con esta clave
+    u.password_temporal = True  # debe cambiarla en su primer ingreso
     db.session.commit()
     registrar_auditoria("Restablecer contraseña", f"{u.usuario} → clave temporal aplicada")
     session["flash_usuarios"] = f"Clave de '{u.usuario}' restablecida a: {nueva}"
@@ -52464,7 +52570,7 @@ def _carne_version_de(est_id):
 
 def _carne_firma(inst, codigo, ver):
     import hmac, hashlib
-    return hmac.new(str(app.secret_key).encode("utf-8"), ("v.%s.%s.%s" % (inst or 0, codigo, ver)).encode("utf-8"),
+    return hmac.new(str(_SECRETO_LEGADO).encode("utf-8"), ("v.%s.%s.%s" % (inst or 0, codigo, ver)).encode("utf-8"),
                     hashlib.sha256).hexdigest()[:12]
 
 
@@ -56765,7 +56871,7 @@ def _sol_asegurar_tablas():
 def _sol_firma(usuario, rol, accion, texto):
     """Firma digital (HMAC-SHA256 truncado) de una acción con la identidad del usuario."""
     import hmac as _hm, hashlib as _hl
-    k = app.secret_key or os.environ.get("SECRET_KEY") or "procsis"
+    k = _SECRETO_LEGADO or os.environ.get("SECRET_KEY") or "procsis"
     if isinstance(k, str):
         k = k.encode("utf-8")
     msg = ("%s|%s|%s|%s" % (usuario, rol, accion, texto)).encode("utf-8")
@@ -58014,6 +58120,7 @@ _REPARTO_VISTAS = ("Gerente", "Administrador")
 
 
 def _reparto_construir():
+    explicitos = tuple(_MODULOS_POR_AREA)   # módulos ya definidos a mano: sus subrutas heredan esas reglas
     ops = {}
     for h, _t, _d in _TALENTO_MODULOS:
         ops.setdefault(h, set()).add("Talento")
@@ -58029,8 +58136,9 @@ def _reparto_construir():
     for h, roles in _REPARTO_NUEVOS.items():
         ops.setdefault(h, set()).update(roles)
     for h, roles in ops.items():
-        if h not in _MODULOS_POR_AREA:          # lo que ya estaba definido explícitamente manda
-            _MODULOS_POR_AREA[h] = (tuple(sorted(roles)), ())
+        if h in _MODULOS_POR_AREA or any(h.startswith(k + "/") for k in explicitos):   # lo definido explícitamente manda
+            continue
+        _MODULOS_POR_AREA[h] = (tuple(sorted(roles)), ())
     conocidos = {h for h, _t, _d in _TALENTO_MODULOS}
     for lista in _AREA_MODULOS_EXTRA.values():
         conocidos |= {h for h, _t, _d in lista}
@@ -63847,7 +63955,7 @@ def _wati_fernet():
     try:
         from cryptography.fernet import Fernet
         import base64, hashlib
-        raw = (app.secret_key or "edutrack-wati").encode("utf-8")
+        raw = (_SECRETO_LEGADO or "edutrack-wati").encode("utf-8")
         key = base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
         return Fernet(key)
     except Exception:
@@ -76499,7 +76607,7 @@ def _html_carrusel_clientes():
 def aceptar_terminos_pago():
     if request.form.get("acepto") == "1":
         session["acepto_terminos_wompi"] = True
-    return redirect(request.form.get("next") or request.referrer or "/pagar")
+    return redirect(_destino_interno(request.form.get("next") or request.referrer, "/pagar"))
 
 
 # ── Support · Firmas · Retractos (PDF corporativo tipo factura) ──────────────
@@ -80159,7 +80267,7 @@ def _vi_fernet():
         k = (os.environ.get("VI_ENC_KEY") or "").strip()
         if k:
             return Fernet(k.encode("utf-8"))
-        raw = ("vi|" + str(app.secret_key)).encode("utf-8")
+        raw = ("vi|" + str(_SECRETO_LEGADO)).encode("utf-8")
         return Fernet(base64.urlsafe_b64encode(_vi_hashlib.sha256(raw).digest()))
     except Exception:
         return None
@@ -84921,7 +85029,7 @@ def _acc_ts():
 
 # ---------------------------------------------------------------- ID de acceso
 def _acc_pepper():
-    return (os.environ.get("ID_ACCESO_PEPPER") or str(app.secret_key)).encode("utf-8")
+    return (os.environ.get("ID_ACCESO_PEPPER") or str(_SECRETO_LEGADO)).encode("utf-8")
 
 
 def _acc_norm(txt):
@@ -86347,7 +86455,7 @@ def _kit_pdf_notas(pdf, filas):
 
 def _kit_codigo(kit_id, idx):
     import hmac as _hm, hashlib as _hl
-    firma = _hm.new(str(app.secret_key or "procsis").encode("utf-8"), ("ficha|%s|%s" % (kit_id, idx)).encode("utf-8"), _hl.sha256).hexdigest()[:8].upper()
+    firma = _hm.new(str(_SECRETO_LEGADO or "procsis").encode("utf-8"), ("ficha|%s|%s" % (kit_id, idx)).encode("utf-8"), _hl.sha256).hexdigest()[:8].upper()
     return "PE-%s-%04d-%s" % (kit_id or 0, idx, firma)
 
 
@@ -87362,7 +87470,7 @@ def _n_mask_mail(c):
 
 
 def _n_pin_hash(pin):
-    return _n_hmac.new(str(app.secret_key).encode(), ("perfil:%s" % pin).encode(), _n_hashlib.sha256).hexdigest()
+    return _n_hmac.new(str(_SECRETO_LEGADO).encode(), ("perfil:%s" % pin).encode(), _n_hashlib.sha256).hexdigest()
 
 
 def _n_enviar_pin_perfil(destino, pin, usuario):
@@ -89105,7 +89213,7 @@ _CB_FILL_MUNI = ["Medellín", "Bogotá", "Cali", "Barranquilla", "Bucaramanga", 
 
 
 def _cb_hash(cid, i, texto):
-    return _n_hmac.new(str(app.secret_key).encode(), ("cambio:%s:%s:%s" % (cid, i, texto)).encode(), _n_hashlib.sha256).hexdigest()
+    return _n_hmac.new(str(_SECRETO_LEGADO).encode(), ("cambio:%s:%s:%s" % (cid, i, texto)).encode(), _n_hashlib.sha256).hexdigest()
 
 
 def _cb_mc(correcta, pool, relleno):
@@ -93065,6 +93173,12 @@ def _ti_init():
         except Exception as e:
             db.session.rollback()
             print("ti init:", e)
+    try:
+        db.session.execute(text("CREATE TABLE IF NOT EXISTS ti_config (clave VARCHAR(40) PRIMARY KEY, valor TEXT)"))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print("ti config:", e)
     _TI_INIT["ok"] = True
 
 
@@ -93145,8 +93259,23 @@ def _ti_panel_extra(modulo):
         return ("<div class='ti-grid'><div class='ti-kpi'><span>Con doble factor (MFA)</span><b>%d / %d</b></div>"
                 "<div class='ti-kpi'><span>Cuentas bloqueadas</span><b>%d</b></div>"
                 "<div class='ti-kpi'><span>Contraseñas temporales sin cambiar</span><b>%d</b></div>"
-                "<div class='ti-kpi'><span>Incidentes abiertos</span><b>%d</b></div></div>" % (con_mfa, tot, bloq, temp, int(abiertos or 0)))
+                "<div class='ti-kpi'><span>Incidentes abiertos</span><b>%d</b></div></div>" % (con_mfa, tot, bloq, temp, int(abiertos or 0))) + _ti_librerias()
     return ""
+
+
+def _ti_librerias():
+    """Versiones instaladas de las librerías principales, para revisar parches de seguridad pendientes."""
+    from importlib import metadata as _md
+    filas = ""
+    for nombre in ("Flask", "Werkzeug", "SQLAlchemy", "Flask-SQLAlchemy", "reportlab", "cryptography", "gunicorn", "psycopg2-binary", "psycopg2", "Pillow", "qrcode", "openpyxl", "requests", "urllib3"):
+        try:
+            filas += "<tr><td>%s</td><td>%s</td></tr>" % (nombre, _esc(_md.version(nombre)))
+        except Exception:
+            pass
+    if not filas:
+        return ""
+    return ("<div class='ti-card'><h2>Librerías instaladas</h2><p class='sub'>Revise con <code>pip list --outdated</code> y actualice las que tengan parches de seguridad.</p>"
+            "<table><tr><th>Paquete</th><th>Versión</th></tr>%s</table></div>" % filas)
 
 
 def _ti_usuarios_internos():
@@ -93305,6 +93434,119 @@ def tecnologia_modulo_accion(modulo):
     return redirect(destino)
 
 
+# ══════════════════════════════════════════════════════════════════
+# TI · acceso inicial (Gerencia lo crea UNA sola vez) y gestión de usuarios por Tecnología y Soporte de TI
+# ══════════════════════════════════════════════════════════════════
+def _ti_cfg(clave):
+    r = _c48_q("SELECT valor FROM ti_config WHERE clave=:c", c=clave)
+    return r[0][0] if r else ""
+
+
+def _ti_roles_creables():
+    return tuple(r for r in ROLES_INTERNOS if r not in ("Superadmin", "Gerente", "Administrador", "Proveedor"))
+
+
+def _ti_clave_temporal():
+    alfa = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+    return "".join(secrets.choice(alfa) for _ in range(11)) + secrets.choice("23456789") + "*"
+
+
+def _ti_crear_usuario(usuario, nombre, correo, rol, forzar_mfa):
+    """Crea una cuenta interna con contraseña temporal aleatoria (se muestra una sola vez). Devuelve (usuario, clave) o (None, error)."""
+    usuario = (usuario or "").strip().lower()
+    if not re.match(r"^[a-z0-9._-]{4,40}$", usuario):
+        return None, "Usuario no válido: use de 4 a 40 letras minúsculas, números, punto, guion o guion bajo."
+    if rol not in _ti_roles_creables():
+        return None, "Rol no permitido."
+    if Usuario.query.filter(func.lower(Usuario.usuario) == usuario).first():
+        return None, "Ese usuario ya existe."
+    correo = (correo or "").strip().lower()[:160]
+    if correo and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
+        correo = ""
+    clave = _ti_clave_temporal()
+    u = Usuario(usuario=usuario, password=crear_hash(clave), rol=rol, institucion_id=None, correo=correo, nombre_completo=" ".join((nombre or "").split())[:160])
+    u.password_temporal = True
+    u.activo = True
+    u.forzar_mfa = bool(forzar_mfa)
+    db.session.add(u)
+    db.session.commit()
+    return u, clave
+
+
+def _ti_pagina_credencial(titulo, usuario, clave, rol, volver, nota=""):
+    """Muestra la contraseña temporal UNA sola vez (sin caché, sin guardarla en sesión)."""
+    cuerpo = ("<div class='ti'><div class='ti-card'><h2>%s</h2><p>Entregue estos datos <b>una sola vez</b> y por un canal seguro. "
+              "La persona debe cambiar la contraseña en su primer ingreso. Esta pantalla no se puede volver a ver.</p>"
+              "<table><tr><th>Usuario</th><td><b>%s</b></td></tr><tr><th>Contraseña temporal</th><td><code style='font-size:18px'>%s</code></td></tr>"
+              "<tr><th>Rol</th><td>%s</td></tr></table>%s<p><a class='ti-btn' href='%s'>Continuar</a></p></div></div>"
+              % (_esc(titulo), _esc(usuario), _esc(clave), _esc(AREAS_PROCSIS[rol]["titulo"] if rol in AREAS_PROCSIS else rol), nota, _esc(volver)))
+    r = Response(page(titulo, shell(_TI_CSS + cuerpo)), mimetype="text/html")
+    r.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    r.headers["Pragma"] = "no-cache"
+    return r
+
+
+@app.route("/gerencia/ti-acceso-inicial", methods=["GET", "POST"])
+def gerencia_ti_acceso_inicial():
+    """Gerencia crea UNA SOLA VEZ el acceso inicial del área de TI; desde ahí TI gestiona y crea a los demás.
+    Superadmin puede repetirlo (recuperación)."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _ti_init()
+    rol = rol_actual()
+    es_super = rol == "Superadmin"
+    marca = _ti_cfg("lider_creado")
+    csrf = _acc_csrf()
+    if request.method == "POST":
+        if not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+            return redirect("/gerencia/ti-acceso-inicial")
+        if marca and not es_super:
+            session["ti_msg"] = ("err", "El acceso inicial de TI ya fue creado. Desde ahora lo gestiona Tecnología y Soporte de TI.")
+            return redirect("/gerencia/ti-acceso-inicial")
+        quien = session.get("usuario") or rol
+        reservado = False
+        try:
+            if not marca:
+                # reserva atómica: si dos personas envían a la vez, solo una pasa (clave primaria)
+                _c48_x("INSERT INTO ti_config (clave, valor) VALUES ('lider_creado', :v)", v="pendiente|%s|%s" % (quien, _c48_now()))
+                reservado = True
+        except Exception:
+            db.session.rollback()
+            session["ti_msg"] = ("err", "El acceso inicial de TI ya fue creado.")
+            return redirect("/gerencia/ti-acceso-inicial")
+        u, clave = _ti_crear_usuario(request.form.get("usuario"), request.form.get("nombre"), request.form.get("correo"), "Tecnologia", True)
+        if u is None:
+            if reservado:
+                _c48_x("DELETE FROM ti_config WHERE clave='lider_creado'")
+            session["ti_msg"] = ("err", clave)
+            return redirect("/gerencia/ti-acceso-inicial")
+        if reservado:
+            _c48_x("UPDATE ti_config SET valor=:v WHERE clave='lider_creado'", v="%s|%s|%s" % (u.usuario, quien, _c48_now()))
+        registrar_auditoria("TI acceso inicial", "%s creó el acceso inicial de TI: %s" % (quien, u.usuario))
+        return _ti_pagina_credencial("Acceso inicial de TI creado", u.usuario, clave, "Tecnologia", "/gerencia/ti-acceso-inicial",
+                                     "<p>Este usuario ya puede entrar al área de <b>Tecnología y Soporte de TI</b>, donde crea y gestiona a las demás personas del área. "
+                                     "Quedó con MFA obligatorio.</p>")
+    msg = session.pop("ti_msg", None)
+    aviso = ("<div class='%s'>%s</div>" % ("ti-ok" if msg[0] == "ok" else "ti-err", _esc(msg[1]))) if isinstance(msg, (list, tuple)) and len(msg) == 2 else ""
+    if marca and not es_super:
+        partes = marca.split("|")
+        info = ("<div class='ti-card'><h2>🔑 Acceso inicial de TI</h2><p>Ya fue creado (<b>%s</b>, el %s, por %s). Esta opción solo se puede usar una vez: "
+                "desde ahora <b>Tecnología y Soporte de TI</b> crea y gestiona a su equipo.</p></div>"
+                % (_esc(partes[0] if partes else ""), _esc((partes[2] if len(partes) > 2 else "")[:10]), _esc(partes[1] if len(partes) > 1 else "")))
+    else:
+        info = ("<div class='ti-card'><h2>🔑 Crear el acceso inicial de TI (una sola vez)</h2>"
+                "<p class='sub'>Crea la primera cuenta del área de Tecnología y Soporte de TI. %s Después, esa persona crea y gestiona a las demás.</p>"
+                "<form method='POST'><input type='hidden' name='csrf' value='%s'>"
+                "<label>Usuario de acceso</label><input type='text' name='usuario' required minlength='4' maxlength='40' pattern='[a-z0-9._-]+' placeholder='por ejemplo: ti.lider'>"
+                "<label>Nombre completo</label><input type='text' name='nombre' required>"
+                "<label>Correo</label><input type='email' name='correo'>"
+                "<p><button class='ti-btn' onclick=\"return confirm('Esta acción solo se puede hacer UNA vez. ¿Crear el acceso inicial de TI?');\">Crear acceso inicial</button></p></form></div>"
+                % ("Como Superadmin puede repetirlo si hace falta." if es_super else "<b>Solo se puede hacer una vez.</b>", csrf))
+    return page("Acceso inicial de TI", shell(_TI_CSS + "<div class='ti'><h1>Tecnología y Soporte de TI</h1>%s%s</div>" % (aviso, info)))
+
+
 @app.route("/tecnologia/accesos")
 def tecnologia_accesos():
     g = _ti_guard()
@@ -93313,26 +93555,43 @@ def tecnologia_accesos():
     escribe = _ti_puede_escribir()
     csrf = _acc_csrf()
     yo = (session.get("usuario") or "")
+    creables = _ti_roles_creables()
     trs = []
     for u in _ti_usuarios_internos():
         activo = bool(getattr(u, "activo", True))
         protegido = u.rol in ("Superadmin", "Gerente", "Administrador") and rol_actual() != "Superadmin"
         acc = "—"
         if escribe and not protegido and u.usuario != yo:
-            def boton(accion, txt, cls=""):
+            def boton(accion, txt, cls="", confirma=""):
                 return ("<form class='in' method='POST' action='/tecnologia/accesos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
                         "<button class='ti-btn s %s' name='accion' value='%s'%s>%s</button></form> "
-                        % (csrf, u.id, cls, accion, (" onclick=\"return confirm('¿Confirmar esta acción sobre %s?');\"" % _esc(u.usuario)) if accion in ("bloquear",) else "", txt))
-            acc = (boton("reactivar", "✔ Reactivar", "o") if not activo else boton("bloquear", "⛔ Bloquear (baja)", "r")) + boton("cerrar_sesiones", "Cerrar sesiones") + \
-                  (boton("quitar_mfa", "MFA opcional") if getattr(u, "forzar_mfa", False) else boton("forzar_mfa", "Exigir MFA"))
+                        % (csrf, u.id, cls, accion, (" onclick=\"return confirm('%s');\"" % confirma) if confirma else "", txt))
+            acc = (boton("reactivar", "✔ Reactivar", "o") if not activo else boton("bloquear", "⛔ Bloquear (baja)", "r", "¿Bloquear la cuenta de %s y cerrar sus sesiones?" % _esc(u.usuario))) + \
+                  boton("reset_clave", "🔑 Nueva contraseña", "", "¿Generar una contraseña temporal nueva para %s?" % _esc(u.usuario)) + boton("cerrar_sesiones", "Cerrar sesiones") + \
+                  (boton("quitar_mfa", "MFA opcional") if getattr(u, "forzar_mfa", False) else boton("forzar_mfa", "Exigir MFA")) + \
+                  ("<form class='in' method='POST' action='/tecnologia/accesos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
+                   "<select name='nuevo_rol' style='width:auto'>%s</select> <button class='ti-btn s o' name='accion' value='cambiar_rol'>Cambiar rol</button></form>"
+                   % (csrf, u.id, "".join("<option value='%s'%s>%s</option>" % (r, " selected" if r == u.rol else "", _esc(AREAS_PROCSIS[r]["titulo"] if r in AREAS_PROCSIS else r)) for r in creables))
+                   if u.rol in creables else "")
         mfa = "✔ Activo" if getattr(u, "mfa_habilitado", False) else ("Obligatorio (pendiente)" if getattr(u, "forzar_mfa", False) else "No")
         trs.append("<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td><span class='ti-b %s'>%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>"
                    % (_esc(u.usuario), _esc(getattr(u, "nombre_completo", "") or "—"), _esc(u.rol), "a" if activo else "v", "Activo" if activo else "Bloqueado", _esc(mfa),
                       _esc((getattr(u, "ultimo_acceso", "") or "—")[:16]), acc))
-    cuerpo = ("<h1>🔐 Gestión de accesos e identidades</h1><p class='sub'>Control de quién entra a qué: revisión de cuentas del equipo, bajas inmediatas al retirarse una persona, "
-              "cierre de sesiones y doble factor (MFA). La creación de usuarios y la asignación de roles se hace en <i>Usuarios internos</i> y <i>Roles y permisos</i>.</p>"
+    crear = ""
+    if escribe:
+        crear = ("<div class='ti-card'><h2>➕ Crear usuario del equipo</h2><p class='sub'>Crea el usuario institucional con una contraseña temporal aleatoria que se muestra una sola vez; "
+                 "la persona debe cambiarla al entrar. Las cuentas de Gerencia y Superadmin no se crean desde aquí.</p>"
+                 "<form method='POST' action='/tecnologia/accesos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='crear'>"
+                 "<div class='ti-2'><div><label>Usuario de acceso</label><input type='text' name='usuario' required minlength='4' maxlength='40' pattern='[a-z0-9._-]+'></div>"
+                 "<div><label>Nombre completo</label><input type='text' name='nombre' required></div></div>"
+                 "<div class='ti-2'><div><label>Correo</label><input type='email' name='correo'></div><div><label>Rol / área</label><select name='rol'>%s</select></div></div>"
+                 "<label style='font-weight:400'><input type='checkbox' name='forzar_mfa' value='1'> Exigir doble factor (MFA) desde el primer ingreso</label>"
+                 "<p><button class='ti-btn'>Crear usuario</button></p></form></div>"
+                 % (csrf, "".join("<option value='%s'>%s</option>" % (r, _esc(AREAS_PROCSIS[r]["titulo"] if r in AREAS_PROCSIS else r)) for r in creables)))
+    cuerpo = ("<h1>🔐 Gestión de accesos e identidades</h1><p class='sub'>Control de quién entra a qué: creación de credenciales, asignación de rol, bajas inmediatas al retirarse una persona, "
+              "cierre de sesiones, restablecimiento de contraseña y doble factor (MFA).</p>%s"
               "<div class='ti-card'><h2>Cuentas internas</h2><div style='overflow-x:auto'><table><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>MFA</th><th>Último acceso</th><th>Acciones</th></tr>%s</table></div></div>"
-              % ("".join(trs) or "<tr><td colspan='7'>No hay cuentas internas.</td></tr>"))
+              % (crear, "".join(trs) or "<tr><td colspan='7'>No hay cuentas internas.</td></tr>"))
     return _ti_pagina("Gestión de accesos", cuerpo)
 
 
@@ -93347,34 +93606,59 @@ def tecnologia_accesos_accion():
         session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
         return redirect("/tecnologia/accesos")
     f = request.form
+    quien = session.get("usuario") or "TI"
     try:
+        a = f.get("accion") or ""
+        if a == "crear":
+            u, clave = _ti_crear_usuario(f.get("usuario"), f.get("nombre"), f.get("correo"), f.get("rol") or "", bool(f.get("forzar_mfa")) or (f.get("rol") == "Tecnologia"))
+            if u is None:
+                session["ti_msg"] = ("err", clave)
+                return redirect("/tecnologia/accesos")
+            registrar_auditoria("TI creó usuario", "%s creó a %s (rol %s)" % (quien, u.usuario, u.rol))
+            return _ti_pagina_credencial("Usuario creado", u.usuario, clave, u.rol, "/tecnologia/accesos")
         u = Usuario.query.get(int(f.get("id") or 0))
-        quien = session.get("usuario") or "TI"
         if not u or u.institucion_id is not None or u.rol not in ROLES_INTERNOS or u.usuario == quien:
             session["ti_msg"] = ("err", "Cuenta no válida para esta acción.")
         elif u.rol in ("Superadmin", "Gerente", "Administrador") and rol_actual() != "Superadmin":
             session["ti_msg"] = ("err", "Las cuentas de Gerencia solo las gestiona Superadmin.")
-        else:
-            a = f.get("accion") or ""
-            if a == "bloquear":
-                desactivar_empleado(u.id, quien)
-                session["ti_msg"] = ("ok", "Cuenta de %s bloqueada y sesiones cerradas." % u.usuario)
-            elif a == "reactivar":
-                u.activo = True
-                registrar_auditoria("Reactivar empleado", "Usuario %s reactivado por %s (TI)" % (u.usuario, quien))
+        elif a == "bloquear":
+            desactivar_empleado(u.id, quien)
+            session["ti_msg"] = ("ok", "Cuenta de %s bloqueada y sesiones cerradas." % u.usuario)
+        elif a == "reactivar":
+            u.activo = True
+            registrar_auditoria("Reactivar empleado", "Usuario %s reactivado por %s (TI)" % (u.usuario, quien))
+            db.session.commit()
+            session["ti_msg"] = ("ok", "Cuenta de %s reactivada." % u.usuario)
+        elif a == "cerrar_sesiones":
+            u.session_token = ""
+            revocar_sesiones_usuario(u.id)
+            registrar_auditoria("Cerrar sesiones", "Sesiones de %s cerradas por %s (TI)" % (u.usuario, quien))
+            db.session.commit()
+            session["ti_msg"] = ("ok", "Sesiones de %s cerradas." % u.usuario)
+        elif a in ("forzar_mfa", "quitar_mfa"):
+            u.forzar_mfa = (a == "forzar_mfa")
+            registrar_auditoria("MFA", "%s: MFA %s para %s (TI)" % (quien, "obligatorio" if u.forzar_mfa else "opcional", u.usuario))
+            db.session.commit()
+            session["ti_msg"] = ("ok", "MFA %s para %s." % ("obligatorio" if u.forzar_mfa else "opcional", u.usuario))
+        elif a == "reset_clave":
+            clave = _ti_clave_temporal()
+            u.password = crear_hash(clave)
+            u.password_temporal = True
+            u.session_token = ""
+            revocar_sesiones_usuario(u.id)
+            registrar_auditoria("TI restableció contraseña", "%s restableció la contraseña de %s (temporal)" % (quien, u.usuario))
+            db.session.commit()
+            return _ti_pagina_credencial("Contraseña temporal nueva", u.usuario, clave, u.rol, "/tecnologia/accesos")
+        elif a == "cambiar_rol":
+            nuevo = f.get("nuevo_rol") or ""
+            if nuevo not in _ti_roles_creables() or u.rol not in _ti_roles_creables():
+                session["ti_msg"] = ("err", "Rol no permitido.")
+            else:
+                anterior = u.rol
+                u.rol = nuevo
+                registrar_auditoria("TI cambió rol", "%s: %s → %s (por %s)" % (u.usuario, anterior, nuevo, quien))
                 db.session.commit()
-                session["ti_msg"] = ("ok", "Cuenta de %s reactivada." % u.usuario)
-            elif a == "cerrar_sesiones":
-                u.session_token = ""
-                revocar_sesiones_usuario(u.id)
-                registrar_auditoria("Cerrar sesiones", "Sesiones de %s cerradas por %s (TI)" % (u.usuario, quien))
-                db.session.commit()
-                session["ti_msg"] = ("ok", "Sesiones de %s cerradas." % u.usuario)
-            elif a in ("forzar_mfa", "quitar_mfa"):
-                u.forzar_mfa = (a == "forzar_mfa")
-                registrar_auditoria("MFA", "%s: MFA %s para %s (TI)" % (quien, "obligatorio" if u.forzar_mfa else "opcional", u.usuario))
-                db.session.commit()
-                session["ti_msg"] = ("ok", "MFA %s para %s." % ("obligatorio" if u.forzar_mfa else "opcional", u.usuario))
+                session["ti_msg"] = ("ok", "Rol de %s actualizado a %s." % (u.usuario, nuevo))
     except Exception as e:
         db.session.rollback()
         print("ti accesos:", e)
