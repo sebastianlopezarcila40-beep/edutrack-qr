@@ -287,13 +287,74 @@ def _password_ok(pw):
     return True, ""
 
 
+_LOGIN_CUENTA_INIT = {"ok": False}
+_LOGIN_CUENTA_MAX = 8          # intentos fallidos permitidos por cuenta
+_LOGIN_CUENTA_VENTANA = 900    # ventana y bloqueo: 15 minutos
+
+
+def _login_cuenta_init():
+    if _LOGIN_CUENTA_INIT["ok"]:
+        return
+    for ddl in ("CREATE TABLE IF NOT EXISTS seg_login_fallos (usuario VARCHAR(120), ts BIGINT)",
+                "CREATE INDEX IF NOT EXISTS ix_seg_login_fallos ON seg_login_fallos (usuario, ts)"):
+        try:
+            db.session.execute(text(ddl))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    _LOGIN_CUENTA_INIT["ok"] = True
+
+
+def _login_cuenta_bloqueada(usuario):
+    """True si la CUENTA acumuló demasiados intentos fallidos (sin importar desde qué IP vengan). Protege también a Gerencia."""
+    import time
+    try:
+        _login_cuenta_init()
+        n = db.session.execute(text("SELECT COUNT(*) FROM seg_login_fallos WHERE usuario=:u AND ts>:d"),
+                               {"u": (usuario or "").lower()[:120], "d": int(time.time()) - _LOGIN_CUENTA_VENTANA}).scalar()
+        return int(n or 0) >= _LOGIN_CUENTA_MAX
+    except Exception:
+        db.session.rollback()
+        return False
+
+
+def _login_cuenta_fallo(usuario):
+    import time
+    try:
+        _login_cuenta_init()
+        ahora_ts = int(time.time())
+        db.session.execute(text("INSERT INTO seg_login_fallos (usuario, ts) VALUES (:u, :t)"), {"u": (usuario or "").lower()[:120], "t": ahora_ts})
+        db.session.execute(text("DELETE FROM seg_login_fallos WHERE ts<:d"), {"d": ahora_ts - 86400})
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _login_cuenta_ok(usuario):
+    try:
+        _login_cuenta_init()
+        db.session.execute(text("DELETE FROM seg_login_fallos WHERE usuario=:u"), {"u": (usuario or "").lower()[:120]})
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _login_cuenta_limpiar():
+    try:
+        _login_cuenta_init()
+        db.session.execute(text("DELETE FROM seg_login_fallos"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 def _rate_limit_login(max_attempts=8, window_sec=120, portal="general"):
     """Límite de login POR PORTAL e IP (no comparte bloqueo entre gerencia/ventas/soporte/cobranza).
     Gerencia: sin bloqueo (portal='gerencia' → siempre OK).
     Otros: ventana corta (2 min) y más intentos para no trabar operación."""
     import time
     if (portal or "").lower() in ("gerencia", "gerente", "hq", "admin"):
-        return True, 0
+        max_attempts, window_sec = 15, 600   # Gerencia también se protege (antes sin ningún límite)
     ip = _client_ip()
     key = f"{ip}:{portal or 'general'}"
     now = time.time()
@@ -306,8 +367,6 @@ def _rate_limit_login(max_attempts=8, window_sec=120, portal="general"):
 
 def _rate_limit_fail(portal="general"):
     import time
-    if (portal or "").lower() in ("gerencia", "gerente", "hq", "admin"):
-        return
     ip = _client_ip()
     key = f"{ip}:{portal or 'general'}"
     _login_attempts.setdefault(key, []).append(time.time())
@@ -323,6 +382,7 @@ def _rate_limit_ok(portal="general"):
 
 def _rate_limit_clear_all(ip=None):
     """Soporte/Gerencia: limpia bloqueos de login (reinicio de acceso)."""
+    _login_cuenta_limpiar()
     if ip:
         keys = [k for k in list(_login_attempts.keys()) if str(k).startswith(str(ip))]
         for k in keys:
@@ -410,6 +470,88 @@ def _parse_cop(valor):
             return float(str(valor).strip().replace(",", "").replace("$", "").replace(" ", "") or 0)
         except Exception:
             return 0.0
+
+
+# ══════════════════════════════════════════════════════════════════
+# SEGURIDAD ADICIONAL: contraseñas, archivos subidos, sesiones
+# ══════════════════════════════════════════════════════════════════
+_CLAVES_COMUNES = {"12345678", "123456789", "1234567890", "password", "password1", "qwerty123", "qwertyuiop", "abcd1234", "colegio2026*", "colegio2026",
+                   "edutrack2026", "edutrack", "procsis2026", "procsis123", "admin1234", "contrasena", "contraseña", "iloveyou1", "00000000", "11111111"}
+
+
+def _politica_clave(clave, usuario="", staff=False):
+    """Devuelve el motivo si la contraseña no cumple la política, o '' si es válida."""
+    c = clave or ""
+    minimo = 10 if staff else 8
+    if len(c) < minimo:
+        return "La contraseña debe tener mínimo %d caracteres." % minimo
+    if c.lower() in _CLAVES_COMUNES or (usuario and c.lower() == usuario.lower()) or len(set(c)) < 4:
+        return "Esa contraseña es muy fácil de adivinar. Elija otra."
+    if staff:
+        clases = sum(bool(re.search(pt, c)) for pt in (r"[a-z]", r"[A-Z]", r"\d", r"[^A-Za-z0-9]"))
+        if clases < 3:
+            return "Use al menos 3 tipos de caracteres: minúsculas, mayúsculas, números y símbolos."
+    return ""
+
+
+_SUBIDAS_PRIVADAS = ("/static/uploads/piar/", "/static/uploads/contratos/", "/static/uploads/biometria/", "/static/uploads/entregas/")
+_EXT_PELIGROSAS = (".html", ".htm", ".xhtml", ".js", ".mjs", ".php", ".phtml", ".py", ".pyc", ".exe", ".bat", ".cmd", ".sh", ".jar", ".msi",
+                   ".dll", ".scr", ".vbs", ".ps1", ".cgi", ".asp", ".aspx", ".jsp")
+
+
+@app.before_request
+def _proteger_subidas():
+    """Archivos sensibles (PIAR, contratos, biometría, entregas) solo con sesión iniciada; y no se aceptan archivos ejecutables."""
+    try:
+        if request.path.startswith(_SUBIDAS_PRIVADAS) and not session.get("usuario"):
+            return Response("Acceso restringido: inicie sesión.", status=403, mimetype="text/plain")
+        if request.method == "POST" and request.files:
+            for _k, f in request.files.items(multi=True):
+                nombre = (getattr(f, "filename", "") or "").strip().lower()
+                if nombre and nombre.endswith(_EXT_PELIGROSAS):
+                    return acceso_denegado("Tipo de archivo no permitido por seguridad.")
+    except Exception:
+        return None
+    return None
+
+
+@app.after_request
+def _cabeceras_subidas(resp):
+    """SVG/HTML subidos no pueden ejecutar scripts al abrirse directo; los archivos sensibles no se guardan en caché."""
+    try:
+        p = request.path
+        if p.startswith("/static/uploads/"):
+            if p.lower().endswith((".svg", ".html", ".htm", ".xml")):
+                resp.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"
+            if p.startswith(_SUBIDAS_PRIVADAS):
+                resp.headers["Cache-Control"] = "private, no-store"
+    except Exception:
+        pass
+    return resp
+
+
+@app.before_request
+def _vincular_sesion_dispositivo():
+    """Si la cookie de sesión se roba y se usa desde otro navegador/dispositivo, la sesión se cierra (SESION_VINCULADA=0 lo desactiva)."""
+    try:
+        if os.environ.get("SESION_VINCULADA", "1") == "0" or not session.get("usuario") or request.path.startswith("/static"):
+            return None
+        import hashlib as _hl_ua
+        ua = _hl_ua.sha256((request.headers.get("User-Agent") or "").encode("utf-8")).hexdigest()[:16]
+        previo = session.get("_ua")
+        if not previo:
+            session["_ua"] = ua
+            return None
+        if previo != ua:
+            session.clear()
+            try:
+                _seg_registrar_evento("SESION_OTRO_DISPOSITIVO", request.path[:60])
+            except Exception:
+                pass
+            return redirect("/login")
+    except Exception:
+        return None
+    return None
 
 
 _CSRF_GET_DESTRUCTIVO = ("/eliminar", "/borrar", "/delete", "/desactivar", "/reset_usuario", "/revocar")
@@ -8880,8 +9022,11 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
     if not usuario or not password:
         return None
 
+    if _login_cuenta_bloqueada(usuario):
+        return None   # cuenta bloqueada 15 min por exceso de intentos fallidos
     candidatos = Usuario.query.filter(func.lower(Usuario.usuario) == usuario.lower()).all()
     if not candidatos:
+        _login_cuenta_fallo(usuario)
         return None
 
     u = None
@@ -8910,6 +9055,7 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
     if u is None:
         return None
     if not verificar_password(u.password, password):
+        _login_cuenta_fallo(usuario)
         return None
     if institucion_id is not None:
         rol_u = (u.rol or "").strip()
@@ -8920,6 +9066,7 @@ def login_usuario(usuario, password, rol_requerido=None, institucion_id=None):
     if not es_hash_password(u.password):
         u.password = crear_hash(password)
         db.session.commit()
+    _login_cuenta_ok(usuario)
     return u
 
 
@@ -14136,8 +14283,9 @@ def cambiar_password():
         nueva = request.form.get("password", "").strip()
         confirmar = request.form.get("confirmar", "").strip()
         nombre_completo = (request.form.get("nombre_completo") or "").strip()[:160]
-        if len(nueva) < 8:
-            mensaje = "La contraseña debe tener mínimo 8 caracteres."
+        _err_clave = _politica_clave(nueva, session.get("usuario") or "", es_staff)
+        if _err_clave:
+            mensaje = _err_clave
         elif nueva != confirmar:
             mensaje = "Las contraseñas no coinciden."
         elif es_staff and not nombre_completo:
@@ -32622,7 +32770,8 @@ def ventas_propuesta_pdf():
         data = _doc_pdf_bytes("Propuesta comercial EduTrack", html_body, confidencial=False)
     except Exception as ex:
         import traceback
-        return f"<pre style='white-space:pre-wrap;font-family:monospace;padding:20px;color:#b91c1c'>ERROR REAL:\n{traceback.format_exc()}</pre>", 500
+        print("propuesta comercial:", traceback.format_exc())   # el detalle queda solo en el log del servidor
+        return "<p style='font-family:sans-serif;padding:20px;color:#b91c1c'>No se pudo generar el documento. Intente de nuevo o avise a soporte.</p>", 500
     from flask import Response
     return Response(
         data,
@@ -34130,6 +34279,8 @@ def gerencia_tesoreria():
         _guardar_tesoreria(data)
         registrar_auditoria("Tesorería actualizada", session.get("usuario") or "")
         msg = "Datos de recaudo guardados (solo gerencia)."
+    if not (os.environ.get("WOMPI_EVENTS_SECRET") or data.get("wompi_events_secret")):
+        msg = ((msg + " · ") if msg else "") + "⚠ Falta el secreto de eventos de Wompi: sin él, los pagos automáticos NO se aplican (por seguridad)."
     body = f"""
 <div style="max-width:560px;margin:24px auto;font-family:Segoe UI,sans-serif;padding:16px">
   <a href="/gerencia/hq" style="color:#0B2D57;font-weight:700">← HQ</a>
@@ -62166,6 +62317,38 @@ def _bloqueo_institucion_suspendida():
 
 
 
+def _wompi_verificar_firma(payload):
+    """Verifica el checksum SHA-256 del evento de Wompi con el secreto de eventos (WOMPI_EVENTS_SECRET o el guardado en Tesorería).
+    Devuelve (ok, motivo)."""
+    import hashlib as _hl_w, hmac as _hm_w
+    try:
+        secreto = (os.environ.get("WOMPI_EVENTS_SECRET") or (_leer_tesoreria().get("wompi_events_secret") or "")).strip()
+    except Exception:
+        secreto = ""
+    if not secreto:
+        return False, "sin_secreto_configurado"
+    if not isinstance(payload, dict):
+        return False, "payload_invalido"
+    sig = payload.get("signature") if isinstance(payload.get("signature"), dict) else {}
+    props = sig.get("properties") or []
+    recibido = str(sig.get("checksum") or request.headers.get("X-Event-Checksum") or "").strip().lower()
+    ts = str(payload.get("timestamp") or "")
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    if not props or not recibido or not ts:
+        return False, "firma_incompleta"
+    partes = []
+    for pr in props:
+        v = data
+        for k in str(pr).split("."):
+            if isinstance(v, dict) and k in v:
+                v = v[k]
+            else:
+                return False, "propiedad_faltante"
+        partes.append(str(v))
+    esperado = _hl_w.sha256(("".join(partes) + ts + secreto).encode("utf-8")).hexdigest()
+    return (_hm_w.compare_digest(esperado, recibido), "checksum")
+
+
 @app.route("/api/webhooks/wompi", methods=["POST", "GET"])
 def api_webhook_wompi():
     """
@@ -62183,6 +62366,19 @@ def api_webhook_wompi():
     # Aceptar body form también
     if not payload and request.form:
         payload = {k: request.form.get(k) for k in request.form}
+
+    # SEGURIDAD: solo se aceptan eventos firmados por Wompi (antes cualquiera podía marcar una factura como pagada)
+    if os.environ.get("WOMPI_WEBHOOK_SIN_FIRMA") != "1":
+        _ok_rl, _espera = _rate_limit("wompi-webhook", 120, 60)
+        if not _ok_rl:
+            return {"ok": False, "error": "demasiadas solicitudes"}, 429
+        _firma_ok, _motivo = _wompi_verificar_firma(payload)
+        if not _firma_ok:
+            try:
+                registrar_auditoria("Wompi webhook RECHAZADO", "motivo=%s ip=%s" % (_motivo, _client_ip()))
+            except Exception:
+                pass
+            return {"ok": False, "error": "firma inválida"}, 401
 
     # Extraer transaction (formatos Wompi / genéricos)
     tx = {}
