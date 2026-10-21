@@ -1660,6 +1660,10 @@ class Usuario(db.Model):
     # ID de acceso oculto: hash (para buscar) + cifrado (para que Secretaría/Soporte puedan entregarlo)
     id_acceso_hash = db.Column(db.String(64), default="", index=True)
     id_acceso_enc = db.Column(db.Text, default="")
+    # Estructura del equipo (la define TI por orden de Talento Humano)
+    departamento = db.Column(db.String(60), default="")
+    jefe_usuario = db.Column(db.String(80), default="")      # usuario del supervisor/jefe
+    nivel = db.Column(db.String(20), default="")             # ASESOR | SUPERVISOR
 
 
 class IngresoPorteria(db.Model):
@@ -4364,6 +4368,7 @@ def _staff_module_title(path, rol=""):
 
 _MODULOS_GERENCIA = [
     ('Talento humano', [
+        ('/gerencia/talento/ingresos', '👤 Ingreso de personal (solicitud a TI)'),
         ('/gerencia/talento-legal', 'Talento / legal laboral'),
         ('/gerencia/contratos-personal', 'Contratos de personal'),
         ('/gerencia/contratos-firmas', 'Firmas de contratos'),
@@ -4391,6 +4396,7 @@ _MODULOS_GERENCIA = [
         ('/gerencia/pie-login', 'Pie de página del login'),
     ]),
     ('Ventas y comercial', [
+        ('/ventas/equipo', '👥 Equipo de ventas (supervisión)'),
         ('/gerencia/ventas', 'Panel de ventas'),
         ('/gerencia/validaciones-ventas', 'Validaciones de ventas'),
         ('/gerencia/comisiones-ventas', 'Comisiones de ventas'),
@@ -4432,6 +4438,8 @@ _MODULOS_GERENCIA = [
         ('/tecnologia/seguridad', '🛡️ Seguridad de la información'),
         ('/tecnologia/sistemas', '📊 Sistemas y aplicaciones de negocio'),
         ('/tecnologia/proyectos', '🚀 Proyectos y desarrollo de software'),
+        ('/tecnologia/solicitudes-rrhh', '📥 Solicitudes de Talento Humano'),
+        ('/tecnologia/permisos', '🔒 Permisos por propiedad de datos'),
         ('/ti/reportar', '🎫 Reportar un problema a TI'),
         ('/gerencia/ti-acceso-inicial', '🔑 Acceso inicial de TI (una sola vez)'),
     ]),
@@ -6283,6 +6291,9 @@ def inicializar_bd():
                 ("instituciones", "nombre_promo_aplicada", "VARCHAR(100) DEFAULT ''"),
                 ("instituciones", "porcentaje_promo_aplicada", "DOUBLE PRECISION DEFAULT 0"),
                 ("instituciones", "almacenamiento_gb", "INTEGER DEFAULT 0"),
+                ("usuarios", "departamento", "VARCHAR(60) DEFAULT ''"),
+                ("usuarios", "jefe_usuario", "VARCHAR(80) DEFAULT ''"),
+                ("usuarios", "nivel", "VARCHAR(20) DEFAULT ''"),
             ]
             for table, col, typedef in patches:
                 try:
@@ -23591,17 +23602,17 @@ def ventas_panel():
 
     # Embudo counts
     try:
-        n_contacto = LeadCRM.query.filter_by(etapa="CONTACTO").count()
-        n_demo = LeadCRM.query.filter_by(etapa="DEMO").count()
-        n_neg = LeadCRM.query.filter_by(etapa="NEGOCIACION").count()
-        n_ganado = LeadCRM.query.filter_by(etapa="GANADO").count()
+        n_contacto = _leads_visibles(LeadCRM.query).filter_by(etapa="CONTACTO").count()
+        n_demo = _leads_visibles(LeadCRM.query).filter_by(etapa="DEMO").count()
+        n_neg = _leads_visibles(LeadCRM.query).filter_by(etapa="NEGOCIACION").count()
+        n_ganado = _leads_visibles(LeadCRM.query).filter_by(etapa="GANADO").count()
     except Exception:
         n_contacto = n_demo = n_neg = n_ganado = 0
 
     # Tabla maestra CRM leads (estilo agencia)
     filas_leads = ""
     try:
-        for L in LeadCRM.query.order_by(LeadCRM.id.desc()).limit(100).all():
+        for L in _leads_visibles(LeadCRM.query).order_by(LeadCRM.id.desc()).limit(100).all():
             et = (L.etapa or "CONTACTO").upper()
             color = {
                 "CONTACTO": "#64748b", "DEMO": "#0369a1", "NEGOCIACION": "#b45309",
@@ -23625,7 +23636,7 @@ def ventas_panel():
     def _cards_etapa(etapa, limit=5):
         html = ""
         try:
-            for L in LeadCRM.query.filter_by(etapa=etapa).order_by(LeadCRM.id.desc()).limit(limit).all():
+            for L in _leads_visibles(LeadCRM.query).filter_by(etapa=etapa).order_by(LeadCRM.id.desc()).limit(limit).all():
                 et_label = (etapa or "CONTACTO").upper()
                 html += (
                     f'<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:14px;'
@@ -23647,7 +23658,7 @@ def ventas_panel():
     if not meta:
         # cerrados del mes = leads GANADO del vendedor (aprox)
         try:
-            cerrados = LeadCRM.query.filter_by(etapa="GANADO", vendedor=asesor).count()
+            cerrados = _leads_visibles(LeadCRM.query).filter_by(etapa="GANADO", vendedor=asesor).count()
         except Exception:
             cerrados = 0
         meta = MetaVendedor(
@@ -32677,7 +32688,7 @@ def ventas_comisiones():
         f"<td><b>{_cop(m.comision_cop or 0)}</b></td></tr>"
         for m in metas
     ) or '<tr><td colspan="5">Sin historial todavía</td></tr>'
-    leads_q = LeadCRM.query.filter_by(etapa="GANADO")
+    leads_q = _leads_visibles(LeadCRM.query).filter_by(etapa="GANADO")
     if not es_jefe:
         leads_q = leads_q.filter_by(vendedor=asesor)
     ganados = leads_q.order_by(LeadCRM.actualizado.desc()).all()
@@ -32955,7 +32966,7 @@ def ventas_crm():
             etapa = (request.form.get("etapa") or "CONTACTO").strip().upper()
             if etapa not in ("CONTACTO", "DEMO", "NEGOCIACION", "GANADO", "PERDIDO"):
                 etapa = "CONTACTO"
-            lead = LeadCRM.query.get(lid)
+            lead = _lead_visible_o_none(LeadCRM.query.get(lid))
             if lead:
                 lead.etapa = etapa
                 lead.actualizado = f"{fecha_hoy()} {hora_actual()}"
@@ -32966,7 +32977,7 @@ def ventas_crm():
                 lid = int(request.form.get("lead_id") or 0)
             except Exception:
                 lid = 0
-            lead = LeadCRM.query.get(lid)
+            lead = _lead_visible_o_none(LeadCRM.query.get(lid))
             if lead:
                 db.session.delete(lead)
                 db.session.commit()
@@ -32980,7 +32991,7 @@ def ventas_crm():
     cols = ""
     for key, titulo, color in etapas:
         cards = ""
-        for L in LeadCRM.query.filter_by(etapa=key).order_by(LeadCRM.id.desc()).limit(40).all():
+        for L in _leads_visibles(LeadCRM.query).filter_by(etapa=key).order_by(LeadCRM.id.desc()).limit(40).all():
             tel_digits = "".join(c for c in (L.telefono or "") if c.isdigit())
             if tel_digits and not tel_digits.startswith("57") and len(tel_digits) == 10:
                 tel_digits = "57" + tel_digits
@@ -58319,6 +58330,10 @@ _REPARTO_NUEVOS.update({
     "/tecnologia/seguridad": ("Tecnologia",),
     "/tecnologia/sistemas": ("Tecnologia", "Desarrollador"),
     "/tecnologia/proyectos": ("Tecnologia", "Desarrollador"),
+    "/tecnologia/solicitudes-rrhh": ("Tecnologia",),
+    "/tecnologia/permisos": ("Tecnologia",),
+    "/gerencia/talento/ingresos": ("Talento",),
+    "/ventas/equipo": ("Comercial", "Gerente", "Administrador"),
     "/ti/reportar": ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Soluciones", "Gerente", "Administrador") + tuple(AREAS_PROCSIS),
 })
 _REPARTO_NUEVOS["/gerencia/api-conexiones"] = ("Calidad", "Desarrollador", "Tecnologia")
@@ -65394,7 +65409,7 @@ def ventas_solicitud_publica():
             etapa="CONTACTO",
             plan_interes=plan or "Por definir",
             notas=notas,
-            vendedor="Web pública",
+            vendedor=_propietario_web() or "Web pública",
             creado_en=ahora,
             actualizado=ahora,
         )
@@ -65429,7 +65444,7 @@ def ventas_solicitudes():
             lid = int(request.form.get("lead_id") or 0)
         except Exception:
             lid = 0
-        lead = LeadCRM.query.get(lid) if lid else None
+        lead = _lead_visible_o_none(LeadCRM.query.get(lid)) if lid else None
         if lead and acc == "actualizar":
             lead.rector = (request.form.get("nombre") or lead.rector or "")[:160]
             lead.correo = (request.form.get("correo") or lead.correo or "")[:160]
@@ -65461,7 +65476,7 @@ def ventas_solicitudes():
             msg = "Quedó registrado el pedido de datos de activación."
     # Listar solicitudes web + contactos recientes
     try:
-        q = LeadCRM.query.order_by(LeadCRM.id.desc()).limit(200).all()
+        q = _leads_visibles(LeadCRM.query).order_by(LeadCRM.id.desc()).limit(200).all()
     except Exception:
         q = []
     filas = []
@@ -65507,7 +65522,7 @@ def ventas_solicitud_detalle(lid):
         return redirect("/ventas-login")
     if rol_actual() not in ("Comercial", "Ventas", "Gerente", "Gerencia", "Administrador", "Superadmin", "Soporte"):
         return acceso_denegado()
-    lead = LeadCRM.query.get_or_404(lid)
+    lead = _lead_o_404(lid)
     msg = ""
     if request.method == "POST":
         lead.colegio = (request.form.get("colegio") or lead.colegio or "")[:200]
@@ -93647,7 +93662,7 @@ def _ti_clave_temporal():
     return "".join(secrets.choice(alfa) for _ in range(11)) + secrets.choice("23456789") + "*"
 
 
-def _ti_crear_usuario(usuario, nombre, correo, rol, forzar_mfa):
+def _ti_crear_usuario(usuario, nombre, correo, rol, forzar_mfa, departamento="", nivel="", jefe=""):
     """Crea una cuenta interna con contraseña temporal aleatoria (se muestra una sola vez). Devuelve (usuario, clave) o (None, error)."""
     usuario = (usuario or "").strip().lower()
     if not re.match(r"^[a-z0-9._-]{4,40}$", usuario):
@@ -93664,6 +93679,9 @@ def _ti_crear_usuario(usuario, nombre, correo, rol, forzar_mfa):
     u.password_temporal = True
     u.activo = True
     u.forzar_mfa = bool(forzar_mfa)
+    u.departamento = (departamento or "")[:60]
+    u.nivel = (nivel or "")[:20]
+    u.jefe_usuario = (jefe or "")[:80]
     db.session.add(u)
     db.session.commit()
     return u, clave
@@ -93774,7 +93792,10 @@ def tecnologia_accesos():
                    % (_esc(u.usuario), _esc(getattr(u, "nombre_completo", "") or "—"), _esc(u.rol), "a" if activo else "v", "Activo" if activo else "Bloqueado", _esc(mfa),
                       _esc((getattr(u, "ultimo_acceso", "") or "—")[:16]), acc))
     crear = ""
-    if escribe:
+    if escribe and rol_actual() != "Superadmin":
+        crear = ("<div class='ti-card'><h2>➕ Nuevo usuario</h2><p class='sub'>TI crea credenciales <b>solo bajo la orden de Talento Humano</b>. "
+                 "Atienda las órdenes en <a href='/tecnologia/solicitudes-rrhh'>Solicitudes de Talento Humano</a>.</p></div>")
+    if escribe and rol_actual() == "Superadmin":
         crear = ("<div class='ti-card'><h2>➕ Crear usuario del equipo</h2><p class='sub'>Crea el usuario institucional con una contraseña temporal aleatoria que se muestra una sola vez; "
                  "la persona debe cambiarla al entrar. Las cuentas de Gerencia y Superadmin no se crean desde aquí.</p>"
                  "<form method='POST' action='/tecnologia/accesos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='crear'>"
@@ -93806,6 +93827,9 @@ def tecnologia_accesos_accion():
     try:
         a = f.get("accion") or ""
         if a == "crear":
+            if rol_actual() != "Superadmin":
+                session["ti_msg"] = ("err", "Las credenciales se crean únicamente desde una solicitud de Talento Humano.")
+                return redirect("/tecnologia/solicitudes-rrhh")
             u, clave = _ti_crear_usuario(f.get("usuario"), f.get("nombre"), f.get("correo"), f.get("rol") or "", bool(f.get("forzar_mfa")) or (f.get("rol") == "Tecnologia"))
             if u is None:
                 session["ti_msg"] = ("err", clave)
@@ -93905,6 +93929,642 @@ def ti_reportar():
               % (aviso, csrf, "".join("<option>%s</option>" % _esc(c) for c in _TI_CATEGORIAS), "".join("<option%s>%s</option>" % (" selected" if p == "Media" else "", p) for p in _TI_PRIORIDADES),
                  trs or "<tr><td colspan='5'>Aún no ha enviado reportes.</td></tr>"))
     return page("Reportar a TI", shell(_TI_CSS + cuerpo))
+
+
+
+# ══════════════════════════════════════════════════════════════════
+# INGRESO DE PERSONAL (Talento Humano) → SOLICITUD A TI → CREDENCIAL
+# + PERMISOS BASADOS EN LA PROPIEDAD (Record-Level Security) para los clientes del área comercial
+#
+# 1) Talento Humano registra al empleado y decide su puesto, rol y funciones, y envía la solicitud a TI.
+# 2) TI crea la credencial SOLO desde esa solicitud (usuario, correo corporativo, contraseña temporal) y asigna departamento/rol.
+# 3) El ROL define qué herramientas usa el asesor; la PROPIEDAD define qué clientes puede tocar (candado "solo propietario").
+# 4) El supervisor rompe el candado con la jerarquía: ve a su equipo y reasigna clientes.
+# ══════════════════════════════════════════════════════════════════
+_TH_INIT = {"ok": False}
+_TH_ESTADOS = ("Registrado", "Solicitada a TI", "En proceso", "Credencial creada", "Devuelta por TI", "Cancelada")
+_TH_DEPARTAMENTOS = ("Ventas", "Cobranza y cartera", "Soporte", "Contabilidad", "Talento Humano", "Finanzas", "Marketing", "Jurídica", "Operaciones", "Calidad", "Tecnología", "Desarrollo", "Soluciones")
+_TH_CONTRATOS = ("Término indefinido", "Término fijo", "Obra o labor", "Prestación de servicios", "Aprendizaje")
+_PROP_CACHE = {"t": 0.0, "v": {}}
+
+
+def _th_init():
+    if _TH_INIT["ok"]:
+        return
+    _ti_init()
+    pk = "INTEGER PRIMARY KEY AUTOINCREMENT" if db.engine.dialect.name == "sqlite" else "SERIAL PRIMARY KEY"
+    ddl = ("CREATE TABLE IF NOT EXISTS th_ingresos (id %s, nombre VARCHAR(160), documento VARCHAR(30) DEFAULT '', correo_personal VARCHAR(160) DEFAULT '', "
+           "cargo VARCHAR(120) DEFAULT '', departamento VARCHAR(60) DEFAULT '', rol_sistema VARCHAR(60) DEFAULT '', nivel VARCHAR(20) DEFAULT '', "
+           "jefe_usuario VARCHAR(80) DEFAULT '', tipo_contrato VARCHAR(40) DEFAULT '', fecha_ingreso VARCHAR(12) DEFAULT '', funciones TEXT DEFAULT '', "
+           "estado VARCHAR(24) DEFAULT 'Registrado', usuario_creado VARCHAR(80) DEFAULT '', correo_corporativo VARCHAR(160) DEFAULT '', nota_ti TEXT DEFAULT '', "
+           "creado_por VARCHAR(80) DEFAULT '', creado_en VARCHAR(20) DEFAULT '', enviado_en VARCHAR(20) DEFAULT '', atendido_por VARCHAR(80) DEFAULT '', "
+           "atendido_en VARCHAR(20) DEFAULT '')" % pk)
+    try:
+        db.session.execute(text(ddl))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print("th init:", e)
+    _TH_INIT["ok"] = True
+
+
+_TH_COLS = ("id, nombre, documento, correo_personal, cargo, departamento, rol_sistema, nivel, jefe_usuario, tipo_contrato, fecha_ingreso, funciones, "
+            "estado, usuario_creado, correo_corporativo, nota_ti, creado_por, creado_en, enviado_en, atendido_por, atendido_en")
+
+
+def _th_row(r):
+    return dict(zip([c.strip() for c in _TH_COLS.split(",")], r))
+
+
+def _th_puestos():
+    """Opciones de rol para la solicitud: (clave 'rol|nivel', etiqueta)."""
+    ops = [("Comercial|ASESOR", "Asesor Comercial (Ventas)"), ("Comercial|SUPERVISOR", "Supervisor de Ventas (jefe de departamento)")]
+    for r in _ti_roles_creables():
+        if r == "Comercial":
+            continue
+        ops.append((r + "|", AREAS_PROCSIS[r]["titulo"] if r in AREAS_PROCSIS else r))
+    return ops
+
+
+def _th_guard():
+    if not requiere_login():
+        return redirect("/login")
+    r = rol_actual()
+    if r in ("Superadmin", "Gerente", "Administrador"):
+        return None
+    m = _modulo_area_de_ruta(request.path)
+    if m and r in m[0]:
+        return None
+    return acceso_denegado("Este módulo es exclusivo de Talento Humano.")
+
+
+def _th_puede_escribir():
+    r = rol_actual()
+    if r == "Superadmin":
+        return True
+    m = _modulo_area_de_ruta(request.path)
+    return bool(m) and r in m[0] and r not in ("Gerente", "Administrador")
+
+
+def _th_pagina(titulo, cuerpo):
+    msg = session.pop("ti_msg", None)
+    aviso = ("<div class='%s'>%s</div>" % ("ti-ok" if msg[0] == "ok" else "ti-err", _esc(msg[1]))) if isinstance(msg, (list, tuple)) and len(msg) == 2 else ""
+    return page(titulo, shell(_TI_CSS + "<div class='ti'>%s%s</div>" % (aviso, cuerpo)))
+
+
+def _th_badge(estado):
+    cls = {"Credencial creada": "a", "Cancelada": "v", "Devuelta por TI": "v"}.get(estado, "p")
+    return "<span class='ti-b %s'>%s</span>" % (cls, _esc(estado))
+
+
+@app.route("/gerencia/talento/ingresos")
+def gerencia_talento_ingresos():
+    """Talento Humano registra a la persona que ingresa, define su puesto/rol/funciones y envía la solicitud a TI."""
+    g = _th_guard()
+    if g is not None:
+        return g
+    _th_init()
+    escribe = _th_puede_escribir()
+    csrf = _acc_csrf()
+    est = request.args.get("e") or ""
+    sql = "SELECT " + _TH_COLS + " FROM th_ingresos" + (" WHERE estado=:e" if est in _TH_ESTADOS else "") + " ORDER BY id DESC LIMIT 300"
+    filas = [_th_row(r) for r in _c48_q(sql, **({"e": est} if est in _TH_ESTADOS else {}))]
+    puestos = dict(_th_puestos())
+    trs = []
+    for d in filas:
+        acc = "—"
+        if escribe and d["estado"] in ("Registrado", "Solicitada a TI", "Devuelta por TI"):
+            acc = ("<form class='in' method='POST' action='/gerencia/talento/ingresos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
+                   "<button class='ti-btn s' name='accion' value='enviar'%s>📤 %s</button> <button class='ti-btn s r' name='accion' value='cancelar' onclick=\"return confirm('¿Cancelar este ingreso?');\">Cancelar</button></form>"
+                   % (csrf, d["id"], "" if d["estado"] != "Solicitada a TI" else " disabled", "Reenviar a TI" if d["estado"] == "Devuelta por TI" else "Enviar solicitud a TI"))
+        cred = "—"
+        if d["estado"] == "Credencial creada":
+            cred = "Usuario <b>%s</b>%s" % (_esc(d["usuario_creado"]), (" · " + _esc(d["correo_corporativo"])) if d["correo_corporativo"] else "")
+        elif d["estado"] == "Devuelta por TI" and d["nota_ti"]:
+            cred = "Motivo: " + _esc(d["nota_ti"])
+        etiqueta = puestos.get("%s|%s" % (d["rol_sistema"], d["nivel"] or ""), d["rol_sistema"])
+        trs.append("<tr><td>#%d</td><td><b>%s</b><br><small>CC %s · %s</small></td><td>%s<br><small>%s · %s</small></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+                   % (d["id"], _esc(d["nombre"]), _esc(d["documento"]), _esc((d["fecha_ingreso"] or "")[:10]), _esc(d["cargo"]), _esc(d["departamento"]), _esc(etiqueta),
+                      _th_badge(d["estado"]), cred, _esc((d["funciones"] or "")[:140]), acc))
+    form = ""
+    if escribe:
+        form = ("<div class='ti-card'><h2>➕ Registrar nuevo empleado</h2><p class='sub'>Talento Humano define el puesto, el rol y las funciones según el contrato. "
+                "La credencial técnica la crea el equipo de TI únicamente a partir de esta solicitud.</p>"
+                "<form method='POST' action='/gerencia/talento/ingresos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='crear'>"
+                "<div class='ti-2'><div><label>Nombre completo</label><input type='text' name='nombre' required></div><div><label>Documento (cédula)</label><input type='text' name='documento' required inputmode='numeric' pattern='[0-9]{5,12}'></div></div>"
+                "<div class='ti-2'><div><label>Cargo / puesto</label><input type='text' name='cargo' required placeholder='Asesor de Ventas'></div>"
+                "<div><label>Departamento</label><select name='departamento'>%s</select></div></div>"
+                "<div class='ti-2'><div><label>Rol en el sistema</label><select name='puesto'>%s</select></div>"
+                "<div><label>Jefe inmediato (usuario del supervisor, si aplica)</label><input type='text' name='jefe' placeholder='ej: ventas.supervisor'></div></div>"
+                "<div class='ti-2'><div><label>Tipo de contrato</label><select name='contrato'>%s</select></div><div><label>Fecha de ingreso</label><input type='date' name='fecha' required></div></div>"
+                "<div class='ti-2'><div><label>Correo personal (opcional)</label><input type='email' name='correo'></div><div></div></div>"
+                "<label>Funciones que va a realizar</label><textarea name='funciones' rows='3' required></textarea>"
+                "<p><button class='ti-btn'>Guardar ingreso</button></p></form></div>"
+                % (csrf, "".join("<option>%s</option>" % _esc(x) for x in _TH_DEPARTAMENTOS), "".join("<option value='%s'>%s</option>" % (k, _esc(v)) for k, v in _th_puestos()),
+                   "".join("<option>%s</option>" % _esc(x) for x in _TH_CONTRATOS)))
+    opt_e = "<option value=''>Todos los estados</option>" + "".join("<option%s>%s</option>" % (" selected" if x == est else "", _esc(x)) for x in _TH_ESTADOS)
+    lista = ("<div class='ti-card'><h2>Ingresos de personal</h2><form method='GET' style='display:flex;gap:8px;align-items:end;margin-bottom:12px'>"
+             "<div style='flex:1'><label>Estado</label><select name='e'>%s</select></div><button class='ti-btn'>Filtrar</button></form>"
+             "<div style='overflow-x:auto'><table><tr><th>#</th><th>Empleado</th><th>Puesto</th><th>Estado</th><th>Credencial</th><th>Funciones</th><th>Acciones</th></tr>%s</table></div></div>"
+             % (opt_e, "".join(trs) or "<tr><td colspan='7'>Aún no hay ingresos registrados.</td></tr>"))
+    cuerpo = ("<h1>👤 Ingreso de personal</h1><p class='sub'>Talento Humano contrata, define el puesto y envía la solicitud a Tecnología y Soporte de TI, que crea la credencial y configura los accesos. "
+              "Talento Humano no tiene permisos técnicos sobre el servidor ni el software.</p>%s%s" % (form, lista))
+    return _th_pagina("Ingreso de personal", cuerpo)
+
+
+@app.route("/gerencia/talento/ingresos/accion", methods=["POST"])
+def gerencia_talento_ingresos_accion():
+    g = _th_guard()
+    if g is not None:
+        return g
+    if not _th_puede_escribir():
+        return acceso_denegado("Solo Talento Humano puede registrar ingresos de personal.")
+    _th_init()
+    destino = "/gerencia/talento/ingresos"
+    if not _ti_csrf_ok():
+        session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect(destino)
+    f = request.form
+    quien = session.get("usuario") or "Talento"
+    try:
+        a = f.get("accion") or ""
+        if a == "crear":
+            nombre = " ".join((f.get("nombre") or "").split())[:160]
+            doc = re.sub(r"\D", "", f.get("documento") or "")
+            cargo = " ".join((f.get("cargo") or "").split())[:120]
+            funciones = (f.get("funciones") or "").replace("\r", "").strip()[:1500]
+            fecha = (f.get("fecha") or "")[:10]
+            puesto = f.get("puesto") or ""
+            if puesto not in dict(_th_puestos()) or not (5 <= len(doc) <= 12) or len(nombre) < 3 or not cargo or not funciones or not re.match(r"^\d{4}-\d{2}-\d{2}$", fecha):
+                session["ti_msg"] = ("err", "Revise los datos: nombre, documento, cargo, fecha, rol y funciones son obligatorios.")
+                return redirect(destino)
+            rol_s, _, nivel = puesto.partition("|")
+            dep = f.get("departamento") if f.get("departamento") in _TH_DEPARTAMENTOS else _TH_DEPARTAMENTOS[0]
+            contrato = f.get("contrato") if f.get("contrato") in _TH_CONTRATOS else _TH_CONTRATOS[0]
+            correo = (f.get("correo") or "").strip().lower()[:160]
+            if correo and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
+                correo = ""
+            jefe = re.sub(r"[^a-z0-9._-]", "", (f.get("jefe") or "").strip().lower())[:80]
+            if _c48_q("SELECT 1 FROM th_ingresos WHERE documento=:d AND estado IN ('Registrado','Solicitada a TI','En proceso')", d=doc):
+                session["ti_msg"] = ("err", "Ya hay un ingreso en trámite con ese documento.")
+                return redirect(destino)
+            _c48_x("INSERT INTO th_ingresos (nombre, documento, correo_personal, cargo, departamento, rol_sistema, nivel, jefe_usuario, tipo_contrato, fecha_ingreso, funciones, estado, creado_por, creado_en) "
+                   "VALUES (:a,:b,:c,:d,:e,:f,:g,:h,:i,:j,:k,'Registrado',:l,:m)",
+                   a=nombre, b=doc, c=correo, d=cargo, e=dep, f=rol_s, g=nivel, h=jefe, i=contrato, j=fecha, k=funciones, l=quien, m=_c48_now())
+            session["ti_msg"] = ("ok", "Ingreso registrado. Envíe la solicitud a TI para que cree la credencial.")
+        elif a in ("enviar", "cancelar"):
+            rid = int(f.get("id") or 0)
+            if a == "enviar":
+                n = _c48_x("UPDATE th_ingresos SET estado='Solicitada a TI', enviado_en=:n, nota_ti='' WHERE id=:i AND estado IN ('Registrado','Devuelta por TI')", n=_c48_now(), i=rid)
+                if n:
+                    registrar_auditoria("Talento→TI", "%s envió a TI la solicitud de credencial del ingreso #%d" % (quien, rid))
+                session["ti_msg"] = ("ok", "Solicitud enviada a Tecnología y Soporte de TI." if n else "No se pudo enviar (¿ya estaba enviada?).")
+            else:
+                n = _c48_x("UPDATE th_ingresos SET estado='Cancelada' WHERE id=:i AND estado IN ('Registrado','Solicitada a TI','Devuelta por TI')", i=rid)
+                session["ti_msg"] = ("ok" if n else "err", "Ingreso cancelado." if n else "No se puede cancelar: TI ya lo está procesando.")
+    except Exception as e:
+        db.session.rollback()
+        print("th accion:", e)
+        session["ti_msg"] = ("err", "No se pudo completar la acción.")
+    return redirect(destino)
+
+
+# ───────── TI: solicitudes de RRHH → credencial ─────────
+def _ti_sugerir_usuario(nombre):
+    p = [x for x in re.sub(r"[^a-záéíóúñ ]", "", (nombre or "").lower()).split() if x]
+    tr = str.maketrans("áéíóúñ", "aeioun")
+    p = [x.translate(tr) for x in p]
+    if len(p) >= 2:
+        return (p[0][0] + p[-2 if len(p) > 2 else -1])[:30]
+    return (p[0] if p else "usuario")[:30]
+
+
+@app.route("/tecnologia/solicitudes-rrhh")
+def tecnologia_solicitudes_rrhh():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    _th_init()
+    escribe = _ti_puede_escribir()
+    csrf = _acc_csrf()
+    puestos = dict(_th_puestos())
+    filas = [_th_row(r) for r in _c48_q("SELECT " + _TH_COLS + " FROM th_ingresos WHERE estado<>'Registrado' ORDER BY CASE WHEN estado IN ('Solicitada a TI','En proceso') THEN 0 ELSE 1 END, id DESC LIMIT 200")]
+    trs = []
+    for d in filas:
+        etiqueta = puestos.get("%s|%s" % (d["rol_sistema"], d["nivel"] or ""), d["rol_sistema"])
+        detalle = ("<b>Cargo:</b> %s<br><b>Departamento:</b> %s<br><b>Rol solicitado:</b> %s<br><b>Jefe inmediato:</b> %s<br><b>Ingreso:</b> %s · %s<br><b>Funciones:</b> %s"
+                   % (_esc(d["cargo"]), _esc(d["departamento"]), _esc(etiqueta), _esc(d["jefe_usuario"] or "—"), _esc((d["fecha_ingreso"] or "")[:10]), _esc(d["tipo_contrato"]), _esc(d["funciones"])))
+        acc = "—"
+        if d["estado"] in ("Solicitada a TI", "En proceso") and escribe:
+            sug = _ti_sugerir_usuario(d["nombre"])
+            acc = ("<form class='in' method='POST' action='/tecnologia/solicitudes-rrhh/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
+                   "<div class='ti-2'><div><label>Usuario</label><input type='text' name='usuario' value='%s' pattern='[a-z0-9._-]{4,40}' required></div>"
+                   "<div><label>Correo corporativo</label><input type='email' name='correo_corp' placeholder='nombre@procsis.com'></div></div>"
+                   "<label style='font-weight:400'><input type='checkbox' name='forzar_mfa' value='1'> Exigir MFA desde el primer ingreso</label><br>"
+                   "<input type='text' name='nota' placeholder='Nota (si la devuelve a RRHH, explique el motivo)' style='margin:6px 0'>"
+                   "<button class='ti-btn s' name='accion' value='crear' onclick=\"return confirm('¿Crear la credencial de %s?');\">🔑 Crear credencial</button> "
+                   "<button class='ti-btn s r' name='accion' value='devolver'>↩ Devolver a RRHH</button></form>" % (csrf, d["id"], _esc(sug), _esc(d["nombre"])))
+        elif d["estado"] == "Credencial creada":
+            acc = "Usuario <b>%s</b> · %s" % (_esc(d["usuario_creado"]), _esc((d["atendido_en"] or "")[:10]))
+        trs.append("<tr><td>#%d</td><td><b>%s</b><br><small>CC %s</small><details><summary style='cursor:pointer;color:#0f766e'>Ver orden de RRHH</summary>%s</details></td><td>%s</td><td>%s</td></tr>"
+                   % (d["id"], _esc(d["nombre"]), _esc(d["documento"]), detalle, _th_badge(d["estado"]), acc))
+    cuerpo = ("<h1>📥 Solicitudes de Talento Humano</h1><p class='sub'>TI crea la credencial (usuario, correo corporativo y contraseña temporal) <b>solo bajo la orden de Talento Humano</b>: el rol, el departamento "
+              "y el jefe vienen definidos en la solicitud. La contraseña se muestra una sola vez y la persona debe cambiarla al entrar.</p>"
+              "<div class='ti-card'><h2>Órdenes de ingreso</h2><div style='overflow-x:auto'><table><tr><th>#</th><th>Empleado</th><th>Estado</th><th>Gestión de TI</th></tr>%s</table></div></div>"
+              % ("".join(trs) or "<tr><td colspan='4'>No hay solicitudes de Talento Humano.</td></tr>"))
+    return _ti_pagina("Solicitudes de Talento Humano", cuerpo)
+
+
+@app.route("/tecnologia/solicitudes-rrhh/accion", methods=["POST"])
+def tecnologia_solicitudes_rrhh_accion():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    if not _ti_puede_escribir():
+        return acceso_denegado("Solo el área de Tecnología y Soporte de TI atiende estas solicitudes.")
+    _th_init()
+    destino = "/tecnologia/solicitudes-rrhh"
+    if not _ti_csrf_ok():
+        session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect(destino)
+    f = request.form
+    quien = session.get("usuario") or "TI"
+    try:
+        rid = int(f.get("id") or 0)
+        r = _c48_q("SELECT " + _TH_COLS + " FROM th_ingresos WHERE id=:i AND estado IN ('Solicitada a TI','En proceso')", i=rid)
+        if not r:
+            session["ti_msg"] = ("err", "La solicitud ya no está pendiente.")
+            return redirect(destino)
+        d = _th_row(r[0])
+        a = f.get("accion") or ""
+        if a == "devolver":
+            nota = " ".join((f.get("nota") or "").split())[:400]
+            if len(nota) < 5:
+                session["ti_msg"] = ("err", "Escriba el motivo para devolverla a Talento Humano.")
+                return redirect(destino)
+            _c48_x("UPDATE th_ingresos SET estado='Devuelta por TI', nota_ti=:n, atendido_por=:u, atendido_en=:t WHERE id=:i", n=nota, u=quien, t=_c48_now(), i=rid)
+            registrar_auditoria("TI→Talento", "%s devolvió la solicitud #%d: %s" % (quien, rid, nota))
+            session["ti_msg"] = ("ok", "Solicitud devuelta a Talento Humano.")
+        elif a == "crear":
+            u, clave = _ti_crear_usuario(f.get("usuario"), d["nombre"], (f.get("correo_corp") or d["correo_personal"] or ""), d["rol_sistema"], bool(f.get("forzar_mfa")) or d["rol_sistema"] == "Tecnologia",
+                                         departamento=d["departamento"], nivel=d["nivel"], jefe=d["jefe_usuario"])
+            if u is None:
+                session["ti_msg"] = ("err", clave)
+                return redirect(destino)
+            corp = (f.get("correo_corp") or "").strip().lower()[:160]
+            _c48_x("UPDATE th_ingresos SET estado='Credencial creada', usuario_creado=:u, correo_corporativo=:c, atendido_por=:p, atendido_en=:t WHERE id=:i",
+                   u=u.usuario, c=corp, p=quien, t=_c48_now(), i=rid)
+            registrar_auditoria("TI creó credencial", "%s creó a %s (%s, %s) por orden de Talento Humano #%d" % (quien, u.usuario, d["rol_sistema"], d["departamento"], rid))
+            return _ti_pagina_credencial("Credencial creada", u.usuario, clave, u.rol, destino,
+                                         "<p><b>Departamento:</b> %s · <b>Puesto:</b> %s%s</p>" % (_esc(d["departamento"]), _esc(d["cargo"]), ("<br><b>Correo corporativo:</b> " + _esc(corp)) if corp else ""))
+    except Exception as e:
+        db.session.rollback()
+        print("ti solicitudes:", e)
+        session["ti_msg"] = ("err", "No se pudo completar la acción.")
+    return redirect(destino)
+
+
+# ───────── Permisos basados en la propiedad (Record-Level Security) ─────────
+def _ti_cfg_set(clave, valor):
+    if not _c48_x("UPDATE ti_config SET valor=:v WHERE clave=:c", v=str(valor), c=clave):
+        _c48_x("INSERT INTO ti_config (clave, valor) VALUES (:c, :v)", c=clave, v=str(valor))
+    _PROP_CACHE["t"] = 0.0
+
+
+def _prop_reglas():
+    """Reglas vigentes (con caché de 20 s): visibilidad de clientes y modo de asignación."""
+    import time
+    if time.time() - _PROP_CACHE["t"] < 20 and _PROP_CACHE["v"]:
+        return _PROP_CACHE["v"]
+    v = {"visibilidad": "propietario", "asignacion": "rotacion"}
+    try:
+        _ti_init()
+        for clave, k in (("prop_leads_visibilidad", "visibilidad"), ("prop_leads_asignacion", "asignacion")):
+            r = _c48_q("SELECT valor FROM ti_config WHERE clave=:c", c=clave)
+            if r and r[0][0]:
+                v[k] = r[0][0]
+    except Exception:
+        db.session.rollback()
+    _PROP_CACHE["t"] = time.time()
+    _PROP_CACHE["v"] = v
+    return v
+
+
+def _usuario_interno_actual():
+    from flask import g as _g
+    if getattr(_g, "_usr_int", None) is None:
+        u = None
+        try:
+            nombre = (session.get("usuario") or "").strip().lower()
+            if nombre:
+                u = Usuario.query.filter(func.lower(Usuario.usuario) == nombre, Usuario.institucion_id.is_(None)).first()
+        except Exception:
+            db.session.rollback()
+        _g._usr_int = u or False
+    return _g._usr_int or None
+
+
+def _es_supervisor_ventas():
+    u = _usuario_interno_actual()
+    return bool(u) and (getattr(u, "nivel", "") or "") == "SUPERVISOR"
+
+
+def _equipo_visible_usuarios():
+    """Usuarios cuyos clientes puede ver la persona actual: ella misma y, si es supervisora, su equipo."""
+    yo = (session.get("usuario") or "").strip()
+    nombres = {yo}
+    if _es_supervisor_ventas():
+        try:
+            for x in Usuario.query.filter(Usuario.institucion_id.is_(None), Usuario.jefe_usuario == yo).all():
+                nombres.add(x.usuario)
+        except Exception:
+            db.session.rollback()
+    return nombres
+
+
+def _equipo_visible_lower():
+    return {x.strip().lower() for x in _equipo_visible_usuarios() if x}
+
+
+def _leads_visibles(query):
+    """Candado de información: el rol decide la herramienta; la PROPIEDAD decide los datos. Gerencia ve todo;
+    el supervisor ve a su equipo; el asesor solo sus clientes (si la regla está en 'Solo propietario')."""
+    try:
+        rol = rol_actual()
+        if rol not in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor"):
+            return query
+        if _prop_reglas().get("visibilidad") != "propietario":
+            return query
+        return query.filter(func.lower(LeadCRM.vendedor).in_(sorted(_equipo_visible_lower())))   # sin distinguir mayúsculas
+    except Exception:
+        return query.filter(LeadCRM.id < 0)   # ante un fallo, no mostrar nada (fallo seguro)
+
+
+def _lead_visible_o_none(lead):
+    if lead is None:
+        return None
+    rol = rol_actual()
+    if rol not in ("Comercial", "Ventas", "Supervisor de Ventas", "Supervisor") or _prop_reglas().get("visibilidad") != "propietario":
+        return lead
+    return lead if (lead.vendedor or "").strip().lower() in _equipo_visible_lower() else None
+
+
+def _lead_o_404(lid):
+    from flask import abort as _abort
+    lead = _lead_visible_o_none(LeadCRM.query.get(lid))
+    if lead is None:
+        _abort(404)
+    return lead
+
+
+def _rr_asesores():
+    try:
+        us = Usuario.query.filter(Usuario.institucion_id.is_(None), Usuario.rol == "Comercial", or_(Usuario.activo.is_(True), Usuario.activo.is_(None))).order_by(Usuario.id.asc()).all()
+    except Exception:
+        db.session.rollback()
+        return []
+    return [u.usuario for u in us if (getattr(u, "nivel", "") or "") != "SUPERVISOR"]
+
+
+def _rr_siguiente_asesor():
+    """Asignación por rotación (Round Robin): 1.º cliente al asesor A, 2.º al B, 3.º al C, y vuelve a empezar."""
+    asesores = _rr_asesores()
+    if not asesores:
+        return ""
+    _ti_init()
+    r = _c48_q("SELECT valor FROM ti_config WHERE clave='rr_leads_ultimo'")
+    ultimo = r[0][0] if r else ""
+    elegido = asesores[(asesores.index(ultimo) + 1) % len(asesores)] if ultimo in asesores else asesores[0]
+    _ti_cfg_set("rr_leads_ultimo", elegido)
+    return elegido
+
+
+def _propietario_web():
+    """Propietario de un cliente que llega por la página web, según la regla de asignación configurada por TI."""
+    try:
+        if _prop_reglas().get("asignacion") == "rotacion":
+            return _rr_siguiente_asesor()
+    except Exception:
+        db.session.rollback()
+    return ""
+
+
+_SIN_DUENO = ("", "Web pública")
+
+
+@app.route("/tecnologia/permisos")
+def tecnologia_permisos():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    _ti_init()
+    escribe = _ti_puede_escribir()
+    csrf = _acc_csrf()
+    reg = _prop_reglas()
+    try:
+        comerciales = Usuario.query.filter(Usuario.institucion_id.is_(None), Usuario.rol == "Comercial").order_by(Usuario.usuario.asc()).all()
+    except Exception:
+        db.session.rollback()
+        comerciales = []
+    conteo = dict(db.session.query(LeadCRM.vendedor, func.count(LeadCRM.id)).group_by(LeadCRM.vendedor).all()) if comerciales else {}
+    sin_dueno = sum(int(v) for k, v in conteo.items() if (k or "") in _SIN_DUENO)
+    supervisores = [u.usuario for u in comerciales if (getattr(u, "nivel", "") or "") == "SUPERVISOR"]
+    filas = []
+    for u in comerciales:
+        nivel = (getattr(u, "nivel", "") or "") or "ASESOR"
+        if escribe:
+            acc = ("<form class='in' method='POST' action='/tecnologia/permisos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='usuario'><input type='hidden' name='id' value='%d'>"
+                   "<select name='nivel' style='width:auto'><option value='ASESOR'%s>Asesor</option><option value='SUPERVISOR'%s>Supervisor</option></select> "
+                   "<select name='departamento' style='width:auto'>%s</select> "
+                   "<select name='jefe' style='width:auto'><option value=''>Sin jefe</option>%s</select> <button class='ti-btn s'>Guardar</button></form>"
+                   % (csrf, u.id, " selected" if nivel == "ASESOR" else "", " selected" if nivel == "SUPERVISOR" else "",
+                      "".join("<option%s>%s</option>" % (" selected" if (getattr(u, "departamento", "") or "") == dp else "", _esc(dp)) for dp in _TH_DEPARTAMENTOS),
+                      "".join("<option%s>%s</option>" % (" selected" if (getattr(u, "jefe_usuario", "") or "") == s else "", _esc(s)) for s in supervisores if s != u.usuario)))
+        else:
+            acc = "—"
+        filas.append("<tr><td><b>%s</b></td><td>%s</td><td><span class='ti-b %s'>%s</span></td><td>%s</td><td>%d</td><td>%s</td></tr>"
+                     % (_esc(u.usuario), _esc(getattr(u, "nombre_completo", "") or "—"), "a" if getattr(u, "activo", True) else "v", "Activo" if getattr(u, "activo", True) else "Bloqueado",
+                        _esc((getattr(u, "departamento", "") or "—") + " · " + ("Supervisor" if nivel == "SUPERVISOR" else "Asesor") + ((" · jefe " + u.jefe_usuario) if getattr(u, "jefe_usuario", "") else "")),
+                        int(conteo.get(u.usuario, 0)), acc))
+    reglas = ""
+    if escribe:
+        reglas = ("<form method='POST' action='/tecnologia/permisos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='reglas'>"
+                  "<div class='ti-2'><div><label>Visibilidad de clientes (registros comerciales)</label><select name='visibilidad'>"
+                  "<option value='propietario'%s>Privada · solo el propietario (el supervisor ve a su equipo)</option><option value='publica'%s>Pública · todos los asesores ven todos los clientes</option></select></div>"
+                  "<div><label>Asignación de clientes nuevos (página web)</label><select name='asignacion'>"
+                  "<option value='rotacion'%s>Automática por rotación (Round Robin)</option><option value='manual'%s>Manual · quedan sin propietario hasta que el supervisor los asigne</option></select></div></div>"
+                  "<p><button class='ti-btn'>Guardar reglas</button></p></form>"
+                  % (csrf, " selected" if reg["visibilidad"] == "propietario" else "", " selected" if reg["visibilidad"] == "publica" else "",
+                     " selected" if reg["asignacion"] == "rotacion" else "", " selected" if reg["asignacion"] == "manual" else ""))
+    rotar = ""
+    if escribe and sin_dueno:
+        rotar = ("<form method='POST' action='/tecnologia/permisos/accion' style='margin-top:10px'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='rotar'>"
+                 "<button class='ti-btn o' onclick=\"return confirm('¿Repartir por rotación los %d clientes sin propietario?');\">🔄 Repartir por rotación los %d clientes sin propietario</button></form>" % (csrf, sin_dueno, sin_dueno))
+    cuerpo = ("<h1>🔒 Permisos por propiedad de datos</h1>"
+              "<p class='sub'><b>Regla de oro:</b> el <i>rol</i> define qué herramientas puede usar el asesor; la <i>propiedad</i> define qué datos específicos puede tocar. "
+              "Todos los asesores comparten el mismo rol (<b>Comercial</b>), pero cada uno solo ve los clientes donde él es el propietario; el supervisor ve a su equipo y puede reasignar.</p>"
+              "<div class='ti-grid'><div class='ti-kpi'><span>Visibilidad</span><b style='font-size:17px'>%s</b></div><div class='ti-kpi'><span>Asignación web</span><b style='font-size:17px'>%s</b></div>"
+              "<div class='ti-kpi'><span>Clientes sin propietario</span><b>%d</b></div><div class='ti-kpi'><span>Asesores activos</span><b>%d</b></div></div>"
+              "<div class='ti-card'><h2>Reglas de privacidad y distribución</h2>%s%s</div>"
+              "<div class='ti-card'><h2>Equipo comercial: departamento, nivel y jefe</h2><p class='sub'>El supervisor rompe el candado por jerarquía: ve la información de los asesores que tiene a su cargo. TI no ve ni modifica los clientes, solo configura las reglas.</p>"
+              "<div style='overflow-x:auto'><table><tr><th>Usuario</th><th>Nombre</th><th>Estado</th><th>Departamento · nivel</th><th>Clientes propios</th><th>Configurar</th></tr>%s</table></div></div>"
+              % ("Privada (solo propietario)" if reg["visibilidad"] == "propietario" else "Pública", "Rotación" if reg["asignacion"] == "rotacion" else "Manual", sin_dueno, len(_rr_asesores()),
+                 reglas or "<p class='sub'>Solo TI puede cambiar estas reglas.</p>", rotar, "".join(filas) or "<tr><td colspan='6'>No hay usuarios del área comercial.</td></tr>"))
+    return _ti_pagina("Permisos por propiedad", cuerpo)
+
+
+@app.route("/tecnologia/permisos/accion", methods=["POST"])
+def tecnologia_permisos_accion():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    if not _ti_puede_escribir():
+        return acceso_denegado("Solo el área de Tecnología y Soporte de TI configura estas reglas.")
+    _ti_init()
+    destino = "/tecnologia/permisos"
+    if not _ti_csrf_ok():
+        session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect(destino)
+    f = request.form
+    quien = session.get("usuario") or "TI"
+    try:
+        a = f.get("accion") or ""
+        if a == "reglas":
+            if f.get("visibilidad") in ("propietario", "publica"):
+                _ti_cfg_set("prop_leads_visibilidad", f["visibilidad"])
+            if f.get("asignacion") in ("rotacion", "manual"):
+                _ti_cfg_set("prop_leads_asignacion", f["asignacion"])
+            registrar_auditoria("TI reglas de propiedad", "%s: visibilidad=%s asignación=%s" % (quien, f.get("visibilidad"), f.get("asignacion")))
+            session["ti_msg"] = ("ok", "Reglas guardadas.")
+        elif a == "usuario":
+            u = Usuario.query.get(int(f.get("id") or 0))
+            if not u or u.institucion_id is not None or u.rol != "Comercial":
+                session["ti_msg"] = ("err", "Usuario no válido.")
+            else:
+                u.nivel = "SUPERVISOR" if f.get("nivel") == "SUPERVISOR" else "ASESOR"
+                u.departamento = f.get("departamento") if f.get("departamento") in _TH_DEPARTAMENTOS else (u.departamento or "")
+                jefe = re.sub(r"[^a-z0-9._-]", "", (f.get("jefe") or "").lower())[:80]
+                u.jefe_usuario = "" if (u.nivel == "SUPERVISOR" or jefe == u.usuario.lower()) else jefe
+                registrar_auditoria("TI configuró acceso", "%s: %s → nivel %s, depto %s, jefe %s" % (quien, u.usuario, u.nivel, u.departamento, u.jefe_usuario or "—"))
+                db.session.commit()
+                _PROP_CACHE["t"] = 0.0
+                session["ti_msg"] = ("ok", "Configuración de %s guardada." % u.usuario)
+        elif a == "rotar":
+            asesores = _rr_asesores()
+            leads = LeadCRM.query.filter(LeadCRM.vendedor.in_(list(_SIN_DUENO))).order_by(LeadCRM.id.asc()).all()
+            if not asesores:
+                session["ti_msg"] = ("err", "No hay asesores activos para repartir.")
+            else:
+                r = _c48_q("SELECT valor FROM ti_config WHERE clave='rr_leads_ultimo'")
+                ultimo = r[0][0] if r else ""
+                idx = (asesores.index(ultimo) + 1) % len(asesores) if ultimo in asesores else 0
+                for lead in leads:
+                    lead.vendedor = asesores[idx]
+                    idx = (idx + 1) % len(asesores)
+                db.session.commit()
+                _ti_cfg_set("rr_leads_ultimo", asesores[(idx - 1) % len(asesores)])
+                registrar_auditoria("TI rotación de clientes", "%s repartió %d clientes sin propietario entre %d asesores" % (quien, len(leads), len(asesores)))
+                session["ti_msg"] = ("ok", "Se repartieron %d clientes entre %d asesores." % (len(leads), len(asesores)))
+    except Exception as e:
+        db.session.rollback()
+        print("ti permisos:", e)
+        session["ti_msg"] = ("err", "No se pudo completar la acción.")
+    return redirect(destino)
+
+
+# ───────── Supervisor de ventas: equipo y reasignación ─────────
+def _equipo_guard():
+    if not requiere_login():
+        return redirect("/ventas-login")
+    if rol_actual() in ("Gerente", "Administrador", "Superadmin"):
+        return None
+    if rol_actual() == "Comercial" and _es_supervisor_ventas():
+        return None
+    return acceso_denegado("Esta pantalla es solo para supervisores de ventas.")
+
+
+def _equipo_miembros():
+    """Asesores que la persona actual puede gestionar (Gerencia: todos; supervisor: los que tiene a cargo)."""
+    q = Usuario.query.filter(Usuario.institucion_id.is_(None), Usuario.rol == "Comercial")
+    if rol_actual() == "Comercial":
+        q = q.filter(Usuario.jefe_usuario == (session.get("usuario") or ""))
+    return [u for u in q.order_by(Usuario.usuario.asc()).all() if (getattr(u, "nivel", "") or "") != "SUPERVISOR"]
+
+
+@app.route("/ventas/equipo")
+def ventas_equipo():
+    g = _equipo_guard()
+    if g is not None:
+        return g
+    csrf = _acc_csrf()
+    miembros = _equipo_miembros()
+    nombres = [u.usuario for u in miembros]
+    por_etapa = {}
+    for v, e, n in db.session.query(LeadCRM.vendedor, LeadCRM.etapa, func.count(LeadCRM.id)).group_by(LeadCRM.vendedor, LeadCRM.etapa).all():
+        por_etapa.setdefault(v or "", {})[e] = int(n)
+    filas = ""
+    for u in miembros:
+        d = por_etapa.get(u.usuario, {})
+        filas += ("<tr><td><b>%s</b><br><small>%s</small></td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td></tr>"
+                  % (_esc(u.usuario), _esc(getattr(u, "nombre_completo", "") or ""), sum(d.values()), d.get("CONTACTO", 0), d.get("DEMO", 0), d.get("NEGOCIACION", 0), d.get("GANADO", 0), d.get("PERDIDO", 0)))
+    sin = LeadCRM.query.filter(LeadCRM.vendedor.in_(list(_SIN_DUENO))).order_by(LeadCRM.id.desc()).limit(40).all()
+    opts = "".join("<option>%s</option>" % _esc(n) for n in nombres)
+    sin_html = "".join(
+        "<tr><td>#%d</td><td>%s<br><small>%s · %s</small></td><td><form class='in' method='POST' action='/ventas/equipo/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='asignar'>"
+        "<input type='hidden' name='lead_id' value='%d'><select name='para' style='width:auto'>%s</select> <button class='ti-btn s'>Asignar</button></form></td></tr>"
+        % (x.id, _esc(x.colegio), _esc(x.rector), _esc(x.municipio), csrf, x.id, opts) for x in sin)
+    mover = ("<form method='POST' action='/ventas/equipo/accion' class='ti-2'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='mover_todos'>"
+             "<div><label>Pasar TODOS los clientes de…</label><select name='de'>%s</select></div><div><label>…a</label><select name='para'>%s</select></div>"
+             "<div><button class='ti-btn o' onclick=\"return confirm('¿Reasignar todos los clientes de ese asesor?');\">↔ Reasignar clientes</button></div></form>" % (csrf, opts, opts)) if len(nombres) > 1 else "<p class='sub'>Necesita al menos 2 asesores en su equipo para reasignar.</p>"
+    cuerpo = ("<h1>👥 Equipo de ventas</h1><p class='sub'>Como supervisor ve la información de los asesores que tiene a su cargo, revisa sus métricas y reasigna clientes cuando un asesor se va de vacaciones o se enferma.</p>"
+              "<div class='ti-card'><h2>Métricas del equipo</h2><div style='overflow-x:auto'><table><tr><th>Asesor</th><th>Clientes</th><th>Contacto</th><th>Demo</th><th>Negociación</th><th>Ganados</th><th>Perdidos</th></tr>%s</table></div></div>"
+              "<div class='ti-card'><h2>Reasignar clientes de un asesor</h2>%s</div>"
+              "<div class='ti-card'><h2>Clientes sin propietario (%d)</h2><div style='overflow-x:auto'><table><tr><th>#</th><th>Cliente</th><th>Asignar a</th></tr>%s</table></div></div>"
+              % (filas or "<tr><td colspan='7'>No tiene asesores a su cargo. Pida a TI que los asigne a su equipo.</td></tr>", mover, len(sin), sin_html or "<tr><td colspan='3'>No hay clientes sin propietario.</td></tr>"))
+    msg = session.pop("ti_msg", None)
+    aviso = ("<div class='%s'>%s</div>" % ("ti-ok" if msg[0] == "ok" else "ti-err", _esc(msg[1]))) if isinstance(msg, (list, tuple)) and len(msg) == 2 else ""
+    return page("Equipo de ventas", shell(_TI_CSS + "<div class='ti'>" + aviso + cuerpo + "</div>"))
+
+
+@app.route("/ventas/equipo/accion", methods=["POST"])
+def ventas_equipo_accion():
+    g = _equipo_guard()
+    if g is not None:
+        return g
+    if not _ti_csrf_ok():
+        session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect("/ventas/equipo")
+    f = request.form
+    quien = session.get("usuario") or ""
+    try:
+        permitidos = {u.usuario for u in _equipo_miembros()}
+        a = f.get("accion") or ""
+        para = f.get("para") or ""
+        if para not in permitidos:
+            session["ti_msg"] = ("err", "Ese asesor no está en su equipo.")
+        elif a == "mover_todos":
+            de = f.get("de") or ""
+            if de not in permitidos or de == para:
+                session["ti_msg"] = ("err", "Elija dos asesores distintos de su equipo.")
+            else:
+                n = LeadCRM.query.filter_by(vendedor=de).update({"vendedor": para})
+                db.session.commit()
+                registrar_auditoria("Reasignación de clientes", "%s pasó %d clientes de %s a %s" % (quien, n, de, para))
+                session["ti_msg"] = ("ok", "Se reasignaron %d clientes de %s a %s." % (n, de, para))
+        elif a == "asignar":
+            lead = LeadCRM.query.get(int(f.get("lead_id") or 0))
+            if not lead or (lead.vendedor or "") not in _SIN_DUENO:
+                session["ti_msg"] = ("err", "Ese cliente ya tiene propietario.")
+            else:
+                lead.vendedor = para
+                db.session.commit()
+                registrar_auditoria("Asignación de cliente", "%s asignó el cliente #%d a %s" % (quien, lead.id, para))
+                session["ti_msg"] = ("ok", "Cliente asignado a %s." % para)
+    except Exception as e:
+        db.session.rollback()
+        print("ventas equipo:", e)
+        session["ti_msg"] = ("err", "No se pudo completar la acción.")
+    return redirect("/ventas/equipo")
 
 
 
