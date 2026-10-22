@@ -4438,7 +4438,7 @@ _MODULOS_GERENCIA = [
         ('/tecnologia/seguridad', '🛡️ Seguridad de la información'),
         ('/tecnologia/sistemas', '📊 Sistemas y aplicaciones de negocio'),
         ('/tecnologia/proyectos', '🚀 Proyectos y desarrollo de software'),
-        ('/tecnologia/solicitudes-rrhh', '📥 Solicitudes de Talento Humano'),
+        ('/tecnologia/solicitudes-rrhh', '📥 Gestión de Solicitudes de TI'),
         ('/tecnologia/permisos', '🔒 Permisos por propiedad de datos'),
         ('/ti/reportar', '🎫 Reportar un problema a TI'),
         ('/gerencia/ti-acceso-inicial', '🔑 Acceso inicial de TI (una sola vez)'),
@@ -93869,7 +93869,7 @@ def tecnologia_accesos():
     crear = ""
     if escribe and rol_actual() != "Superadmin":
         crear = ("<div class='ti-card'><h2>➕ Nuevo usuario</h2><p class='sub'>TI crea credenciales <b>solo bajo la orden de Talento Humano</b>. "
-                 "Atienda las órdenes en <a href='/tecnologia/solicitudes-rrhh'>Solicitudes de Talento Humano</a>.</p></div>")
+                 "Atienda las órdenes en <a href='/tecnologia/solicitudes-rrhh'>Gestión de Solicitudes de TI</a>.</p></div>")
     if escribe and rol_actual() == "Superadmin":
         crear = ("<div class='ti-card'><h2>➕ Crear usuario del equipo</h2><p class='sub'>Crea el usuario institucional con una contraseña temporal aleatoria que se muestra una sola vez; "
                  "la persona debe cambiarla al entrar. Las cuentas de Gerencia y Superadmin no se crean desde aquí.</p>"
@@ -94264,11 +94264,11 @@ def tecnologia_solicitudes_rrhh():
             acc = "Usuario <b>%s</b> · %s" % (_esc(d["usuario_creado"]), _esc((d["atendido_en"] or "")[:10]))
         trs.append("<tr><td>#%d</td><td><b>%s</b><br><small>CC %s</small><details><summary style='cursor:pointer;color:#0f766e'>Ver orden de RRHH</summary>%s</details></td><td>%s</td><td>%s</td></tr>"
                    % (d["id"], _esc(d["nombre"]), _esc(d["documento"]), detalle, _th_badge(d["estado"]), acc))
-    cuerpo = ("<h1>📥 Solicitudes de Talento Humano</h1><p class='sub'>TI crea la credencial (usuario, correo corporativo y contraseña temporal) <b>solo bajo la orden de Talento Humano</b>: el rol, el departamento "
+    cuerpo = ("<h1>📥 Gestión de Solicitudes de TI</h1><p class='sub'>TI crea la credencial (usuario, correo corporativo y contraseña temporal) <b>solo bajo la orden de Talento Humano</b>: el rol, el departamento "
               "y el jefe vienen definidos en la solicitud. La contraseña se muestra una sola vez y la persona debe cambiarla al entrar.</p>"
               "<div class='ti-card'><h2>Órdenes de ingreso</h2><div style='overflow-x:auto'><table><tr><th>#</th><th>Empleado</th><th>Estado</th><th>Gestión de TI</th></tr>%s</table></div></div>"
               % ("".join(trs) or "<tr><td colspan='4'>No hay solicitudes de Talento Humano.</td></tr>"))
-    return _ti_pagina("Solicitudes de Talento Humano", cuerpo)
+    return _ti_pagina("Gestión de Solicitudes de TI", cuerpo)
 
 
 @app.route("/tecnologia/solicitudes-rrhh/accion", methods=["POST"])
