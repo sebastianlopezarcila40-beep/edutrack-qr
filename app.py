@@ -93731,14 +93731,34 @@ def _ti_referencia_roles():
             "el sistema le mostrará el rol y sus módulos para que lo confirme.</p>%s</div>" % filas)
 
 
-def _ti_pagina_confirmar(titulo, rol, resumen, destino, campos, boton, volver, extra_html=""):
+def _ti_reauth(f, rol):
+    """None si TI confirmó el rol Y escribió su propia contraseña; si no, el mensaje de error ('' en la primera visita)."""
+    if (f.get("confirmo_rol") or "") != rol:
+        return ""
+    quien = (session.get("usuario") or "").strip()
+    ok, espera = _rate_limit("ti-reauth:" + quien.lower(), 5, 300)
+    if not ok:
+        return "Demasiados intentos con la contraseña. Espere %d segundos." % espera
+    yo = _usuario_interno_actual()
+    if yo is None or not verificar_password(yo.password, f.get("mi_clave") or ""):
+        registrar_auditoria("TI reautenticación fallida", "%s escribió mal su contraseña al autorizar accesos (rol %s)" % (quien, rol))
+        return "Contraseña incorrecta. No se activó ningún acceso."
+    return None
+
+
+def _ti_pagina_confirmar(titulo, rol, resumen, destino, campos, boton, volver, extra_html="", error=""):
     """Paso obligatorio: TI ve de qué rol son los accesos que va a activar y los confirma."""
     ocultos = "".join("<input type='hidden' name='%s' value='%s'>" % (_esc(k), _esc(v)) for k, v in campos.items() if v not in (None, ""))
     cuerpo = ("<div class='ti-card'><h2>%s</h2><p>%s</p></div>%s%s"
-              "<div class='ti-card'><form method='POST' action='%s'><input type='hidden' name='csrf' value='%s'>%s<input type='hidden' name='confirmo_rol' value='%s'>"
+              "<div class='ti-card'>%s<form method='POST' action='%s'><input type='hidden' name='csrf' value='%s'>%s<input type='hidden' name='confirmo_rol' value='%s'>"
+              "<label>Su contraseña (autoriza esta acción)</label><input type='password' name='mi_clave' required autocomplete='current-password' style='max-width:320px'>"
               "<p><button class='ti-btn'>%s</button> <a class='ti-btn s r' href='%s'>Cancelar</a></p></form></div>"
-              % (_esc(titulo), resumen, _ti_panel_accesos(rol), extra_html, _esc(destino), _acc_csrf(), ocultos, _esc(rol), _esc(boton), _esc(volver)))
-    return _ti_pagina(titulo, cuerpo)
+              % (_esc(titulo), resumen, _ti_panel_accesos(rol), extra_html, ("<div class='ti-err'>%s</div>" % _esc(error)) if error else "",
+                 _esc(destino), _acc_csrf(), ocultos, _esc(rol), _esc(boton), _esc(volver)))
+    r = app.make_response(_ti_pagina(titulo, cuerpo))
+    r.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    r.headers["Pragma"] = "no-cache"
+    return r
 
 
 def _ti_pagina_credencial(titulo, usuario, clave, rol, volver, nota=""):
@@ -93887,12 +93907,13 @@ def tecnologia_accesos_accion():
                 session["ti_msg"] = ("err", "Las credenciales se crean únicamente desde una solicitud de Talento Humano.")
                 return redirect("/tecnologia/solicitudes-rrhh")
             rol_n = f.get("rol") or ""
-            if rol_n in _ti_roles_creables() and (f.get("confirmo_rol") or "") != rol_n:
+            _err = _ti_reauth(f, rol_n) if rol_n in _ti_roles_creables() else None
+            if _err is not None:
                 return _ti_pagina_confirmar("Confirmar rol y accesos antes de crear el usuario", rol_n,
                                             "Va a crear el usuario <b>%s</b> (%s) con el rol <b>%s</b>. Revise los accesos que se activarán." % (_esc(f.get("usuario")), _esc(f.get("nombre")), _esc(_ti_titulo_rol(rol_n))),
                                             "/tecnologia/accesos/accion", {"accion": "crear", "usuario": f.get("usuario"), "nombre": f.get("nombre"), "correo": f.get("correo"), "rol": rol_n,
                                                                           "forzar_mfa": "1" if f.get("forzar_mfa") else ""},
-                                            "✔ Confirmar y crear usuario", "/tecnologia/accesos")
+                                            "✔ Confirmar y crear usuario", "/tecnologia/accesos", error=_err)
             u, clave = _ti_crear_usuario(f.get("usuario"), f.get("nombre"), f.get("correo"), f.get("rol") or "", bool(f.get("forzar_mfa")) or (f.get("rol") == "Tecnologia"))
             if u is None:
                 session["ti_msg"] = ("err", clave)
@@ -93908,10 +93929,11 @@ def tecnologia_accesos_accion():
             desactivar_empleado(u.id, quien)
             session["ti_msg"] = ("ok", "Cuenta de %s bloqueada y sesiones cerradas." % u.usuario)
         elif a == "reactivar":
-            if (f.get("confirmo_rol") or "") != u.rol:
+            _err = _ti_reauth(f, u.rol)
+            if _err is not None:
                 return _ti_pagina_confirmar("Confirmar accesos antes de reactivar la cuenta", u.rol,
                                             "Va a reactivar la cuenta de <b>%s</b>. Volverá a tener los accesos de su rol <b>%s</b>." % (_esc(u.usuario), _esc(_ti_titulo_rol(u.rol))),
-                                            "/tecnologia/accesos/accion", {"accion": "reactivar", "id": u.id}, "✔ Confirmar y reactivar", "/tecnologia/accesos")
+                                            "/tecnologia/accesos/accion", {"accion": "reactivar", "id": u.id}, "✔ Confirmar y reactivar", "/tecnologia/accesos", error=_err)
             u.activo = True
             registrar_auditoria("Reactivar empleado", "Usuario %s reactivado por %s (TI; rol %s)" % (u.usuario, quien, u.rol))
             db.session.commit()
@@ -93941,11 +93963,12 @@ def tecnologia_accesos_accion():
             if nuevo not in _ti_roles_creables() or u.rol not in _ti_roles_creables():
                 session["ti_msg"] = ("err", "Rol no permitido.")
             else:
-                if (f.get("confirmo_rol") or "") != nuevo:
+                _err = _ti_reauth(f, nuevo)
+                if _err is not None:
                     return _ti_pagina_confirmar("Confirmar el cambio de rol y de accesos", nuevo,
                                                 "Va a cambiar el rol de <b>%s</b> de <b>%s</b> a <b>%s</b>. Dejará de tener los accesos del rol anterior y recibirá los del nuevo." % (_esc(u.usuario), _esc(_ti_titulo_rol(u.rol)), _esc(_ti_titulo_rol(nuevo))),
                                                 "/tecnologia/accesos/accion", {"accion": "cambiar_rol", "id": u.id, "nuevo_rol": nuevo}, "✔ Confirmar cambio de rol", "/tecnologia/accesos",
-                                                _ti_panel_accesos(u.rol, "Accesos que dejará de tener (rol actual)"))
+                                                _ti_panel_accesos(u.rol, "Accesos que dejará de tener (rol actual)"), error=_err)
                 anterior = u.rol
                 u.rol = nuevo
                 registrar_auditoria("TI cambió rol", "%s: %s → %s (por %s)" % (u.usuario, anterior, nuevo, quien))
@@ -94279,12 +94302,13 @@ def tecnologia_solicitudes_rrhh_accion():
             registrar_auditoria("TI→Talento", "%s devolvió la solicitud #%d: %s" % (quien, rid, nota))
             session["ti_msg"] = ("ok", "Solicitud devuelta a Talento Humano.")
         elif a == "crear":
-            if (f.get("confirmo_rol") or "") != d["rol_sistema"]:
+            _err = _ti_reauth(f, d["rol_sistema"])
+            if _err is not None:
                 return _ti_pagina_confirmar("Confirmar rol y accesos antes de crear la credencial", d["rol_sistema"],
                                             "Va a crear la credencial de <b>%s</b> por orden de Talento Humano #%d, con el rol <b>%s</b>. Revise los accesos que se activarán." % (_esc(d["nombre"]), rid, _esc(_ti_titulo_rol(d["rol_sistema"]))),
                                             "/tecnologia/solicitudes-rrhh/accion", {"id": rid, "accion": "crear", "usuario": f.get("usuario"), "correo_corp": f.get("correo_corp"),
                                                                                     "forzar_mfa": "1" if f.get("forzar_mfa") else ""},
-                                            "✔ Confirmar y crear credencial", destino)
+                                            "✔ Confirmar y crear credencial", destino, error=_err)
             u, clave = _ti_crear_usuario(f.get("usuario"), d["nombre"], (f.get("correo_corp") or d["correo_personal"] or ""), d["rol_sistema"], bool(f.get("forzar_mfa")) or d["rol_sistema"] == "Tecnologia",
                                          departamento=d["departamento"], nivel=d["nivel"], jefe=d["jefe_usuario"])
             if u is None:
