@@ -4384,6 +4384,7 @@ _MODULOS_GERENCIA = [
     ]),
     ('Legal corporativo', [
         ('/gerencia/libro-actas', 'Libro de actas'),
+        ('/gerencia/protocolo-sic', 'Protocolo de inspecciones SIC'),
         ('/gerencia/boveda-legal', 'Bóveda legal'),
         ('/gerencia/firmas-corporativas', 'Firmas corporativas'),
         ('/gerencia/contratos-saas', 'Contratos SaaS (colegios)'),
@@ -22650,7 +22651,7 @@ _AREA_RUTAS_EXTRA = {
                  "/gerencia/donaciones", "/gerencia/envios"),
     "Juridica": ("/gerencia/contratos-saas", "/gerencia/paginas-legales", "/gerencia/textos-legales", "/gerencia/libro-actas",
                  "/gerencia/boveda-legal", "/gerencia/requerimientos-autoridades", "/gerencia/retractos", "/gerencia/certificados-apoyo",
-                 "/gerencia/pie-login", "/gerencia/datos-rut", "/gerencia/fondo-formalizacion", "/gerencia/firmas-corporativas"),
+                 "/gerencia/pie-login", "/gerencia/protocolo-sic", "/gerencia/datos-rut", "/gerencia/fondo-formalizacion", "/gerencia/firmas-corporativas"),
     "Marketing": ("/gerencia/web-menu", "/gerencia/casos-exito", "/gerencia/login-banners", "/gerencia/web-corporativa", "/gerencia/procsis-web",
                   "/gerencia/landing-ventas", "/gerencia/alianzas-clientes", "/gerencia/diseno-login",
                   "/gerencia/backoffice-branding"),
@@ -58337,6 +58338,7 @@ _REPARTO_NUEVOS.update({
     "/ti/reportar": ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Soluciones", "Gerente", "Administrador") + tuple(AREAS_PROCSIS),
 })
 _REPARTO_NUEVOS["/gerencia/api-conexiones"] = ("Calidad", "Desarrollador", "Tecnologia")
+_REPARTO_NUEVOS["/gerencia/protocolo-sic"] = ("Juridica",)
 _reparto_construir()
 _MODULOS_POR_AREA["/gerencia/empresa"] = _MODULOS_POR_AREA["/gerencia/datos-empresa"]   # misma pantalla, segunda dirección
 
@@ -72866,6 +72868,370 @@ def gerencia_comisiones_ventas():
     return page("Comisiones ventas", shell(body))
 
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROTOCOLO DE REACCIÓN ANTE INSPECCIONES IN SITU DE LA SIC
+#   Paso 1  Identificación de funcionarios y validación de la orden (con Representación Legal)
+#   Paso 2  Bloqueo temporal de modificaciones en la base de datos de configuración
+#   Paso 3  Extracción del reporte consolidado de logs con el rol Superadmin (Mesa de Control)
+#   Paso 4  Entrega en formato plano (CSV) junto con el hash SHA-256 del paquete y de cada archivo
+# ═══════════════════════════════════════════════════════════════════════════
+import json as _json_sic
+import csv as _csv_sic
+import io as _io_sic
+import zipfile as _zip_sic
+import hashlib as _hl_sic
+import tempfile as _tmp_sic
+import shutil as _sh_sic
+import time as _time_sic
+from sqlalchemy import event as _sa_event_sic, inspect as _sa_inspect_sic
+from sqlalchemy.orm import Session as _SaSessionSic
+
+_SIC_CLAVE = "sic_bloqueo"      # clave en SegConfig; vacío = sin bloqueo, JSON = bloqueo activo
+_SIC_CACHE = {"t": 0.0, "v": None}
+
+# Modelos que forman la "base de datos de configuración" (se bloquean mientras dura la inspección)
+_SIC_MODELOS_CONFIG = (
+    "Configuracion", "LoginBanner", "PlantillaContrato", "PlantillaConsentimiento", "ContratoPlantilla",
+    "PaginaLegal", "TextoLegal", "ConfigRetracto", "WatiConfig", "IngresoQRConfig", "NotifPlantilla",
+)
+# Registros de auditoría que se entregan en el reporte consolidado
+_SIC_MODELOS_LOGS = (
+    "Auditoria", "LogAuditoriaNota", "ReqAutoridadAudit", "DescargaReporteFinanciero",
+    "EventoSeg", "ChangelogVersion", "AuditoriaEduAura",
+)
+
+
+class SicBloqueoError(Exception):
+    """Se intentó modificar la configuración mientras está activo el bloqueo por inspección de la SIC."""
+
+
+def _sic_estado():
+    """Estado del bloqueo para mostrar en pantalla (dict) o None si no hay bloqueo."""
+    try:
+        _seg_ensure()
+        raw = (_seg_cfg(_SIC_CLAVE, "") or "").strip()
+        if not raw:
+            return None
+        d = _json_sic.loads(raw)
+        return d if isinstance(d, dict) and d.get("activo") else None
+    except Exception:
+        return None
+
+
+def _sic_bloqueado():
+    """True si hay bloqueo activo. Lee con una conexión aparte (no dispara autoflush) y cachea 3 s."""
+    t = _time_sic.time()
+    if _SIC_CACHE["v"] is not None and (t - _SIC_CACHE["t"]) < 3:
+        return _SIC_CACHE["v"]
+    v = False
+    try:
+        with db.engine.connect() as c:
+            r = c.execute(text("SELECT valor FROM seg_config WHERE clave = :k"), {"k": _SIC_CLAVE}).first()
+        v = bool(r and (r[0] or "").strip())
+    except Exception:
+        v = False
+    _SIC_CACHE["t"], _SIC_CACHE["v"] = t, v
+    return v
+
+
+def _sic_clases_config():
+    return tuple(c for c in (globals().get(n) for n in _SIC_MODELOS_CONFIG) if isinstance(c, type))
+
+
+@_sa_event_sic.listens_for(_SaSessionSic, "before_flush")
+def _sic_before_flush(session_, flush_context, instances):
+    """Respaldo a nivel de datos: mientras el bloqueo está activo, ninguna ruta puede guardar cambios
+    en los modelos de configuración, sin importar desde qué pantalla se intente."""
+    try:
+        clases = _sic_clases_config()
+        if not clases:
+            return
+        tocados = [o for o in session_.new if isinstance(o, clases)]
+        tocados += [o for o in session_.deleted if isinstance(o, clases)]
+        tocados += [o for o in session_.dirty if isinstance(o, clases) and session_.is_modified(o, include_collections=False)]
+        if not tocados:
+            return
+        if not _sic_bloqueado():
+            return
+    except Exception:
+        return
+    raise SicBloqueoError(", ".join(sorted({type(o).__name__ for o in tocados})))
+
+
+@app.errorhandler(SicBloqueoError)
+def _sic_bloqueo_handler(e):
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    try:
+        registrar_auditoria("SIC · Intento de modificación bloqueado", ("%s %s · %s" % (request.method, request.path, e))[:300])
+    except Exception:
+        pass
+    return page("Configuración bloqueada", shell(
+        "<div class='blocked-box'><h1>Configuración bloqueada</h1>"
+        "<p>La configuración del sistema está bloqueada temporalmente por una inspección de la SIC, "
+        "para garantizar la integridad de la información. El cambio no se guardó.</p>"
+        "<a class='btn' href='/dashboard'>Volver al panel</a></div>")), 423
+
+
+def _sic_guard(escribe=False):
+    if not requiere_login():
+        return redirect("/login")
+    r = rol_actual()
+    if escribe:
+        if r == "Superadmin":
+            return None
+        return acceso_denegado("Solo el rol Superadmin (Mesa de Control) puede activar el bloqueo o extraer los logs durante una inspección de la SIC.")
+    if r in ("Superadmin", "Gerente", "Administrador", "Juridica"):
+        return None
+    return acceso_denegado("Este módulo es del área de Jurídica y Cumplimiento. Gerencia lo consulta.")
+
+
+def _sic_valor(v):
+    if v is None:
+        return ""
+    if hasattr(v, "isoformat"):
+        try:
+            return v.isoformat()
+        except Exception:
+            pass
+    return str(v)
+
+
+def _sic_sha256_archivo(ruta):
+    h = _hl_sic.sha256()
+    with open(ruta, "rb") as fh:
+        for bloque in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(bloque)
+    return h.hexdigest()
+
+
+def _sic_exportar():
+    """Genera el ZIP con un CSV por tabla de auditoría, SHA256SUMS.txt y LEEME. Devuelve la respuesta de descarga."""
+    ahora_dt = ahora()
+    marca = ahora_dt.strftime("%Y%m%d_%H%M%S")
+    sello = ahora_dt.strftime("%Y-%m-%d %H:%M:%S") + " (America/Bogota)"
+    usuario = session.get("usuario") or "Superadmin"
+    tmpdir = _tmp_sic.mkdtemp(prefix="sic_")
+    try:
+        archivos, errores = [], []
+        for nombre in _SIC_MODELOS_LOGS:
+            M = globals().get(nombre)
+            if not (isinstance(M, type) and hasattr(M, "__table__")):
+                continue
+            tabla = M.__table__.name
+            ruta = os.path.join(tmpdir, tabla + ".csv")
+            try:
+                attrs = [a.key for a in _sa_inspect_sic(M).column_attrs]
+                q = db.session.query(M)
+                pk = list(M.__table__.primary_key.columns)
+                if pk:
+                    q = q.order_by(pk[0])
+                filas = 0
+                with open(ruta, "w", encoding="utf-8", newline="") as fh:
+                    w = _csv_sic.writer(fh)
+                    w.writerow(attrs)
+                    for fila in q.yield_per(2000):
+                        w.writerow([_sic_valor(getattr(fila, a, None)) for a in attrs])
+                        filas += 1
+                archivos.append((tabla + ".csv", ruta, _sic_sha256_archivo(ruta), filas))
+            except Exception as ex:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                errores.append("%s: %s" % (tabla, str(ex)[:160]))
+        if not archivos:
+            raise RuntimeError("No se pudo extraer ninguna tabla de auditoría. " + " | ".join(errores))
+
+        sumas = "".join("%s  %s\n" % (sha, nom) for nom, _r, sha, _n in archivos)
+        resumen = "".join("  - %s: %d registros\n" % (nom, n) for nom, _r, _s, n in archivos)
+        leeme = (
+            "PROCSIS HQ · REPORTE CONSOLIDADO DE LOGS (INSPECCIÓN SIC)\n"
+            "Extraído: %s\nExtraído por: %s (rol Superadmin)\n\n"
+            "Contenido (formato plano, CSV UTF-8, un archivo por tabla):\n%s\n"
+            "Verificación de integridad:\n"
+            "  - SHA256SUMS.txt trae el hash SHA-256 de cada archivo. En Linux/macOS: sha256sum -c SHA256SUMS.txt\n"
+            "    En Windows (PowerShell): Get-FileHash <archivo> -Algorithm SHA256\n"
+            "  - El hash SHA-256 del paquete ZIP completo queda registrado en la Auditoría general "
+            "(acción «SIC · Exportación de logs») y se muestra en el módulo Protocolo de inspecciones SIC.\n"
+            "  - Los hashes certifican que los archivos no han sido alterados desde su extracción en la fecha y hora indicadas.\n"
+        ) % (sello, usuario, resumen)
+        if errores:
+            leeme += "\nTablas que no se pudieron extraer:\n" + "".join("  - %s\n" % e for e in errores)
+
+        buf = _io_sic.BytesIO()
+        with _zip_sic.ZipFile(buf, "w", _zip_sic.ZIP_DEFLATED) as zf:
+            for nom, ruta, _s, _n in archivos:
+                zf.write(ruta, nom)
+            zf.writestr("SHA256SUMS.txt", sumas)
+            zf.writestr("LEEME_VERIFICACION.txt", leeme)
+        datos = buf.getvalue()
+        sha_paquete = _hl_sic.sha256(datos).hexdigest()
+        nombre_zip = "PROCSIS_logs_SIC_%s.zip" % marca
+        try:
+            registrar_auditoria(
+                "SIC · Exportación de logs",
+                "Paquete: %s | SHA-256: %s | %s%s" % (
+                    nombre_zip, sha_paquete,
+                    ", ".join("%s=%d" % (nom.replace(".csv", ""), n) for nom, _r, _s, n in archivos),
+                    (" | ERRORES: " + "; ".join(errores)) if errores else ""))
+        except Exception:
+            pass
+        return Response(datos, mimetype="application/zip", headers={
+            "Content-Disposition": 'attachment; filename="%s"' % nombre_zip,
+            "X-Paquete-SHA256": sha_paquete,
+            "Cache-Control": "no-store",
+        })
+    finally:
+        _sh_sic.rmtree(tmpdir, ignore_errors=True)
+
+
+@app.route("/gerencia/protocolo-sic", methods=["GET", "POST"])
+def gerencia_protocolo_sic():
+    """Protocolo de reacción ante inspecciones in situ de la SIC. Jurídica y Gerencia consultan;
+    solo Superadmin (Mesa de Control) activa el bloqueo y extrae los logs."""
+    g = _sic_guard(escribe=(request.method == "POST"))
+    if g:
+        return g
+    _seg_ensure()
+    es_super = rol_actual() == "Superadmin"
+    msg = err = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        try:
+            if accion == "activar":
+                funcionarios = (request.form.get("funcionarios") or "").strip()[:400]
+                orden = (request.form.get("orden") or "").strip()[:120]
+                rep = (request.form.get("rep_legal") or "").strip()[:160]
+                if not (funcionarios and orden and rep) or request.form.get("confirma") != "on":
+                    err = "Para activar el bloqueo completa los funcionarios, la orden administrativa, quién de Representación Legal la validó y marca la confirmación."
+                elif _sic_estado():
+                    err = "El bloqueo ya está activo."
+                else:
+                    datos = {"activo": True, "desde": "%s %s" % (fecha_hoy(), hora_actual()),
+                             "por": session.get("usuario") or "", "funcionarios": funcionarios,
+                             "orden": orden, "rep_legal": rep}
+                    _seg_cfg_set(_SIC_CLAVE, _json_sic.dumps(datos, ensure_ascii=False))
+                    _SIC_CACHE["v"] = None
+                    registrar_auditoria("SIC · Bloqueo de configuración ACTIVADO",
+                                        "Orden: %s | Funcionarios: %s | Validó Rep. Legal: %s" % (orden, funcionarios, rep))
+                    msg = "Bloqueo de configuración ACTIVADO. Nadie puede modificar la configuración hasta que se desactive."
+            elif accion == "desactivar":
+                motivo = (request.form.get("motivo") or "").strip()[:300]
+                if not motivo:
+                    err = "Indica el motivo para levantar el bloqueo (por ejemplo, fin de la inspección)."
+                elif not _sic_estado():
+                    err = "El bloqueo no está activo."
+                else:
+                    _seg_cfg_set(_SIC_CLAVE, "")
+                    _SIC_CACHE["v"] = None
+                    registrar_auditoria("SIC · Bloqueo de configuración DESACTIVADO", "Motivo: %s" % motivo)
+                    msg = "Bloqueo de configuración desactivado."
+            elif accion == "exportar":
+                return _sic_exportar()
+            else:
+                err = "Acción no reconocida."
+        except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = "No se pudo completar la acción: %s" % str(ex)[:160]
+
+    est = _sic_estado()
+    try:
+        eventos = Auditoria.query.filter(Auditoria.accion.like("SIC · %")).order_by(Auditoria.id.desc()).limit(25).all()
+    except Exception:
+        db.session.rollback()
+        eventos = []
+    filas = "".join(
+        "<tr><td style='padding:8px;white-space:nowrap'>%s %s</td><td style='padding:8px'>%s</td>"
+        "<td style='padding:8px'><b>%s</b></td><td style='padding:8px;word-break:break-all;font-size:12px'>%s</td></tr>" % (
+            _esc(e.fecha), _esc(e.hora), _esc(e.usuario), _esc(e.accion), _esc((e.detalle or "")[:600]))
+        for e in eventos
+    ) or "<tr><td colspan='4' style='padding:12px;color:#64748b;text-align:center'>Sin eventos del protocolo</td></tr>"
+
+    if est:
+        banner = (
+            "<div class='role-panel' style='background:#fef2f2;border:1px solid #fecaca;margin-bottom:12px'>"
+            "<b style='color:#b91c1c'>🔒 BLOQUEO DE CONFIGURACIÓN ACTIVO</b><br>"
+            "<span style='font-size:13px'>Desde %s · activado por %s<br>Orden: %s · Funcionarios: %s · Validó Rep. Legal: %s</span></div>" % (
+                _esc(est.get("desde", "")), _esc(est.get("por", "")), _esc(est.get("orden", "")),
+                _esc(est.get("funcionarios", "")), _esc(est.get("rep_legal", ""))))
+    else:
+        banner = ("<div class='role-panel' style='background:#f0fdf4;border:1px solid #bbf7d0;margin-bottom:12px'>"
+                  "<b style='color:#15803d'>🔓 Sin bloqueo activo</b> · la configuración opera con normalidad.</div>")
+
+    inp = "width:100%;padding:8px;border-radius:4px;border:1px solid #cbd5e1"
+    if es_super and not est:
+        form_bloqueo = f"""
+<form method="POST" onsubmit="return confirm('¿Activar el bloqueo de configuración? Nadie podrá modificar la configuración hasta que se desactive.')" style="display:grid;gap:10px;max-width:720px;margin-top:10px">
+  <input type="hidden" name="accion" value="activar">
+  <div><label style="font-size:12px;font-weight:700">Funcionarios de la SIC (nombre y cargo)</label><input name="funcionarios" required style="{inp}"></div>
+  <div><label style="font-size:12px;font-weight:700">Orden administrativa de inspección (número / radicado)</label><input name="orden" required style="{inp}"></div>
+  <div><label style="font-size:12px;font-weight:700">Representación Legal: quién validó la orden</label><input name="rep_legal" required style="{inp}"></div>
+  <label style="font-size:13px"><input type="checkbox" name="confirma" style="width:auto"> Confirmo que identifiqué a los funcionarios y que Representación Legal validó la orden.</label>
+  <div><button class="btn" type="submit">Activar bloqueo de configuración</button></div>
+</form>"""
+    elif es_super and est:
+        form_bloqueo = f"""
+<form method="POST" onsubmit="return confirm('¿Levantar el bloqueo de configuración?')" style="display:grid;gap:10px;max-width:720px;margin-top:10px">
+  <input type="hidden" name="accion" value="desactivar">
+  <div><label style="font-size:12px;font-weight:700">Motivo para levantar el bloqueo</label><input name="motivo" required style="{inp}"></div>
+  <div><button class="btn" type="submit">Desactivar bloqueo</button></div>
+</form>"""
+    else:
+        form_bloqueo = "<p style='font-size:13px;color:#64748b'>Solo el rol Superadmin (Mesa de Control) puede activar o desactivar el bloqueo.</p>"
+
+    if es_super:
+        form_export = """
+<form method="POST" onsubmit="return confirm('Se generará y descargará el paquete con los logs. Queda registrado en la auditoría. ¿Continuar?')" style="margin-top:10px">
+  <input type="hidden" name="accion" value="exportar">
+  <button class="btn" type="submit">Extraer reporte consolidado (ZIP con CSV + SHA-256)</button>
+</form>"""
+    else:
+        form_export = "<p style='font-size:13px;color:#64748b'>Solo el rol Superadmin (Mesa de Control) puede extraer el reporte.</p>"
+
+    body = f"""
+<header class="role-hero"><div>
+  <h1>Protocolo de inspecciones in situ de la SIC</h1>
+  <p>Reacción ante visitas de auditoría preventiva o por investigación en PROCSIS HQ o sus entornos virtuales.</p>
+</div>
+<a class="btn" href="/gerencia/hq">← HQ</a></header>
+{"<div class='msg ok'>" + _esc(msg) + "</div>" if msg else ""}
+{"<div class='msg danger'>" + _esc(err) + "</div>" if err else ""}
+{banner}
+<section class="role-panel">
+  <h3 style="margin-top:0">Primero · Identificación y validación de la orden</h3>
+  <p style="font-size:14px">Identificar a los funcionarios de la SIC y validar la orden administrativa de inspección en coordinación con la Representación Legal. Estos datos se registran al activar el bloqueo (Segundo).</p>
+</section>
+<section class="role-panel" style="margin-top:12px">
+  <h3 style="margin-top:0">Segundo · Bloqueo temporal de modificaciones en la base de datos de configuración</h3>
+  <p style="font-size:14px">Mientras está activo, el sistema rechaza cualquier cambio en la configuración institucional, páginas, textos y plantillas legales, banners y parámetros de integración, sin importar desde qué pantalla se intente. Los intentos quedan en la auditoría. No cubre cambios hechos directamente sobre el servidor de base de datos.</p>
+  {form_bloqueo}
+</section>
+<section class="role-panel" style="margin-top:12px">
+  <h3 style="margin-top:0">Tercero · Extracción del reporte consolidado de logs</h3>
+  <p style="font-size:14px">Con el rol Superadmin de la Mesa de Control se extrae el reporte consolidado de registros de auditoría: auditoría general, notas, requerimientos de autoridades, descargas financieras, eventos de seguridad e historial de cambios.</p>
+  {form_export}
+</section>
+<section class="role-panel" style="margin-top:12px">
+  <h3 style="margin-top:0">Cuarto · Entrega en formato plano con hash criptográfico</h3>
+  <p style="font-size:14px">El paquete trae un CSV por tabla y el archivo SHA256SUMS.txt con el hash SHA-256 de cada uno. El hash del paquete completo queda registrado abajo. Certifica que los archivos no han sido alterados desde su extracción.</p>
+</section>
+<section class="role-panel" style="margin-top:12px">
+  <h3 style="margin-top:0">Registro de eventos del protocolo</h3>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+    <tr><th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Usuario</th><th style="padding:8px;text-align:left">Acción</th><th style="padding:8px;text-align:left">Detalle (incluye SHA-256)</th></tr>
+    {filas}
+  </table></div>
+</section>
+"""
+    return page("Protocolo SIC", shell(body))
 
 
 @app.route("/gerencia/libro-actas", methods=["GET", "POST"])
