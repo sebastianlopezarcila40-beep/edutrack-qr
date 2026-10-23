@@ -595,14 +595,14 @@ def _security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    resp.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
+    resp.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(self)"
     resp.headers["X-XSS-Protection"] = "1; mode=block"
     resp.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     # No filtrar CSP agresivo en planilla (inline JS); baseline:
     if not request.path.startswith("/static"):
         resp.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
             "font-src 'self' data: https://fonts.gstatic.com; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; "
             "worker-src 'self' blob:; media-src 'self' blob: data:; "
@@ -2114,6 +2114,25 @@ class WebMenuItem(db.Model):
     url = db.Column(db.String(255), default="#")
     orden = db.Column(db.Integer, default=0)
     activo = db.Column(db.Boolean, default=True)
+
+
+class PuntoAtencion(db.Model):
+    """Sedes y puntos de atencion publicos de EduTrack/Procsis (editable desde Gerencia)."""
+    __tablename__ = "puntos_atencion"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(160), default="")
+    categoria = db.Column(db.String(20), default="sedes")  # sedes | soporte | administrativa | seguridad
+    direccion = db.Column(db.String(220), default="")
+    ciudad = db.Column(db.String(100), default="")
+    codigo_postal = db.Column(db.String(12), default="")
+    telefono = db.Column(db.String(40), default="")
+    lat = db.Column(db.Float, default=None)
+    lng = db.Column(db.Float, default=None)
+    dias = db.Column(db.String(20), default="1,2,3,4,5")  # 1=lunes ... 7=domingo
+    abre = db.Column(db.String(5), default="08:00")
+    cierra = db.Column(db.String(5), default="17:00")
+    activo = db.Column(db.Boolean, default=True)
+    orden = db.Column(db.Integer, default=0)
 
 
 class CasoExito(db.Model):
@@ -3962,6 +3981,20 @@ class PreMatricula(db.Model):
 
 
 
+def _aviso_id_seguro(valor):
+    """ID de aviso apto para HTML/JS/localStorage: letras, numeros, _ . - (max 40)."""
+    v = re.sub(r"[^A-Za-z0-9_.-]", "", str(valor or "").strip())[:40]
+    return v or "1"
+
+
+def _nuevo_id_aviso():
+    """ID unico automatico, ej. aviso_20261025_083000."""
+    try:
+        return "aviso_" + ahora().strftime("%Y%m%d_%H%M%S")
+    except Exception:
+        return "aviso_" + str(int(__import__("time").time()))
+
+
 def html_anuncio_global():
     """Aviso institucional + anuncio técnico de desarrolladores."""
     try:
@@ -3988,24 +4021,18 @@ def html_anuncio_global():
         pass
     if not getattr(p, "anuncio_activo", False):
         return ""
-    ver = str(getattr(p, "anuncio_version", None) or "1").replace('"', "").replace("'", "")[:40]
-    # En las pantallas de login el anuncio sale SIEMPRE, en cada carga y antes de ingresar
-    # (antes se ocultaba para siempre si alguien lo cerraba una vez: sesión + localStorage).
-    try:
-        _p_login = (request.path or "").rstrip("/")
-        es_login = _p_login in ("/login", "/gerencia-login", "/soporte-login", "/ventas-login",
-                                "/cobranza-login", "/dev-login", "/desarrollo-login")
-    except Exception:
-        es_login = False
-    # No mostrar en la web pública PROCSIS (solo login / sistema)
+    ver = _aviso_id_seguro(getattr(p, "anuncio_version", None))
+    # No mostrar en la web publica PROCSIS (solo login / sistema)
     try:
         path_pub = (request.path or "").rstrip("/") or "/"
         if path_pub in ("/procsis", "/empresa", "/portafolio", "/tecnologia", "/soluciones", "/quienes-somos", "/contacto", "/"):
             return ""
     except Exception:
         pass
+    # Si el usuario ya cerro este aviso (ID) en esta sesion, no se vuelve a mostrar.
+    # La fuente principal es localStorage del navegador (ver script).
     try:
-        if (not es_login) and str(session.get("anuncio_dismissed_ver") or "") == ver:
+        if str(session.get("anuncio_dismissed_ver") or "") == ver:
             return ""
     except Exception:
         pass
@@ -4030,9 +4057,9 @@ def html_anuncio_global():
         cards = []
         for src in imgs[:2]:
             cards.append(
-                '<div style="border-radius:14px;overflow:hidden;background:#0f172a;'
-                'aspect-ratio:4/3;max-height:280px;box-shadow:0 8px 24px rgba(15,23,42,.12)">'
-                '<img src="' + src + '" alt="Anuncio PROCSIS" '
+                '<div style="border-radius:16px;overflow:hidden;background:#0f172a;'
+                'aspect-ratio:4/3;max-height:170px;box-shadow:0 6px 18px rgba(15,23,42,.14)">'
+                '<img src="' + src + '" alt="Imagen del aviso PROCSIS" '
                 'style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block">'
                 "</div>"
             )
@@ -4040,7 +4067,7 @@ def html_anuncio_global():
             visual = '<div style="margin-top:12px">' + cards[0] + "</div>"
         else:
             visual = (
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">'
                 + "".join(cards)
                 + "</div>"
             )
@@ -4053,65 +4080,99 @@ def html_anuncio_global():
             + "</p>"
         )
 
-    # LS key por versión: al publicar anuncio nuevo (versión +1) vuelve a salir una vez
-    ls_key = "procsis_anuncio_visto_v" + ver
-
+    html = """
+<style>
+#aviso-glass{position:fixed;top:max(12px,env(safe-area-inset-top,0px));left:0;right:0;z-index:100000;
+  display:flex;justify-content:center;padding:0 12px;box-sizing:border-box;pointer-events:none;
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+#aviso-glass .ag-card{pointer-events:auto;position:relative;width:100%;max-width:560px;
+  max-height:min(74vh,600px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;
+  border-radius:28px;background:rgba(255,255,255,.68);
+  -webkit-backdrop-filter:blur(28px) saturate(180%);backdrop-filter:blur(28px) saturate(180%);
+  border:1px solid rgba(255,255,255,.9);
+  box-shadow:0 20px 50px rgba(11,45,87,.22),0 2px 8px rgba(11,45,87,.08),inset 0 1px 0 rgba(255,255,255,.95);
+  color:#0f172a;transform:translateY(-135%) scale(.96);opacity:0;
+  transition:transform .75s cubic-bezier(.34,1.56,.64,1),opacity .35s ease}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  #aviso-glass .ag-card{background:rgba(255,255,255,.95)}}
+#aviso-glass.in .ag-card{transform:none;opacity:1}
+#aviso-glass.out .ag-card{transform:translateY(-135%) scale(.98);opacity:0;
+  transition:transform .42s cubic-bezier(.4,0,1,1),opacity .36s ease}
+#aviso-glass .ag-head{padding:18px 60px 10px 22px;flex:0 0 auto}
+#aviso-glass .ag-kicker{font-size:11px;letter-spacing:.14em;font-weight:700;color:#2563eb;text-transform:uppercase}
+#aviso-glass .ag-title{margin:6px 0 0;font-size:clamp(17px,4.6vw,21px);line-height:1.25;font-weight:800;
+  color:#0B2D57;letter-spacing:-.01em}
+#aviso-glass .ag-x{-webkit-user-select:none;user-select:none;position:absolute;top:12px;right:12px;width:40px;height:40px;border:1px solid rgba(255,255,255,.9);
+  border-radius:50%;background:rgba(255,255,255,.7);color:#0B2D57;font-size:22px;line-height:1;font-weight:600;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
+  box-shadow:0 2px 8px rgba(11,45,87,.12);transition:transform .2s ease,background .2s ease}
+#aviso-glass .ag-x:hover{background:#fff;transform:scale(1.06)}
+#aviso-glass .ag-x:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+#aviso-glass .ag-body{padding:4px 22px 10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  font-size:14px;line-height:1.6;color:#1e293b}
+#aviso-glass .ag-foot{padding:6px 22px 16px;font-size:12px;color:#64748b;flex:0 0 auto}
+@media(max-width:640px){#aviso-glass .ag-body div[style*=grid-template-columns]{grid-template-columns:1fr!important}}
+@media(prefers-reduced-motion:reduce){
+  #aviso-glass .ag-card,#aviso-glass.out .ag-card{transition:opacity .2s ease;transform:none}}
+</style>
+<div id="aviso-glass" data-aviso-id="__ID__" role="dialog" aria-modal="false" aria-label="Aviso institucional">
+  <div class="ag-card">
+    <div class="ag-head">
+      <div class="ag-kicker">PROCSIS · Aviso institucional</div>
+      <h2 class="ag-title">__TITULO__</h2>
+      <span role="button" tabindex="0" class="ag-x" id="aviso-cerrar" aria-label="Cerrar aviso">&times;</span>
+    </div>
+    <div class="ag-body"><div style="margin-bottom:8px">__CUERPO__</div>__CUENTA____VISUAL__</div>
+    <div class="ag-foot">Al cerrar con la X no volverá a mostrarse. Solo verás un aviso si publicamos uno nuevo.</div>
+  </div>
+</div>
+<script>(function(){
+var id="__ID__";
+var k="procsis_aviso_"+id, kShown=k+"_mostrado", kOld="procsis_anuncio_visto_v"+id, DAY=86400000;
+var el=document.getElementById("aviso-glass"); if(!el)return;
+var prev=/[?&]aviso=ver(&|$)/.test(location.search); // ?aviso=ver -> vista previa: ignora el historial del navegador
+try{
+  var ls=window.localStorage;
+  if(ls&&!prev){
+    // Regla de oro: si ya lo cerro (X), jamas se vuelve a mostrar este ID.
+    if(ls.getItem(k)==="visto"||ls.getItem(kOld)==="1"){el.remove();return;}
+    // Si lo ignoro (no toco la X), no se repite hasta pasadas 24 horas.
+    var t=parseInt(ls.getItem(kShown)||"0",10);
+    if(t&&(Date.now()-t)<DAY){el.remove();return;}
+    ls.setItem(kShown,String(Date.now()));
+  }
+}catch(e){}
+var cerrado=false;
+function cerrar(){
+  if(cerrado)return; cerrado=true;
+  el.classList.remove("in"); el.classList.add("out");
+  if(!prev){try{localStorage.setItem(k,"visto");}catch(e){}}
+  try{fetch("/anuncio/cerrar",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:"ver="+encodeURIComponent(id),credentials:"same-origin"}).catch(function(){});}catch(e){}
+  setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},480);
+}
+var btn=document.getElementById("aviso-cerrar");
+if(btn){btn.onclick=cerrar;btn.onkeydown=function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();cerrar();}};}
+document.addEventListener("keydown",function(ev){if(ev.key==="Escape")cerrar();});
+requestAnimationFrame(function(){requestAnimationFrame(function(){el.classList.add("in");});});
+})();</script>
+"""
     return (
-        '<div id="anuncio-global" style="display:none;position:fixed;inset:0;z-index:100000;'
-        "background:rgba(15,23,42,.55);backdrop-filter:blur(6px);align-items:center;justify-content:center;"
-        'padding:16px;font-family:Segoe UI,Arial,sans-serif">'
-        '<div style="position:relative;max-width:680px;width:100%;background:#fff;border-radius:20px;'
-        'box-shadow:0 28px 70px rgba(0,0,0,.28);overflow:hidden;max-height:92vh;overflow-y:auto">'
-        '<div style="background:linear-gradient(90deg,#0B2D57 0%,#1e40af 55%,#2563eb 100%);'
-        'color:#fff;padding:18px 56px 16px 22px;position:relative">'
-        '<div style="font-size:11px;letter-spacing:.14em;opacity:.88;font-weight:600">PROCSIS · AVISO INSTITUCIONAL</div>'
-        '<h2 style="margin:6px 0 0;font-size:22px;line-height:1.25;font-weight:800">' + titulo + "</h2>"
-        '<button type="button" id="anuncio-cerrar" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;'
-        "width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;"
-        'font-size:20px;font-weight:700;cursor:pointer;line-height:34px">×</button>'
-        "</div>"
-        '<div style="padding:18px 22px 14px;color:#1e293b;font-size:14.5px;line-height:1.6">'
-        + '<div style="margin-bottom:8px">' + cuerpo + "</div>"
-        + cuenta_html
-        + visual
-        + '<p style="margin:14px 0 6px;font-size:12px;color:#94a3b8">'
-        + ("Cierra con la X para continuar al ingreso." if es_login else "Al cerrar con la X no volverá a mostrarse al navegar. Solo si se publica un aviso nuevo.")
-        + "</p>"
-        "</div></div></div>"
-        "<script>(function(){"
-        'var ver="' + ver + '";'
-        'var lsKey="' + ls_key + '";'
-        'var enLogin=' + ("true" if es_login else "false") + ';'
-        'var el=document.getElementById("anuncio-global");'
-        "if(!el)return;"
-        "try{"
-        "if(!enLogin&&window.localStorage&&localStorage.getItem(lsKey)==='1'){el.remove();return;}"
-        "}catch(e){}"
-        'el.style.display="flex";'
-        'function cerrarAnuncio(){'
-        'el.style.display="none";'
-        # En login solo se oculta esta vista: al recargar o volver al login vuelve a salir.
-        "if(enLogin)return;"
-        "try{if(window.localStorage)localStorage.setItem(lsKey,'1');}catch(e){}"
-        'try{fetch("/anuncio/cerrar",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},'
-        'body:"ver="+encodeURIComponent(ver),credentials:"same-origin"});}catch(e){}'
-        "}"
-        'var btn=document.getElementById("anuncio-cerrar");'
-        "if(btn)btn.onclick=cerrarAnuncio;"
-        "el.addEventListener('click',function(ev){if(ev.target===el)cerrarAnuncio();});"
-        "})();</script>"
-        "<style>@media(max-width:640px){#anuncio-global div[style*=grid-template-columns]{"
-        "grid-template-columns:1fr!important}}</style>"
+        html.replace("__ID__", ver)
+        .replace("__TITULO__", titulo)
+        .replace("__CUERPO__", cuerpo)
+        .replace("__CUENTA__", cuenta_html)
+        .replace("__VISUAL__", visual)
     )
 
 
 @app.route("/anuncio/cerrar", methods=["POST", "GET"])
 def anuncio_cerrar():
     """Marca el anuncio como visto en esta sesión de login (no vuelve a salir al navegar)."""
-    ver = (request.values.get("ver") or "").strip()[:40]
-    if not ver:
+    ver = _aviso_id_seguro(request.values.get("ver") or "")
+    if ver == "1" and not (request.values.get("ver") or "").strip():
         try:
-            ver = str(getattr(plataforma(), "anuncio_version", None) or "1")
+            ver = _aviso_id_seguro(getattr(plataforma(), "anuncio_version", None))
         except Exception:
             ver = "1"
     session["anuncio_dismissed_ver"] = ver
@@ -4842,9 +4903,10 @@ def page(title, body):
     body = (_APPLE_SHELL_CSS or "") + (_STAFF_TAB_JS or "") + body
 
     cookie_banner = """
-<div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);background:rgba(11,45,87,.28)">
+<style>#cookie-banner #cookie-accept-all,#cookie-banner #cookie-save-cfg{background:#0071e3!important;border:0!important;box-shadow:0 4px 14px rgba(0,113,227,.32)!important;color:#fff!important}#cookie-banner #cookie-accept-all:hover,#cookie-banner #cookie-save-cfg:hover{background:#0077ed!important}#cookie-banner #cookie-reject{background:#fff!important;color:#0071e3!important;border:1.5px solid #0071e3!important;box-shadow:none!important}#cookie-banner #cookie-config{background:transparent!important;color:#0071e3!important;border:0!important;box-shadow:none!important}</style>
+<div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);background:rgba(245,245,247,.42)">
   <div style="max-width:560px;margin:0 auto;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border-radius:20px;box-shadow:0 8px 32px rgba(11,45,87,.22);padding:18px 16px 16px;border:1px solid rgba(255,255,255,.65);box-sizing:border-box">
-    <h2 style="margin:0 0 8px;font-size:clamp(16px,4.2vw,19px);color:#0B2D57;font-weight:800;letter-spacing:-.02em;line-height:1.25">Usamos cookies para mejorar tu experiencia</h2>
+    <h2 style="margin:0 0 8px;font-size:clamp(16px,4.2vw,19px);color:#1d1d1f;font-weight:800;letter-spacing:-.02em;line-height:1.25">Usamos cookies para mejorar tu experiencia</h2>
     <p style="margin:0 0 14px;font-size:13px;line-height:1.5;color:#334155;word-wrap:break-word;overflow-wrap:anywhere">
       Usamos cookies propias y técnicas para acceso seguro, sesión, estadísticas básicas y el funcionamiento del sitio.
       <b>No usamos cookies de publicidad de terceros.</b>
@@ -6590,7 +6652,7 @@ def ruta_publica():
         or p.startswith("/qr/")
         or p.startswith("/matricula")
         or p.startswith("/colegio")
-        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/validar-dispositivo", "/legal", "/cookies", "/reembolsos", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva", "/acudiente/autorizar-salida", "/acudiente/ficha-medica"]
+        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/validar-dispositivo", "/legal", "/cookies", "/reembolsos", "/puntos-atencion", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva", "/acudiente/autorizar-salida", "/acudiente/ficha-medica"]
         or p.startswith("/verificar-certificado")
         or p.startswith("/demo/invitar")
         or p.startswith("/pqr/")
@@ -11244,11 +11306,13 @@ _EAP_CSS = """
 background:linear-gradient(135deg,rgba(11,45,87,.74),rgba(0,91,234,.62));backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
 box-shadow:0 10px 30px rgba(0,40,120,.35),inset 0 1px 0 rgba(255,255,255,.5);font-family:inherit}
 .eap-btn:hover{filter:brightness(1.08)}
+.eap-root .eap-btn{background:#0071e3!important;border:1px solid rgba(255,255,255,.4)!important;box-shadow:0 10px 28px rgba(0,113,227,.38),inset 0 1px 0 rgba(255,255,255,.35)!important}
+.eap-root .eap-btn:hover{background:#0077ed!important;filter:none}
 .eap-box{display:none;flex-direction:column;width:372px;max-width:calc(100vw - 28px);height:540px;max-height:calc(100vh - 36px);border-radius:26px;overflow:hidden;
 background:rgba(255,255,255,.56);backdrop-filter:blur(32px) saturate(190%);-webkit-backdrop-filter:blur(32px) saturate(190%);
 border:1px solid rgba(255,255,255,.75);box-shadow:0 28px 70px rgba(7,28,56,.38),inset 0 1px 0 rgba(255,255,255,.85)}
 .eap-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;color:#fff;
-background:linear-gradient(135deg,rgba(11,45,87,.84),rgba(0,91,234,.72));border-bottom:1px solid rgba(255,255,255,.35)}
+background:linear-gradient(135deg,rgba(0,113,227,.95),rgba(52,152,255,.88));border-bottom:1px solid rgba(255,255,255,.35)}
 .eap-ttl{display:flex;align-items:center;gap:10px}
 .eap-ttl .eap-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.45);font-size:16px}
 .eap-ttl b{display:block;font-size:15px;line-height:1.1}.eap-ttl small{display:block;font-size:11px;opacity:.82;font-weight:500;margin-top:2px}
@@ -11258,7 +11322,7 @@ background:linear-gradient(135deg,rgba(11,45,87,.84),rgba(0,91,234,.72));border-
 .eap-m{margin:0 0 10px;max-width:88%;border-radius:18px;word-wrap:break-word;overflow:hidden}
 .eap-m .eap-c{padding:9px 13px 2px}
 .eap-a{background:rgba(255,255,255,.86);border:1px solid rgba(255,255,255,.9);color:#0f172a;border-bottom-left-radius:6px;box-shadow:0 2px 10px rgba(15,23,42,.08)}
-.eap-u{background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;margin-left:auto;border-bottom-right-radius:6px}
+.eap-u{background:#0071e3;color:#fff;margin-left:auto;border-bottom-right-radius:6px}
 .eap-time{display:block;text-align:right;font-size:10px;opacity:.55;padding:0 12px 6px}
 .eap-consent{background:#fff;min-width:230px}
 .eap-act{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;border:0;border-top:1px solid #f0f0f0;background:#fff;padding:12px 10px;font-size:14px;font-weight:600;color:#0a6b3d;cursor:pointer;font-family:inherit}
@@ -11270,7 +11334,7 @@ background:linear-gradient(135deg,rgba(11,45,87,.84),rgba(0,91,234,.72));border-
 .eap-form{display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.35)}
 .eap-in{flex:1;padding:10px 14px;border:1px solid rgba(148,163,184,.45);border-radius:999px;font-size:14px;background:rgba(255,255,255,.8);outline:none;font-family:inherit}
 .eap-in:focus{border-color:#005BEA;box-shadow:0 0 0 3px rgba(0,91,234,.15)}.eap-in:disabled{background:rgba(226,232,240,.7)}
-.eap-send{background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;border:0;border-radius:999px;padding:0 18px;font-weight:700;cursor:pointer;font-family:inherit}
+.eap-root .eap-send{background:#0071e3!important;box-shadow:none!important;color:#fff;border:0!important;border-radius:999px;padding:0 18px;font-weight:700;cursor:pointer;font-family:inherit}
 .eap-send:disabled{opacity:.5;cursor:default}
 @media print{.eap-root{display:none}}
 """
@@ -11640,7 +11704,7 @@ def security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(self)"
+    resp.headers["Permissions-Policy"] = "geolocation=(self), microphone=(), camera=(self)"
     if request.is_secure:
         resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return resp
@@ -11715,7 +11779,7 @@ def session_idle_timeout():
     if path in (
         "/login", "/soporte-login", "/cobranza-login", "/ventas-login", "/gerencia-login",
         "/docente-login", "/familia-login", "/logout", "/pqr", "/ayuda", "/centro-ayuda",
-        "/cookies", "/reembolsos", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales",
+        "/cookies", "/reembolsos", "/puntos-atencion", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales",
         "/procsis", "/empresa", "/portafolio", "/tecnologia",
     ):
         return
@@ -11756,7 +11820,7 @@ def seguridad_empleados_gate():
     path = request.path or ""
     if path.startswith("/static") or path in (
         "/login", "/soporte-login", "/docente-login", "/logout",
-        "/recuperar", "/cookies", "/reembolsos", "/legal", "/ayuda", "/centro-ayuda", "/dev-console-login", "/dev-console", "/ventas-login", "/gerencia-login",
+        "/recuperar", "/cookies", "/reembolsos", "/puntos-atencion", "/legal", "/ayuda", "/centro-ayuda", "/dev-console-login", "/dev-console", "/ventas-login", "/gerencia-login",
         "/cobranza-login", "/cobranza", "/cobranza/panel",
         "/ventas", "/ventas-login", "/ventas/panel", "/gerencia-login", "/gerencia/planes", "/whatsapp", "/whatsapp-soporte", "/contacto", "/pqr",
         "/familia-login", "/familia", "/familia/boletin", "/familia/certificado",
@@ -11927,6 +11991,19 @@ def _seed_web_menu_defaults():
                 pass
         n = db.session.execute(text("SELECT COUNT(*) FROM web_menu_items")).scalar() or 0
         if int(n) > 0:
+            try:
+                ya = db.session.execute(text("SELECT COUNT(*) FROM web_menu_items WHERE url='/puntos-atencion'")).scalar() or 0
+                if int(ya) == 0:
+                    db.session.execute(text(
+                        "INSERT INTO web_menu_items (seccion, etiqueta, url, orden, activo) "
+                        "VALUES ('ayuda','Sedes y Puntos de Atención','/puntos-atencion',5,TRUE)"
+                    ))
+                    db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
             return
         defaults = [
             ("procsis", "¿Qué es Procsis?", "/procsis", 1),
@@ -11949,6 +12026,7 @@ def _seed_web_menu_defaults():
             ("ayuda", "Portal de Consulta para Padres", "/login", 2),
             ("ayuda", "Radicar PQR", "/pqr", 3),
             ("ayuda", "Soporte por WhatsApp", "/whatsapp", 4),
+            ("ayuda", "Sedes y Puntos de Atención", "/puntos-atencion", 5),
         ]
         for sec, et, url, ord_ in defaults:
             db.session.execute(text(
@@ -12010,6 +12088,7 @@ def _nav_public_html(active=""):
         '<a class="dropdown-link" href="/ayuda">Tutoriales para Profesores</a>'
         '<a class="dropdown-link" href="/pqr">Radicar PQR</a>'
         '<a class="dropdown-link" href="/whatsapp">Soporte por WhatsApp</a>'
+        '<a class="dropdown-link" href="/puntos-atencion">Sedes y Puntos de Atención</a>'
     )
     html = """
 <style>
@@ -13351,6 +13430,429 @@ def pol_aviso():
 
 
 
+_PA_CATEGORIAS = [
+    ("sedes", "Sedes y Campus"),
+    ("soporte", "Soporte Técnico"),
+    ("administrativa", "Atención Administrativa"),
+    ("seguridad", "Puntos de Seguridad"),
+]
+
+_PA_PAGE = r"""
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+.sa{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1d1d1f;background:#fff}
+.sa *{box-sizing:border-box}
+.sa-sec{padding:0 20px}
+.sa-hero{min-height:72vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:72px 20px;background:#fff}
+.sa-hero h1{margin:0 0 16px;font-size:clamp(34px,6.4vw,66px);line-height:1.05;font-weight:700;letter-spacing:-.03em;color:#000;max-width:860px}
+.sa-hero p{margin:0 0 30px;font-size:clamp(17px,2.4vw,24px);line-height:1.35;color:#6e6e73;max-width:640px;font-weight:400}
+.sa-cta,.sa-go{display:inline-flex;align-items:center;justify-content:center;border-radius:980px;background:#0071e3;color:#fff;font-weight:500;font-size:17px;
+  padding:13px 28px;text-decoration:none;cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .2s ease,transform .12s ease,opacity .2s ease}
+.sa-cta:hover,.sa-go:hover{background:#0077ed}
+.sa-cta:active,.sa-go:active{transform:scale(.97)}
+.sa-cta:focus-visible,.sa-go:focus-visible,.sa-cat:focus-visible,.sa-item:focus-visible,.sa-gps:focus-visible{outline:3px solid rgba(0,113,227,.45);outline-offset:3px}
+.sa-find{background:#f5f5f7;padding:72px 20px 64px}
+.sa-wrap{max-width:900px;margin:0 auto}
+.sa-find h2{margin:0 0 8px;text-align:center;font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-.025em;color:#000}
+.sa-find .sa-lead{margin:0 0 28px;text-align:center;color:#6e6e73;font-size:17px}
+.sa-search{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #d2d2d7;border-radius:980px;padding:6px 8px 6px 20px;max-width:640px;margin:0 auto 26px;transition:border-color .2s,box-shadow .2s}
+.sa-search:focus-within{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.15)}
+.sa-search svg{flex:0 0 auto;width:20px;height:20px;stroke:#86868b;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sa .sa-search input.sa-in{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:#1d1d1f;padding:10px 0;box-shadow:none;margin:0;width:auto;border-radius:0}
+.sa-gps{flex:0 0 auto;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#1d1d1f;transition:background .2s}
+.sa-gps svg{stroke:currentColor}
+.sa-gps:hover{background:#f0f0f3}
+.sa-gps.on{color:#0071e3;background:rgba(0,113,227,.1)}
+.sa-cats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.sa-cat{background:#fff;border:1px solid #e0e0e5;border-radius:24px;aspect-ratio:1/1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:14px;
+  text-align:center;cursor:pointer;user-select:none;-webkit-user-select:none;transition:border-color .2s,background .2s,transform .15s,box-shadow .2s}
+.sa-cat svg{width:44px;height:44px;stroke:#1d1d1f;fill:none;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.sa-cat span{font-size:15px;font-weight:500;line-height:1.25;color:#1d1d1f}
+.sa-cat:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.07)}
+.sa-cat.on{border:1.5px solid #0071e3;background:#f5faff;box-shadow:0 0 0 3px rgba(0,113,227,.12)}
+.sa-cat.on svg{stroke:#0071e3}
+.sa-actions{display:flex;flex-direction:column;align-items:center;gap:12px}
+.sa-go{min-width:120px}
+.sa-go.is-off{background:#a9d1f7;pointer-events:none;cursor:default}
+.sa-msg{min-height:20px;text-align:center;font-size:14px;color:#6e6e73}
+.sa-res{display:none;background:#fff;padding:56px 20px 72px}
+.sa-res.show{display:block}
+.sa-res-head{max-width:1200px;margin:0 auto 18px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sa-res-head h3{margin:0;font-size:clamp(22px,3vw,30px);font-weight:700;letter-spacing:-.02em}
+.sa-res-head span{color:#6e6e73;font-size:15px}
+.sa-split{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:20px;height:620px}
+.sa-list{overflow-y:auto;padding:2px 6px 2px 2px;display:flex;flex-direction:column;gap:12px;-webkit-overflow-scrolling:touch}
+.sa-item{background:#f5f5f7;border:1.5px solid transparent;border-radius:22px;padding:18px 18px 16px;cursor:pointer;transition:border-color .2s,background .2s}
+.sa-item:hover{background:#efeff2}
+.sa-item.on{border-color:#0071e3;background:#f5faff}
+.sa-item-t{font-size:17px;font-weight:600;letter-spacing:-.01em;color:#1d1d1f}
+.sa-item-a{margin-top:4px;font-size:14px;color:#6e6e73;line-height:1.4}
+.sa-item-s{margin-top:10px;font-size:14px;font-weight:500}
+.sa-item-s.open{color:#1a7f37}
+.sa-item-s.closed{color:#6e6e73}
+.sa-item-f{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sa-how{display:inline-flex;border-radius:980px;background:#0071e3;color:#fff!important;font-size:14px;font-weight:500;padding:9px 18px;text-decoration:none;transition:background .2s}
+.sa-how:hover{background:#0077ed}
+.sa-tel{font-size:14px;color:#0071e3;text-decoration:none}
+.sa-dist{margin-left:auto;font-size:13px;color:#6e6e73}
+.sa-mapbox{position:relative;border-radius:28px;overflow:hidden;border:1px solid rgba(255,255,255,.9);box-shadow:0 18px 50px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.9);background:#e9eef5}
+#sa-map{position:absolute;inset:0}
+.sa-chip{position:absolute;left:14px;top:14px;z-index:500;padding:8px 14px;border-radius:980px;font-size:13px;font-weight:500;color:#1d1d1f;
+  background:rgba(255,255,255,.7);-webkit-backdrop-filter:blur(18px) saturate(180%);backdrop-filter:blur(18px) saturate(180%);border:1px solid rgba(255,255,255,.9)}
+.sa-nomap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#6e6e73;font-size:15px}
+.sa-empty{padding:28px 20px;border-radius:22px;background:#f5f5f7;color:#6e6e73;font-size:15px;line-height:1.5;text-align:center}
+.sa-pin span{display:block;width:22px;height:22px;border-radius:50%;background:#0071e3;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,113,227,.55)}
+.sa-pin.on span{transform:scale(1.25);box-shadow:0 0 0 6px rgba(0,113,227,.25),0 3px 10px rgba(0,113,227,.55)}
+.leaflet-container{font-family:inherit}
+@media(max-width:900px){
+  .sa-cats{grid-template-columns:repeat(2,1fr)}
+  .sa-split{grid-template-columns:1fr;height:auto}
+  .sa-mapbox{order:-1;height:340px}
+  .sa-list{max-height:none;overflow:visible}
+}
+@media(prefers-reduced-motion:reduce){.sa *{transition:none!important}}
+</style>
+
+<div class="sa">
+  <section class="sa-hero" id="sa-inicio">
+    <h1>Hay una sede de EduTrack cerca de ti</h1>
+    <p>Encuentra soporte técnico, atención administrativa o campus autorizados.</p>
+    <a class="sa-cta" id="sa-cta" role="button" tabindex="0" href="#sa-buscar">Buscar una sede</a>
+  </section>
+
+  <section class="sa-find" id="sa-buscar">
+    <div class="sa-wrap">
+      <h2>¿Qué estás buscando?</h2>
+      <p class="sa-lead">Escribe tu ciudad o código postal, o usa tu ubicación.</p>
+      <div class="sa-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input class="sa-in" id="sa-q" type="text" inputmode="search" autocomplete="off" placeholder="Ciudad o código postal" aria-label="Ciudad o código postal">
+        <span class="sa-gps" id="sa-gps" role="button" tabindex="0" aria-label="Usar mi ubicación" title="Usar mi ubicación">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5 3.5 10.8l6.7 2.5 2.5 6.7z"/></svg>
+        </span>
+      </div>
+      <div class="sa-cats" role="radiogroup" aria-label="Tipo de punto de atención">
+        <div class="sa-cat" role="radio" aria-checked="false" tabindex="0" data-cat="sedes">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V4.5A1.5 1.5 0 0 1 5.5 3h8A1.5 1.5 0 0 1 15 4.5V21"/><path d="M15 9h3.5a1.5 1.5 0 0 1 1.5 1.5V21"/><path d="M3 21h18"/><path d="M8 7.5h3M8 11h3M8 14.5h3"/></svg>
+          <span>Sedes y Campus</span>
+        </div>
+        <div class="sa-cat" role="radio" aria-checked="false" tabindex="0" data-cat="soporte">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/><path d="M19 20c0 1.3-2 2-5 2"/></svg>
+          <span>Soporte Técnico</span>
+        </div>
+        <div class="sa-cat" role="radio" aria-checked="false" tabindex="0" data-cat="administrativa">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7.5A1.5 1.5 0 0 0 6 4.5v15A1.5 1.5 0 0 0 7.5 21h9a1.5 1.5 0 0 0 1.5-1.5V7z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 15.5h6"/></svg>
+          <span>Atención Administrativa</span>
+        </div>
+        <div class="sa-cat" role="radio" aria-checked="false" tabindex="0" data-cat="seguridad">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7.5 3v5.5c0 4.5-3.1 8.2-7.5 9.5-4.4-1.3-7.5-5-7.5-9.5V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
+          <span>Puntos de Seguridad</span>
+        </div>
+      </div>
+      <div class="sa-actions">
+        <a class="sa-go is-off" id="sa-go" role="button" tabindex="0" aria-disabled="true">Ir</a>
+        <div class="sa-msg" id="sa-msg" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sa-res" id="sa-resultados">
+    <div class="sa-res-head"><h3 id="sa-res-t">Resultados</h3><span id="sa-res-n"></span></div>
+    <div class="sa-split">
+      <div class="sa-list" id="sa-list"></div>
+      <div class="sa-mapbox"><div class="sa-chip" id="sa-chip">Mapa</div><div id="sa-map"></div></div>
+    </div>
+  </section>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+var DATA=__DATA__;
+var CATN={sedes:"Sedes y Campus",soporte:"Soporte Técnico",administrativa:"Atención Administrativa",seguridad:"Puntos de Seguridad"};
+var DIAS=["","L","M","X","J","V","S","D"];
+var st={cat:null,pos:null,map:null,layer:null,markers:[]};
+var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+function $(i){return document.getElementById(i);}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function norm(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");}
+function goTo(id){var e=$(id);if(e)e.scrollIntoView({behavior:reduce?"auto":"smooth",block:"start"});}
+function onAct(el,fn){el.addEventListener("click",fn);el.addEventListener("keydown",function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();fn(ev);}});}
+function msg(t){$("sa-msg").textContent=t||"";}
+
+/* Paso 1 -> 2 */
+$("sa-cta").addEventListener("click",function(ev){ev.preventDefault();goTo("sa-buscar");setTimeout(function(){try{$("sa-q").focus({preventScroll:true});}catch(e){}},600);});
+
+/* Paso 2: categorias */
+var cats=[].slice.call(document.querySelectorAll(".sa-cat"));
+function pick(c){
+  st.cat=c.getAttribute("data-cat");
+  cats.forEach(function(x){var on=(x===c);x.classList.toggle("on",on);x.setAttribute("aria-checked",on?"true":"false");});
+  var go=$("sa-go");go.classList.remove("is-off");go.setAttribute("aria-disabled","false");msg("");
+}
+cats.forEach(function(c){onAct(c,function(){pick(c);});});
+
+/* GPS */
+onAct($("sa-gps"),function(){
+  if(!navigator.geolocation){msg("Tu navegador no permite detectar la ubicación. Escribe tu ciudad.");return;}
+  msg("Detectando tu ubicación…");
+  navigator.geolocation.getCurrentPosition(function(p){
+    st.pos={lat:p.coords.latitude,lng:p.coords.longitude};
+    $("sa-q").value="";$("sa-q").placeholder="Usando tu ubicación actual";$("sa-gps").classList.add("on");
+    msg(st.cat?"Ubicación lista. Toca Ir.":"Ubicación lista. Elige un tipo de punto y toca Ir.");
+  },function(){msg("No pudimos obtener tu ubicación. Escribe tu ciudad o código postal.");},{timeout:10000,maximumAge:300000});
+});
+$("sa-q").addEventListener("input",function(){if(st.pos){st.pos=null;$("sa-gps").classList.remove("on");$("sa-q").placeholder="Ciudad o código postal";}});
+$("sa-q").addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();run();}});
+onAct($("sa-go"),function(){run();});
+
+/* Utilidades */
+function dist(a,b){var R=6371,r=Math.PI/180,dl=(b.lat-a.lat)*r,dg=(b.lng-a.lng)*r;
+  var x=Math.sin(dl/2)*Math.sin(dl/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dg/2)*Math.sin(dg/2);return 2*R*Math.asin(Math.sqrt(x));}
+function hm(s){var a=String(s||"").split(":");return (parseInt(a[0],10)||0)*60+(parseInt(a[1],10)||0);}
+function fmt(s){var m=hm(s),h=Math.floor(m/60),mm=m%60;return (h%12||12)+":"+(mm<10?"0":"")+mm+" "+(h>=12?"p. m.":"a. m.");}
+function bogota(){var o={};new Intl.DateTimeFormat("en-US",{timeZone:"America/Bogota",weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(new Date()).forEach(function(x){o[x.type]=x.value;});
+  var d={Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6,Sun:7}[o.weekday];return {d:d,m:(parseInt(o.hour,10)%24)*60+(parseInt(o.minute,10)||0)};}
+function diasTxt(p){var a=String(p.dias||"").split(",").map(Number).filter(Boolean).sort();if(!a.length)return "";
+  var cont=a.every(function(v,i){return i===0||v===a[i-1]+1;});
+  return cont&&a.length>1?DIAS[a[0]]+"–"+DIAS[a[a.length-1]]:a.map(function(v){return DIAS[v];}).join(", ");}
+function estado(p){var n=bogota(),dias=String(p.dias||"").split(",").map(Number);
+  var open=dias.indexOf(n.d)>=0&&n.m>=hm(p.abre)&&n.m<hm(p.cierra);
+  return open?{ok:true,t:"Abierto · cierra "+fmt(p.cierra)}:{ok:false,t:"Cerrado · "+diasTxt(p)+" "+fmt(p.abre)+" – "+fmt(p.cierra)};}
+function como(p){var q=(p.lat!=null&&p.lng!=null)?(p.lat+","+p.lng):encodeURIComponent((p.direccion||"")+" "+(p.ciudad||""));
+  return "https://www.google.com/maps/dir/?api=1&destination="+q;}
+
+/* Paso 3: resultados */
+function run(){
+  if(!st.cat){msg("Elige primero un tipo de punto de atención.");return;}
+  var q=norm($("sa-q").value).trim();
+  var list=DATA.filter(function(p){return p.categoria===st.cat;});
+  if(q)list=list.filter(function(p){return norm([p.nombre,p.direccion,p.ciudad,p.codigo_postal].join(" ")).indexOf(q)>=0;});
+  list.forEach(function(p){p._d=(st.pos&&p.lat!=null&&p.lng!=null)?dist(st.pos,p):null;});
+  if(st.pos)list.sort(function(a,b){return (a._d==null?1e9:a._d)-(b._d==null?1e9:b._d);});
+  render(list,q);
+  $("sa-resultados").classList.add("show");
+  setTimeout(function(){ensureMap();drawMap(list);goTo("sa-resultados");},60);
+}
+function render(list,q){
+  $("sa-res-t").textContent=CATN[st.cat]||"Resultados";
+  $("sa-res-n").textContent=list.length+(list.length===1?" punto encontrado":" puntos encontrados");
+  $("sa-chip").textContent=list.length+(list.length===1?" ubicación":" ubicaciones");
+  var box=$("sa-list");
+  if(!list.length){
+    box.innerHTML='<div class="sa-empty">'+(DATA.length?"No encontramos puntos de este tipo"+(q?" para «"+esc($("sa-q").value)+"»":"")+". Prueba con otra ciudad, otro código postal o usa tu ubicación.":"Aún no hay puntos de atención publicados. Muy pronto los verás aquí.")+'</div>';
+    return;
+  }
+  box.innerHTML=list.map(function(p,i){
+    var e=estado(p);
+    return '<div class="sa-item" role="button" tabindex="0" data-i="'+i+'">'
+      +'<div class="sa-item-t">'+esc(p.nombre)+'</div>'
+      +'<div class="sa-item-a">'+esc(p.direccion)+(p.ciudad?(p.direccion?" · ":"")+esc(p.ciudad):"")+(p.codigo_postal?" · "+esc(p.codigo_postal):"")+'</div>'
+      +'<div class="sa-item-s '+(e.ok?"open":"closed")+'">'+esc(e.t)+'</div>'
+      +'<div class="sa-item-f"><a class="sa-how" href="'+como(p)+'" target="_blank" rel="noopener">Cómo llegar</a>'
+      +(p.telefono?'<a class="sa-tel" href="tel:'+esc(String(p.telefono).replace(/[^0-9+]/g,""))+'">'+esc(p.telefono)+'</a>':"")
+      +(p._d!=null?'<span class="sa-dist">'+(p._d<10?p._d.toFixed(1):Math.round(p._d))+' km</span>':"")
+      +'</div></div>';
+  }).join("");
+  st.list=list;
+  [].slice.call(box.querySelectorAll(".sa-item")).forEach(function(el){
+    onAct(el,function(ev){if(ev&&ev.target&&ev.target.closest&&ev.target.closest("a"))return;focusItem(parseInt(el.getAttribute("data-i"),10),true);});
+  });
+}
+function ensureMap(){
+  var m=$("sa-map");
+  if(!window.L){m.innerHTML='<div class="sa-nomap">El mapa no está disponible en este momento. Usa «Cómo llegar» en cada punto.</div>';return;}
+  if(st.map)return;
+  st.map=L.map("sa-map",{scrollWheelZoom:false,zoomControl:true}).setView([4.6,-74.08],6);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(st.map);
+  st.layer=L.layerGroup().addTo(st.map);
+}
+function drawMap(list){
+  if(!st.map)return;
+  st.map.invalidateSize();st.layer.clearLayers();st.markers=[];
+  var pts=[];
+  list.forEach(function(p,i){
+    if(p.lat==null||p.lng==null){st.markers[i]=null;return;}
+    var mk=L.marker([p.lat,p.lng],{icon:L.divIcon({className:"sa-pin",html:"<span></span>",iconSize:[22,22],iconAnchor:[11,11],popupAnchor:[0,-12]})})
+      .bindPopup("<b>"+esc(p.nombre)+"</b><br>"+esc(p.direccion||""));
+    mk.on("click",function(){focusItem(i,false);});
+    mk.addTo(st.layer);st.markers[i]=mk;pts.push([p.lat,p.lng]);
+  });
+  if(st.pos)pts.push([st.pos.lat,st.pos.lng]);
+  if(pts.length>1)st.map.fitBounds(pts,{padding:[50,50],maxZoom:15});
+  else if(pts.length===1)st.map.setView(pts[0],15);
+}
+function focusItem(i,fromList){
+  var items=[].slice.call(document.querySelectorAll(".sa-item"));
+  items.forEach(function(el,k){el.classList.toggle("on",k===i);});
+  if(!fromList&&items[i])items[i].scrollIntoView({block:"nearest",behavior:reduce?"auto":"smooth"});
+  st.markers.forEach(function(m,k){if(m&&m._icon)m._icon.classList.toggle("on",k===i);});
+  var mk=st.markers[i];
+  if(fromList&&mk&&st.map){st.map.setView(mk.getLatLng(),Math.max(st.map.getZoom(),14),{animate:!reduce});mk.openPopup();}
+}
+})();
+</script>
+"""
+
+
+@app.route("/puntos-atencion")
+def puntos_atencion_publico():
+    """Sedes y puntos de atencion: bienvenida -> filtros -> resultados con mapa."""
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    datos = []
+    try:
+        rows = PuntoAtencion.query.filter_by(activo=True).order_by(PuntoAtencion.orden, PuntoAtencion.id).all()
+        for r in rows:
+            datos.append({
+                "id": r.id, "nombre": r.nombre or "", "categoria": r.categoria or "sedes",
+                "direccion": r.direccion or "", "ciudad": r.ciudad or "", "codigo_postal": r.codigo_postal or "",
+                "telefono": r.telefono or "", "lat": r.lat, "lng": r.lng,
+                "dias": r.dias or "1,2,3,4,5", "abre": r.abre or "08:00", "cierra": r.cierra or "17:00",
+            })
+    except Exception as ex:
+        print("puntos atencion:", ex)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    data_js = json.dumps(datos, ensure_ascii=False).replace("</", "<\\/")
+    return _public_shell("Sedes y puntos de atención · EduTrack", _PA_PAGE.replace("__DATA__", data_js), "ayuda")
+
+
+def _pa_float(v):
+    try:
+        v = str(v or "").strip().replace(",", ".")
+        return float(v) if v else None
+    except Exception:
+        return None
+
+
+@app.route("/gerencia/puntos-atencion", methods=["GET", "POST"])
+def gerencia_puntos_atencion():
+    """Alta, activacion y borrado de sedes / puntos de atencion publicos."""
+    rol = (rol_actual() or "").strip()
+    if not requiere_login() or rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+        return redirect("/gerencia-login" if request.path.startswith("/gerencia") else "/soporte-login")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    cats = dict(_PA_CATEGORIAS)
+    mensaje = ""
+    if request.method == "POST":
+        accion = (request.form.get("accion") or "").strip()
+        try:
+            if accion == "crear":
+                nombre = (request.form.get("nombre") or "").strip()[:160]
+                cat = (request.form.get("categoria") or "sedes").strip()
+                if not nombre:
+                    mensaje = "Escribe el nombre del punto."
+                elif cat not in cats:
+                    mensaje = "Categoría no válida."
+                else:
+                    dias = sorted({d for d in request.form.getlist("dias") if d in "1234567" and len(d) == 1})
+                    db.session.add(PuntoAtencion(
+                        nombre=nombre, categoria=cat,
+                        direccion=(request.form.get("direccion") or "").strip()[:220],
+                        ciudad=(request.form.get("ciudad") or "").strip()[:100],
+                        codigo_postal=(request.form.get("codigo_postal") or "").strip()[:12],
+                        telefono=(request.form.get("telefono") or "").strip()[:40],
+                        lat=_pa_float(request.form.get("lat")), lng=_pa_float(request.form.get("lng")),
+                        dias=",".join(dias) or "1,2,3,4,5",
+                        abre=(request.form.get("abre") or "08:00")[:5], cierra=(request.form.get("cierra") or "17:00")[:5],
+                        activo=True,
+                    ))
+                    db.session.commit()
+                    mensaje = "Punto «%s» creado y publicado." % nombre
+            elif accion in ("toggle", "borrar"):
+                pid = int(request.form.get("id") or 0)
+                r = PuntoAtencion.query.get(pid)
+                if r:
+                    if accion == "toggle":
+                        r.activo = not bool(r.activo)
+                        mensaje = "«%s» %s." % (r.nombre, "publicado" if r.activo else "oculto")
+                    else:
+                        mensaje = "«%s» eliminado." % r.nombre
+                        db.session.delete(r)
+                    db.session.commit()
+        except Exception as ex:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            mensaje = "No se pudo guardar: %s" % _esc(str(ex)[:120])
+    filas = ""
+    try:
+        for r in PuntoAtencion.query.order_by(PuntoAtencion.categoria, PuntoAtencion.id).all():
+            coords = ("%.5f, %.5f" % (r.lat, r.lng)) if (r.lat is not None and r.lng is not None) else "<span style='color:#b45309'>sin coordenadas (no sale en el mapa)</span>"
+            filas += (
+                "<tr><td><b>%s</b><br><small>%s</small></td><td>%s</td><td>%s<br><small>%s %s</small></td><td>%s</td>"
+                "<td>%s</td><td><form method='POST' style='display:flex;gap:6px'>"
+                "<input type='hidden' name='id' value='%d'>"
+                "<button name='accion' value='toggle' type='submit'>%s</button>"
+                "<button name='accion' value='borrar' type='submit' style='background:#b91c1c' onclick=\"return confirm('¿Eliminar este punto?')\">Eliminar</button>"
+                "</form></td></tr>"
+            ) % (
+                _esc(r.nombre), _esc(cats.get(r.categoria, r.categoria)), "Publicado" if r.activo else "Oculto",
+                _esc(r.direccion), _esc(r.ciudad), _esc(r.codigo_postal), coords,
+                _esc(r.telefono), r.id, "Ocultar" if r.activo else "Publicar",
+            )
+    except Exception:
+        pass
+    opts = "".join("<option value='%s'>%s</option>" % (k, v) for k, v in _PA_CATEGORIAS)
+    dias_chk = "".join(
+        "<label style='display:inline-flex;gap:4px;align-items:center;margin-right:10px'><input type='checkbox' name='dias' value='%d' %s style='width:auto'>%s</label>"
+        % (i, "checked" if i <= 5 else "", n) for i, n in enumerate(["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"], start=1)
+    )
+    volver = "/soporte_admin" if (rol == "Soporte" or session.get("soporte")) else "/gerencia/hq"
+    content = f"""
+<header class="role-hero"><div>
+  <h1>Sedes y puntos de atención</h1>
+  <p>Lo que se publica aquí aparece en <a href="/puntos-atencion" target="_blank">/puntos-atencion</a> (menú Ayuda). Para las coordenadas: en Google Maps, clic derecho sobre el lugar y copia los dos números.</p>
+</div><a class="btn" href="{volver}">Volver</a></header>
+{"<div class='msg ok'>" + mensaje + "</div>" if mensaje else ""}
+<section class="role-panel">
+  <h3>Nuevo punto</h3>
+  <form method="POST">
+    <input type="hidden" name="accion" value="crear">
+    <div class="form-row">
+      <div><label><b>Nombre</b></label><input name="nombre" required maxlength="160" placeholder="Ej. Sede Principal Procsis"></div>
+      <div><label><b>Tipo</b></label><select name="categoria">{opts}</select></div>
+    </div>
+    <div class="form-row">
+      <div><label><b>Dirección</b></label><input name="direccion" maxlength="220" placeholder="Calle / Carrera ..."></div>
+      <div><label><b>Ciudad</b></label><input name="ciudad" maxlength="100"></div>
+      <div><label><b>Código postal</b></label><input name="codigo_postal" maxlength="12"></div>
+    </div>
+    <div class="form-row">
+      <div><label><b>Latitud</b></label><input name="lat" placeholder="6.2442"></div>
+      <div><label><b>Longitud</b></label><input name="lng" placeholder="-75.5812"></div>
+      <div><label><b>Teléfono</b></label><input name="telefono" maxlength="40"></div>
+    </div>
+    <div class="form-row">
+      <div><label><b>Abre</b></label><input type="time" name="abre" value="08:00"></div>
+      <div><label><b>Cierra</b></label><input type="time" name="cierra" value="17:00"></div>
+    </div>
+    <label><b>Días de atención</b></label><div style="margin:6px 0 12px">{dias_chk}</div>
+    <button type="submit">Crear y publicar</button>
+  </form>
+</section>
+<section class="role-panel" style="margin-top:16px;overflow-x:auto">
+  <h3>Puntos registrados</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr><th align="left">Nombre / tipo</th><th align="left">Estado</th><th align="left">Dirección</th><th align="left">Coordenadas</th><th align="left">Teléfono</th><th></th></tr></thead>
+    <tbody>{filas or "<tr><td colspan='6'>Aún no hay puntos. Crea el primero arriba.</td></tr>"}</tbody>
+  </table>
+</section>
+"""
+    if rol == "Soporte" or session.get("soporte"):
+        return page("Puntos de atención", shell_soporte(content))
+    return page("Puntos de atención · Gerencia", content)
+
+
 @app.route("/reembolsos")
 @app.route("/politicas/reembolsos")
 def pol_reembolsos():
@@ -13940,18 +14442,15 @@ def login():
 .sr-only{{position:absolute;left:-9999px}}
 .promo-row{{max-width:1100px;margin:0 auto 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 20px}}
 @media(max-width:800px){{.promo-row{{grid-template-columns:1fr}}}}
-.promo-card{{border-radius:24px;padding:24px 22px;min-height:160px;color:#fff;position:relative;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.08);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
-.promo-card h3{{margin:10px 0 8px;font-size:20px;line-height:1.25;font-weight:700;letter-spacing:-.015em}}
-.promo-card p{{margin:0 0 16px;font-size:13px;opacity:.92;line-height:1.45;font-weight:400}}
-.promo-card .badge{{display:inline-block;font-size:11px;font-weight:600;padding:5px 12px;border-radius:980px;background:rgba(255,255,255,.2);letter-spacing:.02em}}
-.promo-card a.btn-promo{{display:inline-block;padding:10px 20px;border-radius:980px;font-weight:600;font-size:13px;text-decoration:none;transition:background .2s,color .2s,transform .1s}}
+.promo-card{{border-radius:28px;padding:26px 24px;min-height:160px;color:#1d1d1f;position:relative;overflow:hidden;border:1px solid rgba(0,0,0,.05);box-shadow:0 8px 30px rgba(0,0,0,.05);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.promo-card h3{{margin:10px 0 8px;font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-.02em;color:#1d1d1f}}
+.promo-card p{{margin:0 0 18px;font-size:14px;line-height:1.5;font-weight:400;color:#6e6e73}}
+.promo-card .badge{{display:inline-block;font-size:11px;font-weight:600;padding:5px 12px;border-radius:980px;background:rgba(0,113,227,.1);color:#0071e3;letter-spacing:.02em}}
+.promo-card a.btn-promo{{display:inline-block;padding:11px 22px;border-radius:980px;font-weight:600;font-size:14px;text-decoration:none;background:#0071e3;color:#fff;transition:background .2s,color .2s,transform .1s}}
 .promo-card a.btn-promo:active{{transform:scale(.98)}}
-.promo-a{{background:linear-gradient(145deg,#002060 0%,#0B2D57 45%,#1e40af 100%)}}
-.promo-a a.btn-promo{{background:#fff;color:#002060}}
-.promo-a a.btn-promo:hover{{background:#f5f5f7}}
-.promo-b{{background:linear-gradient(145deg,#0369a1 0%,#0d9488 100%)}}
-.promo-b a.btn-promo{{background:#fff;color:#002060}}
-.promo-b a.btn-promo:hover{{background:#f5f5f7}}
+.promo-a{{background:linear-gradient(135deg,#cfe6ff 0%,#eaf4ff 42%,#fafafc 100%)}}
+.promo-b{{background:linear-gradient(135deg,#d6efff 0%,#eef7fb 45%,#fafafc 100%)}}
+.promo-card a.btn-promo:hover{{background:#0077ed;color:#fff}}
 
 .corp-support{{max-width:1100px;margin:8px auto 24px;padding:0 20px}}
 .corp-support-inner{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:24px;padding:32px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 24px rgba(0,0,0,.04);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
@@ -13967,14 +14466,14 @@ def login():
 .corp-hour b{{color:#002060;display:block;margin-bottom:4px}}
 .corp-note{{margin-top:12px;padding:12px;background:#eff6ff;border-left:4px solid #1e3a8a;border-radius:8px;font-size:12px;color:#1e3a8a}}
 .corp-cta{{max-width:1100px;margin:0 auto 28px;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
-.corp-cta-card{{background:linear-gradient(145deg,#002060 0%,#0B2D57 55%,#0a3a78 100%);color:#fff;border-radius:24px;padding:32px 28px;max-width:440px;box-shadow:0 12px 40px rgba(0,32,96,.25)}}
-.corp-cta-ico{{width:44px;height:44px;background:rgba(255,255,255,.1);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#fff;font-size:18px;font-weight:700;letter-spacing:-.02em}}
-.corp-cta-card h2{{margin:0 0 10px;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.02em;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
-.corp-cta-card p{{margin:0 0 20px;opacity:.88;font-size:14px;line-height:1.55;color:rgba(255,255,255,.85);font-weight:400}}
-.corp-wa{{display:inline-block;background:#f5f5f7;color:#002060;font-weight:600;padding:12px 28px;border-radius:980px;text-decoration:none;font-size:14px;letter-spacing:-.01em;transition:background .25s ease,transform .1s ease;border:0}}
-.corp-wa:hover{{background:#ffffff;color:#002060}}
+.corp-cta-card{{background:linear-gradient(135deg,#cfe6ff 0%,#eaf4ff 45%,#fafafc 100%);color:#1d1d1f;border:1px solid rgba(0,0,0,.05);border-radius:28px;padding:32px 28px;max-width:440px;box-shadow:0 10px 36px rgba(0,0,0,.06)}}
+.corp-cta-ico{{width:44px;height:44px;background:rgba(0,113,227,.12);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#0071e3;font-size:18px;font-weight:700;letter-spacing:-.02em}}
+.corp-cta-card h2{{margin:0 0 10px;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.02em;color:#1d1d1f;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
+.corp-cta-card p{{margin:0 0 20px;font-size:14px;line-height:1.55;color:#6e6e73;font-weight:400}}
+.corp-wa{{display:inline-block;background:#0071e3;color:#fff;font-weight:600;padding:12px 28px;border-radius:980px;text-decoration:none;font-size:14px;letter-spacing:-.01em;transition:background .25s ease,transform .1s ease;border:0}}
+.corp-wa:hover{{background:#0077ed;color:#fff}}
 .corp-wa:active{{transform:scale(.98)}}
-.corp-cta-foot{{margin-top:16px;font-size:11px;opacity:.65;letter-spacing:.01em;color:rgba(255,255,255,.75);line-height:1.4}}
+.corp-cta-foot{{margin-top:16px;font-size:12px;letter-spacing:.01em;color:#86868b;line-height:1.4}}
 .corp-footer{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .corp-footer-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:32px}}
 @media(max-width:800px){{.corp-footer-inner{{grid-template-columns:1fr}}}}
@@ -14157,7 +14656,7 @@ def login():
           <div class="corp-hour"><b>Martes a viernes</b><br>{hor_sem}</div>
         </div>
         <div class="corp-note">Fuera de horario puede dejar su mensaje por WhatsApp o correo. Lo atenderemos al volver.</div>
-        <p style="margin-top:12px"><a href="/whatsapp" style="display:inline-block;background:#005BEA;color:#fff;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;transition:background .3s ease" onmouseover="this.style.background='#002060'" onmouseout="this.style.background='#005BEA'">Escribir a soporte por WhatsApp</a></p>
+        <p style="margin-top:12px"><a href="/whatsapp" style="display:inline-block;background:#0071e3;color:#fff;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;transition:background .3s ease" onmouseover="this.style.background='#0077ed'" onmouseout="this.style.background='#0071e3'">Escribir a soporte por WhatsApp</a></p>
       </div>
     </div>
   </section>
@@ -23545,7 +24044,7 @@ def _sitemap_xml():
         "/", "/procsis", "/tecnologia", "/soluciones",
         "/politicas", "/politicas/seguridad-informacion", "/politicas/ciberseguridad",
         "/politicas/cookies", "/politicas/datos-personales", "/politicas/aviso-privacidad",
-        "/politicas/habeas", "/reembolsos", "/pqr", "/whatsapp", "/contacto", "/ayuda",
+        "/politicas/habeas", "/reembolsos", "/puntos-atencion", "/pqr", "/whatsapp", "/contacto", "/ayuda",
     ]
     hoy = fecha_hoy()
     items = "".join(
@@ -50315,10 +50814,7 @@ def soporte_actualizaciones():
                     p.anuncio_activo = True
                     p.anuncio_titulo = f"{_icono} {_etiqueta}: {primera_linea}"
                     p.anuncio_cuerpo = (p.novedades or "").strip()[:2000]
-                    try:
-                        p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
-                    except Exception:
-                        p.anuncio_version = "1"
+                    p.anuncio_version = _nuevo_id_aviso()
                     try:
                         registrar_auditoria("Anuncio automático por actualización", f"Desarrollador publicó {tipo_upd}: {primera_linea}")
                     except Exception:
@@ -54067,11 +54563,13 @@ def soporte_anuncios():
                     p.anuncio_img2 = ""
             except Exception as ex:
                 print("anuncio upload:", ex)
-            # Siempre nueva versión → todos los usuarios vuelven a ver el anuncio
-            try:
-                p.anuncio_version = str(int(str(getattr(p, "anuncio_version", None) or "1").strip() or "1") + 1)
-            except Exception:
-                p.anuncio_version = str(__import__("time").time())
+            # ID unico del aviso: mismo ID = quien lo cerro no lo vuelve a ver (aunque corrijas el texto);
+            # ID distinto (o casilla "volver a mostrar") = lo ve todo el mundo una vez mas.
+            _id_form = _aviso_id_seguro(request.form.get("aviso_id")) if (request.form.get("aviso_id") or "").strip() else ""
+            if request.form.get("forzar_nueva") == "1" or not _id_form:
+                p.anuncio_version = _nuevo_id_aviso()
+            else:
+                p.anuncio_version = _id_form
             # Limpiar dismiss de esta sesión de gerencia para previsualizar
             try:
                 session.pop("anuncio_dismissed_ver", None)
@@ -54087,14 +54585,14 @@ def soporte_anuncios():
             except Exception:
                 pass
             mensaje = (
-                "Anuncio guardado (v%s). " % (getattr(p, "anuncio_version", "") or "")
+                "Anuncio guardado (ID: %s). " % (getattr(p, "anuncio_version", "") or "")
                 + ("Ya está activo: se verá al abrir /login y portales de acceso." if getattr(p,"anuncio_activo",False) else "(Inactivo — marque «Anuncio activo» para publicarlo)")
             )
     volver_href = "/soporte_admin" if (rol == "Soporte" or session.get("soporte")) else "/gerencia/hq"
     content = f"""
 <header class="role-hero"><div>
   <h1>Anuncios institucionales</h1>
-  <p>Avisos a pantalla completa en el login (ej. emergencias, donaciones). El usuario cierra con la X.</p>
+  <p>Avisos flotantes de cristal (ej. lanzamientos, mantenimiento, emergencias). Cada aviso tiene un ID: quien lo cierra con la X no lo vuelve a ver; si lo ignora, reaparece a las 24 horas.</p>
 </div>
 <a class="btn" href="{volver_href}">Volver</a></header>
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
@@ -54104,6 +54602,9 @@ def soporte_anuncios():
       <input type="checkbox" name="activo" value="1" {"checked" if getattr(p,"anuncio_activo",False) else ""} style="width:auto">
       Anuncio activo (visible en login)
     </label>
+    <label><b>ID del aviso</b> (único; ej. aviso_lanzamiento_oct25, aviso_mantenimiento_nov1)</label>
+    <input name="aviso_id" maxlength="40" pattern="[A-Za-z0-9_.\\-]*" value="{_aviso_id_seguro(getattr(p,"anuncio_version",None))}" placeholder="aviso_lanzamiento_oct25">
+    <div class="mini-text" style="margin:4px 0 10px">Déjalo igual para corregir el texto sin molestar a quien ya lo cerró. Cámbialo (o deja vacío para generar uno automático) para que todos lo vean una vez más.</div>
     <label><b>Título</b></label>
     <input name="titulo" value="{(getattr(p,"anuncio_titulo",None) or "").replace('"','&quot;')}" placeholder="Ej. Solidaridad ante emergencia nacional">
     <label><b>Mensaje</b></label>
@@ -54123,14 +54624,14 @@ def soporte_anuncios():
     <input name="cuenta" value="{(getattr(p,"anuncio_cuenta",None) or "").replace('"','&quot;')}" placeholder="Ej. Bancolombia Ahorros 123-456789-00 · NIT 900...">
     <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
       <input type="checkbox" name="forzar_nueva" value="1" style="width:auto">
-      Volver a mostrar aunque el usuario ya hubiera cerrado el aviso anterior
+      Volver a mostrar a todos (genera un ID nuevo automáticamente, ignora el ID de arriba)
     </label>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
       <button type="submit">Guardar anuncio</button>
       <button type="submit" name="accion" value="desactivar" style="background:#b91c1c">Desactivar ahora</button>
     </div>
   </form>
-  <p class="mini-text" style="margin-top:12px">Versión actual del anuncio: <b>{getattr(p,"anuncio_version",None) or "1"}</b> · Al cambiar versión, todos vuelven a verlo.</p>
+  <p class="mini-text" style="margin-top:12px">ID actual del aviso: <b>{getattr(p,"anuncio_version",None) or "1"}</b> · Al cambiar el ID, todos vuelven a verlo una vez.</p>
 </section>
 """
     if rol == "Soporte" or session.get("soporte"):
@@ -81634,7 +82135,7 @@ def gerencia_correo_extra(n):
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
 _RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/media/login-banner/", "/contrato-activacion/", "/verificar-certificado/", "/demo/invitar/",
-                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal", "/reembolsos", "/convocatoria48", "/reconocimiento/")
+                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal", "/reembolsos", "/puntos-atencion", "/convocatoria48", "/reconocimiento/")
 
 
 @app.before_request
