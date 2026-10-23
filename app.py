@@ -4850,9 +4850,10 @@ def page(title, body):
       <b>No usamos cookies de publicidad de terceros.</b>
       Al continuar o aceptar, autorizas esta utilización.
       Más info:
-      <a href="/cookies" style="color:#0b63ce;font-weight:700;text-decoration:underline">política de cookies</a>
+      <a href="/cookies" style="color:#0b63ce;font-weight:700;text-decoration:underline">política de cookies</a>,
+      <a href="/tratamiento-datos" style="color:#0b63ce;font-weight:700;text-decoration:underline">tratamiento de datos</a>
       y
-      <a href="/tratamiento-datos" style="color:#0b63ce;font-weight:700;text-decoration:underline">tratamiento de datos</a>.
+      <a href="/reembolsos" style="color:#0b63ce;font-weight:700;text-decoration:underline">política de reembolsos</a>.
     </p>
     <div id="cookie-config-panel" style="display:none;background:rgba(239,246,255,.9);border:1px solid #bfdbfe;border-radius:14px;padding:12px;margin-bottom:12px;font-size:13px;color:#1e3a5f">
       <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;line-height:1.35"><input type="checkbox" checked disabled style="width:18px;height:18px;flex-shrink:0;margin-top:2px"> Cookies esenciales (sesión / seguridad) — siempre activas</label>
@@ -6589,7 +6590,7 @@ def ruta_publica():
         or p.startswith("/qr/")
         or p.startswith("/matricula")
         or p.startswith("/colegio")
-        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/validar-dispositivo", "/legal", "/cookies", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva", "/acudiente/autorizar-salida", "/acudiente/ficha-medica"]
+        or p in ["/", "/login", "/logout", "/recuperar", "/validar_pin", "/validar-dispositivo", "/legal", "/cookies", "/reembolsos", "/privacidad", "/tratamiento-datos", "/politica-pqr", "/contacto", "/portal", "/pqr", "/familia-login", "/familia", "/familia/boletin", "/familia/certificado", "/acudiente-asistencia", "/familia/asistencia-viva", "/acudiente/autorizar-salida", "/acudiente/ficha-medica"]
         or p.startswith("/verificar-certificado")
         or p.startswith("/demo/invitar")
         or p.startswith("/pqr/")
@@ -11714,7 +11715,7 @@ def session_idle_timeout():
     if path in (
         "/login", "/soporte-login", "/cobranza-login", "/ventas-login", "/gerencia-login",
         "/docente-login", "/familia-login", "/logout", "/pqr", "/ayuda", "/centro-ayuda",
-        "/cookies", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales",
+        "/cookies", "/reembolsos", "/legal", "/soluciones", "/quienes-somos", "/eventos-virtuales",
         "/procsis", "/empresa", "/portafolio", "/tecnologia",
     ):
         return
@@ -11755,7 +11756,7 @@ def seguridad_empleados_gate():
     path = request.path or ""
     if path.startswith("/static") or path in (
         "/login", "/soporte-login", "/docente-login", "/logout",
-        "/recuperar", "/cookies", "/legal", "/ayuda", "/centro-ayuda", "/dev-console-login", "/dev-console", "/ventas-login", "/gerencia-login",
+        "/recuperar", "/cookies", "/reembolsos", "/legal", "/ayuda", "/centro-ayuda", "/dev-console-login", "/dev-console", "/ventas-login", "/gerencia-login",
         "/cobranza-login", "/cobranza", "/cobranza/panel",
         "/ventas", "/ventas-login", "/ventas/panel", "/gerencia-login", "/gerencia/planes", "/whatsapp", "/whatsapp-soporte", "/contacto", "/pqr",
         "/familia-login", "/familia", "/familia/boletin", "/familia/certificado",
@@ -12488,6 +12489,37 @@ def pagina_historias_decision():
 
 
 _PAGINAS_LEGALES_DEFAULT = {
+    "reembolsos": {
+        "titulo": "Politica de reembolsos",
+        "cuerpo": (
+            "<h2>1. Alcance</h2><p>Esta politica aplica a los planes, licencias y servicios de la plataforma "
+            "EduTrack contratados con Procsis. Las condiciones particulares de cada institucion son las "
+            "del contrato y del plan activado.</p>"
+            "<h2>2. Derecho de retracto</h2><p>Cuando la contratacion se haga a distancia y el comprador tenga "
+            "la calidad de consumidor, puede ejercer el derecho de retracto dentro de los terminos de la "
+            "Ley 1480 de 2011, siempre que el servicio no se haya empezado a prestar con su consentimiento "
+            "expreso. Se solicita a traves de <a href='/pqr'>PQR</a> o por los canales oficiales.</p>"
+            "<h2>3. Cuando procede el reembolso</h2><ul>"
+            "<li>Cobro duplicado o por un valor distinto al pactado.</li>"
+            "<li>Servicio contratado que no pudo activarse por causas atribuibles a Procsis.</li>"
+            "<li>Retracto ejercido en tiempo, segun el numeral anterior.</li>"
+            "</ul>"
+            "<h2>4. Cuando no procede</h2><ul>"
+            "<li>El fee de implementacion no se reembolsa si ya se ejecuto capacitacion docente o migracion de datos SIMAT.</li>"
+            "<li>Periodos del plan ya prestados y consumidos.</li>"
+            "<li>Terminacion del contrato por incumplimiento de la institucion.</li>"
+            "</ul>"
+            "<h2>5. Como solicitarlo</h2><p>Radique la solicitud por <a href='/pqr'>PQR</a> indicando institucion, "
+            "NIT, fecha y valor del pago y motivo, con el soporte de pago. Procsis responde dentro de los "
+            "terminos de ley.</p>"
+            "<h2>6. Plazo y medio de devolucion</h2><p>Aprobado el reembolso, se devuelve por el mismo medio de "
+            "pago utilizado, o por transferencia a la cuenta de la institucion, en un plazo maximo de 30 dias "
+            "calendario. Si el plan se contrato a traves de un asesor, la devolucion se procesa desde "
+            "Gerencia (modulo Reembolsos).</p>"
+            "<h2>Ver tambien</h2><p><a href='/legal'>Terminos y condiciones</a> · "
+            "<a href='/cookies'>Cookies</a> · <a href='/privacidad'>Privacidad</a></p>"
+        ),
+    },
     "privacidad": {
         "titulo": "Aviso de privacidad",
         "cuerpo": (
@@ -13055,6 +13087,7 @@ def _legal_page_shell(titulo, cuerpo_html, activo_codigo=""):
         ("privacidad", "Privacidad", "/privacidad"),
         ("tratamiento", "Tratamiento de datos", "/tratamiento-datos"),
         ("cookies", "Cookies", "/cookies"),
+        ("reembolsos", "Reembolsos", "/reembolsos"),
         ("terminos", "Terminos / Aviso legal", "/legal"),
         ("habeas", "Habeas data", "/politicas/habeas"),
     ]
@@ -13230,6 +13263,7 @@ def _politica_page(titulo, cuerpo):
         '<a href="/politicas/seguridad-informacion" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Seguridad de la información</a>'
         '<a href="/politicas/ciberseguridad" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Ciberseguridad</a>'
         '<a href="/politicas/cookies" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Cookies</a>'
+        '<a href="/reembolsos" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Reembolsos</a>'
         '<a href="/politicas/datos-personales" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Protección de datos personales</a>'
         '<a href="/politicas/aviso-privacidad" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Aviso de privacidad</a>'
         "</div>" + cuerpo + "</div></div>"
@@ -13314,6 +13348,18 @@ def pol_aviso():
         "<h2 style='color:#0B2D57'>Responsable</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Procsis — plataforma EduTrack. Los datos de cada colegio se tratan en el marco del contrato con la institución.</p>"
         "<h2 style='color:#0B2D57'>Derechos</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Consulta y actualización a través de la institución y canales oficiales. Ver <a href='/legal'>/legal</a>.</p>",
     )
+
+
+
+@app.route("/reembolsos")
+@app.route("/politicas/reembolsos")
+def pol_reembolsos():
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal("reembolsos")
+    return _legal_page_shell(titulo, cuerpo, "reembolsos")
 
 
 
@@ -13448,6 +13494,7 @@ def _html_login_pie_colegios():
       <p>{_esc(corp_tel)}</p>
       <a href="/contacto">Formulario de contacto</a>
       <a href="/legal">Privacidad y datos</a>
+      <a href="/reembolsos">Política de reembolsos</a>
     </div>
   </div>
   <div class="lcf-copy">© 2026 PROCSIS · Soluciones digitales. Todos los derechos reservados.</div>
@@ -14213,6 +14260,7 @@ def login():
         <div class="corp-footer-brand">EduTrack · PROCSIS</div>
         <a href="/legal">Privacidad y protección de datos</a>
         <a href="/cookies">Cookies</a>
+        <a href="/reembolsos">Política de reembolsos</a>
       </div>
       <div>
         <h4>Contacto</h4>
@@ -23497,7 +23545,7 @@ def _sitemap_xml():
         "/", "/procsis", "/tecnologia", "/soluciones",
         "/politicas", "/politicas/seguridad-informacion", "/politicas/ciberseguridad",
         "/politicas/cookies", "/politicas/datos-personales", "/politicas/aviso-privacidad",
-        "/politicas/habeas", "/pqr", "/whatsapp", "/contacto", "/ayuda",
+        "/politicas/habeas", "/reembolsos", "/pqr", "/whatsapp", "/contacto", "/ayuda",
     ]
     hoy = fecha_hoy()
     items = "".join(
@@ -28868,6 +28916,7 @@ def gerencia_paginas_legales():
         ("privacidad", "Privacidad / Aviso de privacidad", "/privacidad"),
         ("tratamiento", "Tratamiento de datos personales", "/tratamiento-datos"),
         ("cookies", "Politica de cookies", "/cookies"),
+        ("reembolsos", "Politica de reembolsos", "/reembolsos"),
         ("terminos", "Terminos y condiciones / Aviso legal", "/legal"),
         ("habeas", "Habeas data (Ley 1581)", "/politicas/habeas"),
     ]
@@ -63973,6 +64022,7 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
         <p style="margin:0 0 6px">{corp_tel}</p>
         <a href="/contacto">Formulario de contacto</a>
         <a href="/legal">Privacidad y datos</a>
+      <a href="/reembolsos">Política de reembolsos</a>
       </div>
     </div>
     <div class="pc-copy">© {anio} {brand_nom} · {brand_sub}. Todos los derechos reservados.</div>
@@ -81584,7 +81634,7 @@ def gerencia_correo_extra(n):
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
 _RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/media/login-banner/", "/contrato-activacion/", "/verificar-certificado/", "/demo/invitar/",
-                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal", "/convocatoria48", "/reconocimiento/")
+                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal", "/reembolsos", "/convocatoria48", "/reconocimiento/")
 
 
 @app.before_request
