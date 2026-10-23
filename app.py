@@ -1664,6 +1664,7 @@ class Usuario(db.Model):
     departamento = db.Column(db.String(60), default="")
     jefe_usuario = db.Column(db.String(80), default="")      # usuario del supervisor/jefe
     nivel = db.Column(db.String(20), default="")             # ASESOR | SUPERVISOR
+    genero = db.Column(db.String(10), default="")            # F | M | T (trans/otro) | "" = sin definir (la define TI al crear)
 
 
 class IngresoPorteria(db.Model):
@@ -6295,6 +6296,7 @@ def inicializar_bd():
                 ("usuarios", "departamento", "VARCHAR(60) DEFAULT ''"),
                 ("usuarios", "jefe_usuario", "VARCHAR(80) DEFAULT ''"),
                 ("usuarios", "nivel", "VARCHAR(20) DEFAULT ''"),
+                ("usuarios", "genero", "VARCHAR(10) DEFAULT ''"),
             ]
             for table, col, typedef in patches:
                 try:
@@ -22890,12 +22892,21 @@ def _sin_tildes(txt):
 
 
 def _tratamiento_usuario():
-    """'señor' o 'señora' según el nombre a mostrar del usuario."""
+    """'señor', 'señora' o '' (sin tratamiento) según el género que TI registró.
+    Cuentas antiguas sin género definido: se deduce del nombre, como antes."""
+    u = None
     try:
         u = _usuario_actual_obj()
         tiene_nombre = bool(u and (u.nombre_completo or "").strip())
     except Exception:
         tiene_nombre = False
+    g = ((getattr(u, "genero", "") or "") if u else "").strip().upper()
+    if g == "F":
+        return "señora"
+    if g == "M":
+        return "señor"
+    if g == "T":
+        return ""
     base = (nombre_mostrar_actual() or "").strip()
     primero = re.split(r"[\s._\-]+", _sin_tildes(base).lower())[0] if base else ""
     if primero in _NOMBRES_FEM:
@@ -22917,12 +22928,13 @@ def _saludo_staff():
         franja = "Buenas noches"
     nombre = (nombre_mostrar_actual() or "colaborador").strip()
     trat = _tratamiento_usuario()
+    pref = (trat + " ") if trat else ""
     fecha = "%s %d de %s de %d" % (_DIAS_ES[n.weekday()], n.day, _MESES_ES[n.month - 1], n.year)
     if n.weekday() == 0:
-        grande = "¡Feliz lunes, %s %s!" % (trat, nombre)
+        grande = "¡Feliz lunes, %s%s!" % (pref, nombre)
         sub = "%s · %s" % (franja, fecha)
     else:
-        grande = "%s, %s %s" % (franja, trat, nombre)
+        grande = "%s, %s%s" % (franja, pref, nombre)
         sub = fecha
     return grande, sub
 
@@ -94028,7 +94040,16 @@ def _ti_clave_temporal():
     return "".join(secrets.choice(alfa) for _ in range(11)) + secrets.choice("23456789") + "*"
 
 
-def _ti_crear_usuario(usuario, nombre, correo, rol, forzar_mfa, departamento="", nivel="", jefe=""):
+_TI_GENEROS = (("F", "Femenino (señora)"), ("M", "Masculino (señor)"), ("T", "Trans / otro (sin señor ni señora)"))
+
+
+def _ti_html_genero(actual="", estilo=""):
+    """Selector obligatorio de género; el sistema lo usa para saludar bien (señor / señora / solo el nombre)."""
+    opts = "".join("<option value='%s'%s>%s</option>" % (c, " selected" if c == (actual or "") else "", t) for c, t in _TI_GENEROS)
+    return "<select name='genero' required%s><option value=''>— Seleccione —</option>%s</select>" % ((" style='%s'" % estilo) if estilo else "", opts)
+
+
+def _ti_crear_usuario(usuario, nombre, correo, rol, forzar_mfa, departamento="", nivel="", jefe="", genero=""):
     """Crea una cuenta interna con contraseña temporal aleatoria (se muestra una sola vez). Devuelve (usuario, clave) o (None, error)."""
     usuario = (usuario or "").strip().lower()
     if not re.match(r"^[a-z0-9._-]{4,40}$", usuario):
@@ -94037,6 +94058,9 @@ def _ti_crear_usuario(usuario, nombre, correo, rol, forzar_mfa, departamento="",
         return None, "Rol no permitido."
     if Usuario.query.filter(func.lower(Usuario.usuario) == usuario).first():
         return None, "Ese usuario ya existe."
+    genero = (genero or "").strip().upper()
+    if genero not in ("F", "M", "T"):
+        return None, "Indique el género de la persona (Femenino, Masculino o Trans) para que el sistema la salude correctamente."
     correo = (correo or "").strip().lower()[:160]
     if correo and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
         correo = ""
@@ -94048,6 +94072,7 @@ def _ti_crear_usuario(usuario, nombre, correo, rol, forzar_mfa, departamento="",
     u.departamento = (departamento or "")[:60]
     u.nivel = (nivel or "")[:20]
     u.jefe_usuario = (jefe or "")[:80]
+    u.genero = genero
     db.session.add(u)
     db.session.commit()
     return u, clave
@@ -94171,7 +94196,7 @@ def gerencia_ti_acceso_inicial():
             db.session.rollback()
             session["ti_msg"] = ("err", "El acceso inicial de TI ya fue creado.")
             return redirect("/gerencia/ti-acceso-inicial")
-        u, clave = _ti_crear_usuario(request.form.get("usuario"), request.form.get("nombre"), request.form.get("correo"), "Tecnologia", True)
+        u, clave = _ti_crear_usuario(request.form.get("usuario"), request.form.get("nombre"), request.form.get("correo"), "Tecnologia", True, genero=request.form.get("genero"))
         if u is None:
             if reservado:
                 _c48_x("DELETE FROM ti_config WHERE clave='lider_creado'")
@@ -94196,9 +94221,10 @@ def gerencia_ti_acceso_inicial():
                 "<form method='POST'><input type='hidden' name='csrf' value='%s'>"
                 "<label>Usuario de acceso</label><input type='text' name='usuario' required minlength='4' maxlength='40' pattern='[a-z0-9._-]+' placeholder='por ejemplo: ti.lider'>"
                 "<label>Nombre completo</label><input type='text' name='nombre' required>"
+                "<label>Género (para saludarle correctamente)</label>%s"
                 "<label>Correo</label><input type='email' name='correo'>"
                 "<p><button class='ti-btn' onclick=\"return confirm('Esta acción solo se puede hacer UNA vez. ¿Crear el acceso inicial de TI?');\">Crear acceso inicial</button></p></form></div>"
-                % ("Como Superadmin puede repetirlo si hace falta." if es_super else "<b>Solo se puede hacer una vez.</b>", csrf))
+                % ("Como Superadmin puede repetirlo si hace falta." if es_super else "<b>Solo se puede hacer una vez.</b>", csrf, _ti_html_genero()))
     return page("Acceso inicial de TI", shell(_TI_CSS + "<div class='ti'><h1>Tecnología y Soporte de TI</h1>%s%s</div>" % (aviso, info)))
 
 
@@ -94224,6 +94250,9 @@ def tecnologia_accesos():
             acc = (boton("reactivar", "✔ Reactivar", "o") if not activo else boton("bloquear", "⛔ Bloquear (baja)", "r", "¿Bloquear la cuenta de %s y cerrar sus sesiones?" % _esc(u.usuario))) + \
                   boton("reset_clave", "🔑 Nueva contraseña", "", "¿Generar una contraseña temporal nueva para %s?" % _esc(u.usuario)) + boton("cerrar_sesiones", "Cerrar sesiones") + \
                   (boton("quitar_mfa", "MFA opcional") if getattr(u, "forzar_mfa", False) else boton("forzar_mfa", "Exigir MFA")) + \
+                  ("<form class='in' method='POST' action='/tecnologia/accesos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>%s "
+                   "<button class='ti-btn s o' name='accion' value='cambiar_genero'>Guardar género</button></form> "
+                   % (csrf, u.id, _ti_html_genero(getattr(u, "genero", "") or "", "width:auto"))) + \
                   ("<form class='in' method='POST' action='/tecnologia/accesos/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
                    "<select name='nuevo_rol' style='width:auto'>%s</select> <button class='ti-btn s o' name='accion' value='cambiar_rol'>Cambiar rol</button></form>"
                    % (csrf, u.id, "".join("<option value='%s'%s>%s</option>" % (r, " selected" if r == u.rol else "", _esc(AREAS_PROCSIS[r]["titulo"] if r in AREAS_PROCSIS else r)) for r in creables))
@@ -94243,9 +94272,10 @@ def tecnologia_accesos():
                  "<div class='ti-2'><div><label>Usuario de acceso</label><input type='text' name='usuario' required minlength='4' maxlength='40' pattern='[a-z0-9._-]+'></div>"
                  "<div><label>Nombre completo</label><input type='text' name='nombre' required></div></div>"
                  "<div class='ti-2'><div><label>Correo</label><input type='email' name='correo'></div><div><label>Rol / área</label><select name='rol'>%s</select></div></div>"
+                 "<div><label>Género (para saludarle correctamente)</label>%s</div>"
                  "<label style='font-weight:400'><input type='checkbox' name='forzar_mfa' value='1'> Exigir doble factor (MFA) desde el primer ingreso</label>"
                  "<p><button class='ti-btn'>Crear usuario</button></p></form></div>"
-                 % (csrf, "".join("<option value='%s'>%s</option>" % (r, _esc(AREAS_PROCSIS[r]["titulo"] if r in AREAS_PROCSIS else r)) for r in creables)))
+                 % (csrf, "".join("<option value='%s'>%s</option>" % (r, _esc(AREAS_PROCSIS[r]["titulo"] if r in AREAS_PROCSIS else r)) for r in creables), _ti_html_genero()))
     cuerpo = ("<h1>🔐 Gestión de accesos e identidades</h1><p class='sub'>Control de quién entra a qué: creación de credenciales, asignación de rol, bajas inmediatas al retirarse una persona, "
               "cierre de sesiones, restablecimiento de contraseña y doble factor (MFA).</p>%s"
               "<div class='ti-card'><h2>Cuentas internas</h2><div style='overflow-x:auto'><table><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>MFA</th><th>Último acceso</th><th>Acciones</th></tr>%s</table></div></div>"
@@ -94277,10 +94307,10 @@ def tecnologia_accesos_accion():
             if _err is not None:
                 return _ti_pagina_confirmar("Confirmar rol y accesos antes de crear el usuario", rol_n,
                                             "Va a crear el usuario <b>%s</b> (%s) con el rol <b>%s</b>. Revise los accesos que se activarán." % (_esc(f.get("usuario")), _esc(f.get("nombre")), _esc(_ti_titulo_rol(rol_n))),
-                                            "/tecnologia/accesos/accion", {"accion": "crear", "usuario": f.get("usuario"), "nombre": f.get("nombre"), "correo": f.get("correo"), "rol": rol_n,
+                                            "/tecnologia/accesos/accion", {"accion": "crear", "usuario": f.get("usuario"), "nombre": f.get("nombre"), "correo": f.get("correo"), "rol": rol_n, "genero": f.get("genero"),
                                                                           "forzar_mfa": "1" if f.get("forzar_mfa") else ""},
                                             "✔ Confirmar y crear usuario", "/tecnologia/accesos", error=_err)
-            u, clave = _ti_crear_usuario(f.get("usuario"), f.get("nombre"), f.get("correo"), f.get("rol") or "", bool(f.get("forzar_mfa")) or (f.get("rol") == "Tecnologia"))
+            u, clave = _ti_crear_usuario(f.get("usuario"), f.get("nombre"), f.get("correo"), f.get("rol") or "", bool(f.get("forzar_mfa")) or (f.get("rol") == "Tecnologia"), genero=f.get("genero"))
             if u is None:
                 session["ti_msg"] = ("err", clave)
                 return redirect("/tecnologia/accesos")
@@ -94291,6 +94321,15 @@ def tecnologia_accesos_accion():
             session["ti_msg"] = ("err", "Cuenta no válida para esta acción.")
         elif u.rol in ("Superadmin", "Gerente", "Administrador") and rol_actual() != "Superadmin":
             session["ti_msg"] = ("err", "Las cuentas de Gerencia solo las gestiona Superadmin.")
+        elif a == "cambiar_genero":
+            g_nuevo = (f.get("genero") or "").strip().upper()
+            if g_nuevo not in ("F", "M", "T"):
+                session["ti_msg"] = ("err", "Seleccione un género válido.")
+            else:
+                u.genero = g_nuevo
+                registrar_auditoria("TI actualizó género", "%s actualizó el género registrado de %s (para el saludo)" % (quien, u.usuario))
+                db.session.commit()
+                session["ti_msg"] = ("ok", "Género de %s actualizado." % u.usuario)
         elif a == "bloquear":
             desactivar_empleado(u.id, quien)
             session["ti_msg"] = ("ok", "Cuenta de %s bloqueada y sesiones cerradas." % u.usuario)
@@ -94622,10 +94661,11 @@ def tecnologia_solicitudes_rrhh():
             acc = ("<form class='in' method='POST' action='/tecnologia/solicitudes-rrhh/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
                    "<div class='ti-2'><div><label>Usuario</label><input type='text' name='usuario' value='%s' pattern='[a-z0-9._-]{4,40}' required></div>"
                    "<div><label>Correo corporativo</label><input type='email' name='correo_corp' placeholder='nombre@procsis.com'></div></div>"
+                   "<label>Género de la persona (para saludarla correctamente)</label>%s<br>"
                    "<label style='font-weight:400'><input type='checkbox' name='forzar_mfa' value='1'> Exigir MFA desde el primer ingreso</label><br>"
                    "<input type='text' name='nota' placeholder='Nota (si la devuelve a RRHH, explique el motivo)' style='margin:6px 0'>"
                    "<button class='ti-btn s' name='accion' value='crear' onclick=\"return confirm('Se le mostrarán el rol y los accesos de %s para confirmar. ¿Continuar?');\">🔑 Crear credencial</button> "
-                   "<button class='ti-btn s r' name='accion' value='devolver'>↩ Devolver a RRHH</button></form>" % (csrf, d["id"], _esc(sug), _esc(d["nombre"])))
+                   "<button class='ti-btn s r' name='accion' value='devolver'>↩ Devolver a RRHH</button></form>" % (csrf, d["id"], _esc(sug), _ti_html_genero(), _esc(d["nombre"])))
         elif d["estado"] == "Credencial creada":
             acc = "Usuario <b>%s</b> · %s" % (_esc(d["usuario_creado"]), _esc((d["atendido_en"] or "")[:10]))
         trs.append("<tr><td>#%d</td><td><b>%s</b><br><small>CC %s</small><details><summary style='cursor:pointer;color:#0f766e'>Ver orden de RRHH</summary>%s</details></td><td>%s</td><td>%s</td></tr>"
@@ -94672,11 +94712,11 @@ def tecnologia_solicitudes_rrhh_accion():
             if _err is not None:
                 return _ti_pagina_confirmar("Confirmar rol y accesos antes de crear la credencial", d["rol_sistema"],
                                             "Va a crear la credencial de <b>%s</b> por orden de Talento Humano #%d, con el rol <b>%s</b>. Revise los accesos que se activarán." % (_esc(d["nombre"]), rid, _esc(_ti_titulo_rol(d["rol_sistema"]))),
-                                            "/tecnologia/solicitudes-rrhh/accion", {"id": rid, "accion": "crear", "usuario": f.get("usuario"), "correo_corp": f.get("correo_corp"),
+                                            "/tecnologia/solicitudes-rrhh/accion", {"id": rid, "accion": "crear", "usuario": f.get("usuario"), "correo_corp": f.get("correo_corp"), "genero": f.get("genero"),
                                                                                     "forzar_mfa": "1" if f.get("forzar_mfa") else ""},
                                             "✔ Confirmar y crear credencial", destino, error=_err)
             u, clave = _ti_crear_usuario(f.get("usuario"), d["nombre"], (f.get("correo_corp") or d["correo_personal"] or ""), d["rol_sistema"], bool(f.get("forzar_mfa")) or d["rol_sistema"] == "Tecnologia",
-                                         departamento=d["departamento"], nivel=d["nivel"], jefe=d["jefe_usuario"])
+                                         departamento=d["departamento"], nivel=d["nivel"], jefe=d["jefe_usuario"], genero=f.get("genero"))
             if u is None:
                 session["ti_msg"] = ("err", clave)
                 return redirect(destino)
