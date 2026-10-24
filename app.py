@@ -6673,6 +6673,7 @@ def ruta_publica():
         or p.startswith("/pqr/")
         or p.startswith("/docs/")
         or p.startswith("/politicas")
+        or p.startswith("/institucional/")
         or p.startswith("/convocatoria48")
         or p.startswith("/reconocimiento/")
     )
@@ -11789,7 +11790,7 @@ def session_idle_timeout():
     from flask import request as _req
     path = (_req.path or "")
     # Solo rutas 100% públicas (sin sesión)
-    if path.startswith(("/static", "/api/health", "/api/webhooks", "/biometria", "/api/biometria")):
+    if path.startswith(("/static", "/institucional/", "/api/health", "/api/webhooks", "/biometria", "/api/biometria")):
         return
     if path in (
         "/login", "/soporte-login", "/cobranza-login", "/ventas-login", "/gerencia-login",
@@ -11833,7 +11834,7 @@ def session_idle_timeout():
 def seguridad_empleados_gate():
     """Bloqueo por usuario inactivo, horario laboral y sesión revocada (empleados internos)."""
     path = request.path or ""
-    if path.startswith("/static") or path in (
+    if path.startswith(("/static", "/institucional/")) or path in (
         "/login", "/soporte-login", "/docente-login", "/logout",
         "/recuperar", "/cookies", "/reembolsos", "/puntos-atencion", "/legal", "/ayuda", "/centro-ayuda", "/dev-console-login", "/dev-console", "/ventas-login", "/gerencia-login",
         "/cobranza-login", "/cobranza", "/cobranza/panel",
@@ -12252,16 +12253,7 @@ def _nav_public_html(active=""):
 def _public_shell(title, body_html, active=""):
     """Página pública corporativa con menú."""
     nav = _nav_public_html(active)
-    footer = """
-<footer style="background:#0B2D57;color:#e2e8f0;padding:28px 16px;margin-top:40px;font-family:Segoe UI,system-ui,sans-serif">
-  <div style="max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;font-size:13px">
-    <div><b style="color:#fff">EduTrack · PROCSIS</b><p style="margin:8px 0 0;opacity:.85">Plataforma de gestión académica multi-institucional para colegios de Colombia.</p></div>
-    <div><b style="color:#fff">Explorar</b><p style="margin:8px 0 0"><a href="/soluciones" style="color:#bfdbfe">Soluciones</a><br><a href="/quienes-somos" style="color:#bfdbfe">Quiénes somos</a><br><a href="/eventos-virtuales" style="color:#bfdbfe">Eventos</a></p></div>
-    <div><b style="color:#fff">Acceso</b><p style="margin:8px 0 0"><a href="/login" style="color:#bfdbfe">Instituciones (todos los roles)</a><br><a href="/familia-login" style="color:#bfdbfe">Portal familiar (padres)</a><br><a href="/ayuda" style="color:#bfdbfe">Centro de ayuda</a></p></div>
-  </div>
-  <div style="text-align:center;margin-top:20px;font-size:12px;opacity:.7">© 2026 Procsis · EduTrack. Todos los derechos reservados.</div>
-</footer>
-"""
+    footer = _footer_corporativo_html()
     content = f"""
 <style>
 /* Botones estilo Apple · azul PROCSIS (logo) */
@@ -13170,7 +13162,7 @@ def _get_pagina_legal(codigo):
     return meta["titulo"], meta["cuerpo"]
 
 
-def _legal_page_shell(titulo, cuerpo_html, activo_codigo=""):
+def _legal_page_shell(titulo, cuerpo_html, activo_codigo="", con_nav=True):
     """Plantilla publica unificada con navegacion entre modulos legales."""
     nav = [
         ("privacidad", "Privacidad", "/privacidad"),
@@ -13195,6 +13187,8 @@ def _legal_page_shell(titulo, cuerpo_html, activo_codigo=""):
     nav_html = "".join(links) + (
         '<a href="/login" style="color:#86868b;font-size:13px;margin-left:8px">Volver</a>'
     )
+    if not con_nav:
+        nav_html = '<a href="/" style="color:#1d4ed8;font-weight:600;font-size:13px;text-decoration:none">← Volver al inicio</a>'
     year = "2026"
     try:
         year = str(ahora().year)
@@ -13221,6 +13215,199 @@ def _legal_page_shell(titulo, cuerpo_html, activo_codigo=""):
         "</div></div>"
     )
     return page(titulo, body)
+
+
+
+
+# ───────────────────────── Pie corporativo (4 columnas) + paginas institucionales editables ─────────────────────────
+def _cp(h2_p):
+    """[(titulo, texto), ...] -> HTML simple."""
+    out = ""
+    for t, txt in h2_p:
+        out += "<h2>%s</h2>%s" % (t, txt if txt.startswith("<") else "<p>%s</p>" % txt)
+    return out
+
+
+_CORP_PAGES = [
+    ("educacion", "Procsis y el sector educativo", _cp([
+        ("Quiénes somos", "Procsis desarrolla EduTrack, una plataforma de gestión académica multi-institucional para colegios de Colombia."),
+        ("Qué resolvemos", "<ul><li>Asistencia con código QR y alertas de impuntualidad.</li><li>Notas con planillas SIEE y boletines en PDF.</li>"
+                           "<li>Pre-matrícula (SIMAT), PQR y portales por rol.</li><li>Reportes para coordinación y rectoría.</li></ul>"),
+        ("Nuestro enfoque", "Reducir la carga administrativa, dejar trazabilidad de cada proceso y acercar a las familias con la institución. "
+                            "Conoce más en <a href='/soluciones'>Soluciones</a> y <a href='/casos-exito'>Casos de éxito</a>."),
+    ])),
+    ("directivos", "EduTrack para directivos y rectores", _cp([
+        ("Visión de conjunto", "Rectoría accede a indicadores de asistencia, rendimiento y PQR de toda la institución, con registros de auditoría de los cambios."),
+        ("Control y seguridad", "Roles y permisos por cargo, aislamiento entre instituciones y sedes, y cierre de sesión por inactividad."),
+        ("Siguiente paso", "Solicita una demostración en <a href='/ventas'>Planes</a> o <a href='/contacto'>contáctanos</a>."),
+    ])),
+    ("coordinacion", "Gestión para la coordinación escolar", _cp([
+        ("Seguimiento diario", "Control de asistencia y alertas de retardo para actuar a tiempo con estudiantes y familias."),
+        ("Informes", "Reprobación por niveles, cuadro de honor y rendimiento por salón, listos para consulta y descarga."),
+        ("Convivencia y trámites", "Canal de PQR con radicado y seguimiento, y sedes organizadas por institución."),
+    ])),
+    ("docentes", "Plataforma para docentes", _cp([
+        ("Planillas SIEE", "Registro de notas con componentes cognitivo, procedimental y actitudinal, y promedios automáticos."),
+        ("Asistencia", "Toma de asistencia ágil, también desde el celular."),
+        ("Acompañamiento", "Tutoriales en el <a href='/ayuda'>Centro de ayuda</a> y <a href='/eventos-virtuales'>capacitaciones virtuales</a> para docentes."),
+    ])),
+    ("familias", "Portal de seguimiento para padres", _cp([
+        ("Para las familias", "<ul><li><a href='/familia-login'>Portal familiar</a>: boletines y seguimiento.</li>"
+                              "<li><a href='/acudiente-asistencia'>Consulta de asistencia</a>.</li>"
+                              "<li><a href='/acudiente/autorizar-salida'>Autorización de salidas</a>.</li></ul>"),
+        ("Notificaciones", "Los avisos por WhatsApp dependen de la activación y los límites técnicos del plan contratado por la institución."),
+        ("Tus datos", "Tratamos los datos de estudiantes con especial cuidado, conforme a la <a href='/politicas/habeas'>Ley 1581 de 2012</a>."),
+    ])),
+    ("alianzas", "Socios y alianzas", _cp([
+        ("Trabajamos con aliados", "Procsis desarrolla convenios con instituciones educativas, aliados tecnológicos y entidades del sector para llevar EduTrack a más colegios."),
+        ("Quieres ser aliado", "Escríbenos desde el <a href='/contacto'>formulario de contacto</a> con tu propuesta y te responderá el equipo comercial."),
+    ])),
+    ("infraestructura", "Operador de infraestructura", _cp([
+        ("Operación en la nube", "EduTrack opera en la nube con copias de seguridad y aislamiento de los datos de cada institución."),
+        ("Seguridad", "Control de acceso por roles, límite de intentos de ingreso, cabeceras de seguridad y registros de auditoría."),
+        ("Más detalle técnico", "Consulta el <a href='/institucional/trust-center'>Trust Center</a> o solicita información técnica por <a href='/contacto'>contacto</a>."),
+    ])),
+    ("trust-center", "Trust Center", _cp([
+        ("Centro de confianza", "Aquí reunimos cómo protegemos la información de las instituciones, docentes, estudiantes y familias."),
+        ("Documentos", "<ul><li><a href='/politicas/seguridad-informacion'>Seguridad de la información</a></li><li><a href='/politicas/ciberseguridad'>Ciberseguridad</a></li>"
+                       "<li><a href='/politicas/datos-personales'>Protección de datos personales</a></li><li><a href='/politicas/habeas'>Habeas data (Ley 1581)</a></li>"
+                       "<li><a href='/cookies'>Política de cookies</a></li></ul>"),
+        ("Reportar un incidente", "Si detectas una vulnerabilidad o un uso indebido, avísanos por <a href='/pqr'>PQR</a> o <a href='/contacto'>contacto</a>."),
+    ])),
+    ("integridad", "Integridad y conformidad", _cp([
+        ("Buenas prácticas", "Actuamos con transparencia: tratamos los datos solo para prestar el servicio, no usamos cookies publicitarias de terceros y dejamos registro de los cambios."),
+        ("Canal de reclamos", "Cualquier persona puede presentar una queja o sugerencia por el <a href='/pqr'>canal oficial de PQRSD</a>."),
+        ("Marco normativo", "Ley 1581 de 2012 de protección de datos y normas complementarias. Ver <a href='/legal'>términos y condiciones</a>."),
+    ])),
+    ("sustentabilidad", "Sustentabilidad", _cp([
+        ("Menos papel", "Planillas, boletines y trámites digitales ayudan a reducir el uso de papel en las instituciones."),
+        ("Huella digital responsable", "Procuramos un uso eficiente de recursos en la nube y conservamos los datos solo el tiempo necesario."),
+    ])),
+    ("prensa", "Prensa y Medios", _cp([
+        ("Sala de prensa", "Novedades de la compañía y de EduTrack en <a href='/historias-decision'>Historias</a> y <a href='/casos-exito'>Casos de éxito</a>."),
+        ("Contacto para medios", "Escríbenos desde el <a href='/contacto'>formulario de contacto</a> indicando tu medio y el tema."),
+    ])),
+    ("condiciones-venta", "Condiciones de venta", _cp([
+        ("1. Objeto", "Licenciamiento de uso de la plataforma EduTrack, bajo el plan elegido por la institución."),
+        ("2. Contratación", "La contratación se formaliza con un contrato digital y la validación de identidad del representante de la institución."),
+        ("3. Precio y pago", "El valor, la periodicidad y el medio de pago son los del plan y la propuesta aceptados por la institución."),
+        ("4. Vigencia y renovación", "El servicio rige durante el periodo contratado; las condiciones de renovación se informan antes del vencimiento."),
+        ("5. Retracto y reembolsos", "Consulta la <a href='/reembolsos'>política de reembolsos</a>."),
+        ("6. Otros textos", "<a href='/legal'>Términos y condiciones</a> · <a href='/institucional/politica-entrega'>Política de entrega</a> · <a href='/institucional/faq'>Preguntas frecuentes</a>"),
+    ])),
+    ("politica-entrega", "Política de entrega", _cp([
+        ("Activación del servicio", "EduTrack es un servicio en la nube: no hay envío físico. Los accesos se entregan al representante de la institución cuando se valida su identidad y se confirma el pago."),
+        ("Plazos", "Los tiempos de activación y de capacitación dependen del plan y se informan en la propuesta comercial."),
+        ("Acompañamiento", "Tras la activación, el equipo de soporte acompaña la puesta en marcha. Ver <a href='/ayuda'>Centro de ayuda</a>."),
+    ])),
+    ("faq", "Preguntas frecuentes", _cp([
+        ("¿Qué incluye EduTrack?", "Asistencia con QR, notas y boletines, pre-matrícula, PQR y portales por rol, según el plan contratado."),
+        ("¿Cómo solicito una demostración?", "Desde <a href='/ventas'>Planes</a> o por el <a href='/contacto'>formulario de contacto</a>."),
+        ("¿Cuándo se activa el servicio?", "Al validar la identidad del representante y confirmar el pago. Ver <a href='/institucional/politica-entrega'>Política de entrega</a>."),
+        ("¿Puedo pedir un reembolso?", "Sí, según el caso. Ver <a href='/reembolsos'>Política de reembolsos</a>."),
+        ("¿Dónde radico una queja o reclamo?", "En el <a href='/pqr'>canal oficial de PQRSD</a>."),
+    ])),
+]
+
+_CORP_SLUGS = {sl: "inst_" + sl for sl, _t, _b in _CORP_PAGES}
+_CORP_TITULOS = {"inst_" + sl: t for sl, t, _b in _CORP_PAGES}
+_PAGINAS_LEGALES_DEFAULT.update({"inst_" + sl: {"titulo": t, "cuerpo": b} for sl, t, b in _CORP_PAGES})
+
+_FOOTER_COLS = [
+    ("Procsis y la Educación", [
+        ("Procsis y el sector educativo", "/institucional/educacion"),
+        ("EduTrack para directivos y rectores", "/institucional/directivos"),
+        ("Gestión para la coordinación escolar", "/institucional/coordinacion"),
+        ("Plataforma para docentes", "/institucional/docentes"),
+        ("Portal de seguimiento para padres", "/institucional/familias"),
+        ("Socios y alianzas", "/institucional/alianzas"),
+    ]),
+    ("Infraestructura y Operación", [
+        ("Operador de infraestructura", "/institucional/infraestructura"),
+        ("Trust Center", "/institucional/trust-center"),
+        ("Política de privacidad", "/privacidad"),
+        ("Integridad y conformidad", "/institucional/integridad"),
+        ("Sustentabilidad", "/institucional/sustentabilidad"),
+    ]),
+    ("Corporativo e Institucional", [
+        ("Equipo Directivo", "/#lideres"),
+        ("Prensa y Medios", "/institucional/prensa"),
+        ("Eventos y capacitaciones docentes", "/eventos-virtuales"),
+        ("Canal oficial de PQRSD", "/pqr"),
+    ]),
+    ("Procsis Ventas y Legal", [
+        ("Condiciones de venta", "/institucional/condiciones-venta"),
+        ("Política de entrega", "/institucional/politica-entrega"),
+        ("Política de devoluciones", "/reembolsos"),
+        ("Preguntas frecuentes", "/institucional/faq"),
+        ("Superintendencia de Industria y Comercio", "https://www.sic.gov.co"),
+    ]),
+]
+
+_FOOTER_CSS = """<style>
+.cf-foot{background:#1d1d1f;color:#a1a1a6;padding:52px 20px 24px;margin-top:12px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.cf-in{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1.25fr repeat(4,1fr);gap:28px}
+.cf-foot h4{margin:0 0 14px;font-size:12px;font-weight:600;color:#f5f5f7;letter-spacing:.01em;line-height:1.3}
+.cf-foot a{display:block;margin:0 0 9px;font-size:12px;font-weight:400;line-height:1.4;color:#a1a1a6;text-decoration:none;transition:color .2s ease}
+.cf-foot a:hover,.cf-foot a:focus-visible{color:#fff;text-decoration:none}
+.cf-foot a:focus-visible{outline:2px solid #6e6e73;outline-offset:2px;border-radius:4px}
+.cf-brand{font-weight:600;font-size:15px;color:#f5f5f7;margin-bottom:12px}
+.cf-foot p{margin:0 0 14px;font-size:12px;line-height:1.55;color:#a1a1a6}
+.cf-bot{max-width:1180px;margin:34px auto 0;padding-top:16px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;font-size:11px;font-weight:300;color:#86868b}
+.cf-foot .cf-bot a{display:inline;margin:0 0 0 16px;font-size:11px;font-weight:300;color:#86868b}
+.cf-foot .cf-bot a:hover{color:#fff}
+@media(max-width:1000px){.cf-in{grid-template-columns:repeat(2,1fr)}.cf-first{grid-column:1/-1}}
+@media(max-width:560px){.cf-in{grid-template-columns:1fr}.cf-foot .cf-bot a{margin:0 16px 0 0}}
+</style>"""
+
+
+def _footer_corporativo_html():
+    """Pie corporativo oscuro de 4 columnas (login, /procsis y paginas publicas)."""
+    correo, tel, desc = "procsis.edu@gmail.com", "3246868183", "Soluciones digitales para el sector educativo. Plataforma académica multi-institucional."
+    try:
+        p = plataforma()
+        correo = (getattr(p, "email_empresa", None) or getattr(p, "email_soporte", None) or correo).strip()
+        tel = re.sub(r"[^0-9+]", "", str(getattr(p, "telefono_empresa", None) or getattr(p, "telefono_soporte", None) or tel)) or tel
+        desc = (getattr(p, "corp_footer_texto", None) or desc).strip()
+    except Exception:
+        pass
+    try:
+        anio = str(ahora().year)
+    except Exception:
+        anio = "2026"
+    cols = ""
+    for tit, links in _FOOTER_COLS:
+        items = "".join(
+            '<a href="%s"%s>%s</a>' % (_esc(h), ' target="_blank" rel="noopener noreferrer"' if h.startswith("http") else "", _esc(l))
+            for l, h in links
+        )
+        cols += '<nav class="cf-col" aria-label="%s"><h4>%s</h4>%s</nav>' % (_esc(tit), _esc(tit), items)
+    return (
+        _FOOTER_CSS
+        + '<footer class="cf-foot"><div class="cf-in">'
+        + '<div class="cf-first"><div class="cf-brand">PROCSIS</div><p>' + _esc(desc) + "</p>"
+        + '<a href="mailto:' + _esc(correo) + '">Soporte por correo</a>'
+        + '<a href="tel:' + _esc(tel) + '">Línea de atención</a>'
+        + '<a href="/contacto">Formulario de contacto</a></div>'
+        + cols
+        + '</div><div class="cf-bot"><span>© ' + anio + " PROCSIS · Soluciones digitales. Todos los derechos reservados.</span>"
+        + '<span><a href="/legal">Términos</a><a href="/cookies">Cookies</a><a href="/politicas/habeas">Habeas data</a>'
+        + '<a href="/puntos-atencion">Sedes y Puntos de Atención</a></span></div></footer>'
+    )
+
+
+@app.route("/institucional/<slug>")
+def pagina_institucional(slug):
+    cod = _CORP_SLUGS.get((slug or "").strip().lower())
+    if not cod:
+        return _public_shell("No encontrada", "<div style='max-width:640px;margin:80px auto;padding:0 20px;font-family:sans-serif;text-align:center'>"
+                                              "<h1>Página no encontrada</h1><p><a href='/'>Volver al inicio</a></p></div>"), 404
+    try:
+        _seed_paginas_legales()
+    except Exception:
+        pass
+    titulo, cuerpo = _get_pagina_legal(cod)
+    return _legal_page_shell(titulo, cuerpo, "", con_nav=False)
 
 
 
@@ -14441,46 +14628,13 @@ def _html_login_pie_colegios():
 .login-apple-foot{{max-width:1100px;margin:0 auto;padding:28px 20px 8px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
 .login-apple-foot .laf-notes{{font-size:12px;line-height:1.55;color:#6e6e73;margin:0 0 10px}}
 .login-apple-foot .laf-notes a{{color:#0066cc;text-decoration:underline}}
-.login-corp-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:12px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}}
-.login-corp-foot .lcf-inner{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:32px}}
-@media(max-width:800px){{.login-corp-foot .lcf-inner{{grid-template-columns:1fr}}}}
-.login-corp-foot .lcf-brand{{font-weight:600;font-size:15px;color:#f5f5f7;margin-bottom:12px}}
-.login-corp-foot a{{color:#2997ff;text-decoration:none;display:block;margin:8px 0;font-size:13px;font-weight:500}}
-.login-corp-foot a:hover{{text-decoration:underline}}
-.login-corp-foot h4{{margin:0 0 12px;color:#f5f5f7;font-size:13px;font-weight:600}}
-.login-corp-foot p{{margin:4px 0;font-size:13px;color:#a1a1a6;line-height:1.5}}
-.login-corp-foot .lcf-copy{{max-width:1100px;margin:28px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6e6e73;text-align:center}}
 </style>
 <div class="login-apple-foot">
   <p class="laf-notes">{_fill_p1(p1)}</p>
   <p class="laf-notes">{_fill_p2(p2)}</p>
   <p class="laf-notes">{_esc(extra)}</p>
 </div>
-<footer class="login-corp-foot">
-  <div class="lcf-inner">
-    <div>
-      <div class="lcf-brand">PROCSIS</div>
-      <p>Soluciones digitales para el sector educativo. Plataforma académica multi-institucional.</p>
-    </div>
-    <div>
-      <h4>Navegación</h4>
-      <a href="/">Inicio</a>
-      <a href="/procsis">Portafolio</a>
-      <a href="/ventas">Planes</a>
-      <a href="/login">Acceso instituciones</a>
-      <a href="/support">Support</a>
-    </div>
-    <div>
-      <h4>Contacto</h4>
-      <p>{_esc(corp_email)}</p>
-      <p>{_esc(corp_tel)}</p>
-      <a href="/contacto">Formulario de contacto</a>
-      <a href="/legal">Privacidad y datos</a>
-      <a href="/reembolsos">Política de reembolsos</a>
-    </div>
-  </div>
-  <div class="lcf-copy">© 2026 PROCSIS · Soluciones digitales. Todos los derechos reservados.</div>
-</footer>
+{_footer_corporativo_html()}
 """
 
 
@@ -29898,7 +30052,7 @@ def gerencia_paginas_legales():
         ("reembolsos", "Politica de reembolsos", "/reembolsos"),
         ("terminos", "Terminos y condiciones / Aviso legal", "/legal"),
         ("habeas", "Habeas data (Ley 1581)", "/politicas/habeas"),
-    ]
+    ] + [(c, "Pie de página · " + t, "/institucional/" + c[5:]) for c, t in _CORP_TITULOS.items()]
     edit = (request.args.get("edit") or request.form.get("codigo") or "").strip().lower()
     if request.method == "POST":
         accion = (request.form.get("accion") or "guardar").strip()
@@ -64986,37 +65140,13 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
 '''}
     </div>
   </section>
-<footer class="pc-foot">
-    <div class="pc-foot-in">
-      <div>
-        <h4>{brand_nom}</h4>
-        <p style="margin:0;line-height:1.5">{foot_txt}</p>
-      </div>
-      <div>
-        <h4>Navegación</h4>
-        <a href="/procsis">Inicio</a>
-        <a href="/portafolio">Portafolio</a>
-        <a href="/tecnologia">{brand_nom}</a>
-        {link_planes_foot}
-        <a href="/login">Acceso instituciones</a>
-      </div>
-      <div>
-        <h4>Contacto</h4>
-        <p style="margin:0 0 6px">{corp_email}</p>
-        <p style="margin:0 0 6px">{corp_tel}</p>
-        <a href="/contacto">Formulario de contacto</a>
-        <a href="/legal">Privacidad y datos</a>
-      <a href="/reembolsos">Política de reembolsos</a>
-      </div>
-    </div>
-    <div class="pc-copy">© {anio} {brand_nom} · {brand_sub}. Todos los derechos reservados.</div>
-  </footer>
+{_footer_corporativo_html()}
 </div>
 """
     try:
         _car = _html_carrusel_clientes()
-        if "pc-foot" in (body or ""):
-            body = (body or "").replace('<footer class="pc-foot">', _car + '<footer class="pc-foot">', 1)
+        if "cf-foot" in (body or ""):
+            body = (body or "").replace('<footer class="cf-foot">', _car + '<footer class="cf-foot">', 1)
         else:
             body = (body or "") + _car
     except Exception as _ce:
@@ -82618,7 +82748,7 @@ def gerencia_correo_extra(n):
 import re as _re_rw
 _RW_PATRON = _re_rw.compile(rb"https?://[A-Za-z0-9.-]+\.up\.railway\.app", _re_rw.I)
 _RW_RUTAS_PUBLICAS = ("/encuesta/", "/pqr", "/validar-identidad/", "/validar-biometria/", "/legal-texto/", "/media/login/", "/media/login-banner/", "/contrato-activacion/", "/verificar-certificado/", "/demo/invitar/",
-                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal", "/reembolsos", "/puntos-atencion", "/convocatoria48", "/reconocimiento/")
+                      "/colegio/", "/matricula", "/biometria/validar/", "/tratamiento-datos", "/privacidad", "/legal", "/reembolsos", "/puntos-atencion", "/institucional/", "/convocatoria48", "/reconocimiento/")
 
 
 @app.before_request
