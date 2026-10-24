@@ -2135,6 +2135,17 @@ class PuntoAtencion(db.Model):
     orden = db.Column(db.Integer, default=0)
 
 
+class GeoCache(db.Model):
+    """Cache de geocodificacion (Mapa de ubicaciones) para no repetir consultas."""
+    __tablename__ = "geo_cache"
+    id = db.Column(db.Integer, primary_key=True)
+    clave = db.Column(db.String(300), unique=True, index=True)
+    lat = db.Column(db.Float)
+    lng = db.Column(db.Float)
+    nombre = db.Column(db.String(300), default="")
+    creado = db.Column(db.String(30), default="")
+
+
 class CasoExito(db.Model):
     """Casos de éxito públicos — editable desde Gerencia."""
     __tablename__ = "casos_exito"
@@ -4473,6 +4484,8 @@ _MODULOS_GERENCIA = [
         ('/gerencia/roles', 'Roles y permisos'),
         ('/gerencia/usuarios', 'Usuarios internos'),
         ('/gerencia/empresa', 'Datos de la empresa (alterno)'),
+        ('/gerencia/puntos-atencion', '📍 Sedes y puntos de atención (públicos)'),
+        ('/mapa', '🗺️ Mapa de ubicaciones'),
         ('/gerencia/finanzas/promociones', 'Promociones financieras'),
         ('/gerencia/dev-console', 'Consola de desarrollador'),
         ('/gerencia/sesiones-tecnicas', 'Sesiones técnicas (solo ver)'),
@@ -4732,6 +4745,8 @@ def _staff_nav_items(path, rol=""):
         _add = [(h, l) for h, l in _REPARTO_MENU_EXTRA[_rol_menu] if h not in _ya0]
         if _add:
             items = [x for x in items if x[0] != "/logout"] + _add + [x for x in items if x[0] == "/logout"]
+    if rol in _ROLES_MAPA and not any(h == "/mapa" for h, _l in items):
+        items = [x for x in items if x[0] != "/logout"] + [("/mapa", "🗺️ Mapa de ubicaciones")] + [x for x in items if x[0] == "/logout"]
     if rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
         # Todos los módulos de Gerencia viven en el menú lateral (antes eran un panel al final del dashboard).
         _ya = {h for h, _l in items}
@@ -11992,13 +12007,9 @@ def _seed_web_menu_defaults():
         n = db.session.execute(text("SELECT COUNT(*) FROM web_menu_items")).scalar() or 0
         if int(n) > 0:
             try:
-                ya = db.session.execute(text("SELECT COUNT(*) FROM web_menu_items WHERE url='/puntos-atencion'")).scalar() or 0
-                if int(ya) == 0:
-                    db.session.execute(text(
-                        "INSERT INTO web_menu_items (seccion, etiqueta, url, orden, activo) "
-                        "VALUES ('ayuda','Sedes y Puntos de Atención','/puntos-atencion',5,TRUE)"
-                    ))
-                    db.session.commit()
+                # "Sedes y Puntos de Atencion" ahora vive en la barra principal, no dentro de Ayuda.
+                db.session.execute(text("DELETE FROM web_menu_items WHERE url='/puntos-atencion'"))
+                db.session.commit()
             except Exception:
                 try:
                     db.session.rollback()
@@ -12026,7 +12037,6 @@ def _seed_web_menu_defaults():
             ("ayuda", "Portal de Consulta para Padres", "/login", 2),
             ("ayuda", "Radicar PQR", "/pqr", 3),
             ("ayuda", "Soporte por WhatsApp", "/whatsapp", 4),
-            ("ayuda", "Sedes y Puntos de Atención", "/puntos-atencion", 5),
         ]
         for sec, et, url, ord_ in defaults:
             db.session.execute(text(
@@ -12088,7 +12098,6 @@ def _nav_public_html(active=""):
         '<a class="dropdown-link" href="/ayuda">Tutoriales para Profesores</a>'
         '<a class="dropdown-link" href="/pqr">Radicar PQR</a>'
         '<a class="dropdown-link" href="/whatsapp">Soporte por WhatsApp</a>'
-        '<a class="dropdown-link" href="/puntos-atencion">Sedes y Puntos de Atención</a>'
     )
     html = """
 <style>
@@ -12167,6 +12176,7 @@ def _nav_public_html(active=""):
     <span class="link-apple" role="button" tabindex="0" data-dd="soluciones">Soluciones</span>
     <span class="link-apple" role="button" tabindex="0" data-dd="planes">Planes</span>
     <span class="link-apple" role="button" tabindex="0" data-dd="ayuda">Ayuda</span>
+    <a class="link-apple" href="/puntos-atencion" style="text-decoration:none">Sedes y Puntos de Atención</a>
     <a class="link-apple" href="/support" style="text-decoration:none">Support</a>
   </div>
   <div class="nav-button-right">
@@ -13719,7 +13729,7 @@ def puntos_atencion_publico():
         except Exception:
             pass
     data_js = json.dumps(datos, ensure_ascii=False).replace("</", "<\\/")
-    return _public_shell("Sedes y puntos de atención · EduTrack", _PA_PAGE.replace("__DATA__", data_js), "ayuda")
+    return _public_shell("Sedes y puntos de atención · EduTrack", _PA_PAGE.replace("__DATA__", data_js), "puntos")
 
 
 def _pa_float(v):
@@ -13734,7 +13744,7 @@ def _pa_float(v):
 def gerencia_puntos_atencion():
     """Alta, activacion y borrado de sedes / puntos de atencion publicos."""
     rol = (rol_actual() or "").strip()
-    if not requiere_login() or rol not in ("Soporte", "Gerente", "Superadmin", "Administrador"):
+    if not requiere_login() or rol not in ("Soporte", "Gerente", "Gerencia", "Superadmin", "Administrador"):
         return redirect("/gerencia-login" if request.path.startswith("/gerencia") else "/soporte-login")
     try:
         db.create_all()
@@ -13851,6 +13861,476 @@ def gerencia_puntos_atencion():
     if rol == "Soporte" or session.get("soporte"):
         return page("Puntos de atención", shell_soporte(content))
     return page("Puntos de atención · Gerencia", content)
+
+
+# ───────────────────────── Mapa de ubicaciones (Ventas · Soporte · Gerencia · Cobranza ...) ─────────────────────────
+_ROLES_MAPA = (
+    "Soporte", "Desarrollador", "Developer", "Soluciones",
+    "Comercial", "Ventas", "Supervisor de Ventas", "Cobranza",
+    "Gerente", "Gerencia", "Administrador", "Superadmin",
+)
+
+# Capital (centro aproximado) de cada departamento: el mapa siempre tiene a donde centrarse, sin red.
+_DEP_CENTROS = {
+    "amazonas": (-4.2153, -69.9406), "antioquia": (6.2442, -75.5812), "arauca": (7.0847, -70.7591),
+    "atlantico": (10.9685, -74.7813), "bogota": (4.7110, -74.0721), "bolivar": (10.3910, -75.4794),
+    "boyaca": (5.5353, -73.3678), "caldas": (5.0703, -75.5138), "caqueta": (1.6144, -75.6062),
+    "casanare": (5.3378, -72.3959), "cauca": (2.4448, -76.6147), "cesar": (10.4631, -73.2532),
+    "choco": (5.6947, -76.6611), "cordoba": (8.7479, -75.8814), "cundinamarca": (5.0300, -74.0300),
+    "guainia": (3.8653, -67.9239), "guaviare": (2.5729, -72.6459), "huila": (2.9273, -75.2819),
+    "la guajira": (11.5444, -72.9072), "magdalena": (11.2408, -74.1990), "meta": (4.1420, -73.6266),
+    "narino": (1.2136, -77.2811), "norte de santander": (7.8939, -72.5078), "putumayo": (1.1478, -76.6469),
+    "quindio": (4.5339, -75.6811), "risaralda": (4.8133, -75.6961), "san andres y providencia": (12.5847, -81.7006),
+    "santander": (7.1254, -73.1198), "sucre": (9.3047, -75.3978), "tolima": (4.4389, -75.2322),
+    "valle del cauca": (3.4516, -76.5320), "vaupes": (1.2530, -70.2336), "vichada": (6.1890, -67.4859),
+}
+
+import threading as _th_geo
+import time as _time_geo
+_GEO_LOCK = _th_geo.Lock()
+_GEO_ULTIMA = [0.0]
+
+
+def _geo_norm(s):
+    import unicodedata as _ud_geo
+    t = _ud_geo.normalize("NFD", str(s or "").lower())
+    t = "".join(c for c in t if _ud_geo.category(c) != "Mn")
+    t = re.sub(r"[^a-z0-9 ]+", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _dep_centro(dep):
+    k = _geo_norm(dep)
+    if k in _DEP_CENTROS:
+        return _DEP_CENTROS[k]
+    for nombre, c in _DEP_CENTROS.items():  # "Bogotá, D.C." -> "bogota d c"
+        if k.startswith(nombre) or nombre.startswith(k) and k:
+            return c
+    return None
+
+
+def _geo_nominatim(consulta):
+    """Una consulta a Nominatim (OSM): 1 por segundo como maximo, con cache en BD."""
+    clave = _geo_norm(consulta)[:300]
+    if not clave:
+        return None
+    try:
+        row = GeoCache.query.filter_by(clave=clave).first()
+        if row:
+            return {"lat": row.lat, "lng": row.lng, "nombre": row.nombre or ""}
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        import urllib.request as _ur_geo
+        import urllib.parse as _up_geo
+        with _GEO_LOCK:
+            espera = 1.1 - (_time_geo.time() - _GEO_ULTIMA[0])
+            if espera > 0:
+                _time_geo.sleep(espera)
+            url = "https://nominatim.openstreetmap.org/search?" + _up_geo.urlencode({
+                "q": consulta + ", Colombia", "format": "jsonv2", "limit": 1,
+                "countrycodes": "co", "accept-language": "es",
+            })
+            req = _ur_geo.Request(url, headers={
+                "User-Agent": "EduTrack-Procsis/1.0 (procsis.edu@gmail.com)", "Accept": "application/json"})
+            try:
+                with _ur_geo.urlopen(req, timeout=6) as r:
+                    data = json.loads(r.read().decode("utf-8", "replace") or "[]")
+            finally:
+                _GEO_ULTIMA[0] = _time_geo.time()
+        if not data:
+            return None
+        lat, lng = float(data[0]["lat"]), float(data[0]["lon"])
+        nombre = str(data[0].get("display_name") or "")[:300]
+        try:
+            db.session.add(GeoCache(clave=clave, lat=lat, lng=lng, nombre=nombre, creado=str(ahora())[:19]))
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        return {"lat": lat, "lng": lng, "nombre": nombre}
+    except Exception as ex:
+        print("geo nominatim:", repr(ex)[:160])
+        return None
+
+
+def _geo_resolver(dep="", mun="", direccion="", nombre=""):
+    """Devuelve la mejor ubicacion posible: exacta (direccion/nombre), municipio o departamento."""
+    base = ", ".join(x for x in (mun, dep) if x)
+    intentos = []
+    if direccion:
+        intentos.append((", ".join(x for x in (direccion, mun, dep) if x), True))
+    elif nombre:
+        intentos.append((", ".join(x for x in (nombre, mun, dep) if x), True))
+    if base:
+        intentos.append((base, False))
+    for consulta, exacta in intentos[:2]:
+        r = _geo_nominatim(consulta)
+        if r:
+            r.update({"aprox": not exacta, "fuente": "direccion" if exacta else "municipio"})
+            return r
+    c = _dep_centro(dep) or _dep_centro(mun)
+    if c:
+        return {"lat": c[0], "lng": c[1], "nombre": dep or mun, "aprox": True, "fuente": "departamento"}
+    return None
+
+
+def _mapa_autorizado():
+    try:
+        return bool(requiere_login()) and (rol_actual() or "").strip() in _ROLES_MAPA
+    except Exception:
+        return False
+
+
+@app.route("/mapa/api/geo")
+def mapa_api_geo():
+    if not _mapa_autorizado():
+        return jsonify({"ok": False, "error": "sin permiso"}), 403
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    r = _geo_resolver(
+        dep=(request.args.get("dep") or "").strip()[:80], mun=(request.args.get("mun") or "").strip()[:80],
+        direccion=(request.args.get("dir") or "").strip()[:200], nombre=(request.args.get("nombre") or "").strip()[:200],
+    )
+    if not r:
+        return jsonify({"ok": False, "error": "No se pudo ubicar"}), 200
+    r["ok"] = True
+    return jsonify(r)
+
+
+@app.route("/mapa/api/lugares")
+def mapa_api_lugares():
+    """Colegios y puntos por departamento / municipio / texto, tengan o no sedes registradas."""
+    if not _mapa_autorizado():
+        return jsonify({"ok": False, "error": "sin permiso"}), 403
+    dep = (request.args.get("dep") or "").strip()[:80]
+    mun = (request.args.get("mun") or "").strip()[:80]
+    q = (request.args.get("q") or "").strip()[:80]
+    capas = {c for c in (request.args.get("capas") or "cliente,sede,prospecto,directorio,punto").split(",") if c}
+    LIM = 120
+    out, truncado = [], False
+
+    def _f(query, col_dep=None, col_mun=None):
+        if dep and col_dep is not None:
+            query = query.filter(col_dep.ilike("%" + dep.replace("%", "") + "%"))
+        if mun and col_mun is not None:
+            query = query.filter(col_mun.ilike("%" + mun.replace("%", "") + "%"))
+        return query
+
+    try:
+        if "cliente" in capas:
+            qq = _f(Institucion.query.filter(Institucion.estado != "ARCHIVADA"), Institucion.departamento, Institucion.municipio)
+            if q:
+                like = "%" + q.replace("%", "") + "%"
+                qq = qq.filter(or_(Institucion.nombre.ilike(like), Institucion.dane.ilike(like), Institucion.nit.ilike(like)))
+            rows = qq.order_by(Institucion.nombre).limit(LIM + 1).all()
+            truncado = truncado or len(rows) > LIM
+            for r in rows[:LIM]:
+                out.append({"tipo": "cliente", "nombre": r.nombre or "", "direccion": r.direccion or "", "municipio": r.municipio or "",
+                            "departamento": r.departamento or "", "dane": r.dane or "", "extra": "Cliente EduTrack · plan %s · %s" % (r.plan or "-", r.estado or "-")})
+        if "sede" in capas:
+            qq = db.session.query(SedeInstitucion, Institucion.nombre).join(Institucion, Institucion.id == SedeInstitucion.institucion_id).filter(SedeInstitucion.activa == True)  # noqa: E712
+            qq = _f(qq, SedeInstitucion.departamento, SedeInstitucion.municipio)
+            if q:
+                like = "%" + q.replace("%", "") + "%"
+                qq = qq.filter(or_(SedeInstitucion.nombre.ilike(like), Institucion.nombre.ilike(like), SedeInstitucion.codigo_dane.ilike(like)))
+            rows = qq.limit(LIM + 1).all()
+            truncado = truncado or len(rows) > LIM
+            for sd, inom in rows[:LIM]:
+                out.append({"tipo": "sede", "nombre": "%s · %s" % (inom or "", sd.nombre or ""), "direccion": sd.direccion or "", "municipio": sd.municipio or "",
+                            "departamento": sd.departamento or "", "dane": sd.codigo_dane or "", "extra": "Sede %s · %s" % (sd.tipo or "", sd.zona or "")})
+        if "prospecto" in capas:
+            qq = _f(LeadCRM.query, None, LeadCRM.municipio)
+            saltar = False
+            if dep and not mun:  # los prospectos no guardan departamento: se filtran por los municipios del departamento
+                try:
+                    munis = [m for d, lst in _cargar_divipola().items() if _geo_norm(d) == _geo_norm(dep) for m in lst]
+                except Exception:
+                    munis = []
+                if munis:
+                    qq = qq.filter(or_(*[LeadCRM.municipio.ilike(m) for m in munis]))
+                else:
+                    saltar = True
+            if q:
+                qq = qq.filter(LeadCRM.colegio.ilike("%" + q.replace("%", "") + "%"))
+            rows = [] if saltar else qq.order_by(LeadCRM.id.desc()).limit(LIM + 1).all()
+            truncado = truncado or len(rows) > LIM
+            for r in rows[:LIM]:
+                out.append({"tipo": "prospecto", "nombre": r.colegio or "", "direccion": "", "municipio": r.municipio or "",
+                            "departamento": dep, "dane": "", "extra": "Prospecto · etapa %s" % (r.etapa or "-")})
+        if "directorio" in capas and (dep or mun or q):
+            qq = _f(DirectorioMEN.query, DirectorioMEN.departamento, DirectorioMEN.municipio)
+            if q:
+                like = "%" + q.replace("%", "") + "%"
+                qq = qq.filter(or_(DirectorioMEN.nombre.ilike(like), DirectorioMEN.codigo_dane.ilike(like), DirectorioMEN.nit.ilike(like)))
+            rows = qq.order_by(DirectorioMEN.nombre).limit(LIM + 1).all()
+            truncado = truncado or len(rows) > LIM
+            for r in rows[:LIM]:
+                out.append({"tipo": "directorio", "nombre": r.nombre or "", "direccion": "", "municipio": r.municipio or "",
+                            "departamento": r.departamento or "", "dane": r.codigo_dane or "", "extra": "Directorio MEN · %s · %s" % (r.sector or "-", r.zona or "-")})
+        if "punto" in capas:
+            qq = _f(PuntoAtencion.query.filter(PuntoAtencion.activo == True), None, PuntoAtencion.ciudad)  # noqa: E712
+            if q:
+                qq = qq.filter(PuntoAtencion.nombre.ilike("%" + q.replace("%", "") + "%"))
+            for r in qq.limit(LIM).all():
+                out.append({"tipo": "punto", "nombre": r.nombre or "", "direccion": r.direccion or "", "municipio": r.ciudad or "",
+                            "departamento": "", "dane": "", "lat": r.lat, "lng": r.lng, "extra": "Punto de atención Procsis"})
+    except Exception as ex:
+        print("mapa lugares:", repr(ex)[:200])
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "No se pudo consultar"}), 200
+    return jsonify({"ok": True, "items": out, "truncado": truncado})
+
+
+_MP_PAGE = r"""
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+.mp{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1d1d1f;max-width:1280px;margin:0 auto;padding:18px 16px 40px}
+.mp *{box-sizing:border-box}
+.mp h1{margin:0 0 4px;font-size:clamp(24px,3.4vw,34px);font-weight:700;letter-spacing:-.02em;color:#000}
+.mp .mp-sub{margin:0 0 18px;color:#6e6e73;font-size:15px}
+.mp-bar{background:#f5f5f7;border-radius:24px;padding:16px;display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px;margin-bottom:12px}
+.mp-bar label{display:block;font-size:12px;font-weight:600;color:#6e6e73;margin:0 0 4px 4px}
+.mp .mp-in{width:100%;height:46px;border:1px solid #d2d2d7;border-radius:14px;background:#fff;padding:0 14px;font:inherit;font-size:15px;color:#1d1d1f;outline:0;margin:0;box-shadow:none}
+.mp .mp-in:focus{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.15)}
+.mp-row2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.mp-capa{display:inline-flex;align-items:center;gap:7px;border:1px solid #d2d2d7;border-radius:980px;padding:7px 14px 7px 10px;font-size:13px;cursor:pointer;background:#fff;user-select:none;-webkit-user-select:none}
+.mp-capa input{width:auto;margin:0;accent-color:#0071e3}
+.mp-dot{display:inline-block;width:10px;height:10px;border-radius:50%}
+.mp-btn{display:inline-flex;align-items:center;justify-content:center;border-radius:980px;background:#0071e3;color:#fff;font-weight:500;font-size:15px;padding:11px 24px;cursor:pointer;user-select:none;-webkit-user-select:none;text-decoration:none;transition:background .2s,transform .12s}
+.mp-btn:hover{background:#0077ed}.mp-btn:active{transform:scale(.97)}
+.mp-btn.sec{background:#fff;color:#0071e3;border:1px solid #0071e3}
+.mp-btn.sec:hover{background:#f0f7ff}
+.mp-btn:focus-visible,.mp-it:focus-visible{outline:3px solid rgba(0,113,227,.45);outline-offset:2px}
+.mp-val{font-size:13px;min-height:20px;margin:0 0 12px 4px;color:#6e6e73}
+.mp-val.ok{color:#1a7f37}.mp-val.warn{color:#b45309}
+.mp-split{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:16px;height:640px}
+.mp-list{overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:2px 6px 2px 2px}
+.mp-it{background:#f5f5f7;border:1.5px solid transparent;border-radius:20px;padding:14px 16px;cursor:pointer;transition:border-color .2s,background .2s}
+.mp-it:hover{background:#efeff2}.mp-it.on{border-color:#0071e3;background:#f5faff}
+.mp-tag{display:inline-block;font-size:11px;font-weight:600;border-radius:980px;padding:3px 10px;color:#fff}
+.mp-it h4{margin:8px 0 2px;font-size:16px;font-weight:600;letter-spacing:-.01em}
+.mp-it p{margin:0;font-size:13px;color:#6e6e73;line-height:1.4}
+.mp-it .mp-f{margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}
+.mp-loc{display:inline-flex;border-radius:980px;background:#0071e3;color:#fff;font-size:13px;font-weight:500;padding:7px 14px;cursor:pointer}
+.mp-loc:hover{background:#0077ed}.mp-loc.done{background:#e8f3ff;color:#0071e3}
+.mp-st{color:#6e6e73}.mp-st.ok{color:#1a7f37}
+.mp-box{position:relative;border-radius:28px;overflow:hidden;border:1px solid rgba(255,255,255,.9);box-shadow:0 18px 50px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.9);background:#e9eef5}
+#mp-map{position:absolute;inset:0}
+.mp-chip{position:absolute;left:14px;top:14px;z-index:500;padding:8px 14px;border-radius:980px;font-size:13px;font-weight:500;background:rgba(255,255,255,.72);-webkit-backdrop-filter:blur(18px) saturate(180%);backdrop-filter:blur(18px) saturate(180%);border:1px solid rgba(255,255,255,.9)}
+.mp-empty{padding:26px 18px;border-radius:20px;background:#f5f5f7;color:#6e6e73;font-size:14px;line-height:1.5;text-align:center}
+.mp-nomap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#6e6e73}
+.mp-pin span{display:block;width:20px;height:20px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35)}
+.mp-pin.on span{transform:scale(1.3);box-shadow:0 0 0 6px rgba(0,113,227,.25),0 3px 10px rgba(0,0,0,.35)}
+.mp-pin.aprox span{opacity:.75;border-style:dashed}
+.leaflet-container{font-family:inherit}
+@media(max-width:900px){.mp-bar{grid-template-columns:1fr}.mp-split{grid-template-columns:1fr;height:auto}.mp-box{height:360px;order:-1}.mp-list{overflow:visible}}
+</style>
+<div class="mp">
+  <h1>Mapa de ubicaciones</h1>
+  <p class="mp-sub">Busca por departamento, municipio o colegio para validar dónde está. Funciona tengan o no sedes registradas.</p>
+  <div class="mp-bar">
+    <div><label for="mp-dep">Departamento</label>
+      <select class="mp-in" id="mp-dep"><option value="">— Todos —</option>__DEPS__</select></div>
+    <div><label for="mp-mun">Municipio</label>
+      <input class="mp-in" id="mp-mun" list="mp-mun-list" autocomplete="off" placeholder="Escribe o elige el municipio">
+      <datalist id="mp-mun-list"></datalist></div>
+    <div><label for="mp-q">Colegio, código DANE o NIT</label>
+      <input class="mp-in" id="mp-q" type="search" autocomplete="off" placeholder="Ej. Institución Educativa… / 105001…"></div>
+  </div>
+  <div class="mp-row2" id="mp-capas">
+    <label class="mp-capa"><input type="checkbox" value="cliente" checked><span class="mp-dot" style="background:#0071e3"></span>Colegios clientes</label>
+    <label class="mp-capa"><input type="checkbox" value="sede" checked><span class="mp-dot" style="background:#0d9488"></span>Sedes</label>
+    <label class="mp-capa"><input type="checkbox" value="prospecto" checked><span class="mp-dot" style="background:#f59e0b"></span>Prospectos de ventas</label>
+    <label class="mp-capa"><input type="checkbox" value="directorio" checked><span class="mp-dot" style="background:#8e8e93"></span>Directorio MEN</label>
+    <label class="mp-capa"><input type="checkbox" value="punto" checked><span class="mp-dot" style="background:#7c3aed"></span>Puntos Procsis</label>
+    <span style="flex:1"></span>
+    <a class="mp-btn sec" id="mp-todos" role="button" tabindex="0">Ubicar los primeros 15</a>
+    <a class="mp-btn" id="mp-buscar" role="button" tabindex="0">Buscar</a>
+  </div>
+  <div class="mp-val" id="mp-val" aria-live="polite"></div>
+  <div class="mp-split">
+    <div class="mp-list" id="mp-list"><div class="mp-empty">Elige un departamento o escribe un colegio y toca <b>Buscar</b>.</div></div>
+    <div class="mp-box"><div class="mp-chip" id="mp-chip">Colombia</div><div id="mp-map"></div></div>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+var DIV=__DIVIPOLA__, CEN=__CENTROS__;
+var COL={cliente:"#0071e3",sede:"#0d9488",prospecto:"#f59e0b",directorio:"#8e8e93",punto:"#7c3aed"};
+var NOM={cliente:"Cliente",sede:"Sede",prospecto:"Prospecto",directorio:"Directorio MEN",punto:"Punto Procsis"};
+var st={map:null,layer:null,items:[],markers:{},stop:false,busy:false};
+var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+function $(i){return document.getElementById(i);}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function norm(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();}
+function onAct(el,fn){el.addEventListener("click",fn);el.addEventListener("keydown",function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();fn(ev);}});}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+function initMap(){
+  if(st.map)return true;
+  if(!window.L){$("mp-map").innerHTML='<div class="mp-nomap">El mapa no se pudo cargar. Revisa tu conexión; la lista sigue disponible.</div>';return false;}
+  st.map=L.map("mp-map",{scrollWheelZoom:true}).setView([4.6,-74.08],6);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(st.map);
+  st.layer=L.layerGroup().addTo(st.map);
+  return true;
+}
+function depCentro(dep){var k=norm(dep);if(CEN[k])return CEN[k];for(var n in CEN){if(k&&(k.indexOf(n)===0||n.indexOf(k)===0))return CEN[n];}return null;}
+function fly(lat,lng,z){if(st.map)st.map.setView([lat,lng],z,{animate:!reduce});}
+
+/* Departamento -> municipios */
+function fillMun(){
+  var dep=$("mp-dep").value,dl=$("mp-mun-list");dl.innerHTML="";
+  (DIV[dep]||[]).forEach(function(m){var o=document.createElement("option");o.value=m;dl.appendChild(o);});
+  $("mp-mun").value="";
+  if(dep){var c=depCentro(dep);if(c&&initMap())fly(c[0],c[1],8);$("mp-chip").textContent=dep;}
+}
+$("mp-dep").addEventListener("change",fillMun);
+
+function validar(dep,mun){
+  var v=$("mp-val");v.className="mp-val";v.textContent="";
+  if(!mun)return;
+  var lista=DIV[dep]||[];
+  if(dep&&lista.length){
+    var ok=lista.some(function(m){return norm(m)===norm(mun);});
+    if(ok){v.className="mp-val ok";v.textContent="✓ «"+mun+"» es un municipio de "+dep+" (DIVIPOLA).";}
+    else{v.className="mp-val warn";v.textContent="⚠ «"+mun+"» no aparece como municipio de "+dep+" en DIVIPOLA. Revisa la ortografía.";}
+  } else if(!dep){
+    var hits=[];for(var d in DIV){if((DIV[d]||[]).some(function(m){return norm(m)===norm(mun);}))hits.push(d);}
+    if(hits.length){v.className="mp-val ok";v.textContent="✓ «"+mun+"» existe en: "+hits.join(", ")+".";}
+  }
+}
+
+/* Busqueda */
+function capas(){return [].slice.call(document.querySelectorAll("#mp-capas input:checked")).map(function(x){return x.value;}).join(",");}
+async function buscar(){
+  if(st.busy)return;st.busy=true;
+  var dep=$("mp-dep").value,mun=$("mp-mun").value.trim(),q=$("mp-q").value.trim();
+  validar(dep,mun);
+  var list=$("mp-list");
+  if(!dep&&!mun&&!q){list.innerHTML='<div class="mp-empty">Elige un departamento, escribe un municipio o busca un colegio.</div>';st.busy=false;return;}
+  list.innerHTML='<div class="mp-empty">Buscando…</div>';
+  var ok=initMap();
+  if(ok){st.layer.clearLayers();st.markers={};}
+  var ctr=null;
+  if(mun){
+    try{var g=await (await fetch("/mapa/api/geo?"+new URLSearchParams({dep:dep,mun:mun}),{credentials:"same-origin"})).json();
+      if(g.ok){ctr=[g.lat,g.lng];if(ok)fly(g.lat,g.lng,g.aprox&&g.fuente==="departamento"?8:12);}}catch(e){}
+  } else if(dep){var c=depCentro(dep);if(c&&ok)fly(c[0],c[1],8);}
+  var data={ok:false,items:[]};
+  try{data=await (await fetch("/mapa/api/lugares?"+new URLSearchParams({dep:dep,mun:mun,q:q,capas:capas()}),{credentials:"same-origin"})).json();}catch(e){}
+  st.items=data.items||[];
+  render(data);
+  if(ok){st.items.forEach(function(it,i){if(it.lat!=null&&it.lng!=null)place(i,it.lat,it.lng,false);});}
+  $("mp-chip").textContent=(mun||dep||"Colombia")+" · "+st.items.length+(st.items.length===1?" resultado":" resultados");
+  st.busy=false;
+}
+function render(data){
+  var list=$("mp-list");
+  if(!data.ok){list.innerHTML='<div class="mp-empty">No se pudo consultar ahora. Intenta de nuevo.</div>';return;}
+  if(!st.items.length){list.innerHTML='<div class="mp-empty">No hay colegios ni puntos registrados con ese criterio. El mapa quedó centrado en la zona: puedes validar la ubicación igual.</div>';return;}
+  list.innerHTML=st.items.map(function(it,i){
+    return '<div class="mp-it" role="button" tabindex="0" data-i="'+i+'"><span class="mp-tag" style="background:'+COL[it.tipo]+'">'+esc(NOM[it.tipo]||it.tipo)+'</span>'
+      +'<h4>'+esc(it.nombre)+'</h4>'
+      +'<p>'+esc([it.direccion,it.municipio,it.departamento].filter(Boolean).join(" · "))+'</p>'
+      +(it.extra?'<p>'+esc(it.extra)+(it.dane?' · DANE '+esc(it.dane):'')+'</p>':'')
+      +'<div class="mp-f"><a class="mp-loc" role="button" tabindex="0" data-loc="'+i+'">Ubicar en mapa</a><span class="mp-st" id="mp-st-'+i+'"></span></div></div>';
+  }).join("")+(data.truncado?'<div class="mp-empty">Se muestran los primeros resultados. Afina con municipio o nombre.</div>':"");
+  [].slice.call(list.querySelectorAll(".mp-it")).forEach(function(el){
+    onAct(el,function(ev){
+      var t=ev&&ev.target&&ev.target.closest?ev.target.closest("[data-loc]"):null;
+      var i=parseInt(el.getAttribute("data-i"),10);
+      if(t){ubicar(i,true);}else{sel(i,true);}
+    });
+  });
+}
+function sel(i,fromList){
+  [].slice.call(document.querySelectorAll(".mp-it")).forEach(function(el){el.classList.toggle("on",parseInt(el.getAttribute("data-i"),10)===i);});
+  var m=st.markers[i];
+  Object.keys(st.markers).forEach(function(k){var mk=st.markers[k];if(mk&&mk._icon)mk._icon.classList.toggle("on",parseInt(k,10)===i);});
+  if(m&&st.map){st.map.setView(m.getLatLng(),Math.max(st.map.getZoom(),14),{animate:!reduce});m.openPopup();}
+}
+function place(i,lat,lng,aprox){
+  if(!st.map)return;
+  var it=st.items[i];if(st.markers[i])st.layer.removeLayer(st.markers[i]);
+  if(aprox){var a=(i*2.399)%(Math.PI*2),r=0.0011*(1+(i%5));lat+=Math.sin(a)*r;lng+=Math.cos(a)*r;}
+  var mk=L.marker([lat,lng],{icon:L.divIcon({className:"mp-pin"+(aprox?" aprox":""),html:'<span style="background:'+COL[it.tipo]+'"></span>',iconSize:[20,20],iconAnchor:[10,10],popupAnchor:[0,-12]})})
+    .bindPopup("<b>"+esc(it.nombre)+"</b><br>"+esc(it.direccion||it.municipio||"")+(aprox?"<br><i>Ubicación aproximada (municipio)</i>":""));
+  mk.on("click",function(){sel(i,false);});mk.addTo(st.layer);st.markers[i]=mk;
+}
+async function ubicar(i,abrir){
+  var it=st.items[i];if(!it)return false;
+  var btn=document.querySelector('[data-loc="'+i+'"]'),s=$("mp-st-"+i);
+  if(!initMap())return false;
+  if(st.markers[i]){if(abrir)sel(i,true);return true;}
+  if(s){s.className="mp-st";s.textContent="Ubicando…";}
+  try{
+    var p=new URLSearchParams({dep:it.departamento||$("mp-dep").value,mun:it.municipio||"",dir:it.direccion||"",nombre:it.direccion?"":it.nombre});
+    var g=await (await fetch("/mapa/api/geo?"+p.toString(),{credentials:"same-origin"})).json();
+    if(!g.ok){if(s)s.textContent="No se pudo ubicar";return false;}
+    place(i,g.lat,g.lng,!!g.aprox);
+    if(s){s.className="mp-st"+(g.aprox?"":" ok");s.textContent=g.aprox?"≈ Aproximada ("+(g.fuente==="departamento"?"departamento":"municipio")+")":"✓ Ubicación exacta";}
+    if(btn)btn.classList.add("done");
+    if(abrir)sel(i,true);
+    return true;
+  }catch(e){if(s)s.textContent="Error de red";return false;}
+}
+async function todos(){
+  if(!st.items.length)return;
+  var n=0;
+  for(var i=0;i<st.items.length&&n<15;i++){
+    if(st.markers[i])continue;n++;
+    await ubicar(i,false);await sleep(1200);
+  }
+  if(st.map&&Object.keys(st.markers).length>1){
+    var pts=Object.keys(st.markers).map(function(k){var ll=st.markers[k].getLatLng();return [ll.lat,ll.lng];});
+    st.map.fitBounds(pts,{padding:[50,50],maxZoom:14});
+  }
+}
+onAct($("mp-buscar"),buscar);onAct($("mp-todos"),todos);
+["mp-mun","mp-q"].forEach(function(id){$(id).addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();buscar();}});});
+$("mp-mun").addEventListener("change",function(){validar($("mp-dep").value,$("mp-mun").value.trim());});
+initMap();
+})();
+</script>
+"""
+
+
+@app.route("/mapa")
+def mapa_ubicaciones():
+    """Mapa compartido: valida departamento / municipio / colegio (Ventas, Soporte, Gerencia, Cobranza...)."""
+    if not requiere_login():
+        return redirect("/login")
+    if (rol_actual() or "").strip() not in _ROLES_MAPA:
+        return acceso_denegado("Tu rol no tiene acceso al mapa de ubicaciones.")
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    try:
+        div = _cargar_divipola()
+    except Exception:
+        div = {}
+    deps = sorted(div.keys()) if div else list(_DEPARTAMENTOS_CO)
+    opts = "".join('<option value="%s">%s</option>' % (_esc(d), _esc(d)) for d in deps)
+    cen = {k: [v[0], v[1]] for k, v in _DEP_CENTROS.items()}
+    html = (
+        _MP_PAGE.replace("__DEPS__", opts)
+        .replace("__DIVIPOLA__", json.dumps(div or {}, ensure_ascii=False).replace("</", "<\\/"))
+        .replace("__CENTROS__", json.dumps(cen))
+    )
+    return page("Mapa de ubicaciones", html)
 
 
 @app.route("/reembolsos")
@@ -40893,6 +41373,7 @@ def _modulos_por_rol(rol):
         ("Vista contacto público", "/contacto", "#0f766e"),
         ("Buscar planes", "/planes/buscar", "#1d4ed8"),
         ("Planes activos / vendidos", "/soporte/planes-vendidos", "#1d4ed8"),
+        ("🗺️ Mapa de ubicaciones", "/mapa", "#0071e3"),
         ("Auditoría de colegios", "/soporte/auditoria-colegios", "#64748b"),
         ("Periodos por colegio (3/4)", "/soporte/periodos-colegio", "#0B2D57"),
     ]
@@ -40915,6 +41396,7 @@ def _modulos_por_rol(rol):
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
         ("Instituciones (ver / registrar)", "/tenants", "#64748b"),
         ("👥 Turnos", "/ventas/turnos", "#0B2D57"),
+        ("🗺️ Mapa de ubicaciones", "/mapa", "#0071e3"),
         ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
     ]
     gerencia = ventas + [
@@ -40922,6 +41404,7 @@ def _modulos_por_rol(rol):
         ("💙 Fidelización CSAT", "/gerencia/fidelizacion", "#0d9488"),
         ("📊 Reportes de pago", "/gerencia/reportes-pago", "#0B2D57"),
         ("Anuncios globales", "/gerencia/anuncios", "#0B2D57"),
+        ("📍 Sedes y puntos de atención", "/gerencia/puntos-atencion", "#0071e3"),
         ("Marca global", "/soporte/marca", "#0B2D57"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
         ("Editar planes", "/gerencia/planes", "#0B2D57"),
