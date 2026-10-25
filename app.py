@@ -4490,6 +4490,7 @@ _MODULOS_GERENCIA = [
         ('/gerencia/legal/consentimientos', 'Consentimientos (Habeas Data)'),
         ('/gerencia/paginas-legales', 'Páginas legales públicas'),
         ('/gerencia/pie-login', 'Pie de página del login'),
+        ('/gerencia/inauguracion', '🚀 Inauguración en vivo'),
     ]),
     ('Ventas y comercial', [
         ('/ventas/equipo', '👥 Equipo de ventas (supervisión)'),
@@ -4558,7 +4559,7 @@ _NAV_GRUPOS = {
         ("Contratos y legal", ("/gerencia/plantilla-contrato", "/gerencia/contratos", "/gerencia/legal/consentimientos", "/gerencia/paginas-legales", "/gerencia/textos-legales",
                                "/gerencia/firmas-corporativas", "/gerencia/retractos", "/gerencia/retractos/config", "/gerencia/retractos/reembolsos")),
         ("Correos", ("/gerencia/correo-soporte", "/gerencia/correo-notificaciones", "/gerencia/correo-extra/1", "/gerencia/correo-extra/2", "/gerencia/correo-extra/3")),
-        ("Empresa y web", ("/gerencia/datos-empresa", "/gerencia/web-corporativa", "/gerencia/web-menu", "/gerencia/pie-login")),
+        ("Empresa y web", ("/gerencia/datos-empresa", "/gerencia/web-corporativa", "/gerencia/web-menu", "/gerencia/pie-login", "/gerencia/inauguracion")),
         ("Reportes", ("/gerencia/reportes", "/gerencia/indicadores", "/gerencia/historial-validaciones")),
     ],
     "soporte": [
@@ -4696,6 +4697,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/convocatoria48", "🌱 Convocatoria 48 h"),
             ("/gerencia/reconocimientos", "🏅 Certificados de reconocimiento"),
             ("/gerencia/hq", "Dashboard"),
+            ("/gerencia/inauguracion", "🚀 Inauguración en vivo"),
             ("/gerencia/reportes", "Reportes"),
             ("/gerencia/historial-validaciones", "Historial técnico de validaciones"),
             ("/logout", "Salir"),
@@ -4708,6 +4710,7 @@ def _staff_nav_items(path, rol=""):
             ("/gerencia/donaciones/kit", "📦 Kit de donación"),
             ("/gerencia/envios", "🚚 Envíos"),
             ("/gerencia/hq", "Dashboard"),
+            ("/gerencia/inauguracion", "🚀 Inauguración en vivo"),
             ("/gerencia/usuarios", "Usuarios internos"),
             ("/gerencia/equipo-carnes", "Carnés del equipo"),
             ("/gerencia/horarios-asesores", "Horarios de asesores"),
