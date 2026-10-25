@@ -1324,6 +1324,13 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 .role-icons a .ic{width:48px;height:48px;margin:0 auto 7px;border-radius:12px;background:#0B2D57;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(11,45,87,.18);transition:background .15s,transform .15s}
 .role-icons a .ic svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .role-icons a:hover .ic{background:#1e4a8c;transform:translateY(-1px)}
+.role-icons.role-shortcuts,.role-icons{gap:12px 8px}
+.role-icons a{width:112px}
+.role-icons a .lb{display:block;white-space:normal;word-break:break-word;overflow-wrap:anywhere;font-size:11.5px;line-height:1.25;max-height:none;padding:0 2px}
+.role-icons a.sc.is-on .ic{background:#c9a227;box-shadow:0 0 0 3px rgba(201,162,39,.35)}
+.role-icons .sc-search{flex:0 0 100%;display:flex;justify-content:center;margin-bottom:4px}
+.role-icons .sc-search input{width:min(420px,92%);padding:9px 14px;border:1px solid #cbd5e1;border-radius:999px;font-size:13px;outline:none}
+.role-icons .sc-search input:focus{border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}
 .role-icons a.out .ic{background:#475569}
 .role-icons a.out:hover .ic{background:#334155}
 .role-welcome{background:#f8fafc;padding:10px 20px;border-bottom:1px solid #e2e8f0;font-size:12.5px;color:#475569;text-align:center;font-weight:500}
@@ -3568,6 +3575,21 @@ class NominaPago(db.Model):
     # Flags exenciones
     exento_eps_empresa = db.Column(db.Boolean, default=False)
     exento_icbf_sena = db.Column(db.Boolean, default=False)
+    # Horas extras, recargos nocturnos, dominicales y festivos (horas del mes)
+    horas_extra_diurna = db.Column(db.Float, default=0.0)
+    horas_extra_nocturna = db.Column(db.Float, default=0.0)
+    horas_recargo_nocturno = db.Column(db.Float, default=0.0)
+    horas_dominical = db.Column(db.Float, default=0.0)
+    horas_recargo_nocturno_dominical = db.Column(db.Float, default=0.0)
+    horas_extra_dominical_diurna = db.Column(db.Float, default=0.0)
+    horas_extra_dominical_nocturna = db.Column(db.Float, default=0.0)
+    divisor_horas = db.Column(db.Float, default=0.0)
+    salario_base = db.Column(db.Float, default=0.0)       # salario básico (valor_bruto = devengado total)
+    valor_extras = db.Column(db.Float, default=0.0)       # total horas extras y recargos
+    auxilio_transporte = db.Column(db.Float, default=0.0)
+    # Enlace con Contabilidad
+    asiento_id = db.Column(db.Integer, nullable=True)       # asiento de devengo
+    asiento_pago_id = db.Column(db.Integer, nullable=True)  # asiento del pago
     costo_empresa_total = db.Column(db.Float, default=0.0)  # suma aportes empresa + prestaciones
     fecha_pago = db.Column(db.String(20), default="")
     medio_pago = db.Column(db.String(60), default="")
@@ -4794,10 +4816,11 @@ def _staff_nav_items(path, rol=""):
 
 def _wrap_staff_layout(title, body, path):
     try:
-        usuario = (session.get("usuario") or "?")[:1].upper()
+        _nom_staff = _nombre_para_saludo(session.get("usuario") or "?") or "?"
+        usuario = _nom_staff[:1].upper()
         rol = session.get("rol") or ""
     except Exception:
-        usuario, rol = "?", ""
+        _nom_staff, usuario, rol = "?", "?", ""
     try:
         periodo = ahora().strftime("%Y-%m") if hasattr(ahora(), "strftime") else "2026-09"
     except Exception:
@@ -4890,7 +4913,8 @@ def _wrap_staff_layout(title, body, path):
         '<span id="nav-api-ping" class="nav-api-ping">☁️ API: …</span>'
         + bell
         + '<span class="badge-periodo">Periodo: ' + periodo + "</span>"
-        '<span class="user-profile-circle">' + _esc(usuario) + "</span>"
+        '<span class="user-profile-circle" title="' + _esc(_nom_staff) + '">' + _esc(usuario) + "</span>"
+        '<span class="nav-user-fullname" style="font-size:12px;font-weight:600;color:#334155;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(_nom_staff) + "</span>"
         '<a href="/logout" class="btn-apple-secondary" style="padding:8px 14px;font-size:12px">Salir</a>'
         "</div></header>"
         '<main class="bento-workspace-apple">' + body + "</main>"
@@ -5395,18 +5419,24 @@ def shell(content):
                 logo = logo_actual()
         except Exception:
             logo = logo_plataforma()
-    usuario = (session.get("usuario") or "").upper()
+    usuario = _esc(_nombre_para_saludo(session.get("usuario") or ""))
     items = menu_items_por_rol()
     icons = []
     for url, nombre in items:
         if url == "/logout":
             continue
-        short = nombre if len(nombre) <= 14 else (nombre[:12] + "…")
+        _act = " is-on" if (request.path == url.split("?")[0] and url != "/dashboard") or (url == "/dashboard" and request.path == "/dashboard") else ""
         icons.append(
-            f'<a href="{url}" title="{nombre}"><div class="ic">{_icono_menu(nombre)}</div>{short}</a>'
+            f'<a class="sc{_act}" href="{url}" title="{_esc(nombre)}" data-n="{_esc(nombre.lower())}"><div class="ic">{_icono_menu(nombre)}</div><span class="lb">{nombre}</span></a>'
         )
-    icons.append(f'<a class="out" href="/logout" title="Salir"><div class="ic">{_icono_menu("Salir")}</div>Salir</a>')
+    icons.append(f'<a class="out" href="/logout" title="Salir"><div class="ic">{_icono_menu("Salir")}</div><span class="lb">Salir</span></a>')
     icon_html = "".join(icons)
+    if len(items) > 9:
+        icon_html = (
+            '<div class="sc-search"><input id="sc-q" type="search" placeholder="🔎 Buscar acceso directo…" autocomplete="off" '
+            'oninput="var q=this.value.toLowerCase();document.querySelectorAll(\'.role-icons a.sc\').forEach(function(a){a.style.display=(a.dataset.n||\'\').indexOf(q)>-1?\'\':\'none\';});"></div>'
+            + icon_html
+        )
     # Salida segura: al cerrar pestaña cierra sesión (si Gerencia lo activó)
     ss_js = ""
     try:
@@ -5447,7 +5477,7 @@ def shell(content):
     <span class="role-tag">{rol}</span>
   </div>
   <nav class="role-icons">{icon_html}</nav>
-  <div class="role-welcome">Bienvenido(a) a <b>{APP_NAME}</b>. Gestión académica institucional · PROCSIS</div>
+  <div class="role-welcome">Bienvenido(a), <b>{usuario}</b> · {APP_NAME} · Gestión académica institucional · PROCSIS</div>
   <main class="role-main">{banner_licencia_html()}{content}{footer()}</main>
 </div>
 {ss_js}
@@ -6473,6 +6503,19 @@ def inicializar_bd():
                     "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS intereses_cesantias DOUBLE PRECISION DEFAULT 0",
                     "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS vacaciones DOUBLE PRECISION DEFAULT 0",
                     "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS costo_empresa_total DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_extra_diurna DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_extra_nocturna DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_recargo_nocturno DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_dominical DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_recargo_nocturno_dominical DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_extra_dominical_diurna DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_extra_dominical_nocturna DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS divisor_horas DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS salario_base DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS valor_extras DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS auxilio_transporte DOUBLE PRECISION DEFAULT 0",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS asiento_id INTEGER",
+                    "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS asiento_pago_id INTEGER",
 
 
 
@@ -13927,6 +13970,63 @@ def _pa_float(v):
         return None
 
 
+_PA_VIAS = ("Carrera", "Calle", "Avenida", "Avenida Carrera", "Avenida Calle", "Diagonal", "Transversal", "Circular", "Autopista", "Kilómetro", "Vereda")
+
+
+def _pa_componer_direccion(f):
+    """Arma la dirección normalizada (ej. «Carrera 43A # 1 Sur - 50, Barrio X») desde los campos separados."""
+    via = (f.get("via") or "").strip()
+    num = (f.get("via_numero") or "").strip()
+    plac = (f.get("placa") or "").strip()
+    n2 = (f.get("numero2") or "").strip()
+    comp = (f.get("complemento") or "").strip()
+    barrio = (f.get("barrio") or "").strip()
+    if not (via and num):
+        return (f.get("direccion") or "").strip()[:220]
+    d = f"{via} {num}"
+    if plac or n2:
+        d += f" # {plac}" + (f" - {n2}" if n2 else "")
+    if comp:
+        d += f", {comp}"
+    if barrio:
+        d += f", {barrio}"
+    return d[:220]
+
+
+def _pa_geocodificar(direccion, ciudad, depto=""):
+    """Coordenadas de una dirección (OpenStreetMap/Nominatim con caché). Prueba de la más precisa a la más general."""
+    base = re.sub(r"\s+", " ", (direccion or "").replace("#", " ").replace(" - ", "-")).strip()
+    cl = ", ".join(x for x in (ciudad, depto) if x)
+    intentos = [f"{direccion}, {cl}", f"{base}, {cl}"]
+    # sin complemento/barrio (lo que va después de la primera coma)
+    corto = (direccion or "").split(",")[0]
+    intentos.append(f"{corto}, {cl}")
+    vistos = set()
+    for q in intentos:
+        q = q.strip(" ,")
+        if q and q not in vistos:
+            vistos.add(q)
+            r = _geo_nominatim(q)
+            if r:
+                return r
+    return None
+
+
+@app.route("/gerencia/puntos-atencion/geocodificar")
+def gerencia_puntos_geocodificar():
+    rol = (rol_actual() or "").strip()
+    if not requiere_login() or rol not in ("Soporte", "Gerente", "Gerencia", "Superadmin", "Administrador"):
+        return jsonify({"ok": False, "error": "no autorizado"}), 403
+    d = _pa_componer_direccion(request.args)
+    ciudad = (request.args.get("ciudad") or "").strip()
+    if not d or not ciudad:
+        return jsonify({"ok": False, "error": "Escribe la dirección (carrera/calle y número) y la ciudad."})
+    r = _pa_geocodificar(d, ciudad, (request.args.get("depto") or "").strip())
+    if not r:
+        return jsonify({"ok": False, "direccion": d, "error": "No se encontró esa dirección. Revisa vía, número y ciudad, o ubica el punto manualmente."})
+    return jsonify({"ok": True, "direccion": d, "lat": round(r["lat"], 6), "lng": round(r["lng"], 6), "lugar": r.get("nombre", "")})
+
+
 @app.route("/gerencia/puntos-atencion", methods=["GET", "POST"])
 def gerencia_puntos_atencion():
     """Alta, activacion y borrado de sedes / puntos de atencion publicos."""
@@ -13945,19 +14045,29 @@ def gerencia_puntos_atencion():
             if accion == "crear":
                 nombre = (request.form.get("nombre") or "").strip()[:160]
                 cat = (request.form.get("categoria") or "sedes").strip()
+                direccion_f = _pa_componer_direccion(request.form)
+                ciudad_f = (request.form.get("ciudad") or "").strip()[:100]
+                lat_f, lng_f = _pa_float(request.form.get("lat")), _pa_float(request.form.get("lng"))
                 if not nombre:
                     mensaje = "Escribe el nombre del punto."
                 elif cat not in cats:
                     mensaje = "Categoría no válida."
+                elif not direccion_f or not ciudad_f:
+                    mensaje = "Primero la dirección: tipo de vía (carrera/calle…), número, placa y ciudad. La ubicación se calcula con ella."
+                elif (lat_f is None or lng_f is None) and not _pa_geocodificar(direccion_f, ciudad_f, (request.form.get("depto") or "").strip()):
+                    mensaje = "No se pudo ubicar «%s, %s» con exactitud. Corrige la dirección o pulsa «Ubicar dirección» y ajusta las coordenadas." % (_esc(direccion_f), _esc(ciudad_f))
                 else:
+                    if lat_f is None or lng_f is None:
+                        _g = _pa_geocodificar(direccion_f, ciudad_f, (request.form.get("depto") or "").strip())
+                        lat_f, lng_f = _g["lat"], _g["lng"]
                     dias = sorted({d for d in request.form.getlist("dias") if d in "1234567" and len(d) == 1})
                     db.session.add(PuntoAtencion(
                         nombre=nombre, categoria=cat,
-                        direccion=(request.form.get("direccion") or "").strip()[:220],
-                        ciudad=(request.form.get("ciudad") or "").strip()[:100],
+                        direccion=direccion_f,
+                        ciudad=ciudad_f,
                         codigo_postal=(request.form.get("codigo_postal") or "").strip()[:12],
                         telefono=(request.form.get("telefono") or "").strip()[:40],
-                        lat=_pa_float(request.form.get("lat")), lng=_pa_float(request.form.get("lng")),
+                        lat=lat_f, lng=lng_f,
                         dias=",".join(dias) or "1,2,3,4,5",
                         abre=(request.form.get("abre") or "08:00")[:5], cierra=(request.form.get("cierra") or "17:00")[:5],
                         activo=True,
@@ -14005,6 +14115,24 @@ def gerencia_puntos_atencion():
         % (i, "checked" if i <= 5 else "", n) for i, n in enumerate(["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"], start=1)
     )
     volver = "/soporte_admin" if (rol == "Soporte" or session.get("soporte")) else "/gerencia/hq"
+    vias_opts = "".join("<option>%s</option>" % v for v in _PA_VIAS)
+    pa_js = """<script>(function(){
+var ids=['via','vnum','placa','n2','comp','barrio','ciudad','depto'].map(function(k){return document.getElementById('pa-'+k);});
+var prev=document.getElementById('pa-prev'),lat=document.getElementById('pa-lat'),lng=document.getElementById('pa-lng'),msg=document.getElementById('pa-msg'),ver=document.getElementById('pa-ver');
+function dir(){var v=ids[0].value,n=ids[1].value.trim(),p=ids[2].value.trim(),n2=ids[3].value.trim(),c=ids[4].value.trim(),b=ids[5].value.trim();
+ if(!n)return '';var d=v+' '+n;if(p||n2){d+=' # '+p+(n2?' - '+n2:'');}if(c)d+=', '+c;if(b)d+=', '+b;return d;}
+function pintar(){var d=dir(),ci=ids[6].value.trim();prev.textContent=d?(d+(ci?', '+ci:'')):'—';}
+ids.forEach(function(e){e.addEventListener('input',function(){pintar();lat.value='';lng.value='';ver.style.display='none';msg.textContent='';});});
+function mostrar(la,lo){ver.href='https://www.google.com/maps?q='+la+','+lo;ver.style.display='';}
+[lat,lng].forEach(function(e){e.addEventListener('input',function(){if(lat.value&&lng.value){mostrar(lat.value,lng.value);}});});
+document.getElementById('pa-ubicar').addEventListener('click',function(){
+ var q=new URLSearchParams({via:ids[0].value,via_numero:ids[1].value,placa:ids[2].value,numero2:ids[3].value,complemento:ids[4].value,barrio:ids[5].value,ciudad:ids[6].value,depto:ids[7].value});
+ msg.style.color='#475569';msg.textContent='Buscando la dirección…';
+ fetch('/gerencia/puntos-atencion/geocodificar?'+q.toString(),{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){
+  if(d.ok){lat.value=d.lat;lng.value=d.lng;mostrar(d.lat,d.lng);msg.style.color='#166534';msg.textContent='✅ Ubicada: '+(d.lugar||d.direccion)+' — verifícala en el mapa y ajusta las coordenadas si hace falta.';}
+  else{msg.style.color='#b91c1c';msg.textContent=d.error||'No se pudo ubicar.';}
+ }).catch(function(){msg.style.color='#b91c1c';msg.textContent='Error de conexión al ubicar la dirección.';});});
+pintar();})();</script>"""
     content = f"""
 <header class="role-hero"><div>
   <h1>Sedes y puntos de atención</h1>
@@ -14019,14 +14147,29 @@ def gerencia_puntos_atencion():
       <div><label><b>Nombre</b></label><input name="nombre" required maxlength="160" placeholder="Ej. Sede Principal Procsis"></div>
       <div><label><b>Tipo</b></label><select name="categoria">{opts}</select></div>
     </div>
+    <h4 style="margin:14px 0 6px;color:#0B2D57">1. Dirección exacta</h4>
     <div class="form-row">
-      <div><label><b>Dirección</b></label><input name="direccion" maxlength="220" placeholder="Calle / Carrera ..."></div>
-      <div><label><b>Ciudad</b></label><input name="ciudad" maxlength="100"></div>
-      <div><label><b>Código postal</b></label><input name="codigo_postal" maxlength="12"></div>
+      <div><label><b>Tipo de vía *</b></label><select name="via" id="pa-via">{vias_opts}</select></div>
+      <div><label><b>Número de la vía *</b></label><input name="via_numero" id="pa-vnum" maxlength="20" placeholder="Ej. 43A" inputmode="text"></div>
+      <div><label><b>Placa (# ... - ...) *</b></label><div style="display:flex;gap:6px;align-items:center"># <input name="placa" id="pa-placa" maxlength="12" placeholder="1 Sur" style="width:90px"> - <input name="numero2" id="pa-n2" maxlength="12" placeholder="50" style="width:70px"></div></div>
     </div>
     <div class="form-row">
-      <div><label><b>Latitud</b></label><input name="lat" placeholder="6.2442"></div>
-      <div><label><b>Longitud</b></label><input name="lng" placeholder="-75.5812"></div>
+      <div><label><b>Complemento</b></label><input name="complemento" id="pa-comp" maxlength="80" placeholder="Local 2, Piso 3, Edificio…"></div>
+      <div><label><b>Barrio</b></label><input name="barrio" id="pa-barrio" maxlength="80"></div>
+      <div><label><b>Ciudad / municipio *</b></label><input name="ciudad" id="pa-ciudad" maxlength="100" placeholder="Medellín"></div>
+      <div><label><b>Departamento</b></label><input name="depto" id="pa-depto" maxlength="60" placeholder="Antioquia"></div>
+      <div><label><b>Código postal</b></label><input name="codigo_postal" maxlength="12"></div>
+    </div>
+    <div style="margin:6px 0 4px;font-size:13px">Dirección: <b id="pa-prev" style="color:#0B2D57">—</b></div>
+    <h4 style="margin:14px 0 6px;color:#0B2D57">2. Ubicación (se calcula con la dirección)</h4>
+    <div class="form-row">
+      <div><label><b>Latitud</b></label><input name="lat" id="pa-lat" placeholder="se completa sola"></div>
+      <div><label><b>Longitud</b></label><input name="lng" id="pa-lng" placeholder="se completa sola"></div>
+      <div style="align-self:end"><button type="button" id="pa-ubicar" style="background:#0369a1">📍 Ubicar dirección</button></div>
+      <div style="align-self:end"><a id="pa-ver" href="#" target="_blank" rel="noopener" style="display:none">Ver en el mapa ↗</a></div>
+    </div>
+    <div id="pa-msg" style="font-size:12.5px;margin:4px 0 8px;min-height:18px"></div>
+    <div class="form-row">
       <div><label><b>Teléfono</b></label><input name="telefono" maxlength="40"></div>
     </div>
     <div class="form-row">
@@ -14037,6 +14180,7 @@ def gerencia_puntos_atencion():
     <button type="submit">Crear y publicar</button>
   </form>
 </section>
+{pa_js}
 <section class="role-panel" style="margin-top:16px;overflow-x:auto">
   <h3>Puntos registrados</h3>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -21196,8 +21340,11 @@ def sedes_colegios():
                     error = "Seleccione o tenga asignada una institución."
                 else:
                     nombre = (request.form.get("nombre") or "").strip()[:120]
+                    _dir_s = (request.form.get("direccion") or "").strip()
                     if not nombre:
                         error = "El nombre de la sede es obligatorio."
+                    elif len(_dir_s) < 6 or not re.search(r"\d", _dir_s) and not re.search(r"(?i)vereda|corregimiento|kil[oó]metro|km", _dir_s):
+                        error = "Escriba primero la dirección exacta (ej. Carrera 43A # 1 Sur - 50, o Vereda La Palma, km 3): con ella se ubica la sede."
                     else:
                         if sid:
                             s = SedeInstitucion.query.get(sid)
@@ -21334,8 +21481,8 @@ def sedes_colegios():
       <div class="row">
         <div style="grid-column:1/-1">{_html_campos_dep_mun("departamento", "municipio", required=False)}</div>
       </div>
-      <label>Dirección</label>
-      <input name="direccion" id="f_direccion" placeholder="Calle / vereda / km">
+      <label><b>Dirección exacta *</b> <span style="font-weight:400;color:#64748b">(primero la dirección; con ella se ubica la sede en el mapa)</span></label>
+      <input name="direccion" id="f_direccion" required maxlength="220" placeholder="Ej. Carrera 43A # 1 Sur - 50, Barrio Centro  ·  o  Vereda La Palma, km 3" title="Tipo de vía + número + placa (Carrera 43A # 1 Sur - 50) o vereda/kilómetro">
       <div class="row">
         <div><label>Teléfono</label><input name="telefono" id="f_telefono"></div>
         <div><label>Correo</label><input name="correo" id="f_correo" type="email"></div>
@@ -23670,6 +23817,19 @@ def _usuario_actual_obj():
         return None
 
 
+def _nombre_para_saludo(usuario_login=""):
+    """Nombre completo para saludos: el usuario de ingreso es uno y el nombre mostrado es otro
+    (campo nombre_completo, editable por Gerencia/Soporte o en Mi perfil). Si no hay, se
+    embellece el usuario de acceso."""
+    try:
+        nom = (nombre_mostrar_actual() or "").strip()
+        if nom and nom != (session.get("usuario") or ""):
+            return nom
+    except Exception:
+        pass
+    return (usuario_login or "").replace("_", " ").replace(".", " ").title()
+
+
 def nombre_mostrar_actual():
     """Nombre a mostrar del usuario logueado: nombre_completo si existe, si no el usuario de login."""
     u = _usuario_actual_obj()
@@ -23830,7 +23990,7 @@ _TALENTO_RUTAS = ("/gerencia/hojas-vida", "/gerencia/nomina", "/gerencia/contrat
 
 _AREA_RUTAS_EXTRA = {
     "Talento": ("/gerencia/talento-legal", "/gerencia/matriz-epp", "/gerencia/equipo", "/gerencia/contabilidad/trabajador"),
-    "Finanzas": ("/gerencia/tesoreria", "/gerencia/gastos", "/gerencia/comisiones-ventas", "/gerencia/proveedores", "/gerencia/retractos/reembolsos",
+    "Finanzas": ("/gerencia/recursos-financieros", "/gerencia/tesoreria", "/gerencia/gastos", "/gerencia/comisiones-ventas", "/gerencia/proveedores", "/gerencia/retractos/reembolsos",
                  "/gerencia/donaciones", "/gerencia/envios"),
     "Juridica": ("/gerencia/contratos-saas", "/gerencia/paginas-legales", "/gerencia/textos-legales", "/gerencia/libro-actas",
                  "/gerencia/boveda-legal", "/gerencia/requerimientos-autoridades", "/gerencia/retractos", "/gerencia/certificados-apoyo",
@@ -24342,6 +24502,7 @@ def _aislar_paneles_internos():
         ok_cob = (
             path.startswith("/cobranza")
             or path.startswith("/gerencia/facturacion")
+            or path.startswith("/gerencia/recursos-financieros")
             or path.startswith("/gerencia/plazos-cuotas")
             or path.startswith("/gerencia/planes")
             or path.startswith("/gerencia/activaciones")
@@ -24361,7 +24522,7 @@ def _aislar_paneles_internos():
             return redirect("/cobranza/panel")
         if path.startswith("/soporte_admin") or path.startswith("/ventas") or path.startswith("/contabilidad"):
             return redirect("/cobranza/panel")
-        if path.startswith("/gerencia/") and not path.startswith(("/gerencia/facturacion", "/gerencia/planes", "/gerencia/activaciones")):
+        if path.startswith("/gerencia/") and not path.startswith(("/gerencia/facturacion", "/gerencia/planes", "/gerencia/activaciones", "/gerencia/recursos-financieros")):
             return redirect("/cobranza/panel")
         if not ok_cob and (path.startswith("/gerencia") or path.startswith("/usuarios")):
             return redirect("/cobranza/panel")
@@ -24783,7 +24944,7 @@ def ventas_panel():
         pass
     rol = (session.get("rol") or "").strip()
     asesor = (session.get("usuario") or "asesor").strip()
-    asesor_label = asesor.replace("_", " ").replace(".", " ").title()
+    asesor_label = _esc(_nombre_para_saludo(asesor))
     try:
         p = plataforma()
         empresa = (getattr(p, "empresa", None) or "Procsis").strip()
@@ -30231,7 +30392,7 @@ def gerencia_hq():
 
     # Nombre del gerente
     gerente_user = (session.get("usuario") or "gerente").strip()
-    gerente_label = gerente_user.replace("_", " ").replace(".", " ").title()
+    gerente_label = _esc(_nombre_para_saludo(gerente_user))
     try:
         p_plat = plataforma()
         logo_et = logo_plataforma()
@@ -36802,12 +36963,24 @@ def gerencia_usuarios():
                 error = "Ese usuario ya existe."
             else:
                 u = Usuario(usuario=usuario, password=crear_hash(password), rol=rol, institucion_id=None)
+                u.nombre_completo = (request.form.get("nombre_completo") or "").strip()[:160]
                 if hasattr(u, "activo"):
                     u.activo = True
                 db.session.add(u)
                 db.session.commit()
                 registrar_auditoria("Gerencia creo usuario", f"{usuario} rol={rol}")
                 msg = f"Usuario <b>{usuario}</b> creado con rol <b>{rol}</b>."
+        elif accion == "nombre_completo":
+            # El usuario de ingreso (login) es uno; el nombre que se muestra en el sistema es otro.
+            uid = request.form.get("uid", type=int)
+            u = Usuario.query.get(uid) if uid else None
+            if not u:
+                error = "Usuario no válido."
+            else:
+                u.nombre_completo = (request.form.get("nombre_completo") or "").strip()[:160]
+                db.session.commit()
+                registrar_auditoria("Gerencia cambió nombre a mostrar", f"{u.usuario} → {u.nombre_completo or '(vacío)'}")
+                msg = f"Nombre a mostrar de <b>{_esc(u.usuario)}</b>: <b>{_esc(u.nombre_completo or '(usa el usuario de acceso)')}</b>."
         elif accion == "renombrar":
             uid = request.form.get("uid", type=int)
             nuevo = (request.form.get("nuevo_usuario") or "").strip().lower()
@@ -36908,10 +37081,16 @@ def gerencia_usuarios():
         activo = getattr(u, "activo", True)
         filas += f"""<tr>
           <td>{u.id}</td>
-          <td><b>{_esc(u.usuario)}</b></td>
+          <td><b>{_esc(u.usuario)}</b><div style="font-size:11px;color:#64748b">{_esc(u.nombre_completo or 'sin nombre a mostrar')}</div></td>
           <td>{_esc(u.rol)}</td>
           <td>{'✅ Activo' if activo else '⛔ Inactivo'}</td>
           <td style="white-space:nowrap">
+            <form method="POST" style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+              <input type="hidden" name="accion" value="nombre_completo">
+              <input type="hidden" name="uid" value="{u.id}">
+              <input name="nombre_completo" placeholder="Nombre completo a mostrar" value="{_esc(u.nombre_completo or '')}" style="width:190px;padding:6px;border:1px solid #e2e8f0;border-radius:6px">
+              <button type="submit" style="padding:6px 10px;background:#16a34a;color:#fff;border:0;border-radius:6px;font-size:12px">Guardar nombre</button>
+            </form><br>
             <form method="POST" style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap">
               <input type="hidden" name="accion" value="renombrar">
               <input type="hidden" name="uid" value="{u.id}">
@@ -36971,6 +37150,8 @@ def gerencia_usuarios():
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div><label style="font-size:13px;font-weight:600">Usuario (login)</label>
       <input name="usuario" required style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
+      <div><label style="font-size:13px;font-weight:600">Nombre completo (el que se muestra en el sistema)</label>
+      <input name="nombre_completo" placeholder="Ej. Laura Gómez Pérez" style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
       <div><label style="font-size:13px;font-weight:600">Contraseña temporal</label>
       <input name="password" type="text" required minlength="8" style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
     </div>
@@ -51681,6 +51862,587 @@ _CTA_PLAN_INICIAL = (
 _CTA_CENTROS_INICIAL = ("Desarrollo", "Soporte", "Ventas", "Marketing", "Administración", "Infraestructura")
 
 
+# ─── PUC colombiano de referencia (base sugerida: validar con contador) ──────────────────────────
+# Formato "codigo|nombre". Niveles: clase (1), grupo (2), cuenta (4), subcuenta (6), auxiliar (8+, definidos por el usuario).
+_PUC_DATOS = """
+# CLASES
+1|ACTIVO
+2|PASIVO
+3|PATRIMONIO
+4|INGRESOS
+5|GASTOS
+6|COSTOS DE VENTAS
+7|COSTOS DE PRODUCCIÓN O DE OPERACIÓN
+# GRUPOS
+11|Disponible
+12|Inversiones
+13|Deudores
+14|Inventarios
+15|Propiedades, planta y equipo
+16|Intangibles
+17|Diferidos
+18|Otros activos
+19|Valorizaciones
+21|Obligaciones financieras
+22|Proveedores
+23|Cuentas por pagar
+24|Impuestos, gravámenes y tasas
+25|Obligaciones laborales
+26|Pasivos estimados y provisiones
+27|Diferidos
+28|Otros pasivos
+29|Bonos y papeles comerciales
+31|Capital social
+32|Superávit de capital
+33|Reservas
+34|Revalorización del patrimonio
+35|Dividendos o participaciones decretados en acciones
+36|Resultados del ejercicio
+37|Resultados de ejercicios anteriores
+38|Superávit por valorizaciones
+41|Operacionales
+42|No operacionales
+47|Ajustes por inflación
+51|Operacionales de administración
+52|Operacionales de ventas
+53|No operacionales
+54|Impuesto de renta y complementarios
+59|Ganancias y pérdidas
+61|Costo de ventas y de prestación de servicios
+71|Costos de producción · Materia prima y mano de obra
+72|Costos de producción · Servicios
+# CUENTAS
+1105|Caja
+1110|Bancos
+1115|Remesas en tránsito
+1120|Cuentas de ahorro
+1125|Fondos
+1205|Acciones
+1210|Cuotas o partes de interés social
+1215|Bonos
+1220|Cédulas
+1225|Certificados
+1230|Papeles comerciales
+1235|Títulos
+1240|Aceptaciones bancarias o financieras
+1245|Derechos fiduciarios
+1295|Otras inversiones
+1299|Provisiones
+1305|Clientes
+1310|Cuentas corrientes comerciales
+1315|Cuentas por cobrar a casa matriz
+1320|Cuentas por cobrar a vinculados económicos
+1325|Cuentas por cobrar a socios y accionistas
+1330|Anticipos y avances
+1335|Depósitos
+1340|Promesas de compraventa
+1345|Ingresos por cobrar
+1350|Retención sobre contratos
+1355|Anticipo de impuestos y contribuciones o saldos a favor
+1360|Reclamaciones
+1365|Cuentas por cobrar a trabajadores
+1370|Préstamos a particulares
+1380|Deudores varios
+1390|Deudas de difícil cobro
+1399|Provisiones
+1405|Materias primas
+1410|Productos en proceso
+1430|Productos terminados
+1435|Mercancías no fabricadas por la empresa
+1455|Materiales, repuestos y accesorios
+1460|Envases y empaques
+1465|Inventarios en tránsito
+1499|Provisiones
+1504|Terrenos
+1508|Construcciones en curso
+1516|Construcciones y edificaciones
+1520|Maquinaria y equipo
+1524|Equipo de oficina
+1528|Equipo de computación y comunicación
+1532|Equipo médico-científico
+1536|Equipo de hoteles y restaurantes
+1540|Flota y equipo de transporte
+1588|Propiedades, planta y equipo en tránsito
+1592|Depreciación acumulada
+1596|Depreciación diferida
+1597|Amortización acumulada
+1599|Provisiones
+1605|Crédito mercantil
+1610|Marcas
+1615|Patentes
+1620|Concesiones y franquicias
+1625|Derechos
+1630|Know how
+1635|Licencias
+1698|Depreciación y/o amortización acumulada
+1699|Provisiones
+1705|Gastos pagados por anticipado
+1710|Cargos diferidos
+1740|Amortización acumulada
+1805|Bienes de arte y cultura
+1895|Diversos
+1899|Provisiones
+1905|Valorizaciones de inversiones
+1910|Valorizaciones de propiedades, planta y equipo
+1995|Valorizaciones de otros activos
+2105|Bancos nacionales
+2110|Bancos del exterior
+2115|Corporaciones financieras
+2120|Compañías de financiamiento comercial
+2195|Otras obligaciones
+2205|Proveedores nacionales
+2210|Proveedores del exterior
+2215|Cuentas corrientes comerciales
+2220|Casa matriz
+2225|Compañías vinculadas
+2230|Contratistas
+2305|Cuentas corrientes comerciales
+2310|A casa matriz
+2315|A compañías vinculadas
+2320|A contratistas
+2330|Órdenes de compra por utilizar
+2335|Costos y gastos por pagar
+2340|Instalamentos por pagar
+2345|Acreedores oficiales
+2350|Regalías por pagar
+2355|Deudas con accionistas o socios
+2360|Dividendos o participaciones por pagar
+2365|Retención en la fuente
+2367|Impuesto a las ventas retenido
+2368|Impuesto de industria y comercio retenido
+2370|Retenciones y aportes de nómina
+2375|Cuotas por devolver
+2380|Acreedores varios
+2404|De renta y complementarios
+2408|Impuesto sobre las ventas por pagar
+2412|De industria y comercio
+2416|A la propiedad raíz
+2420|Derechos sobre instrumentos públicos
+2424|De valorización
+2495|Otros
+2505|Salarios por pagar
+2510|Cesantías consolidadas
+2515|Intereses sobre cesantías
+2520|Prima de servicios
+2525|Vacaciones consolidadas
+2530|Prestaciones extralegales
+2532|Pensiones por pagar
+2605|Para costos y gastos
+2610|Para obligaciones laborales
+2615|Para obligaciones fiscales
+2620|Pensiones de jubilación
+2630|Para mantenimiento y reparaciones
+2635|Para contingencias
+2640|Para obligaciones de garantías
+2695|Provisiones diversas
+2705|Ingresos recibidos por anticipado
+2710|Abonos diferidos
+2715|Utilidad diferida
+2725|Impuestos diferidos
+2805|Anticipos y avances recibidos
+2810|Depósitos recibidos
+2815|Ingresos recibidos para terceros
+2820|Cuentas en participación
+2825|Retenciones a terceros sobre contratos
+2830|Embargos judiciales
+2895|Diversos
+2905|Bonos en circulación
+2915|Papeles comerciales
+3105|Capital suscrito y pagado
+3110|Aportes del Estado
+3115|Aportes sociales
+3120|Capital asignado
+3125|Inversión suplementaria al capital asignado
+3130|Capital de personas naturales
+3205|Prima en colocación de acciones, cuotas o partes de interés social
+3210|Donaciones
+3215|Crédito mercantil
+3225|Know how
+3230|Superávit método de participación
+3305|Reservas obligatorias
+3310|Reservas estatutarias
+3315|Reservas ocasionales
+3405|Ajustes por inflación
+3505|Dividendos decretados en acciones
+3510|Participaciones decretadas en cuotas o partes de interés social
+3605|Utilidad del ejercicio
+3610|Pérdida del ejercicio
+3705|Utilidades acumuladas
+3710|Pérdidas acumuladas
+3805|Superávit por valorización de inversiones
+3810|Superávit por valorización de propiedades, planta y equipo
+3895|Superávit por valorización de otros activos
+4105|Agricultura, ganadería, caza y silvicultura
+4110|Pesca
+4115|Explotación de minas y canteras
+4120|Industrias manufactureras
+4125|Suministro de electricidad, gas y agua
+4130|Construcción
+4135|Comercio al por mayor y al por menor
+4140|Hoteles y restaurantes
+4145|Transporte, almacenamiento y comunicaciones
+4150|Actividad financiera
+4155|Actividades inmobiliarias, empresariales y de alquiler
+4160|Enseñanza
+4165|Servicios sociales y de salud
+4170|Otras actividades de servicios comunitarios, sociales y personales
+4175|Devoluciones, rebajas y descuentos en ventas
+4205|Otras ventas
+4210|Financieros
+4215|Dividendos y participaciones
+4220|Arrendamientos
+4225|Comisiones
+4230|Honorarios
+4235|Servicios
+4240|Utilidad en venta de inversiones
+4245|Utilidad en venta de propiedades, planta y equipo
+4250|Recuperaciones
+4255|Indemnizaciones
+4265|Ingresos de ejercicios anteriores
+4295|Diversos
+4705|Corrección monetaria
+5105|Gastos de personal
+5110|Honorarios
+5115|Impuestos
+5120|Arrendamientos
+5125|Contribuciones y afiliaciones
+5130|Seguros
+5135|Servicios
+5140|Gastos legales
+5145|Mantenimiento y reparaciones
+5150|Adecuación e instalación
+5155|Gastos de viaje
+5160|Depreciaciones
+5165|Amortizaciones
+5195|Diversos
+5199|Provisiones
+5305|Financieros
+5310|Pérdida en venta y retiro de bienes
+5315|Gastos extraordinarios
+5395|Gastos diversos
+5405|Impuesto de renta y complementarios
+5905|Ganancias y pérdidas
+6105|Costo de ventas · Agricultura, ganadería, caza y silvicultura
+6120|Costo de ventas · Industrias manufactureras
+6135|Costo de ventas · Comercio al por mayor y al por menor
+6145|Costo de ventas · Transporte, almacenamiento y comunicaciones
+6155|Costo de ventas · Actividades inmobiliarias, empresariales y de alquiler
+6160|Costo de ventas · Enseñanza
+6165|Costo de ventas · Servicios sociales y de salud
+6170|Costo de ventas · Otras actividades de servicios
+7105|Materia prima
+7110|Mano de obra directa
+7115|Costos indirectos de fabricación
+7120|Contratos de servicios
+7205|Mano de obra directa · servicios
+7210|Costos indirectos · servicios
+# SUBCUENTAS
+110505|Caja general
+110510|Cajas menores
+110515|Moneda extranjera
+111005|Bancos · Moneda nacional
+111010|Bancos · Moneda extranjera
+112005|Cuentas de ahorro · Bancos
+112010|Cuentas de ahorro · Corporaciones de ahorro y vivienda
+112015|Cuentas de ahorro · Organismos cooperativos financieros
+130505|Clientes nacionales
+130510|Clientes del exterior
+130515|Deudores del sistema
+133005|Anticipos a proveedores
+133010|Anticipos a contratistas
+133015|Anticipos a trabajadores
+133020|Anticipos a accionistas
+135505|Anticipo de impuesto de renta y complementarios
+135515|Retención en la fuente a favor
+135517|Impuesto a las ventas retenido a favor
+135518|Impuesto de industria y comercio retenido a favor
+135595|Otros anticipos de impuestos
+136505|Cuentas por cobrar a trabajadores · Vivienda
+136510|Cuentas por cobrar a trabajadores · Vehículos
+136515|Cuentas por cobrar a trabajadores · Educación
+136520|Cuentas por cobrar a trabajadores · Médicos, odontológicos y similares
+136525|Cuentas por cobrar a trabajadores · Calamidad doméstica
+136595|Cuentas por cobrar a trabajadores · Otros
+138005|Deudores varios · Cuentas por cobrar a terceros
+143505|Mercancías no fabricadas por la empresa · Inventario
+152405|Equipo de oficina · Muebles y enseres
+152410|Equipo de oficina · Equipos
+152495|Equipo de oficina · Otros
+152805|Equipos de procesamiento de datos
+152810|Equipos de telecomunicaciones
+152815|Equipos de radio
+159205|Depreciación acumulada · Construcciones y edificaciones
+159210|Depreciación acumulada · Maquinaria y equipo
+159215|Depreciación acumulada · Equipo de oficina
+159220|Depreciación acumulada · Equipo de computación y comunicación
+170505|Gastos pagados por anticipado · Seguros y fianzas
+170510|Gastos pagados por anticipado · Intereses
+170515|Gastos pagados por anticipado · Honorarios
+170520|Gastos pagados por anticipado · Comisiones
+170525|Gastos pagados por anticipado · Mantenimiento de equipos
+170530|Gastos pagados por anticipado · Servicios
+210505|Sobregiros bancarios
+210510|Pagarés
+210515|Cartas de crédito
+210520|Aceptaciones bancarias
+233505|Costos y gastos por pagar · Gastos financieros
+233510|Costos y gastos por pagar · Gastos legales
+233515|Costos y gastos por pagar · Libros, suscripciones, periódicos y revistas
+233520|Costos y gastos por pagar · Comisiones
+233525|Costos y gastos por pagar · Honorarios
+233530|Costos y gastos por pagar · Servicios técnicos
+233535|Costos y gastos por pagar · Servicios de mantenimiento
+233540|Costos y gastos por pagar · Arrendamientos
+233545|Costos y gastos por pagar · Transportes, fletes y acarreos
+233550|Costos y gastos por pagar · Servicios públicos
+233555|Costos y gastos por pagar · Seguros
+233560|Costos y gastos por pagar · Gastos de viaje
+233595|Costos y gastos por pagar · Otros
+236505|Retención en la fuente · Salarios y pagos laborales
+236510|Retención en la fuente · Dividendos y/o participaciones
+236515|Retención en la fuente · Honorarios
+236520|Retención en la fuente · Comisiones
+236525|Retención en la fuente · Servicios
+236530|Retención en la fuente · Arrendamientos
+236535|Retención en la fuente · Rendimientos financieros
+236540|Retención en la fuente · Compras
+237005|Aportes a EPS
+237006|Aportes a ARL
+237010|Aportes al ICBF, SENA y cajas de compensación
+237025|Embargos judiciales
+237030|Libranzas
+237095|Otros descuentos de nómina
+238030|Fondos de cesantías y/o pensiones
+240405|Impuesto de renta · Vigencia fiscal corriente
+240410|Impuesto de renta · Vigencia fiscal anterior
+240801|IVA generado
+240802|IVA descontable
+241205|Impuesto de industria y comercio por pagar
+250501|Salarios por pagar
+251005|Cesantías consolidadas
+251505|Intereses sobre cesantías
+252005|Prima de servicios
+252505|Vacaciones consolidadas
+360505|Utilidad del ejercicio
+361005|Pérdida del ejercicio
+370505|Utilidades acumuladas
+371005|Pérdidas acumuladas
+413505|Ingresos · Venta de productos y servicios
+416005|Ingresos · Enseñanza
+417505|Devoluciones en ventas
+421005|Ingresos financieros · Intereses
+510503|Gastos de personal · Salario integral
+510506|Gastos de personal · Sueldos
+510512|Gastos de personal · Jornales
+510515|Gastos de personal · Horas extras y recargos
+510518|Gastos de personal · Comisiones
+510521|Gastos de personal · Viáticos
+510524|Gastos de personal · Incapacidades
+510527|Gastos de personal · Auxilio de transporte
+510530|Gastos de personal · Cesantías
+510533|Gastos de personal · Intereses sobre cesantías
+510536|Gastos de personal · Prima de servicios
+510539|Gastos de personal · Vacaciones
+510542|Gastos de personal · Primas extralegales
+510545|Gastos de personal · Auxilios
+510548|Gastos de personal · Bonificaciones
+510551|Gastos de personal · Dotación y suministro a trabajadores
+510568|Gastos de personal · Aportes a la ARL
+510569|Gastos de personal · Aportes a la EPS
+510570|Gastos de personal · Aportes a fondos de pensiones y/o cesantías
+510572|Gastos de personal · Aportes cajas de compensación familiar
+510575|Gastos de personal · Aportes ICBF
+510578|Gastos de personal · Aportes SENA
+511005|Honorarios · Junta directiva
+511010|Honorarios · Revisoría fiscal
+511015|Honorarios · Auditoría externa
+511025|Honorarios · Asesoría jurídica
+511030|Honorarios · Asesoría financiera
+511035|Honorarios · Asesoría técnica
+511095|Honorarios · Otros
+511505|Impuestos · Industria y comercio
+511510|Impuestos · De timbres
+511515|Impuestos · A la propiedad raíz
+511570|Impuestos · IVA descontable
+511595|Impuestos · Otros
+512005|Arrendamientos · Terrenos
+512010|Arrendamientos · Construcciones y edificaciones
+512015|Arrendamientos · Maquinaria y equipo
+512020|Arrendamientos · Equipo de oficina
+512025|Arrendamientos · Equipo de computación y comunicación
+512040|Arrendamientos · Flota y equipo de transporte
+512095|Arrendamientos · Otros
+513005|Seguros · Manejo
+513010|Seguros · Cumplimiento
+513020|Seguros · Vida colectiva
+513025|Seguros · Incendio
+513095|Seguros · Otros
+513505|Servicios · Aseo y vigilancia
+513510|Servicios · Temporales
+513515|Servicios · Asistencia técnica
+513520|Servicios · Procesamiento electrónico de datos
+513525|Servicios · Acueducto y alcantarillado
+513530|Servicios · Energía eléctrica
+513535|Servicios · Teléfono
+513540|Servicios · Correo, portes y telegramas
+513550|Servicios · Transporte, fletes y acarreos
+513555|Servicios · Gas
+513595|Servicios · Otros
+514005|Gastos legales · Notariales
+514010|Gastos legales · Registro mercantil
+514015|Gastos legales · Trámites y licencias
+514095|Gastos legales · Otros
+514510|Mantenimiento · Construcciones y edificaciones
+514515|Mantenimiento · Maquinaria y equipo
+514520|Mantenimiento · Equipo de oficina
+514525|Mantenimiento · Equipo de computación y comunicación
+515505|Gastos de viaje · Alojamiento y manutención
+515515|Gastos de viaje · Pasajes aéreos
+515520|Gastos de viaje · Pasajes terrestres
+515595|Gastos de viaje · Otros
+516005|Depreciaciones · Construcciones y edificaciones
+516010|Depreciaciones · Maquinaria y equipo
+516015|Depreciaciones · Equipo de oficina
+516020|Depreciaciones · Equipo de computación y comunicación
+519505|Diversos · Comisiones
+519510|Diversos · Libros, suscripciones, periódicos y revistas
+519520|Diversos · Gastos de representación y relaciones públicas
+519525|Diversos · Elementos de aseo y cafetería
+519530|Diversos · Útiles, papelería y fotocopias
+519535|Diversos · Combustibles y lubricantes
+519545|Diversos · Taxis y buses
+519560|Diversos · Casino y restaurante
+519595|Diversos · Otros
+530505|Financieros · Gastos bancarios
+530510|Financieros · Comisiones
+530515|Financieros · Intereses
+530520|Financieros · Diferencia en cambio
+530595|Financieros · Otros
+"""
+
+
+def _puc_cargar_std():
+    std = {}
+    for ln in _PUC_DATOS.splitlines():
+        ln = ln.strip()
+        if not ln or ln.startswith("#") or "|" not in ln:
+            continue
+        cod, nom = ln.split("|", 1)
+        cod, nom = cod.strip(), nom.strip()
+        if cod.isdigit() and nom:
+            std[cod] = nom
+    # Gastos de ventas (52) replican la estructura de administración (51)
+    for cod, nom in list(std.items()):
+        if cod.startswith("51") and len(cod) >= 4:
+            std["52" + cod[2:]] = nom
+    return std
+
+
+_PUC_STD = _puc_cargar_std()
+# Cuentas de naturaleza contraria a la de su clase (reguladoras)
+_PUC_CONTRA_CREDITO = ("1299", "1399", "1499", "1599", "1592", "1596", "1597", "1698", "1699", "1740", "1899")
+_PUC_CONTRA_DEBITO = ("4175", "3610", "3710", "361005", "371005")
+_PUC_CLASE_TIPO = {"1": "ACTIVO", "2": "PASIVO", "3": "PATRIMONIO", "4": "INGRESO", "5": "GASTO", "6": "COSTO", "7": "COSTO"}
+
+
+def _puc_nivel(cod):
+    n = len(cod or "")
+    if n <= 1:
+        return "CLASE"
+    if n == 2:
+        return "GRUPO"
+    if n <= 4:
+        return "CUENTA"
+    if n <= 6:
+        return "SUBCUENTA"
+    return "AUXILIAR"
+
+
+def _puc_tipo(cod):
+    return _PUC_CLASE_TIPO.get((cod or "x")[:1], "")
+
+
+def _puc_naturaleza(cod, tipo=None):
+    tipo = tipo or _puc_tipo(cod)
+    nat = "D" if tipo in ("ACTIVO", "COSTO", "GASTO") else "C"
+    if any(cod.startswith(p) for p in _PUC_CONTRA_CREDITO):
+        nat = "C"
+    if any(cod.startswith(p) for p in _PUC_CONTRA_DEBITO):
+        nat = "D"
+    return nat
+
+
+def _puc_padre_codigo(cod, existentes=None):
+    """Código del nivel superior más cercano (en BD o en el PUC de referencia)."""
+    cod = cod or ""
+    for ln in (10, 8, 6, 4, 2, 1):
+        if ln < len(cod):
+            p = cod[:ln]
+            if (existentes is not None and p in existentes) or p in _PUC_STD:
+                return p
+    return ""
+
+
+def _puc_sugerir(cod):
+    """Dado un código, devuelve nombre/tipo/naturaleza/nivel (BD primero, luego PUC de referencia)."""
+    cod = re.sub(r"\D", "", cod or "")[:16]
+    if not cod:
+        return {"ok": False}
+    existe = None
+    try:
+        existe = CtaCuenta.query.filter_by(codigo=cod).first()
+    except Exception:
+        db.session.rollback()
+    tipo = _puc_tipo(cod)
+    out = {"ok": True, "codigo": cod, "nivel": _puc_nivel(cod), "tipo": tipo,
+           "naturaleza": _puc_naturaleza(cod, tipo), "nombre": "", "origen": "", "padre": "", "padre_nombre": ""}
+    if existe:
+        out.update({"nombre": existe.nombre, "tipo": existe.tipo, "naturaleza": existe.naturaleza, "origen": "plan", "existe": True})
+    elif cod in _PUC_STD:
+        out.update({"nombre": _PUC_STD[cod], "origen": "puc"})
+    pcod = ""
+    try:
+        exist = {c[0] for c in db.session.query(CtaCuenta.codigo).filter(CtaCuenta.codigo.in_([cod[:i] for i in range(1, len(cod))])).all()}
+    except Exception:
+        db.session.rollback()
+        exist = set()
+    pcod = _puc_padre_codigo(cod, exist)
+    if pcod:
+        pn = ""
+        try:
+            pr = CtaCuenta.query.filter_by(codigo=pcod).first()
+            pn = pr.nombre if pr else ""
+        except Exception:
+            db.session.rollback()
+        out["padre"] = pcod
+        out["padre_nombre"] = pn or _PUC_STD.get(pcod, "")
+    if not out["nombre"] and out["padre_nombre"] and out["nivel"] in ("SUBCUENTA", "AUXILIAR"):
+        out["origen"] = "padre"
+    return out
+
+
+def _puc_asegurar_cuenta(cod, nombre=None, creado_por=""):
+    """Devuelve la cuenta `cod`; si no existe la crea con el nombre del PUC de referencia (y sus padres)."""
+    c = CtaCuenta.query.filter_by(codigo=cod).first()
+    if c:
+        return c
+    nom = (nombre or _PUC_STD.get(cod) or "").strip()
+    if not nom:
+        return None
+    for ln in (1, 2, 4, 6):
+        if ln < len(cod):
+            p = cod[:ln]
+            if p in _PUC_STD and not CtaCuenta.query.filter_by(codigo=p).first():
+                db.session.add(CtaCuenta(codigo=p, nombre=_PUC_STD[p][:160], tipo=_puc_tipo(p), naturaleza=_puc_naturaleza(p),
+                                         creado_por=creado_por, creado_en=f"{fecha_hoy()} {hora_actual()}"))
+    tipo = _puc_tipo(cod)
+    c = CtaCuenta(codigo=cod, nombre=nom[:160], tipo=tipo, naturaleza=_puc_naturaleza(cod, tipo),
+                  creado_por=creado_por, creado_en=f"{fecha_hoy()} {hora_actual()}")
+    db.session.add(c)
+    db.session.flush()
+    return c
+
+
 def _cta_menu_items():
     return [
         ("/contabilidad", "Dashboard"),
@@ -51689,6 +52451,7 @@ def _cta_menu_items():
         ("/contabilidad/plan", "Plan de cuentas"),
         ("/contabilidad/centros", "Centros de costo"),
         ("/contabilidad/cuentas-por-cobrar", "Cuentas por cobrar"),
+        ("/contabilidad/nomina", "Nómina"),
         ("/contabilidad/estados", "Estados financieros"),
         ("/contabilidad/auditoria", "Auditoría"),
         ("/tickets-doc", "Tickets"),
@@ -52164,9 +52927,14 @@ def contabilidad_asiento_nuevo():
                 cuentas_map = {c.id: c for c in CtaCuenta.query.filter(CtaCuenta.activa == True).all()}  # noqa: E712
             except Exception:
                 db.session.rollback()
+            _codigos_act = [c.codigo for c in cuentas_map.values()]
             for cid, _d_, de, cr in lineas:
                 if not str(cid).isdigit() or int(cid) not in cuentas_map:
                     err = "Cada línea debe tener una cuenta activa del plan."
+                    break
+                _cx = cuentas_map[int(cid)].codigo
+                if any(k != _cx and k.startswith(_cx) for k in _codigos_act):
+                    err = f"La cuenta {_cx} tiene subcuentas o auxiliares: registra el movimiento en la subcuenta/auxiliar."
                     break
                 if (de > 0) == (cr > 0):
                     err = "Cada línea debe tener valor en débito o en crédito, no en ambos ni en ninguno."
@@ -52199,8 +52967,10 @@ def contabilidad_asiento_nuevo():
         return _cta_page("Nuevo asiento", "/contabilidad/asiento/nuevo",
                          "<section class='role-panel'><p>Primero carga o crea el plan de cuentas.</p>"
                          "<a class='btn' href='/contabilidad/plan'>Ir al plan de cuentas</a></section>")
+    _cods_all = [c.codigo for c in cuentas]
+    _movibles = [c for c in cuentas if not any(k != c.codigo and k.startswith(c.codigo) for k in _cods_all)]
     opt_c = "<option value=''>— Cuenta —</option>" + "".join(
-        f"<option value='{c.id}'>{_esc(c.codigo)} · {_esc(c.nombre)}</option>" for c in cuentas)
+        f"<option value='{c.id}' data-cod='{_esc(c.codigo)}'>{_esc(c.codigo)} · {_esc(c.nombre)}</option>" for c in _movibles)
     opt_cc = "<option value=''>— Sin centro —</option>" + "".join(f"<option>{_esc(x.nombre)}</option>" for x in centros)
     opt_t = "".join(f"<option {'selected' if (f.get('tipo') or '') == t else ''}>{t}</option>" for t in _CTA_TIPOS_ASIENTO)
     inp = "width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box"
@@ -52224,9 +52994,14 @@ function calc(){var d=0,c=0;body.querySelectorAll('tr').forEach(function(tr){d+=
  est.textContent=ok?'✅ Equilibrado':'⚠️ Diferencia: '+fmt(Math.abs(dif));est.style.color=ok?'#15803d':'#b45309';
  document.getElementById('btn-guardar').disabled=!ok;}
 function wire(tr){tr.querySelectorAll('input').forEach(function(i){i.addEventListener('input',calc);});
+ var cod=tr.querySelector('.cod'),sel=tr.querySelector('.sel-cta'),msg=tr.querySelector('.cod-msg');
+ cod.addEventListener('input',function(){var v=cod.value.replace(/\\D/g,'');cod.value=v;msg.textContent='';if(!v){return;}
+  var hit=null;for(var k=0;k<sel.options.length;k++){if(sel.options[k].dataset.cod===v){hit=sel.options[k];break;}}
+  if(hit){sel.value=hit.value;}else if(v.length>=4){sel.value='';msg.textContent='No existe en tu plan (o tiene subcuentas). Créala en Plan de cuentas.';}});
+ sel.addEventListener('change',function(){var o=sel.options[sel.selectedIndex];cod.value=(o&&o.dataset.cod)||'';});
  tr.querySelector('.quitar').addEventListener('click',function(){if(body.querySelectorAll('tr').length>2){tr.remove();calc();}});}
 function add(d){var tr=document.createElement('tr');tr.innerHTML=tpl.innerHTML;body.appendChild(tr);
- if(d){tr.querySelector('select').value=d.c||'';tr.querySelector('.ld').value=d.d||'';tr.querySelector('.deb').value=d.deb||'';tr.querySelector('.cre').value=d.cre||'';}
+ if(d){tr.querySelector('select').value=d.c||'';var _o=tr.querySelector('select').options[tr.querySelector('select').selectedIndex];if(_o&&_o.dataset.cod){tr.querySelector('.cod').value=_o.dataset.cod;}tr.querySelector('.ld').value=d.d||'';tr.querySelector('.deb').value=d.deb||'';tr.querySelector('.cre').value=d.cre||'';}
  wire(tr);}
 document.getElementById('add-linea').addEventListener('click',function(){add();});
 if(PRE.length){PRE.forEach(function(d){add(d);});}else{add();add();}
@@ -52251,7 +53026,7 @@ calc();})();
     <tr style="background:#f1f5f9;font-weight:800"><td colspan="2" style="padding:8px;text-align:right">Totales</td><td style="padding:8px;text-align:right" id="t-deb">0,00</td><td style="padding:8px;text-align:right" id="t-cre">0,00</td><td></td></tr>
   </table></div>
   <template id="tpl-linea">
-    <td style="padding:5px"><select name="cuenta_id" style="{inp}">{opt_c}</select></td>
+    <td style="padding:5px"><input class="cod" inputmode="numeric" placeholder="Código" title="Escribe el código y se elige la cuenta" style="{inp};width:96px;margin-bottom:4px;font-weight:700"><select name="cuenta_id" class="sel-cta" style="{inp}">{opt_c}</select><div class="cod-msg" style="font-size:11px;color:#b45309"></div></td>
     <td style="padding:5px"><input name="linea_desc" class="ld" style="{inp}"></td>
     <td style="padding:5px"><input name="debito" class="deb" inputmode="decimal" placeholder="0,00" style="{inp};text-align:right"></td>
     <td style="padding:5px"><input name="credito" class="cre" inputmode="decimal" placeholder="0,00" style="{inp};text-align:right"></td>
@@ -52329,6 +53104,13 @@ def contabilidad_asiento_anular(aid):
     return redirect(f"/contabilidad/asiento/{aid}")
 
 
+@app.route("/contabilidad/plan/sugerir")
+@_cta_ruta()
+def contabilidad_plan_sugerir():
+    """Escribe el código y devuelve el nombre automáticamente (plan propio o PUC de referencia)."""
+    return jsonify(_puc_sugerir(request.args.get("codigo") or ""))
+
+
 @app.route("/contabilidad/plan", methods=["GET", "POST"])
 @_cta_ruta()
 def contabilidad_plan():
@@ -52337,30 +53119,68 @@ def contabilidad_plan():
         if not _cta_puede_escribir():
             return acceso_denegado("Solo el rol Contabilidad configura el plan de cuentas.")
         accion = (request.form.get("accion") or "").strip()
-        if accion == "cargar_inicial":
+        quien = session.get("usuario") or ""
+        if accion in ("cargar_inicial", "cargar_puc"):
             n = 0
-            for cod, nom, tipo in _CTA_PLAN_INICIAL:
-                if not CtaCuenta.query.filter_by(codigo=cod).first():
-                    db.session.add(CtaCuenta(codigo=cod, nombre=nom, tipo=tipo, naturaleza="D" if tipo in ("ACTIVO", "COSTO", "GASTO") else "C",
-                                             creado_por=session.get("usuario") or "", creado_en=f"{fecha_hoy()} {hora_actual()}"))
-                    n += 1
+            if accion == "cargar_inicial":
+                fuente = [(cod, nom) for cod, nom, _t in _CTA_PLAN_INICIAL]
+            else:
+                fuente = sorted(_PUC_STD.items(), key=lambda kv: (len(kv[0]), kv[0]))
+            existentes = {c[0] for c in db.session.query(CtaCuenta.codigo).all()}
+            for cod, nom in fuente:
+                if cod in existentes or _puc_tipo(cod) == "":
+                    continue
+                tipo = _puc_tipo(cod)
+                db.session.add(CtaCuenta(codigo=cod, nombre=nom[:160], tipo=tipo, naturaleza=_puc_naturaleza(cod, tipo),
+                                         creado_por=quien, creado_en=f"{fecha_hoy()} {hora_actual()}"))
+                existentes.add(cod)
+                n += 1
             db.session.commit()
-            _cta_log("Cargó plan inicial", f"{n} cuentas nuevas")
-            msg = f"Plan inicial cargado ({n} cuentas nuevas)."
+            _cta_log("Cargó plan inicial" if accion == "cargar_inicial" else "Cargó PUC completo", f"{n} cuentas nuevas")
+            msg = (f"Plan inicial cargado ({n} cuentas nuevas)." if accion == "cargar_inicial"
+                   else f"PUC cargado: {n} cuentas nuevas (clases, grupos, cuentas y subcuentas).")
         elif accion == "crear":
-            cod = re.sub(r"\D", "", request.form.get("codigo") or "")[:12]
+            cod = re.sub(r"\D", "", request.form.get("codigo") or "")[:16]
             nom = (request.form.get("nombre") or "").strip()[:160]
             tipo = (request.form.get("tipo") or "").strip().upper()
-            if not cod or not nom or tipo not in _CTA_TIPOS:
-                err = "Código (solo números), nombre y tipo son obligatorios."
-            elif CtaCuenta.query.filter_by(codigo=cod).first():
-                err = "Ya existe una cuenta con ese código."
+            if not cod:
+                err = "Escribe el código de la cuenta (solo números)."
             else:
-                db.session.add(CtaCuenta(codigo=cod, nombre=nom, tipo=tipo, naturaleza="D" if tipo in ("ACTIVO", "COSTO", "GASTO") else "C",
-                                         creado_por=session.get("usuario") or "", creado_en=f"{fecha_hoy()} {hora_actual()}"))
+                sug = _puc_sugerir(cod)
+                if not nom:
+                    nom = (sug.get("nombre") or "").strip()
+                if tipo not in _CTA_TIPOS:
+                    tipo = sug.get("tipo") or ""
+                if not nom:
+                    err = "No hay nombre sugerido para ese código: escribe el nombre (por ejemplo, el del auxiliar)."
+                elif tipo not in _CTA_TIPOS:
+                    err = "El código debe iniciar en 1-7 (clase del PUC) o elige el tipo."
+                elif CtaCuenta.query.filter_by(codigo=cod).first():
+                    err = "Ya existe una cuenta con ese código."
+                else:
+                    # Si falta el nivel superior (cuenta/subcuenta) y está en el PUC, se crea automáticamente.
+                    for ln in (1, 2, 4, 6):
+                        if ln < len(cod):
+                            p = cod[:ln]
+                            if p in _PUC_STD and not CtaCuenta.query.filter_by(codigo=p).first():
+                                db.session.add(CtaCuenta(codigo=p, nombre=_PUC_STD[p][:160], tipo=_puc_tipo(p), naturaleza=_puc_naturaleza(p),
+                                                         creado_por=quien, creado_en=f"{fecha_hoy()} {hora_actual()}"))
+                    db.session.add(CtaCuenta(codigo=cod, nombre=nom, tipo=tipo, naturaleza=_puc_naturaleza(cod, tipo),
+                                             creado_por=quien, creado_en=f"{fecha_hoy()} {hora_actual()}"))
+                    db.session.commit()
+                    _cta_log("Creó cuenta", f"{cod} {nom} ({tipo} · {_puc_nivel(cod).lower()})")
+                    msg = f"{_puc_nivel(cod).capitalize()} creada: {cod} · {nom}."
+        elif accion == "editar":
+            c = CtaCuenta.query.get(request.form.get("id", type=int) or 0)
+            nom = (request.form.get("nombre") or "").strip()[:160]
+            if not c or not nom:
+                err = "Indica el nuevo nombre."
+            else:
+                ant = c.nombre
+                c.nombre = nom
                 db.session.commit()
-                _cta_log("Creó cuenta", f"{cod} {nom} ({tipo})")
-                msg = "Cuenta creada."
+                _cta_log("Renombró cuenta", f"{c.codigo}", ant, nom)
+                msg = "Nombre de la cuenta actualizado."
         elif accion == "toggle":
             c = CtaCuenta.query.get(request.form.get("id", type=int) or 0)
             if c:
@@ -52369,46 +53189,102 @@ def contabilidad_plan():
                 _cta_log("Cambió estado de cuenta", f"{c.codigo} → {'activa' if c.activa else 'inactiva'}")
                 msg = "Estado de la cuenta actualizado."
     saldos = _cta_saldos(None, None)
+    sal_por_cod = {f["cuenta"].codigo: f["saldo"] for f in saldos}
+    codigos = sorted(sal_por_cod)
+    filtro_nivel = (request.args.get("nivel") or "").upper()
     filas = ""
+    contadores = {"CLASE": 0, "GRUPO": 0, "CUENTA": 0, "SUBCUENTA": 0, "AUXILIAR": 0}
+    colores = {"CLASE": "#0B2D57", "GRUPO": "#1d4ed8", "CUENTA": "#0369a1", "SUBCUENTA": "#047857", "AUXILIAR": "#b45309"}
+    sangria = {"CLASE": 0, "GRUPO": 10, "CUENTA": 22, "SUBCUENTA": 36, "AUXILIAR": 50}
     for f in saldos:
         c = f["cuenta"]
+        nivel = _puc_nivel(c.codigo)
+        contadores[nivel] = contadores.get(nivel, 0) + 1
+        if filtro_nivel in contadores and nivel != filtro_nivel:
+            continue
+        # saldo consolidado: la cuenta + todo lo que cuelga de ella (subcuentas y auxiliares)
+        consolidado = sum((sal_por_cod[k] for k in codigos if k.startswith(c.codigo)), _D("0"))
         btn = ""
         if _cta_puede_escribir():
-            btn = (f"<form method='POST' style='margin:0'><input type='hidden' name='accion' value='toggle'><input type='hidden' name='id' value='{c.id}'>"
-                   f"<button class='btn' style='padding:4px 10px;font-size:12px'>{'Desactivar' if c.activa else 'Activar'}</button></form>")
-        filas += (f"<tr style='border-bottom:1px solid #e2e8f0;{'' if c.activa else 'opacity:.5'}'>"
-                  f"<td style='padding:7px 8px'><b>{_esc(c.codigo)}</b></td><td style='padding:7px 8px'>{_esc(c.nombre)}</td>"
+            nom_js = (c.nombre or "").replace("\\", "\\\\").replace("'", "\\'").replace('"', "&quot;")
+            btn = (f"<form method='POST' style='margin:0;display:inline-flex;gap:4px'><input type='hidden' name='accion' value='toggle'><input type='hidden' name='id' value='{c.id}'>"
+                   f"<button class='btn' style='padding:4px 10px;font-size:12px'>{'Desactivar' if c.activa else 'Activar'}</button></form> "
+                   f"<form method='POST' style='margin:0;display:inline-flex' onsubmit=\"var n=prompt('Nuevo nombre de la cuenta {c.codigo}','{nom_js}');if(!n)return false;this.nombre.value=n;return true;\">"
+                   f"<input type='hidden' name='accion' value='editar'><input type='hidden' name='id' value='{c.id}'><input type='hidden' name='nombre' value=''>"
+                   f"<button class='btn' style='padding:4px 10px;font-size:12px;background:#334155;color:#fff'>Editar</button></form>")
+        peso = "800" if nivel in ("CLASE", "GRUPO") else "600"
+        filas += (f"<tr data-t='{_esc((c.codigo + ' ' + (c.nombre or '')).lower())}' style='border-bottom:1px solid #e2e8f0;{'' if c.activa else 'opacity:.5'}'>"
+                  f"<td style='padding:7px 8px;padding-left:{8 + sangria[nivel]}px;font-weight:{peso}'>{_esc(c.codigo)}</td>"
+                  f"<td style='padding:7px 8px;font-weight:{peso}'>{_esc(c.nombre)}</td>"
+                  f"<td style='padding:7px 8px'><span style='background:{colores[nivel]};color:#fff;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:800'>{nivel}</span></td>"
                   f"<td style='padding:7px 8px'>{_esc(c.tipo)}</td><td style='padding:7px 8px'>{'Débito' if c.naturaleza == 'D' else 'Crédito'}</td>"
-                  f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(f['saldo'])}</td><td style='padding:7px 8px'>{btn}</td></tr>")
+                  f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(consolidado)}</td><td style='padding:7px 8px;white-space:nowrap'>{btn}</td></tr>")
     if not filas:
-        filas = "<tr><td colspan='6' style='padding:16px;text-align:center;color:#64748b'>Aún no hay cuentas.</td></tr>"
+        filas = "<tr><td colspan='7' style='padding:16px;text-align:center;color:#64748b'>Aún no hay cuentas. Usa «Cargar PUC completo».</td></tr>"
     formularios = ""
     if _cta_puede_escribir():
         opt = "".join(f"<option>{t}</option>" for t in _CTA_TIPOS)
         formularios = f"""
 <section class="role-panel">
-  <h2 style="margin-top:0;color:#0B2D57">Nueva cuenta</h2>
-  <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap">
+  <h2 style="margin-top:0;color:#0B2D57">Nueva cuenta, subcuenta o auxiliar</h2>
+  <p class="mini-text" style="margin-top:0">Escribe solo el <b>código</b>: el nombre, el tipo y la naturaleza se completan solos desde el PUC.
+  Niveles: 1 dígito clase · 2 grupo · 4 cuenta · 6 subcuenta · 8 o más <b>auxiliar</b> (el nombre del auxiliar lo defines tú).</p>
+  <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap" autocomplete="off">
     <input type="hidden" name="accion" value="crear">
-    <input name="codigo" placeholder="Código (números)" required style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:150px">
-    <input name="nombre" placeholder="Nombre de la cuenta" required style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;flex:1;min-width:220px">
-    <select name="tipo" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px">{opt}</select>
-    <button class="btn">Crear cuenta</button>
+    <input id="puc-cod" name="codigo" placeholder="Código (ej. 110505)" inputmode="numeric" required style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:170px;font-weight:700">
+    <input id="puc-nom" name="nombre" placeholder="Nombre (se completa solo)" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;flex:1;min-width:220px">
+    <select id="puc-tipo" name="tipo" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px">{opt}</select>
+    <button class="btn">Crear</button>
   </form>
-  <form method="POST" style="margin-top:10px"><input type="hidden" name="accion" value="cargar_inicial">
-    <button class="btn" style="background:#334155;color:#fff">Cargar plan inicial sugerido</button></form>
-</section>"""
+  <div id="puc-hint" class="mini-text" style="margin-top:6px;min-height:18px"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    <form method="POST" style="margin:0"><input type="hidden" name="accion" value="cargar_puc">
+      <button class="btn" style="background:#0B2D57;color:#fff">📚 Cargar PUC completo (clases, grupos, cuentas y subcuentas)</button></form>
+    <form method="POST" style="margin:0"><input type="hidden" name="accion" value="cargar_inicial">
+      <button class="btn" style="background:#334155;color:#fff">Cargar plan inicial sugerido</button></form>
+  </div>
+</section>
+<script>
+(function(){{
+var cod=document.getElementById('puc-cod'),nom=document.getElementById('puc-nom'),tipo=document.getElementById('puc-tipo'),hint=document.getElementById('puc-hint');
+var t=null,editado=false;
+nom.addEventListener('input',function(){{editado=true;}});
+cod.addEventListener('input',function(){{cod.value=cod.value.replace(/\\D/g,'');clearTimeout(t);editado=false;nom.value='';
+ if(!cod.value){{hint.textContent='';return;}}
+ t=setTimeout(function(){{fetch('/contabilidad/plan/sugerir?codigo='+encodeURIComponent(cod.value),{{credentials:'same-origin'}}).then(function(r){{return r.json();}}).then(function(d){{
+  if(!d||!d.ok)return;
+  if(!editado&&d.nombre&&d.origen!=='padre'){{nom.value=d.nombre;}}
+  if(d.tipo){{tipo.value=d.tipo;}}
+  var m='Nivel: <b>'+d.nivel+'</b> · '+d.tipo+' · naturaleza '+(d.naturaleza==='D'?'débito':'crédito');
+  if(d.existe){{m+=' · <span style="color:#b91c1c">⚠️ ya existe en tu plan</span>';}}
+  else if(d.origen==='puc'){{m+=' · ✅ nombre tomado del PUC';}}
+  else if(d.origen==='padre'){{m+=' · escribe el nombre del auxiliar/subcuenta (pertenece a <b>'+d.padre+' '+d.padre_nombre+'</b>)';nom.placeholder=d.padre_nombre+' · …';}}
+  else{{m+=' · código no está en el PUC base: escribe el nombre';}}
+  if(d.padre&&d.origen!=='padre'){{m+=' · depende de '+d.padre+' '+d.padre_nombre;}}
+  hint.innerHTML=m;}});}},180);}});
+var q=document.getElementById('puc-q');
+if(q){{q.addEventListener('input',function(){{var v=q.value.toLowerCase();document.querySelectorAll('#puc-tabla tr[data-t]').forEach(function(r){{r.style.display=r.dataset.t.indexOf(v)>-1?'':'none';}});}});}}
+}})();
+</script>"""
     th = "padding:8px;text-align:left;font-size:12px"
+    chips = "".join(
+        f"<a href='/contabilidad/plan?nivel={n}' style='padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;"
+        f"background:{'#0B2D57' if filtro_nivel == n else '#e2e8f0'};color:{'#fff' if filtro_nivel == n else '#0f172a'}'>{n.capitalize()}s · {k}</a>"
+        for n, k in contadores.items())
+    chips = f"<a href='/contabilidad/plan' style='padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;background:{'#0B2D57' if not filtro_nivel else '#e2e8f0'};color:{'#fff' if not filtro_nivel else '#0f172a'}'>Todas</a>" + chips
     cuerpo = f"""{formularios}
 <section class="role-panel" style="margin-top:14px">
   <div style="background:#fffbeb;border:1px solid #fde68a;padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:10px">
-  ⚠️ El plan inicial es solo una <b>base editable</b>. En Colombia debe ajustarse al marco contable aplicable a Procsis: valídalo con un contador antes de usarlo en firme.</div>
-  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
-    <tr style="background:#0B2D57;color:#fff"><th style="{th}">Código</th><th style="{th}">Cuenta</th><th style="{th}">Tipo</th><th style="{th}">Naturaleza</th><th style="{th};text-align:right">Saldo</th><th style="{th}"></th></tr>
+  ⚠️ El PUC cargado es una <b>base de referencia editable</b>. En Colombia debe ajustarse al marco contable aplicable a Procsis: valídalo con un contador antes de usarlo en firme.
+  Los saldos de cuentas y subcuentas se muestran <b>consolidados</b> con lo que cuelga de ellas (subcuentas y auxiliares), lo que facilita la presentación de los EEFF.</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">{chips}
+    <input id="puc-q" type="search" placeholder="🔎 Buscar por código o nombre…" style="margin-left:auto;padding:8px 12px;border:1px solid #cbd5e1;border-radius:999px;min-width:240px"></div>
+  <div style="overflow:auto"><table id="puc-tabla" style="width:100%;border-collapse:collapse">
+    <tr style="background:#0B2D57;color:#fff"><th style="{th}">Código</th><th style="{th}">Cuenta</th><th style="{th}">Nivel</th><th style="{th}">Tipo</th><th style="{th}">Naturaleza</th><th style="{th};text-align:right">Saldo consolidado</th><th style="{th}"></th></tr>
     {filas}
   </table></div>
 </section>"""
-    return _cta_page("Plan de cuentas", "/contabilidad/plan", cuerpo, "Cuentas contables que usa Procsis", msg=msg, err=err)
+    return _cta_page("Plan de cuentas", "/contabilidad/plan", cuerpo, "PUC con cuentas, subcuentas y auxiliares", msg=msg, err=err)
 
 
 @app.route("/contabilidad/centros", methods=["GET", "POST"])
@@ -52516,6 +53392,48 @@ def contabilidad_cxc():
     return _cta_page("Cuentas por cobrar", "/contabilidad/cuentas-por-cobrar", cuerpo, "Facturado, pagado y pendiente por institución")
 
 
+def _cta_patrimonio_datos(d, h):
+    """Estado de cambios en el patrimonio del período d→h.
+    Por cada cuenta de patrimonio: saldo inicial, aumentos (créditos), disminuciones (débitos) y saldo final.
+    Los resultados (ingresos − costos − gastos) se muestran como una línea propia del patrimonio."""
+    try:
+        d_prev = (datetime.strptime(d, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    except Exception:
+        d_prev = d
+    previo = {f["cuenta"].id: f for f in _cta_saldos(None, d_prev)}
+    per = {f["cuenta"].id: f for f in _cta_saldos(d, h)}
+    acum = _cta_saldos(None, h)
+    filas = []
+    tot = {"ini": _D("0"), "aum": _D("0"), "dis": _D("0"), "fin": _D("0")}
+    for f in acum:
+        c = f["cuenta"]
+        if c.tipo != "PATRIMONIO":
+            continue
+        p_ = per.get(c.id, {"debito": _D("0"), "credito": _D("0")})
+        pr = previo.get(c.id, {"debito": _D("0"), "credito": _D("0")})
+        ini = pr["credito"] - pr["debito"]
+        fin = f["credito"] - f["debito"]
+        aum, dis = p_["credito"], p_["debito"]
+        if not (ini or aum or dis or fin):
+            continue
+        filas.append({"codigo": c.codigo, "nombre": c.nombre, "grupo": c.codigo[:2], "ini": ini, "aum": aum, "dis": dis, "fin": fin})
+        tot["ini"] += ini
+        tot["aum"] += aum
+        tot["dis"] += dis
+        tot["fin"] += fin
+    # Resultados del ejercicio (cuentas 4, 5, 6 y 7), no cerrados contra patrimonio
+    res_prev = sum((_cta_suma(list(previo.values()), t) * (1 if t == "INGRESO" else -1) for t in ("INGRESO", "COSTO", "GASTO")), _D("0"))
+    res_per = sum((_cta_suma(list(per.values()), t) * (1 if t == "INGRESO" else -1) for t in ("INGRESO", "COSTO", "GASTO")), _D("0"))
+    res_fin = res_prev + res_per
+    if res_prev or res_per:
+        r = {"codigo": "—", "nombre": "Resultado del ejercicio (ingresos − costos − gastos)", "grupo": "36",
+             "ini": res_prev, "aum": res_per if res_per > 0 else _D("0"), "dis": -res_per if res_per < 0 else _D("0"), "fin": res_fin}
+        filas.append(r)
+        for k in ("ini", "aum", "dis", "fin"):
+            tot[k] += r[k]
+    return {"filas": filas, "tot": tot, "desde": d, "hasta": h, "cuadra": (tot["ini"] + tot["aum"] - tot["dis"]) == tot["fin"]}
+
+
 def _cta_estados_datos(d, h):
     per = _cta_saldos(d, h)
     acum = _cta_saldos(None, h)
@@ -52526,6 +53444,89 @@ def _cta_estados_datos(d, h):
     return {"per": per, "acum": acum, "ing": ing, "cos": cos, "gas": gas, "res": ing - cos - gas, "res_acum": res_acum,
             "act": _cta_suma(acum, "ACTIVO"), "pas": _cta_suma(acum, "PASIVO"),
             "pat": _cta_suma(acum, "PATRIMONIO") + res_acum, "ent": entradas, "sal": salidas}
+
+
+@app.route("/contabilidad/nomina", methods=["GET", "POST"])
+@_cta_ruta()
+def contabilidad_nomina():
+    """Nómina de RRHH conectada a Contabilidad: ver liquidaciones y contabilizar devengo/pago."""
+    msg = err = ""
+    if request.method == "POST":
+        if not _cta_puede_escribir():
+            return acceso_denegado("Solo el rol Contabilidad contabiliza la nómina.")
+        accion = (request.form.get("accion") or "").strip()
+        row = NominaPago.query.get(request.form.get("id", type=int) or 0)
+        if not row:
+            err = "Registro de nómina no encontrado."
+        elif accion in ("contabilizar", "contabilizar_pago"):
+            a_, e_ = _nom_contabilizar(row)
+            if a_ and accion == "contabilizar_pago":
+                a_, e_ = _nom_contabilizar_pago(row)
+            msg = f"Asiento registrado: {a_.numero}" if a_ else ""
+            err = "" if a_ else (e_ or "No se pudo contabilizar.")
+        elif accion == "contabilizar_todo":
+            pass
+    if request.method == "POST" and (request.form.get("accion") == "contabilizar_todo") and _cta_puede_escribir():
+        n = nerr = 0
+        per = (request.form.get("periodo") or "").strip()[:7]
+        q = NominaPago.query.filter(NominaPago.estado != "ANULADO")
+        if per:
+            q = q.filter_by(periodo=per)
+        for row in q.order_by(NominaPago.id).limit(500).all():
+            if not _nom_asiento_activo(row.asiento_id):
+                a_, e_ = _nom_contabilizar(row)
+                n += 1 if a_ else 0
+                nerr += 0 if a_ else 1
+            if (row.estado or "") == "PAGADO" and _nom_asiento_activo(row.asiento_id) and not _nom_asiento_activo(row.asiento_pago_id):
+                _nom_contabilizar_pago(row)
+        msg = f"Contabilizadas {n} liquidaciones." + (f" {nerr} con error." if nerr else "")
+        err = ""
+    per_f = (request.args.get("periodo") or "").strip()[:7]
+    q = NominaPago.query
+    if per_f:
+        q = q.filter_by(periodo=per_f)
+    pagos = q.order_by(NominaPago.periodo.desc(), NominaPago.id.desc()).limit(300).all()
+    th = "padding:8px;text-align:left;font-size:12px"
+    filas = ""
+    t_dev = t_ded = t_neto = t_costo = 0.0
+    for p in pagos:
+        t_dev += float(p.valor_bruto or 0)
+        t_ded += float(p.deducciones or 0)
+        t_neto += float(p.valor_neto or 0)
+        t_costo += float(getattr(p, "costo_empresa_total", 0) or 0)
+        filas += (f"<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:7px 8px'>{_esc(p.periodo)}</td>"
+                  f"<td style='padding:7px 8px'>{_esc(p.trabajador_nombre)}<div style='font-size:11px;color:#64748b'>{_esc(p.documento)}</div></td>"
+                  f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(p.valor_bruto)}</td>"
+                  f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(getattr(p, 'valor_extras', 0))}</td>"
+                  f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(p.deducciones)}</td>"
+                  f"<td style='padding:7px 8px;text-align:right;font-weight:700'>{_cta_fmt(p.valor_neto)}</td>"
+                  f"<td style='padding:7px 8px;text-align:right'>{_cta_fmt(getattr(p, 'costo_empresa_total', 0))}</td>"
+                  f"<td style='padding:7px 8px'>{_esc(p.estado)}</td>"
+                  f"<td style='padding:7px 8px'>{_nom_contab_html(p, _cta_puede_escribir(), '/contabilidad/nomina')}</td></tr>")
+    if not filas:
+        filas = "<tr><td colspan='9' style='padding:16px;text-align:center;color:#64748b'>Sin liquidaciones de nómina. RRHH/Gerencia las registra en Nómina.</td></tr>"
+    todo = ""
+    if _cta_puede_escribir():
+        todo = (f"<form method='POST' style='margin:0'><input type='hidden' name='accion' value='contabilizar_todo'>"
+                f"<input type='hidden' name='periodo' value='{_esc(per_f)}'>"
+                f"<button class='btn' style='background:#7c3aed;color:#fff'>⚙️ Contabilizar todo lo pendiente{' de ' + _esc(per_f) if per_f else ''}</button></form>")
+    cuerpo = f"""<section class="role-panel">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <form method="GET" style="display:flex;gap:8px;align-items:center;margin:0"><label style="font-size:12px;font-weight:700">Periodo</label>
+      <input name="periodo" value="{_esc(per_f)}" placeholder="YYYY-MM" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;width:110px">
+      <button class="btn" type="submit">Filtrar</button></form>
+    {todo}
+    <a class="btn" href="/gerencia/nomina" style="margin-left:auto">Ir a la nómina de RRHH</a>
+  </div>
+  <p class="mini-text">Cada liquidación genera un asiento de <b>devengo</b> (gasto de personal, horas extras y recargos, aportes y provisiones contra salarios, seguridad social y prestaciones por pagar)
+  y, al marcarse PAGADA, un asiento de <b>pago</b> (salarios por pagar contra bancos o caja). Las cuentas se toman del PUC (51 · gastos de personal; 23/25 · pasivos laborales).</p>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+    <tr style="background:#0B2D57;color:#fff"><th style="{th}">Periodo</th><th style="{th}">Trabajador</th><th style="{th};text-align:right">Devengado</th><th style="{th};text-align:right">Extras y recargos</th><th style="{th};text-align:right">Deducciones</th><th style="{th};text-align:right">Neto</th><th style="{th};text-align:right">Costo empresa</th><th style="{th}">Estado</th><th style="{th}">Contabilidad</th></tr>
+    {filas}
+    <tr style="background:#f1f5f9;font-weight:800"><td colspan="2" style="padding:8px;text-align:right">Totales</td><td style="padding:8px;text-align:right">{_cta_fmt(t_dev)}</td><td></td><td style="padding:8px;text-align:right">{_cta_fmt(t_ded)}</td><td style="padding:8px;text-align:right">{_cta_fmt(t_neto)}</td><td style="padding:8px;text-align:right">{_cta_fmt(t_costo)}</td><td colspan="2"></td></tr>
+  </table></div>
+</section>"""
+    return _cta_page("Nómina", "/contabilidad/nomina", cuerpo, "Nómina de RRHH conectada al libro contable", msg=msg, err=err)
 
 
 @app.route("/contabilidad/estados")
@@ -52541,6 +53542,21 @@ def contabilidad_estados():
         return (f"<tr style='background:#f1f5f9'><td colspan='2' style='padding:6px 8px;font-weight:800'>{titulo}</td></tr>{li}"
                 f"<tr><td style='padding:6px 8px;text-align:right;font-weight:800'>Total {titulo.lower()}</td><td style='padding:6px 8px;text-align:right;font-weight:800'>{_cta_fmt(tot)}</td></tr>")
 
+    pt = _cta_patrimonio_datos(d, h)
+    _td = "padding:5px 8px;text-align:right"
+    pat_filas = "<tr style='background:#0B2D57;color:#fff'><th style='padding:6px 8px;text-align:left'>Cuenta de patrimonio</th><th style='padding:6px 8px;text-align:right'>Saldo inicial</th><th style='padding:6px 8px;text-align:right'>Aumentos</th><th style='padding:6px 8px;text-align:right'>Disminuciones</th><th style='padding:6px 8px;text-align:right'>Saldo final</th></tr>"
+    _grupo_act = None
+    for r_ in sorted(pt["filas"], key=lambda z: (z["grupo"], z["codigo"])):
+        if r_["grupo"] != _grupo_act:
+            _grupo_act = r_["grupo"]
+            pat_filas += f"<tr style='background:#f1f5f9'><td colspan='5' style='padding:6px 8px;font-weight:800'>{_esc(_PUC_STD.get(_grupo_act, 'Patrimonio'))} ({_esc(_grupo_act)})</td></tr>"
+        pat_filas += (f"<tr><td style='padding:5px 8px'>{_esc(r_['codigo'])} · {_esc(r_['nombre'])}</td><td style='{_td}'>{_cta_fmt(r_['ini'])}</td>"
+                      f"<td style='{_td}'>{_cta_fmt(r_['aum'])}</td><td style='{_td}'>{_cta_fmt(r_['dis'])}</td><td style='{_td}'>{_cta_fmt(r_['fin'])}</td></tr>")
+    if not pt["filas"]:
+        pat_filas += "<tr><td colspan='5' style='padding:12px;text-align:center;color:#64748b'>Sin movimientos de patrimonio en el período.</td></tr>"
+    pat_filas += (f"<tr style='background:#0B2D57;color:#fff;font-weight:800'><td style='padding:8px'>Total patrimonio {'✅' if pt['cuadra'] else '⚠️ no concilia'}</td>"
+                  f"<td style='padding:8px;text-align:right'>{_cta_fmt(pt['tot']['ini'])}</td><td style='padding:8px;text-align:right'>{_cta_fmt(pt['tot']['aum'])}</td>"
+                  f"<td style='padding:8px;text-align:right'>{_cta_fmt(pt['tot']['dis'])}</td><td style='padding:8px;text-align:right'>{_cta_fmt(pt['tot']['fin'])}</td></tr>")
     dif = x["act"] - x["pas"] - x["pat"]
     resultados = (bloque("Ingresos", x["per"], "INGRESO") + bloque("Costos", x["per"], "COSTO") + bloque("Gastos", x["per"], "GASTO")
                   + f"<tr style='background:#0B2D57;color:#fff'><td style='padding:8px;font-weight:800'>Resultado del período</td><td style='padding:8px;text-align:right;font-weight:800'>{_cta_fmt(x['res'])}</td></tr>")
@@ -52565,6 +53581,7 @@ def contabilidad_estados():
               + f"<a class='btn' style='background:#b91c1c;color:#fff' href='{pdf}'>📄 Descargar PDF</a>"
               + f"<p class='mini-text'>Resultados y flujo: {d} → {h}. Situación financiera y balance de prueba: acumulado al {h}.</p>"
               + caja("Estado de resultados", resultados) + caja("Estado de situación financiera", situacion)
+              + caja("Estado de cambios en el patrimonio", pat_filas)
               + caja("Flujo de efectivo", flujo)
               + caja("Balance de prueba", "<tr style='background:#0B2D57;color:#fff'><th style='padding:6px 8px;text-align:left'>Cuenta</th><th style='padding:6px 8px;text-align:right'>Débitos</th><th style='padding:6px 8px;text-align:right'>Créditos</th><th style='padding:6px 8px;text-align:right'>Saldo</th></tr>" + bp))
     return _cta_page("Estados financieros", "/contabilidad/estados", cuerpo, "Generados automáticamente desde el libro")
@@ -52579,6 +53596,9 @@ def contabilidad_estados_pdf():
              ["Estado de resultados", "Gastos", _cta_fmt(x["gas"])], ["Estado de resultados", "Resultado del período", _cta_fmt(x["res"])],
              ["Situación financiera", "Activo", _cta_fmt(x["act"])], ["Situación financiera", "Pasivo", _cta_fmt(x["pas"])],
              ["Situación financiera", "Patrimonio (incl. resultado)", _cta_fmt(x["pat"])],
+             *[["Cambios en el patrimonio", f"{r_['codigo']} · {r_['nombre']}",
+                f"Inicial {_cta_fmt(r_['ini'])} · + {_cta_fmt(r_['aum'])} · − {_cta_fmt(r_['dis'])} · Final {_cta_fmt(r_['fin'])}"]
+               for r_ in sorted(_cta_patrimonio_datos(d, h)["filas"], key=lambda z: (z["grupo"], z["codigo"]))],
              ["Flujo de efectivo", "Entradas", _cta_fmt(x["ent"])], ["Flujo de efectivo", "Salidas", _cta_fmt(x["sal"])],
              ["Flujo de efectivo", "Variación del efectivo", _cta_fmt(x["ent"] - x["sal"])]]
     for f in x["acum"]:
@@ -62721,10 +63741,11 @@ WIN32_TABLE_CSS = """
 def modulo_almacenamiento():
     """Recursos financieros y consumo: almacenamiento EN VIVO por colegio (cuota propia, ajustable por Gerencia)
     + historial de mensualidades/mora. Exclusivo para Cobranza y Gerencia."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
-        if rol_actual() == "Soporte":
-            return redirect(_home_portal(rol_actual()))
-        return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza", "Finanzas"):
+        if not requiere_login():
+            return redirect("/login")
+        # Usuario con sesión pero sin permiso: NO se le cierra la sesión ni se le manda al login.
+        return acceso_denegado("El módulo de Recursos financieros es para Finanzas, Cobranza y Gerencia.")
     q = (request.args.get("q") or "").strip()
     insts = Institucion.query.order_by(Institucion.nombre.asc()).all()
     if q:
@@ -62812,7 +63833,7 @@ setInterval(tick,15000);})();</script>"""
 @app.route("/gerencia/recursos-financieros/en-vivo")
 def modulo_almacenamiento_en_vivo():
     """JSON con el consumo actual de cada colegio (lo consulta la tabla de Recursos financieros cada 15 s)."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza", "Finanzas"):
         return jsonify({"error": "no autorizado"}), 403
     total = 0
     out = []
@@ -62850,10 +63871,11 @@ def gerencia_cuota_almacenamiento():
 @app.route("/gerencia/recursos-financieros/<int:iid>/historial")
 def modulo_historial_mensualidades(iid):
     """Historial de mensualidades pagadas / en mora de un colegio. Exclusivo Cobranza/Gerencia."""
-    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza"):
-        if rol_actual() == "Soporte":
-            return redirect(_home_portal(rol_actual()))
-        return redirect(_login_portal(rol_actual()) if session.get("usuario") else "/login")
+    if not requiere_login() or rol_actual() not in ("Gerente", "Superadmin", "Administrador", "Cobranza", "Finanzas"):
+        if not requiere_login():
+            return redirect("/login")
+        # Usuario con sesión pero sin permiso: NO se le cierra la sesión ni se le manda al login.
+        return acceso_denegado("El módulo de Recursos financieros es para Finanzas, Cobranza y Gerencia.")
     inst = Institucion.query.get_or_404(iid)
     facturas = FacturaCobro.query.filter_by(institucion_id=iid).order_by(FacturaCobro.ciclo.desc()).all()
     filas = ""
@@ -71885,6 +72907,234 @@ def gerencia_contrato_editar(cid):
 
 
 # ─── Módulo de nómina (Gerencia) ────────────────────────────────────────────
+# ─── Nómina: horas extras / recargos y enlace contable ──────────────────────────────────────────
+_NOM_HORAS = (
+    # (campo, etiqueta, clave de factor)
+    ("horas_extra_diurna", "Hora extra diurna", "extra_diurna"),
+    ("horas_extra_nocturna", "Hora extra nocturna", "extra_nocturna"),
+    ("horas_recargo_nocturno", "Recargo nocturno (hora ordinaria nocturna)", "recargo_nocturno"),
+    ("horas_dominical", "Dominical / festivo diurno (hora ordinaria)", "dominical"),
+    ("horas_recargo_nocturno_dominical", "Recargo nocturno dominical / festivo", "recargo_nocturno_dominical"),
+    ("horas_extra_dominical_diurna", "Extra diurna dominical / festiva", "extra_diurna_dominical"),
+    ("horas_extra_dominical_nocturna", "Extra nocturna dominical / festiva", "extra_nocturna_dominical"),
+)
+
+
+def _nom_parametros(periodo):
+    """Parámetros legales según el periodo (YYYY-MM): recargo dominical/festivo y divisor mensual de horas.
+    Ley 2466/2025: dominical 80% (jul-2025), 90% (jul-2026), 100% (jul-2027). Ley 2101/2021: jornada 44h→42h (15-jul-2026)."""
+    p = (periodo or "")[:7]
+    if p >= "2027-07":
+        dom = 1.00
+    elif p >= "2026-07":
+        dom = 0.90
+    elif p >= "2025-07":
+        dom = 0.80
+    else:
+        dom = 0.75
+    if p >= "2026-07":
+        div = 210
+    elif p >= "2025-07":
+        div = 220
+    elif p >= "2024-07":
+        div = 230
+    else:
+        div = 235
+    fac = {
+        "extra_diurna": 1.25,
+        "extra_nocturna": 1.75,
+        "recargo_nocturno": 0.35,  # la hora ordinaria ya está pagada en el salario mensual
+        "dominical": 1.0 + dom,
+        "recargo_nocturno_dominical": 1.0 + dom + 0.35,
+        "extra_diurna_dominical": 1.0 + dom + 0.25,
+        "extra_nocturna_dominical": 1.0 + dom + 0.75,
+    }
+    return {"dominical_pct": dom, "divisor": div, "factores": fac}
+
+
+def _nom_valor_extras(salario, horas, periodo, divisor=None):
+    """Valor total de horas extras y recargos. `horas` = {campo: horas}. Devuelve (total, detalle[(etiqueta, horas, valor)])."""
+    par = _nom_parametros(periodo)
+    div = float(divisor or par["divisor"] or 220)
+    vh = (float(salario or 0) / div) if div else 0.0
+    total, det = 0.0, []
+    for campo, etiqueta, clave in _NOM_HORAS:
+        h = float(horas.get(campo) or 0)
+        if h <= 0:
+            continue
+        v = round(h * vh * par["factores"][clave], 2)
+        total += v
+        det.append((etiqueta, h, v))
+    return round(total, 2), det
+
+
+def _cta_crear_asiento(fecha, tipo, tercero, descripcion, lineas, documento="", centro="", usuario=""):
+    """Crea un asiento de partida doble. lineas = [(codigo_cuenta, detalle, debito, credito)].
+    Si la cuenta no existe en el plan, se crea con el nombre del PUC. Devuelve (asiento, error)."""
+    _cta_ensure()
+    lin = []
+    for cod, det, de, cr in lineas:
+        de, cr = _D(str(round(float(de or 0), 2))), _D(str(round(float(cr or 0), 2)))
+        if de == 0 and cr == 0:
+            continue
+        lin.append((str(cod), det, de, cr))
+    if len(lin) < 2:
+        return None, "El asiento necesita al menos dos líneas con valor."
+    td = sum((x[2] for x in lin), _D("0"))
+    tc = sum((x[3] for x in lin), _D("0"))
+    if td != tc:
+        return None, f"El asiento no cuadra: débitos {_cta_fmt(td)} · créditos {_cta_fmt(tc)}."
+    try:
+        cuentas = {}
+        for cod, _d1, _d2, _d3 in lin:
+            c = _puc_asegurar_cuenta(cod, creado_por=usuario)
+            if not c:
+                db.session.rollback()
+                return None, f"La cuenta {cod} no existe en el plan ni en el PUC de referencia."
+            cuentas[cod] = c
+        anio = fecha[:4]
+        n = CtaAsiento.query.filter(CtaAsiento.numero.like(f"CMP-{anio}-%")).count() + 1
+        a = CtaAsiento(numero=f"CMP-{anio}-{n:04d}", fecha=fecha, tipo=tipo, tercero=(tercero or "")[:200],
+                       descripcion=(descripcion or "")[:1500], centro_costo=centro, documento=(documento or "")[:120],
+                       estado="REGISTRADO", total_debito=td, total_credito=tc, creado_por=usuario,
+                       creado_en=f"{fecha_hoy()} {hora_actual()}", modificado_en=f"{fecha_hoy()} {hora_actual()}",
+                       ip=(_client_ip_audit() or "")[:80])
+        db.session.add(a)
+        db.session.flush()
+        for cod, det, de, cr in lin:
+            c = cuentas[cod]
+            db.session.add(CtaAsientoLinea(asiento_id=a.id, cuenta_id=c.id, cuenta_codigo=c.codigo,
+                                           cuenta_nombre=c.nombre, descripcion=(det or "")[:300], debito=de, credito=cr))
+        db.session.commit()
+        return a, ""
+    except Exception as ex:
+        db.session.rollback()
+        return None, f"No se pudo crear el asiento: {str(ex)[:120]}"
+
+
+def _nom_asiento_activo(aid):
+    if not aid:
+        return None
+    try:
+        a = CtaAsiento.query.get(int(aid))
+        return a if a and a.estado == "REGISTRADO" else None
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def _nom_fin_de_mes(periodo):
+    import calendar
+    try:
+        y, m = int(periodo[:4]), int(periodo[5:7])
+        return f"{y:04d}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
+    except Exception:
+        return fecha_hoy()
+
+
+def _nom_contabilizar(p):
+    """Genera el asiento de DEVENGO de la nómina en Contabilidad. Devuelve (asiento, error)."""
+    if _nom_asiento_activo(getattr(p, "asiento_id", None)):
+        return _nom_asiento_activo(p.asiento_id), ""
+    f = lambda v: float(v or 0)  # noqa: E731
+    bruto, extras, aux = f(p.valor_bruto), f(getattr(p, "valor_extras", 0)), f(getattr(p, "auxilio_transporte", 0))
+    sueldo = round(bruto - extras - aux, 2)
+    eps_e, pen_e = f(p.eps_empleado), f(p.pension_empleado)
+    ded = f(p.deducciones)
+    otros = round(ded - eps_e - pen_e, 2)
+    icbf = f(p.icbf_sena)
+    icbf_p = round(icbf * 0.6, 2)
+    d = [("510506", "Sueldos", sueldo, 0), ("510515", "Horas extras y recargos", extras, 0),
+         ("510527", "Auxilio de transporte", aux, 0),
+         ("510569", "Aporte EPS empresa", f(p.eps_empresa), 0), ("510570", "Aporte pensión empresa", f(p.pension_empresa), 0),
+         ("510568", "Aporte ARL", f(p.arl_empresa), 0), ("510572", "Caja de compensación", f(p.caja_compensacion), 0),
+         ("510575", "ICBF", icbf_p, 0), ("510578", "SENA", round(icbf - icbf_p, 2), 0),
+         ("510536", "Prima de servicios (provisión)", f(p.prima_servicios), 0), ("510530", "Cesantías (provisión)", f(p.cesantias), 0),
+         ("510533", "Intereses sobre cesantías (provisión)", f(p.intereses_cesantias), 0),
+         ("510539", "Vacaciones (provisión)", f(p.vacaciones), 0)]
+    c = [("250501", "Salarios por pagar (neto)", 0, round(bruto - ded, 2)),
+         ("237005", "EPS por pagar (empleado + empresa)", 0, round(eps_e + f(p.eps_empresa), 2)),
+         ("238030", "Pensión por pagar (empleado + empresa)", 0, round(pen_e + f(p.pension_empresa), 2)),
+         ("237095", "Otros descuentos de nómina", 0, otros if otros > 0.004 else 0),
+         ("237006", "ARL por pagar", 0, f(p.arl_empresa)),
+         ("237010", "Caja, ICBF y SENA por pagar", 0, round(f(p.caja_compensacion) + icbf, 2)),
+         ("251005", "Cesantías consolidadas", 0, f(p.cesantias)), ("251505", "Intereses sobre cesantías", 0, f(p.intereses_cesantias)),
+         ("252005", "Prima de servicios", 0, f(p.prima_servicios)), ("252505", "Vacaciones consolidadas", 0, f(p.vacaciones))]
+    usuario = session.get("usuario") or ""
+    a, err = _cta_crear_asiento(_nom_fin_de_mes(p.periodo), "Nómina", p.trabajador_nombre,
+                                f"Nómina {p.periodo} · {p.trabajador_nombre}", d + c,
+                                documento=f"NOM-{p.id}", centro="Administración", usuario=usuario)
+    if a:
+        p.asiento_id = a.id
+        db.session.commit()
+        _cta_log("Nómina contabilizada", f"{a.numero} · {p.trabajador_nombre} · {p.periodo}", "", f"NOM-{p.id}")
+    return a, err
+
+
+def _nom_contabilizar_pago(p):
+    """Asiento del PAGO al trabajador (Dr Salarios por pagar / Cr Bancos o Caja)."""
+    if _nom_asiento_activo(getattr(p, "asiento_pago_id", None)):
+        return _nom_asiento_activo(p.asiento_pago_id), ""
+    if not _nom_asiento_activo(getattr(p, "asiento_id", None)):
+        return None, "Primero contabilice el devengo de la nómina."
+    neto = round(float(p.valor_bruto or 0) - float(p.deducciones or 0), 2)
+    medio = (p.medio_pago or "").lower()
+    contra = ("110505", "Caja general") if "efectivo" in medio or "caja" in medio else ("111005", "Bancos · Moneda nacional")
+    fecha = (p.fecha_pago or "")[:10]
+    try:
+        datetime.strptime(fecha, "%Y-%m-%d")
+    except Exception:
+        fecha = fecha_hoy()
+    usuario = session.get("usuario") or ""
+    a, err = _cta_crear_asiento(fecha, "Egreso", p.trabajador_nombre, f"Pago de nómina {p.periodo} · {p.trabajador_nombre}",
+                                [("250501", "Salarios por pagar", neto, 0), (contra[0], contra[1], 0, neto)],
+                                documento=f"PAGO-NOM-{p.id}", centro="Administración", usuario=usuario)
+    if a:
+        p.asiento_pago_id = a.id
+        db.session.commit()
+        _cta_log("Pago de nómina contabilizado", f"{a.numero} · {p.trabajador_nombre} · {p.periodo}", "", f"PAGO-NOM-{p.id}")
+    return a, err
+
+
+def _nom_det_extras_html(p):
+    """Resumen de salario base, horas extras/recargos y auxilio para la liquidación."""
+    try:
+        base_ = float(getattr(p, "salario_base", 0) or 0) or (float(p.valor_bruto or 0) - float(getattr(p, "valor_extras", 0) or 0) - float(getattr(p, "auxilio_transporte", 0) or 0))
+        par = _nom_parametros(p.periodo)
+        det = []
+        for campo, et, _k in _NOM_HORAS:
+            h = float(getattr(p, campo, 0) or 0)
+            if h > 0:
+                det.append(f"{_esc(et)}: {h:g} h")
+        ext = float(getattr(p, "valor_extras", 0) or 0)
+        out = f"<b>Salario base:</b> $ {base_:,.0f}".replace(",", ".") + "<br>"
+        if det:
+            out += "<b>Horas:</b> " + " · ".join(det) + f"<br><b>Extras y recargos:</b> $ {ext:,.0f}".replace(",", ".") + "<br>"
+        aux = float(getattr(p, "auxilio_transporte", 0) or 0)
+        if aux:
+            out += f"Auxilio de transporte: $ {aux:,.0f}".replace(",", ".") + "<br>"
+        return out
+    except Exception:
+        return ""
+
+
+def _nom_contab_html(p, con_boton=True, base="/gerencia/nomina"):
+    a = _nom_asiento_activo(getattr(p, "asiento_id", None))
+    ap = _nom_asiento_activo(getattr(p, "asiento_pago_id", None))
+    if a:
+        h = f"<a href='/contabilidad/asiento/{a.id}' style='font-size:11px'>✅ Devengo {_esc(a.numero)}</a>"
+        if ap:
+            h += f"<br><a href='/contabilidad/asiento/{ap.id}' style='font-size:11px'>💸 Pago {_esc(ap.numero)}</a>"
+        elif (p.estado or "") == "PAGADO" and con_boton:
+            h += (f"<form method='POST' action='{base}' style='display:inline'><input type='hidden' name='accion' value='contabilizar_pago'>"
+                  f"<input type='hidden' name='id' value='{p.id}'><button style='font-size:11px;padding:2px 6px'>Contabilizar pago</button></form>")
+        return h
+    if not con_boton:
+        return "<span style='font-size:11px;color:#b45309'>Pendiente</span>"
+    return (f"<form method='POST' action='{base}' style='display:inline'><input type='hidden' name='accion' value='contabilizar'>"
+            f"<input type='hidden' name='id' value='{p.id}'><button style='font-size:11px;padding:3px 7px;background:#7c3aed;color:#fff;border:0;border-radius:4px'>Contabilizar</button></form>")
+
+
 @app.route("/gerencia/nomina", methods=["GET", "POST"])
 def gerencia_nomina():
     """Registro de pagos de nómina con seguridad social, parafiscales y prestaciones."""
@@ -71913,6 +73163,19 @@ def gerencia_nomina():
             "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS costo_empresa_total DOUBLE PRECISION DEFAULT 0",
             "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS exento_eps_empresa BOOLEAN DEFAULT FALSE",
             "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS exento_icbf_sena BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_extra_diurna DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_extra_nocturna DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_recargo_nocturno DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_dominical DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_recargo_nocturno_dominical DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_extra_dominical_diurna DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS horas_extra_dominical_nocturna DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS divisor_horas DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS salario_base DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS valor_extras DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS auxilio_transporte DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS asiento_id INTEGER",
+            "ALTER TABLE nomina_pagos ADD COLUMN IF NOT EXISTS asiento_pago_id INTEGER",
         ]
         # SQLite no soporta IF NOT EXISTS en ADD COLUMN en versiones viejas: intentar una a una
         for sql in alters:
@@ -71968,12 +73231,30 @@ def gerencia_nomina():
             try:
                 nid = int(request.form.get("id") or 0)
                 row = NominaPago.query.get(nid)
-                if row:
+                if row and (_nom_asiento_activo(getattr(row, "asiento_id", None)) or _nom_asiento_activo(getattr(row, "asiento_pago_id", None))):
+                    err = "Esta nómina ya está contabilizada: un movimiento contable no se borra. Pida a Contabilidad anular el asiento primero."
+                elif row:
                     db.session.delete(row)
                     db.session.commit()
                     msg = "Pago eliminado."
             except Exception as e:
                 err = str(e)[:100]
+        elif accion in ("contabilizar", "contabilizar_pago"):
+            try:
+                row = NominaPago.query.get(int(request.form.get("id") or 0))
+                if not row:
+                    err = "Registro de nómina no encontrado."
+                else:
+                    a_, e_ = _nom_contabilizar(row)
+                    if a_ and accion == "contabilizar_pago":
+                        a_, e_ = _nom_contabilizar_pago(row)
+                    if a_:
+                        msg = f"Contabilizado en el libro: asiento {a_.numero}."
+                    else:
+                        err = e_ or "No se pudo contabilizar."
+            except Exception as e:
+                db.session.rollback()
+                err = str(e)[:120]
         elif accion == "marcar_pagado":
             try:
                 nid = int(request.form.get("id") or 0)
@@ -71984,6 +73265,17 @@ def gerencia_nomina():
                         row.fecha_pago = fecha_hoy() if "fecha_hoy" in dir() else ""
                     db.session.commit()
                     msg = "Marcado como PAGADO."
+                    # Conexión con Contabilidad: devengo (si falta) + pago
+                    try:
+                        _a1, _e1 = _nom_contabilizar(row)
+                        if _a1:
+                            _a2, _e2 = _nom_contabilizar_pago(row)
+                            msg += f" Contabilidad: {_a1.numero}" + (f" y pago {_a2.numero}." if _a2 else f" (pago sin contabilizar: {_e2}).")
+                        else:
+                            msg += f" (No se contabilizó: {_e1})"
+                    except Exception as _ec:
+                        db.session.rollback()
+                        print("nomina contab pagado:", _ec)
             except Exception as e:
                 err = str(e)[:100]
         else:
@@ -71996,6 +73288,13 @@ def gerencia_nomina():
             doc = (tw.documento if tw else (request.form.get("documento") or "")).strip()[:40]
             periodo = (request.form.get("periodo") or "")[:7]
             salario = _fnum("valor_bruto")
+            horas = {campo: max(0.0, _fnum(campo)) for campo, _et, _k in _NOM_HORAS}
+            divisor_h = _fnum("divisor_horas") or float(_nom_parametros(periodo)["divisor"])
+            extras, _det_extras = _nom_valor_extras(salario, horas, periodo, divisor_h)
+            aux_transp = max(0.0, _fnum("auxilio_transporte"))
+            ibc = round(salario + extras, 2)                 # base de seguridad social (salario + extras)
+            base_prest = round(ibc + aux_transp, 2)          # prima y cesantías incluyen auxilio de transporte
+            devengado = round(salario + extras + aux_transp, 2)
             # Campos individuales (editables; si vienen vacíos se calculan)
             eps_e = _fnum("eps_empleado")
             eps_emp = _fnum("eps_empresa")
@@ -72015,40 +73314,40 @@ def gerencia_nomina():
             tasas_arl = {"1": 0.00522, "2": 0.01044, "3": 0.02436, "4": 0.04350, "5": 0.06960}
             if salario > 0:
                 if eps_e <= 0:
-                    eps_e = round(salario * 0.04, 2)
+                    eps_e = round(ibc * 0.04, 2)
                 if pen_e <= 0:
-                    pen_e = round(salario * 0.04, 2)
+                    pen_e = round(ibc * 0.04, 2)
                 if eps_emp <= 0 and not exento_eps:
-                    eps_emp = round(salario * 0.085, 2)
+                    eps_emp = round(ibc * 0.085, 2)
                 elif exento_eps:
                     eps_emp = 0.0
                 if pen_emp <= 0:
-                    pen_emp = round(salario * 0.12, 2)
+                    pen_emp = round(ibc * 0.12, 2)
                 if arl <= 0:
-                    arl = round(salario * tasas_arl.get(riesgo, 0.00522), 2)
+                    arl = round(ibc * tasas_arl.get(riesgo, 0.00522), 2)
                 if caja <= 0:
-                    caja = round(salario * 0.04, 2)
+                    caja = round(ibc * 0.04, 2)
                 if icbf <= 0 and not exento_icbf:
-                    icbf = round(salario * 0.05, 2)
+                    icbf = round(ibc * 0.05, 2)
                 elif exento_icbf:
                     icbf = 0.0
                 if prima <= 0:
-                    prima = round(salario * 0.0833, 2)
+                    prima = round(base_prest * 0.0833, 2)
                 if ces <= 0:
-                    ces = round(salario * 0.0833, 2)
+                    ces = round(base_prest * 0.0833, 2)
                 if int_ces <= 0:
                     int_ces = round(ces * 0.01, 2)
                 if vac <= 0:
-                    vac = round(salario * 0.0417, 2)
+                    vac = round(ibc * 0.0417, 2)
             ded = round(eps_e + pen_e, 2)
             # permitir override deducciones
             ded_form = _fnum("deducciones")
             if ded_form > 0:
                 ded = ded_form
-            neto = round(max(0.0, salario - ded), 2)
-            # Costo empresa = salario + todos los aportes a cargo de la empresa
+            neto = round(max(0.0, devengado - ded), 2)
+            # Costo empresa = devengado (salario + extras + auxilio) + todos los aportes a cargo de la empresa
             costo_emp = round(
-                salario + eps_emp + pen_emp + arl + caja + icbf + prima + ces + int_ces + vac, 2
+                devengado + eps_emp + pen_emp + arl + caja + icbf + prima + ces + int_ces + vac, 2
             )
             if not nombre or not periodo:
                 err = "Trabajador y periodo (YYYY-MM) son obligatorios."
@@ -72059,7 +73358,18 @@ def gerencia_nomina():
                     documento=doc,
                     periodo=periodo,
                     concepto=(request.form.get("concepto") or "Salario / Honorarios")[:120],
-                    valor_bruto=salario,
+                    valor_bruto=devengado,
+                    salario_base=salario,
+                    valor_extras=extras,
+                    auxilio_transporte=aux_transp,
+                    divisor_horas=divisor_h,
+                    horas_extra_diurna=horas["horas_extra_diurna"],
+                    horas_extra_nocturna=horas["horas_extra_nocturna"],
+                    horas_recargo_nocturno=horas["horas_recargo_nocturno"],
+                    horas_dominical=horas["horas_dominical"],
+                    horas_recargo_nocturno_dominical=horas["horas_recargo_nocturno_dominical"],
+                    horas_extra_dominical_diurna=horas["horas_extra_dominical_diurna"],
+                    horas_extra_dominical_nocturna=horas["horas_extra_dominical_nocturna"],
                     deducciones=ded,
                     valor_neto=neto,
                     eps_empleado=eps_e,
@@ -72095,6 +73405,21 @@ def gerencia_nomina():
                         registrar_auditoria("Nómina registro", "%s %s neto=%s" % (nombre, periodo, neto))
                     except Exception:
                         pass
+                    # Conexión con Contabilidad: asiento automático de devengo (y de pago si ya está PAGADO)
+                    try:
+                        if request.form.get("contabilizar", "1") == "1":
+                            _a1, _e1 = _nom_contabilizar(row)
+                            if _a1:
+                                msg += f" · Contabilidad: asiento {_a1.numero}"
+                                if (row.estado or "") == "PAGADO":
+                                    _a2, _e2 = _nom_contabilizar_pago(row)
+                                    msg += f" y pago {_a2.numero}" if _a2 else f" (pago sin contabilizar: {_e2})"
+                            else:
+                                err = f"Nómina guardada, pero no se pudo contabilizar: {_e1}"
+                    except Exception as _ec:
+                        db.session.rollback()
+                        print("nomina contab:", _ec)
+                        err = "Nómina guardada, pero falló la contabilización (use el botón Contabilizar)."
                 except Exception as e:
                     db.session.rollback()
                     err = str(e)[:150]
@@ -72146,6 +73471,7 @@ def gerencia_nomina():
         det = (
             "<details style='font-size:11px'><summary>Ver liquidación</summary>"
             "<div style='text-align:left;padding:6px;background:#f8fafc;border-radius:6px;margin-top:4px'>"
+            + _nom_det_extras_html(p) +
             "EPS emp %s / Pensión emp %s<br>"
             "EPS empresa %s / Pensión empresa %s / ARL %s<br>"
             "Caja %s / ICBF-SENA %s<br>"
@@ -72177,13 +73503,16 @@ def gerencia_nomina():
             "<td style='padding:8px;text-align:right'>" + _cop_n(getattr(p, "costo_empresa_total", 0)) + "</td>"
             "<td style='padding:8px'>" + _esc(p.estado) + "</td>"
             "<td style='padding:8px'>" + _esc(p.fecha_pago or "—") + "</td>"
+            "<td style='padding:8px'>" + _nom_contab_html(p, True, "/gerencia/nomina") + "</td>"
             "<td style='padding:8px'>" + btn_pdf + btn_pag + btn_del + "</td>"
             "</tr>"
         )
     filas_html = "".join(filas) or (
-        "<tr><td colspan='10' style='padding:14px;color:#64748b;text-align:center'>Sin pagos registrados</td></tr>"
+        "<tr><td colspan='11' style='padding:14px;color:#64748b;text-align:center'>Sin pagos registrados</td></tr>"
     )
 
+    _par = _nom_parametros(fecha_hoy()[:7])
+    _fac = _par["factores"]
     body = f"""
 <header class="role-hero"><div>
   <h1>Nómina / Pagos a trabajadores</h1>
@@ -72191,6 +73520,7 @@ def gerencia_nomina():
 </div>
 <div style="display:flex;gap:8px">
   <a class="btn" href="/gerencia/contabilidad/trabajadores">Trabajadores</a>
+  <a class="btn" href="/contabilidad/nomina">Nómina en Contabilidad</a>
   <a class="btn" href="/gerencia/contabilidad">Contabilidad</a>
 </div></header>
 <section class="role-panel">
@@ -72206,12 +73536,12 @@ def gerencia_nomina():
         {opts}
       </select></div>
       <div><label style="font-size:12px;font-weight:700">Periodo (YYYY-MM) *</label>
-      <input name="periodo" placeholder="2026-09" required style="width:100%;padding:9px"></div>
+      <input name="periodo" id="periodo" value="{_esc(fecha_hoy()[:7])}" placeholder="2026-09" required style="width:100%;padding:9px" oninput="calcularNomina()"></div>
       <div><label style="font-size:12px;font-weight:700">Concepto</label>
       <input name="concepto" value="Salario / Honorarios" style="width:100%;padding:9px"></div>
       <div><label style="font-size:12px;font-weight:700">Estado</label>
       <select name="estado" style="width:100%;padding:9px"><option>PENDIENTE</option><option>PAGADO</option></select></div>
-      <div><label style="font-size:12px;font-weight:700">Salario básico / IBC *</label>
+      <div><label style="font-size:12px;font-weight:700">Salario básico mensual *</label>
       <input name="valor_bruto" id="salario" placeholder="2500000" style="width:100%;padding:9px" oninput="calcularNomina()"></div>
       <div><label style="font-size:12px;font-weight:700">Riesgo ARL</label>
       <select name="riesgo_arl" id="riesgo_arl" style="width:100%;padding:9px" onchange="calcularNomina()">
@@ -72225,9 +73555,41 @@ def gerencia_nomina():
       <input name="fecha_pago" placeholder="2026-09-30" style="width:100%;padding:9px"></div>
     </div>
 
+    <div style="background:#fdf4ff;border:1px solid #f5d0fe;border-radius:12px;padding:14px;margin-bottom:12px">
+      <h4 style="margin:0 0 6px;color:#86198f">0. Horas extras, recargos nocturnos, dominicales y festivos</h4>
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px">Digite las <b>horas del mes</b>. Valor hora ordinaria = salario ÷ divisor ({_par["divisor"]} h/mes con la jornada vigente).
+      Recargo dominical/festivo vigente: <b>{int(round(_par["dominical_pct"]*100))}%</b> (Ley 2466/2025). El recargo nocturno paga solo el 35% adicional porque la hora ordinaria ya va en el salario;
+      las horas dominicales/festivas trabajadas se pagan completas (1 + recargo). Los factores se editan en <code>_nom_parametros</code> y deben validarse con su asesor laboral.
+      Las extras y recargos hacen parte del IBC (salud, pensión, parafiscales) y de la base de prima, cesantías y vacaciones.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label style="font-size:11px;font-weight:700">Horas extra diurnas <span style="color:#86198f">× {_fac["extra_diurna"]:.2f}</span></label>
+        <input name="horas_extra_diurna" id="horas_extra_diurna" inputmode="decimal" placeholder="0" style="width:100%;padding:8px" oninput="calcularNomina()"></div>
+        <div><label style="font-size:11px;font-weight:700">Horas extra nocturnas <span style="color:#86198f">× {_fac["extra_nocturna"]:.2f}</span></label>
+        <input name="horas_extra_nocturna" id="horas_extra_nocturna" inputmode="decimal" placeholder="0" style="width:100%;padding:8px" oninput="calcularNomina()"></div>
+        <div><label style="font-size:11px;font-weight:700">Horas con recargo nocturno <span style="color:#86198f">× {_fac["recargo_nocturno"]:.2f}</span></label>
+        <input name="horas_recargo_nocturno" id="horas_recargo_nocturno" inputmode="decimal" placeholder="0" style="width:100%;padding:8px" oninput="calcularNomina()"></div>
+        <div><label style="font-size:11px;font-weight:700">Horas dominical / festivo diurno <span style="color:#86198f">× {_fac["dominical"]:.2f}</span></label>
+        <input name="horas_dominical" id="horas_dominical" inputmode="decimal" placeholder="0" style="width:100%;padding:8px" oninput="calcularNomina()"></div>
+        <div><label style="font-size:11px;font-weight:700">Horas recargo nocturno dominical / festivo <span style="color:#86198f">× {_fac["recargo_nocturno_dominical"]:.2f}</span></label>
+        <input name="horas_recargo_nocturno_dominical" id="horas_recargo_nocturno_dominical" inputmode="decimal" placeholder="0" style="width:100%;padding:8px" oninput="calcularNomina()"></div>
+        <div><label style="font-size:11px;font-weight:700">Horas extra diurna dominical / festiva <span style="color:#86198f">× {_fac["extra_diurna_dominical"]:.2f}</span></label>
+        <input name="horas_extra_dominical_diurna" id="horas_extra_dominical_diurna" inputmode="decimal" placeholder="0" style="width:100%;padding:8px" oninput="calcularNomina()"></div>
+        <div><label style="font-size:11px;font-weight:700">Horas extra nocturna dominical / festiva <span style="color:#86198f">× {_fac["extra_nocturna_dominical"]:.2f}</span></label>
+        <input name="horas_extra_dominical_nocturna" id="horas_extra_dominical_nocturna" inputmode="decimal" placeholder="0" style="width:100%;padding:8px" oninput="calcularNomina()"></div>
+        <div><label style="font-size:11px;font-weight:700">Divisor mensual de horas</label>
+        <input name="divisor_horas" id="divisor_horas" inputmode="decimal" value="{_par["divisor"]}" style="width:100%;padding:8px" oninput="this.dataset.manual='1';calcularNomina()"></div>
+        <div><label style="font-size:11px;font-weight:700">Valor hora ordinaria</label>
+        <input id="valor_hora" readonly style="width:100%;padding:8px;background:#f1f5f9"></div>
+        <div><label style="font-size:11px;font-weight:700">Total horas extras y recargos</label>
+        <input id="valor_extras_preview" readonly style="width:100%;padding:8px;background:#fae8ff;font-weight:800;color:#86198f"></div>
+        <div><label style="font-size:11px;font-weight:700">Auxilio de transporte (si aplica, ≤ 2 SMMLV)</label>
+        <input name="auxilio_transporte" id="auxilio_transporte" inputmode="decimal" placeholder="0" style="width:100%;padding:8px" oninput="calcularNomina()"></div>
+      </div>
+    </div>
+
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:12px">
       <h4 style="margin:0 0 10px;color:#1e40af">1. Aportes a Seguridad Social (mensual)</h4>
-      <p style="font-size:12px;color:#64748b;margin:0 0 10px">Se calculan sobre el salario básico / IBC. Puede editar cada casilla.</p>
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px">Se calculan sobre el IBC (salario + horas extras y recargos). Puede editar cada casilla.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><label style="font-size:11px;font-weight:700">EPS empleado (4%) → Deducciones</label>
         <input name="eps_empleado" id="eps_empleado" placeholder="—" style="width:100%;padding:8px" oninput="recalcDed()"></div>
@@ -72289,6 +73651,8 @@ def gerencia_nomina():
       <div><label style="font-size:12px;font-weight:700">Notas</label>
       <input name="notas" style="width:100%;padding:9px"></div>
     </div>
+    <label style="display:block;font-size:12px;margin-bottom:10px"><input type="checkbox" name="contabilizar" value="1" checked>
+      Contabilizar automáticamente en el libro contable (asiento de devengo; si el estado es PAGADO también el asiento de pago)</label>
     <button type="submit" style="background:#1e40af;color:#fff;border:0;padding:12px 18px;border-radius:8px;font-weight:800">Registrar liquidación de nómina</button>
   </form>
 
@@ -72323,25 +73687,59 @@ def gerencia_nomina():
     var ent = parts[0].replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, '.');
     return (neg ? '-' : '') + ent + ',' + parts[1];
   }}
+  function paramsPeriodo(p) {{
+    p = (p || '').substring(0, 7);
+    var dom = p >= '2027-07' ? 1.00 : (p >= '2026-07' ? 0.90 : (p >= '2025-07' ? 0.80 : 0.75));
+    var div = p >= '2026-07' ? 210 : (p >= '2025-07' ? 220 : (p >= '2024-07' ? 230 : 235));
+    return {{dom: dom, div: div}};
+  }}
+  var HORAS_F = {{
+    horas_extra_diurna: function(d) {{ return 1.25; }},
+    horas_extra_nocturna: function(d) {{ return 1.75; }},
+    horas_recargo_nocturno: function(d) {{ return 0.35; }},
+    horas_dominical: function(d) {{ return 1 + d; }},
+    horas_recargo_nocturno_dominical: function(d) {{ return 1 + d + 0.35; }},
+    horas_extra_dominical_diurna: function(d) {{ return 1 + d + 0.25; }},
+    horas_extra_dominical_nocturna: function(d) {{ return 1 + d + 0.75; }}
+  }};
+  function calcExtras() {{
+    var s = num(document.getElementById('salario').value);
+    var pr = paramsPeriodo(document.getElementById('periodo').value);
+    var divEl = document.getElementById('divisor_horas');
+    if (!divEl.dataset.manual) {{ divEl.value = pr.div; }}
+    var div = num(divEl.value) || pr.div;
+    var vh = s > 0 ? s / div : 0, tot = 0;
+    for (var k in HORAS_F) {{
+      var el = document.getElementById(k);
+      tot += num(el ? el.value : 0) * vh * HORAS_F[k](pr.dom);
+    }}
+    tot = Math.round(tot * 100) / 100;
+    document.getElementById('valor_hora').value = money(vh);
+    document.getElementById('valor_extras_preview').value = money(tot);
+    return tot;
+  }}
   function calcularNomina() {{
     var s = num(document.getElementById('salario').value);
+    var ext = calcExtras();
     if (s <= 0) return;
+    var aux = num(document.getElementById('auxilio_transporte').value);
+    var ibc = s + ext, basePrest = ibc + aux;
     var riesgo = document.getElementById('riesgo_arl').value || '1';
     var tasas = {{'1':0.00522,'2':0.01044,'3':0.02436,'4':0.04350,'5':0.06960}};
     var exEps = document.getElementById('exento_eps').checked;
     var exIcbf = document.getElementById('exento_icbf').checked;
-    document.getElementById('eps_empleado').value = money(s * 0.04);
-    document.getElementById('pension_empleado').value = money(s * 0.04);
-    document.getElementById('eps_empresa').value = money(exEps ? 0 : s * 0.085);
-    document.getElementById('pension_empresa').value = money(s * 0.12);
-    document.getElementById('arl_empresa').value = money(s * (tasas[riesgo] || 0.00522));
-    document.getElementById('caja_compensacion').value = money(s * 0.04);
-    document.getElementById('icbf_sena').value = money(exIcbf ? 0 : s * 0.05);
-    document.getElementById('prima_servicios').value = money(s * 0.0833);
-    var ces = s * 0.0833;
+    document.getElementById('eps_empleado').value = money(ibc * 0.04);
+    document.getElementById('pension_empleado').value = money(ibc * 0.04);
+    document.getElementById('eps_empresa').value = money(exEps ? 0 : ibc * 0.085);
+    document.getElementById('pension_empresa').value = money(ibc * 0.12);
+    document.getElementById('arl_empresa').value = money(ibc * (tasas[riesgo] || 0.00522));
+    document.getElementById('caja_compensacion').value = money(ibc * 0.04);
+    document.getElementById('icbf_sena').value = money(exIcbf ? 0 : ibc * 0.05);
+    document.getElementById('prima_servicios').value = money(basePrest * 0.0833);
+    var ces = basePrest * 0.0833;
     document.getElementById('cesantias').value = money(ces);
     document.getElementById('intereses_cesantias').value = money(ces * 0.01);
-    document.getElementById('vacaciones').value = money(s * 0.0417);
+    document.getElementById('vacaciones').value = money(ibc * 0.0417);
     recalcDed();
   }}
   function calcularIntCes() {{
@@ -72351,13 +73749,14 @@ def gerencia_nomina():
   }}
   function recalcDed() {{
     var s = num(document.getElementById('salario').value);
+    var dev = s + calcExtras() + num(document.getElementById('auxilio_transporte').value);
     var eps = num(document.getElementById('eps_empleado').value);
     var pen = num(document.getElementById('pension_empleado').value);
     var ded = eps + pen;
     document.getElementById('deducciones').value = money(ded);
-    document.getElementById('neto_preview').value = money(Math.max(0, s - ded));
-    // Costo empresa = salario + aportes empresa (NO incluye deducciones del empleado)
-    var costo = s
+    document.getElementById('neto_preview').value = money(Math.max(0, dev - ded));
+    // Costo empresa = devengado + aportes empresa (NO incluye deducciones del empleado)
+    var costo = dev
       + num(document.getElementById('eps_empresa').value)
       + num(document.getElementById('pension_empresa').value)
       + num(document.getElementById('arl_empresa').value)
@@ -72369,6 +73768,7 @@ def gerencia_nomina():
       + num(document.getElementById('vacaciones').value);
     document.getElementById('costo_empresa_preview').value = money(costo);
   }}
+  window.addEventListener('load', function() {{ try {{ calcExtras(); }} catch (e) {{}} }});
   </script>
 
   <hr style="border:0;border-top:1px solid #e2e8f0;margin:24px 0">
@@ -72385,12 +73785,13 @@ def gerencia_nomina():
         <th style="padding:8px;text-align:left">Periodo</th>
         <th style="padding:8px;text-align:left">Trabajador</th>
         <th style="padding:8px;text-align:left">Documento</th>
-        <th style="padding:8px;text-align:right">Salario</th>
+        <th style="padding:8px;text-align:right">Devengado</th>
         <th style="padding:8px;text-align:right">Deducciones</th>
         <th style="padding:8px;text-align:right">Neto</th>
         <th style="padding:8px;text-align:right">Costo empresa</th>
         <th style="padding:8px;text-align:left">Estado</th>
         <th style="padding:8px;text-align:left">Fecha</th>
+        <th style="padding:8px;text-align:left">Contabilidad</th>
         <th style="padding:8px;text-align:left">Acciones</th>
       </tr>
       {filas_html}
@@ -72682,6 +74083,9 @@ def gerencia_nomina_excel():
         "EPS empleado", "Pension empleado", "EPS empresa", "Pension empresa", "ARL",
         "Caja compensacion", "ICBF SENA", "Prima", "Cesantias", "Int. cesantias", "Vacaciones",
         "Deducciones", "Neto", "Costo empresa", "Estado", "Fecha pago", "Medio pago", "Referencia",
+        "Salario base", "Horas extras y recargos ($)", "Auxilio transporte", "H. extra diurna", "H. extra nocturna",
+        "H. recargo nocturno", "H. dominical/festivo", "H. recargo noct. dom/fest", "H. extra diurna dom/fest",
+        "H. extra nocturna dom/fest", "Asiento contable",
     ]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
@@ -72697,6 +74101,11 @@ def gerencia_nomina_excel():
             getattr(p, "cesantias", 0) or 0, getattr(p, "intereses_cesantias", 0) or 0,
             getattr(p, "vacaciones", 0) or 0, p.deducciones or 0, p.valor_neto or 0,
             getattr(p, "costo_empresa_total", 0) or 0, p.estado, p.fecha_pago, p.medio_pago, p.referencia,
+            getattr(p, "salario_base", 0) or 0, getattr(p, "valor_extras", 0) or 0, getattr(p, "auxilio_transporte", 0) or 0,
+            getattr(p, "horas_extra_diurna", 0) or 0, getattr(p, "horas_extra_nocturna", 0) or 0,
+            getattr(p, "horas_recargo_nocturno", 0) or 0, getattr(p, "horas_dominical", 0) or 0,
+            getattr(p, "horas_recargo_nocturno_dominical", 0) or 0, getattr(p, "horas_extra_dominical_diurna", 0) or 0,
+            getattr(p, "horas_extra_dominical_nocturna", 0) or 0, ("sí" if getattr(p, "asiento_id", None) else "no"),
         ]
         for c, v in enumerate(vals, 1):
             ws.cell(row=r, column=c, value=v)
@@ -72790,7 +74199,20 @@ def gerencia_nomina_pdf(nid):
     c.setFillColor(colors.HexColor("#0B2D57"))
     c.drawString(left, y, "1. SALARIO BASICO / IBC")
     y -= 14
-    row("Salario basico", p.valor_bruto, True)
+    _base_pdf = float(getattr(p, "salario_base", 0) or 0) or (float(p.valor_bruto or 0) - float(getattr(p, "valor_extras", 0) or 0) - float(getattr(p, "auxilio_transporte", 0) or 0))
+    row("Salario basico", _base_pdf, True)
+    for _campo, _et, _k in _NOM_HORAS:
+        _h = float(getattr(p, _campo, 0) or 0)
+        if _h > 0:
+            c.setFont("Helvetica-Oblique", 8)
+            c.setFillColor(colors.HexColor("#475569"))
+            c.drawString(left + 12, y, "- %s: %g h" % (_et.replace("í", "i").replace("ó", "o").replace("é", "e"), _h))
+            y -= 11
+    if float(getattr(p, "valor_extras", 0) or 0) > 0:
+        row("Horas extras y recargos", getattr(p, "valor_extras", 0))
+    if float(getattr(p, "auxilio_transporte", 0) or 0) > 0:
+        row("Auxilio de transporte", getattr(p, "auxilio_transporte", 0))
+    row("TOTAL DEVENGADO", p.valor_bruto, True)
     y -= 6
     c.setFont("Helvetica-Bold", 10)
     c.setFillColor(colors.HexColor("#0B2D57"))
@@ -76974,7 +78396,7 @@ def dev_console():
 """
 
     try:
-        _dev_user = (session.get("usuario") or "Desarrollador").replace("_", " ").title()
+        _dev_user = _nombre_para_saludo(session.get("usuario") or "Desarrollador")
     except Exception:
         _dev_user = "Desarrollador"
     try:
