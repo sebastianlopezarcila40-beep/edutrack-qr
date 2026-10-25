@@ -14782,6 +14782,236 @@ def _html_login_pie_colegios():
 """
 
 
+# ===== INAUGURACIÓN EN VIVO (telón "Liquid Glass" con conteo regresivo sobre el login) =====
+# La hora, los segundos y el encendido se configuran en Gerencia: /gerencia/inauguracion
+
+def _inaug_cfg():
+    """Lee la configuración (una sola fila). Por defecto: apagada."""
+    cfg = {"activa": 0, "fecha_hora": "", "segundos": 10, "seg_envivo": 4, "ventana_min": 60}
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS inauguracion_cfg ("
+            "id INTEGER PRIMARY KEY, activa INTEGER DEFAULT 0, fecha_hora VARCHAR(20) DEFAULT '', "
+            "segundos INTEGER DEFAULT 10, seg_envivo INTEGER DEFAULT 4, ventana_min INTEGER DEFAULT 60)"
+        ))
+        db.session.commit()
+        row = db.session.execute(text(
+            "SELECT activa, fecha_hora, segundos, seg_envivo, ventana_min FROM inauguracion_cfg WHERE id=1"
+        )).first()
+        if row:
+            cfg["activa"] = 1 if row[0] else 0
+            cfg["fecha_hora"] = (row[1] or "").strip()
+            cfg["segundos"] = max(3, min(60, int(row[2] or 10)))
+            cfg["seg_envivo"] = max(2, min(15, int(row[3] or 4)))
+            cfg["ventana_min"] = max(1, min(1440, int(row[4] or 60)))
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return cfg
+
+
+def _inauguracion_html():
+    """Devuelve el telón de inauguración, o '' si no corresponde mostrarlo."""
+    try:
+        forzar = (request.args.get("inauguracion") or "") == "1"   # vista previa para Gerencia
+        cfg = _inaug_cfg()
+        if not forzar:
+            if not cfg["activa"] or not cfg["fecha_hora"]:
+                return ""
+            ini = datetime.strptime(cfg["fecha_hora"], "%Y-%m-%dT%H:%M").replace(tzinfo=BOGOTA)
+            if not (ini <= datetime.now(BOGOTA) < ini + timedelta(minutes=cfg["ventana_min"])):
+                return ""
+    except Exception:
+        return ""
+    clave = "inaug_" + (cfg["fecha_hora"] or "prueba").replace("-", "").replace(":", "").replace("T", "_")
+    return r"""
+<style>
+#inaug-telon{position:fixed;inset:0;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#fff;overflow:hidden}
+.inaug-hoja{position:absolute;top:0;bottom:0;width:50.2%;
+  background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.06)),radial-gradient(600px 500px at 30% 20%,rgba(0,91,234,.28),transparent 70%),radial-gradient(600px 500px at 70% 90%,rgba(16,185,129,.26),transparent 70%);
+  -webkit-backdrop-filter:blur(48px) saturate(1.6);backdrop-filter:blur(48px) saturate(1.6);
+  transition:transform 1.5s cubic-bezier(.16,1,.3,1);will-change:transform}
+.inaug-izq{left:0;border-right:1px solid rgba(255,255,255,.18)}
+.inaug-der{right:0;border-left:1px solid rgba(255,255,255,.18)}
+#inaug-telon.abre .inaug-izq{transform:translateX(-102%)}
+#inaug-telon.abre .inaug-der{transform:translateX(102%)}
+.inaug-centro{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;transition:opacity .7s ease,transform .7s ease}
+#inaug-telon.abre .inaug-centro,#inaug-telon.parte .inaug-centro{opacity:0;transform:scale(.96);pointer-events:none}
+.inaug-card{position:relative;width:min(560px,92vw);padding:44px 36px 40px;border-radius:44px;text-align:center;overflow:hidden;
+  background:linear-gradient(145deg,rgba(255,255,255,.26),rgba(255,255,255,.08));
+  -webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);
+  border:.5px solid rgba(255,255,255,.35);box-shadow:0 30px 80px rgba(0,20,60,.35),inset 0 1px 0 rgba(255,255,255,.45)}
+.inaug-logos{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:30px}
+.inaug-logo{display:flex;align-items:center;justify-content:center;height:46px;padding:6px 14px;border-radius:14px;background:rgba(255,255,255,.88);box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.inaug-logo img{height:32px;width:auto;max-width:150px;object-fit:contain;display:block}
+.inaug-logo b{font-size:15px;color:#0B2D57;letter-spacing:.04em}
+.inaug-fase{display:none}
+.inaug-fase.on{display:block;animation:inaugAparece .6s ease both}
+@keyframes inaugAparece{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+.inaug-msg{font-size:clamp(15px,2.4vw,18px);font-weight:300;letter-spacing:.01em;color:rgba(255,255,255,.92);line-height:1.5;margin:0 0 6px}
+.inaug-num-caja{position:relative;height:clamp(150px,34vw,210px);margin-top:6px;overflow:hidden}
+.inaug-n{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;
+  font-size:clamp(130px,30vw,190px);font-weight:200;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 8px 40px rgba(0,60,160,.45);
+  transition:transform .75s cubic-bezier(.22,1,.36,1),opacity .6s ease}
+.inaug-n.entra{transform:translateY(70%);opacity:0}
+.inaug-n.sale{transform:translateY(-70%);opacity:0}
+.inaug-vivo{font-size:clamp(30px,7.2vw,46px);font-weight:600;letter-spacing:-.01em;line-height:1.15;margin:8px 0 12px;
+  background:linear-gradient(100deg,#34d399 0%,#10b981 30%,#2563eb 70%,#1e3a8a 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 14px rgba(255,255,255,.35))}
+.inaug-sub{font-size:clamp(14px,2.4vw,17px);font-weight:300;color:rgba(255,255,255,.9)}
+.inaug-brillo{position:absolute;top:-20%;bottom:-20%;left:-60%;width:45%;pointer-events:none;opacity:0;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);transform:skewX(-18deg);filter:blur(6px)}
+.inaug-card.vivo .inaug-brillo{animation:inaugBrillo var(--t-vivo,4s) ease-in-out 1 both}
+@keyframes inaugBrillo{0%{left:-60%;opacity:0}15%{opacity:1}85%{opacity:1}100%{left:130%;opacity:0}}
+</style>
+<div id="inaug-telon" role="dialog" aria-live="polite" data-seg="__SEG__" data-vivo="__VIVO__">
+  <div class="inaug-hoja inaug-izq"></div>
+  <div class="inaug-hoja inaug-der"></div>
+  <div class="inaug-centro">
+    <div class="inaug-card" id="inaug-card">
+      <div class="inaug-brillo"></div>
+      <div class="inaug-logos">
+        <div class="inaug-logo"><img src="/media/logo-corporativo" alt="Procsis" onerror="this.outerHTML='<b>PROCSIS</b>'"></div>
+        <div class="inaug-logo"><img src="/static/img/logo-edutrack.png" alt="EduTrack" onerror="this.outerHTML='<b>EduTrack</b>'"></div>
+      </div>
+      <div class="inaug-fase on" id="inaug-f1">
+        <p class="inaug-msg">La innovación que educa está lista.<br>Iniciando en...</p>
+        <div class="inaug-num-caja" id="inaug-caja"><div class="inaug-n" id="inaug-n0">__SEG__</div></div>
+      </div>
+      <div class="inaug-fase" id="inaug-f2">
+        <div class="inaug-vivo">🚀 ¡YA ESTAMOS EN VIVO! 🚀</div>
+        <div class="inaug-sub">Bienvenidos a la nueva era de EduTrack</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var KEY="__CLAVE__", telon=document.getElementById("inaug-telon");
+  if(!telon) return;
+  var forzar=/[?&]inauguracion=1/.test(location.search);
+  try{ if(!forzar && localStorage.getItem(KEY)){ telon.remove(); return; } }catch(e){}
+  var seg=parseInt(telon.getAttribute("data-seg"),10)||10, vivo=parseInt(telon.getAttribute("data-vivo"),10)||4;
+  var n=seg, caja=document.getElementById("inaug-caja"), actual=document.getElementById("inaug-n0");
+  var card=document.getElementById("inaug-card"), f1=document.getElementById("inaug-f1"), f2=document.getElementById("inaug-f2");
+  card.style.setProperty("--t-vivo", vivo+"s");
+  var prev=document.body.style.overflow; document.body.style.overflow="hidden";
+  function cambiar(txt){
+    var nuevo=document.createElement("div"); nuevo.className="inaug-n entra"; nuevo.textContent=txt; caja.appendChild(nuevo);
+    void nuevo.offsetWidth;
+    actual.classList.add("sale"); nuevo.classList.remove("entra");
+    var viejo=actual; setTimeout(function(){ if(viejo.parentNode) viejo.parentNode.removeChild(viejo); },800);
+    actual=nuevo;
+  }
+  function liberar(){
+    try{ localStorage.setItem(KEY,"1"); }catch(e){}
+    telon.remove(); document.body.style.overflow=prev;
+  }
+  function telonReal(){
+    telon.classList.add("parte");                       // la tarjeta se desvanece
+    setTimeout(function(){
+      telon.classList.add("abre");                      // las dos hojas se abren hacia los lados
+      setTimeout(liberar,1700);                         // se eliminan para poder usar el login
+    },650);
+  }
+  var t=setInterval(function(){
+    n--;
+    if(n>0){ cambiar(String(n)); return; }
+    clearInterval(t);
+    f1.classList.remove("on"); f2.classList.add("on"); card.classList.add("vivo");
+    setTimeout(telonReal, vivo*1000);
+  },1000);
+})();
+</script>
+""".replace("__SEG__", str(cfg["segundos"])).replace("__VIVO__", str(cfg["seg_envivo"])).replace("__CLAVE__", clave)
+
+
+@app.route("/gerencia/inauguracion", methods=["GET", "POST"])
+def gerencia_inauguracion():
+    """Gerencia define a qué hora sale el telón de inauguración y cuántos segundos dura el conteo."""
+    if not requiere_gerencia():
+        return redirect("/gerencia-login")
+    msg = err = ""
+    if request.method == "POST":
+        try:
+            fh = (request.form.get("fecha_hora") or "").strip()
+            datetime.strptime(fh, "%Y-%m-%dT%H:%M")
+            activa = 1 if request.form.get("activa") == "1" else 0
+            seg = max(3, min(60, int(request.form.get("segundos") or 10)))
+            vivo = max(2, min(15, int(request.form.get("seg_envivo") or 4)))
+            ven = max(1, min(1440, int(request.form.get("ventana_min") or 60)))
+            _inaug_cfg()  # asegura la tabla
+            db.session.execute(text("DELETE FROM inauguracion_cfg WHERE id=1"))
+            db.session.execute(text(
+                "INSERT INTO inauguracion_cfg (id, activa, fecha_hora, segundos, seg_envivo, ventana_min) "
+                "VALUES (1, :a, :f, :s, :v, :w)"), {"a": activa, "f": fh, "s": seg, "v": vivo, "w": ven})
+            db.session.commit()
+            msg = "Inauguración guardada. Saldrá en /login el %s (hora de Colombia)." % fh.replace("T", " a las ")
+            try:
+                registrar_auditoria("Gerencia inauguración", session.get("usuario") or "")
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            err = "Revise la fecha y hora (y que los números sean válidos). " + str(e)[:80]
+    cfg = _inaug_cfg()
+    ahora_txt = datetime.now(BOGOTA).strftime("%Y-%m-%d %H:%M:%S")
+    body = r"""
+<style>
+.ig{max-width:640px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}
+.ig h1{font-size:22px;color:#002060;margin:6px 0}
+.ig .sub{color:#86868b;font-size:13px;margin:0 0 16px}
+.ig label{display:block;font-size:12px;font-weight:700;color:#475569;margin:14px 0 4px}
+.ig input[type=datetime-local],.ig input[type=number]{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:12px;box-sizing:border-box;font-size:15px}
+.ig .hint{font-size:11px;color:#94a3b8;margin:4px 0 0}
+.ig .fila{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ig button,.ig a.b{display:inline-block;margin-top:18px;background:#005BEA;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:700;cursor:pointer;text-decoration:none;font-size:14px}
+.ig a.b2{background:#10b981}
+.ig .msg{padding:12px;border-radius:12px;margin-bottom:12px;font-weight:600;font-size:13px}
+.ig .ok{background:#ecfdf5;color:#065f46}.ig .err{background:#fef2f2;color:#991b1b}
+.ig .reloj{background:#f5f5f7;border-radius:14px;padding:10px 14px;font-size:13px;color:#334155;margin-bottom:6px}
+</style>
+<div class="ig">
+  <a href="/gerencia/hq" style="font-size:13px;color:#005BEA;font-weight:600;text-decoration:none">← HQ</a>
+  <h1>🚀 Inauguración en vivo</h1>
+  <p class="sub">Telón con conteo regresivo sobre el login. Defina cuándo sale y cuántos segundos dura la cuenta.</p>
+  __MSG__
+  <div class="reloj">Hora actual del sistema (Colombia): <b>__AHORA__</b></div>
+  <form method="POST">
+    <label>Fecha y hora de la inauguración</label>
+    <input type="datetime-local" name="fecha_hora" value="__FH__" required>
+    <div class="fila">
+      <div><label>Segundos del conteo regresivo</label>
+        <input type="number" name="segundos" min="3" max="60" value="__SEG__"><p class="hint">Entre 3 y 60.</p></div>
+      <div><label>Segundos de "¡Ya estamos en vivo!"</label>
+        <input type="number" name="seg_envivo" min="2" max="15" value="__VIVO__"><p class="hint">Entre 2 y 15.</p></div>
+    </div>
+    <label>Minutos que queda activo desde esa hora</label>
+    <input type="number" name="ventana_min" min="1" max="1440" value="__VEN__">
+    <p class="hint">Quien abra el login dentro de ese rango lo verá una sola vez.</p>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="activa" value="1" __CHK__> Inauguración activada</label>
+    <button type="submit">Guardar</button>
+    <a class="b b2" href="/login?inauguracion=1" target="_blank">▶ Vista previa ahora</a>
+  </form>
+</div>
+"""
+    body = (body.replace("__MSG__", ("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else (("<div class='msg err'>" + _esc(err) + "</div>") if err else ""))
+            .replace("__AHORA__", ahora_txt)
+            .replace("__FH__", _esc(cfg["fecha_hora"]))
+            .replace("__SEG__", str(cfg["segundos"])).replace("__VIVO__", str(cfg["seg_envivo"]))
+            .replace("__VEN__", str(cfg["ventana_min"])).replace("__CHK__", "checked" if cfg["activa"] else ""))
+    return page("Inauguración en vivo", body)
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = ""
@@ -15153,7 +15383,7 @@ def login():
         soporte_msg = "¿Tiene alguna duda sobre el uso de la plataforma? Nuestro equipo está listo para asistirle."
         anio = 2026
     return page("Login", f"""
-
+{_inauguracion_html()}
 
 <style>
 .lp-topnav{{background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50;box-shadow:0 1px 0 rgba(15,23,42,.04)}}
@@ -30709,6 +30939,7 @@ def gerencia_hq():
               <a class="hq-pill-primary" href="/gerencia/pqr-apelaciones">⚖️ Recursos y apelaciones PQRS</a>
               <a href="/gerencia/procsis-web">Noticias / productos</a>
               <a class="hq-pill-primary" href="/gerencia/login-banners">Banners Login / Salida segura</a>
+              <a class="hq-pill-primary" href="/gerencia/inauguracion">🚀 Inauguración en vivo</a>
               <a class="hq-pill-more" href="/gerencia/correo-soporte">Gmail Soporte</a>
               <a class="hq-pill-more" href="/gerencia/correo-notificaciones">Gmail Notif.</a>
               <a class="hq-pill-more" href="/gerencia/correo-extra/1">Gmail adicional 1</a>
