@@ -4345,6 +4345,9 @@ def _disk_usage_txt():
 # Estilos Apple globales + layout enterprise (staff)
 _APPLE_SHELL_CSS = (
     "<style id=\"apple-shell-global\">"
+    "body,body *:not(code):not(pre):not(kbd):not(samp):not([style*=\"monospace\"]):not([style*=\"Georgia\"]){"
+    "font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"SF Pro Display\",\"Helvetica Neue\",\"Segoe UI\",Roboto,Arial,sans-serif!important;"
+    "-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}"
     "html,body{font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"Segoe UI\",sans-serif!important;"
     "background:#f5f5f7!important;margin:0;padding:0;overflow-x:hidden}"
     ".app-layout-enterprise{display:flex;width:100%;min-height:100vh}"
@@ -24068,6 +24071,26 @@ def nombre_mostrar_actual():
     u = _usuario_actual_obj()
     if u and (u.nombre_completo or "").strip():
         return u.nombre_completo.strip()
+    # Respaldo: el nombre real viene de la solicitud que Talento Humano envió a TI al crear la credencial
+    # (el usuario de ingreso es solo para entrar; el nombre mostrado sale de esa solicitud).
+    try:
+        login = (session.get("usuario") or "").strip()
+        if login:
+            r = db.session.execute(text("SELECT nombre FROM th_ingresos WHERE LOWER(usuario_creado)=LOWER(:u) ORDER BY id DESC LIMIT 1"), {"u": login}).fetchone()
+            if r and (r[0] or "").strip():
+                nom_th = " ".join(r[0].split())[:160]
+                if u is not None:
+                    try:
+                        u.nombre_completo = nom_th
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                return nom_th
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     return session.get("usuario") or ""
 
 
@@ -52688,7 +52711,10 @@ def _cta_menu_items():
         ("/contabilidad/nomina", "Nómina"),
         ("/contabilidad/estados", "Estados financieros"),
         ("/contabilidad/auditoria", "Auditoría"),
+        ("/contabilidad/presupuestos", "Presupuestos"),
         ("/tickets-doc", "Tickets"),
+        ("/contabilidad/tickets-internos", "Tickets de las áreas"),
+        ("/ti/reportar", "Reportar a TI"),
         ("/logout", "Salir"),
     ]
 
@@ -60789,7 +60815,10 @@ _REPARTO_NUEVOS.update({
     "/gerencia/talento/ingresos": ("Talento",),
     "/ventas/equipo": ("Comercial", "Gerente", "Administrador"),
     "/ti/reportar": ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Soluciones", "Gerente", "Administrador") + tuple(AREAS_PROCSIS),
+    "/contabilidad/solicitar": ("Soporte", "Comercial", "Cobranza", "Desarrollador", "Soluciones", "Gerente", "Administrador") + tuple(AREAS_PROCSIS),
 })
+_REPARTO_ETIQUETAS["/contabilidad/solicitar"] = "🧾 Ticket a Contabilidad"
+_REPARTO_ETIQUETAS["/ti/reportar"] = "🎫 Reportar un problema a TI"
 _REPARTO_NUEVOS["/gerencia/api-conexiones"] = ("Calidad", "Desarrollador", "Tecnologia")
 _REPARTO_NUEVOS["/gerencia/protocolo-sic"] = ("Juridica",)
 _reparto_construir()
@@ -73585,6 +73614,8 @@ def gerencia_nomina():
             )
             if not nombre or not periodo:
                 err = "Trabajador y periodo (YYYY-MM) son obligatorios."
+            elif salario <= 0 and any(v > 0 for v in horas.values()):
+                err = "Digite el salario básico mensual: sin él no se puede calcular el valor de las horas extras y recargos."
             else:
                 row = NominaPago(
                     trabajador_id=tid or None,
@@ -73666,7 +73697,8 @@ def gerencia_nomina():
     pagos = q.order_by(NominaPago.id.desc()).limit(300).all()
     trabajadores = ContTrabajador.query.filter_by(activo=True).order_by(ContTrabajador.nombre).all()
     opts = "".join(
-        '<option value="%s">%s — %s</option>' % (t.id, _esc(t.nombre), _esc(t.documento))
+        '<option value="%s" data-salario="%s">%s — %s</option>' % (
+            t.id, _esc(re.sub(r"[^0-9.,]", "", t.honorarios or "")), _esc(t.nombre), _esc(t.documento))
         for t in trabajadores
     )
 
@@ -73765,7 +73797,7 @@ def gerencia_nomina():
   <form method="POST" id="form-nomina" style="max-width:980px">
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
       <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Trabajador activo *</label>
-      <select name="trabajador_id" required style="width:100%;padding:9px">
+      <select name="trabajador_id" id="trabajador_id" required style="width:100%;padding:9px" onchange="cargarSalarioTrabajador(this)">
         <option value="">— Seleccione —</option>
         {opts}
       </select></div>
@@ -74002,7 +74034,15 @@ def gerencia_nomina():
       + num(document.getElementById('vacaciones').value);
     document.getElementById('costo_empresa_preview').value = money(costo);
   }}
-  window.addEventListener('load', function() {{ try {{ calcExtras(); }} catch (e) {{}} }});
+  // Al elegir el trabajador se carga su salario (si está registrado en su ficha) y se recalcula todo (extras, aportes, prestaciones).
+  function cargarSalarioTrabajador(sel) {{
+    var o = sel && sel.options ? sel.options[sel.selectedIndex] : null;
+    var h = o ? (o.getAttribute('data-salario') || '') : '';
+    var el = document.getElementById('salario');
+    if (h && num(h) > 0) {{ el.value = h; }}
+    calcularNomina();
+  }}
+  window.addEventListener('load', function() {{ try {{ calcularNomina(); }} catch (e) {{}} }});
   </script>
 
   <hr style="border:0;border-top:1px solid #e2e8f0;margin:24px 0">
@@ -97206,6 +97246,93 @@ def tecnologia_accesos_accion():
     return redirect("/tecnologia/accesos")
 
 
+# Categorías y subcategorías del reporte a TI, por área de PROCSIS (solo trabajo interno de la empresa;
+# la administración académica de los colegios no va aquí).
+_TI_AREAS_CATS = {
+    "General (equipos y cuentas)": {
+        "Equipo de cómputo": ["Computador lento o bloqueado", "No enciende", "Pantalla, mouse o teclado", "Laptop (batería, cargador, daño)"],
+        "Correo electrónico": ["No puedo ingresar", "No envía o no recibe", "Buzón lleno", "Firma o configuración"],
+        "Impresión y escáner": ["No imprime", "Atasco o tóner", "Escáner"],
+        "Cuenta y contraseña": ["Bloqueo de cuenta", "Restablecer contraseña", "Verificación en dos pasos (MFA)"],
+        "Internet, Wi-Fi y VPN": ["Sin internet", "Wi-Fi inestable", "VPN / acceso remoto"],
+        "Instalación de software": ["Instalar programa", "Licencia o activación", "Actualización"],
+    },
+    "Gerencia": {
+        "Panel de gerencia": ["Indicadores o reportes con error", "Permisos de usuarios", "Auditoría"],
+        "Contratos y firmas": ["Plantilla de contrato", "Firma digital", "Descarga de PDF"],
+        "Cuentas del equipo": ["Crear o dar de baja usuario", "Cambio de rol", "Cierre de sesiones"],
+    },
+    "Ventas (comercial)": {
+        "CRM y clientes potenciales": ["Lead mal asignado", "No carga el cliente", "Duplicados"],
+        "Cotizaciones y planes": ["Error en cotización", "Precios o planes", "Descuentos"],
+        "Comisiones": ["Comisión mal calculada", "Reporte de ventas"],
+        "Herramientas de contacto": ["WhatsApp / llamadas", "Correo masivo", "Agenda de visitas"],
+    },
+    "Cobranza y cartera": {
+        "Facturación y cuentas de cobro": ["Factura o cuenta de cobro con error", "Recibo de caja / paz y salvo", "Numeración"],
+        "Cartera y plazos": ["Plazos, cuotas y abonos", "Saldo incorrecto", "Mora y recordatorios"],
+        "Conciliación bancaria": ["Pago no identificado", "Extracto no cuadra", "Soporte de pago"],
+        "Reinicio de acceso": ["Colegio pagó y sigue bloqueado", "Reactivación de plataforma"],
+    },
+    "Contabilidad": {
+        "Libro contable y asientos": ["Asiento no cuadra", "Cuenta del PUC", "Anulación de asiento"],
+        "Nómina": ["Cálculo de horas extras", "Seguridad social y parafiscales", "Prestaciones sociales", "Contabilización de nómina"],
+        "Presupuestos": ["Categoría o subcategoría faltante", "Ejecución presupuestal", "Cierre de año"],
+        "Estados financieros": ["Balance o resultados", "Exportación PDF / Excel", "Flujo de efectivo"],
+        "Impuestos y facturación electrónica": ["IVA / retenciones", "ICA", "Factura electrónica DIAN"],
+    },
+    "Talento Humano": {
+        "Ingreso de personal": ["Solicitud de credencial a TI", "Datos del empleado", "Cambio de cargo o rol"],
+        "Contratos y documentos": ["Contrato de personal", "Certificaciones laborales", "Carné del equipo"],
+        "Nómina y PILA": ["Planillas PILA", "Horas extras y recargos", "Novedades (incapacidades, vacaciones)"],
+        "Seguridad y salud (SST)": ["Matriz EPP", "Exámenes y afiliaciones"],
+    },
+    "Finanzas y Tesorería": {
+        "Tesorería": ["Caja y bancos", "Movimiento no reflejado", "Transferencias"],
+        "Gastos y proveedores": ["Registro de gasto", "Pago a proveedor", "Centro de costo"],
+        "Presupuesto y flujo de caja": ["Presupuesto anual", "Proyección de ingresos y egresos", "Metas de recaudo"],
+        "Reembolsos y comisiones": ["Reembolso por retracto", "Liquidación de comisiones"],
+    },
+    "Marketing": {
+        "Web corporativa": ["Contenido o menú web", "Banners del login", "Casos de éxito"],
+        "Campañas y redes": ["Campaña o pauta", "Redes sociales", "Calendario de contenido"],
+        "Marca y piezas": ["Logos y plantillas", "Boletines", "Material comercial"],
+    },
+    "Jurídica": {
+        "Contratos": ["Contrato SaaS", "Plantilla de contrato", "Firma y token"],
+        "Datos personales (Habeas Data)": ["Consentimientos", "Reclamos de titulares", "Textos legales"],
+        "Cumplimiento y legal": ["Requerimiento de autoridad", "Libro de actas", "Bóveda legal", "RUT y registro mercantil"],
+    },
+    "Operaciones": {
+        "Carnés y producción": ["Lote de carnés", "Proveedor de carnés", "Plantilla del carné"],
+        "Compras y proveedores": ["Orden de compra", "Directorio de proveedores"],
+        "Procesos y activos": ["Inventario o activos", "Procedimientos", "Coordinación diaria"],
+        "Envíos": ["Despachos y guías", "Entrega no confirmada"],
+    },
+    "Calidad": {
+        "Pruebas de software": ["Casos de prueba", "Error encontrado", "Versión a validar"],
+        "Seguridad de la información": ["Incidente", "Vulnerabilidad", "Gestión de accesos"],
+        "Respaldos": ["Copia de seguridad", "Prueba de restauración"],
+    },
+    "Soporte": {
+        "PQR y tickets": ["Radicación de PQR", "Búsqueda de radicado", "Escalamiento a ingeniería"],
+        "Herramientas de soporte": ["Suplantar perfil", "Reset de clave", "Historial de cambios"],
+        "Ajuste temporal": ["Periodos y fechas", "Prórrogas"],
+        "Acceso con PIN": ["PIN no llega", "Verificación de ingreso"],
+    },
+    "Tecnología": {
+        "Mesa de ayuda": ["Ticket interno", "Mantenimiento de hardware"],
+        "Accesos e identidades": ["Alta o baja de usuario", "MFA", "Permisos por propiedad"],
+        "Infraestructura y sistemas": ["Servidor / nube", "Base de datos y respaldos", "Licencias"],
+        "Proyectos de software": ["Nueva herramienta", "Mejora de un módulo"],
+    },
+}
+_TI_ROL_AREA = {"Soporte": "Soporte", "Comercial": "Ventas (comercial)", "Cobranza": "Cobranza y cartera", "Contabilidad": "Contabilidad",
+                "Talento": "Talento Humano", "Finanzas": "Finanzas y Tesorería", "Marketing": "Marketing", "Juridica": "Jurídica",
+                "Operaciones": "Operaciones", "Calidad": "Calidad", "Tecnologia": "Tecnología", "Gerente": "Gerencia",
+                "Administrador": "Gerencia", "Superadmin": "Gerencia"}
+
+
 @app.route("/ti/reportar", methods=["GET", "POST"])
 def ti_reportar():
     """Mesa de ayuda: cualquier persona del equipo interno reporta un problema a TI y sigue su ticket."""
@@ -97223,7 +97350,14 @@ def ti_reportar():
         f = request.form
         asunto = " ".join((f.get("asunto") or "").split())[:200]
         detalle = (f.get("detalle") or "").replace("\r", "").strip()[:1500]
-        cat = f.get("categoria") if f.get("categoria") in _TI_CATEGORIAS else _TI_CATEGORIAS[-1]
+        area_f = f.get("area") or ""
+        cat_f = f.get("categoria") or ""
+        sub_f = f.get("subcategoria") or ""
+        if sub_f in (_TI_AREAS_CATS.get(area_f, {}).get(cat_f) or []):
+            cat = ("%s › %s › %s" % (area_f, cat_f, sub_f))[:240]
+        else:
+            session["ti_msg"] = ("err", "Elija el área, la categoría y la subcategoría del problema.")
+            return redirect("/ti/reportar")
         pri = f.get("prioridad") if f.get("prioridad") in _TI_PRIORIDADES else "Media"
         recientes = (_c48_q("SELECT COUNT(*) FROM ti_tickets WHERE creado_por=:u AND creado_en>=:d", u=usuario, d=(ahora() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")) or [(0,)])[0][0]
         if not asunto:
@@ -97242,12 +97376,21 @@ def ti_reportar():
     aviso = ("<div class='%s'>%s</div>" % ("ti-ok" if msg[0] == "ok" else "ti-err", _esc(msg[1]))) if isinstance(msg, (list, tuple)) and len(msg) == 2 else ""
     cuerpo = ("<div class='ti'><h1>🎫 Reportar un problema a TI</h1><p class='sub'>Computador lento, correo, impresión, bloqueo de cuenta, hardware o instalación de software: cuéntenos y TI le responde.</p>%s"
               "<div class='ti-card'><h2>Nuevo reporte</h2><form method='POST'><input type='hidden' name='csrf' value='%s'>"
-              "<div class='ti-2'><div><label>Categoría</label><select name='categoria'>%s</select></div><div><label>Prioridad</label><select name='prioridad'>%s</select></div></div>"
+              "<div class='ti-2'><div><label>Área</label><select name='area' id='ti-area' required></select></div>"
+              "<div><label>Categoría</label><select name='categoria' id='ti-cat' required></select></div></div>"
+              "<div class='ti-2'><div><label>Subcategoría</label><select name='subcategoria' id='ti-sub' required></select></div>"
+              "<div><label>Prioridad</label><select name='prioridad'>%s</select></div></div>"
               "<label>Asunto</label><input type='text' name='asunto' required><label>Detalle</label><textarea name='detalle' rows='4'></textarea>"
               "<p><button class='ti-btn'>Enviar reporte</button></p></form></div>"
               "<div class='ti-card'><h2>Mis reportes</h2><div style='overflow-x:auto'><table><tr><th>#</th><th>Reporte</th><th>Estado</th><th>Atiende</th><th>Respuesta</th></tr>%s</table></div></div></div>"
-              % (aviso, csrf, "".join("<option>%s</option>" % _esc(c) for c in _TI_CATEGORIAS), "".join("<option%s>%s</option>" % (" selected" if p == "Media" else "", p) for p in _TI_PRIORIDADES),
-                 trs or "<tr><td colspan='5'>Aún no ha enviado reportes.</td></tr>"))
+              "<script>(function(){var D=%s,A=%s,a=document.getElementById('ti-area'),c=document.getElementById('ti-cat'),s=document.getElementById('ti-sub');"
+              "function fill(el,arr,sel){el.innerHTML='';arr.forEach(function(x){var o=document.createElement('option');o.value=x;o.textContent=x;if(x===sel)o.selected=true;el.appendChild(o);});}"
+              "function onA(){fill(c,Object.keys(D[a.value]||{}));onC();}function onC(){fill(s,(D[a.value]||{})[c.value]||[]);}"
+              "fill(a,Object.keys(D),A);a.onchange=onA;c.onchange=onC;onA();})();</script>"
+              % (aviso, csrf, "".join("<option%s>%s</option>" % (" selected" if p == "Media" else "", p) for p in _TI_PRIORIDADES),
+                 trs or "<tr><td colspan='5'>Aún no ha enviado reportes.</td></tr>",
+                 json.dumps(_TI_AREAS_CATS, ensure_ascii=False).replace("</", "<\\/"),
+                 json.dumps(_TI_ROL_AREA.get(rol_actual(), "General (equipos y cuentas)"), ensure_ascii=False)))
     return page("Reportar a TI", shell(_TI_CSS + cuerpo))
 
 
@@ -97894,6 +98037,427 @@ def ventas_equipo_accion():
         print("ventas equipo:", e)
         session["ti_msg"] = ("err", "No se pudo completar la acción.")
     return redirect("/ventas/equipo")
+
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════════
+# CONTABILIDAD · (1) TICKETS DE LAS ÁREAS A CONTABILIDAD  (2) PRESUPUESTOS (régimen colombiano)
+# (1) Cualquier persona del equipo interno radica un ticket a Contabilidad con área, categoría y subcategoría;
+#     Contabilidad lo atiende (solo ella responde); Gerencia solo lo ve.
+# (2) Presupuesto anual por clase / categoría / subcategoría con cuenta del PUC (Decreto 2650 de 1993),
+#     para empresas en constitución o ya constituidas, comparado con lo ejecutado en el libro contable.
+#     Los códigos PUC son de referencia: valídelos con su contador antes de presentar información oficial.
+# ══════════════════════════════════════════════════════════════════════════════════════════
+_CTK_INIT = {"ok": False}
+_CTK_ESTADOS = ("Abierto", "En proceso", "Resuelto", "Cerrado")
+_CTK_PRIORIDADES = ("Baja", "Media", "Alta", "Urgente")
+_CTK_CATS = {
+    "Pagos y proveedores": ["Pago a proveedor", "Cuenta de cobro / factura recibida", "Anticipo", "Caja menor"],
+    "Reembolsos y gastos": ["Reembolso de gastos", "Legalización de gastos de viaje", "Comisiones"],
+    "Facturación electrónica (DIAN)": ["Solicitar factura a un cliente", "Corrección o nota crédito", "Resolución de numeración"],
+    "Impuestos y retenciones": ["Retención en la fuente", "IVA", "Industria y comercio (ICA)", "Renta"],
+    "Nómina y seguridad social": ["Horas extras y recargos", "Liquidación de prestaciones", "Planilla PILA", "Certificado de ingresos y retenciones"],
+    "Bancos y conciliación": ["Pago no identificado", "Conciliación bancaria", "Soporte de consignación"],
+    "Presupuesto y centros de costo": ["Nueva categoría o subcategoría", "Ajuste de presupuesto", "Ejecución presupuestal"],
+    "Certificados y soportes": ["Certificado de pago", "Paz y salvo", "Copia de factura"],
+    "Otro": ["Otro tema contable"],
+}
+_CTK_ROL_AREA = dict(_TI_ROL_AREA)
+
+
+def _ctk_pk():
+    return "INTEGER PRIMARY KEY AUTOINCREMENT" if db.engine.dialect.name == "sqlite" else "SERIAL PRIMARY KEY"
+
+
+def _ctk_init():
+    if _CTK_INIT["ok"]:
+        return
+    pk = _ctk_pk()
+    ddls = (
+        "CREATE TABLE IF NOT EXISTS cta_tickets (id %s, radicado VARCHAR(20) DEFAULT '', area VARCHAR(60) DEFAULT '', categoria VARCHAR(120) DEFAULT '', "
+        "subcategoria VARCHAR(160) DEFAULT '', prioridad VARCHAR(12) DEFAULT 'Media', asunto VARCHAR(200) DEFAULT '', detalle TEXT DEFAULT '', "
+        "solicitante VARCHAR(80) DEFAULT '', rol VARCHAR(40) DEFAULT '', estado VARCHAR(20) DEFAULT 'Abierto', respuesta TEXT DEFAULT '', "
+        "atendido_por VARCHAR(80) DEFAULT '', creado_en VARCHAR(20) DEFAULT '', actualizado_en VARCHAR(20) DEFAULT '')" % pk,
+        "CREATE TABLE IF NOT EXISTS cta_presupuestos (id %s, anio INTEGER, modo VARCHAR(30) DEFAULT '', clase VARCHAR(60) DEFAULT '', "
+        "categoria VARCHAR(120) DEFAULT '', subcategoria VARCHAR(160) DEFAULT '', cuenta_puc VARCHAR(12) DEFAULT '', valor DOUBLE PRECISION DEFAULT 0, "
+        "nota TEXT DEFAULT '', creado_por VARCHAR(80) DEFAULT '', creado_en VARCHAR(20) DEFAULT '', actualizado_en VARCHAR(20) DEFAULT '')" % pk,
+    )
+    for ddl in ddls:
+        try:
+            db.session.execute(text(ddl))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print("ctk init:", e)
+    _CTK_INIT["ok"] = True
+
+
+@app.route("/contabilidad/solicitar", methods=["GET", "POST"])
+def contabilidad_solicitar():
+    """Cualquier persona del equipo interno radica un ticket a Contabilidad y sigue su respuesta."""
+    if not requiere_login():
+        return redirect("/login")
+    if rol_actual() not in ROLES_INTERNOS:
+        return acceso_denegado("Solo el equipo interno puede enviar tickets a Contabilidad.")
+    _ctk_init()
+    usuario = session.get("usuario") or ""
+    rol = rol_actual() or ""
+    csrf = _acc_csrf()
+    if request.method == "POST":
+        if not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+            return redirect("/contabilidad/solicitar")
+        f = request.form
+        asunto = " ".join((f.get("asunto") or "").split())[:200]
+        detalle = (f.get("detalle") or "").replace("\r", "").strip()[:2000]
+        cat, sub = f.get("categoria") or "", f.get("subcategoria") or ""
+        pri = f.get("prioridad") if f.get("prioridad") in _CTK_PRIORIDADES else "Media"
+        area = _CTK_ROL_AREA.get(rol, "General")
+        recientes = (_c48_q("SELECT COUNT(*) FROM cta_tickets WHERE solicitante=:u AND creado_en>=:d", u=usuario,
+                            d=(ahora() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")) or [(0,)])[0][0]
+        if sub not in (_CTK_CATS.get(cat) or []):
+            session["ti_msg"] = ("err", "Elija la categoría y la subcategoría del ticket.")
+        elif not asunto:
+            session["ti_msg"] = ("err", "Escriba un asunto para el ticket.")
+        elif int(recientes or 0) >= 10:
+            session["ti_msg"] = ("err", "Ya envió varios tickets en la última hora. Espere la respuesta de Contabilidad.")
+        else:
+            anio = ahora().strftime("%Y")
+            n = int((_c48_q("SELECT COUNT(*) FROM cta_tickets WHERE radicado LIKE :p", p="TC-%s-%%" % anio) or [(0,)])[0][0] or 0) + 1
+            rad = "TC-%s-%04d" % (anio, n)
+            _c48_x("INSERT INTO cta_tickets (radicado, area, categoria, subcategoria, prioridad, asunto, detalle, solicitante, rol, estado, creado_en, actualizado_en) "
+                   "VALUES (:r,:a,:c,:s,:p,:t,:d,:u,:ro,'Abierto',:n,:n)", r=rad, a=area, c=cat, s=sub, p=pri, t=asunto, d=detalle, u=usuario, ro=rol, n=_c48_now())
+            session["ti_msg"] = ("ok", "Su ticket %s llegó a Contabilidad. Aquí puede seguir su estado." % rad)
+        return redirect("/contabilidad/solicitar")
+    mis = _c48_q("SELECT radicado, asunto, categoria, subcategoria, prioridad, estado, respuesta, creado_en FROM cta_tickets WHERE solicitante=:u ORDER BY id DESC LIMIT 30", u=usuario)
+    trs = "".join("<tr><td>%s</td><td>%s<br><small>%s › %s · %s</small></td><td><span class='ti-b %s'>%s</span></td><td>%s</td></tr>"
+                  % (_esc(r[0]), _esc(r[1]), _esc(r[2]), _esc(r[3]), _esc(r[4]), "p" if r[5] in ("Abierto", "En proceso") else "a", _esc(r[5]), _esc(r[6] or "—")) for r in mis)
+    msg = session.pop("ti_msg", None)
+    aviso = ("<div class='%s'>%s</div>" % ("ti-ok" if msg[0] == "ok" else "ti-err", _esc(msg[1]))) if isinstance(msg, (list, tuple)) and len(msg) == 2 else ""
+    cuerpo = ("<div class='ti'><h1>🧾 Ticket a Contabilidad</h1><p class='sub'>Pagos, reembolsos, facturación, impuestos, nómina, bancos o presupuesto: radique su solicitud y Contabilidad le responde aquí.</p>%s"
+              "<div class='ti-card'><h2>Nuevo ticket</h2><form method='POST'><input type='hidden' name='csrf' value='%s'>"
+              "<div class='ti-2'><div><label>Categoría</label><select name='categoria' id='ck-cat' required></select></div>"
+              "<div><label>Subcategoría</label><select name='subcategoria' id='ck-sub' required></select></div></div>"
+              "<div class='ti-2'><div><label>Prioridad</label><select name='prioridad'>%s</select></div><div></div></div>"
+              "<label>Asunto</label><input type='text' name='asunto' required><label>Detalle</label><textarea name='detalle' rows='4'></textarea>"
+              "<p><button class='ti-btn'>Enviar a Contabilidad</button></p></form></div>"
+              "<div class='ti-card'><h2>Mis tickets</h2><div style='overflow-x:auto'><table><tr><th>Radicado</th><th>Ticket</th><th>Estado</th><th>Respuesta</th></tr>%s</table></div></div></div>"
+              "<script>(function(){var D=%s,c=document.getElementById('ck-cat'),s=document.getElementById('ck-sub');"
+              "function fill(el,arr){el.innerHTML='';arr.forEach(function(x){var o=document.createElement('option');o.value=x;o.textContent=x;el.appendChild(o);});}"
+              "function onC(){fill(s,D[c.value]||[]);}fill(c,Object.keys(D));c.onchange=onC;onC();})();</script>"
+              % (aviso, csrf, "".join("<option%s>%s</option>" % (" selected" if p == "Media" else "", p) for p in _CTK_PRIORIDADES),
+                 trs or "<tr><td colspan='4'>Aún no ha enviado tickets.</td></tr>",
+                 json.dumps(_CTK_CATS, ensure_ascii=False).replace("</", "<\\/")))
+    return page("Ticket a Contabilidad", shell(_TI_CSS + cuerpo))
+
+
+@app.route("/contabilidad/tickets-internos", methods=["GET", "POST"])
+@_cta_ruta()
+def contabilidad_tickets_internos():
+    """Bandeja de Contabilidad: tickets que radican las demás áreas. Solo Contabilidad responde; Gerencia ve."""
+    _ctk_init()
+    msg = err = ""
+    if request.method == "POST":
+        if not _cta_puede_escribir():
+            return acceso_denegado("Solo el rol Contabilidad responde los tickets.")
+        if not _ti_csrf_ok():
+            err = "La sesión del formulario venció. Recargue la página e intente de nuevo."
+        else:
+            estado = request.form.get("estado") if request.form.get("estado") in _CTK_ESTADOS else "En proceso"
+            resp = " ".join((request.form.get("respuesta") or "").split())[:1000]
+            tid = request.form.get("id", type=int) or 0
+            _c48_x("UPDATE cta_tickets SET estado=:e, respuesta=:r, atendido_por=:u, actualizado_en=:n WHERE id=:i",
+                   e=estado, r=resp, u=session.get("usuario") or "", n=_c48_now(), i=tid)
+            _cta_log("Ticket de área atendido", "ticket #%s → %s" % (tid, estado))
+            msg = "Ticket actualizado."
+    fest = request.args.get("estado") or ""
+    if fest in _CTK_ESTADOS:
+        rows = _c48_q("SELECT id, radicado, area, categoria, subcategoria, prioridad, asunto, detalle, solicitante, estado, respuesta, creado_en FROM cta_tickets WHERE estado=:e ORDER BY id DESC LIMIT 300", e=fest)
+    else:
+        rows = _c48_q("SELECT id, radicado, area, categoria, subcategoria, prioridad, asunto, detalle, solicitante, estado, respuesta, creado_en FROM cta_tickets ORDER BY id DESC LIMIT 300")
+    csrf = _acc_csrf()
+    puede = _cta_puede_escribir()
+    filtros = "".join("<a href='/contabilidad/tickets-internos%s' style='padding:6px 12px;border-radius:999px;text-decoration:none;font-size:12px;font-weight:700;background:%s;color:%s'>%s</a>"
+                      % (("?estado=" + quote(e)) if e else "", "#0B2D57" if e == fest else "#e2e8f0", "#fff" if e == fest else "#0f172a", e or "Todos")
+                      for e in ("",) + _CTK_ESTADOS)
+    filas = ""
+    for r in rows:
+        ctrl = "—"
+        if puede:
+            ctrl = ("<form method='POST' style='margin:0;display:grid;gap:6px'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='id' value='%d'>"
+                    "<select name='estado' style='padding:6px'>%s</select><input name='respuesta' value='%s' placeholder='Respuesta' style='padding:6px'>"
+                    "<button class='btn' type='submit'>Guardar</button></form>"
+                    % (csrf, r[0], "".join("<option%s>%s</option>" % (" selected" if e == r[9] else "", e) for e in _CTK_ESTADOS), _esc(r[10] or "")))
+        elif r[10]:
+            ctrl = _esc(r[10])
+        filas += ("<tr style='border-bottom:1px solid #e2e8f0;vertical-align:top'><td style='padding:7px 8px;white-space:nowrap'><b>%s</b><br><small>%s</small></td>"
+                  "<td style='padding:7px 8px'>%s<br><small>%s</small></td>"
+                  "<td style='padding:7px 8px'><b>%s</b><br><small>%s › %s · %s</small><div style='font-size:12px;margin-top:4px'>%s</div></td>"
+                  "<td style='padding:7px 8px'>%s</td><td style='padding:7px 8px;min-width:200px'>%s</td></tr>"
+                  % (_esc(r[1]), _esc(r[11]), _esc(r[8]), _esc(r[2]), _esc(r[6]), _esc(r[3]), _esc(r[4]), _esc(r[5]), _esc(r[7] or ""), _esc(r[9]), ctrl))
+    if not filas:
+        filas = "<tr><td colspan='5' style='padding:16px;text-align:center;color:#64748b'>Sin tickets.</td></tr>"
+    th = "padding:8px;text-align:left;font-size:12px"
+    cuerpo = ("<section class='role-panel'><div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px'>%s</div>"
+              "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse'>"
+              "<tr style='background:#0B2D57;color:#fff'><th style='%s'>Radicado</th><th style='%s'>Solicitante / área</th><th style='%s'>Ticket</th><th style='%s'>Estado</th><th style='%s'>Respuesta</th></tr>%s</table></div></section>"
+              % (filtros, th, th, th, th, th, filas))
+    return _cta_page("Tickets de las áreas", "/contabilidad/tickets-internos", cuerpo, "Solicitudes que radican las demás áreas a Contabilidad", msg=msg, err=err)
+
+
+# ───────────────────────── Presupuestos ─────────────────────────
+_PRES_MODOS = ("Empresa en constitución", "Empresa constituida")
+# (clase, naturaleza de ejecución D|C, solo_constitución, {categoría: [(subcategoría, cuenta PUC), ...]})
+_PRES_CAT = (
+    ("Ingresos", "C", False, {
+        "Ingresos operacionales": [("Venta de bienes (comercio al por mayor y menor)", "4135"), ("Servicios empresariales y de informática (licencias / planes)", "4155"),
+                                   ("Implementación, capacitación y soporte", "4155"), ("Otros ingresos operacionales", "41")],
+        "Ingresos no operacionales": [("Financieros (intereses)", "4210"), ("Recuperaciones", "4250"), ("Diversos / donaciones", "4295")],
+    }),
+    ("Costos", "D", False, {
+        "Costo de ventas y prestación de servicios": [("Costo de mercancía vendida", "6135"), ("Costo de servicios prestados", "6155"),
+                                                      ("Hosting, nube y licencias de terceros", "6155"), ("Mano de obra directa (implementación y soporte)", "6155")],
+    }),
+    ("Gastos de administración", "D", False, {
+        "Gastos de personal": [("Sueldos", "510506"), ("Horas extras y recargos", "510515"), ("Auxilio de transporte", "510527"), ("Cesantías", "510530"),
+                               ("Intereses sobre cesantías", "510533"), ("Prima de servicios", "510536"), ("Vacaciones", "510539"), ("ARL", "510568"),
+                               ("EPS (aportes empresa)", "510569"), ("Pensión (aportes empresa)", "510570"), ("Caja de compensación", "510572"),
+                               ("ICBF", "510575"), ("SENA", "510578")],
+        "Honorarios": [("Revisoría fiscal", "511010"), ("Auditoría externa", "511015"), ("Asesoría jurídica", "511025"), ("Asesoría financiera y contable", "511030"), ("Asesoría técnica", "511035")],
+        "Impuestos": [("Industria y comercio (ICA)", "511505"), ("Impuesto predial / vehículos y otros", "5115")],
+        "Arrendamientos": [("Arrendamiento de oficina", "5120"), ("Equipo de cómputo y comunicación (renting)", "512025")],
+        "Servicios": [("Servicios públicos (energía, agua)", "5135"), ("Telefonía e internet", "513535"), ("Procesamiento electrónico de datos (nube, hosting)", "513520"),
+                      ("Aseo y vigilancia", "513505"), ("Transporte, fletes y acarreos", "513550")],
+        "Gastos legales": [("Notariales", "514005"), ("Registro mercantil (renovación)", "514010"), ("Trámites y licencias", "514015")],
+        "Seguros y afiliaciones": [("Seguros", "5130"), ("Contribuciones y afiliaciones", "5125")],
+        "Mantenimiento y viajes": [("Mantenimiento y reparaciones", "5145"), ("Gastos de viaje", "5155")],
+        "Depreciaciones y diversos": [("Depreciaciones", "5160"), ("Amortizaciones", "5165"), ("Útiles, papelería y fotocopias", "519530"), ("Gastos diversos", "5195")],
+    }),
+    ("Gastos de ventas", "D", False, {
+        "Personal de ventas": [("Sueldos y comisiones de asesores", "5205")],
+        "Mercadeo": [("Publicidad, propaganda y promoción", "523560"), ("Gastos de viaje de ventas", "5255"), ("Diversos de ventas", "5295")],
+    }),
+    ("Gastos no operacionales", "D", False, {
+        "Financieros": [("Gastos bancarios y comisiones", "5305"), ("Intereses de obligaciones", "5305")],
+        "Otros": [("Gastos extraordinarios", "5315"), ("Gastos diversos no operacionales", "5395")],
+    }),
+    ("Impuesto de renta", "D", False, {
+        "Impuesto de renta y complementarios": [("Provisión impuesto de renta (tarifa general 35%)", "5405")],
+    }),
+    ("Inversión en activos", "D", False, {
+        "Propiedad, planta y equipo": [("Equipo de oficina y muebles", "1524"), ("Equipo de computación y comunicación", "1528")],
+        "Intangibles": [("Software y licencias", "16"), ("Marca y propiedad intelectual", "16")],
+        "Capital de trabajo": [("Caja y bancos", "11"), ("Cuentas por cobrar a clientes", "1305")],
+    }),
+    ("Patrimonio y financiación", "C", False, {
+        "Patrimonio": [("Capital suscrito y pagado", "3105"), ("Reservas", "3305")],
+        "Obligaciones": [("Obligaciones financieras", "2105"), ("Deudas con socios", "2355")],
+    }),
+    ("Constitución y legalización", "D", True, {
+        "Cámara de Comercio": [("Matrícula mercantil de la sociedad", "514010"), ("Inscripción de libros de comercio", "514010"),
+                               ("Certificado de existencia y representación legal", "514010"), ("Impuesto de registro (Gobernación)", "5115")],
+        "Documento de constitución": [("Documento privado / escritura pública", "514005"), ("Honorarios de abogado o contador", "5110")],
+        "DIAN y facturación": [("RUT (gratuito)", "514015"), ("Firma electrónica y habilitación de facturación electrónica", "514015"), ("Resolución de numeración", "514015")],
+        "Propiedad intelectual": [("Registro de marca (SIC)", "514015")],
+        "Apertura bancaria y preoperativos": [("Apertura de cuenta bancaria", "5305"), ("Gastos preoperativos (cargos diferidos)", "1710")],
+    }),
+)
+
+
+def _pres_catalogo(modo):
+    """{clase: {categoría: [(sub, puc)]}} según el modo (constitución solo para empresas en constitución)."""
+    return {cl: cats for cl, _n, solo, cats in _PRES_CAT if (modo == "Empresa en constitución" or not solo)}
+
+
+def _pres_naturaleza(clase):
+    for cl, nat, _s, _c in _PRES_CAT:
+        if cl == clase:
+            return nat
+    return "D"
+
+
+def _pres_ejecutado(anio):
+    """Saldo del libro contable por cuenta en el año: {codigo: (debitos, creditos)}."""
+    out = {}
+    try:
+        q = (db.session.query(CtaAsientoLinea.cuenta_codigo, func.coalesce(func.sum(CtaAsientoLinea.debito), 0), func.coalesce(func.sum(CtaAsientoLinea.credito), 0))
+             .join(CtaAsiento, CtaAsiento.id == CtaAsientoLinea.asiento_id)
+             .filter(CtaAsiento.estado == "REGISTRADO", CtaAsiento.fecha >= "%s-01-01" % anio, CtaAsiento.fecha <= "%s-12-31" % anio)
+             .group_by(CtaAsientoLinea.cuenta_codigo))
+        for cod, d, c in q.all():
+            out[str(cod or "")] = (float(d or 0), float(c or 0))
+    except Exception:
+        db.session.rollback()
+    return out
+
+
+@app.route("/contabilidad/presupuestos", methods=["GET", "POST"])
+@_cta_ruta()
+def contabilidad_presupuestos():
+    _ctk_init()
+    msg = err = ""
+    hoy_anio = int(ahora().strftime("%Y"))
+    anio = request.values.get("anio", type=int) or hoy_anio
+    modo = request.values.get("modo") if request.values.get("modo") in _PRES_MODOS else _PRES_MODOS[1]
+    catalogo = _pres_catalogo(modo)
+    usuario = session.get("usuario") or ""
+    if request.method == "POST":
+        if not _cta_puede_escribir():
+            return acceso_denegado("Solo el rol Contabilidad registra o cambia presupuestos. Gerencia solo visualiza.")
+        if not _ti_csrf_ok():
+            err = "La sesión del formulario venció. Recargue la página e intente de nuevo."
+        else:
+            f = request.form
+            accion = f.get("accion") or ""
+            try:
+                if accion == "agregar":
+                    clase, cat, sub = f.get("clase") or "", f.get("categoria") or "", f.get("subcategoria") or ""
+                    custom = " ".join((f.get("sub_personal") or "").split())[:160]
+                    puc = re.sub(r"\D", "", f.get("puc_personal") or "")[:10]
+                    valor = max(0.0, _parse_cop(f.get("valor")))
+                    if cat not in (catalogo.get(clase) or {}):
+                        err = "Elija la clase y la categoría."
+                    elif custom:
+                        if len(puc) < 2:
+                            err = "Para una subcategoría propia indique la cuenta del PUC (mínimo 2 dígitos)."
+                        else:
+                            sub = custom
+                    else:
+                        match = [p for s_, p in catalogo[clase][cat] if s_ == sub]
+                        if not match:
+                            err = "Elija la subcategoría."
+                        else:
+                            puc = match[0]
+                    if not err:
+                        n = _c48_now()
+                        _c48_x("INSERT INTO cta_presupuestos (anio, modo, clase, categoria, subcategoria, cuenta_puc, valor, nota, creado_por, creado_en, actualizado_en) "
+                               "VALUES (:a,:m,:cl,:c,:s,:p,:v,:no,:u,:n,:n)", a=anio, m=modo, cl=clase, c=cat, s=sub, p=puc, v=valor,
+                               no=" ".join((f.get("nota") or "").split())[:300], u=usuario, n=n)
+                        _cta_log("Presupuesto: línea agregada", "%s · %s › %s › %s · %s" % (anio, clase, cat, sub, _cta_fmt(valor)))
+                        msg = "Línea de presupuesto agregada."
+                elif accion == "plantilla":
+                    existentes = {(r[0], r[1], r[2]) for r in _c48_q("SELECT clase, categoria, subcategoria FROM cta_presupuestos WHERE anio=:a AND modo=:m", a=anio, m=modo)}
+                    n_ = 0
+                    for cl, cats in catalogo.items():
+                        for ca, subs in cats.items():
+                            for s_, p_ in subs:
+                                if (cl, ca, s_) in existentes:
+                                    continue
+                                _c48_x("INSERT INTO cta_presupuestos (anio, modo, clase, categoria, subcategoria, cuenta_puc, valor, nota, creado_por, creado_en, actualizado_en) "
+                                       "VALUES (:a,:m,:cl,:c,:s,:p,0,'',:u,:n,:n)", a=anio, m=modo, cl=cl, c=ca, s=s_, p=p_, u=usuario, n=_c48_now())
+                                n_ += 1
+                    _cta_log("Presupuesto: plantilla cargada", "%s · %s · %d líneas" % (anio, modo, n_))
+                    msg = "Plantilla cargada: %d líneas nuevas en $ 0 para que complete los valores." % n_
+                elif accion == "valor":
+                    _c48_x("UPDATE cta_presupuestos SET valor=:v, actualizado_en=:n WHERE id=:i", v=max(0.0, _parse_cop(f.get("valor"))), n=_c48_now(), i=f.get("id", type=int) or 0)
+                    _cta_log("Presupuesto: valor actualizado", "línea #%s" % (f.get("id") or ""))
+                    msg = "Valor actualizado."
+                elif accion == "eliminar":
+                    _c48_x("DELETE FROM cta_presupuestos WHERE id=:i", i=f.get("id", type=int) or 0)
+                    _cta_log("Presupuesto: línea eliminada", "línea #%s" % (f.get("id") or ""))
+                    msg = "Línea eliminada del presupuesto (no afecta el libro contable)."
+            except Exception as ex:
+                db.session.rollback()
+                print("presupuestos:", ex)
+                err = "No se pudo guardar el cambio."
+    filas = _c48_q("SELECT id, clase, categoria, subcategoria, cuenta_puc, valor, nota FROM cta_presupuestos WHERE anio=:a AND modo=:m ORDER BY id", a=anio, m=modo)
+    ejec = _pres_ejecutado(anio)
+    csrf = _acc_csrf()
+    puede = _cta_puede_escribir()
+
+    def ejecutado(puc, nat):
+        d = c = 0.0
+        for cod, (dd, cc) in ejec.items():
+            if puc and cod.startswith(puc):
+                d += dd
+                c += cc
+        return (c - d) if nat == "C" else (d - c)
+
+    orden = [cl for cl, _n, _s, _c in _PRES_CAT]
+    por_clase = {}
+    for r in filas:
+        por_clase.setdefault(r[1], []).append(r)
+    tot_p, tot_e = {}, {}
+    cuerpo_tabla = ""
+    th = "padding:7px 8px;text-align:left;font-size:12px"
+    for cl in orden + [c for c in por_clase if c not in orden]:
+        lst = por_clase.get(cl)
+        if not lst:
+            continue
+        nat = _pres_naturaleza(cl)
+        sp = se = 0.0
+        sub_html = ""
+        for r in lst:
+            e = ejecutado(r[4], nat)
+            sp += float(r[5] or 0)
+            se += e
+            pct = ("%d%%" % round(e / float(r[5]) * 100)) if float(r[5] or 0) > 0 else "—"
+            if puede:
+                acc = ("<form method='POST' style='display:flex;gap:4px;margin:0'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='anio' value='%d'><input type='hidden' name='modo' value='%s'>"
+                       "<input type='hidden' name='id' value='%d'><input type='hidden' name='accion' value='valor'><input name='valor' value='%s' style='width:120px;padding:5px;text-align:right'>"
+                       "<button class='btn' style='padding:5px 8px'>💾</button></form>"
+                       "<form method='POST' style='margin:4px 0 0' onsubmit=\"return confirm('¿Quitar esta línea del presupuesto?')\"><input type='hidden' name='csrf' value='%s'><input type='hidden' name='anio' value='%d'>"
+                       "<input type='hidden' name='modo' value='%s'><input type='hidden' name='id' value='%d'><input type='hidden' name='accion' value='eliminar'>"
+                       "<button style='padding:3px 8px;font-size:11px'>Quitar</button></form>"
+                       % (csrf, anio, _esc(modo), r[0], ("%.2f" % float(r[5] or 0)).replace(".", ","), csrf, anio, _esc(modo), r[0]))
+            else:
+                acc = _cta_fmt(r[5])
+            sub_html += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:6px 8px'>%s<div style='font-size:11px;color:#64748b'>%s%s</div></td>"
+                         "<td style='padding:6px 8px;font-family:monospace'>%s</td><td style='padding:6px 8px;text-align:right'>%s</td>"
+                         "<td style='padding:6px 8px;text-align:right'>%s</td><td style='padding:6px 8px;text-align:right'>%s</td><td style='padding:6px 8px'>%s</td></tr>"
+                         % (_esc(r[3]), _esc(r[2]), (" · " + _esc(r[6])) if r[6] else "", _esc(r[4]), _cta_fmt(r[5]), _cta_fmt(e), pct, acc))
+        tot_p[cl], tot_e[cl] = sp, se
+        cuerpo_tabla += ("<tr style='background:#f1f5f9;font-weight:800'><td colspan='2' style='padding:8px'>%s</td><td style='padding:8px;text-align:right'>%s</td>"
+                         "<td style='padding:8px;text-align:right'>%s</td><td colspan='2'></td></tr>%s" % (_esc(cl), _cta_fmt(sp), _cta_fmt(se), sub_html))
+    if not cuerpo_tabla:
+        cuerpo_tabla = "<tr><td colspan='6' style='padding:18px;text-align:center;color:#64748b'>Aún no hay líneas. Cargue la plantilla o agregue categorías y subcategorías.</td></tr>"
+
+    def g(d, *cl):
+        return sum(d.get(c, 0.0) for c in cl)
+    gastos = ("Costos", "Gastos de administración", "Gastos de ventas", "Gastos no operacionales", "Impuesto de renta")
+    res_p = g(tot_p, "Ingresos") - g(tot_p, *gastos)
+    res_e = g(tot_e, "Ingresos") - g(tot_e, *gastos)
+    tarjetas = ("<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px'>%s%s%s%s</div>" % (
+        _cta_card("INGRESOS PRESUPUESTADOS", _cta_fmt(g(tot_p, "Ingresos")), "#15803d", "Ejecutado " + _cta_fmt(g(tot_e, "Ingresos"))),
+        _cta_card("COSTOS Y GASTOS PRESUPUESTADOS", _cta_fmt(g(tot_p, *gastos)), "#b91c1c", "Ejecutado " + _cta_fmt(g(tot_e, *gastos))),
+        _cta_card("RESULTADO PROYECTADO", _cta_fmt(res_p), "#0B2D57", "Ejecutado " + _cta_fmt(res_e)),
+        _cta_card("INVERSIÓN + CONSTITUCIÓN", _cta_fmt(g(tot_p, "Inversión en activos", "Constitución y legalización")), "#7c3aed", "Ejecutado " + _cta_fmt(g(tot_e, "Inversión en activos", "Constitución y legalización")))))
+    filtro = ("<form method='GET' style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px'>"
+              "<label style='font-size:12px;font-weight:700'>Año <input type='number' name='anio' value='%d' style='padding:7px;width:90px'></label>"
+              "<label style='font-size:12px;font-weight:700'>Tipo de empresa <select name='modo' style='padding:8px'>%s</select></label>"
+              "<button class='btn' type='submit'>Ver</button></form>"
+              % (anio, "".join("<option%s>%s</option>" % (" selected" if m == modo else "", m) for m in _PRES_MODOS)))
+    form = ""
+    if puede:
+        form = ("<section class='role-panel' style='margin-bottom:14px'><h3 style='margin-top:0;color:#0B2D57'>Agregar línea al presupuesto %d · %s</h3>"
+                "<form method='POST' style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;align-items:end'>"
+                "<input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='agregar'><input type='hidden' name='anio' value='%d'><input type='hidden' name='modo' value='%s'>"
+                "<div><label style='font-size:11px;font-weight:700'>Clase</label><select name='clase' id='pr-cl' style='width:100%%;padding:8px'></select></div>"
+                "<div><label style='font-size:11px;font-weight:700'>Categoría</label><select name='categoria' id='pr-ca' style='width:100%%;padding:8px'></select></div>"
+                "<div><label style='font-size:11px;font-weight:700'>Subcategoría</label><select name='subcategoria' id='pr-su' style='width:100%%;padding:8px'></select></div>"
+                "<div><label style='font-size:11px;font-weight:700'>…o subcategoría propia</label><input name='sub_personal' placeholder='Opcional' style='width:100%%;padding:8px'></div>"
+                "<div><label style='font-size:11px;font-weight:700'>Cuenta PUC (si es propia)</label><input name='puc_personal' placeholder='Ej. 519530' style='width:100%%;padding:8px'></div>"
+                "<div><label style='font-size:11px;font-weight:700'>Valor presupuestado (COP)</label><input name='valor' placeholder='1.500.000' style='width:100%%;padding:8px'></div>"
+                "<div><label style='font-size:11px;font-weight:700'>Nota</label><input name='nota' style='width:100%%;padding:8px'></div>"
+                "<div><button class='btn' type='submit' style='background:#1e40af;color:#fff'>➕ Agregar</button></div></form>"
+                "<form method='POST' style='margin-top:10px'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='plantilla'><input type='hidden' name='anio' value='%d'><input type='hidden' name='modo' value='%s'>"
+                "<button class='btn' type='submit'>📋 Cargar plantilla completa de categorías (%s)</button></form></section>"
+                "<script>(function(){var D=%s,cl=document.getElementById('pr-cl'),ca=document.getElementById('pr-ca'),su=document.getElementById('pr-su');"
+                "function fill(el,arr){el.innerHTML='';arr.forEach(function(x){var o=document.createElement('option');o.value=x;o.textContent=x;el.appendChild(o);});}"
+                "function onCl(){fill(ca,Object.keys(D[cl.value]||{}));onCa();}function onCa(){fill(su,((D[cl.value]||{})[ca.value]||[]).map(function(p){return p[0];}));}"
+                "fill(cl,Object.keys(D));cl.onchange=onCl;ca.onchange=onCa;onCl();})();</script>"
+                % (anio, _esc(modo), csrf, anio, _esc(modo), csrf, anio, _esc(modo), _esc(modo),
+                   json.dumps({cl: {ca: [[s_, p_] for s_, p_ in subs] for ca, subs in cats.items()} for cl, cats in catalogo.items()}, ensure_ascii=False).replace("</", "<\\/")))
+    nota = ("<p class='mini-text'>Estructura por clases del PUC (Decreto 2650 de 1993): ingresos (41-42), costos (61), gastos de administración (51), de ventas (52), no operacionales (53), "
+            "impuesto de renta (54), inversión en activos, patrimonio y financiación%s. Lo <b>ejecutado</b> sale del libro contable del año (asientos registrados) por cuenta. "
+            "Los códigos son de referencia: confírmelos con su contador.</p>"
+            % (" y los gastos de constitución y legalización (Cámara de Comercio, DIAN, registro de marca)" if modo == "Empresa en constitución" else ""))
+    tabla = ("<section class='role-panel'><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
+             "<tr style='background:#0B2D57;color:#fff'><th style='%s'>Categoría / subcategoría</th><th style='%s'>PUC</th><th style='%s;text-align:right'>Presupuestado</th>"
+             "<th style='%s;text-align:right'>Ejecutado</th><th style='%s;text-align:right'>%% ejec.</th><th style='%s'>%s</th></tr>%s</table></div></section>"
+             % (th, th, th, th, th, th, "Valor / acciones" if puede else "Presupuestado", cuerpo_tabla))
+    return _cta_page("Presupuestos", "/contabilidad/presupuestos", filtro + tarjetas + form + nota + tabla,
+                     "Presupuesto anual por categoría y subcategoría · régimen colombiano", msg=msg, err=err)
 
 
 
