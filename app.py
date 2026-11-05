@@ -742,6 +742,16 @@ elif DATABASE_URL.startswith("sqlite"):
     _engine_opts.update({
         "connect_args": {"check_same_thread": False, "timeout": 30},
     })
+if os.environ.get("VERCEL") and "postgres" in DATABASE_URL:
+    # Serverless: cada invocación abre su propia conexión. Un pool grande agota las conexiones de Supabase,
+    # así que no se mantiene pool (NullPool) y se exige SSL con un timeout corto para fallar rápido y con mensaje claro.
+    from sqlalchemy.pool import NullPool as _NullPool
+    _engine_opts = {"poolclass": _NullPool, "pool_pre_ping": True}
+    _ca = {"connect_timeout": 10}
+    if "sslmode=" not in DATABASE_URL and "supabase" in DATABASE_URL:
+        _ca["sslmode"] = "require"
+    if "psycopg2" in DATABASE_URL:
+        _engine_opts["connect_args"] = _ca
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _engine_opts
 db = SQLAlchemy(app)
 
@@ -6779,7 +6789,18 @@ def before():
     # Eso causaba WORKER TIMEOUT / SIGKILL en Railway (bucle infinito de reinicios).
     try:
         if not getattr(inicializar_bd, "_done", False):
-            inicializar_bd()
+            # Si la base de datos aún no responde, no marcar la inicialización como hecha: se reintenta en la
+            # siguiente petición (antes quedaba "hecha" aunque no se hubieran creado las tablas).
+            try:
+                db.session.execute(text("SELECT 1"))
+            except Exception as _probe:
+                print("BD no disponible (se reintentará):", repr(_probe)[:300], flush=True)
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+            else:
+                inicializar_bd()
     except Exception as _init_err:
         print("inicializar_bd error:", _init_err)
         try:
@@ -35320,13 +35341,22 @@ def _capturar_error_sistema(e):
             detalle_staff = f"<p style='font-size:12px;color:#94a3b8;margin-top:16px'>{_esc(str(e))[:300]}</p>"
     except Exception:
         pass
-    html = f"""
-<div style="max-width:480px;margin:70px auto;font-family:Segoe UI,Arial;text-align:center;padding:24px">
-  <h1 style="color:#b91c1c">Algo salió mal</h1>
-  <p>Ocurrió un error inesperado. Ya quedó registrado con el código <b>{ref}</b> para que Soporte lo revise.</p>
-  <p><a href="javascript:history.back()">← Volver</a> · <a href="/">Ir al inicio</a></p>
+    ref_html = ""
+    if log_id:
+        ref_html = f"<p style='font-size:12px;color:#94a3b8;margin-top:22px'>Código de referencia {ref}</p>"
+    html = f"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EduTrack · PROCSIS</title></head>
+<body style="margin:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue','Segoe UI',Roboto,Arial,sans-serif">
+<div style="max-width:520px;margin:12vh auto 0;background:#fff;border-radius:18px;box-shadow:0 12px 40px rgba(15,23,42,.10);padding:36px 30px;text-align:center">
+  <div style="font-size:12px;font-weight:700;letter-spacing:.12em;color:#0B2D57;margin-bottom:14px">EDUTRACK · PROCSIS</div>
+  <h1 style="color:#0B2D57;font-size:24px;margin:0 0 14px">¡Hola! Estamos optimizando tu experiencia</h1>
+  <p style="color:#334155;line-height:1.6;margin:0 0 12px">En este momento no pudimos validar tus credenciales de acceso. Esto puede deberse a una actualización programada en nuestra infraestructura o a un dato ingresado de forma incorrecta.</p>
+  <p style="color:#334155;line-height:1.6;margin:0 0 22px">Por favor, verifica tus datos de inicio de sesión e inténtalo de nuevo. Si el inconveniente persiste, nuestro equipo de soporte técnico e IT está a tu entera disposición para resolverlo de inmediato.</p>
+  <a href="/login" style="display:inline-block;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px">Intentar de nuevo</a>
+  <a href="/" style="display:inline-block;color:#0B2D57;text-decoration:none;font-weight:600;padding:11px 18px">Ir al inicio</a>
+  {ref_html}
   {detalle_staff}
-</div>"""
+</div></body></html>"""
     return html, 500
 
 
