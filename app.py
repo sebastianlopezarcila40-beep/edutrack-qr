@@ -42,6 +42,51 @@ from modules.tenants import (
     total_instituciones
 )
 
+
+# ===== Vercel / serverless: el disco del proyecto es de SOLO LECTURA; solo /tmp es escribible =====
+# Si estamos en Vercel, toda escritura de archivos (uploads, carpetas, configuraciones) bajo la carpeta del
+# proyecto se redirige a /tmp/procsis. /tmp es temporal: los archivos subidos se pierden al reciclar la función,
+# así que para producción conviene guardarlos en almacenamiento externo (Vercel Blob, S3, Supabase Storage...).
+if os.environ.get("VERCEL"):
+    import builtins as _vbi
+    import errno as _verrno
+    _V_ROOT = os.path.dirname(os.path.abspath(__file__))
+    _V_TMP = os.path.join("/tmp", "procsis")
+
+    def _v_map(_p):
+        try:
+            _ap = os.path.abspath(os.fspath(_p))
+        except Exception:
+            return _p
+        if _ap == _V_ROOT or _ap.startswith(_V_ROOT + os.sep):
+            return os.path.join(_V_TMP, os.path.relpath(_ap, _V_ROOT))
+        return _p
+
+    _v_makedirs = os.makedirs
+    _v_open = _vbi.open
+
+    def _vercel_makedirs(name, mode=0o777, exist_ok=False):
+        try:
+            return _v_makedirs(name, mode, exist_ok)
+        except OSError as _e:
+            if _e.errno in (_verrno.EROFS, _verrno.EACCES, _verrno.EPERM):
+                return _v_makedirs(_v_map(name), mode, exist_ok)
+            raise
+
+    def _vercel_open(file, mode="r", *args, **kwargs):
+        if isinstance(file, (str, bytes, os.PathLike)):
+            _m = _v_map(file)
+            if _m != file:
+                if any(_c in mode for _c in "wax+"):
+                    _v_makedirs(os.path.dirname(_m), exist_ok=True)
+                    return _v_open(_m, mode, *args, **kwargs)
+                if not os.path.exists(file) and os.path.exists(_m):
+                    return _v_open(_m, mode, *args, **kwargs)
+        return _v_open(file, mode, *args, **kwargs)
+
+    os.makedirs = _vercel_makedirs
+    _vbi.open = _vercel_open
+
 app = Flask(__name__)
 
 # ===== Áreas PROCSIS: un portal interno por área (rol propio, home y esqueleto) =====
