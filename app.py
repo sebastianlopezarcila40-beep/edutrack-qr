@@ -35336,8 +35336,17 @@ def _capturar_error_sistema(e):
         raise e
     ref = f"#{log_id}" if log_id else "sin registrar"
     detalle_staff = ""
+    # Diagnóstico temporal: con la variable de entorno MOSTRAR_ERRORES=1 se muestra la causa real en pantalla.
+    # Quítela cuando termine de configurar el hosting.
+    if (os.environ.get("MOSTRAR_ERRORES") or "").strip() == "1":
+        try:
+            _tb_txt = (__import__("traceback").format_exc() or "")[-2500:]
+            detalle_staff = ("<pre style='text-align:left;white-space:pre-wrap;word-break:break-word;font-size:11px;background:#fef2f2;color:#991b1b;"
+                             "padding:12px;border-radius:10px;margin-top:18px'>%s: %s\n\n%s</pre>" % (_esc(type(e).__name__), _esc(str(e))[:600], _esc(_tb_txt)))
+        except Exception:
+            pass
     try:
-        if rol_actual() in ("Gerente", "Superadmin", "Administrador"):
+        if detalle_staff == "" and rol_actual() in ("Gerente", "Superadmin", "Administrador"):
             detalle_staff = f"<p style='font-size:12px;color:#94a3b8;margin-top:16px'>{_esc(str(e))[:300]}</p>"
     except Exception:
         pass
