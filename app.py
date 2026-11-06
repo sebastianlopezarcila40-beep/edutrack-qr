@@ -6401,53 +6401,170 @@ def _autoreparar_columnas_faltantes():
         pass
 
 
-def _arranque_base_vacia():
-    """Corre en cada arranque, con o sin RUN_DB_MIGRATE:
-    1) si la base es nueva y no tiene la tabla de usuarios, crea todas las tablas;
-    2) si no existe NINGÚN Gerente/Superadmin, crea el Gerente inicial (Sebastian / sebas123, clave temporal).
-    Si luego Gerencia renombra o cambia a Sebastian, no se vuelve a crear (ya existe un Gerente)."""
+_ARRANQUE_LOG = []
+
+
+def _alog(msg):
+    """Registro corto de arranque (se ve en los logs de Vercel y en /estado-base)."""
+    print(msg, flush=True)
+    _ARRANQUE_LOG.append(str(msg)[:300])
+    del _ARRANQUE_LOG[:-40]
+
+
+def _rollback_seguro():
     try:
-        from sqlalchemy import inspect as _sa_inspect
-        if not _sa_inspect(db.engine).has_table("usuarios"):
-            print("BD nueva/vacía: creando tablas (create_all)…", flush=True)
-            db.create_all()
-    except Exception as _e1:
-        print("arranque create_all:", repr(_e1)[:300], flush=True)
+        db.session.rollback()
+    except Exception:
+        pass
+
+
+def _tablas_pendientes():
+    from sqlalchemy import inspect as _sa_inspect
+    existentes = set(_sa_inspect(db.engine).get_table_names())
+    return [t for t in db.metadata.sorted_tables if t.name not in existentes]
+
+
+def _crear_tablas_por_lotes(presupuesto=5.0):
+    """Crea las tablas que faltan UNA POR UNA, cada una en su propia transacción y con un tope de tiempo.
+    Antes se usaba db.create_all() (todas las tablas en una sola transacción): en una base nueva tarda más
+    que el límite de Vercel, la función se corta, todo se revierte y el sistema queda sin tablas y sin poder
+    ingresar. Así lo ya creado se conserva entre peticiones y el proceso avanza hasta terminar.
+    Primero se crean 'instituciones' y 'usuarios' (lo necesario para ingresar). Devuelve cuántas faltan."""
+    import time as _t
+    t0 = _t.time()
+    try:
+        pend = _tablas_pendientes()
+    except Exception as e:
+        _alog("tablas pendientes: %r" % (e,))
+        _rollback_seguro()
+        return None
+    nucleo = [t for t in pend if t.name in ("instituciones", "usuarios")]
+    resto = [t for t in pend if t.name not in ("instituciones", "usuarios")]
+    hechas = 0
+    for t in nucleo + resto:
+        if t.name not in ("instituciones", "usuarios") and _t.time() - t0 > presupuesto:
+            break
         try:
-            db.session.rollback()
-        except Exception:
-            pass
+            with db.engine.begin() as conn:
+                t.create(bind=conn, checkfirst=True)
+            hechas += 1
+        except Exception as e:
+            _alog("crear tabla %s: %r" % (t.name, e))
+    if pend and hechas == 0:
+        try:
+            db.create_all()   # último recurso (dependencias circulares)
+            hechas = len(pend)
+        except Exception as e:
+            _alog("create_all: %r" % (e,))
+            _rollback_seguro()
+    if pend:
+        _alog("tablas creadas en este arranque: %d de %d pendientes (%.1fs)" % (hechas, len(pend), _t.time() - t0))
+    return max(0, len(pend) - hechas)
+
+
+def _schema_firma():
+    import hashlib as _h
+    cols = sorted("%s.%s" % (t.name, c.name) for t in db.metadata.sorted_tables for c in t.columns)
+    return _h.sha1("|".join(cols).encode("utf-8")).hexdigest()
+
+
+def _schema_ya_listo():
+    """True si la base ya fue preparada con ESTE conjunto de modelos: se omiten todos los DDL de arranque
+    (en Vercel cada uno abre una conexión nueva y juntos tardaban ~1 minuto en cada arranque en frío)."""
     try:
+        with db.engine.connect() as conn:
+            fila = conn.execute(text("SELECT firma FROM procsis_schema_marker WHERE id = 1")).fetchone()
+        return bool(fila) and fila[0] == _schema_firma()
+    except Exception:
+        return False
+
+
+def _schema_marcar():
+    try:
+        firma = _schema_firma()
+        with db.engine.begin() as conn:
+            conn.execute(text("CREATE TABLE IF NOT EXISTS procsis_schema_marker (id INTEGER PRIMARY KEY, firma VARCHAR(64))"))
+            conn.execute(text("DELETE FROM procsis_schema_marker WHERE id = 1"))
+            conn.execute(text("INSERT INTO procsis_schema_marker (id, firma) VALUES (1, :f)"), {"f": firma})
+        _alog("base lista: arranques siguientes serán rápidos")
+    except Exception as e:
+        _alog("marcar base lista: %r" % (e,))
+
+
+def _crear_gerente_inicial(forzar=False):
+    """Crea el Gerente inicial (Sebastian / sebas123, clave temporal) si no existe ningún Gerente/Superadmin.
+    forzar=True (solo desde /estado-base con token) lo crea o le restablece la clave."""
+    try:
+        sebas = Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first()
         hay_gerente = Usuario.query.filter(Usuario.rol.in_(["Gerente", "Superadmin"])).first() is not None
-        if not hay_gerente and not Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first():
-            _seb = Usuario(usuario="Sebastian", password=crear_hash(os.environ.get("GERENTE_INICIAL_CLAVE") or "sebas123"),
-                           rol="Gerente", institucion_id=None, nombre_completo="Sebastian", password_temporal=True)
-            if hasattr(_seb, "activo"):
-                _seb.activo = True
-            db.session.add(_seb)
+        clave = os.environ.get("GERENTE_INICIAL_CLAVE") or "sebas123"
+        if sebas is None and (forzar or not hay_gerente):
+            sebas = Usuario(usuario="Sebastian", password=crear_hash(clave), rol="Gerente", institucion_id=None,
+                            nombre_completo="Sebastian", password_temporal=True)
+            if hasattr(sebas, "activo"):
+                sebas.activo = True
+            db.session.add(sebas)
             db.session.commit()
-            print("Creado Gerente inicial: Sebastian", flush=True)
-    except Exception as _e2:
-        print("arranque gerente inicial:", repr(_e2)[:300], flush=True)
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
+            _alog("Creado Gerente inicial: Sebastian")
+        elif sebas is not None and forzar:
+            sebas.password = crear_hash(clave)
+            sebas.password_temporal = True
+            sebas.rol = "Gerente"
+            sebas.institucion_id = None
+            if hasattr(sebas, "activo"):
+                sebas.activo = True
+            db.session.commit()
+            _alog("Clave de Sebastian restablecida")
+    except Exception as e:
+        _alog("gerente inicial: %r" % (e,))
+        _rollback_seguro()
+
+
+@app.route("/estado-base")
+def estado_base():
+    """Diagnóstico/arreglo de la base (solo con SETUP_TOKEN). /estado-base?k=TOKEN avanza la creación de tablas y
+    muestra el estado; agregue &sebastian=1 para crear o restablecer a Sebastian (clave sebas123)."""
+    import hmac as _hm, json as _json
+    tok = os.environ.get("SETUP_TOKEN", "")
+    if not tok or not _hm.compare_digest(request.args.get("k", ""), tok):
+        return "No encontrado", 404
+    info = {"motor": db.engine.dialect.name}
+    try:
+        from urllib.parse import urlparse as _up
+        info["servidor_bd"] = (_up(DATABASE_URL).hostname or "")[:60]
+    except Exception:
+        pass
+    try:
+        info["tablas_pendientes_tras_este_intento"] = _crear_tablas_por_lotes(presupuesto=8.0)
+        if request.args.get("sebastian") == "1":
+            _crear_gerente_inicial(forzar=True)
+        info["usuarios_total"] = Usuario.query.count()
+        info["gerentes"] = [u.usuario for u in Usuario.query.filter(Usuario.rol.in_(["Gerente", "Superadmin"])).all()]
+        info["sebastian_existe"] = Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first() is not None
+        info["marcador_arranque_rapido"] = _schema_ya_listo()
+    except Exception as e:
+        info["error"] = repr(e)[:300]
+        _rollback_seguro()
+    info["registro"] = list(_ARRANQUE_LOG)
+    return Response(_json.dumps(info, ensure_ascii=False, indent=2), mimetype="application/json")
 
 
 def inicializar_bd():
-    try:
-        _ensure_scale_indexes()
-    except Exception as _sx:
-        print("scale idx:", _sx)
-    
     global _migracion_bd_lista
     # CRITICAL: no repetir create_all/migraciones en cada request (WORKER TIMEOUT en Railway)
     if getattr(inicializar_bd, "_done", False):
         return
     # Marcar YA para que si el worker se reinicia a mitad, el siguiente request no reintente el bloque pesado
     inicializar_bd._done = True
-    _arranque_base_vacia()
+    _forzar_mig = (os.environ.get("RUN_DB_MIGRATE") or "").strip() in ("1", "true", "TRUE", "yes")
+    if not _forzar_mig and _schema_ya_listo():
+        return   # arranque rápido: la base ya está preparada para este código
+    _pendientes = _crear_tablas_por_lotes(presupuesto=5.0)
+    _crear_gerente_inicial()
+    try:
+        _ensure_scale_indexes()
+    except Exception as _sx:
+        print("scale idx:", _sx)
     try:
         _acc_ensure()  # ID de acceso + dispositivos autorizados
     except Exception as _ea:
@@ -6475,6 +6592,8 @@ def inicializar_bd():
             except Exception as _mc:
                 print("migrar_columnas:", _mc)
     if (os.environ.get("RUN_DB_MIGRATE") or "").strip() not in ("1", "true", "TRUE", "yes"):
+        if _pendientes == 0:
+            _schema_marcar()
         return  # resto de migraciones/indices/purga solo con RUN_DB_MIGRATE=1
     # Garantizar columnas nuevas (periodos y otras) — Postgres + SQLite
     try:
