@@ -6401,6 +6401,40 @@ def _autoreparar_columnas_faltantes():
         pass
 
 
+def _arranque_base_vacia():
+    """Corre en cada arranque, con o sin RUN_DB_MIGRATE:
+    1) si la base es nueva y no tiene la tabla de usuarios, crea todas las tablas;
+    2) si no existe NINGÚN Gerente/Superadmin, crea el Gerente inicial (Sebastian / sebas123, clave temporal).
+    Si luego Gerencia renombra o cambia a Sebastian, no se vuelve a crear (ya existe un Gerente)."""
+    try:
+        from sqlalchemy import inspect as _sa_inspect
+        if not _sa_inspect(db.engine).has_table("usuarios"):
+            print("BD nueva/vacía: creando tablas (create_all)…", flush=True)
+            db.create_all()
+    except Exception as _e1:
+        print("arranque create_all:", repr(_e1)[:300], flush=True)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        hay_gerente = Usuario.query.filter(Usuario.rol.in_(["Gerente", "Superadmin"])).first() is not None
+        if not hay_gerente and not Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first():
+            _seb = Usuario(usuario="Sebastian", password=crear_hash(os.environ.get("GERENTE_INICIAL_CLAVE") or "sebas123"),
+                           rol="Gerente", institucion_id=None, nombre_completo="Sebastian", password_temporal=True)
+            if hasattr(_seb, "activo"):
+                _seb.activo = True
+            db.session.add(_seb)
+            db.session.commit()
+            print("Creado Gerente inicial: Sebastian", flush=True)
+    except Exception as _e2:
+        print("arranque gerente inicial:", repr(_e2)[:300], flush=True)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
 def inicializar_bd():
     try:
         _ensure_scale_indexes()
@@ -6413,6 +6447,7 @@ def inicializar_bd():
         return
     # Marcar YA para que si el worker se reinicia a mitad, el siguiente request no reintente el bloque pesado
     inicializar_bd._done = True
+    _arranque_base_vacia()
     try:
         _acc_ensure()  # ID de acceso + dispositivos autorizados
     except Exception as _ea:
@@ -6753,16 +6788,6 @@ def inicializar_bd():
                     db.session.commit()
         _ensure_user("gerencia", "Gerencia2026*", "Gerente")
         _ensure_user("ventas", "Ventas2026*", "Comercial")
-        # Gerente inicial TEMPORAL (Sebastian). Se crea solo si no existe; la clave se puede fijar con la
-        # variable GERENTE_INICIAL_CLAVE. Queda como clave temporal: el sistema pide cambiarla al ingresar.
-        if not Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first():
-            _seb = Usuario(usuario="Sebastian", password=crear_hash(os.environ.get("GERENTE_INICIAL_CLAVE") or "sebas123"),
-                           rol="Gerente", institucion_id=None, nombre_completo="Sebastian", password_temporal=True)
-            if hasattr(_seb, "activo"):
-                _seb.activo = True
-            db.session.add(_seb)
-            db.session.commit()
-            print("Creado usuario interno: Sebastian (Gerente)")
         if not Usuario.query.filter_by(usuario="soporte").first():
             _ensure_user("soporte", "Soporte2026*", "Soporte")
         # Rol Cobranza: NO se crea solo. Gerencia lo crea en /gerencia/usuarios.
