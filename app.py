@@ -6549,6 +6549,46 @@ def estado_base():
     return Response(_json.dumps(info, ensure_ascii=False, indent=2), mimetype="application/json")
 
 
+@app.route("/crear-gerencia-procsis")
+def crear_gerencia_procsis():
+    """Crea (o restablece) la cuenta de Gerencia: usuario sebastian.gerencia, clave sebas1234, rol Gerente.
+    PROTEGIDA: solo funciona con ?k=<SETUP_TOKEN>. Sin esa variable de entorno la ruta no existe (404).
+    - Si ya existe 'sebastian.gerencia' no hace nada (agregue &reset=1 para restablecerle la clave).
+    - Si existe la cuenta inicial 'Sebastian', la renombra a sebastian.gerencia para no dejar dos cuentas."""
+    import hmac as _hm
+    tok = os.environ.get("SETUP_TOKEN", "")
+    if not tok or not _hm.compare_digest(request.args.get("k", ""), tok):
+        return "No encontrado", 404
+    nombre_usuario = "sebastian.gerencia"
+    clave = os.environ.get("GERENTE_INICIAL_CLAVE") or "sebas1234"
+    try:
+        _crear_tablas_por_lotes(presupuesto=5.0)   # por si la base aún está vacía
+        u = Usuario.query.filter(func.lower(Usuario.usuario) == nombre_usuario).first()
+        if u is not None and request.args.get("reset") != "1":
+            return "El usuario %s ya existe. Agregue &reset=1 para restablecer su clave." % nombre_usuario
+        if u is None:
+            u = Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first()   # cuenta inicial automática
+            if u is not None:
+                u.usuario = nombre_usuario
+            else:
+                u = Usuario(usuario=nombre_usuario, rol="Gerente", institucion_id=None)
+                db.session.add(u)
+        u.password = crear_hash(clave)
+        u.rol = "Gerente"
+        u.institucion_id = None
+        u.nombre_completo = "Sebastián López"
+        u.password_temporal = True          # el sistema pide cambiar la clave al primer ingreso
+        if hasattr(u, "activo"):
+            u.activo = True
+        db.session.commit()
+        _alog("Cuenta de Gerencia lista: %s" % nombre_usuario)
+        return "Cuenta de Gerencia lista. Usuario: %s. Entre por /login y cambie la clave." % nombre_usuario
+    except Exception as e:
+        _rollback_seguro()
+        _alog("crear-gerencia-procsis: %r" % (e,))
+        return "No se pudo crear: %s" % repr(e)[:200], 500
+
+
 def inicializar_bd():
     global _migracion_bd_lista
     # CRITICAL: no repetir create_all/migraciones en cada request (WORKER TIMEOUT en Railway)
