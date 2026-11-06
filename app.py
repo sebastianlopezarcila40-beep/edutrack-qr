@@ -6753,6 +6753,16 @@ def inicializar_bd():
                     db.session.commit()
         _ensure_user("gerencia", "Gerencia2026*", "Gerente")
         _ensure_user("ventas", "Ventas2026*", "Comercial")
+        # Gerente inicial TEMPORAL (Sebastian). Se crea solo si no existe; la clave se puede fijar con la
+        # variable GERENTE_INICIAL_CLAVE. Queda como clave temporal: el sistema pide cambiarla al ingresar.
+        if not Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first():
+            _seb = Usuario(usuario="Sebastian", password=crear_hash(os.environ.get("GERENTE_INICIAL_CLAVE") or "sebas123"),
+                           rol="Gerente", institucion_id=None, nombre_completo="Sebastian", password_temporal=True)
+            if hasattr(_seb, "activo"):
+                _seb.activo = True
+            db.session.add(_seb)
+            db.session.commit()
+            print("Creado usuario interno: Sebastian (Gerente)")
         if not Usuario.query.filter_by(usuario="soporte").first():
             _ensure_user("soporte", "Soporte2026*", "Soporte")
         # Rol Cobranza: NO se crea solo. Gerencia lo crea en /gerencia/usuarios.
@@ -37283,6 +37293,21 @@ def _facturacion_auto_test_activa():
         return False
 
 
+# Gerencia solo crea estos dos usuarios y una sola vez cada uno; el resto lo gestionan Talento Humano (solicitud) y TI (creación).
+ROLES_UNICOS_GERENCIA = {"Talento": "Recursos Humanos", "Tecnologia": "Tecnología (TI)"}
+
+
+def _opciones_roles_unicos_gerencia():
+    out = ""
+    for rol, etiqueta in ROLES_UNICOS_GERENCIA.items():
+        try:
+            existe = Usuario.query.filter(Usuario.rol == rol).first() is not None
+        except Exception:
+            existe = False
+        out += '<option value="%s"%s>%s%s</option>' % (rol, " disabled" if existe else "", etiqueta, " (ya creado)" if existe else "")
+    return out
+
+
 @app.route("/gerencia/usuarios", methods=["GET", "POST"])
 def gerencia_usuarios():
     """Gerencia: crear, renombrar y gestionar roles de Ventas / Soporte / Gerencia."""
@@ -37295,9 +37320,11 @@ def gerencia_usuarios():
         if accion == "crear":
             usuario = (request.form.get("usuario") or "").strip().lower()
             password = (request.form.get("password") or "").strip()
-            rol = (request.form.get("rol") or "Comercial").strip()
-            if rol not in ("Comercial", "Soporte", "Gerente", "Cobranza", "Contabilidad", "Proveedor", "Soluciones", *ROLES_AREAS, "Superadmin", "Desarrollador"):
-                error = "Rol no permitido."
+            rol = (request.form.get("rol") or "").strip()
+            if rol not in ROLES_UNICOS_GERENCIA:
+                error = "Gerencia solo crea el usuario de Recursos Humanos (Talento) y el de Tecnología (TI). Los demás usuarios los solicita Recursos Humanos y los crea TI."
+            elif Usuario.query.filter(Usuario.rol == rol).first():
+                error = "Ya existe el usuario de %s. Gerencia solo puede crearlo una vez; desde ahí se gestionan los demás usuarios." % ROLES_UNICOS_GERENCIA[rol]
             elif not usuario or len(password) < 8:
                 error = "Usuario obligatorio y contraseña de al menos 8 caracteres."
             elif Usuario.query.filter_by(usuario=usuario).first():
@@ -37487,7 +37514,7 @@ def gerencia_usuarios():
   {"<p style='color:#b91c1c;background:#fef2f2;padding:10px;border-radius:8px'>"+error+"</p>" if error else ""}
   <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:20px;box-shadow:0 4px 12px rgba(15,23,42,.04)">
     <input type="hidden" name="accion" value="crear">
-    <h3 style="margin:0 0 12px;color:#0B2D57">Crear usuario de la empresa</h3><p style="margin:0 0 12px;font-size:13px;color:#64748b">Soporte, Ventas, Cobranza, Gerente, Superadmin o Desarrollador. Portales: /soporte-login · /ventas-login · /cobranza-login · /gerencia-login · /dev-console-login</p>
+    <h3 style="margin:0 0 12px;color:#0B2D57">Crear usuario de la empresa</h3><p style="margin:0 0 12px;font-size:13px;color:#64748b">Gerencia crea <b>una sola vez</b> el usuario de <b>Recursos Humanos</b> y el de <b>Tecnología (TI)</b>. Después, Recursos Humanos solicita cada ingreso y TI crea las credenciales.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div><label style="font-size:13px;font-weight:600">Usuario (login)</label>
       <input name="usuario" required style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
@@ -37498,16 +37525,7 @@ def gerencia_usuarios():
     </div>
     <label style="font-size:13px;font-weight:600">Rol</label>
     <select name="rol" style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px">
-      <option value="Comercial">Comercial (Ventas)</option>
-      <option value="Soporte">Soporte técnico</option>
-      <option value="Cobranza">Cobranza / Facturación</option>
-      <option value="Contabilidad">Contabilidad</option>
-      <option value="Soluciones">Soluciones Procsis (atención al cliente)</option>
-      {_opciones_areas_rol()}
-      <option value="Proveedor">Proveedor de carnés</option>
-      <option value="Gerente">Gerente</option>
-      <option value="Superadmin">Superadmin</option>
-      <option value="Desarrollador">Desarrollador</option>
+      {_opciones_roles_unicos_gerencia()}
     </select>
     <button type="submit" style="margin-top:10px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;cursor:pointer">Crear usuario</button>
   </form>
@@ -98543,6 +98561,16 @@ def contabilidad_presupuestos():
     return _cta_page("Presupuestos", "/contabilidad/presupuestos", filtro + tarjetas + form + nota + tabla,
                      "Presupuesto anual por categoría y subcategoría · régimen colombiano", msg=msg, err=err)
 
+
+
+# --- Acceso del equipo (validar/solicitar usuarios con foto de cara) ---
+try:
+    from acceso_equipo import registrar_acceso_equipo
+    registrar_acceso_equipo(app, db, Usuario, crear_hash,
+                            registrar_auditoria=registrar_auditoria,
+                            rate_limit=_rate_limit, areas=AREAS_PROCSIS)
+except Exception as _e_ae:
+    print("acceso_equipo no cargó:", repr(_e_ae), flush=True)
 
 
 if __name__ == "__main__":
