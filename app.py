@@ -4983,6 +4983,68 @@ def _wrap_staff_layout(title, body, path):
     )
 
 
+
+_TEMA_TIGO_GLASS_CSS = """<style id="tema-glass-corporativo">
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Paleta tomada de la referencia: azul #001EB3 / #0119B9 y verde #01F501 */
+:root{
+--tg-blue:#001EB3;--tg-blue-2:#0119B9;--tg-blue-deep:#000F66;--tg-green:#01F501;--tg-green-ink:#07A83A;
+--tg-glass:rgba(255,255,255,.62);--tg-glass-strong:rgba(255,255,255,.80);--tg-glass-line:rgba(255,255,255,.75);
+--tg-shadow:0 12px 40px rgba(0,30,179,.12),0 2px 8px rgba(0,15,102,.06);
+--azul:#001EB3;--azul2:#0119B9;--primary-color:#001EB3;--login-prim:#001EB3;--verde:#07A83A;
+--font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Inter","Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;
+}
+/* Tipografía Apple (SF Pro en Mac/iPhone; Inter como equivalente en Windows/Android) */
+body,body *:not(code):not(pre):not(kbd):not(samp):not([style*="monospace"]):not([style*="Georgia"]){font-family:var(--font-ui)!important;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+/* Fondo con luz azul y verde para que el cristal tenga qué difuminar */
+html,body{background:#eef2fc!important}
+body{background:radial-gradient(1000px 520px at 6% -8%,rgba(0,30,179,.16),transparent 62%),radial-gradient(760px 460px at 100% 0%,rgba(1,245,1,.12),transparent 60%),linear-gradient(180deg,#f5f8ff 0%,#eaf0fb 100%)!important;background-attachment:fixed!important}
+.main-content-container,.bento-workspace-apple{background:transparent!important}
+/* Superficies de cristal */
+.card,.role-panel,.role-card,.table-card,.modern-card,.summary-card,.filter-bar,.card-bento-apple,.hq-tab-panel,.pc-card,.student-form-card,.student-list-card{
+background:var(--tg-glass)!important;-webkit-backdrop-filter:blur(22px) saturate(170%);backdrop-filter:blur(22px) saturate(170%);
+border:1px solid var(--tg-glass-line)!important;box-shadow:var(--tg-shadow),inset 0 1px 0 rgba(255,255,255,.85)!important;border-radius:20px}
+.role-hero{background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(226,233,255,.62))!important;-webkit-backdrop-filter:blur(24px) saturate(170%);backdrop-filter:blur(24px) saturate(170%);border:1px solid var(--tg-glass-line)!important;box-shadow:var(--tg-shadow),inset 0 1px 0 rgba(255,255,255,.9)!important}
+.role-hero h1{color:var(--tg-blue-deep)!important}
+/* Menú lateral */
+.sidebar-apple-glass{background:linear-gradient(180deg,rgba(0,30,179,.90) 0%,rgba(1,25,185,.86) 55%,rgba(0,15,102,.93) 100%)!important;-webkit-backdrop-filter:blur(28px) saturate(180%);backdrop-filter:blur(28px) saturate(180%);border-right:1px solid rgba(255,255,255,.22)!important;box-shadow:10px 0 40px rgba(0,30,179,.22),inset -1px 0 0 rgba(255,255,255,.08)}
+.brand-text-apple{letter-spacing:.14em;font-weight:800}
+.nav-item-apple:hover,.nav-group>summary:hover{background:rgba(255,255,255,.14)!important}
+.nav-item-apple.is-active{background:rgba(255,255,255,.20)!important;box-shadow:inset 3px 0 0 var(--tg-green),0 4px 16px rgba(0,15,102,.25);color:#fff!important}
+.nav-group .cnt{background:var(--tg-green)!important;color:#00164d!important;font-weight:700}
+.nav-search input{background:rgba(255,255,255,.14)!important;border-color:rgba(255,255,255,.28)!important}
+/* Barra superior */
+.navbar-top-apple{background:rgba(255,255,255,.66)!important;-webkit-backdrop-filter:blur(26px) saturate(180%);backdrop-filter:blur(26px) saturate(180%);border-bottom:1px solid rgba(0,30,179,.10)!important}
+.user-profile-circle{background:var(--tg-blue)!important}
+.badge-env-prod{background:rgba(1,245,1,.16)!important;color:#056b25!important;border:1px solid rgba(1,245,1,.45)!important}
+.nav-api-ping.ok{color:#056b25!important}
+/* Botones */
+.btn:not(.btn-red):not(.btn-green),button.btn,button[type=submit]:not(.btn-red):not(.btn-green){background:var(--tg-blue)!important;color:#fff!important;box-shadow:0 6px 18px rgba(0,30,179,.24)}
+.btn-apple-primary,.btn-apple-capsule-primary,.btn-apple-oval,.pc-btn-w{background:var(--tg-blue)!important;color:#fff!important;box-shadow:0 6px 18px rgba(0,30,179,.28)!important}
+.btn:not(.btn-red):not(.btn-green):hover,.btn-apple-primary:hover,.btn-apple-capsule-primary:hover,.btn-apple-oval:hover,.pc-btn-w:hover{background:var(--tg-blue-2)!important}
+.btn-green{background:var(--tg-green-ink)!important}
+/* Encabezado de Gerencia (HQ) */
+.hq-corp{background:linear-gradient(135deg,var(--tg-blue-deep) 0%,var(--tg-blue) 48%,var(--tg-blue-2) 100%)!important;border-bottom:3px solid var(--tg-green)!important;box-shadow:0 18px 50px rgba(0,30,179,.28)}
+.hq-welcome .hello span{color:var(--tg-green)!important}
+.hq-logos img{background:rgba(255,255,255,.94)!important}
+/* Ingreso */
+.center,.login-shell{background:radial-gradient(circle at 18% 18%,rgba(1,245,1,.20),transparent 30%),radial-gradient(circle at 82% 12%,rgba(0,30,179,.55),transparent 34%),linear-gradient(135deg,#000F66 0%,#001EB3 52%,#0119B9 100%)!important}
+/* Sitio público */
+.navbar-apple-glass{background:rgba(255,255,255,.66)!important;-webkit-backdrop-filter:blur(26px) saturate(180%)!important;backdrop-filter:blur(26px) saturate(180%)!important;border-bottom:1px solid rgba(0,30,179,.10)!important}
+.link-apple:hover,.link-apple.on,.link-apple.is-hot,.dropdown-link:hover,.btn-apple-ghost:hover{color:var(--tg-blue)!important;border-color:var(--tg-blue)!important}
+.apple-dropdown-menu{background:rgba(255,255,255,.82)!important;-webkit-backdrop-filter:blur(34px) saturate(180%)!important;backdrop-filter:blur(34px) saturate(180%)!important}
+.pc-hero{background:radial-gradient(700px 360px at 90% 0%,rgba(1,245,1,.14),transparent 60%),radial-gradient(900px 480px at 0% 0%,rgba(0,30,179,.14),transparent 62%),linear-gradient(135deg,#f6f8ff 0%,#e9eefc 100%)}
+.pc-hero h1,.pc-sec h2,.pc-card h3,.pc-stat b{color:var(--tg-blue)!important}
+.pc-hero .tag{background:var(--tg-glass-strong)!important;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.pc-hero .tag svg{stroke:var(--tg-blue)!important}
+.pc-btn-g{background:var(--tg-blue-deep)!important}
+.pc-card .ico{background:rgba(0,30,179,.08)!important;color:var(--tg-blue)!important}
+.pc-cta{background:linear-gradient(145deg,var(--tg-blue-deep) 0%,var(--tg-blue) 55%,var(--tg-blue-2) 100%)!important;box-shadow:0 18px 48px rgba(0,30,179,.30)!important}
+.pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{background:var(--tg-green)!important;color:#00164d!important}
+.pc-cta a:first-of-type:hover,.pc-cta a.pc-cta-primary:hover{background:#3dff3d!important}
+.pc-foot a{color:var(--tg-green)!important}
+</style>"""
+
 def page(title, body):
     body = body or ""
     try:
@@ -5130,7 +5192,7 @@ window.addEventListener('pageshow', function (event) {
         _n_guard = _n_guard_js()  # aviso antes de cerrar pestaña / sesión por expirar (todos los paneles)
     except Exception:
         _n_guard = ""
-    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0B2D57"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{html_anuncio_global()}{_bfcache_fix}{_n_guard}</body></html>"""
+    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#001EB3"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{_TEMA_TIGO_GLASS_CSS}{html_anuncio_global()}{_bfcache_fix}{_n_guard}</body></html>"""
 
 
 
@@ -8011,15 +8073,29 @@ def media_logo_corporativo():
         if _os.path.isfile(fs):
             from flask import send_file
             return send_file(fs)
-    # SVG PROCSIS por defecto (texto solo si no hay logo subido)
+    # Respaldo: archivo del proyecto (static/img/logo-procsis.*). Nunca el logo del producto EduTrack.
+    try:
+        import os as _os2
+        from flask import send_file as _sf2
+        _base2 = _os2.path.dirname(_os2.path.abspath(__file__))
+        for _nm in ("logo-procsis.svg", "logo-procsis.png", "logo-procsis.webp", "logo-procsis.jpg", "logo-procsis.jpeg"):
+            _fs2 = _os2.path.join(_base2, "static", "img", _nm)
+            if _os2.path.isfile(_fs2):
+                return _sf2(_fs2)
+    except Exception:
+        pass
+    # Marcador PROCSIS (solo hasta que Gerencia suba el logo en Datos de la empresa)
     svg = (
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80'>"
-        "<rect width='240' height='80' rx='8' fill='#0B2D57'/>"
-        "<text x='120' y='48' text-anchor='middle' fill='white' "
-        "font-family='Arial,sans-serif' font-size='22' font-weight='bold'>PROCSIS</text>"
+        "<svg xmlns='http://www.w3.org/2000/svg' width='240' height='80' viewBox='0 0 240 80'>"
+        "<defs><linearGradient id='pg' x1='0' y1='0' x2='1' y2='1'>"
+        "<stop offset='0' stop-color='#001EB3'/><stop offset='1' stop-color='#0119B9'/></linearGradient></defs>"
+        "<rect width='240' height='80' rx='16' fill='url(#pg)'/>"
+        "<rect x='24' y='62' width='192' height='4' rx='2' fill='#01F501'/>"
+        "<text x='120' y='45' text-anchor='middle' fill='white' "
+        "font-family='-apple-system,Helvetica,Arial,sans-serif' font-size='24' font-weight='700' letter-spacing='4'>PROCSIS</text>"
         "</svg>"
     )
-    return Response(svg, mimetype="image/svg+xml")
+    return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
 def logo_plataforma():
@@ -12287,8 +12363,15 @@ def _html_lideres_login():
 
 
 
+_WEB_MENU_SEED_OK = {"ok": False}
+
+
 def _seed_web_menu_defaults():
-    """Crea items por defecto del mega-menú si la tabla está vacía."""
+    """Crea items por defecto del mega-menú si la tabla está vacía.
+    Idempotente: se ejecuta una sola vez por proceso, inserta cada ítem solo si no existe y limpia duplicados
+    (en Vercel varias funciones arrancaban a la vez sobre la base vacía y cada una insertaba la lista completa)."""
+    if _WEB_MENU_SEED_OK["ok"]:
+        return
     try:
         db.session.execute(text(
             "CREATE TABLE IF NOT EXISTS web_menu_items ("
@@ -12314,8 +12397,21 @@ def _seed_web_menu_defaults():
                 db.session.rollback()
             except Exception:
                 pass
+        try:
+            # Limpia duplicados exactos ya existentes (conserva el más antiguo de cada grupo)
+            db.session.execute(text(
+                "DELETE FROM web_menu_items WHERE id NOT IN ("
+                "SELECT MIN(id) FROM web_menu_items GROUP BY seccion, etiqueta, url)"
+            ))
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
         n = db.session.execute(text("SELECT COUNT(*) FROM web_menu_items")).scalar() or 0
         if int(n) > 0:
+            _WEB_MENU_SEED_OK["ok"] = True
             try:
                 # "Sedes y Puntos de Atencion" ahora vive en la barra principal, no dentro de Ayuda.
                 db.session.execute(text("DELETE FROM web_menu_items WHERE url='/puntos-atencion'"))
@@ -12350,9 +12446,12 @@ def _seed_web_menu_defaults():
         ]
         for sec, et, url, ord_ in defaults:
             db.session.execute(text(
-                "INSERT INTO web_menu_items (seccion, etiqueta, url, orden, activo) VALUES (:s,:e,:u,:o,TRUE)"
+                "INSERT INTO web_menu_items (seccion, etiqueta, url, orden, activo) "
+                "SELECT :s,:e,:u,:o,TRUE WHERE NOT EXISTS ("
+                "SELECT 1 FROM web_menu_items WHERE seccion=:s AND etiqueta=:e AND url=:u)"
             ), {"s": sec, "e": et, "u": url, "o": ord_})
-        db.session.commit()
+            db.session.commit()   # un ítem por transacción: si otra función inserta a la vez, no se pisan
+        _WEB_MENU_SEED_OK["ok"] = True
     except Exception:
         try:
             db.session.rollback()
@@ -12367,10 +12466,14 @@ def _menu_links_html(seccion):
             "SELECT etiqueta, url FROM web_menu_items WHERE seccion=:s AND activo=TRUE ORDER BY orden ASC, id ASC"
         ), {"s": seccion}).fetchall()
         if rows:
-            return "".join(
-                '<a class="dropdown-link" href="%s">%s</a>' % (_esc(r[1] or "#"), _esc(r[0] or ""))
-                for r in rows
-            )
+            _vistos, _out = set(), []
+            for r in rows:   # nunca mostrar dos veces el mismo enlace
+                _k = ((r[0] or "").strip().lower(), (r[1] or "#").strip())
+                if _k in _vistos:
+                    continue
+                _vistos.add(_k)
+                _out.append('<a class="dropdown-link" href="%s">%s</a>' % (_esc(r[1] or "#"), _esc(r[0] or "")))
+            return "".join(_out)
     except Exception:
         try:
             db.session.rollback()
