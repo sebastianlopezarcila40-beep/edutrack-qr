@@ -122,7 +122,7 @@ AREAS_PROCSIS = {
                       ("Posicionamiento", "Indicadores de alcance y reconocimiento.")],
     },
     "Juridica": {
-        "slug": "juridica", "titulo": "Jurídica y Cumplimiento", "icono": "⚖️", "color": "#1d4ed8",
+        "slug": "juridica", "titulo": "Jurídica y Cumplimiento", "icono": "⚖️", "color": "#0020C2",
         "desc": "Contratos, protección de datos personales, propiedad intelectual, políticas, cumplimiento normativo y revisión legal. Puede contratarse externamente.",
         "funciones": [("Contratos", "Revisión y control de contratos con clientes y proveedores."),
                       ("Protección de datos", "Habeas Data, consentimientos y reclamos."),
@@ -312,8 +312,8 @@ def serve_static_img(fname):
         label = "EduTrack"
     svg = (
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80'>"
-        "<defs><linearGradient id='pg' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#001EB3'/><stop offset='1' stop-color='#0119B9'/></linearGradient></defs>"
-        "<rect width='240' height='80' rx='16' fill='url(#pg)'/><rect x='24' y='62' width='192' height='4' rx='2' fill='#01F501'/>"
+        "<defs><linearGradient id='pg' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#0020C2'/><stop offset='1' stop-color='#0018A8'/></linearGradient></defs>"
+        "<rect width='240' height='80' rx='16' fill='url(#pg)'/><rect x='24' y='62' width='192' height='4' rx='2' fill='#00FF66'/>"
         "<text x='120' y='45' text-anchor='middle' fill='white' font-family='-apple-system,Helvetica,Arial,sans-serif' font-size='24' font-weight='700' letter-spacing='3'>" + label + "</text></svg>"
     )
     return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
@@ -1301,7 +1301,7 @@ LOGO_SVG_FALLBACK = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/
 CSS = """
 <style>
 :root{
---azul:#0B2D57;
+--azul:#0020C2;
 --azul2:#1e3a8a;
 --azul3:#f1f5f9;
 --rojo:#dc2626;
@@ -1318,7 +1318,7 @@ input,select,textarea{width:100%;padding:13px;border:1px solid #d1d5db;border-ra
 button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;padding:13px 17px;font-weight:800;text-decoration:none;display:inline-block;cursor:pointer}
 .btn-red{background:var(--rojo)!important}
 .btn-green{background:var(--verde)!important}
-.center{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:linear-gradient(135deg,#061b3f,#0b63ce)}
+.center{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:linear-gradient(135deg,#061b3f,#0020C2)}
 .card{background:white;border-radius:24px;padding:28px;box-shadow:var(--s)}
 .login-card{width:100%;max-width:440px}
 .logo{width:92px;height:92px;object-fit:contain;background:white;border-radius:20px;padding:8px}
@@ -1346,7 +1346,7 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 .tool-btn{width:23px;height:23px;border:1px solid #9d9d9d;background:#e5e5e5;border-radius:2px;text-align:center;line-height:21px;font-size:12px;color:#333}
 .record-box{display:inline-flex;align-items:center;gap:5px}.record-box input{width:55px;padding:4px;border-radius:0;margin:0;height:24px;font-size:12px;background:#e6e6e6}
 .fieldset{border:1px solid #eee;margin:12px 18px 18px;padding:14px 18px 16px;position:relative}
-.fieldset legend{font-size:12px;padding:0 8px;color:#111}.classic-grid{display:grid;grid-template-columns:120px 1fr 130px 1fr;gap:7px 10px;align-items:center}.classic-grid label{font-size:12px;text-align:right}.classic-grid input,.classic-grid select,.classic-grid textarea{border:1px solid #aaa;border-radius:0;background:#f4f4f4;height:23px;padding:3px 6px;margin:0;font-size:12px}.classic-grid textarea{height:45px;resize:vertical}.span3{grid-column:2/5}.span-all{grid-column:1/5}.classic-actions{padding:0 18px 15px;display:flex;gap:8px;flex-wrap:wrap}.classic-btn{background:#d8d8d8;color:#111;border:1px solid #777;border-radius:3px;padding:6px 12px;font-size:12px;font-weight:bold;text-decoration:none;display:inline-block}.classic-btn.primary{background:#0b63ce;color:white}.classic-btn.red{background:#cf1717;color:white}.classic-btn.green{background:#16a34a;color:white}.classic-btn.yellow{background:#ffe28a;color:#111}.classic-info{background:#eeeeee;border:1px solid #aaa;padding:8px;font-size:12px}
+.fieldset legend{font-size:12px;padding:0 8px;color:#111}.classic-grid{display:grid;grid-template-columns:120px 1fr 130px 1fr;gap:7px 10px;align-items:center}.classic-grid label{font-size:12px;text-align:right}.classic-grid input,.classic-grid select,.classic-grid textarea{border:1px solid #aaa;border-radius:0;background:#f4f4f4;height:23px;padding:3px 6px;margin:0;font-size:12px}.classic-grid textarea{height:45px;resize:vertical}.span3{grid-column:2/5}.span-all{grid-column:1/5}.classic-actions{padding:0 18px 15px;display:flex;gap:8px;flex-wrap:wrap}.classic-btn{background:#d8d8d8;color:#111;border:1px solid #777;border-radius:3px;padding:6px 12px;font-size:12px;font-weight:bold;text-decoration:none;display:inline-block}.classic-btn.primary{background:#0020C2;color:white}.classic-btn.red{background:#cf1717;color:white}.classic-btn.green{background:#16a34a;color:white}.classic-btn.yellow{background:#ffe28a;color:#111}.classic-info{background:#eeeeee;border:1px solid #aaa;padding:8px;font-size:12px}
 .dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.classic-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.classic-stat{border:1px solid #777;background:#eee;padding:10px;text-align:center}.classic-stat h3{font-size:28px;margin:0;color:#111}.classic-stat p{margin:3px 0 0;font-size:12px}.classic-stat.green{background:#d9f99d}.classic-stat.yellow{background:#fef08a}.classic-stat.red{background:#fecaca}.classic-stat.blue{background:#bfdbfe}
 .finance-strip{border:1px solid #333;margin:10px 0;background:#d4d4d4;font-size:14px}.finance-row{display:grid;grid-template-columns:1.7fr 1fr;border-bottom:1px solid #333}.finance-row:last-child{border-bottom:0}.finance-row div{padding:5px;border-right:1px solid #333}.finance-row div:last-child{border-right:0;text-align:right;font-weight:bold}.finance-red{background:#c90000;color:white;font-weight:bold}.finance-yellow{background:#ffd21f;font-weight:bold}.finance-soft{background:#fff1a8}
 
@@ -1377,15 +1377,15 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 
 /* PANEL NUEVO POR ROLES */
 .role-layout{display:flex;flex-direction:column;min-height:100vh;background:#eef2f7}
-.role-topbar{background:#0B2D57;color:#fff;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:3px solid #c9a227}
+.role-topbar{background:#0020C2;color:#fff;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:3px solid #c9a227}
 .role-topbar .tb-left{display:flex;align-items:center;gap:14px}
 .role-topbar .tb-left img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:8px;padding:3px}
 .role-topbar .tb-user b{display:block;font-size:14px;font-weight:700;letter-spacing:.02em}
 .role-topbar .tb-user span{font-size:11px;opacity:.85;font-weight:500}
-.role-tag{display:inline-block;background:#c9a227;color:#0B2D57;border-radius:6px;padding:5px 12px;font-weight:800;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.role-tag{display:inline-block;background:#c9a227;color:#0020C2;border-radius:6px;padding:5px 12px;font-weight:800;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
 .role-icons{background:#fff;border-bottom:1px solid #d8e0ea;padding:16px 16px 12px;display:flex;flex-wrap:wrap;gap:10px 4px;justify-content:center;align-items:flex-start;box-shadow:0 1px 0 rgba(15,23,42,.04)}
 .role-icons a{width:92px;text-align:center;text-decoration:none;color:#1e293b;font-size:10.5px;font-weight:600;line-height:1.25;letter-spacing:.01em}
-.role-icons a .ic{width:48px;height:48px;margin:0 auto 7px;border-radius:12px;background:#0B2D57;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(11,45,87,.18);transition:background .15s,transform .15s}
+.role-icons a .ic{width:48px;height:48px;margin:0 auto 7px;border-radius:12px;background:#0020C2;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,32,194,.18);transition:background .15s,transform .15s}
 .role-icons a .ic svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .role-icons a:hover .ic{background:#1e4a8c;transform:translateY(-1px)}
 .role-icons.role-shortcuts,.role-icons{gap:12px 8px}
@@ -1394,11 +1394,11 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 .role-icons a.sc.is-on .ic{background:#c9a227;box-shadow:0 0 0 3px rgba(201,162,39,.35)}
 .role-icons .sc-search{flex:0 0 100%;display:flex;justify-content:center;margin-bottom:4px}
 .role-icons .sc-search input{width:min(420px,92%);padding:9px 14px;border:1px solid #cbd5e1;border-radius:999px;font-size:13px;outline:none}
-.role-icons .sc-search input:focus{border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}
+.role-icons .sc-search input:focus{border-color:#0020C2;box-shadow:0 0 0 3px rgba(0,32,194,.12)}
 .role-icons a.out .ic{background:#475569}
 .role-icons a.out:hover .ic{background:#334155}
 .role-welcome{background:#f8fafc;padding:10px 20px;border-bottom:1px solid #e2e8f0;font-size:12.5px;color:#475569;text-align:center;font-weight:500}
-.role-welcome b{color:#0B2D57}
+.role-welcome b{color:#0020C2}
 .role-main{flex:1;padding:18px 20px 32px;overflow:auto;max-width:1280px;width:100%;margin:0 auto;box-sizing:border-box}
 .role-sidebar{display:block;width:240px;position:fixed;left:0;top:0;height:100vh;max-height:100vh;overflow-y:auto!important;overflow-x:hidden;padding:18px;box-sizing:border-box;z-index:50}
 .role-hero{background:linear-gradient(135deg,#ffffff,#eff6ff);border-radius:28px;padding:26px;box-shadow:var(--s);display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:20px;border:1px solid #dbeafe}
@@ -1413,7 +1413,7 @@ button,.btn{background:var(--azul);color:white;border:0;border-radius:12px;paddi
 /* HISTORIAL DE NOVEDADES Y CONVIVENCIA */
 .conv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:18px}
 .conv-card{background:white;border-radius:24px;padding:22px;box-shadow:var(--s);border-left:7px solid #2563eb}
-.conv-card.red{border-left-color:#dc2626}.conv-card.orange{border-left-color:#f59e0b}.conv-card.green{border-left-color:#16a34a}.conv-card h2{margin:0;color:#0f172a}.conv-card p{color:#475569;font-weight:700}.novedad-badge{display:inline-block;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900}.badge-tarde{background:#fef3c7;color:#92400e}.badge-excusa{background:#dbeafe;color:#1e3a8a}.badge-salida{background:#dcfce7;color:#14532d}.badge-citacion{background:#ede9fe;color:#5b21b6}.citation-paper{background:white;border-radius:18px;padding:28px;box-shadow:var(--s);max-width:900px;margin:auto}.citation-head{display:grid;grid-template-columns:90px 1fr;gap:16px;align-items:center;border-bottom:2px solid #0b2d57;padding-bottom:12px;margin-bottom:18px}.citation-head img{width:80px;height:80px;object-fit:contain}.firma-linea{margin-top:36px;border-top:1px solid #111;width:260px;padding-top:6px;font-weight:800}.field-help{font-size:12px;color:#64748b;margin-top:-4px}
+.conv-card.red{border-left-color:#dc2626}.conv-card.orange{border-left-color:#f59e0b}.conv-card.green{border-left-color:#16a34a}.conv-card h2{margin:0;color:#0f172a}.conv-card p{color:#475569;font-weight:700}.novedad-badge{display:inline-block;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900}.badge-tarde{background:#fef3c7;color:#92400e}.badge-excusa{background:#dbeafe;color:#1e3a8a}.badge-salida{background:#dcfce7;color:#14532d}.badge-citacion{background:#ede9fe;color:#5b21b6}.citation-paper{background:white;border-radius:18px;padding:28px;box-shadow:var(--s);max-width:900px;margin:auto}.citation-head{display:grid;grid-template-columns:90px 1fr;gap:16px;align-items:center;border-bottom:2px solid #0020C2;padding-bottom:12px;margin-bottom:18px}.citation-head img{width:80px;height:80px;object-fit:contain}.firma-linea{margin-top:36px;border-top:1px solid #111;width:260px;padding-top:6px;font-weight:800}.field-help{font-size:12px;color:#64748b;margin-top:-4px}
 @media(max-width:900px){.conv-grid{grid-template-columns:1fr}.citation-head{grid-template-columns:1fr;text-align:center}}
 
 
@@ -1443,9 +1443,9 @@ body{
   background:
     radial-gradient(circle at 20% 20%, rgba(59,130,246,.42), transparent 30%),
     radial-gradient(circle at 78% 18%, rgba(14,165,233,.28), transparent 26%),
-    linear-gradient(135deg,#061b3f 0%,#0a3a78 46%,#0b63ce 100%) !important;
+    linear-gradient(135deg,#061b3f 0%,#0a3a78 46%,#0020C2 100%) !important;
 }
-.login-shell{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:28px 16px 40px;background:radial-gradient(circle at 20% 15%,rgba(96,165,250,.32),transparent 32%),linear-gradient(135deg,#061b3f,#0b63ce);gap:22px}
+.login-shell{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:28px 16px 40px;background:radial-gradient(circle at 20% 15%,rgba(96,165,250,.32),transparent 32%),linear-gradient(135deg,#061b3f,#0020C2);gap:22px}
 .login-liquid-wrap{width:min(1040px,96vw);display:grid;grid-template-columns:1.05fr .95fr;gap:24px;align-items:stretch;margin-top:12px}
 .login-updates{width:min(1040px,96vw);margin:0 auto}
 .login-updates-card{background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.18);border:1px solid rgba(226,232,240,.9);overflow:hidden;display:flex;flex-direction:column}
@@ -1460,24 +1460,24 @@ body{
 @media(max-width:850px){.login-updates-scroll{max-height:220px}.login-updates-gallery img{width:140px;height:90px}}
 
 .login-page{min-height:100vh;background:#f1f5f9;color:#0f172a}
-.lp-nav{background:linear-gradient(90deg,#061b3f,#0a3a78 50%,#0b63ce);color:#fff;padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,.18)}
+.lp-nav{background:linear-gradient(90deg,#061b3f,#0a3a78 50%,#0020C2);color:#fff;padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,.18)}
 .lp-nav .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.3px}
 .lp-nav .brand img{width:36px;height:36px;border-radius:10px;object-fit:contain;background:#fff;padding:3px}
 .lp-nav a{color:rgba(255,255,255,.92);text-decoration:none;font-size:13px;font-weight:600;margin:0 10px}
 .lp-nav a:hover{color:#fff;text-decoration:underline}
-.lp-hero{background:radial-gradient(circle at 18% 20%,rgba(96,165,250,.28),transparent 34%),linear-gradient(145deg,#061b3f 0%,#0a3a78 48%,#0b63ce 100%);padding:40px 20px 60px;position:relative}
+.lp-hero{background:radial-gradient(circle at 18% 20%,rgba(96,165,250,.28),transparent 34%),linear-gradient(145deg,#061b3f 0%,#0a3a78 48%,#0020C2 100%);padding:40px 20px 60px;position:relative}
 .lp-hero-inner{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:360px 1fr;gap:28px;align-items:stretch}
 .lp-login-card{background:rgba(255,255,255,.88);border-radius:22px;padding:26px 24px 20px;box-shadow:0 20px 50px rgba(0,0,0,.28);color:#0f172a;align-self:center;border:1px solid rgba(255,255,255,.55);backdrop-filter:blur(12px)}
 .lp-login-card .lp-logo-wrap{text-align:center;margin-top:-42px;margin-bottom:14px}
 .lp-login-card .lp-logo-wrap img{width:96px;height:96px;border-radius:22px;background:#fff;padding:10px;object-fit:contain;box-shadow:0 12px 28px rgba(0,0,0,.18);border:3px solid #e2e8f0}
-.lp-login-card .lp-inst{text-align:center;font-weight:800;margin-bottom:4px;font-size:15px;color:#0B2D57}
+.lp-login-card .lp-inst{text-align:center;font-weight:800;margin-bottom:4px;font-size:15px;color:#0020C2}
 .lp-login-card .lp-sede{text-align:center;font-size:12px;color:#64748b;margin-bottom:12px}
 .lp-login-card label{display:block;font-size:12px;font-weight:800;margin:8px 0 4px;color:#334155}
 .lp-login-card input,.lp-login-card select{width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:11px 12px;font-size:14px;margin-bottom:8px;box-sizing:border-box;background:#fff}
-.lp-login-card button{width:100%;margin-top:10px;background:linear-gradient(135deg,#062b63,#0b63ce);color:#fff;border:0;border-radius:14px;padding:12px;font-weight:800;font-size:14px;cursor:pointer;box-shadow:0 12px 28px rgba(11,99,206,.28)}
+.lp-login-card button{width:100%;margin-top:10px;background:linear-gradient(135deg,#062b63,#0020C2);color:#fff;border:0;border-radius:14px;padding:12px;font-weight:800;font-size:14px;cursor:pointer;box-shadow:0 12px 28px rgba(11,99,206,.28)}
 .lp-login-card button:hover{filter:brightness(1.05)}
 .lp-login-card .lp-links{text-align:center;margin-top:12px;font-size:12px}
-.lp-login-card .lp-links a{color:#0b63ce;margin:0 4px;font-weight:600}
+.lp-login-card .lp-links a{color:#0020C2;margin:0 4px;font-weight:600}
 .lp-login-card .error{background:#fee2e2;color:#991b1b;padding:8px 10px;border-radius:10px;font-size:13px;margin-bottom:8px}
 .lp-side{background:rgba(255,255,255,.12);border-radius:22px;padding:28px 28px 24px;color:#fff;border:1px solid rgba(255,255,255,.22);box-shadow:0 16px 40px rgba(0,0,0,.18);display:flex;flex-direction:column;justify-content:center;min-height:280px;backdrop-filter:blur(14px)}
 .lp-side h2{margin:0 0 10px;font-size:26px;line-height:1.2;letter-spacing:.3px}
@@ -1487,31 +1487,31 @@ body{
 .lp-wave{height:48px;background:#f1f5f9;border-radius:40px 40px 0 0;margin-top:-40px;position:relative;z-index:1}
 .lp-content{max-width:1080px;margin:-8px auto 40px;padding:0 20px;position:relative;z-index:2}
 .lp-section{background:#fff;border-radius:14px;box-shadow:0 8px 28px rgba(15,23,42,.08);padding:28px 32px;margin-bottom:20px;border:1px solid #e2e8f0}
-.lp-section h2{margin:0 0 6px;color:#0B2D57;font-size:22px;text-align:center}
+.lp-section h2{margin:0 0 6px;color:#0020C2;font-size:22px;text-align:center}
 .lp-section .lp-sub{text-align:center;color:#64748b;font-size:14px;margin-bottom:18px}
-.lp-section h3{color:#0b63ce;font-size:16px;margin:18px 0 8px}
+.lp-section h3{color:#0020C2;font-size:16px;margin:18px 0 8px}
 .lp-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}
 .lp-gallery figure{margin:0;background:#f8fafc;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0}
 .lp-gallery img{width:100%;height:160px;object-fit:cover;display:block}
 .lp-gallery figcaption{padding:8px 10px;font-size:12px;color:#475569;text-align:center}
 .lp-footer{text-align:center;padding:20px;color:#a1a1a6;font-size:12px;background:#1d1d1f}
 .lp-footer b{color:#f5f5f7}
-.lp-footer b{color:#0B2D57}
+.lp-footer b{color:#0020C2}
 .lp-portals{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
 .lp-portal-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 12px;border-radius:14px;font-weight:800;font-size:14px;text-decoration:none;text-align:center;border:1px solid transparent;transition:.15s}
-.lp-portal-btn.doc{background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;box-shadow:0 10px 24px rgba(29,78,216,.28)}
-.lp-portal-btn.sop{background:#f1f5f9;color:#0B2D57;border-color:#cbd5e1}
+.lp-portal-btn.doc{background:linear-gradient(135deg,#0020C2,#0020C2);color:#fff;box-shadow:0 10px 24px rgba(29,78,216,.28)}
+.lp-portal-btn.sop{background:#f1f5f9;color:#0020C2;border-color:#cbd5e1}
 .lp-portal-btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
-.auth-exec{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px 16px;background:radial-gradient(circle at 20% 15%,rgba(96,165,250,.25),transparent 32%),linear-gradient(145deg,#061b3f,#0a3a78 50%,#0b63ce)}
+.auth-exec{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px 16px;background:radial-gradient(circle at 20% 15%,rgba(96,165,250,.25),transparent 32%),linear-gradient(145deg,#061b3f,#0a3a78 50%,#0020C2)}
 .auth-exec-card{width:100%;max-width:440px;background:rgba(255,255,255,.92);border-radius:24px;padding:32px 28px 24px;box-shadow:0 24px 60px rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.5)}
 .auth-exec-card .auth-logo{display:block;width:100px;height:100px;object-fit:contain;margin:0 auto 14px;background:#fff;border-radius:20px;padding:10px;border:2px solid #e2e8f0;box-shadow:0 8px 20px rgba(0,0,0,.1)}
-.auth-exec-card h1{margin:0 0 8px;text-align:center;color:#0B2D57;font-size:28px;line-height:1.15}
+.auth-exec-card h1{margin:0 0 8px;text-align:center;color:#0020C2;font-size:28px;line-height:1.15}
 .auth-exec-card .auth-sub{text-align:center;color:#64748b;font-size:14px;line-height:1.5;margin:0 0 18px}
 .auth-exec-card label{display:block;font-weight:800;font-size:12px;color:#334155;margin:8px 0 4px}
 .auth-exec-card input,.auth-exec-card select{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid #cbd5e1;font-size:15px;margin-bottom:6px}
-.auth-exec-card button{width:100%;margin-top:14px;padding:14px;border:0;border-radius:14px;background:linear-gradient(135deg,#062b63,#0b63ce);color:#fff;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 12px 28px rgba(11,99,206,.3)}
+.auth-exec-card button{width:100%;margin-top:14px;padding:14px;border:0;border-radius:14px;background:linear-gradient(135deg,#062b63,#0020C2);color:#fff;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 12px 28px rgba(11,99,206,.3)}
 .auth-exec-card .auth-links{text-align:center;margin-top:16px;font-size:13px}
-.auth-exec-card .auth-links a{color:#0b63ce;font-weight:600}
+.auth-exec-card .auth-links a{color:#0020C2;font-weight:600}
 .auth-exec-card .error{background:#fee2e2;color:#991b1b;padding:10px;border-radius:10px;margin-bottom:10px;font-size:13px}
 .auth-exec-card .auth-foot{text-align:center;margin-top:16px;font-size:12px;color:#64748b}
 @media(max-width:900px){
@@ -1541,11 +1541,11 @@ body{
 .login-brand-panel h1{font-size:42px;line-height:1;margin:12px 0;color:white}.login-brand-panel p{color:#eaf2ff;line-height:1.55}
 .login-highlight{margin-top:28px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.30);border-radius:18px;padding:17px;font-weight:900;box-shadow:inset 0 1px 0 rgba(255,255,255,.22);backdrop-filter:blur(18px)}
 .login-form-panel h1{font-size:30px;margin:0 0 10px}.login-form-panel input{background:rgba(255,255,255,.74);border:1px solid rgba(148,163,184,.42);border-radius:15px;box-shadow:inset 0 1px 0 rgba(255,255,255,.55)}
-.login-form-panel button{width:100%;border-radius:15px;background:linear-gradient(135deg,#062b63,#0b63ce);box-shadow:0 16px 35px rgba(11,99,206,.28)}
+.login-form-panel button{width:100%;border-radius:15px;background:linear-gradient(135deg,#062b63,#0020C2);box-shadow:0 16px 35px rgba(11,99,206,.28)}
 .login-form-panel a{font-size:13px}.login-mini-footer{margin-top:18px;text-align:center;color:#475569;font-size:12px}.login-mini-footer strong{color:#062b63}
 .role-layout{background:radial-gradient(circle at 75% 7%,rgba(96,165,250,.22),transparent 28%),linear-gradient(135deg,#dde9f7,#edf5ff 50%,#d8e6f5) !important}
 .role-sidebar{
-  background:linear-gradient(180deg,rgba(7,26,51,.68),rgba(11,45,87,.58)) !important;
+  background:linear-gradient(180deg,rgba(7,26,51,.68),rgba(0,32,194,.58)) !important;
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border-right:1px solid rgba(255,255,255,.18) !important;
@@ -1565,7 +1565,7 @@ body{
 }
 .role-card{transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease}.role-card:hover,.role-panel:hover{box-shadow:0 34px 90px rgba(2,8,23,.26), inset 0 1px 0 rgba(255,255,255,.50)!important;border-color:rgba(255,255,255,.78)!important}
 button,.btn,.small-action{
-  background:linear-gradient(135deg,#062b63,#0b63ce)!important;border:1px solid rgba(255,255,255,.20)!important;box-shadow:0 16px 35px rgba(11,99,206,.24), inset 0 1px 0 rgba(255,255,255,.26)!important;transition:transform .12s ease, box-shadow .2s ease, filter .2s ease;
+  background:linear-gradient(135deg,#062b63,#0020C2)!important;border:1px solid rgba(255,255,255,.20)!important;box-shadow:0 16px 35px rgba(11,99,206,.24), inset 0 1px 0 rgba(255,255,255,.26)!important;transition:transform .12s ease, box-shadow .2s ease, filter .2s ease;
 }
 button:hover,.btn:hover,.small-action:hover{filter:brightness(1.08);box-shadow:0 24px 50px rgba(11,99,206,.32), inset 0 1px 0 rgba(255,255,255,.35)!important}
 button:active,.btn:active,.small-action:active{transform:scale(.975);filter:brightness(1.18)}
@@ -2087,7 +2087,7 @@ class Plataforma(db.Model):
     logo_es_custom = db.Column(db.Boolean, default=False)  # True solo si subieron logo PROCSIS en Datos empresa
     css_inyectado = db.Column(db.Text, default="")  # CSS custom desde Consola Desarrollo
     # Personalización de logins (colores / diseño)
-    login_color_primario = db.Column(db.String(20), default="#0B2D57")
+    login_color_primario = db.Column(db.String(20), default="#0020C2")
     login_color_acento = db.Column(db.String(20), default="#f59e0b")
     login_color_fondo = db.Column(db.String(20), default="#f8fafc")
     login_titulo = db.Column(db.String(160), default="")
@@ -2108,7 +2108,7 @@ class Plataforma(db.Model):
     anuncio_img2 = db.Column(db.Text, default="")
     tema_fuente = db.Column(db.String(80), default="Segoe UI")
     tema_color_secundario = db.Column(db.String(20), default="#F2C12E")
-    tema_color_primario = db.Column(db.String(20), default="#0B2D57")
+    tema_color_primario = db.Column(db.String(20), default="#0020C2")
     tema_color_acento = db.Column(db.String(20), default="#1e40af")
     tema_color_fondo = db.Column(db.String(20), default="#f1f5f9")
     contacto_publico_tel = db.Column(db.String(40), default="")
@@ -3066,7 +3066,7 @@ class CalendarioEvento(db.Model):
     fecha = db.Column(db.String(10), default="", index=True)  # YYYY-MM-DD
     fecha_fin = db.Column(db.String(10), default="")
     tipo = db.Column(db.String(40), default="institucional")  # institucional|academico|festivo|reunion
-    color = db.Column(db.String(20), default="#0B2D57")
+    color = db.Column(db.String(20), default="#0020C2")
     creado_por = db.Column(db.String(120), default="")
     creado_en = db.Column(db.String(30), default="")
 
@@ -4110,7 +4110,7 @@ def html_anuncio_global():
             if not path0.startswith(("/login", "/dev-console", "/gerencia", "/ventas-login", "/soporte-login")):
                 txt = _esc((p.anuncio_tecnico or "")[:500])
                 return (
-                    '<div style="background:#0B2D57;color:#fff;padding:10px 16px;font-size:13px;text-align:center;'
+                    '<div style="background:#0020C2;color:#fff;padding:10px 16px;font-size:13px;text-align:center;'
                     'font-family:Segoe UI,system-ui,sans-serif">'
                     '<b>Aviso técnico</b> · ' + txt + '</div>'
                 )
@@ -4172,7 +4172,7 @@ def html_anuncio_global():
     cuenta_html = ""
     if cuenta:
         cuenta_html = (
-            '<p style="margin:0 0 10px;font-size:13px;color:#0B2D57;font-weight:600">'
+            '<p style="margin:0 0 10px;font-size:13px;color:#0020C2;font-weight:600">'
             + cuenta
             + "</p>"
         )
@@ -4187,7 +4187,7 @@ def html_anuncio_global():
   border-radius:28px;background:rgba(255,255,255,.68);
   -webkit-backdrop-filter:blur(28px) saturate(180%);backdrop-filter:blur(28px) saturate(180%);
   border:1px solid rgba(255,255,255,.9);
-  box-shadow:0 20px 50px rgba(11,45,87,.22),0 2px 8px rgba(11,45,87,.08),inset 0 1px 0 rgba(255,255,255,.95);
+  box-shadow:0 20px 50px rgba(0,32,194,.22),0 2px 8px rgba(0,32,194,.08),inset 0 1px 0 rgba(255,255,255,.95);
   color:#0f172a;transform:translateY(-135%) scale(.96);opacity:0;
   transition:transform .75s cubic-bezier(.34,1.56,.64,1),opacity .35s ease}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
@@ -4198,11 +4198,11 @@ def html_anuncio_global():
 #aviso-glass .ag-head{padding:18px 60px 10px 22px;flex:0 0 auto}
 #aviso-glass .ag-kicker{font-size:11px;letter-spacing:.14em;font-weight:700;color:#2563eb;text-transform:uppercase}
 #aviso-glass .ag-title{margin:6px 0 0;font-size:clamp(17px,4.6vw,21px);line-height:1.25;font-weight:800;
-  color:#0B2D57;letter-spacing:-.01em}
+  color:#0020C2;letter-spacing:-.01em}
 #aviso-glass .ag-x{-webkit-user-select:none;user-select:none;position:absolute;top:12px;right:12px;width:40px;height:40px;border:1px solid rgba(255,255,255,.9);
-  border-radius:50%;background:rgba(255,255,255,.7);color:#0B2D57;font-size:22px;line-height:1;font-weight:600;
+  border-radius:50%;background:rgba(255,255,255,.7);color:#0020C2;font-size:22px;line-height:1;font-weight:600;
   cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
-  box-shadow:0 2px 8px rgba(11,45,87,.12);transition:transform .2s ease,background .2s ease}
+  box-shadow:0 2px 8px rgba(0,32,194,.12);transition:transform .2s ease,background .2s ease}
 #aviso-glass .ag-x:hover{background:#fff;transform:scale(1.06)}
 #aviso-glass .ag-x:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
 #aviso-glass .ag-body{padding:4px 22px 10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
@@ -4428,7 +4428,7 @@ _APPLE_SHELL_CSS = (
     ".nav-item-apple{display:block;font-size:13px;color:rgba(255,255,255,.85);text-decoration:none;"
     "padding:10px 14px;border-radius:12px;margin:2px 0;font-weight:400;transition:all .2s ease}"
     ".nav-item-apple:hover{background:rgba(255,255,255,.08);color:#fff}"
-    ".nav-item-apple.is-active{background:#005BEA;color:#fff;font-weight:500}"
+    ".nav-item-apple.is-active{background:#0020C2;color:#fff;font-weight:500}"
     ".nav-group{margin:4px 0;border-radius:12px}"
     ".nav-group>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;"
     "letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.6);padding:9px 12px;border-radius:10px;user-select:none}"
@@ -4451,14 +4451,14 @@ _APPLE_SHELL_CSS = (
     ".navbar-module-title{font-size:14px;color:#1d1d1f}.navbar-module-title strong{font-weight:700}"
     ".navbar-actions-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}"".navbar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}"".badge-env{font-size:11px;font-weight:600;padding:5px 12px;border-radius:980px;white-space:nowrap}"".badge-env-prod{background:rgba(22,163,74,.12);color:#15803d}"".badge-env-staging{background:rgba(202,138,4,.15);color:#a16207}"".nav-ntp-clock{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#1d1d1f;font-weight:500;letter-spacing:-.02em;white-space:nowrap}"".nav-api-ping{font-size:12px;color:#86868b;white-space:nowrap}"".nav-api-ping.ok{color:#15803d}"".nav-api-ping.bad{color:#b91c1c;font-weight:600}"".nav-bell{position:relative;text-decoration:none;font-size:16px;color:#1d1d1f;padding:4px 6px}"".nav-bell-idle{opacity:.55}"".nav-bell-count{position:absolute;top:-2px;right:-4px;background:#df1c1c;color:#fff;font-size:10px;font-weight:700;border-radius:980px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}"
     ".badge-periodo{font-size:12px;background:rgba(0,0,0,.04);padding:6px 12px;border-radius:980px;color:#1d1d1f}"
-    ".user-profile-circle{width:28px;height:28px;background:#002060;color:#fff;border-radius:50%;"
+    ".user-profile-circle{width:28px;height:28px;background:#0F172A;color:#fff;border-radius:50%;"
     "display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}"
     ".bento-workspace-apple{padding:28px;box-sizing:border-box;flex:1}"
     ".card-bento-apple{background:#fff;border-radius:24px;padding:24px;"
     "box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02)}"
-    ".btn-apple-primary,.btn-apple-capsule-primary{display:inline-block;background:#005BEA;color:#fff!important;"
+    ".btn-apple-primary,.btn-apple-capsule-primary{display:inline-block;background:#0020C2;color:#fff!important;"
     "border:0;border-radius:980px;padding:10px 20px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}"
-    ".btn-apple-secondary,.btn-apple-capsule-secondary{display:inline-block;background:#f5f5f7;color:#002060!important;"
+    ".btn-apple-secondary,.btn-apple-capsule-secondary{display:inline-block;background:#f5f5f7;color:#0F172A!important;"
     "border:0;border-radius:980px;padding:10px 20px;font-size:13px;font-weight:500;text-decoration:none;cursor:pointer}"
     "@media(max-width:900px){.sidebar-apple-glass{position:relative;width:100%;min-height:auto}"
     ".main-content-container{margin-left:0;width:100%}.app-layout-enterprise{flex-direction:column}}"
@@ -4980,6 +4980,7 @@ def _wrap_staff_layout(title, body, path):
         '<div class="main-content-container">'
         '<header class="navbar-top-apple">'
         '<div class="navbar-left">'
+        '<a class="nb-brand" href="/dashboard"><img src="/static/img/logo-procsis-mark.png" alt="PROCSIS"><span>PROCSIS <i>|</i> EduTrack</span></a>'
         '<div class="navbar-module-title">' + mod + "</div>"
         + env_badge
         + "</div>"
@@ -5000,19 +5001,19 @@ def _wrap_staff_layout(title, body, path):
 
 _TEMA_TIGO_GLASS_CSS = """<style id="tema-glass-corporativo">
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-/* Paleta tomada de la referencia: azul #001EB3 / #0119B9 y verde #01F501 */
+/* Paleta tomada de la referencia: azul #0020C2 / #0018A8 y verde #00FF66 */
 :root{
---tg-blue:#001EB3;--tg-blue-2:#0119B9;--tg-blue-deep:#000F66;--tg-green:#01F501;--tg-green-ink:#07A83A;
+--tg-blue:#0020C2;--tg-blue-2:#0018A8;--tg-blue-deep:#000F66;--tg-green:#00FF66;--tg-green-ink:#07A83A;
 --tg-glass:rgba(255,255,255,.62);--tg-glass-strong:rgba(255,255,255,.80);--tg-glass-line:rgba(255,255,255,.75);
---tg-shadow:0 12px 40px rgba(0,30,179,.12),0 2px 8px rgba(0,15,102,.06);
---azul:#001EB3;--azul2:#0119B9;--primary-color:#001EB3;--login-prim:#001EB3;--verde:#07A83A;
+--tg-shadow:0 12px 40px rgba(0,32,194,.12),0 2px 8px rgba(0,15,102,.06);
+--azul:#0020C2;--azul2:#0018A8;--primary-color:#0020C2;--login-prim:#0020C2;--verde:#07A83A;
 --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Inter","Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;
 }
 /* Tipografía Apple (SF Pro en Mac/iPhone; Inter como equivalente en Windows/Android) */
 body,body *:not(code):not(pre):not(kbd):not(samp):not([style*="monospace"]):not([style*="Georgia"]){font-family:var(--font-ui)!important;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 /* Fondo con luz azul y verde para que el cristal tenga qué difuminar */
 html,body{background:#eef2fc!important}
-body{background:radial-gradient(1000px 520px at 6% -8%,rgba(0,30,179,.16),transparent 62%),radial-gradient(760px 460px at 100% 0%,rgba(1,245,1,.12),transparent 60%),linear-gradient(180deg,#f5f8ff 0%,#eaf0fb 100%)!important;background-attachment:fixed!important}
+body{background:radial-gradient(1000px 520px at 6% -8%,rgba(0,32,194,.16),transparent 62%),radial-gradient(760px 460px at 100% 0%,rgba(0,255,102,.12),transparent 60%),linear-gradient(180deg,#f5f8ff 0%,#eaf0fb 100%)!important;background-attachment:fixed!important}
 .main-content-container,.bento-workspace-apple{background:transparent!important}
 /* Superficies de cristal */
 .card,.role-panel,.role-card,.table-card,.modern-card,.summary-card,.filter-bar,.card-bento-apple,.hq-tab-panel,.pc-card,.student-form-card,.student-list-card{
@@ -5021,48 +5022,111 @@ border:1px solid var(--tg-glass-line)!important;box-shadow:var(--tg-shadow),inse
 .role-hero{background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(226,233,255,.62))!important;-webkit-backdrop-filter:blur(24px) saturate(170%);backdrop-filter:blur(24px) saturate(170%);border:1px solid var(--tg-glass-line)!important;box-shadow:var(--tg-shadow),inset 0 1px 0 rgba(255,255,255,.9)!important}
 .role-hero h1{color:var(--tg-blue-deep)!important}
 /* Menú lateral */
-.sidebar-apple-glass{background:linear-gradient(180deg,rgba(0,30,179,.90) 0%,rgba(1,25,185,.86) 55%,rgba(0,15,102,.93) 100%)!important;-webkit-backdrop-filter:blur(28px) saturate(180%);backdrop-filter:blur(28px) saturate(180%);border-right:1px solid rgba(255,255,255,.22)!important;box-shadow:10px 0 40px rgba(0,30,179,.22),inset -1px 0 0 rgba(255,255,255,.08)}
+.sidebar-apple-glass{background:linear-gradient(180deg,rgba(0,32,194,.90) 0%,rgba(1,25,185,.86) 55%,rgba(0,15,102,.93) 100%)!important;-webkit-backdrop-filter:blur(28px) saturate(180%);backdrop-filter:blur(28px) saturate(180%);border-right:1px solid rgba(255,255,255,.22)!important;box-shadow:10px 0 40px rgba(0,32,194,.22),inset -1px 0 0 rgba(255,255,255,.08)}
 .brand-text-apple{letter-spacing:.14em;font-weight:800}
 .nav-item-apple:hover,.nav-group>summary:hover{background:rgba(255,255,255,.14)!important}
 .nav-item-apple.is-active{background:rgba(255,255,255,.20)!important;box-shadow:inset 3px 0 0 var(--tg-green),0 4px 16px rgba(0,15,102,.25);color:#fff!important}
 .nav-group .cnt{background:var(--tg-green)!important;color:#00164d!important;font-weight:700}
 .nav-search input{background:rgba(255,255,255,.14)!important;border-color:rgba(255,255,255,.28)!important}
 /* Barra superior */
-.navbar-top-apple{background:rgba(255,255,255,.66)!important;-webkit-backdrop-filter:blur(26px) saturate(180%);backdrop-filter:blur(26px) saturate(180%);border-bottom:1px solid rgba(0,30,179,.10)!important}
+.navbar-top-apple{background:rgba(255,255,255,.66)!important;-webkit-backdrop-filter:blur(26px) saturate(180%);backdrop-filter:blur(26px) saturate(180%);border-bottom:1px solid rgba(0,32,194,.10)!important}
 .user-profile-circle{background:var(--tg-blue)!important}
-.badge-env-prod{background:rgba(1,245,1,.16)!important;color:#056b25!important;border:1px solid rgba(1,245,1,.45)!important}
+.badge-env-prod{background:rgba(0,255,102,.16)!important;color:#056b25!important;border:1px solid rgba(0,255,102,.45)!important}
 .nav-api-ping.ok{color:#056b25!important}
 /* Botones */
-.btn:not(.btn-red):not(.btn-green),button.btn,button[type=submit]:not(.btn-red):not(.btn-green){background:var(--tg-blue)!important;color:#fff!important;box-shadow:0 6px 18px rgba(0,30,179,.24)}
-.btn-apple-primary,.btn-apple-capsule-primary,.btn-apple-oval,.pc-btn-w{background:var(--tg-blue)!important;color:#fff!important;box-shadow:0 6px 18px rgba(0,30,179,.28)!important}
+.btn:not(.btn-red):not(.btn-green),button.btn,button[type=submit]:not(.btn-red):not(.btn-green){background:var(--tg-blue)!important;color:#fff!important;box-shadow:0 6px 18px rgba(0,32,194,.24)}
+.btn-apple-primary,.btn-apple-capsule-primary,.btn-apple-oval,.pc-btn-w{background:var(--tg-blue)!important;color:#fff!important;box-shadow:0 6px 18px rgba(0,32,194,.28)!important}
 .btn:not(.btn-red):not(.btn-green):hover,.btn-apple-primary:hover,.btn-apple-capsule-primary:hover,.btn-apple-oval:hover,.pc-btn-w:hover{background:var(--tg-blue-2)!important}
 .btn-green{background:var(--tg-green-ink)!important}
 /* Encabezado de Gerencia (HQ) */
-.hq-corp{background:linear-gradient(135deg,var(--tg-blue-deep) 0%,var(--tg-blue) 48%,var(--tg-blue-2) 100%)!important;border-bottom:3px solid var(--tg-green)!important;box-shadow:0 18px 50px rgba(0,30,179,.28)}
+.hq-corp{background:linear-gradient(135deg,var(--tg-blue-deep) 0%,var(--tg-blue) 48%,var(--tg-blue-2) 100%)!important;border-bottom:3px solid var(--tg-green)!important;box-shadow:0 18px 50px rgba(0,32,194,.28)}
 .hq-welcome .hello span{color:var(--tg-green)!important}
 .hq-logos img{background:rgba(255,255,255,.94)!important}
 /* Ingreso */
-.center,.login-shell{background:radial-gradient(circle at 18% 18%,rgba(1,245,1,.20),transparent 30%),radial-gradient(circle at 82% 12%,rgba(0,30,179,.55),transparent 34%),linear-gradient(135deg,#000F66 0%,#001EB3 52%,#0119B9 100%)!important}
+.center,.login-shell{background:radial-gradient(circle at 18% 18%,rgba(0,255,102,.20),transparent 30%),radial-gradient(circle at 82% 12%,rgba(0,32,194,.55),transparent 34%),linear-gradient(135deg,#000F66 0%,#0020C2 52%,#0018A8 100%)!important}
 /* Sitio público */
-.navbar-apple-glass{background:rgba(255,255,255,.66)!important;-webkit-backdrop-filter:blur(26px) saturate(180%)!important;backdrop-filter:blur(26px) saturate(180%)!important;border-bottom:1px solid rgba(0,30,179,.10)!important}
+.navbar-apple-glass{background:rgba(255,255,255,.66)!important;-webkit-backdrop-filter:blur(26px) saturate(180%)!important;backdrop-filter:blur(26px) saturate(180%)!important;border-bottom:1px solid rgba(0,32,194,.10)!important}
 .link-apple:hover,.link-apple.on,.link-apple.is-hot,.dropdown-link:hover,.btn-apple-ghost:hover{color:var(--tg-blue)!important;border-color:var(--tg-blue)!important}
 .apple-dropdown-menu{background:rgba(255,255,255,.82)!important;-webkit-backdrop-filter:blur(34px) saturate(180%)!important;backdrop-filter:blur(34px) saturate(180%)!important}
-.pc-hero{background:radial-gradient(700px 360px at 90% 0%,rgba(1,245,1,.14),transparent 60%),radial-gradient(900px 480px at 0% 0%,rgba(0,30,179,.14),transparent 62%),linear-gradient(135deg,#f6f8ff 0%,#e9eefc 100%)}
+.pc-hero{background:radial-gradient(700px 360px at 90% 0%,rgba(0,255,102,.14),transparent 60%),radial-gradient(900px 480px at 0% 0%,rgba(0,32,194,.14),transparent 62%),linear-gradient(135deg,#f6f8ff 0%,#e9eefc 100%)}
 .pc-hero h1,.pc-sec h2,.pc-card h3,.pc-stat b{color:var(--tg-blue)!important}
 .pc-hero .tag{background:var(--tg-glass-strong)!important;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
 .pc-hero .tag svg{stroke:var(--tg-blue)!important}
 .pc-btn-g{background:var(--tg-blue-deep)!important}
-.pc-card .ico{background:rgba(0,30,179,.08)!important;color:var(--tg-blue)!important}
-.pc-cta{background:linear-gradient(145deg,var(--tg-blue-deep) 0%,var(--tg-blue) 55%,var(--tg-blue-2) 100%)!important;box-shadow:0 18px 48px rgba(0,30,179,.30)!important}
+.pc-card .ico{background:rgba(0,32,194,.08)!important;color:var(--tg-blue)!important}
+.pc-cta{background:linear-gradient(145deg,var(--tg-blue-deep) 0%,var(--tg-blue) 55%,var(--tg-blue-2) 100%)!important;box-shadow:0 18px 48px rgba(0,32,194,.30)!important}
 .pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{background:var(--tg-green)!important;color:#00164d!important}
-.pc-cta a:first-of-type:hover,.pc-cta a.pc-cta-primary:hover{background:#3dff3d!important}
+.pc-cta a:first-of-type:hover,.pc-cta a.pc-cta-primary:hover{background:#33FF85!important}
 .pc-foot a{color:var(--tg-green)!important}
 /* Contraste del bloque azul de la landing: título y texto SIEMPRE en blanco */
 .pc-sec .pc-cta h2,.pc-cta h2{color:#fff!important}
 .pc-sec .pc-cta p,.pc-cta p{color:rgba(255,255,255,.94)!important;opacity:1!important}
 .pc-sec .pc-cta a.pc-cta-secondary,.pc-cta a:not(:first-of-type){background:rgba(255,255,255,.14)!important;color:#fff!important;border:1.5px solid rgba(255,255,255,.7)!important}
 .pc-cta a.pc-cta-secondary:hover,.pc-cta a:not(:first-of-type):hover{background:rgba(255,255,255,.26)!important}
-.pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{box-shadow:0 8px 22px rgba(1,245,1,.35)}
+.pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{box-shadow:0 8px 22px rgba(0,255,102,.35)}
+/* ═════ MANUAL DE MARCA PROCSIS | ED · regla 60-30-10 ═════
+   60% blanco #FFFFFF / #F8FAFC · 30% azul rey #0020C2 · 10% neón #00FF66 · texto #0F172A */
+:root{--bm-blue:#0020C2;--bm-blue-dark:#0018A8;--bm-blue-deep:#000F66;--bm-neon:#00FF66;--bm-ink:#0F172A;--bm-bg:#F8FAFC;--bm-line:#E2E8F0;
+--tg-blue:#0020C2;--tg-blue-2:#0018A8;--tg-green:#00FF66;--azul:#0020C2;--primary-color:#0020C2;--login-prim:#0020C2}
+html,body{background:#F8FAFC!important}
+body{background:#F8FAFC!important;color:#0F172A}
+.center,.login-shell{background:linear-gradient(135deg,#0020C2 0%,#0A1B8F 50%,#050B3D 100%)!important}
+/* Tarjetas: blancas, bordes redondeados, sombra suave (sin cristal) */
+.card,.role-panel,.role-card,.table-card,.modern-card,.summary-card,.filter-bar,.card-bento-apple,.hq-tab-panel,.pc-card,.student-form-card,.student-list-card,.role-hero{background:#fff!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border:1px solid #E2E8F0!important;border-radius:16px!important;box-shadow:0 1px 3px rgba(15,23,42,.05),0 8px 24px rgba(15,23,42,.04)!important}
+.role-hero h1{color:#0F172A!important}
+/* Barra superior del tablero (Gerencia y staff): blanca, línea fina gris, la P a color + PROCSIS | EduTrack */
+.navbar-top-apple{background:#fff!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border-bottom:1px solid #E2E8F0!important;box-shadow:none!important}
+.navbar-top-apple .navbar-left{display:flex;align-items:center;gap:14px}
+.nb-brand,.nav-logo-apple{display:inline-flex;align-items:center;gap:10px;text-decoration:none}
+.nb-brand{padding-right:16px;border-right:1px solid #E2E8F0}
+.nb-brand img{height:34px;width:auto;display:block}
+.nb-brand span,.nav-logo-apple span,.role-topbar .tb-brand{font-size:15px;font-weight:700;letter-spacing:.01em;color:#0F172A!important}
+.nb-brand i,.nav-logo-apple i,.role-topbar .tb-brand i{font-style:normal;color:#94A3B8;font-weight:400;margin:0 5px}
+.nav-logo-apple img.logo-micro{height:34px!important;width:auto!important;background:transparent!important;border-radius:0!important;padding:0!important;box-shadow:none!important}
+.sidebar-apple-glass{background:linear-gradient(180deg,#0020C2 0%,#001A9E 100%)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.user-profile-circle{background:#0020C2!important}
+/* Tablero de roles de colegio */
+.role-topbar{background:#fff!important;color:#0F172A!important;border-bottom:1px solid #E2E8F0!important}
+.role-topbar .tb-left{gap:12px}
+.role-topbar .tb-left img{background:transparent!important;border-radius:0!important;padding:0!important;width:auto!important;height:38px!important}
+.role-topbar .tb-brand{padding-right:14px;border-right:1px solid #E2E8F0}
+.role-topbar .tb-user b{color:#0F172A!important}
+.role-topbar .tb-user span{color:#475569!important;opacity:1!important}
+.role-tag{background:rgba(0,32,194,.08)!important;color:#0020C2!important;box-shadow:none!important}
+.role-icons a .ic{background:#0020C2!important;box-shadow:0 2px 8px rgba(0,32,194,.18)!important}
+.role-icons a:hover .ic{background:#0018A8!important}
+.role-icons a.sc.is-on .ic{background:#0020C2!important;box-shadow:0 0 0 3px rgba(0,255,102,.55)!important}
+.role-welcome b{color:#0020C2!important}
+/* Portal de acceso: degradado diagonal, tarjeta que flota, sin bordes finos */
+.login-page,.lp-content{background:#F8FAFC!important}
+.sinai-portal{background:linear-gradient(135deg,#0020C2 0%,#0A1B8F 48%,#050B3D 100%)!important}
+.sinai-carousel{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:16px!important}
+.sinai-carousel::after,.sinai-slide-ph::before,.sinai-slide-ph::after{display:none!important}
+.sinai-slide,.sinai-slide-ph{background:transparent!important}
+.sinai-brand-tile{background:#fff!important;border:0!important;border-radius:16px!important;box-shadow:0 20px 50px rgba(0,0,40,.35)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.sinai-brand-slogan{background:rgba(255,255,255,.12)!important;border:1px solid rgba(255,255,255,.35)!important;box-shadow:none!important}
+.sinai-nav{background:rgba(255,255,255,.16)!important;border:1px solid rgba(255,255,255,.4)!important;box-shadow:none!important}
+.sinai-nav:hover{background:rgba(255,255,255,.3)!important}
+.sinai-dots{background:rgba(255,255,255,.14)!important;border:1px solid rgba(255,255,255,.3)!important;box-shadow:none!important}
+.sinai-dot.is-on{background:#fff!important}
+.sinai-access h1{color:#fff!important}
+.sinai-sub{color:rgba(255,255,255,.84)!important}
+.sinai-ver,.sinai-ver b{color:rgba(255,255,255,.78)!important}
+.sinai-card{border:1px solid #E2E8F0!important;border-radius:16px!important;box-shadow:0 20px 50px rgba(0,0,40,.28)!important}
+.sinai-btn{background:#0020C2!important}.sinai-btn:hover{background:#0018A8!important}
+/* Banner de convocatoria: gris oscuro con borde lateral neón */
+.c48-lg summary{background:#1E293B!important;border-left:6px solid #00FF66!important;border-radius:12px!important;box-shadow:0 6px 18px rgba(15,23,42,.18)!important;text-align:left!important;font-weight:600!important}
+.c48-lg .row a:hover{border-color:#0020C2!important}
+.c48-lg .lk a{color:#0020C2!important}
+/* Novedades y planes: tarjetas blancas, etiquetas verde claro, botones de contorno */
+.promo-card,.promo-a,.promo-b{background:#fff!important}
+.promo-card{border:1px solid #E2E8F0!important;border-radius:16px!important;box-shadow:0 1px 3px rgba(15,23,42,.05),0 8px 24px rgba(15,23,42,.05)!important}
+.promo-card .badge{background:rgba(0,255,102,.12)!important;color:#047857!important;border-radius:6px!important;font-size:10.5px!important;font-weight:600!important;letter-spacing:.05em!important;padding:4px 10px!important}
+.promo-card a.btn-promo{background:#fff!important;color:#0020C2!important;border:1.5px solid #0020C2!important}
+.promo-card a.btn-promo:hover{background:#0020C2!important;color:#fff!important}
+.corp-cta-card{background:#fff!important;border:1px solid #E2E8F0!important;border-radius:16px!important}
+.corp-support-inner{border-radius:16px!important}
+.pc-foot a{color:#CBD5E1!important}.pc-foot a:hover{color:#fff!important}
 </style>"""
 
 def page(title, body):
@@ -5085,30 +5149,30 @@ def page(title, body):
     body = (_APPLE_SHELL_CSS or "") + (_STAFF_TAB_JS or "") + body
 
     cookie_banner = """
-<style>#cookie-banner #cookie-accept-all,#cookie-banner #cookie-save-cfg{background:#0071e3!important;border:0!important;box-shadow:0 4px 14px rgba(0,113,227,.32)!important;color:#fff!important}#cookie-banner #cookie-accept-all:hover,#cookie-banner #cookie-save-cfg:hover{background:#0077ed!important}#cookie-banner #cookie-reject{background:#fff!important;color:#0071e3!important;border:1.5px solid #0071e3!important;box-shadow:none!important}#cookie-banner #cookie-config{background:transparent!important;color:#0071e3!important;border:0!important;box-shadow:none!important}</style>
+<style>#cookie-banner #cookie-accept-all,#cookie-banner #cookie-save-cfg{background:#0020C2!important;border:0!important;box-shadow:0 4px 14px rgba(0,32,194,.32)!important;color:#fff!important}#cookie-banner #cookie-accept-all:hover,#cookie-banner #cookie-save-cfg:hover{background:#0018A8!important}#cookie-banner #cookie-reject{background:#fff!important;color:#0020C2!important;border:1.5px solid #0020C2!important;box-shadow:none!important}#cookie-banner #cookie-config{background:transparent!important;color:#0020C2!important;border:0!important;box-shadow:none!important}</style>
 <div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);background:rgba(245,245,247,.42)">
-  <div style="max-width:560px;margin:0 auto;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border-radius:20px;box-shadow:0 8px 32px rgba(11,45,87,.22);padding:18px 16px 16px;border:1px solid rgba(255,255,255,.65);box-sizing:border-box">
+  <div style="max-width:560px;margin:0 auto;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border-radius:20px;box-shadow:0 8px 32px rgba(0,32,194,.22);padding:18px 16px 16px;border:1px solid rgba(255,255,255,.65);box-sizing:border-box">
     <h2 style="margin:0 0 8px;font-size:clamp(16px,4.2vw,19px);color:#1d1d1f;font-weight:800;letter-spacing:-.02em;line-height:1.25">Usamos cookies para mejorar tu experiencia</h2>
     <p style="margin:0 0 14px;font-size:13px;line-height:1.5;color:#334155;word-wrap:break-word;overflow-wrap:anywhere">
       Usamos cookies propias y técnicas para acceso seguro, sesión, estadísticas básicas y el funcionamiento del sitio.
       <b>No usamos cookies de publicidad de terceros.</b>
       Al continuar o aceptar, autorizas esta utilización.
       Más info:
-      <a href="/cookies" style="color:#0b63ce;font-weight:700;text-decoration:underline">política de cookies</a>,
-      <a href="/tratamiento-datos" style="color:#0b63ce;font-weight:700;text-decoration:underline">tratamiento de datos</a>
+      <a href="/cookies" style="color:#0020C2;font-weight:700;text-decoration:underline">política de cookies</a>,
+      <a href="/tratamiento-datos" style="color:#0020C2;font-weight:700;text-decoration:underline">tratamiento de datos</a>
       y
-      <a href="/reembolsos" style="color:#0b63ce;font-weight:700;text-decoration:underline">política de reembolsos</a>.
+      <a href="/reembolsos" style="color:#0020C2;font-weight:700;text-decoration:underline">política de reembolsos</a>.
     </p>
     <div id="cookie-config-panel" style="display:none;background:rgba(239,246,255,.9);border:1px solid #bfdbfe;border-radius:14px;padding:12px;margin-bottom:12px;font-size:13px;color:#1e3a5f">
       <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;line-height:1.35"><input type="checkbox" checked disabled style="width:18px;height:18px;flex-shrink:0;margin-top:2px"> Cookies esenciales (sesión / seguridad) — siempre activas</label>
       <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;line-height:1.35"><input type="checkbox" id="ck-pref" checked style="width:18px;height:18px;flex-shrink:0;margin-top:2px"> Preferencias de interfaz</label>
       <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;line-height:1.35"><input type="checkbox" id="ck-stat" style="width:18px;height:18px;flex-shrink:0;margin-top:2px"> Estadística anónima de uso</label>
-      <button type="button" id="cookie-save-cfg" style="margin-top:8px;width:100%;background:#0b63ce;color:#fff;border:0;border-radius:12px;padding:11px 14px;font-weight:700;cursor:pointer;font-size:14px">Guardar preferencias</button>
+      <button type="button" id="cookie-save-cfg" style="margin-top:8px;width:100%;background:#0020C2;color:#fff;border:0;border-radius:12px;padding:11px 14px;font-weight:700;cursor:pointer;font-size:14px">Guardar preferencias</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px">
-      <button type="button" id="cookie-accept-all" style="width:100%;background:#0b63ce;color:#fff;border:0;border-radius:14px;padding:13px 16px;font-weight:800;cursor:pointer;font-size:15px;box-shadow:0 4px 14px rgba(11,99,206,.35)">Aceptar todas las cookies</button>
-      <button type="button" id="cookie-reject" style="width:100%;background:#fff;color:#0B2D57;border:1.5px solid #93c5fd;border-radius:14px;padding:12px 16px;font-weight:700;cursor:pointer;font-size:14px">Rechazar cookies no esenciales</button>
-      <button type="button" id="cookie-config" style="width:100%;background:transparent;color:#0b63ce;border:0;border-radius:14px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:14px">Configurar cookies</button>
+      <button type="button" id="cookie-accept-all" style="width:100%;background:#0020C2;color:#fff;border:0;border-radius:14px;padding:13px 16px;font-weight:800;cursor:pointer;font-size:15px;box-shadow:0 4px 14px rgba(11,99,206,.35)">Aceptar todas las cookies</button>
+      <button type="button" id="cookie-reject" style="width:100%;background:#fff;color:#0020C2;border:1.5px solid #93c5fd;border-radius:14px;padding:12px 16px;font-weight:700;cursor:pointer;font-size:14px">Rechazar cookies no esenciales</button>
+      <button type="button" id="cookie-config" style="width:100%;background:transparent;color:#0020C2;border:0;border-radius:14px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:14px">Configurar cookies</button>
     </div>
   </div>
 </div>
@@ -5216,7 +5280,7 @@ window.addEventListener('pageshow', function (event) {
         body = _cobertura_inyectar(body)
     except Exception:
         pass
-    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#001EB3"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{_TEMA_TIGO_GLASS_CSS}{html_anuncio_global()}{_bfcache_fix}{_n_guard}</body></html>"""
+    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0020C2"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{_TEMA_TIGO_GLASS_CSS}{html_anuncio_global()}{_bfcache_fix}{_n_guard}</body></html>"""
 
 
 
@@ -5559,7 +5623,7 @@ def shell(content):
     rol = rol_actual() or "Sin rol"
     # Roles de colegio (Rectoría, Coordinación, Secretaría, Docente, Administrador): logo DEL COLEGIO.
     # Roles de la empresa (Gerencia, Ventas, Cobranza, Contabilidad, Desarrollo): marca Procsis.
-    logo = logo_plataforma()
+    logo = "/static/img/logo-procsis-mark.png"  # roles de la empresa: la P a color
     if rol in ("Rectoría", "Coordinación", "Secretaría", "Docente", "Administrador"):
         try:
             if institucion_id_actual():
@@ -5616,6 +5680,7 @@ def shell(content):
   <div class="role-topbar">
     <div class="tb-left">
       <img src="{logo}" alt="Logo">
+      <span class="tb-brand">PROCSIS <i>|</i> EduTrack</span>
       <div class="tb-user">
         <b>{usuario}</b>
         <span>{APP_NAME} · panel institucional</span>
@@ -6010,7 +6075,7 @@ def migrar_columnas():
         ("plataforma", "anuncio_img1", "ALTER TABLE plataforma ADD COLUMN anuncio_img1 TEXT DEFAULT ''"),
         ("plataforma", "anuncio_img2", "ALTER TABLE plataforma ADD COLUMN anuncio_img2 TEXT DEFAULT ''"),
         ("plataforma", "tema_fuente", "ALTER TABLE plataforma ADD COLUMN tema_fuente VARCHAR(80) DEFAULT 'Segoe UI'"),
-        ("plataforma", "tema_color_primario", "ALTER TABLE plataforma ADD COLUMN tema_color_primario VARCHAR(20) DEFAULT '#0B2D57'"),
+        ("plataforma", "tema_color_primario", "ALTER TABLE plataforma ADD COLUMN tema_color_primario VARCHAR(20) DEFAULT '#0020C2'"),
         ("plataforma", "tema_color_acento", "ALTER TABLE plataforma ADD COLUMN tema_color_acento VARCHAR(20) DEFAULT '#1e40af'"),
         ("plataforma", "tema_color_fondo", "ALTER TABLE plataforma ADD COLUMN tema_color_fondo VARCHAR(20) DEFAULT '#f1f5f9'"),
         ("plataforma", "contacto_publico_tel", "ALTER TABLE plataforma ADD COLUMN contacto_publico_tel VARCHAR(40) DEFAULT ''"),
@@ -8116,9 +8181,9 @@ def media_logo_corporativo():
     svg = (
         "<svg xmlns='http://www.w3.org/2000/svg' width='240' height='80' viewBox='0 0 240 80'>"
         "<defs><linearGradient id='pg' x1='0' y1='0' x2='1' y2='1'>"
-        "<stop offset='0' stop-color='#001EB3'/><stop offset='1' stop-color='#0119B9'/></linearGradient></defs>"
+        "<stop offset='0' stop-color='#0020C2'/><stop offset='1' stop-color='#0018A8'/></linearGradient></defs>"
         "<rect width='240' height='80' rx='16' fill='url(#pg)'/>"
-        "<rect x='24' y='62' width='192' height='4' rx='2' fill='#01F501'/>"
+        "<rect x='24' y='62' width='192' height='4' rx='2' fill='#00FF66'/>"
         "<text x='120' y='45' text-anchor='middle' fill='white' "
         "font-family='-apple-system,Helvetica,Arial,sans-serif' font-size='24' font-weight='700' letter-spacing='4'>PROCSIS</text>"
         "</svg>"
@@ -8701,7 +8766,7 @@ def banner_licencia_html(inst=None):
     + '<h2 style="margin:0 0 10px;color:#9a3412;font-size:18px">Recordatorio de pago</h2>'
     + '<p style="margin:0 0 14px;color:#334155;line-height:1.5;font-size:14px">{info["mensaje"].replace(chr(39), "")}</p>'
     + '<p style="margin:0 0 16px;font-size:12px;color:#64748b">Si el pago no se registra antes del día 11, el servicio se suspenderá automáticamente.</p>'
-    + '<button style="background:#0B2D57;color:#fff;border:0;padding:10px 18px;border-radius:10px;font-weight:800;cursor:pointer;width:100%" onclick="this.closest(\\'div\\').parentElement.remove()">Entendido</button></div>';
+    + '<button style="background:#0020C2;color:#fff;border:0;padding:10px 18px;border-radius:10px;font-weight:800;cursor:pointer;width:100%" onclick="this.closest(\\'div\\').parentElement.remove()">Entendido</button></div>';
   document.body.appendChild(ov);
 }})();
 </script>
@@ -9940,14 +10005,14 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
   <!-- Cabecera visual tipo telco: saludo + foto PROCSIS + chip amarillo -->
   <div style="position:relative;background:#b8d4f0;overflow:hidden">
-    <div style="position:absolute;top:0;right:0;width:120px;height:72px;background:#0B2D57;border-bottom-left-radius:56px;z-index:2;display:flex;align-items:center;justify-content:center">
+    <div style="position:absolute;top:0;right:0;width:120px;height:72px;background:#0020C2;border-bottom-left-radius:56px;z-index:2;display:flex;align-items:center;justify-content:center">
       <span style="color:#fff;font-weight:800;font-size:13px;letter-spacing:1.2px;font-family:Georgia,Times New Roman,serif">PROCSIS</span>
     </div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
       <tr>
         <td style="vertical-align:middle;padding:28px 20px 28px 26px;width:42%">
-          <p style="margin:0;color:#0B2D57;font-size:15px">Hola,</p>
-          <p style="margin:4px 0 16px;color:#0B2D57;font-weight:800;font-size:18px;line-height:1.25">{_esc(nombre)}</p>
+          <p style="margin:0;color:#0020C2;font-size:15px">Hola,</p>
+          <p style="margin:4px 0 16px;color:#0020C2;font-weight:800;font-size:18px;line-height:1.25">{_esc(nombre)}</p>
           <span style="background:#facc15;color:#0f172a;font-weight:800;padding:8px 14px;border-radius:6px;font-size:15px;display:inline-block;line-height:1.3">Esta información<br>es para ti</span>
         </td>
         <td style="vertical-align:bottom;padding:0;width:58%;text-align:right">
@@ -9956,7 +10021,7 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
       </tr>
     </table>
   </div>
-  <div style="padding:22px 26px 8px;color:#0B2D57;font-size:15px;line-height:1.6">
+  <div style="padding:22px 26px 8px;color:#0020C2;font-size:15px;line-height:1.6">
     <p style="margin:0 0 8px">Por medio de este correo electrónico certificado, te compartimos de forma oportuna y efectiva, <b>la respuesta a la solicitud que nos realizaste</b>, para verla haz clic en el botón a continuación:</p>
     <div style="text-align:center;margin:26px 0 18px">
       <a href="{link}" style="background:#38bdf8;color:#fff;text-decoration:none;font-weight:800;padding:14px 40px;border-radius:999px;display:inline-block;font-size:15px;letter-spacing:.4px">VER RESPUESTA</a>
@@ -9967,12 +10032,12 @@ def enviar_notificacion_pqr_estilo_tigo(destino, t):
       <b>Ten en cuenta:</b> con la recepción de este correo se entiende que has sido notificado para todos los efectos, según las normas aplicables vigentes, en especial los artículos 12 y 20 de la Ley 527 de 1999 y sus normas reglamentarias sobre mensajes de datos.
     </div>
   </div>
-  <div style="background:#0B2D57;color:#fff;padding:24px 26px;text-align:center">
+  <div style="background:#0020C2;color:#fff;padding:24px 26px;text-align:center">
     <div style="border:1px solid #f59e0b;border-radius:8px;padding:12px;font-size:12px;margin-bottom:16px">
       ⚠ Por favor no respondas este mensaje. Este buzón tiene como propósito el envío de información y no es un canal oficial para la recepción de solicitudes, peticiones, quejas y reclamos.
     </div>
     <p style="margin:0 0 10px;font-size:13px">¿Dudas? Te las resolvemos aquí</p>
-    <a href="mailto:{email_ayuda}" style="display:inline-block;background:#fff;color:#0B2D57;text-decoration:none;font-weight:700;padding:8px 16px;border-radius:20px;font-size:12px;margin:0 6px">Centro de Ayuda</a>
+    <a href="mailto:{email_ayuda}" style="display:inline-block;background:#fff;color:#0020C2;text-decoration:none;font-weight:700;padding:8px 16px;border-radius:20px;font-size:12px;margin:0 6px">Centro de Ayuda</a>
     <a href="{wa_link}" style="display:inline-block;background:#25D366;color:#fff;text-decoration:none;font-weight:700;padding:8px 16px;border-radius:20px;font-size:12px;margin:0 6px">WhatsApp</a>
   </div>
   <div style="padding:14px 26px;font-size:10.5px;color:#94a3b8;text-align:center">
@@ -10049,9 +10114,9 @@ def pqr_notificacion_publica(token):
         return page(
             "Enlace no válido",
             "<div style='max-width:480px;margin:60px auto;font-family:Segoe UI,Arial;text-align:center;padding:24px'>"
-            "<h1 style='color:#0B2D57'>Enlace no válido o vencido</h1>"
+            "<h1 style='color:#0020C2'>Enlace no válido o vencido</h1>"
             "<p style='color:#64748b'>Verifica el enlace del correo o contacta a soporte con tu número de radicado.</p>"
-            "<a href='/login' style='color:#0B2D57;font-weight:700'>Ir al inicio de sesión</a></div>",
+            "<a href='/login' style='color:#0020C2;font-weight:700'>Ir al inicio de sesión</a></div>",
         )
     empresa = nombre_empresa()
     producto = nombre_producto()
@@ -10073,21 +10138,21 @@ def pqr_notificacion_publica(token):
 <title>PROCSIS · Respuesta a su solicitud</title>
 <style>
 body{{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:#f1f5f9;color:#0f172a}}
-.top{{background:#0B2D57;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}}
+.top{{background:#0020C2;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}}
 .top b{{color:#fff;font-size:18px}}
 .top a{{color:#93c5fd;font-size:13px;font-weight:700;text-decoration:none}}
-.hero{{background:linear-gradient(90deg,#0B2D57,#1e40af);color:#fff;padding:34px 24px}}
+.hero{{background:linear-gradient(90deg,#0020C2,#1e40af);color:#fff;padding:34px 24px}}
 .hero h1{{margin:0;font-size:26px;line-height:1.2}}
 .hero .chip{{background:#facc15;color:#0f172a;font-weight:800;padding:4px 12px;border-radius:4px;font-size:14px;display:inline-block;margin-top:10px}}
 .wrap{{max-width:960px;margin:0 auto;padding:24px 16px 40px;display:grid;grid-template-columns:280px 1fr;gap:20px}}
 @media(max-width:800px){{.wrap{{grid-template-columns:1fr}}}}
 .card{{background:#fff;border-radius:14px;padding:20px;border:1px solid #e2e8f0;box-shadow:0 8px 24px rgba(15,23,42,.06)}}
-.card h3{{margin:0 0 14px;font-size:15px;color:#0B2D57}}
+.card h3{{margin:0 0 14px;font-size:15px;color:#0020C2}}
 .meta{{font-size:13px;margin:0 0 12px;line-height:1.45;color:#334155}}
 .meta b{{display:block;color:#0f172a;margin-bottom:2px}}
-.main h2{{margin:0 0 12px;font-size:20px;color:#0B2D57}}
+.main h2{{margin:0 0 12px;font-size:20px;color:#0020C2}}
 .main p{{font-size:14.5px;line-height:1.65;color:#334155}}
-.sol{{background:#f8fafc;border-left:4px solid #0B2D57;padding:16px;margin:16px 0;font-size:14px;line-height:1.6;color:#0f172a;border-radius:0 10px 10px 0}}
+.sol{{background:#f8fafc;border-left:4px solid #0020C2;padding:16px;margin:16px 0;font-size:14px;line-height:1.6;color:#0f172a;border-radius:0 10px 10px 0}}
 .adj a{{display:inline-flex;align-items:center;gap:8px;color:#1e40af;font-weight:700;font-size:14px;text-decoration:none;padding:10px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff}}
 .foot{{font-size:11px;color:#94a3b8;margin-top:28px}}
 .badge{{display:inline-block;background:#dcfce7;color:#166534;font-weight:800;font-size:11px;padding:4px 10px;border-radius:999px}}
@@ -10113,7 +10178,7 @@ body{{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:#f1f5f
         Su caso fue atendido. Descargue el PDF para ver la respuesta formal firmada por PROCSIS / EduTrack.
       </div>
       <div class="adj" style="margin-top:22px">
-        <h3 style="margin:0 0 10px;font-size:14px;color:#0B2D57">Archivos adjuntos</h3>
+        <h3 style="margin:0 0 10px;font-size:14px;color:#0020C2">Archivos adjuntos</h3>
         <a href="/pqr/notificacion/{token}/pdf" target="_blank" rel="noopener">📄 Descargar respuesta oficial (PDF)</a>
       </div>
       {_rec_box_publico(t, token)}
@@ -10160,7 +10225,7 @@ def enviar_correo_respuesta_pqr(destino, t, texto_solucion=None):
     producto = nombre_producto()
     html = f"""
     <div style="font-family:Segoe UI,Arial,sans-serif;max-width:620px;margin:0 auto;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden">
-      <div style="background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:22px 26px">
+      <div style="background:linear-gradient(135deg,#0020C2,#1e40af);color:#fff;padding:22px 26px">
         <div style="font-size:11px;letter-spacing:1.2px;opacity:.9">{empresa.upper()} · {producto.upper()}</div>
         <h1 style="margin:8px 0 0;font-size:20px">Respuesta a su solicitud PQR</h1>
       </div>
@@ -10449,7 +10514,7 @@ def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO
             colegio = ((getattr(inst, "nombre", "") or "").strip() or "Institución educativa")
             h_col = f"""
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
-  <div style="background:#0B2D57;color:#fff;padding:22px 26px">
+  <div style="background:#0020C2;color:#fff;padding:22px 26px">
     <div style="font-size:19px;font-weight:800">{_esc(colegio)}</div>
     <div style="font-size:12px;opacity:.85;margin-top:2px">Atención a padres de familia y acudientes · PQR</div>
   </div>
@@ -10493,12 +10558,12 @@ def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO
     html = f"""
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
   <div style="position:relative;background:#dbeafe;padding:24px 26px 32px">
-    <div style="position:absolute;top:0;right:0;width:160px;height:90px;background:#0B2D57;border-bottom-left-radius:70px;display:flex;align-items:center;justify-content:center;padding:8px">
+    <div style="position:absolute;top:0;right:0;width:160px;height:90px;background:#0020C2;border-bottom-left-radius:70px;display:flex;align-items:center;justify-content:center;padding:8px">
       <span style="color:#fff;font-weight:800;font-size:16px;letter-spacing:1.5px;font-family:Georgia,Times New Roman,serif">PROCSIS</span>
     </div>
     <div style="max-width:340px">
-      <p style="margin:0;color:#0B2D57;font-size:13px;font-weight:700;letter-spacing:.04em">CONFIRMACIÓN DE RADICACIÓN</p>
-      <p style="margin:8px 0 0;color:#0B2D57;font-weight:800;font-size:18px">Hemos recibido su solicitud</p>
+      <p style="margin:0;color:#0020C2;font-size:13px;font-weight:700;letter-spacing:.04em">CONFIRMACIÓN DE RADICACIÓN</p>
+      <p style="margin:8px 0 0;color:#0020C2;font-weight:800;font-size:18px">Hemos recibido su solicitud</p>
       <span style="background:#facc15;color:#0f172a;font-weight:800;padding:4px 10px;border-radius:4px;font-size:13px;display:inline-block;margin-top:12px">Radicado No. {radicado_fmt}</span>
     </div>
   </div>
@@ -10518,7 +10583,7 @@ def enviar_correo_pqr(destino, radicado, ticket, subtipo, objeto, canal="PUBLICO
     <b>Mesa de Soluciones Corporativas</b><br>
     PROCSIS S.A.S. · Plataforma EduTrack</p>
   </div>
-  <div style="background:#0B2D57;color:#fff;padding:16px 26px;font-size:11px;text-align:center">
+  <div style="background:#0020C2;color:#fff;padding:16px 26px;font-size:11px;text-align:center">
     ⚠ Este buzón es solo informativo. No responda a este mensaje para radicar nuevas solicitudes.
   </div>
   <div style="padding:12px 26px;font-size:10.5px;color:#94a3b8;text-align:center">
@@ -11732,16 +11797,16 @@ def api_public_aura():
 _EAP_CSS = """
 .eap-root{position:fixed;right:18px;bottom:18px;z-index:99999;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif}
 .eap-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:12px 20px;font-weight:700;font-size:14px;cursor:pointer;color:#fff;
-background:linear-gradient(135deg,rgba(11,45,87,.74),rgba(0,91,234,.62));backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+background:linear-gradient(135deg,rgba(0,32,194,.74),rgba(0,32,194,.62));backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
 box-shadow:0 10px 30px rgba(0,40,120,.35),inset 0 1px 0 rgba(255,255,255,.5);font-family:inherit}
 .eap-btn:hover{filter:brightness(1.08)}
-.eap-root .eap-btn{background:#0071e3!important;border:1px solid rgba(255,255,255,.4)!important;box-shadow:0 10px 28px rgba(0,113,227,.38),inset 0 1px 0 rgba(255,255,255,.35)!important}
-.eap-root .eap-btn:hover{background:#0077ed!important;filter:none}
+.eap-root .eap-btn{background:#0020C2!important;border:1px solid rgba(255,255,255,.4)!important;box-shadow:0 10px 28px rgba(0,32,194,.38),inset 0 1px 0 rgba(255,255,255,.35)!important}
+.eap-root .eap-btn:hover{background:#0018A8!important;filter:none}
 .eap-box{display:none;flex-direction:column;width:372px;max-width:calc(100vw - 28px);height:540px;max-height:calc(100vh - 36px);border-radius:26px;overflow:hidden;
 background:rgba(255,255,255,.56);backdrop-filter:blur(32px) saturate(190%);-webkit-backdrop-filter:blur(32px) saturate(190%);
 border:1px solid rgba(255,255,255,.75);box-shadow:0 28px 70px rgba(7,28,56,.38),inset 0 1px 0 rgba(255,255,255,.85)}
 .eap-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;color:#fff;
-background:linear-gradient(135deg,rgba(0,113,227,.95),rgba(52,152,255,.88));border-bottom:1px solid rgba(255,255,255,.35)}
+background:linear-gradient(135deg,rgba(0,32,194,.95),rgba(52,152,255,.88));border-bottom:1px solid rgba(255,255,255,.35)}
 .eap-ttl{display:flex;align-items:center;gap:10px}
 .eap-ttl .eap-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.45);font-size:16px}
 .eap-ttl b{display:block;font-size:15px;line-height:1.1}.eap-ttl small{display:block;font-size:11px;opacity:.82;font-weight:500;margin-top:2px}
@@ -11751,7 +11816,7 @@ background:linear-gradient(135deg,rgba(0,113,227,.95),rgba(52,152,255,.88));bord
 .eap-m{margin:0 0 10px;max-width:88%;border-radius:18px;word-wrap:break-word;overflow:hidden}
 .eap-m .eap-c{padding:9px 13px 2px}
 .eap-a{background:rgba(255,255,255,.86);border:1px solid rgba(255,255,255,.9);color:#0f172a;border-bottom-left-radius:6px;box-shadow:0 2px 10px rgba(15,23,42,.08)}
-.eap-u{background:#0071e3;color:#fff;margin-left:auto;border-bottom-right-radius:6px}
+.eap-u{background:#0020C2;color:#fff;margin-left:auto;border-bottom-right-radius:6px}
 .eap-time{display:block;text-align:right;font-size:10px;opacity:.55;padding:0 12px 6px}
 .eap-consent{background:#fff;min-width:230px}
 .eap-act{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;border:0;border-top:1px solid #f0f0f0;background:#fff;padding:12px 10px;font-size:14px;font-weight:600;color:#0a6b3d;cursor:pointer;font-family:inherit}
@@ -11762,31 +11827,31 @@ background:linear-gradient(135deg,rgba(0,113,227,.95),rgba(52,152,255,.88));bord
 .eap-chips button{background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9);border-radius:999px;padding:5px 11px;font-size:11.5px;cursor:pointer;color:#1e3a5f;backdrop-filter:blur(8px)}
 .eap-form{display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.35)}
 .eap-in{flex:1;padding:10px 14px;border:1px solid rgba(148,163,184,.45);border-radius:999px;font-size:14px;background:rgba(255,255,255,.8);outline:none;font-family:inherit}
-.eap-in:focus{border-color:#005BEA;box-shadow:0 0 0 3px rgba(0,91,234,.15)}.eap-in:disabled{background:rgba(226,232,240,.7)}
-.eap-root .eap-send{background:#0071e3!important;box-shadow:none!important;color:#fff;border:0!important;border-radius:999px;padding:0 18px;font-weight:700;cursor:pointer;font-family:inherit}
+.eap-in:focus{border-color:#0020C2;box-shadow:0 0 0 3px rgba(0,32,194,.15)}.eap-in:disabled{background:rgba(226,232,240,.7)}
+.eap-root .eap-send{background:#0020C2!important;box-shadow:none!important;color:#fff;border:0!important;border-radius:999px;padding:0 18px;font-weight:700;cursor:pointer;font-family:inherit}
 .eap-send:disabled{opacity:.5;cursor:default}
-/* Paleta Tigo (azul #001EB3 + verde #01F501) con contraste legible */
-.eap-root .eap-btn{background:linear-gradient(135deg,#000F66 0%,#001EB3 60%,#0119B9 100%)!important;color:#fff!important;border:1px solid rgba(255,255,255,.35)!important;box-shadow:0 10px 28px rgba(0,30,179,.38),inset 0 1px 0 rgba(255,255,255,.25)!important}
-.eap-root .eap-btn:hover{background:linear-gradient(135deg,#001EB3,#0119B9)!important}
-.eap-root .eap-box{background:rgba(247,249,255,.94)!important;border:1px solid rgba(0,30,179,.16)!important}
-.eap-root .eap-head{background:linear-gradient(135deg,#000F66 0%,#001EB3 55%,#0119B9 100%)!important;border-bottom:3px solid #01F501!important}
-.eap-root .eap-ttl .eap-ic{background:#01F501!important;border:0!important;color:#00164d!important}
+/* Paleta Tigo (azul #0020C2 + verde #00FF66) con contraste legible */
+.eap-root .eap-btn{background:#00FF66!important;color:#0F172A!important;border:0!important;box-shadow:0 10px 28px rgba(0,255,102,.38)!important;font-weight:700!important}
+.eap-root .eap-btn:hover{background:#33FF85!important}
+.eap-root .eap-box{background:rgba(247,249,255,.94)!important;border:1px solid rgba(0,32,194,.16)!important}
+.eap-root .eap-head{background:linear-gradient(135deg,#0020C2 0%,#000F66 100%)!important;border-bottom:0!important}
+.eap-root .eap-ttl .eap-ic{background:rgba(255,255,255,.16)!important;border:1px solid rgba(255,255,255,.35)!important;color:#fff!important}
 .eap-root .eap-x{background:rgba(255,255,255,.16)!important;color:#fff!important}
 .eap-root .eap-a{background:#fff!important;color:#0b1437!important;border:1px solid #e3e8f7!important}
-.eap-root .eap-u{background:#001EB3!important;color:#fff!important}
-.eap-root .eap-box .eap-act{display:flex!important;align-items:center;justify-content:center;gap:8px;width:calc(100% - 20px)!important;margin:8px 10px 0!important;padding:11px 12px!important;border:1.5px solid #001EB3!important;border-radius:12px!important;background:#fff!important;color:#001EB3!important;font-size:14px!important;font-weight:700!important;box-shadow:none!important}
-.eap-root .eap-box .eap-act:nth-of-type(1){background:#01F501!important;border-color:#01F501!important;color:#00164d!important}
-.eap-root .eap-box .eap-act:nth-of-type(1):hover{background:#3dff3d!important}
+.eap-root .eap-u{background:#0020C2!important;color:#fff!important}
+.eap-root .eap-box .eap-act{display:flex!important;align-items:center;justify-content:center;gap:8px;width:calc(100% - 20px)!important;margin:8px 10px 0!important;padding:11px 12px!important;border:1.5px solid #0020C2!important;border-radius:12px!important;background:#fff!important;color:#0020C2!important;font-size:14px!important;font-weight:700!important;box-shadow:none!important}
+.eap-root .eap-box .eap-act:nth-of-type(1){background:#0020C2!important;border-color:#0020C2!important;color:#fff!important}
+.eap-root .eap-box .eap-act:nth-of-type(1):hover{background:#0018A8!important}
 .eap-root .eap-box .eap-act:nth-of-type(2):hover{background:#eef1ff!important}
 .eap-root .eap-box .eap-act:last-child{margin-bottom:10px!important}
 .eap-root .eap-box .eap-act:disabled{opacity:.5!important}
 .eap-root .eap-form{background:rgba(255,255,255,.92)!important;border-top:1px solid #e3e8f7!important}
 .eap-root .eap-in{background:#fff!important;border:1px solid #cfd8f3!important;color:#0b1437!important}
-.eap-root .eap-in:focus{border-color:#001EB3!important;box-shadow:0 0 0 3px rgba(0,30,179,.14)!important}
+.eap-root .eap-in:focus{border-color:#0020C2!important;box-shadow:0 0 0 3px rgba(0,255,102,.28)!important}
 .eap-root .eap-in:disabled{background:#eef1f8!important;color:#64748b!important}
-.eap-root .eap-send{background:#001EB3!important;color:#fff!important}
+.eap-root .eap-send{background:#0020C2!important;color:#fff!important}
 .eap-root .eap-send:disabled{background:#c5cdea!important;color:#fff!important;opacity:1!important}
-.eap-root .eap-chips button{background:#fff!important;color:#001EB3!important;border:1px solid #cfd8f3!important}
+.eap-root .eap-chips button{background:#fff!important;color:#0020C2!important;border:1px solid #cfd8f3!important}
 .eap-root .eap-chips button:hover{background:#e8edff!important}
 .eap-root .eap-wa{background:#07A83A!important}
 @media print{.eap-root{display:none}}
@@ -12070,7 +12135,7 @@ def gerencia_base_conocimiento_aura():
     opts = "".join(_opt(c, cat_sel) for c in _EAP_CATEGORIAS)
     chips = "".join(
         "<a href='/gerencia/base-conocimiento-aura%s' style='padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;%s'>%s</a>"
-        % (("?cat=" + quote(c)) if c else "", "background:#0B2D57;color:#fff" if (fcat == c) else "background:#e2e8f0;color:#334155", _esc(c or "Todas"))
+        % (("?cat=" + quote(c)) if c else "", "background:#0020C2;color:#fff" if (fcat == c) else "background:#e2e8f0;color:#334155", _esc(c or "Todas"))
         for c in ("",) + _EAP_CATEGORIAS)
     filas_html = ""
     for r in filas:
@@ -12079,12 +12144,12 @@ def gerencia_base_conocimiento_aura():
             "<div style='border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px;background:%s'>"
             "<div style='display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap'>"
             "<div><span style='background:#dbeafe;color:#1e40af;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700'>%s</span> "
-            "<b style='color:#0B2D57'>%s</b></div>"
+            "<b style='color:#0020C2'>%s</b></div>"
             "<span style='font-size:11px;color:#64748b'>%s · %s</span></div>"
             "<div style='font-size:12px;color:#64748b;margin:6px 0'>🔑 %s</div>"
             "<div style='font-size:13px;color:#334155;white-space:pre-wrap'>%s</div>"
             "<div style='margin-top:8px;display:flex;gap:6px;flex-wrap:wrap'>"
-            "<a href='/gerencia/base-conocimiento-aura?editar=%d' style='background:#0B2D57;color:#fff;border-radius:6px;padding:5px 10px;font-size:12px;text-decoration:none'>Editar</a>"
+            "<a href='/gerencia/base-conocimiento-aura?editar=%d' style='background:#0020C2;color:#fff;border-radius:6px;padding:5px 10px;font-size:12px;text-decoration:none'>Editar</a>"
             "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='toggle'><input type='hidden' name='id' value='%d'>"
             "<button style='background:#475569;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer'>%s</button></form>"
             "<form method='POST' style='display:inline' onsubmit=\"return confirm('¿Eliminar esta entrada?')\"><input type='hidden' name='accion' value='eliminar'><input type='hidden' name='id' value='%d'>"
@@ -12096,11 +12161,11 @@ def gerencia_base_conocimiento_aura():
             _esc(r.palabras_clave or ""), _esc((r.respuesta_oficial or "")[:600]), r.id, r.id,
             "Desactivar" if r.activo else "Activar", r.id)
     inp = "width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:inherit;font-size:14px"
-    lab = "display:block;font-size:12px;font-weight:700;margin-top:10px;color:#0B2D57"
+    lab = "display:block;font-size:12px;font-weight:700;margin-top:10px;color:#0020C2"
     head = (
         "<div style='background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px'><div style='max-width:860px;margin:0 auto'>"
-        "<a href='/gerencia/hq' style='color:#0B2D57;font-weight:700;text-decoration:none'>← HQ</a>"
-        "<h1 style='color:#0B2D57;margin:8px 0 4px'>📚 Base de conocimiento de Aura</h1>"
+        "<a href='/gerencia/hq' style='color:#0020C2;font-weight:700;text-decoration:none'>← HQ</a>"
+        "<h1 style='color:#0020C2;margin:8px 0 4px'>📚 Base de conocimiento de Aura</h1>"
         "<p style='color:#64748b;font-size:14px;margin-top:0'>Información corporativa oficial. Edu Aura la consulta <b>antes</b> que los manuales y artículos de ayuda, "
         "en el login y en los módulos administrativos. Solo el rol Gerente puede editarla.</p>"
     )
@@ -12110,7 +12175,7 @@ def gerencia_base_conocimiento_aura():
     )
     form = (
         "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0'>"
-        "<h3 style='color:#0B2D57;margin-top:0'>%s</h3>"
+        "<h3 style='color:#0020C2;margin-top:0'>%s</h3>"
         "<form method='POST'><input type='hidden' name='accion' value='guardar'><input type='hidden' name='id' value='%d'>"
         "<label style='%s'>Categoría</label><select name='categoria' style='%s'>%s</select>"
         "<label style='%s'>Palabras clave (separadas por coma)</label>"
@@ -12120,7 +12185,7 @@ def gerencia_base_conocimiento_aura():
         "<label style='%s'>Respuesta oficial corporativa</label>"
         "<textarea name='respuesta_oficial' rows='6' required maxlength='4000' placeholder='Texto exacto que Edu Aura responderá…' style='%s'>%s</textarea>"
         "<label style='display:block;margin-top:10px;font-size:13px'><input type='checkbox' name='activo' value='1'%s> Activa (Edu Aura la usa)</label>"
-        "<button type='submit' style='margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:11px 18px;border-radius:8px;font-weight:800;cursor:pointer'>Guardar</button> %s"
+        "<button type='submit' style='margin-top:12px;background:#0020C2;color:#fff;border:0;padding:11px 18px;border-radius:8px;font-weight:800;cursor:pointer'>Guardar</button> %s"
         "</form></div>"
     ) % (
         "Editar entrada" if editar else "Nueva información", (editar.id if editar else 0),
@@ -12132,11 +12197,11 @@ def gerencia_base_conocimiento_aura():
     )
     resto = (
         "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0'>"
-        "<h3 style='color:#0B2D57;margin-top:0'>🧪 Probar a Edu Aura</h3>"
+        "<h3 style='color:#0020C2;margin-top:0'>🧪 Probar a Edu Aura</h3>"
         "<form method='GET' style='display:flex;gap:8px'><input name='probar' value='%s' placeholder='Escribe como lo haría un usuario: quién es el dueño de procsis' style='%s'>"
         "<button style='background:#7c3aed;color:#fff;border:0;padding:0 16px;border-radius:8px;font-weight:700;cursor:pointer'>Probar</button></form>%s</div>"
         "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px'>"
-        "<h3 style='color:#0B2D57;margin-top:0'>Información registrada (%d)</h3>"
+        "<h3 style='color:#0020C2;margin-top:0'>Información registrada (%d)</h3>"
         "<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px'>%s</div>%s</div>"
         "</div></div>"
     ) % (_esc(prueba), inp, prueba_html, len(filas), chips,
@@ -12380,7 +12445,7 @@ def _html_lideres_login():
         "background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px solid #e2e8f0;"
         "border-radius:20px;box-shadow:0 8px 28px rgba(15,23,42,.06)}"
         ".ldr-head{text-align:center;margin-bottom:14px}"
-        ".ldr-head h2{margin:0 0 4px;font-size:22px;font-weight:800;color:#0B2D57;"
+        ".ldr-head h2{margin:0 0 4px;font-size:22px;font-weight:800;color:#0020C2;"
         "letter-spacing:-0.02em;font-family:Segoe UI,system-ui,sans-serif}"
         ".ldr-sub{margin:0;font-size:13px;color:#64748b;font-weight:500}"
         ".ldr-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:14px}"
@@ -12389,11 +12454,11 @@ def _html_lideres_login():
         "transition:transform .18s ease,box-shadow .18s ease}"
         ".ldr-card:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(15,23,42,.10)}"
         ".ldr-photo{width:160px;height:160px;margin:0 auto 10px;border-radius:50%;overflow:hidden;"
-        "background:#e2e8f0;border:3px solid #dbeafe;box-shadow:0 4px 12px rgba(11,45,87,.12)}"
+        "background:#e2e8f0;border:3px solid #dbeafe;box-shadow:0 4px 12px rgba(0,32,194,.12)}"
         ".ldr-photo img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}"
         ".ldr-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;"
-        "font-size:56px;font-weight:800;color:#0B2D57;background:linear-gradient(135deg,#dbeafe,#e2e8f0)}"
-        ".ldr-name{font-size:12px;font-weight:800;color:#0B2D57;text-transform:uppercase;"
+        "font-size:56px;font-weight:800;color:#0020C2;background:linear-gradient(135deg,#dbeafe,#e2e8f0)}"
+        ".ldr-name{font-size:12px;font-weight:800;color:#0020C2;text-transform:uppercase;"
         "letter-spacing:.04em;line-height:1.3}"
         ".ldr-role{font-size:11.5px;color:#334155;margin-top:4px;font-weight:600;line-height:1.35}"
         ".ldr-year{font-size:11px;color:#94a3b8;margin-top:4px;font-weight:500}"
@@ -12402,7 +12467,7 @@ def _html_lideres_login():
         ".ldr-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}"
         ".ldr-clamp.ldr-open{display:block;-webkit-line-clamp:unset;overflow:visible}"
         ".ldr-more{margin-top:6px;background:none;border:0;padding:0;font-size:12px;font-weight:700;"
-        "color:#005BEA;cursor:pointer}"
+        "color:#0020C2;cursor:pointer}"
         ".ldr-more:hover{text-decoration:underline}"
         "@media(max-width:520px){.ldr-card{width:100%;max-width:260px}}"
         "</style>"
@@ -12633,8 +12698,8 @@ def _nav_public_html(active=""):
 <div class="navbar-apple-wrap" id="navAppleWrap">
 <nav class="navbar-apple-glass">
   <a class="nav-logo-apple" href="/procsis">
-    <img src="/media/logo-corporativo" alt="PROCSIS" class="logo-micro" onerror="this.style.display='none'">
-    <span>EduTrack · PROCSIS</span>
+    <img src="/static/img/logo-procsis-mark.png" alt="PROCSIS" class="logo-micro" onerror="this.style.display='none'">
+    <span>PROCSIS <i>|</i> EduTrack</span>
   </a>
   <div class="nav-links-center">
     <span class="link-apple" role="button" tabindex="0" data-dd="procsis">Procsis</span>
@@ -12731,7 +12796,7 @@ a[href*="whatsapp"], .btn-wa, .btn-apple {{
   box-shadow: none !important;
 }}
 a.btn:active, .btn:active, .sx-cta a:active {{ transform: scale(.97) !important; }}
-.sx-cta a, a.btn-primary {{ background: #0B2D57 !important; color: #fff !important; border: 0 !important; padding: 12px 22px !important; }}
+.sx-cta a, a.btn-primary {{ background: #0020C2 !important; color: #fff !important; border: 0 !important; padding: 12px 22px !important; }}
 .sx-cta a[href*="whatsapp"], a[href*="whatsapp"].btn, a[style*="16a34a"] {{
   background: #0B4A8F !important; color: #fff !important;
 }}
@@ -12753,20 +12818,20 @@ def pagina_soluciones():
     body = """
 <style>
 .sx{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}
-.sx-hero{background:linear-gradient(135deg,#0B2D57 0%,#1e40af 55%,#2563eb 100%);color:#fff;padding:48px 20px 40px}
+.sx-hero{background:linear-gradient(135deg,#0020C2 0%,#1e40af 55%,#2563eb 100%);color:#fff;padding:48px 20px 40px}
 .sx-hero-in{max-width:1000px;margin:0 auto}
 .sx-hero h1{margin:0 0 10px;font-size:32px;font-weight:800;line-height:1.2}
 .sx-hero p{margin:0;max-width:640px;opacity:.92;font-size:16px;line-height:1.5}
 .sx-wrap{max-width:1000px;margin:0 auto;padding:28px 16px 10px}
 .sx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
 .sx-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;box-shadow:0 4px 14px rgba(15,23,42,.04)}
-.sx-card h3{margin:0 0 8px;color:#0B2D57;font-size:17px}
+.sx-card h3{margin:0 0 8px;color:#0020C2;font-size:17px}
 .sx-card p{margin:0;color:#475569;font-size:14px;line-height:1.45}
 .sx-ico{font-size:22px;margin-bottom:8px}
 .sx-sec{margin:28px 0}
-.sx-sec h2{color:#0B2D57;font-size:22px;margin:0 0 12px}
+.sx-sec h2{color:#0020C2;font-size:22px;margin:0 0 12px}
 .sx-cta{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px;text-align:center;margin:24px 0}
-.sx-cta a{display:inline-block;background:#0B2D57;color:#fff;text-decoration:none;font-weight:800;padding:12px 18px;border-radius:10px;margin:6px}
+.sx-cta a{display:inline-block;background:#0020C2;color:#fff;text-decoration:none;font-weight:800;padding:12px 18px;border-radius:10px;margin:6px}
 </style>
 <div class="sx">
   <section class="sx-hero"><div class="sx-hero-in">
@@ -12791,11 +12856,11 @@ def pagina_soluciones():
       </div>
     </section>
     <div class="sx-cta">
-      <h2 style="margin:0 0 8px;color:#0B2D57">¿Quieres ver EduTrack en tu colegio?</h2>
+      <h2 style="margin:0 0 8px;color:#0020C2">¿Quieres ver EduTrack en tu colegio?</h2>
       <p style="color:#64748b;margin:0 0 12px">Agenda una demostración o escribe a ventas por WhatsApp.</p>
       <a href="/eventos-virtuales#demo">Agendar demo</a>
       <a href="/whatsapp" style="background:#16a34a">WhatsApp</a>
-      <a href="/login" style="background:#fff;color:#0B2D57;border:1px solid #0B2D57">Ya soy cliente — Ingresar</a>
+      <a href="/login" style="background:#fff;color:#0020C2;border:1px solid #0020C2">Ya soy cliente — Ingresar</a>
     </div>
   </div>
 </div>
@@ -12813,13 +12878,13 @@ def pagina_quienes_somos():
     body = f"""
 <style>
 .qx{{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}}
-.qx-hero{{background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;padding:48px 20px}}
+.qx-hero{{background:linear-gradient(135deg,#0020C2,#0020C2);color:#fff;padding:48px 20px}}
 .qx-hero-in{{max-width:900px;margin:0 auto}}
 .qx-hero h1{{margin:0 0 10px;font-size:32px;font-weight:800}}
 .qx-hero p{{margin:0;opacity:.93;font-size:16px;line-height:1.5;max-width:620px}}
 .qx-wrap{{max-width:900px;margin:0 auto;padding:28px 16px}}
 .qx-block{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px;margin-bottom:16px}}
-.qx-block h2{{margin:0 0 10px;color:#0B2D57;font-size:20px}}
+.qx-block h2{{margin:0 0 10px;color:#0020C2;font-size:20px}}
 .qx-block p{{margin:0 0 10px;color:#475569;font-size:14px;line-height:1.55}}
 .qx-grid{{display:grid;grid-template-columns:1fr 1fr;gap:14px}}
 @media(max-width:700px){{.qx-grid{{grid-template-columns:1fr}}}}
@@ -12858,19 +12923,19 @@ def pagina_eventos_virtuales():
     body = """
 <style>
 .ex{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}
-.ex-hero{background:linear-gradient(135deg,#0B2D57,#2563eb);color:#fff;padding:48px 20px}
+.ex-hero{background:linear-gradient(135deg,#0020C2,#2563eb);color:#fff;padding:48px 20px}
 .ex-hero-in{max-width:960px;margin:0 auto}
 .ex-hero h1{margin:0 0 10px;font-size:32px;font-weight:800}
 .ex-hero p{margin:0;opacity:.93;max-width:600px;line-height:1.5}
 .ex-wrap{max-width:960px;margin:0 auto;padding:28px 16px}
 .ex-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:14px;display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:center}
 @media(max-width:640px){.ex-card{grid-template-columns:1fr}}
-.ex-date{background:#eff6ff;color:#0B2D57;border-radius:12px;text-align:center;padding:12px;font-weight:800}
+.ex-date{background:#eff6ff;color:#0020C2;border-radius:12px;text-align:center;padding:12px;font-weight:800}
 .ex-date b{display:block;font-size:22px}
-.ex-card h3{margin:0 0 6px;color:#0B2D57;font-size:17px}
+.ex-card h3{margin:0 0 6px;color:#0020C2;font-size:17px}
 .ex-card p{margin:0;color:#64748b;font-size:14px;line-height:1.45}
 .ex-tag{display:inline-block;background:#dbeafe;color:#1e40af;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;margin-bottom:6px}
-.ex-cta{background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:10px 14px;border-radius:10px;display:inline-block;margin-top:10px;font-size:13px}
+.ex-cta{background:#0020C2;color:#fff;text-decoration:none;font-weight:700;padding:10px 14px;border-radius:10px;display:inline-block;margin-top:10px;font-size:13px}
 </style>
 <div class="ex">
   <section class="ex-hero"><div class="ex-hero-in">
@@ -12906,7 +12971,7 @@ def pagina_eventos_virtuales():
       </div>
     </article>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center;margin-top:10px">
-      <h3 style="margin:0 0 8px;color:#0B2D57">¿Tu colegio necesita una sesión privada?</h3>
+      <h3 style="margin:0 0 8px;color:#0020C2">¿Tu colegio necesita una sesión privada?</h3>
       <p style="color:#64748b;margin:0 0 12px;font-size:14px">Coordinamos una capacitación exclusiva para tu equipo directivo y docentes.</p>
       <a class="ex-cta" href="/whatsapp">Solicitar sesión privada</a>
     </div>
@@ -12924,12 +12989,12 @@ def pagina_trabaja_con_nosotros():
     body = """
 <style>
 .tw{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}
-.tw-hero{background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;padding:48px 20px}
+.tw-hero{background:linear-gradient(135deg,#0020C2,#0020C2);color:#fff;padding:48px 20px}
 .tw-wrap{max-width:900px;margin:0 auto;padding:24px 16px}
 .tw-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:14px}
-.tw-card h2{margin:0 0 8px;color:#0B2D57;font-size:18px}
+.tw-card h2{margin:0 0 8px;color:#0020C2;font-size:18px}
 .tw-card p{margin:0;color:#475569;font-size:14px;line-height:1.5}
-.tw-cta{display:inline-block;margin-top:12px;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:10px 14px;border-radius:10px}
+.tw-cta{display:inline-block;margin-top:12px;background:#0020C2;color:#fff;text-decoration:none;font-weight:700;padding:10px 14px;border-radius:10px}
 </style>
 <div class="tw">
   <section class="tw-hero"><div style="max-width:900px;margin:0 auto">
@@ -12983,7 +13048,7 @@ def pagina_casos_exito():
     body = f"""
 <style>
 .cx{{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#1d1d1f}}
-.cx-hero{{background:linear-gradient(135deg,#0B2D57,#0B63CE);color:#fff;padding:48px 20px}}
+.cx-hero{{background:linear-gradient(135deg,#0020C2,#0B63CE);color:#fff;padding:48px 20px}}
 .cx-wrap{{max-width:900px;margin:0 auto;padding:24px 16px}}
 .cx-card{{background:#f5f5f7;border:0;border-radius:20px;padding:22px;margin-bottom:14px;box-shadow:0 4px 30px rgba(0,0,0,.02)}}
 .cx-card h2{{margin:0 0 8px;color:#1d1d1f;font-size:18px;font-weight:600}}
@@ -12998,7 +13063,7 @@ def pagina_casos_exito():
     {cards}
     <div class="cx-card"><h2>¿Quieres ser el próximo caso?</h2>
     <p>Agenda una demo y evaluamos el plan adecuado.</p>
-    <p style="margin-top:12px"><a href="/ventas" style="background:#005BEA;color:#fff;text-decoration:none;font-weight:500;padding:10px 18px;border-radius:980px;display:inline-block">Ver planes</a></p></div>
+    <p style="margin-top:12px"><a href="/ventas" style="background:#0020C2;color:#fff;text-decoration:none;font-weight:500;padding:10px 18px;border-radius:980px;display:inline-block">Ver planes</a></p></div>
   </div>
 </div>
 """
@@ -13010,10 +13075,10 @@ def pagina_historias_decision():
     body = """
 <style>
 .hx{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}
-.hx-hero{background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:48px 20px}
+.hx-hero{background:linear-gradient(135deg,#0020C2,#1e40af);color:#fff;padding:48px 20px}
 .hx-wrap{max-width:900px;margin:0 auto;padding:24px 16px}
 .hx-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:14px}
-.hx-card h2{margin:0 0 8px;color:#0B2D57;font-size:17px}
+.hx-card h2{margin:0 0 8px;color:#0020C2;font-size:17px}
 .hx-card p{margin:0;color:#475569;font-size:14px;line-height:1.55}
 </style>
 <div class="hx">
@@ -13260,7 +13325,7 @@ def _promo_preview_cards():
                 + '<div style="font-size:12px;color:#86868b;text-decoration:line-through;margin-top:2px">$'
                 + "{:,.0f}".format(pv["valor_pleno"]).replace(",", ".")
                 + " COP</div>"
-                + '<div style="margin-top:8px;display:inline-block;background:rgba(0,91,234,.1);color:#005BEA;'
+                + '<div style="margin-top:8px;display:inline-block;background:rgba(0,32,194,.1);color:#0020C2;'
                 'padding:4px 10px;border-radius:980px;font-size:11px;font-weight:600">'
                 + _esc(pv.get("nombre_promo") or "Promo") + " · " + str(pv.get("porcentaje") or 0) + "%</div>"
                 + '<div style="font-size:11px;color:#86868b;margin-top:6px">Hasta ' + _esc(pv.get("fecha_caducidad_texto") or "") + "</div>"
@@ -13276,7 +13341,7 @@ def _promo_preview_cards():
             '<div style="border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px;background:#fafafa">'
             '<div style="font-size:11px;font-weight:600;color:#86868b;text-transform:uppercase">'
             + _esc(pl.codigo or "") + "</div>"
-            '<div style="font-size:15px;font-weight:700;color:#002060;margin:4px 0 10px">' + _esc(pl.nombre or "") + "</div>"
+            '<div style="font-size:15px;font-weight:700;color:#0F172A;margin:4px 0 10px">' + _esc(pl.nombre or "") + "</div>"
             + precio_html + "</div>"
         )
     if not promo:
@@ -13640,19 +13705,19 @@ def _legal_page_shell(titulo, cuerpo_html, activo_codigo="", con_nav=True):
     for cod, lab, href in nav:
         if cod == activo_codigo:
             links.append(
-                '<span style="color:#005BEA;font-weight:700;font-size:13px;margin-right:12px">'
+                '<span style="color:#0020C2;font-weight:700;font-size:13px;margin-right:12px">'
                 + lab + "</span>"
             )
         else:
             links.append(
-                '<a href="' + href + '" style="color:#1d4ed8;font-weight:600;font-size:13px;'
+                '<a href="' + href + '" style="color:#0020C2;font-weight:600;font-size:13px;'
                 'margin-right:12px;text-decoration:none">' + lab + "</a>"
             )
     nav_html = "".join(links) + (
         '<a href="/login" style="color:#86868b;font-size:13px;margin-left:8px">Volver</a>'
     )
     if not con_nav:
-        nav_html = '<a href="/" style="color:#1d4ed8;font-weight:600;font-size:13px;text-decoration:none">← Volver al inicio</a>'
+        nav_html = '<a href="/" style="color:#0020C2;font-weight:600;font-size:13px;text-decoration:none">← Volver al inicio</a>'
     year = "2026"
     try:
         year = str(ahora().year)
@@ -13662,8 +13727,8 @@ def _legal_page_shell(titulo, cuerpo_html, activo_codigo="", con_nav=True):
         "<style>"
         ".legal-wrap{max-width:780px;margin:24px auto;padding:0 16px 48px;"
         "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#1d1d1f}"
-        ".legal-wrap h1{color:#002060;font-size:26px;margin:0 0 8px;letter-spacing:-.02em}"
-        ".legal-wrap h2{color:#002060;font-size:16px;margin:22px 0 8px}"
+        ".legal-wrap h1{color:#0F172A;font-size:26px;margin:0 0 8px;letter-spacing:-.02em}"
+        ".legal-wrap h2{color:#0F172A;font-size:16px;margin:22px 0 8px}"
         ".legal-wrap p,.legal-wrap li{font-size:14px;line-height:1.65;color:#334155}"
         ".legal-card{background:#fff;border-radius:20px;padding:28px;"
         "box-shadow:0 8px 30px rgba(15,23,42,.06);border:1px solid rgba(0,0,0,.04)}"
@@ -13995,17 +14060,17 @@ def _generar_pdf_contrato(contrato_id, texto, meta=None):
 def _politica_page(titulo, cuerpo):
     body = (
         '<div style="font-family:Segoe UI,system-ui,sans-serif;color:#0f172a">'
-        '<section style="background:#0B2D57;color:#fff;padding:36px 20px"><div style="max-width:860px;margin:0 auto">'
+        '<section style="background:#0020C2;color:#fff;padding:36px 20px"><div style="max-width:860px;margin:0 auto">'
         '<h1 style="margin:0;font-size:26px;font-weight:800">' + titulo + "</h1></div></section>"
         '<div style="max-width:860px;margin:0 auto;padding:24px 16px">'
         '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:16px">'
-        '<b style="color:#0B2D57">Políticas</b><br>'
-        '<a href="/politicas/seguridad-informacion" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Seguridad de la información</a>'
-        '<a href="/politicas/ciberseguridad" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Ciberseguridad</a>'
-        '<a href="/politicas/cookies" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Cookies</a>'
-        '<a href="/reembolsos" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Reembolsos</a>'
-        '<a href="/politicas/datos-personales" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Protección de datos personales</a>'
-        '<a href="/politicas/aviso-privacidad" style="display:block;color:#0B2D57;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Aviso de privacidad</a>'
+        '<b style="color:#0020C2">Políticas</b><br>'
+        '<a href="/politicas/seguridad-informacion" style="display:block;color:#0020C2;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Seguridad de la información</a>'
+        '<a href="/politicas/ciberseguridad" style="display:block;color:#0020C2;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Ciberseguridad</a>'
+        '<a href="/politicas/cookies" style="display:block;color:#0020C2;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Cookies</a>'
+        '<a href="/reembolsos" style="display:block;color:#0020C2;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Reembolsos</a>'
+        '<a href="/politicas/datos-personales" style="display:block;color:#0020C2;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Protección de datos personales</a>'
+        '<a href="/politicas/aviso-privacidad" style="display:block;color:#0020C2;font-size:13px;font-weight:600;margin:6px 0;text-decoration:none">Aviso de privacidad</a>'
         "</div>" + cuerpo + "</div></div>"
     )
     return _public_shell(titulo + " · PROCSIS", body, "nosotros")
@@ -14020,8 +14085,8 @@ def pagina_politicas_index():
 def pol_seguridad():
     return _politica_page(
         "Política de seguridad de la información",
-        "<h2 style='color:#0B2D57'>Objetivo</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Proteger la confidencialidad, integridad y disponibilidad de la información de las instituciones y de Procsis en EduTrack.</p>"
-        "<h2 style='color:#0B2D57'>Controles</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Roles, auditoría, cierre de sesión, multi-inquilino y buenas prácticas de acceso.</p>",
+        "<h2 style='color:#0020C2'>Objetivo</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Proteger la confidencialidad, integridad y disponibilidad de la información de las instituciones y de Procsis en EduTrack.</p>"
+        "<h2 style='color:#0020C2'>Controles</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Roles, auditoría, cierre de sesión, multi-inquilino y buenas prácticas de acceso.</p>",
     )
 
 
@@ -14029,8 +14094,8 @@ def pol_seguridad():
 def pol_ciber():
     return _politica_page(
         "Política de ciberseguridad",
-        "<h2 style='color:#0B2D57'>Enfoque</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Reducir riesgos de acceso no autorizado, fraude y pérdida de datos.</p>"
-        "<h2 style='color:#0B2D57'>Medidas</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Cabeceras de seguridad, límite de intentos de login y canales oficiales de soporte.</p>",
+        "<h2 style='color:#0020C2'>Enfoque</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Reducir riesgos de acceso no autorizado, fraude y pérdida de datos.</p>"
+        "<h2 style='color:#0020C2'>Medidas</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Cabeceras de seguridad, límite de intentos de login y canales oficiales de soporte.</p>",
     )
 
 
@@ -14048,7 +14113,7 @@ def pol_cookies():
 def pol_cookies():
     return _politica_page(
         "Política de cookies",
-        "<h2 style='color:#0B2D57'>Cookies técnicas</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Se usan cookies de sesión para autenticación y seguridad. No se usan con fines publicitarios de terceros. Ver también <a href='/cookies'>/cookies</a>.</p>",
+        "<h2 style='color:#0020C2'>Cookies técnicas</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Se usan cookies de sesión para autenticación y seguridad. No se usan con fines publicitarios de terceros. Ver también <a href='/cookies'>/cookies</a>.</p>",
     )
 
 
@@ -14066,8 +14131,8 @@ def pol_datos():
 def pol_datos():
     return _politica_page(
         "Política de protección de datos personales",
-        "<h2 style='color:#0B2D57'>Marco</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Ley 1581 de 2012 y normas complementarias, con especial cuidado de datos de estudiantes y menores.</p>"
-        "<h2 style='color:#0B2D57'>Finalidad</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Prestación del servicio EduTrack, soporte, facturación del servicio y seguridad de la plataforma.</p>",
+        "<h2 style='color:#0020C2'>Marco</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Ley 1581 de 2012 y normas complementarias, con especial cuidado de datos de estudiantes y menores.</p>"
+        "<h2 style='color:#0020C2'>Finalidad</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Prestación del servicio EduTrack, soporte, facturación del servicio y seguridad de la plataforma.</p>",
     )
 
 
@@ -14085,8 +14150,8 @@ def pol_aviso():
 def pol_aviso():
     return _politica_page(
         "Aviso de privacidad",
-        "<h2 style='color:#0B2D57'>Responsable</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Procsis — plataforma EduTrack. Los datos de cada colegio se tratan en el marco del contrato con la institución.</p>"
-        "<h2 style='color:#0B2D57'>Derechos</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Consulta y actualización a través de la institución y canales oficiales. Ver <a href='/legal'>/legal</a>.</p>",
+        "<h2 style='color:#0020C2'>Responsable</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Procsis — plataforma EduTrack. Los datos de cada colegio se tratan en el marco del contrato con la institución.</p>"
+        "<h2 style='color:#0020C2'>Derechos</h2><p style='color:#475569;font-size:14px;line-height:1.55'>Consulta y actualización a través de la institución y canales oficiales. Ver <a href='/legal'>/legal</a>.</p>",
     )
 
 
@@ -14107,31 +14172,31 @@ _PA_PAGE = r"""
 .sa-hero{min-height:72vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:72px 20px;background:#fff}
 .sa-hero h1{margin:0 0 16px;font-size:clamp(34px,6.4vw,66px);line-height:1.05;font-weight:700;letter-spacing:-.03em;color:#000;max-width:860px}
 .sa-hero p{margin:0 0 30px;font-size:clamp(17px,2.4vw,24px);line-height:1.35;color:#6e6e73;max-width:640px;font-weight:400}
-.sa-cta,.sa-go{display:inline-flex;align-items:center;justify-content:center;border-radius:980px;background:#0071e3;color:#fff;font-weight:500;font-size:17px;
+.sa-cta,.sa-go{display:inline-flex;align-items:center;justify-content:center;border-radius:980px;background:#0020C2;color:#fff;font-weight:500;font-size:17px;
   padding:13px 28px;text-decoration:none;cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .2s ease,transform .12s ease,opacity .2s ease}
-.sa-cta:hover,.sa-go:hover{background:#0077ed}
+.sa-cta:hover,.sa-go:hover{background:#0018A8}
 .sa-cta:active,.sa-go:active{transform:scale(.97)}
-.sa-cta:focus-visible,.sa-go:focus-visible,.sa-cat:focus-visible,.sa-item:focus-visible,.sa-gps:focus-visible{outline:3px solid rgba(0,113,227,.45);outline-offset:3px}
+.sa-cta:focus-visible,.sa-go:focus-visible,.sa-cat:focus-visible,.sa-item:focus-visible,.sa-gps:focus-visible{outline:3px solid rgba(0,32,194,.45);outline-offset:3px}
 .sa-find{background:#f5f5f7;padding:72px 20px 64px}
 .sa-wrap{max-width:900px;margin:0 auto}
 .sa-find h2{margin:0 0 8px;text-align:center;font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-.025em;color:#000}
 .sa-find .sa-lead{margin:0 0 28px;text-align:center;color:#6e6e73;font-size:17px}
 .sa-search{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #d2d2d7;border-radius:980px;padding:6px 8px 6px 20px;max-width:640px;margin:0 auto 26px;transition:border-color .2s,box-shadow .2s}
-.sa-search:focus-within{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.15)}
+.sa-search:focus-within{border-color:#0020C2;box-shadow:0 0 0 4px rgba(0,32,194,.15)}
 .sa-search svg{flex:0 0 auto;width:20px;height:20px;stroke:#86868b;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .sa .sa-search input.sa-in{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:#1d1d1f;padding:10px 0;box-shadow:none;margin:0;width:auto;border-radius:0}
 .sa-gps{flex:0 0 auto;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#1d1d1f;transition:background .2s}
 .sa-gps svg{stroke:currentColor}
 .sa-gps:hover{background:#f0f0f3}
-.sa-gps.on{color:#0071e3;background:rgba(0,113,227,.1)}
+.sa-gps.on{color:#0020C2;background:rgba(0,32,194,.1)}
 .sa-cats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
 .sa-cat{background:#fff;border:1px solid #e0e0e5;border-radius:24px;aspect-ratio:1/1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:14px;
   text-align:center;cursor:pointer;user-select:none;-webkit-user-select:none;transition:border-color .2s,background .2s,transform .15s,box-shadow .2s}
 .sa-cat svg{width:44px;height:44px;stroke:#1d1d1f;fill:none;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
 .sa-cat span{font-size:15px;font-weight:500;line-height:1.25;color:#1d1d1f}
 .sa-cat:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.07)}
-.sa-cat.on{border:1.5px solid #0071e3;background:#f5faff;box-shadow:0 0 0 3px rgba(0,113,227,.12)}
-.sa-cat.on svg{stroke:#0071e3}
+.sa-cat.on{border:1.5px solid #0020C2;background:#f5faff;box-shadow:0 0 0 3px rgba(0,32,194,.12)}
+.sa-cat.on svg{stroke:#0020C2}
 .sa-actions{display:flex;flex-direction:column;align-items:center;gap:12px}
 .sa-go{min-width:120px}
 .sa-go.is-off{background:#a9d1f7;pointer-events:none;cursor:default}
@@ -14145,16 +14210,16 @@ _PA_PAGE = r"""
 .sa-list{overflow-y:auto;padding:2px 6px 2px 2px;display:flex;flex-direction:column;gap:12px;-webkit-overflow-scrolling:touch}
 .sa-item{background:#f5f5f7;border:1.5px solid transparent;border-radius:22px;padding:18px 18px 16px;cursor:pointer;transition:border-color .2s,background .2s}
 .sa-item:hover{background:#efeff2}
-.sa-item.on{border-color:#0071e3;background:#f5faff}
+.sa-item.on{border-color:#0020C2;background:#f5faff}
 .sa-item-t{font-size:17px;font-weight:600;letter-spacing:-.01em;color:#1d1d1f}
 .sa-item-a{margin-top:4px;font-size:14px;color:#6e6e73;line-height:1.4}
 .sa-item-s{margin-top:10px;font-size:14px;font-weight:500}
 .sa-item-s.open{color:#1a7f37}
 .sa-item-s.closed{color:#6e6e73}
 .sa-item-f{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.sa-how{display:inline-flex;border-radius:980px;background:#0071e3;color:#fff!important;font-size:14px;font-weight:500;padding:9px 18px;text-decoration:none;transition:background .2s}
-.sa-how:hover{background:#0077ed}
-.sa-tel{font-size:14px;color:#0071e3;text-decoration:none}
+.sa-how{display:inline-flex;border-radius:980px;background:#0020C2;color:#fff!important;font-size:14px;font-weight:500;padding:9px 18px;text-decoration:none;transition:background .2s}
+.sa-how:hover{background:#0018A8}
+.sa-tel{font-size:14px;color:#0020C2;text-decoration:none}
 .sa-dist{margin-left:auto;font-size:13px;color:#6e6e73}
 .sa-mapbox{position:relative;border-radius:28px;overflow:hidden;border:1px solid rgba(255,255,255,.9);box-shadow:0 18px 50px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.9);background:#e9eef5}
 #sa-map{position:absolute;inset:0}
@@ -14162,8 +14227,8 @@ _PA_PAGE = r"""
   background:rgba(255,255,255,.7);-webkit-backdrop-filter:blur(18px) saturate(180%);backdrop-filter:blur(18px) saturate(180%);border:1px solid rgba(255,255,255,.9)}
 .sa-nomap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#6e6e73;font-size:15px}
 .sa-empty{padding:28px 20px;border-radius:22px;background:#f5f5f7;color:#6e6e73;font-size:15px;line-height:1.5;text-align:center}
-.sa-pin span{display:block;width:22px;height:22px;border-radius:50%;background:#0071e3;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,113,227,.55)}
-.sa-pin.on span{transform:scale(1.25);box-shadow:0 0 0 6px rgba(0,113,227,.25),0 3px 10px rgba(0,113,227,.55)}
+.sa-pin span{display:block;width:22px;height:22px;border-radius:50%;background:#0020C2;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,32,194,.55)}
+.sa-pin.on span{transform:scale(1.25);box-shadow:0 0 0 6px rgba(0,32,194,.25),0 3px 10px rgba(0,32,194,.55)}
 .leaflet-container{font-family:inherit}
 @media(max-width:900px){
   .sa-cats{grid-template-columns:repeat(2,1fr)}
@@ -14568,7 +14633,7 @@ pintar();})();</script>"""
       <div><label><b>Nombre</b></label><input name="nombre" required maxlength="160" placeholder="Ej. Sede Principal Procsis"></div>
       <div><label><b>Tipo</b></label><select name="categoria">{opts}</select></div>
     </div>
-    <h4 style="margin:14px 0 6px;color:#0B2D57">1. Dirección exacta</h4>
+    <h4 style="margin:14px 0 6px;color:#0020C2">1. Dirección exacta</h4>
     <div class="form-row">
       <div><label><b>Tipo de vía *</b></label><select name="via" id="pa-via">{vias_opts}</select></div>
       <div><label><b>Número de la vía *</b></label><input name="via_numero" id="pa-vnum" maxlength="20" placeholder="Ej. 43A" inputmode="text"></div>
@@ -14581,8 +14646,8 @@ pintar();})();</script>"""
       <div><label><b>Departamento</b></label><input name="depto" id="pa-depto" maxlength="60" placeholder="Antioquia"></div>
       <div><label><b>Código postal</b></label><input name="codigo_postal" maxlength="12"></div>
     </div>
-    <div style="margin:6px 0 4px;font-size:13px">Dirección: <b id="pa-prev" style="color:#0B2D57">—</b></div>
-    <h4 style="margin:14px 0 6px;color:#0B2D57">2. Ubicación (se calcula con la dirección)</h4>
+    <div style="margin:6px 0 4px;font-size:13px">Dirección: <b id="pa-prev" style="color:#0020C2">—</b></div>
+    <h4 style="margin:14px 0 6px;color:#0020C2">2. Ubicación (se calcula con la dirección)</h4>
     <div class="form-row">
       <div><label><b>Latitud</b></label><input name="lat" id="pa-lat" placeholder="se completa sola"></div>
       <div><label><b>Longitud</b></label><input name="lng" id="pa-lng" placeholder="se completa sola"></div>
@@ -14854,28 +14919,28 @@ _MP_PAGE = r"""
 .mp-bar{background:#f5f5f7;border-radius:24px;padding:16px;display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px;margin-bottom:12px}
 .mp-bar label{display:block;font-size:12px;font-weight:600;color:#6e6e73;margin:0 0 4px 4px}
 .mp .mp-in{width:100%;height:46px;border:1px solid #d2d2d7;border-radius:14px;background:#fff;padding:0 14px;font:inherit;font-size:15px;color:#1d1d1f;outline:0;margin:0;box-shadow:none}
-.mp .mp-in:focus{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.15)}
+.mp .mp-in:focus{border-color:#0020C2;box-shadow:0 0 0 4px rgba(0,32,194,.15)}
 .mp-row2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .mp-capa{display:inline-flex;align-items:center;gap:7px;border:1px solid #d2d2d7;border-radius:980px;padding:7px 14px 7px 10px;font-size:13px;cursor:pointer;background:#fff;user-select:none;-webkit-user-select:none}
-.mp-capa input{width:auto;margin:0;accent-color:#0071e3}
+.mp-capa input{width:auto;margin:0;accent-color:#0020C2}
 .mp-dot{display:inline-block;width:10px;height:10px;border-radius:50%}
-.mp-btn{display:inline-flex;align-items:center;justify-content:center;border-radius:980px;background:#0071e3;color:#fff;font-weight:500;font-size:15px;padding:11px 24px;cursor:pointer;user-select:none;-webkit-user-select:none;text-decoration:none;transition:background .2s,transform .12s}
-.mp-btn:hover{background:#0077ed}.mp-btn:active{transform:scale(.97)}
-.mp-btn.sec{background:#fff;color:#0071e3;border:1px solid #0071e3}
+.mp-btn{display:inline-flex;align-items:center;justify-content:center;border-radius:980px;background:#0020C2;color:#fff;font-weight:500;font-size:15px;padding:11px 24px;cursor:pointer;user-select:none;-webkit-user-select:none;text-decoration:none;transition:background .2s,transform .12s}
+.mp-btn:hover{background:#0018A8}.mp-btn:active{transform:scale(.97)}
+.mp-btn.sec{background:#fff;color:#0020C2;border:1px solid #0020C2}
 .mp-btn.sec:hover{background:#f0f7ff}
-.mp-btn:focus-visible,.mp-it:focus-visible{outline:3px solid rgba(0,113,227,.45);outline-offset:2px}
+.mp-btn:focus-visible,.mp-it:focus-visible{outline:3px solid rgba(0,32,194,.45);outline-offset:2px}
 .mp-val{font-size:13px;min-height:20px;margin:0 0 12px 4px;color:#6e6e73}
 .mp-val.ok{color:#1a7f37}.mp-val.warn{color:#b45309}
 .mp-split{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:16px;height:640px}
 .mp-list{overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:2px 6px 2px 2px}
 .mp-it{background:#f5f5f7;border:1.5px solid transparent;border-radius:20px;padding:14px 16px;cursor:pointer;transition:border-color .2s,background .2s}
-.mp-it:hover{background:#efeff2}.mp-it.on{border-color:#0071e3;background:#f5faff}
+.mp-it:hover{background:#efeff2}.mp-it.on{border-color:#0020C2;background:#f5faff}
 .mp-tag{display:inline-block;font-size:11px;font-weight:600;border-radius:980px;padding:3px 10px;color:#fff}
 .mp-it h4{margin:8px 0 2px;font-size:16px;font-weight:600;letter-spacing:-.01em}
 .mp-it p{margin:0;font-size:13px;color:#6e6e73;line-height:1.4}
 .mp-it .mp-f{margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}
-.mp-loc{display:inline-flex;border-radius:980px;background:#0071e3;color:#fff;font-size:13px;font-weight:500;padding:7px 14px;cursor:pointer}
-.mp-loc:hover{background:#0077ed}.mp-loc.done{background:#e8f3ff;color:#0071e3}
+.mp-loc{display:inline-flex;border-radius:980px;background:#0020C2;color:#fff;font-size:13px;font-weight:500;padding:7px 14px;cursor:pointer}
+.mp-loc:hover{background:#0018A8}.mp-loc.done{background:#e8f3ff;color:#0020C2}
 .mp-st{color:#6e6e73}.mp-st.ok{color:#1a7f37}
 .mp-box{position:relative;border-radius:28px;overflow:hidden;border:1px solid rgba(255,255,255,.9);box-shadow:0 18px 50px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.9);background:#e9eef5}
 #mp-map{position:absolute;inset:0}
@@ -14883,7 +14948,7 @@ _MP_PAGE = r"""
 .mp-empty{padding:26px 18px;border-radius:20px;background:#f5f5f7;color:#6e6e73;font-size:14px;line-height:1.5;text-align:center}
 .mp-nomap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#6e6e73}
 .mp-pin span{display:block;width:20px;height:20px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35)}
-.mp-pin.on span{transform:scale(1.3);box-shadow:0 0 0 6px rgba(0,113,227,.25),0 3px 10px rgba(0,0,0,.35)}
+.mp-pin.on span{transform:scale(1.3);box-shadow:0 0 0 6px rgba(0,32,194,.25),0 3px 10px rgba(0,0,0,.35)}
 .mp-pin.aprox span{opacity:.75;border-style:dashed}
 .leaflet-container{font-family:inherit}
 @media(max-width:900px){.mp-bar{grid-template-columns:1fr}.mp-split{grid-template-columns:1fr;height:auto}.mp-box{height:360px;order:-1}.mp-list{overflow:visible}}
@@ -14901,7 +14966,7 @@ _MP_PAGE = r"""
       <input class="mp-in" id="mp-q" type="search" autocomplete="off" placeholder="Ej. Institución Educativa… / 105001…"></div>
   </div>
   <div class="mp-row2" id="mp-capas">
-    <label class="mp-capa"><input type="checkbox" value="cliente" checked><span class="mp-dot" style="background:#0071e3"></span>Colegios clientes</label>
+    <label class="mp-capa"><input type="checkbox" value="cliente" checked><span class="mp-dot" style="background:#0020C2"></span>Colegios clientes</label>
     <label class="mp-capa"><input type="checkbox" value="sede" checked><span class="mp-dot" style="background:#0d9488"></span>Sedes</label>
     <label class="mp-capa"><input type="checkbox" value="prospecto" checked><span class="mp-dot" style="background:#f59e0b"></span>Prospectos de ventas</label>
     <label class="mp-capa"><input type="checkbox" value="directorio" checked><span class="mp-dot" style="background:#8e8e93"></span>Directorio MEN</label>
@@ -14920,7 +14985,7 @@ _MP_PAGE = r"""
 <script>
 (function(){
 var DIV=__DIVIPOLA__, CEN=__CENTROS__;
-var COL={cliente:"#0071e3",sede:"#0d9488",prospecto:"#f59e0b",directorio:"#8e8e93",punto:"#7c3aed"};
+var COL={cliente:"#0020C2",sede:"#0d9488",prospecto:"#f59e0b",directorio:"#8e8e93",punto:"#7c3aed"};
 var NOM={cliente:"Cliente",sede:"Sede",prospecto:"Prospecto",directorio:"Directorio MEN",punto:"Punto Procsis"};
 var st={map:null,layer:null,items:[],markers:{},stop:false,busy:false};
 var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -15255,7 +15320,7 @@ def _inauguracion_html():
 <style>
 #inaug-telon{position:fixed;inset:0;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#fff;overflow:hidden}
 .inaug-hoja{position:absolute;top:0;bottom:0;width:50.2%;
-  background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.06)),radial-gradient(600px 500px at 30% 20%,rgba(0,91,234,.28),transparent 70%),radial-gradient(600px 500px at 70% 90%,rgba(16,185,129,.26),transparent 70%);
+  background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.06)),radial-gradient(600px 500px at 30% 20%,rgba(0,32,194,.28),transparent 70%),radial-gradient(600px 500px at 70% 90%,rgba(16,185,129,.26),transparent 70%);
   -webkit-backdrop-filter:blur(48px) saturate(1.6);backdrop-filter:blur(48px) saturate(1.6);
   transition:transform 1.5s cubic-bezier(.16,1,.3,1);will-change:transform}
 .inaug-izq{left:0;border-right:1px solid rgba(255,255,255,.18)}
@@ -15271,7 +15336,7 @@ def _inauguracion_html():
 .inaug-logos{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:30px}
 .inaug-logo{display:flex;align-items:center;justify-content:center;height:46px;padding:6px 14px;border-radius:14px;background:rgba(255,255,255,.88);box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .inaug-logo img{height:32px;width:auto;max-width:150px;object-fit:contain;display:block}
-.inaug-logo b{font-size:15px;color:#0B2D57;letter-spacing:.04em}
+.inaug-logo b{font-size:15px;color:#0020C2;letter-spacing:.04em}
 .inaug-fase{display:none}
 .inaug-fase.on{display:block;animation:inaugAparece .6s ease both}
 @keyframes inaugAparece{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
@@ -15389,20 +15454,20 @@ def gerencia_inauguracion():
     body = r"""
 <style>
 .ig{max-width:640px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}
-.ig h1{font-size:22px;color:#002060;margin:6px 0}
+.ig h1{font-size:22px;color:#0F172A;margin:6px 0}
 .ig .sub{color:#86868b;font-size:13px;margin:0 0 16px}
 .ig label{display:block;font-size:12px;font-weight:700;color:#475569;margin:14px 0 4px}
 .ig input[type=datetime-local],.ig input[type=number]{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:12px;box-sizing:border-box;font-size:15px}
 .ig .hint{font-size:11px;color:#94a3b8;margin:4px 0 0}
 .ig .fila{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.ig button,.ig a.b{display:inline-block;margin-top:18px;background:#005BEA;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:700;cursor:pointer;text-decoration:none;font-size:14px}
+.ig button,.ig a.b{display:inline-block;margin-top:18px;background:#0020C2;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:700;cursor:pointer;text-decoration:none;font-size:14px}
 .ig a.b2{background:#10b981}
 .ig .msg{padding:12px;border-radius:12px;margin-bottom:12px;font-weight:600;font-size:13px}
 .ig .ok{background:#ecfdf5;color:#065f46}.ig .err{background:#fef2f2;color:#991b1b}
 .ig .reloj{background:#f5f5f7;border-radius:14px;padding:10px 14px;font-size:13px;color:#334155;margin-bottom:6px}
 </style>
 <div class="ig">
-  <a href="/gerencia/hq" style="font-size:13px;color:#005BEA;font-weight:600;text-decoration:none">← HQ</a>
+  <a href="/gerencia/hq" style="font-size:13px;color:#0020C2;font-weight:600;text-decoration:none">← HQ</a>
   <h1>🚀 Inauguración en vivo</h1>
   <p class="sub">Telón con conteo regresivo sobre el login. Defina cuándo sale y cuántos segundos dura la cuenta.</p>
   __MSG__
@@ -15809,15 +15874,15 @@ def login():
 <style>
 .lp-topnav{{background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50;box-shadow:0 1px 0 rgba(15,23,42,.04)}}
 .lp-topnav-inner{{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 20px;gap:16px}}
-.lp-topnav .brand{{display:flex;align-items:center;gap:10px;font-weight:800;color:#0B2D57;text-decoration:none}}
+.lp-topnav .brand{{display:flex;align-items:center;gap:10px;font-weight:800;color:#0020C2;text-decoration:none}}
 .lp-topnav .brand img{{height:36px;width:auto;border-radius:6px}}
 .lp-topnav-links{{display:flex;gap:8px;flex-wrap:wrap}}
 .lp-topnav-links a{{color:#334155;text-decoration:none;font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px}}
-.lp-topnav-links a:hover{{background:#f1f5f9;color:#0B2D57}}
+.lp-topnav-links a:hover{{background:#f1f5f9;color:#0020C2}}
 .sinai-portal{{background:radial-gradient(900px 520px at 15% 0%,#dbe8ff,transparent 60%),radial-gradient(700px 420px at 100% 8%,#e3eeff,transparent 60%),#f5f7fb;padding:28px 20px 36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .sinai-grid{{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:1.45fr .85fr;gap:30px;align-items:stretch}}
 @media(max-width:900px){{.sinai-grid{{grid-template-columns:1fr}}}}
-.sinai-carousel{{position:relative;border-radius:30px;overflow:hidden;height:470px;background:linear-gradient(135deg,#000F66 0%,#001EB3 55%,#0119B9 100%);box-shadow:0 30px 80px rgba(0,30,179,.32);border:1px solid rgba(255,255,255,.35);isolation:isolate}}
+.sinai-carousel{{position:relative;border-radius:30px;overflow:hidden;height:470px;background:linear-gradient(135deg,#000F66 0%,#0020C2 55%,#0018A8 100%);box-shadow:0 30px 80px rgba(0,32,194,.32);border:1px solid rgba(255,255,255,.35);isolation:isolate}}
 .sinai-carousel::after{{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,0) 38%,rgba(255,255,255,0) 70%,rgba(255,255,255,.08) 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.12)}}
 @media(max-width:900px){{.sinai-carousel{{height:400px;border-radius:26px}}.sinai-brand-slogan{{font-size:15px!important}}}}
 .sinai-viewport{{width:100%;height:100%;overflow:hidden}}
@@ -15826,41 +15891,41 @@ def login():
 .sinai-slide-photo{{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.55)}}
 .sinai-slide-veil{{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.55) 100%);pointer-events:none}}
 .sinai-slide-ph{{width:100%;height:100%;position:relative;overflow:hidden}}
-.sinai-slide-ph::before{{content:"";position:absolute;width:75%;height:75%;left:-15%;top:-20%;background:radial-gradient(circle,rgba(1,245,1,.26),rgba(1,245,1,0) 65%);filter:blur(12px)}}
-.sinai-slide-ph::after{{content:"";position:absolute;width:80%;height:80%;right:-20%;bottom:-30%;background:radial-gradient(circle,rgba(0,30,179,.9),rgba(0,30,179,0) 65%);filter:blur(12px)}}
+.sinai-slide-ph::before{{content:"";position:absolute;width:75%;height:75%;left:-15%;top:-20%;background:radial-gradient(circle,rgba(0,255,102,.26),rgba(0,255,102,0) 65%);filter:blur(12px)}}
+.sinai-slide-ph::after{{content:"";position:absolute;width:80%;height:80%;right:-20%;bottom:-30%;background:radial-gradient(circle,rgba(0,32,194,.9),rgba(0,32,194,0) 65%);filter:blur(12px)}}
 .sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px 16px 56px;text-align:center;pointer-events:none}}
 .sinai-brand-tile{{background:rgba(255,255,255,.88);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.8);border-radius:24px;padding:8px;box-shadow:0 24px 60px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.95);width:min(var(--car-logo,440px),94%);box-sizing:border-box}}
 .sinai-brand-tile.sin-fondo{{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-color:transparent;box-shadow:none}}
 .sinai-brand-logo{{display:block;width:100%;height:auto;max-height:290px;object-fit:contain;border-radius:16px}}
 .sinai-slide-bgblur{{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(26px) saturate(1.3) brightness(.55);opacity:.85;z-index:0}}
-.sinai-brand-slogan{{margin:0;font-size:clamp(15px,1.6vw,21px);font-weight:600;letter-spacing:-.02em;line-height:1.25;color:#fff;max-width:600px;padding:8px 20px;border-radius:20px;background:rgba(0,15,102,.62);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid rgba(1,245,1,.55);box-shadow:0 10px 30px rgba(0,15,102,.35),inset 0 1px 0 rgba(255,255,255,.25);text-shadow:none}}
+.sinai-brand-slogan{{margin:0;font-size:clamp(15px,1.6vw,21px);font-weight:600;letter-spacing:-.02em;line-height:1.25;color:#fff;max-width:600px;padding:8px 20px;border-radius:20px;background:rgba(0,15,102,.62);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid rgba(0,255,102,.55);box-shadow:0 10px 30px rgba(0,15,102,.35),inset 0 1px 0 rgba(255,255,255,.25);text-shadow:none}}
 .sinai-brand-sub{{font-size:11px;font-weight:600;color:rgba(255,255,255,.78);letter-spacing:.1em;text-transform:uppercase}}
 @keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.06)}}}}
 .sinai-card{{animation:sinai-fade-in .5s ease}}
 @keyframes sinai-fade-in{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
 .sinai-visual-badge{{display:none}}
 .sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.55);background:rgba(0,15,102,.6);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);color:#fff;font-size:28px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.45);transition:background .2s;padding:0;display:flex;align-items:center;justify-content:center}}
-.sinai-nav:hover{{background:rgba(0,30,179,.9)}}
+.sinai-nav:hover{{background:rgba(0,32,194,.9)}}
 .sinai-prev{{left:12px}}.sinai-next{{right:12px}}
 .sinai-dots{{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(0,15,102,.55);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 8px 24px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.4)}}
 .sinai-dot{{width:8px;height:8px;border-radius:999px;border:0;background:rgba(255,255,255,.5);cursor:pointer;padding:0;opacity:1;transition:width .35s cubic-bezier(.25,.1,.25,1),background .35s}}
-.sinai-dot.is-on{{width:26px;background:#01F501}}
+.sinai-dot.is-on{{width:26px;background:#00FF66}}
 .sinai-access h1{{margin:0 0 6px;color:#1d1d1f;font-size:26px;font-weight:700;letter-spacing:-.02em}}
 .sinai-sub{{margin:0 0 16px;color:#86868b;font-size:14px;line-height:1.45}}
 .sinai-card{{background:#fff;border-radius:16px;padding:26px 24px;box-shadow:0 4px 24px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.06)}}
 .sinai-card-label{{font-size:11px;font-weight:600;letter-spacing:.06em;color:#86868b;margin-bottom:12px;text-transform:uppercase}}
 .sinai-form label{{display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin:12px 0 6px}}
 .sinai-form input,.sinai-form select{{width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;box-sizing:border-box;background:#fff;font-family:-apple-system,sans-serif;color:#1d1d1f;transition:border-color .2s,box-shadow .2s}}
-.sinai-form input:focus,.sinai-form select:focus{{outline:none;border-color:#001EB3;background:#fff;box-shadow:0 0 0 4px rgba(0,30,179,.12)}}
+.sinai-form input:focus,.sinai-form select:focus{{outline:none;border-color:#0020C2;background:#fff;box-shadow:0 0 0 4px rgba(0,32,194,.12)}}
 .sinai-search{{position:relative}}
 .sinai-search-ico{{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#86868b}}
 .sinai-search select{{padding-left:34px}}
-.sinai-btn{{width:100%;margin-top:16px;padding:14px 24px;border:0;border-radius:980px;background:#001EB3;color:#fff;font-weight:600;font-size:15px;cursor:pointer;font-family:-apple-system,sans-serif;letter-spacing:-.01em;transition:background .2s cubic-bezier(.25,1,.5,1),transform .1s}}
+.sinai-btn{{width:100%;margin-top:16px;padding:14px 24px;border:0;border-radius:980px;background:#0020C2;color:#fff;font-weight:600;font-size:15px;cursor:pointer;font-family:-apple-system,sans-serif;letter-spacing:-.01em;transition:background .2s cubic-bezier(.25,1,.5,1),transform .1s}}
 .sinai-btn:hover{{background:#000F66}}
 .sinai-btn:active{{transform:scale(.98)}}
 .sinai-roles{{display:none}}
 .sinai-help{{margin-top:16px;text-align:center;font-size:12px;color:#86868b;line-height:1.5}}
-.sinai-help a{{color:#001EB3;text-decoration:none;font-weight:500}}
+.sinai-help a{{color:#0020C2;text-decoration:none;font-weight:500}}
 .sinai-help a:hover{{text-decoration:underline}}
 .sinai-portals{{display:flex;flex-direction:column;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(0,0,0,.06)}}
 .sinai-pill-row{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}}
@@ -15874,33 +15939,33 @@ def login():
 .promo-card{{border-radius:28px;padding:26px 24px;min-height:160px;color:#1d1d1f;position:relative;overflow:hidden;border:1px solid rgba(0,0,0,.05);box-shadow:0 8px 30px rgba(0,0,0,.05);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .promo-card h3{{margin:10px 0 8px;font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-.02em;color:#1d1d1f}}
 .promo-card p{{margin:0 0 18px;font-size:14px;line-height:1.5;font-weight:400;color:#6e6e73}}
-.promo-card .badge{{display:inline-block;font-size:11px;font-weight:600;padding:5px 12px;border-radius:980px;background:rgba(0,113,227,.1);color:#0071e3;letter-spacing:.02em}}
-.promo-card a.btn-promo{{display:inline-block;padding:11px 22px;border-radius:980px;font-weight:600;font-size:14px;text-decoration:none;background:#0071e3;color:#fff;transition:background .2s,color .2s,transform .1s}}
+.promo-card .badge{{display:inline-block;font-size:11px;font-weight:600;padding:5px 12px;border-radius:980px;background:rgba(0,32,194,.1);color:#0020C2;letter-spacing:.02em}}
+.promo-card a.btn-promo{{display:inline-block;padding:11px 22px;border-radius:980px;font-weight:600;font-size:14px;text-decoration:none;background:#0020C2;color:#fff;transition:background .2s,color .2s,transform .1s}}
 .promo-card a.btn-promo:active{{transform:scale(.98)}}
 .promo-a{{background:linear-gradient(135deg,#cfe6ff 0%,#eaf4ff 42%,#fafafc 100%)}}
 .promo-b{{background:linear-gradient(135deg,#d6efff 0%,#eef7fb 45%,#fafafc 100%)}}
-.promo-card a.btn-promo:hover{{background:#0077ed;color:#fff}}
+.promo-card a.btn-promo:hover{{background:#0018A8;color:#fff}}
 
 .corp-support{{max-width:1100px;margin:8px auto 24px;padding:0 20px}}
 .corp-support-inner{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:24px;padding:32px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px;box-shadow:0 4px 24px rgba(0,0,0,.04);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 @media(max-width:800px){{.corp-support-inner{{grid-template-columns:1fr}}}}
 .corp-ico{{width:56px;height:56px;border-radius:14px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}}
-.corp-support-left h2{{margin:0 0 10px;color:#0B2D57;font-size:24px}}
+.corp-support-left h2{{margin:0 0 10px;color:#0020C2;font-size:24px}}
 .corp-support-left p{{color:#475569;line-height:1.55;font-size:14px;margin:0}}
 .corp-chan{{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}}
 .corp-pill{{display:flex;gap:10px;align-items:center;background:#f5f5f7;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:12px 14px;font-size:13px;color:#1d1d1f;box-shadow:none}}
-.corp-pill b{{color:#002060}}
+.corp-pill b{{color:#0F172A}}
 .corp-hours{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
 .corp-hour{{background:#f5f5f7;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:12px;font-size:13px;color:#475569;box-shadow:none}}
-.corp-hour b{{color:#002060;display:block;margin-bottom:4px}}
+.corp-hour b{{color:#0F172A;display:block;margin-bottom:4px}}
 .corp-note{{margin-top:12px;padding:12px;background:#eff6ff;border-left:4px solid #1e3a8a;border-radius:8px;font-size:12px;color:#1e3a8a}}
 .corp-cta{{max-width:1100px;margin:0 auto 28px;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .corp-cta-card{{background:linear-gradient(135deg,#cfe6ff 0%,#eaf4ff 45%,#fafafc 100%);color:#1d1d1f;border:1px solid rgba(0,0,0,.05);border-radius:28px;padding:32px 28px;max-width:440px;box-shadow:0 10px 36px rgba(0,0,0,.06)}}
-.corp-cta-ico{{width:44px;height:44px;background:rgba(0,113,227,.12);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#0071e3;font-size:18px;font-weight:700;letter-spacing:-.02em}}
+.corp-cta-ico{{width:44px;height:44px;background:rgba(0,32,194,.12);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#0020C2;font-size:18px;font-weight:700;letter-spacing:-.02em}}
 .corp-cta-card h2{{margin:0 0 10px;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.02em;color:#1d1d1f;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
 .corp-cta-card p{{margin:0 0 20px;font-size:14px;line-height:1.55;color:#6e6e73;font-weight:400}}
-.corp-wa{{display:inline-block;background:#0071e3;color:#fff;font-weight:600;padding:12px 28px;border-radius:980px;text-decoration:none;font-size:14px;letter-spacing:-.01em;transition:background .25s ease,transform .1s ease;border:0}}
-.corp-wa:hover{{background:#0077ed;color:#fff}}
+.corp-wa{{display:inline-block;background:#0020C2;color:#fff;font-weight:600;padding:12px 28px;border-radius:980px;text-decoration:none;font-size:14px;letter-spacing:-.01em;transition:background .25s ease,transform .1s ease;border:0}}
+.corp-wa:hover{{background:#0018A8;color:#fff}}
 .corp-wa:active{{transform:scale(.98)}}
 .corp-cta-foot{{margin-top:16px;font-size:12px;letter-spacing:.01em;color:#86868b;line-height:1.4}}
 .corp-footer{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;margin-top:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
@@ -16085,7 +16150,7 @@ def login():
           <div class="corp-hour"><b>Martes a viernes</b><br>{hor_sem}</div>
         </div>
         <div class="corp-note">Fuera de horario puede dejar su mensaje por WhatsApp o correo. Lo atenderemos al volver.</div>
-        <p style="margin-top:12px"><a href="/whatsapp" style="display:inline-block;background:#0071e3;color:#fff;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;transition:background .3s ease" onmouseover="this.style.background='#0077ed'" onmouseout="this.style.background='#0071e3'">Escribir a soporte por WhatsApp</a></p>
+        <p style="margin-top:12px"><a href="/whatsapp" style="display:inline-block;background:#0020C2;color:#fff;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;transition:background .3s ease" onmouseover="this.style.background='#0018A8'" onmouseout="this.style.background='#0020C2'">Escribir a soporte por WhatsApp</a></p>
       </div>
     </div>
   </section>
@@ -16118,41 +16183,41 @@ def login():
 
     <section class="lp-section" id="tecnologia" style="background:#fff;border-radius:16px;padding:28px 22px;margin:18px 0;border:1px solid #e2e8f0">
       <p style="margin:0;color:#86868b;font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase">CARACTERÍSTICAS</p>
-      <h2 style="margin:8px 0 18px;font-size:28px;line-height:1.2;color:#002060;font-weight:700;letter-spacing:-.02em;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">Tecnología que impulsa instituciones</h2>
+      <h2 style="margin:8px 0 18px;font-size:28px;line-height:1.2;color:#0F172A;font-weight:700;letter-spacing:-.02em;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">Tecnología que impulsa instituciones</h2>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
         <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">▣</div>
-          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Plataforma EduTrack</b>
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,32,194,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#0020C2;font-size:18px;font-weight:600">▣</div>
+          <b style="color:#0F172A;display:block;margin-bottom:6px;font-size:14px">Plataforma EduTrack</b>
           <span style="font-size:13px;color:#86868b;line-height:1.45">Asistencia, notas, boletines, horarios, matrícula y PQR según el plan contratado.</span>
         </div>
         <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">⬡</div>
-          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Tres módulos de acceso</b>
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,32,194,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#0020C2;font-size:18px;font-weight:600">⬡</div>
+          <b style="color:#0F172A;display:block;margin-bottom:6px;font-size:14px">Tres módulos de acceso</b>
           <span style="font-size:13px;color:#86868b;line-height:1.45">Directivos, docentes, estudiantes y familias, cada uno con su portal.</span>
         </div>
         <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">▦</div>
-          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Sistemas de evaluación</b>
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,32,194,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#0020C2;font-size:18px;font-weight:600">▦</div>
+          <b style="color:#0F172A;display:block;margin-bottom:6px;font-size:14px">Sistemas de evaluación</b>
           <span style="font-size:13px;color:#86868b;line-height:1.45">Planillas SIEE (cognitivo, procedimental y actitudinal) con promedios automáticos.</span>
         </div>
         <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">▥</div>
-          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Informes y reportes</b>
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,32,194,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#0020C2;font-size:18px;font-weight:600">▥</div>
+          <b style="color:#0F172A;display:block;margin-bottom:6px;font-size:14px">Informes y reportes</b>
           <span style="font-size:13px;color:#86868b;line-height:1.45">Boletines PDF, reprobación por niveles, cuadro de honor y rendimiento por salón.</span>
         </div>
         <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">☁</div>
-          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Alojamiento y respaldo</b>
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,32,194,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#0020C2;font-size:18px;font-weight:600">☁</div>
+          <b style="color:#0F172A;display:block;margin-bottom:6px;font-size:14px">Alojamiento y respaldo</b>
           <span style="font-size:13px;color:#86868b;line-height:1.45">Nube con copias de seguridad y protección de datos educativos (Ley 1581).</span>
         </div>
         <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.03)">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,91,234,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#005BEA;font-size:18px;font-weight:600">☎</div>
-          <b style="color:#002060;display:block;margin-bottom:6px;font-size:14px">Soporte y acompañamiento</b>
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,32,194,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#0020C2;font-size:18px;font-weight:600">☎</div>
+          <b style="color:#0F172A;display:block;margin-bottom:6px;font-size:14px">Soporte y acompañamiento</b>
           <span style="font-size:13px;color:#86868b;line-height:1.45">Canales de atención para directivos y docentes en la implementación.</span>
         </div>
       </div>
 <p style="text-align:center;margin:20px 0 0">
-        <a href="/tecnologia" style="display:inline-block;background:#005BEA;color:#fff;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;transition:background .3s ease" onmouseover="this.style.background='#002060'" onmouseout="this.style.background='#005BEA'">Más información</a>
+        <a href="/tecnologia" style="display:inline-block;background:#0020C2;color:#fff;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;transition:background .3s ease" onmouseover="this.style.background='#0F172A'" onmouseout="this.style.background='#0020C2'">Más información</a>
       </p>
     </section>
 
@@ -16213,15 +16278,15 @@ def recuperar():
 <style>
 .rec-wrap{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,Arial,sans-serif}
 .rec-card{max-width:440px;width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px 26px;box-shadow:0 8px 28px rgba(15,23,42,.06)}
-.rec-card h1{margin:0 0 12px;color:#0B2D57;font-size:22px;line-height:1.25}
+.rec-card h1{margin:0 0 12px;color:#0020C2;font-size:22px;line-height:1.25}
 .rec-card p{line-height:1.55;color:#475569;font-size:14px;margin:0 0 12px}
 .rec-card ul{line-height:1.7;color:#0f172a;padding-left:18px;margin:0 0 14px;font-size:14px}
 .rec-card .note{font-size:12px;color:#64748b;line-height:1.5;margin-bottom:18px}
 .rec-actions{display:flex;flex-wrap:wrap;gap:10px}
 .rec-actions a{display:inline-block;padding:11px 16px;border-radius:10px;font-weight:700;font-size:13px;text-decoration:none}
-.rec-actions .primary{background:#0B2D57;color:#fff}
-.rec-actions .secondary{background:#f1f5f9;color:#0B2D57;border:1px solid #e2e8f0}
-.rec-brand{text-align:center;margin-bottom:14px;font-weight:800;color:#0B2D57;font-size:14px}
+.rec-actions .primary{background:#0020C2;color:#fff}
+.rec-actions .secondary{background:#f1f5f9;color:#0020C2;border:1px solid #e2e8f0}
+.rec-brand{text-align:center;margin-bottom:14px;font-weight:800;color:#0020C2;font-size:14px}
 </style>
 <div class="rec-wrap">
   <div class="rec-card">
@@ -16343,11 +16408,11 @@ def rectoria_tareas():
     content = f"""
 <div style="max-width:900px;margin:0 auto;font-family:Segoe UI,sans-serif;padding:12px">
   <p><a class="btn" href="/dashboard">← Panel rectoría</a></p>
-  <h1 style="color:#0B2D57;margin:0 0 8px">📂 Monitoreo de tareas</h1>
+  <h1 style="color:#0020C2;margin:0 0 8px">📂 Monitoreo de tareas</h1>
   <p style="color:#64748b;font-size:14px">Vista de lectura: actividad académica de la última semana (registros de planilla / logros). La rectora no califica desde aquí.</p>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
-      <div style="font-size:24px;font-weight:800;color:#0B2D57">{total}</div>
+      <div style="font-size:24px;font-weight:800;color:#0020C2">{total}</div>
       <div style="font-size:12px;color:#64748b">Registros esta semana</div>
     </div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
@@ -16361,13 +16426,13 @@ def rectoria_tareas():
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px">
-      <h3 style="margin:0 0 8px;color:#0B2D57;font-size:14px">Por docente</h3>
+      <h3 style="margin:0 0 8px;color:#0020C2;font-size:14px">Por docente</h3>
       <table style="width:100%;font-size:13px"><tr><th style="text-align:left">Docente</th><th>Actividad</th></tr>
       {filas_d or '<tr><td colspan=2>Sin datos esta semana</td></tr>'}
       </table>
     </div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px">
-      <h3 style="margin:0 0 8px;color:#0B2D57;font-size:14px">Por materia</h3>
+      <h3 style="margin:0 0 8px;color:#0020C2;font-size:14px">Por materia</h3>
       <table style="width:100%;font-size:13px"><tr><th style="text-align:left">Materia</th><th>Actividad</th></tr>
       {filas_m or '<tr><td colspan=2>Sin datos esta semana</td></tr>'}
       </table>
@@ -16472,7 +16537,7 @@ def dashboard():
     .rx-card.g{{border-top:3px solid #16a34a}}
     .rx-card.y{{border-top:3px solid #ca8a04}}
     .rx-card.r{{border-top:3px solid #dc2626}}
-    .rx-card.b{{border-top:3px solid #0B2D57}}
+    .rx-card.b{{border-top:3px solid #0020C2}}
     </style>
     <div class='rx-cards'>
       <div class='rx-card b'><span class='ico'>👥</span><h3>{estudiantes_total}</h3><p>Estudiantes</p><div class='sub'>{sede_nombre_sel or 'Todas las sedes'}</div></div>
@@ -16567,12 +16632,12 @@ def dashboard():
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:8px 0 18px">
           <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px">
-            <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Alerta temprana · salones en riesgo</h3>
+            <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Alerta temprana · salones en riesgo</h3>
             <p style="margin:0 0 8px;font-size:11px;color:#94a3b8">Estudiantes con promedio &lt; 3.0 en el periodo actual</p>
             <canvas id="chartRiesgo" height="180"></canvas>
           </div>
           <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px">
-            <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Asistencia semanal</h3>
+            <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Asistencia semanal</h3>
             <p style="margin:0 0 8px;font-size:11px;color:#94a3b8">Presentes vs ausentes (últimos días)</p>
             <canvas id="chartAsis" height="180"></canvas>
           </div>
@@ -16878,7 +16943,7 @@ def horarios_ingreso():
 <section class="role-panel">
 <form method="POST">
   <table style="width:100%%;border-collapse:collapse">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Grado</th><th style="padding:8px;text-align:left">Hora de entrada</th><th style="padding:8px;text-align:left">Tolerancia (min)</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Grado</th><th style="padding:8px;text-align:left">Hora de entrada</th><th style="padding:8px;text-align:left">Tolerancia (min)</th></tr>
     %s
   </table>
   <p class="mini-text">Déjalo vacío para que el grado use la regla «Todos los grados». Si tampoco hay regla general, se usa la hora de corte del colegio (07:00 por defecto). Con entrada 7:00 y tolerancia 0, las 7:01 cuentan como Tarde.</p>
@@ -17273,9 +17338,9 @@ def familia_login():
     )
     body = f"""
 <style>
-*{{box-sizing:border-box}} body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:linear-gradient(160deg,#0B2D57,#0d9488 90%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}}
+*{{box-sizing:border-box}} body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:linear-gradient(160deg,#0020C2,#0d9488 90%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}}
 .card{{background:#fff;border-radius:18px;padding:28px 24px;max-width:400px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}}
-.card h1{{margin:0 0 6px;color:#0B2D57;font-size:22px}}
+.card h1{{margin:0 0 6px;color:#0020C2;font-size:22px}}
 .card p{{margin:0 0 16px;color:#64748b;font-size:13px;line-height:1.45}}
 label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}}
 input,select{{width:100%;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px}}
@@ -17375,11 +17440,11 @@ def familia_dashboard():
             filas_ing = ["<tr><td colspan='3' style='padding:10px;color:#64748b'>Sin ingresos registrados aun.</td></tr>"]
         ingresos_html = (
             "<div style='background:#fff;border:1px solid #bfdbfe;border-radius:14px;padding:14px 16px;margin:0 0 14px'>"
-            "<div style='font-size:11px;letter-spacing:.08em;color:#1d4ed8;font-weight:800'>ACCESO ESCOLAR · QR</div>"
-            "<h3 style='margin:4px 0 8px;color:#0B2D57;font-size:16px'>Ingresos y salidas</h3>"
+            "<div style='font-size:11px;letter-spacing:.08em;color:#0020C2;font-weight:800'>ACCESO ESCOLAR · QR</div>"
+            "<h3 style='margin:4px 0 8px;color:#0020C2;font-size:16px'>Ingresos y salidas</h3>"
             "<p style='margin:0 0 10px;font-size:13px;color:#334155'>" + resumen_hoy + "</p>"
             "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'>"
-            "<tr style='background:#eff6ff;color:#0B2D57;text-align:left'>"
+            "<tr style='background:#eff6ff;color:#0020C2;text-align:left'>"
             "<th style='padding:6px 8px'>Fecha</th><th style='padding:6px 8px'>Hora</th>"
             "<th style='padding:6px 8px'>Estado</th></tr>"
             + "".join(filas_ing)
@@ -17394,7 +17459,7 @@ def familia_dashboard():
     body = f"""
 <style>
 *{{box-sizing:border-box}} body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f1f5f9;min-height:100vh;padding-bottom:90px}}
-.top{{background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:16px 18px}}
+.top{{background:linear-gradient(135deg,#0020C2,#1e40af);color:#fff;padding:16px 18px}}
 .top h1{{margin:0;font-size:18px}}
 .top p{{margin:4px 0 0;opacity:.9;font-size:13px}}
 .wrap{{max-width:520px;margin:0 auto;padding:14px}}
@@ -17406,7 +17471,7 @@ def familia_dashboard():
 .mat-nivel{{font-size:12px;color:#64748b}}
 .empty{{background:#fff;padding:20px;border-radius:12px;color:#64748b;text-align:center}}
 .float-dl{{position:fixed;left:0;right:0;bottom:0;padding:12px 16px;background:rgba(255,255,255,.96);border-top:1px solid #e2e8f0;box-shadow:0 -4px 20px rgba(0,0,0,.08)}}
-.float-dl a{{display:block;text-align:center;background:linear-gradient(180deg,#1e40af,#0B2D57);color:#fff;text-decoration:none;font-weight:800;padding:14px;border-radius:12px;font-size:15px}}
+.float-dl a{{display:block;text-align:center;background:linear-gradient(180deg,#1e40af,#0020C2);color:#fff;text-decoration:none;font-weight:800;padding:14px;border-radius:12px;font-size:15px}}
 .logout{{color:#93c5fd;font-size:12px}}
 </style>
 <div class="top">
@@ -18019,7 +18084,7 @@ def secretaria_planilla_grupo():
       <div><label><b>Año escolar</b></label><input name="anio" value="{anio_def}" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
     </div>
 
-    <button type="submit" style="margin-top:16px;width:100%;background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:10px;font-weight:800;cursor:pointer">
+    <button type="submit" style="margin-top:16px;width:100%;background:#0020C2;color:#fff;border:0;padding:12px;border-radius:10px;font-weight:800;cursor:pointer">
       Generar planilla PDF
     </button>
   </form>
@@ -19624,10 +19689,10 @@ body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:
 .toolbar {{ display:flex; gap:10px; justify-content:center; padding:14px; flex-wrap:wrap; }}
 .toolbar a, .toolbar button {{
   appearance:none; border:1px solid #cbd5e1; cursor:pointer; text-decoration:none;
-  background:#0B2D57; color:#fff; font-weight:700; font-size:13px;
+  background:#0020C2; color:#fff; font-weight:700; font-size:13px;
   padding:10px 18px; border-radius:4px; box-shadow:none;
 }}
-.toolbar a.sec {{ background:#fff; color:#0B2D57; }}
+.toolbar a.sec {{ background:#fff; color:#0020C2; }}
 .stage {{ display:flex; flex-wrap:wrap; gap:32px; justify-content:center; align-items:flex-start; padding:8px 16px 36px; }}
 .side-label {{ text-align:center; font-size:11px; font-weight:700; letter-spacing:.14em; color:#64748b; margin-bottom:8px; text-transform:uppercase; }}
 /* Tamaño grande para vista e impresión (~ tarjeta ampliada) */
@@ -19638,7 +19703,7 @@ body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:
   box-shadow:0 2px 8px rgba(15,23,42,.08);
 }}
 .card .top {{
-  background:#0B2D57; color:#fff; padding:7px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px;
+  background:#0020C2; color:#fff; padding:7px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px;
 }}
 .card .top img {{ height:26px; width:auto; background:#fff; border-radius:4px; padding:2px; }}
 .card .top .brand {{ font-size:12px; font-weight:800; letter-spacing:.08em; }}
@@ -19651,18 +19716,18 @@ body {{ margin:0; font-family:'Segoe UI',system-ui,Arial,sans-serif; background:
 }}
 .card .info {{ flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }}
 .card .info h2 {{
-  margin:0 0 6px; font-size:15px; color:#0B2D57; font-weight:800; line-height:1.2;
+  margin:0 0 6px; font-size:15px; color:#0020C2; font-weight:800; line-height:1.2;
   word-break:break-word;
 }}
 .card .info p {{ margin:0 0 3px; font-size:11px; color:#334155; }}
-.card .info .cod {{ font-weight:800; color:#0B2D57; font-size:12px; margin-top:4px; }}
+.card .info .cod {{ font-weight:800; color:#0020C2; font-size:12px; margin-top:4px; }}
 .card .bot {{
-  background:#0B2D57; color:#fff; font-size:10px; text-align:center;
+  background:#0020C2; color:#fff; font-size:10px; text-align:center;
   padding:5px 10px; letter-spacing:.03em;
 }}
 .card.back .mid {{ flex-direction:column; padding:8px 12px; gap:6px; }}
 .card.back .legal {{ font-size:7.5px; line-height:1.35; color:#1e293b; text-align:left; }}
-.card.back .legal b {{ color:#0B2D57; }}
+.card.back .legal b {{ color:#0020C2; }}
 .card.back .qr-row {{ display:flex; gap:10px; align-items:center; }}
 .card.back .qr-row img {{ width:72px; height:72px; flex:0 0 auto; }}
 .card.back .emer {{ font-size:8px; color:#334155; line-height:1.35; }}
@@ -20587,17 +20652,17 @@ def panel_convivencia():
         </tr>"""
     content = f"""
 <style>
-.cv-hero{{background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;border-radius:16px;padding:20px;margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}}
+.cv-hero{{background:linear-gradient(135deg,#0020C2,#1e40af);color:#fff;border-radius:16px;padding:20px;margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}}
 .cv-kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}}
 .cv-kpi{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center}}
-.cv-kpi b{{display:block;font-size:24px;color:#0B2D57}}
+.cv-kpi b{{display:block;font-size:24px;color:#0020C2}}
 .cv-kpi span{{font-size:12px;color:#64748b}}
 .cv-grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}}
 @media(max-width:800px){{.cv-grid{{grid-template-columns:1fr}}}}
 .cv-panel{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px}}
-.cv-panel h2{{margin:0 0 8px;color:#0B2D57;font-size:16px}}
+.cv-panel h2{{margin:0 0 8px;color:#0020C2;font-size:16px}}
 .cv-table{{width:100%;border-collapse:collapse;font-size:12px;background:#fff}}
-.cv-table th{{background:#0B2D57;color:#fff;padding:8px;text-align:left}}
+.cv-table th{{background:#0020C2;color:#fff;padding:8px;text-align:left}}
 .cv-table td{{padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top}}
 .cv-tip{{background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:12px}}
 </style>
@@ -20607,7 +20672,7 @@ def panel_convivencia():
     <p style="margin:6px 0 0;opacity:.92;font-size:13px">Tipificación Tipo I / II / III · Debido proceso · PDF y Word para imprimir</p>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
-    {('<a class="btn" style="background:#fff;color:#0B2D57" href="/convivencia/nueva">+ Registrar anotación</a>' if puede_reg else '')}
+    {('<a class="btn" style="background:#fff;color:#0020C2" href="/convivencia/nueva">+ Registrar anotación</a>' if puede_reg else '')}
     <a class="btn" style="background:rgba(255,255,255,.2);color:#fff" href="/historial_novedades">Novedades</a>
     <a class="btn" style="background:rgba(255,255,255,.2);color:#fff" href="/citaciones">Citaciones</a>
   </div>
@@ -20738,7 +20803,7 @@ def convivencia_nueva():
     content = f"""
 <style>
 .cn{{max-width:820px;margin:0 auto;font-family:Segoe UI,system-ui,sans-serif}}
-.cn h1{{color:#0B2D57;margin:0 0 8px}}
+.cn h1{{color:#0020C2;margin:0 0 8px}}
 .cn .box{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:12px}}
 .cn label{{display:block;font-weight:700;font-size:12px;margin:8px 0 4px;color:#334155}}
 .cn input,.cn select,.cn textarea{{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box;font-size:14px}}
@@ -20747,7 +20812,7 @@ def convivencia_nueva():
 @media(max-width:640px){{.cn .row{{grid-template-columns:1fr}}}}
 .cn .err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:10px;margin-bottom:10px}}
 .cn .law{{background:#eff6ff;border-left:4px solid #1e40af;padding:10px 12px;font-size:13px;color:#1e3a8a;margin-bottom:12px}}
-.cn button{{background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer;margin-top:10px}}
+.cn button{{background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer;margin-top:10px}}
 .cn .tipo-i{{border-left:4px solid #15803d}}
 .cn .tipo-ii{{border-left:4px solid #b45309}}
 .cn .tipo-iii{{border-left:4px solid #b91c1c}}
@@ -20850,13 +20915,13 @@ def convivencia_ver(fid):
 <style>
 .cv-sheet{{max-width:780px;margin:0 auto;font-family:Segoe UI,Arial,sans-serif;padding:12px}}
 .cv-sheet .actions a{{margin-right:6px}}
-.cv-card{{border:2px solid #0B2D57;border-radius:4px;background:#fff;overflow:hidden}}
-.cv-main{{display:grid;grid-template-columns:1fr 1fr 1fr 2fr 1fr;gap:0;background:#0B2D57;color:#fff;font-size:11px;font-weight:700}}
+.cv-card{{border:2px solid #0020C2;border-radius:4px;background:#fff;overflow:hidden}}
+.cv-main{{display:grid;grid-template-columns:1fr 1fr 1fr 2fr 1fr;gap:0;background:#0020C2;color:#fff;font-size:11px;font-weight:700}}
 .cv-main > div{{padding:8px 6px;border-right:1px solid rgba(255,255,255,.25)}}
 .cv-main > div:last-child{{border-right:0}}
 .cv-main .val{{display:block;font-size:13px;font-weight:600;margin-top:2px;letter-spacing:.2px}}
 .cv-block{{padding:0}}
-.cv-sec-title{{background:#e2e8f0;color:#0B2D57;font-size:11px;font-weight:800;padding:6px 10px;border-bottom:1px solid #94a3b8;text-transform:uppercase;letter-spacing:.4px}}
+.cv-sec-title{{background:#e2e8f0;color:#0020C2;font-size:11px;font-weight:800;padding:6px 10px;border-bottom:1px solid #94a3b8;text-transform:uppercase;letter-spacing:.4px}}
 .cv-tipo-box{{padding:10px 12px;font-size:14px;font-weight:700;border-bottom:1px solid #cbd5e1}}
 .nb{{padding:4px 10px 8px}}
 .nb-line{{border-bottom:1px dotted #ccc;min-height:22px;padding:3px 2px;font-size:13px;color:#1e293b;line-height:1.35}}
@@ -20915,7 +20980,7 @@ def convivencia_ver(fid):
     <select name="estado">
       {''.join(f'<option {"selected" if f.estado==s else ""}>{s}</option>' for s in ("ABIERTA","EN_SEGUIMIENTO","CERRADA"))}
     </select>
-    <button style="margin-top:10px;background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800">Actualizar</button>
+    <button style="margin-top:10px;background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800">Actualizar</button>
   </form>
 </div>
 """
@@ -21475,7 +21540,7 @@ def contacto():
       <p>✉️ <a href="mailto:{mail_c}">{mail_c}</a></p>
     </div>
   </section>
-  <section style="margin-top:18px;background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;border-radius:22px;padding:28px;text-align:center">
+  <section style="margin-top:18px;background:linear-gradient(135deg,#0020C2,#0020C2);color:#fff;border-radius:22px;padding:28px;text-align:center">
     <h2 style="margin:0">{APP_NAME}</h2>
     <p style="margin:8px 0 0;opacity:.95">{p.slogan or SLOGAN}</p>
     <p style="margin:12px 0 0;font-size:13px;opacity:.8">Desarrollado por <b>{empresa}</b></p>
@@ -21507,13 +21572,13 @@ def _ayuda_shell(activo, titulo, cuerpo_html):
 <style>
 .ay-wrap{{max-width:1150px;margin:24px auto;padding:0 16px;font-family:Segoe UI,Arial,sans-serif;display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}}
 .ay-side{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;width:260px;flex:0 0 260px;overflow:hidden}}
-.ay-side h4{{background:#0B2D57;color:#fff;margin:0;padding:16px;font-size:14px}}
+.ay-side h4{{background:#0020C2;color:#fff;margin:0;padding:16px;font-size:14px}}
 .ay-item{{display:block;padding:12px 16px;border-top:1px solid #eef2f7;color:#334155;font-size:13.5px;text-decoration:none}}
 .ay-item:hover{{background:#f8fafc}}
-.ay-item.on{{color:#0B2D57;font-weight:700;background:#eff6ff}}
+.ay-item.on{{color:#0020C2;font-weight:700;background:#eff6ff}}
 .ay-content{{flex:1;min-width:280px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:26px}}
-.ay-content h1{{color:#0B2D57;font-size:24px;margin:0 0 6px}}
-.ay-content h2{{color:#0B2D57;font-size:16px;margin:22px 0 6px;border-bottom:1px solid #eef2f7;padding-bottom:6px}}
+.ay-content h1{{color:#0020C2;font-size:24px;margin:0 0 6px}}
+.ay-content h2{{color:#0020C2;font-size:16px;margin:22px 0 6px;border-bottom:1px solid #eef2f7;padding-bottom:6px}}
 .ay-content p{{color:#334155;line-height:1.6;font-size:14.5px}}
 .ay-content li{{color:#334155;line-height:1.6;font-size:14.5px}}
 .ay-crumb{{font-size:12.5px;color:#94a3b8;margin-bottom:10px}}
@@ -21717,7 +21782,7 @@ def cambiar_periodo():
     <p class="mini-text">Si escribes un texto personalizado, ese valor tiene prioridad.</p>
     <button type="submit" style="margin-top:14px">Guardar periodo</button>
   </form>
-  <p style="margin-top:16px;font-size:15px">Periodo en sistema ahora: <b style="color:#0B2D57">{cfg.periodo_actual or "—"}</b></p>
+  <p style="margin-top:16px;font-size:15px">Periodo en sistema ahora: <b style="color:#0020C2">{cfg.periodo_actual or "—"}</b></p>
 </section>
 """
     return page("Periodo", shell(content))
@@ -22084,18 +22149,18 @@ def sedes_colegios():
     content = f"""
 <style>
 .sd{{max-width:960px;margin:0 auto;font-family:Segoe UI,system-ui,sans-serif}}
-.sd h1{{color:#0B2D57;margin:0 0 6px}}
+.sd h1{{color:#0020C2;margin:0 0 6px}}
 .sd .box{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px}}
 .sd label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:8px 0 4px}}
 .sd input,.sd select,.sd textarea{{width:100%;padding:9px 11px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box;font-size:14px}}
 .sd .row{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
 @media(max-width:640px){{.sd .row{{grid-template-columns:1fr}}}}
 .sd table{{width:100%;border-collapse:collapse;font-size:13px}}
-.sd th{{background:#0B2D57;color:#fff;padding:8px;text-align:left}}
+.sd th{{background:#0020C2;color:#fff;padding:8px;text-align:left}}
 .sd td{{padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top}}
 .sd .ok{{background:#ecfdf5;color:#065f46;padding:10px;border-radius:10px;margin-bottom:10px}}
 .sd .err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:10px;margin-bottom:10px}}
-.sd button.primary{{background:#0B2D57;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800;cursor:pointer;margin-top:10px}}
+.sd button.primary{{background:#0020C2;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800;cursor:pointer;margin-top:10px}}
 </style>
 <div class="sd">
   <h1>Sedes de la institución</h1>
@@ -22105,7 +22170,7 @@ def sedes_colegios():
   {"<div class='ok'>"+mensaje+"</div>" if mensaje else ""}
   {"<div class='err'>"+error+"</div>" if error else ""}
   <div class="box">
-    <h2 style="margin:0 0 8px;color:#0B2D57;font-size:16px" id="form-title">Nueva sede</h2>
+    <h2 style="margin:0 0 8px;color:#0020C2;font-size:16px" id="form-title">Nueva sede</h2>
     <form method="POST" id="form-sede">
       <input type="hidden" name="accion" value="crear">
       <input type="hidden" name="sede_id" id="sede_id" value="">
@@ -22152,7 +22217,7 @@ def sedes_colegios():
     </form>
   </div>
   <div class="box" style="overflow:auto">
-    <h2 style="margin:0 0 10px;color:#0B2D57;font-size:16px">Sedes registradas</h2>
+    <h2 style="margin:0 0 10px;color:#0020C2;font-size:16px">Sedes registradas</h2>
     <table>
       <tr>
         <th>ID</th>
@@ -22468,10 +22533,10 @@ def reportes():
         periodo = ""  # "" = histórico completo (comportamiento anterior)
     filas = ''.join(f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td></tr>" for r in datos_reporte(periodo or None))
     _tabs = "".join(
-        f'<a class="btn" href="/reportes?periodo={p}" style="background:{"#0B2D57" if periodo==p else "#94a3b8"};margin-right:6px;padding:7px 14px;font-size:12px">{lbl}</a>'
+        f'<a class="btn" href="/reportes?periodo={p}" style="background:{"#0020C2" if periodo==p else "#94a3b8"};margin-right:6px;padding:7px 14px;font-size:12px">{lbl}</a>'
         for p, lbl in (("diario","Diario"),("semanal","Semanal"),("quincenal","Quincenal"),("mensual","Mensual"))
     )
-    _tabs += f'<a class="btn" href="/reportes" style="background:{"#0B2D57" if not periodo else "#94a3b8"};padding:7px 14px;font-size:12px">Histórico completo</a>'
+    _tabs += f'<a class="btn" href="/reportes" style="background:{"#0020C2" if not periodo else "#94a3b8"};padding:7px 14px;font-size:12px">Histórico completo</a>'
     content = f"<header class='header'><div class='header-info'><img src='{logo_actual()}'><div><h1>Reportes institucionales</h1><p>Asistencia por portería/QR — filtra por periodo.</p></div></div><div><a class='btn' href='/exportar_excel_reportes?periodo={periodo}'>Excel</a> <a class='btn' href='/exportar_pdf?periodo={periodo}'>PDF</a> <a class='btn' href='/exportar_word?periodo={periodo}'>Word</a></div></header><div style='margin:10px 0 14px'>{_tabs}</div><div class='table-card'><table><tr><th>Código</th><th>Nombre y apellido</th><th>Grado</th><th>Director</th><th>Fecha</th><th>Hora</th><th>Quién reporta</th></tr>{filas}</table></div>"
     return page("Reportes", shell(content))
 
@@ -23002,7 +23067,7 @@ def migracion_historica():
 <style>
 .mh{{max-width:820px;margin:0 auto;font-family:Segoe UI,system-ui,sans-serif}}
 .mh .box{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:14px}}
-.mh h1{{color:#0B2D57;margin:0 0 8px}}
+.mh h1{{color:#0020C2;margin:0 0 8px}}
 .mh label{{display:block;font-weight:700;font-size:12px;margin:8px 0 4px}}
 .mh select,.mh input{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}}
 .mh .ok{{background:#ecfdf5;color:#065f46;padding:10px;border-radius:10px;margin-bottom:10px}}
@@ -23029,7 +23094,7 @@ def migracion_historica():
       <select name="tipo"><option value="estudiantes">Estudiantes / base</option><option value="notas">Notas históricas</option></select>
       <label>Archivo (.xlsx o .csv)</label>
       <input type="file" name="archivo" accept=".xlsx,.csv" required>
-      <button style="margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Migrar a EduTrack</button>
+      <button style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Migrar a EduTrack</button>
     </form>
   </div>
   <p style="font-size:13px"><a href="/importar_estudiantes">Importación Excel</a> · <a href="/exportar_estudiantes">Exportar respaldo</a></p>
@@ -23506,7 +23571,7 @@ def eduaura():
                         f'font-weight:700;font-size:11px">{prob}% · Favorable</span>'
                     )
             prom_txt = f"{prom:.1f}" if prom is not None else "—"
-            estilo_prom = "color:#b91c1c;font-weight:800" if riesgo_nota else "color:#0B2D57;font-weight:700"
+            estilo_prom = "color:#b91c1c;font-weight:800" if riesgo_nota else "color:#0020C2;font-weight:700"
             filas.append(
                 f"""<tr data-est="{e.id}">
                 <td><b>{_esc(estudiante_nombre(e))}</b><br><span style="font-size:11px;color:#64748b">{_esc(e.codigo)}</span></td>
@@ -23531,7 +23596,7 @@ def eduaura():
 .ea-kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px}}
 .ea-kpi{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 4px 14px rgba(15,23,42,.05)}}
 .ea-kpi .lbl{{font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}}
-.ea-kpi .val{{font-size:26px;font-weight:800;color:#0B2D57;margin-top:4px}}
+.ea-kpi .val{{font-size:26px;font-weight:800;color:#0020C2;margin-top:4px}}
 .ea-kpi.risk .val{{color:#b91c1c}}
 .ea-kpi.warn .val{{color:#c2410c}}
 .ea-filters{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:end}}
@@ -23539,7 +23604,7 @@ def eduaura():
 .ea-filters select{{padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;min-width:140px}}
 .ea-filters button{{background:#4c1d95;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer}}
 .ea-table{{width:100%;border-collapse:collapse;background:#fff;font-size:13px;border-radius:12px;overflow:hidden}}
-.ea-table th{{background:#0B2D57;color:#fff;padding:10px 8px;text-align:left;font-size:12px}}
+.ea-table th{{background:#0020C2;color:#fff;padding:10px 8px;text-align:left;font-size:12px}}
 .ea-table td{{padding:10px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}}
 .ea-btn{{display:inline-block;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;border:0;cursor:pointer;margin:2px}}
 .ea-obs{{background:#4c1d95;color:#fff}}
@@ -23979,10 +24044,10 @@ def radar_predictivo():
 .rd-hero h1{{margin:0 0 8px;font-size:24px}}
 .rd-kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}}
 .rd-kpi{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px;text-align:center}}
-.rd-kpi b{{display:block;font-size:26px;color:#0B2D57}}
+.rd-kpi b{{display:block;font-size:26px;color:#0020C2}}
 .rd-kpi span{{font-size:12px;color:#64748b}}
 .rd-table{{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden}}
-.rd-table th{{background:#0B2D57;color:#fff;padding:10px;text-align:left}}
+.rd-table th{{background:#0020C2;color:#fff;padding:10px;text-align:left}}
 .rd-table td{{padding:10px;border-bottom:1px solid #e2e8f0}}
 .rd-note{{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;padding:12px;border-radius:12px;font-size:13px;margin-bottom:14px}}
 </style>
@@ -24099,11 +24164,11 @@ def privacidad_habeas():
 <style>
 .hb{{max-width:960px;margin:0 auto;font-family:Segoe UI,system-ui,sans-serif}}
 .hb-box{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:14px}}
-.hb h1{{color:#0B2D57;margin:0 0 8px}}
+.hb h1{{color:#0020C2;margin:0 0 8px}}
 .hb label{{display:block;font-weight:700;font-size:12px;margin:8px 0 4px}}
 .hb input,.hb select,.hb textarea{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}}
 .hb table{{width:100%;border-collapse:collapse;font-size:12px}}
-.hb th{{background:#0B2D57;color:#fff;padding:8px;text-align:left}}
+.hb th{{background:#0020C2;color:#fff;padding:8px;text-align:left}}
 .hb td{{padding:8px;border-bottom:1px solid #e2e8f0}}
 .hb .ok{{background:#ecfdf5;color:#065f46;padding:10px;border-radius:10px;margin-bottom:10px}}
 .hb .law{{background:#eff6ff;border-left:4px solid #1e40af;padding:12px;font-size:13px;color:#1e3a8a;margin-bottom:14px;line-height:1.5}}
@@ -24119,7 +24184,7 @@ def privacidad_habeas():
   </div>
   {"<div class='ok'>"+msg+"</div>" if msg else ""}
   <div class="hb-box">
-    <h2 style="margin:0 0 10px;font-size:15px;color:#0B2D57">Nuevo registro</h2>
+    <h2 style="margin:0 0 10px;font-size:15px;color:#0020C2">Nuevo registro</h2>
     <form method="POST">
       <label>Tipo</label>
       <select name="tipo">
@@ -24137,11 +24202,11 @@ def privacidad_habeas():
       <input name="titular_documento">
       <label>Detalle *</label>
       <textarea name="detalle" rows="3" required placeholder="Autorización de tratamiento / descripción de la solicitud..."></textarea>
-      <button style="margin-top:10px;background:#0B2D57;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800;cursor:pointer">Guardar registro</button>
+      <button style="margin-top:10px;background:#0020C2;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800;cursor:pointer">Guardar registro</button>
     </form>
   </div>
   <div class="hb-box">
-    <h2 style="margin:0 0 10px;font-size:15px;color:#0B2D57">Historial</h2>
+    <h2 style="margin:0 0 10px;font-size:15px;color:#0020C2">Historial</h2>
     <table>
       <tr><th>ID</th><th>Fecha</th><th>Tipo</th><th>Titular</th><th>Doc</th><th>Estado</th><th>Detalle</th></tr>
       {filas or '<tr><td colspan="7">Sin registros</td></tr>'}
@@ -24193,11 +24258,11 @@ def legal():
     body = f"""
 <style>
 .legal-wrap{{max-width:760px;margin:24px auto;padding:0 16px 40px;font-family:Segoe UI,Arial;color:#0f172a}}
-.legal-wrap h1{{color:#0B2D57;font-size:26px;margin:0 0 8px}}
+.legal-wrap h1{{color:#0020C2;font-size:26px;margin:0 0 8px}}
 .legal-wrap h2{{color:#1e40af;font-size:16px;margin:22px 0 8px}}
 .legal-wrap p,.legal-wrap li{{font-size:14px;line-height:1.6;color:#334155}}
 .legal-card{{background:#fff;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(15,23,42,.08)}}
-.legal-nav a{{margin-right:12px;color:#1d4ed8;font-weight:600;font-size:13px}}
+.legal-nav a{{margin-right:12px;color:#0020C2;font-weight:600;font-size:13px}}
 </style>
 <div class="legal-wrap"><div class="legal-card">
   <div class="legal-nav"><a href="/privacidad">Privacidad</a><a href="/tratamiento-datos">Tratamiento de datos</a><a href="/cookies">Cookies</a><a href="/login">Volver</a></div>
@@ -24272,11 +24337,11 @@ def privacidad():
     body = f"""
 <style>
 .legal-wrap{{max-width:760px;margin:24px auto;padding:0 16px 40px;font-family:Segoe UI,Arial;color:#0f172a}}
-.legal-wrap h1{{color:#0B2D57;font-size:26px;margin:0 0 8px}}
+.legal-wrap h1{{color:#0020C2;font-size:26px;margin:0 0 8px}}
 .legal-wrap h2{{color:#1e40af;font-size:16px;margin:22px 0 8px}}
 .legal-wrap p,.legal-wrap li{{font-size:14px;line-height:1.6;color:#334155}}
 .legal-card{{background:#fff;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(15,23,42,.08)}}
-.legal-nav a{{margin-right:12px;color:#1d4ed8;font-weight:600;font-size:13px}}
+.legal-nav a{{margin-right:12px;color:#0020C2;font-weight:600;font-size:13px}}
 </style>
 <div class="legal-wrap"><div class="legal-card">
   <div class="legal-nav"><a href="/tratamiento-datos">Tratamiento de datos</a><a href="/cookies">Cookies</a><a href="/legal">Aviso legal</a><a href="/login">Volver</a></div>
@@ -24317,11 +24382,11 @@ def tratamiento_datos():
     body = f"""
 <style>
 .legal-wrap{{max-width:760px;margin:24px auto;padding:0 16px 40px;font-family:Segoe UI,Arial;color:#0f172a}}
-.legal-wrap h1{{color:#0B2D57;font-size:26px;margin:0 0 8px}}
+.legal-wrap h1{{color:#0020C2;font-size:26px;margin:0 0 8px}}
 .legal-wrap h2{{color:#1e40af;font-size:16px;margin:22px 0 8px}}
 .legal-wrap p,.legal-wrap li{{font-size:14px;line-height:1.6;color:#334155}}
 .legal-card{{background:#fff;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(15,23,42,.08)}}
-.legal-nav a{{margin-right:12px;color:#1d4ed8;font-weight:600;font-size:13px}}
+.legal-nav a{{margin-right:12px;color:#0020C2;font-weight:600;font-size:13px}}
 </style>
 <div class="legal-wrap"><div class="legal-card">
   <div class="legal-nav"><a href="/privacidad">Privacidad</a><a href="/politica-pqr">Política PQR</a><a href="/cookies">Cookies</a><a href="/legal">Aviso legal</a><a href="/login">Volver</a></div>
@@ -24365,11 +24430,11 @@ def politica_pqr():
     body = f"""
 <style>
 .legal-wrap{{max-width:760px;margin:24px auto;padding:0 16px 40px;font-family:Segoe UI,Arial;color:#0f172a}}
-.legal-wrap h1{{color:#0B2D57;font-size:26px;margin:0 0 8px}}
+.legal-wrap h1{{color:#0020C2;font-size:26px;margin:0 0 8px}}
 .legal-wrap h2{{color:#1e40af;font-size:16px;margin:22px 0 8px}}
 .legal-wrap p,.legal-wrap li{{font-size:14px;line-height:1.6;color:#334155}}
 .legal-card{{background:#fff;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(15,23,42,.08)}}
-.legal-nav a{{margin-right:12px;color:#1d4ed8;font-weight:600;font-size:13px}}
+.legal-nav a{{margin-right:12px;color:#0020C2;font-weight:600;font-size:13px}}
 </style>
 <div class="legal-wrap"><div class="legal-card">
   <div class="legal-nav"><a href="/tratamiento-datos">Tratamiento de datos</a><a href="/pqr">Portal PQR</a><a href="/pqr-info">Cómo radicar una PQR</a><a href="/legal">Aviso legal</a><a href="/login">Volver</a></div>
@@ -24795,7 +24860,7 @@ def interno_buscar_colegio_ui():
         est = (r.estado or "ACTIVA").upper()
         color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c"}.get(est, "#b45309")
         filas += (
-            f"<tr><td style='font-weight:800;color:#0B2D57'>{_esc(r.codigo)}</td>"
+            f"<tr><td style='font-weight:800;color:#0020C2'>{_esc(r.codigo)}</td>"
             f"<td>{_esc(r.nombre)}</td><td>{_esc(r.nit or '—')}</td>"
             f"<td>{_esc(r.contacto_facturacion or '—')}</td>"
             f"<td><span style='background:{color};color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700'>{est}</span></td>"
@@ -24821,10 +24886,10 @@ def interno_buscar_colegio_ui():
 <section style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px">
   <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap">
     <input name="q" value="{_esc(q)}" placeholder="Nombre, código, NIT, DANE o municipio" style="flex:1;min-width:220px;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
-    <button style="padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800">Buscar</button>
+    <button style="padding:12px 18px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800">Buscar</button>
   </form>
 </section>
-{"<section style='background:#fff;border:2px solid #0B2D57;border-radius:14px;overflow:hidden'><div style='background:#0B2D57;color:#fff;padding:10px 14px;font-weight:800;font-size:13px;text-transform:uppercase'>Detalle agencia · resultados</div><div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'><tr style='background:#1e3a5f;color:#fff'><th style='padding:10px'>CUENTA</th><th style='padding:10px'>COLEGIO</th><th style='padding:10px'>DOCUMENTO</th><th style='padding:10px'>MÓVIL</th><th style='padding:10px'>ESTADO</th><th style='padding:10px'>PLAN</th><th style='padding:10px'>STORAGE</th></tr>"+filas+"</table></div></section>" if q else ""}
+{"<section style='background:#fff;border:2px solid #0020C2;border-radius:14px;overflow:hidden'><div style='background:#0020C2;color:#fff;padding:10px 14px;font-weight:800;font-size:13px;text-transform:uppercase'>Detalle agencia · resultados</div><div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;font-size:13px'><tr style='background:#1e3a5f;color:#fff'><th style='padding:10px'>CUENTA</th><th style='padding:10px'>COLEGIO</th><th style='padding:10px'>DOCUMENTO</th><th style='padding:10px'>MÓVIL</th><th style='padding:10px'>ESTADO</th><th style='padding:10px'>PLAN</th><th style='padding:10px'>STORAGE</th></tr>"+filas+"</table></div></section>" if q else ""}
 """
     return page("Buscar colegio", shell(content))
 
@@ -24971,11 +25036,11 @@ def _bienvenida_staff_html(rol, mensaje=None, destino=None, boton="Ir al panel p
 .bv-logo{{width:180px;height:180px;object-fit:contain;background:#fff;border-radius:32px;padding:18px;
   box-shadow:0 16px 48px rgba(0,32,96,.12);margin-bottom:28px}}
 .bv-hi{{font-size:clamp(34px,6vw,58px);font-weight:800;line-height:1.08;margin:0 0 8px;letter-spacing:-.03em;
-  background:linear-gradient(90deg,#002060,#005BEA);-webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;color:#002060}}
+  background:linear-gradient(90deg,#0F172A,#0020C2);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:#0F172A}}
 .bv-sub{{font-size:15px;color:#6e6e73;margin:0 0 20px;text-transform:capitalize}}
 .bv-txt{{font-size:16px;color:#6e6e73;line-height:1.5;margin:0 0 22px}}
-.bv-btn{{display:inline-block;background:#005BEA;color:#fff;padding:12px 26px;border-radius:980px;
+.bv-btn{{display:inline-block;background:#0020C2;color:#fff;padding:12px 26px;border-radius:980px;
   font-weight:600;text-decoration:none}}
 </style>
 <div class="bv-wrap"><div class="bv-box">
@@ -25349,30 +25414,30 @@ def centro_ayuda():
 <style>
 *{{box-sizing:border-box}}
 body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#eef5fb;color:#0f172a}}
-.nav{{background:#0B2D57;color:#fff;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}}
+.nav{{background:#0020C2;color:#fff;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}}
 .nav .brand{{display:flex;align-items:center;gap:10px;font-weight:900;font-size:18px;text-decoration:none;color:#fff}}
 .nav .brand img{{height:36px;border-radius:6px;background:#fff;padding:2px}}
 .nav-links a{{color:#e2e8f0;text-decoration:none;font-size:13px;font-weight:600;margin-left:16px}}
 .hero{{text-align:center;padding:42px 16px 28px}}
-.hero h1{{margin:0 0 18px;font-size:clamp(22px,4vw,32px);color:#0B2D57;font-weight:900}}
-.search-box{{max-width:640px;margin:0 auto;background:#fff;border-radius:16px;padding:18px 18px 14px;box-shadow:0 10px 40px rgba(11,45,87,.12)}}
+.hero h1{{margin:0 0 18px;font-size:clamp(22px,4vw,32px);color:#0020C2;font-weight:900}}
+.search-box{{max-width:640px;margin:0 auto;background:#fff;border-radius:16px;padding:18px 18px 14px;box-shadow:0 10px 40px rgba(0,32,194,.12)}}
 .search-row{{display:flex;gap:8px;flex-wrap:wrap}}
 .search-row input{{flex:1;min-width:200px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:12px;font-size:15px}}
 .search-row button{{background:#0ea5e9;color:#fff;border:0;padding:14px 20px;border-radius:12px;font-weight:800;cursor:pointer}}
 .chips{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}}
-.chips a{{background:#f8fafc;border:1px solid #e2e8f0;color:#0B2D57;text-decoration:none;font-size:12px;font-weight:700;padding:8px 12px;border-radius:999px}}
+.chips a{{background:#f8fafc;border:1px solid #e2e8f0;color:#0020C2;text-decoration:none;font-size:12px;font-weight:700;padding:8px 12px;border-radius:999px}}
 .chips a:hover{{border-color:#0ea5e9;background:#e0f2fe}}
 .wrap{{max-width:1080px;margin:0 auto;padding:8px 16px 48px}}
 .cats{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin:28px 0 8px}}
-.cat{{background:#fff;border-radius:14px;padding:18px 12px;text-align:center;text-decoration:none;color:#0B2D57;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(15,23,42,.05);border:1px solid #e8eef5}}
+.cat{{background:#fff;border-radius:14px;padding:18px 12px;text-align:center;text-decoration:none;color:#0020C2;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(15,23,42,.05);border:1px solid #e8eef5}}
 .cat span{{display:block;font-size:28px;margin-bottom:8px}}
-.section-title{{color:#0B2D57;font-size:20px;font-weight:900;margin:28px 0 14px}}
+.section-title{{color:#0020C2;font-size:20px;font-weight:900;margin:28px 0 14px}}
 .pop{{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}}
 .pop a{{background:#fff;border-radius:14px;padding:16px 18px;text-decoration:none;color:#0f172a;border:1px solid #e8eef5;box-shadow:0 4px 12px rgba(15,23,42,.04);display:flex;justify-content:space-between;align-items:center;gap:10px}}
-.pop a b{{display:block;color:#0B2D57;font-size:14px;margin-bottom:4px}}
+.pop a b{{display:block;color:#0020C2;font-size:14px;margin-bottom:4px}}
 .pop a span{{font-size:12px;color:#64748b}}
 .pop a .ic{{width:36px;height:36px;border-radius:50%;background:#e0f2fe;display:flex;align-items:center;justify-content:center;flex-shrink:0}}
-.banner{{background:linear-gradient(135deg,#0B2D57,#0369a1);color:#fff;border-radius:18px;padding:28px 24px;margin:32px 0;display:grid;grid-template-columns:1.1fr 1fr;gap:20px}}
+.banner{{background:linear-gradient(135deg,#0020C2,#0369a1);color:#fff;border-radius:18px;padding:28px 24px;margin:32px 0;display:grid;grid-template-columns:1.1fr 1fr;gap:20px}}
 @media(max-width:800px){{.banner{{grid-template-columns:1fr}}}}
 .banner h2{{margin:0 0 8px;font-size:22px}}
 .banner p{{margin:0;opacity:.9;font-size:14px;line-height:1.5}}
@@ -25381,9 +25446,9 @@ body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#eef5fb;colo
 .banner-grid a b{{display:block;margin-bottom:2px}}
 .search-results{{background:#fff;border-radius:14px;padding:18px;margin:16px 0;border:1px solid #e2e8f0}}
 .faq-item{{border-bottom:1px solid #f1f5f9;padding:12px 0}}
-.faq-item h3{{margin:0 0 6px;color:#0B2D57;font-size:15px}}
+.faq-item h3{{margin:0 0 6px;color:#0020C2;font-size:15px}}
 .faq-item p{{margin:0;color:#475569;font-size:14px;line-height:1.5}}
-.foot{{background:#0B2D57;color:#94a3b8;padding:28px 16px;font-size:13px}}
+.foot{{background:#0020C2;color:#94a3b8;padding:28px 16px;font-size:13px}}
 .foot-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px}}
 .foot a{{color:#bfdbfe;text-decoration:none}}
 .foot b{{color:#fff;display:block;margin-bottom:8px}}
@@ -25554,10 +25619,10 @@ def portal_whatsapp_soporte():
     body = f"""
 <style>
 .w{{background:#f8fafc;min-height:100vh;font-family:Segoe UI,system-ui,Arial,sans-serif;color:#0f172a}}
-.w-nav{{background:#0B2D57;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}}
+.w-nav{{background:#0020C2;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}}
 .w-nav a{{color:#93c5fd;text-decoration:none;font-weight:700;margin-left:12px;font-size:13px}}
 .w-box{{max-width:560px;margin:40px auto;background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:32px;box-shadow:0 12px 32px rgba(15,23,42,.08)}}
-.w-box h1{{margin:0 0 10px;color:#0B2D57;font-size:26px}}
+.w-box h1{{margin:0 0 10px;color:#0020C2;font-size:26px}}
 .w-box p{{color:#475569;line-height:1.55;font-size:15px}}
 .w-btn{{display:block;text-align:center;margin-top:20px;padding:16px;border-radius:12px;background:#16a34a;color:#fff;font-weight:800;text-decoration:none;font-size:16px}}
 .w-btn:hover{{background:#15803d}}
@@ -25646,7 +25711,7 @@ def ventas_panel():
             }.get(et, "#64748b")
             filas_leads += (
                 f"<tr>"
-                f"<td style='font-weight:800;color:#0B2D57'>LD-{L.id:05d}</td>"
+                f"<td style='font-weight:800;color:#0020C2'>LD-{L.id:05d}</td>"
                 f"<td>{_esc(L.colegio or '—')}</td>"
                 f"<td>{_esc(L.rector or '—')}</td>"
                 f"<td>{_esc(L.telefono or '—')}</td>"
@@ -25669,8 +25734,8 @@ def ventas_panel():
                     f'padding:12px;margin-bottom:8px;font-size:13px;font-family:-apple-system,sans-serif;'
                     f'box-shadow:0 2px 8px rgba(0,0,0,.03)">'
                     f'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
-                    f'<b style="color:#002060">{_esc(L.colegio)}</b>'
-                    f'<span style="font-size:10px;font-weight:600;background:rgba(0,91,234,.1);color:#005BEA;'
+                    f'<b style="color:#0F172A">{_esc(L.colegio)}</b>'
+                    f'<span style="font-size:10px;font-weight:600;background:rgba(0,32,194,.1);color:#0020C2;'
                     f'padding:3px 8px;border-radius:980px;white-space:nowrap">{et_label}</span></div>'
                     f'<div style="color:#86868b;margin-top:4px;font-size:12px">{_esc(L.rector or "—")} · {_esc(L.municipio or "")}</div></div>'
                 )
@@ -25774,10 +25839,10 @@ def ventas_panel():
                 'style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px 18px;'
                 'box-shadow:0 2px 10px rgba(0,0,0,.03);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">'
                 + _imga_h
-                + '<div style="font-weight:700;color:#002060;font-size:15px">' + nom + '</div>'
+                + '<div style="font-weight:700;color:#0F172A;font-size:15px">' + nom + '</div>'
                 '<div style="font-size:12px;color:#86868b;margin:4px 0">Código: ' + _esc(cod) + '</div>'
                 '<div style="font-size:14px;font-weight:600;color:#1d1d1f;margin:8px 0 12px">' + precio_txt + fee_txt + '</div>'
-                '<a href="/ventas/comprar?plan=' + _esc(cod) + '" style="display:inline-block;background:#005BEA;color:#fff;'
+                '<a href="/ventas/comprar?plan=' + _esc(cod) + '" style="display:inline-block;background:#0020C2;color:#fff;'
                 'padding:10px 22px;border-radius:980px;font-weight:600;font-size:13px;text-decoration:none">Activar</a></div>'
             )
     except Exception as _ep:
@@ -25788,9 +25853,9 @@ def ventas_panel():
         '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:18px;margin:12px 0 16px;'
         'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.03)">'
         '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">'
-        '<div><h2 style="margin:0 0 4px;font-size:14px;color:#002060;font-weight:700">Planes · Activar colegio</h2>'
+        '<div><h2 style="margin:0 0 4px;font-size:14px;color:#0F172A;font-weight:700">Planes · Activar colegio</h2>'
         '<p style="margin:0;font-size:12px;color:#86868b">Elija un plan y active la institución en un clic.</p></div>'
-        '<a href="/ventas/beneficios" style="display:inline-block;background:#005BEA;color:#fff;padding:10px 18px;'
+        '<a href="/ventas/beneficios" style="display:inline-block;background:#0020C2;color:#fff;padding:10px 18px;'
         'border-radius:980px;font-weight:600;font-size:13px;text-decoration:none">Ver planes disponibles</a></div>'
         '<div id="plan-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">'
         + "".join(cards_activar)
@@ -25816,7 +25881,7 @@ def ventas_panel():
 <style>
 .vp{{max-width:1100px;margin:0 auto;padding:16px 16px 48px;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#0f172a;background:#f1f5f9;min-height:100vh}}
 .vp-hero{{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;
-  background:linear-gradient(135deg,#071a33 0%,#0B2D57 55%,#123a6b 100%);color:#fff;border-radius:12px;padding:20px 24px;margin-bottom:12px;
+  background:linear-gradient(135deg,#071a33 0%,#0020C2 55%,#123a6b 100%);color:#fff;border-radius:12px;padding:20px 24px;margin-bottom:12px;
   border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 28px rgba(7,26,51,.25)}}
 .vp-hero .logos{{display:flex;gap:14px;align-items:center}}
 .vp-hero img{{height:48px;width:48px;object-fit:contain;background:#fff;border-radius:10px;padding:5px}}
@@ -25824,12 +25889,12 @@ def ventas_panel():
 .vp-hero .sub{{opacity:.82;font-size:12px;margin-top:4px;font-weight:500}}
 .vp-hero .brand-line{{font-size:10px;opacity:.75;letter-spacing:.12em;text-transform:uppercase;font-weight:600;margin-bottom:2px}}
 .vp-mods{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin-bottom:12px;box-shadow:0 2px 8px rgba(15,23,42,.04)}}
-.vp-mods h2{{margin:0 0 4px;font-size:14px;color:#0B2D57;font-weight:800;letter-spacing:.02em;text-transform:uppercase}}
+.vp-mods h2{{margin:0 0 4px;font-size:14px;color:#0020C2;font-weight:800;letter-spacing:.02em;text-transform:uppercase}}
 .vp-mods .mini{{font-size:12px;color:#64748b;margin:0 0 12px}}
 .vp-kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px}}
-.vp-kpi{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;border-left:4px solid #0B2D57}}
+.vp-kpi{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;border-left:4px solid #0020C2}}
 .vp-kpi .l{{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em}}
-.vp-kpi .v{{font-size:22px;font-weight:800;color:#0B2D57;margin-top:6px;font-variant-numeric:tabular-nums}}
+.vp-kpi .v{{font-size:22px;font-weight:800;color:#0020C2;margin-top:6px;font-variant-numeric:tabular-nums}}
 .vp-kpi .s{{font-size:11px;color:#94a3b8;margin-top:2px}}
 .vp-actions{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}}
 .vp-actions a,.vp-actions button{{display:inline-block;padding:9px 14px;border-radius:8px;font-weight:700;font-size:12px;
@@ -25837,15 +25902,15 @@ def ventas_panel():
 .funnel{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}}
 @media(max-width:800px){{.funnel{{grid-template-columns:1fr}}}}
 .funnel-col{{border-radius:20px;background:#f5f5f7;border:1px solid #e2e8f0;padding:14px;min-height:140px}}
-.funnel-col h3{{margin:0 0 10px;font-size:12px;color:#0B2D57;text-transform:uppercase;letter-spacing:.04em;font-weight:800}}
+.funnel-col h3{{margin:0 0 10px;font-size:12px;color:#0020C2;text-transform:uppercase;letter-spacing:.04em;font-weight:800}}
 .funnel-col .n{{font-size:18px;font-weight:800;color:#334155}}
 .kit{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:12px 0}}
-.kit h2{{margin:0 0 10px;font-size:13px;color:#0B2D57;text-transform:uppercase;letter-spacing:.04em;font-weight:800}}
-.kit a{{display:block;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:6px 0;text-decoration:none;color:#0B2D57;font-weight:600;font-size:13px}}
+.kit h2{{margin:0 0 10px;font-size:13px;color:#0020C2;text-transform:uppercase;letter-spacing:.04em;font-weight:800}}
+.kit a{{display:block;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:6px 0;text-decoration:none;color:#0020C2;font-weight:600;font-size:13px}}
 .kit a:hover{{background:#eff6ff;border-color:#bfdbfe}}
 .modal-bg{{display:none;position:fixed;inset:0;background:rgba(7,26,51,.6);z-index:50;align-items:center;justify-content:center;padding:16px}}
 .modal-bg.on{{display:flex}}
-.modal{{background:#fff;border-radius:12px;max-width:440px;width:100%;padding:22px;box-shadow:0 24px 48px rgba(0,0,0,.28);border-top:4px solid #0B2D57}}
+.modal{{background:#fff;border-radius:12px;max-width:440px;width:100%;padding:22px;box-shadow:0 24px 48px rgba(0,0,0,.28);border-top:4px solid #0020C2}}
 .modal input{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin:6px 0 10px}}
 .modal button{{padding:10px 14px;border-radius:8px;border:0;font-weight:700;cursor:pointer}}
 .sec-title{{margin:16px 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;font-weight:800}}
@@ -25888,7 +25953,7 @@ def ventas_panel():
     <form method="POST" style="display:inline;margin:0">
       <input type="hidden" name="accion" value="crear_link_demo">
       <input type="hidden" name="dias" value="15">
-      <button type="submit" style="background:#005BEA;color:#fff;border:0;padding:10px 18px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;font-family:-apple-system,sans-serif">Crear link invitación demo</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 18px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;font-family:-apple-system,sans-serif">Crear link invitación demo</button>
     </form>
   </div>
 
@@ -25926,11 +25991,11 @@ def ventas_panel():
 <!-- Modal MEN / DANE -->
 <div class="modal-bg" id="men-modal" onclick="if(event.target===this)this.classList.remove('on')">
   <div class="modal">
-    <h2 style="margin:0 0 8px;color:#0B2D57;font-size:18px">🇨🇴 Validar Colegio MEN / DUE</h2>
+    <h2 style="margin:0 0 8px;color:#0020C2;font-size:18px">🇨🇴 Validar Colegio MEN / DUE</h2>
     <p style="font-size:13px;color:#64748b;margin:0 0 10px">Ingrese código DANE (12 dígitos) o NIT del colegio.</p>
     <label style="font-size:12px;font-weight:700">Código DANE o NIT</label>
     <input id="men-codigo" placeholder="Ej. 105001000001 o 900123456" inputmode="numeric">
-    <button type="button" onclick="consultarMEN()" style="background:#0B2D57;color:#fff;width:100%">Consultar institución</button>
+    <button type="button" onclick="consultarMEN()" style="background:#0020C2;color:#fff;width:100%">Consultar institución</button>
     <div id="men-result" style="margin-top:12px;font-size:13px"></div>
     <button type="button" onclick="document.getElementById('men-modal').classList.remove('on')"
       style="margin-top:10px;background:#e2e8f0;color:#334155;width:100%">Cerrar</button>
@@ -26147,9 +26212,9 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 .lv-nav .brand{{font-weight:600;font-size:14px;color:#1d1d1f;letter-spacing:-.01em}}
 .lv-nav .brand span{{font-weight:400;opacity:.7;margin-left:6px;font-size:12px}}
 .lv-nav a{{color:#1d1d1f;text-decoration:none;font-size:14px;font-weight:400;margin-left:18px;opacity:.85}}
-.lv-nav a:hover{{opacity:1;color:#005BEA}}
-.lv-nav .tel{{background:#005BEA;color:#fff;padding:8px 18px;border-radius:980px;font-size:13px;font-weight:500;text-decoration:none}}
-.lv-hero{{background:linear-gradient(135deg,#0B2D57 0%,#0B63CE 55%,#1e3a8a 100%);color:#fff;padding:48px 18px 56px}}
+.lv-nav a:hover{{opacity:1;color:#0020C2}}
+.lv-nav .tel{{background:#0020C2;color:#fff;padding:8px 18px;border-radius:980px;font-size:13px;font-weight:500;text-decoration:none}}
+.lv-hero{{background:linear-gradient(135deg,#0020C2 0%,#0B63CE 55%,#1e3a8a 100%);color:#fff;padding:48px 18px 56px}}
 .lv-hero-in{{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1.2fr .8fr;gap:28px;align-items:center}}
 @media(max-width:800px){{.lv-hero-in{{grid-template-columns:1fr}}}}
 .lv-hero h1{{font-size:clamp(28px,5vw,44px);line-height:1.08;margin:0 0 14px;font-weight:700;letter-spacing:-.02em;color:#fff}}
@@ -26159,14 +26224,14 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 .lv-box{{background:#fff;color:#1d1d1f;border-radius:24px;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.18)}}
 .lv-box h3{{margin:0 0 8px;font-size:18px;font-weight:600;color:#1d1d1f}}
 .lv-box a.btn{{display:block;text-align:center;padding:12px 18px;border-radius:980px;font-weight:500;text-decoration:none;border:0;width:100%;margin-top:10px;font-size:14px}}
-.lv-box a.btn-wa{{background:#005BEA;color:#fff}}
+.lv-box a.btn-wa{{background:#0020C2;color:#fff}}
 .lv-box a.btn-reg{{background:#f5f5f7;color:#1d1d1f}}
 .lv-section{{max-width:1080px;margin:0 auto;padding:48px 16px}}
 .lv-section h2{{text-align:center;font-size:28px;color:#1d1d1f;margin:0 0 8px;font-weight:700;letter-spacing:-.02em}}
 .lv-section .lead{{text-align:center;color:#86868b;margin:0 0 28px;font-size:15px;font-weight:400}}
 .lv-plans{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}}
 .pl-card{{background:#f5f5f7;border:0;border-radius:20px;padding:22px 18px;box-shadow:0 4px 30px rgba(0,0,0,.02);position:relative;display:flex;flex-direction:column}}
-.pl-badge{{position:absolute;top:14px;right:14px;background:#005BEA;color:#fff;font-size:10px;font-weight:600;padding:4px 10px;border-radius:980px;z-index:1}}
+.pl-badge{{position:absolute;top:14px;right:14px;background:#0020C2;color:#fff;font-size:10px;font-weight:600;padding:4px 10px;border-radius:980px;z-index:1}}
 .pl-img{{display:none}}
 .pl-card h3{{margin:0 0 8px;font-size:20px;color:#1d1d1f;font-weight:700}}
 .pl-line{{font-size:12px;color:#86868b;margin-bottom:8px}}
@@ -26174,7 +26239,7 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 .pl-price small{{font-size:12px;font-weight:400;color:#86868b}}
 .pl-old{{font-size:12px;color:#86868b;margin-bottom:12px;text-decoration:line-through}}
 .pl-card ul{{margin:0 0 16px;padding-left:18px;color:#6e6e73;font-size:13px;line-height:1.55;flex:1;list-style:disc}}
-.pl-cta{{display:block;text-align:center;background:#005BEA;color:#fff;padding:11px 16px;border-radius:980px;font-weight:500;text-decoration:none;font-size:13px;margin-top:auto}}
+.pl-cta{{display:block;text-align:center;background:#0020C2;color:#fff;padding:11px 16px;border-radius:980px;font-weight:500;text-decoration:none;font-size:13px;margin-top:auto}}
 .pl-cta:hover{{background:#0047c0}}
 .lv-bar{{background:#f5f5f7;color:#1d1d1f;border-radius:20px;padding:18px 20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;margin:20px 0}}
 .lv-bar b{{font-size:15px;font-weight:600}}
@@ -26183,19 +26248,19 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 .lv-info{{background:#f5f5f7;border:0;border-radius:20px;padding:18px}}
 .lv-info h3{{margin:0 0 8px;color:#1d1d1f;font-size:16px;font-weight:600}}
 .lv-info p{{margin:0 0 12px;color:#6e6e73;font-size:14px;line-height:1.5}}
-.lv-info a{{color:#005BEA;font-weight:500;text-decoration:none}}
+.lv-info a{{color:#0020C2;font-weight:500;text-decoration:none}}
 .lv-cta{{background:#f5f5f7;padding:40px 16px;text-align:center}}
 .lv-cta h2{{color:#1d1d1f;margin:0 0 12px;font-weight:700}}
-.lv-cta button{{background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:500}}
+.lv-cta button{{background:#0020C2;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:500}}
 /* Formulario captación estilo Apple */
 .form-container-apple{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background-color:#ffffff;padding:40px;border-radius:24px;box-shadow:0 4px 30px rgba(0,0,0,0.02);max-width:800px;margin:0 auto}}
 .form-title-apple{{font-size:24px;font-weight:700;color:#1d1d1f;letter-spacing:-0.015em;margin:0 0 8px}}
 .form-subtitle-apple{{font-size:14px;color:#86868b;margin:0 0 24px;line-height:1.45}}
 .form-label-apple{{font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:6px;display:block}}
 .form-input-apple,.form-select-apple,.form-textarea-apple{{width:100%;font-family:-apple-system,sans-serif;font-size:14px;background-color:#ffffff;border:1px solid #d2d2d7;border-radius:12px;padding:12px 16px;color:#1d1d1f;box-sizing:border-box;transition:border-color 0.2s ease,box-shadow 0.2s ease;margin:0}}
-.form-input-apple:focus,.form-select-apple:focus,.form-textarea-apple:focus{{outline:none;border-color:#005bea;box-shadow:0 0 0 4px rgba(0,91,234,0.1)}}
-.btn-submit-apple-oval{{font-family:-apple-system,sans-serif;font-size:14px;font-weight:600;color:#ffffff;background-color:#005bea;padding:14px 32px;border-radius:980px;border:none;cursor:pointer;display:inline-block;transition:background-color 0.2s cubic-bezier(0.25,1,0.5,1),transform 0.1s ease}}
-.btn-submit-apple-oval:hover{{background-color:#002060}}
+.form-input-apple:focus,.form-select-apple:focus,.form-textarea-apple:focus{{outline:none;border-color:#0020C2;box-shadow:0 0 0 4px rgba(0,32,194,0.1)}}
+.btn-submit-apple-oval{{font-family:-apple-system,sans-serif;font-size:14px;font-weight:600;color:#ffffff;background-color:#0020C2;padding:14px 32px;border-radius:980px;border:none;cursor:pointer;display:inline-block;transition:background-color 0.2s cubic-bezier(0.25,1,0.5,1),transform 0.1s ease}}
+.btn-submit-apple-oval:hover{{background-color:#0F172A}}
 .btn-submit-apple-oval:active{{transform:scale(0.98)}}
 @media(max-width:600px){{.form-container-apple{{padding:24px 18px}}.form-container-apple form{{grid-template-columns:1fr!important}}}}
 .lv-foot{{background:#1d1d1f;padding:40px 20px 24px;font-size:13px;color:#a1a1a6;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
@@ -26205,7 +26270,7 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
 .lv-foot a:hover{{text-decoration:underline}}
 .lv-foot b{{color:#f5f5f7;font-weight:600}}
 .lv-foot .lv-foot-copy{{max-width:1080px;margin:24px auto 0;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);text-align:center;font-size:11px;color:#6e6e73}}
-.lv-wa{{position:fixed;right:16px;bottom:16px;background:#005BEA;color:#fff;padding:12px 18px;border-radius:980px;font-weight:500;text-decoration:none;box-shadow:0 8px 24px rgba(0,91,234,.25);z-index:50}}
+.lv-wa{{position:fixed;right:16px;bottom:16px;background:#0020C2;color:#fff;padding:12px 18px;border-radius:980px;font-weight:500;text-decoration:none;box-shadow:0 8px 24px rgba(0,32,194,.25);z-index:50}}
 </style>
 <div class="lv">
   <div class="lv-nav">
@@ -26248,11 +26313,11 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
   </section>
 
   <section class="lv-section" id="pasate" style="background:#f8fafc;padding-top:28px;padding-bottom:8px">
-    <h2 style="text-align:center;color:#0B2D57;margin:0 0 8px">Pasate ahora si aun no eres cliente</h2>
+    <h2 style="text-align:center;color:#0020C2;margin:0 0 8px">Pasate ahora si aun no eres cliente</h2>
     <p class="lead" style="text-align:center">Elige EduTrack completo o Solo QR para control de acceso</p>
     <div style="max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:8px 16px 24px">
       <a href="#planes" style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:block;box-shadow:0 4px 14px rgba(15,23,42,.04)">
-        <span style="background:#0B2D57;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px">Completo</span>
+        <span style="background:#0020C2;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px">Completo</span>
         <div style="color:#0f172a;font-size:14px;margin-top:8px;line-height:1.4"><b>EduTrack completo</b><br><span style="color:#64748b">Notas, boletines, QR y mas</span></div>
       </a>
       <a href="#planes-qr" style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:block;box-shadow:0 4px 14px rgba(15,23,42,.04)">
@@ -26266,15 +26331,15 @@ border-bottom:1px solid rgba(0,0,0,.08)}}
     </div>
   </section>
   <section class="lv-section" id="servicios" style="padding-top:12px">
-    <h2 style="text-align:center;color:#0B2D57;margin:0 0 16px">Gestiona tus servicios aqui</h2>
+    <h2 style="text-align:center;color:#0020C2;margin:0 0 16px">Gestiona tus servicios aqui</h2>
     <div style="max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:0 16px 28px">
-      <a href="#planes" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Ver planes</a>
-      <a href="/familia-login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Portal padres</a>
-      <a href="/portal" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Lector QR</a>
-      <a href="/pqr" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Radicar PQR</a>
-      <a href="/pagar" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Pagar factura</a>
-      <a href="/login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Acceso colegio</a>
-      <a href="{wa}" target="_blank" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0B2D57;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Hablar con ventas</a>
+      <a href="#planes" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0020C2;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Ver planes</a>
+      <a href="/familia-login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0020C2;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Portal padres</a>
+      <a href="/portal" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0020C2;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Lector QR</a>
+      <a href="/pqr" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0020C2;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Radicar PQR</a>
+      <a href="/pagar" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0020C2;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Pagar factura</a>
+      <a href="/login" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0020C2;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Acceso colegio</a>
+      <a href="{wa}" target="_blank" style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none;color:#0020C2;font-size:12px;font-weight:700;border:1px solid #e2e8f0">Hablar con ventas</a>
     </div>
   </section>
   <section class="lv-section" id="beneficios">
@@ -26443,18 +26508,18 @@ def ventas_beneficios():
         li = "".join('<li style="margin:4px 0;font-size:13px;color:#1d1d1f">✓ %s</li>' % _esc(str(x)) for x in feats[:12])
         if pv.get("promo_id") and float(pv.get("porcentaje") or 0) > 0:
             precio_html = (
-                '<div style="font-size:26px;font-weight:700;color:#005BEA">$'
+                '<div style="font-size:26px;font-weight:700;color:#0020C2">$'
                 + "{:,.0f}".format(pv["valor_descuento"]).replace(",", ".")
                 + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
                 '<div style="font-size:13px;color:#86868b;text-decoration:line-through">$'
                 + "{:,.0f}".format(pv["valor_pleno"]).replace(",", ".")
                 + " COP</div>"
-                '<div style="margin-top:8px;display:inline-block;background:rgba(0,91,234,.1);color:#005BEA;padding:4px 12px;border-radius:980px;font-size:11px;font-weight:600">'
+                '<div style="margin-top:8px;display:inline-block;background:rgba(0,32,194,.1);color:#0020C2;padding:4px 12px;border-radius:980px;font-size:11px;font-weight:600">'
                 + _esc(pv.get("nombre_promo") or "Promo") + " · " + str(pv.get("porcentaje") or 0) + "%</div>"
             )
         else:
             precio_html = (
-                '<div style="font-size:26px;font-weight:700;color:#002060">$'
+                '<div style="font-size:26px;font-weight:700;color:#0F172A">$'
                 + "{:,.0f}".format(int(pleno)).replace(",", ".")
                 + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
             )
@@ -26465,13 +26530,13 @@ def ventas_beneficios():
             _vp = int(pleno)
             _meses = int(getattr(pl, "descuento_meses", 0) or 0)
             precio_html = (
-                '<div style="font-size:26px;font-weight:700;color:#005BEA">$'
+                '<div style="font-size:26px;font-weight:700;color:#0020C2">$'
                 + "{:,.0f}".format(_vd).replace(",", ".")
                 + ' <span style="font-size:13px;font-weight:500">COP/mes</span></div>'
                 '<div style="font-size:13px;color:#86868b;text-decoration:line-through">$'
                 + "{:,.0f}".format(_vp).replace(",", ".")
                 + " COP</div>"
-                '<div style="margin-top:8px;display:inline-block;background:rgba(0,91,234,.1);color:#005BEA;padding:4px 12px;border-radius:980px;font-size:11px;font-weight:600">'
+                '<div style="margin-top:8px;display:inline-block;background:rgba(0,32,194,.1);color:#0020C2;padding:4px 12px;border-radius:980px;font-size:11px;font-weight:600">'
                 + "DESCUENTO " + str(_pct).rstrip("0").rstrip(".") + "%"
                 + ((" · " + str(_meses) + " meses") if _meses else "")
                 + "</div>"
@@ -26483,11 +26548,11 @@ def ventas_beneficios():
         if _tit or _msg or _cta:
             copy_html = '<div style="margin:10px 0;padding-top:10px;border-top:1px solid #f0f0f0">'
             if _tit:
-                copy_html += '<div style="font-weight:700;color:#002060;font-size:14px;margin-bottom:6px">' + _esc(_tit) + "</div>"
+                copy_html += '<div style="font-weight:700;color:#0F172A;font-size:14px;margin-bottom:6px">' + _esc(_tit) + "</div>"
             if _msg:
                 copy_html += '<pre style="white-space:pre-wrap;font-family:inherit;font-size:12px;color:#1d1d1f;margin:0;line-height:1.45">' + _esc(_msg) + "</pre>"
             if _cta:
-                copy_html += '<div style="margin-top:8px;font-size:12px;font-weight:600;color:#005BEA">' + _esc(_cta) + "</div>"
+                copy_html += '<div style="margin-top:8px;font-size:12px;font-weight:600;color:#0020C2">' + _esc(_cta) + "</div>"
             copy_html += "</div>"
         elif li:
             copy_html = '<ul style="list-style:none;padding:0;margin:14px 0;flex:1">' + li + "</ul>"
@@ -26499,31 +26564,31 @@ def ventas_beneficios():
             '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.04);display:flex;flex-direction:column">'
             + _img_html
             + '<div style="font-size:11px;font-weight:600;color:#86868b;text-transform:uppercase">Código: ' + _esc(pl.codigo or "") + "</div>"
-            '<div style="font-size:18px;font-weight:700;color:#002060;margin:4px 0 12px">' + _esc(pl.nombre or "") + "</div>"
+            '<div style="font-size:18px;font-weight:700;color:#0F172A;margin:4px 0 12px">' + _esc(pl.nombre or "") + "</div>"
             + precio_html
             + copy_html
-            + '<a href="/ventas/comprar?plan=' + _esc(pl.codigo or "") + '" style="display:block;text-align:center;background:#005BEA;color:#fff;'
+            + '<a href="/ventas/comprar?plan=' + _esc(pl.codigo or "") + '" style="display:block;text-align:center;background:#0020C2;color:#fff;'
             'padding:12px 20px;border-radius:980px;text-decoration:none;font-weight:600;font-size:14px;margin-top:auto">Activar este plan</a></div>'
         )
     tabs = (
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 12px">'
         '<a href="/ventas/beneficios?mod=todos" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
-        + ("background:#002060;color:#fff" if modalidad == "todos" else "background:#f5f5f7;color:#1d1d1f") + '">Todos los planes</a>'
+        + ("background:#0F172A;color:#fff" if modalidad == "todos" else "background:#f5f5f7;color:#1d1d1f") + '">Todos los planes</a>'
         '<a href="/ventas/beneficios?mod=qr" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
-        + ("background:#002060;color:#fff" if modalidad == "qr" else "background:#f5f5f7;color:#1d1d1f") + '">Módulo Planes QR</a>'
+        + ("background:#0F172A;color:#fff" if modalidad == "qr" else "background:#f5f5f7;color:#1d1d1f") + '">Módulo Planes QR</a>'
         '<a href="/ventas/beneficios?mod=inst" style="padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;font-size:13px;'
-        + ("background:#002060;color:#fff" if modalidad == "inst" else "background:#f5f5f7;color:#1d1d1f") + '">Módulo Institucionales</a></div>'
+        + ("background:#0F172A;color:#fff" if modalidad == "inst" else "background:#f5f5f7;color:#1d1d1f") + '">Módulo Institucionales</a></div>'
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 20px;align-items:center">'
         '<span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Activación</span>'
         '<a href="/ventas/beneficios?mod=' + _esc(modalidad if modalidad in ("qr","inst","presencial","online") else "todos") + '&act=presencial" style="padding:8px 14px;border-radius:980px;text-decoration:none;font-weight:600;font-size:12px;'
-        + ("background:#005BEA;color:#fff" if (request.args.get("act") or "") == "presencial" else "background:#f5f5f7;color:#1d1d1f") + '">Presencial</a>'
+        + ("background:#0020C2;color:#fff" if (request.args.get("act") or "") == "presencial" else "background:#f5f5f7;color:#1d1d1f") + '">Presencial</a>'
         '<a href="/ventas/beneficios?mod=' + _esc(modalidad if modalidad in ("qr","inst","presencial","online") else "todos") + '&act=online" style="padding:8px 14px;border-radius:980px;text-decoration:none;font-weight:600;font-size:12px;'
-        + ("background:#005BEA;color:#fff" if (request.args.get("act") or "") == "online" else "background:#f5f5f7;color:#1d1d1f") + '">Online</a></div>'
+        + ("background:#0020C2;color:#fff" if (request.args.get("act") or "") == "online" else "background:#f5f5f7;color:#1d1d1f") + '">Online</a></div>'
     )
     body = (
         '<div style="max-width:1100px;margin:0 auto;padding:20px;font-family:-apple-system,sans-serif">'
         '<a href="/ventas" style="color:#86868b;font-size:13px">&larr; Ventas</a>'
-        '<h1 style="color:#002060;margin:8px 0 4px">Beneficios de planes</h1>'
+        '<h1 style="color:#0F172A;margin:8px 0 4px">Beneficios de planes</h1>'
         '<p style="color:#86868b;font-size:13px;margin:0">Catálogo comercial para asesores. Precios con promoción activa de Gerencia.</p>'
         + tabs
         + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">'
@@ -26572,9 +26637,9 @@ def ventas_comprar():
         _pvb = _calcular_promo_valores(float(precio or 0), _pr)
         if _pr and _pvb.get("promo_id") and float(_pvb.get("porcentaje") or 0) > 0:
             _promo_banner = (
-                '<div style="background:rgba(0,91,234,.08);border:1px solid rgba(0,91,234,.2);border-radius:16px;'
+                '<div style="background:rgba(0,32,194,.08);border:1px solid rgba(0,32,194,.2);border-radius:16px;'
                 'padding:14px 16px;margin:0 0 16px;font-family:-apple-system,sans-serif">'
-                '<div style="font-size:12px;font-weight:600;color:#005BEA;text-transform:uppercase;letter-spacing:.04em">'
+                '<div style="font-size:12px;font-weight:600;color:#0020C2;text-transform:uppercase;letter-spacing:.04em">'
                 "Promocion activa en este plan</div>"
                 '<div style="font-size:20px;font-weight:700;color:#1d1d1f;margin-top:4px">$'
                 + "{:,.0f}".format(_pvb["valor_descuento"]).replace(",", ".")
@@ -26582,7 +26647,7 @@ def ventas_comprar():
                 '<div style="font-size:12px;color:#86868b;text-decoration:line-through">$'
                 + "{:,.0f}".format(_pvb["valor_pleno"]).replace(",", ".")
                 + " COP</div>"
-                '<div style="font-size:13px;color:#002060;margin-top:6px">'
+                '<div style="font-size:13px;color:#0F172A;margin-top:6px">'
                 + _esc(_pvb.get("nombre_promo") or "Descuento")
                 + " · " + str(_pvb.get("porcentaje") or 0) + "% · "
                 + _esc(_pvb.get("tiempo_promo") or "")
@@ -26619,7 +26684,7 @@ def ventas_comprar():
             _badge = '<span style="background:#16a34a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px">PLAN ELEGIDO</span>' if _activo else ""
             lista_planes_confirm += (
                 '<div style="background:' + _bg + ';border-radius:10px;padding:12px 14px;margin-bottom:8px">'
-                '<div style="font-weight:800;color:#0B2D57;font-size:14px">' + _esc(_nom) + _badge + "</div>"
+                '<div style="font-weight:800;color:#0020C2;font-size:14px">' + _esc(_nom) + _badge + "</div>"
                 '<div style="font-size:12px;color:#64748b;margin-top:2px">Código: <code>' + _esc(_cod) + "</code> · " + _pr_txt + "</div>"
                 + ('<div style="font-size:12px;color:#166534;margin-top:6px;font-weight:700">Confirmación: este es el plan que se activará al enviar el formulario.</div>' if _activo else "")
                 + "</div>"
@@ -26981,19 +27046,19 @@ def ventas_comprar():
 .vc-box input[type=checkbox]{{width:auto!important;margin:3px 0 0!important;padding:0!important}}
 #vc-step1-btn,#vc-step2-btn,#btn-canal-online,#btn-canal-presencial{{color:#fff!important}}
 @media(max-width:800px){{.vc-wrap{{grid-template-columns:1fr}}}}
-.vc-box{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px;box-shadow:0 2px 16px rgba(0,0,0,.04)}}.vc input,.vc select{{border-radius:12px !important;border:1px solid #d2d2d7 !important}}.vc button[type=submit]{{border-radius:980px !important;background:#005BEA !important}}
-.vc-box h1{{margin:0 0 8px;color:#0B2D57;font-size:22px}}
-.vc-box h2{{margin:14px 0 8px;color:#0B2D57;font-size:15px}}
+.vc-box{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px;box-shadow:0 2px 16px rgba(0,0,0,.04)}}.vc input,.vc select{{border-radius:12px !important;border:1px solid #d2d2d7 !important}}.vc button[type=submit]{{border-radius:980px !important;background:#0020C2 !important}}
+.vc-box h1{{margin:0 0 8px;color:#0020C2;font-size:22px}}
+.vc-box h2{{margin:14px 0 8px;color:#0020C2;font-size:15px}}
 .vc-box label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}}
 .vc-box input, .vc-box select{{width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box}}
 .vc-box button{{width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:#dc2626;color:#fff;font-weight:800;font-size:15px}}
 .vc-err{{background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:10px}}
 .vc-ok{{background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin-bottom:10px}}
-.vc-plan{{display:inline-block;background:#0B2D57;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800}}
+.vc-plan{{display:inline-block;background:#0020C2;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800}}
 .vc-box ul{{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.45;color:#334155}}
 .vc-kpi{{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}}
 .vc-kpi div{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px}}
-.vc-kpi b{{display:block;font-size:16px;color:#0B2D57}}
+.vc-kpi b{{display:block;font-size:16px;color:#0020C2}}
 .vc-kpi span{{font-size:11px;color:#64748b}}
 .note{{font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:8px 10px;border-radius:8px;margin-top:10px}}
 </style>
@@ -27021,8 +27086,8 @@ def ventas_comprar():
     <div class="vc-box" id="vc-rector-box">
       <h1 style="font-size:19px">Rector y usuarios del colegio</h1>
       <p style="color:#64748b;font-size:13px;margin:0 0 10px">Datos del representante legal (obligatorios para el contrato) y usuarios que se crean con clave temporal. Se envían junto con el resto del formulario.</p>
-          <div style="background:rgba(0,91,234,.06);border-radius:16px;padding:14px 16px;margin-bottom:14px">
-            <div style="font-size:12px;font-weight:700;color:#005BEA;text-transform:uppercase;letter-spacing:.04em">Paso 2 · Identidad del rector</div>
+          <div style="background:rgba(0,32,194,.06);border-radius:16px;padding:14px 16px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:#0020C2;text-transform:uppercase;letter-spacing:.04em">Paso 2 · Identidad del rector</div>
             <div style="font-size:13px;color:#1d1d1f;margin-top:4px">Datos del representante legal de la institucion (obligatorio para el contrato).</div>
           </div>
           <label>Nombre completo del rector / representante legal *</label>
@@ -27035,7 +27100,7 @@ def ventas_comprar():
           <label>Correo institucional</label>
           <input form="form-activar-plan" name="correo" type="email" placeholder="rector@colegio.edu.co" style="border-radius:12px;border:1px solid #d2d2d7;width:100%;padding:12px;box-sizing:border-box">
                   <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0">
-        <h3 style="margin:0 0 8px;color:#0B2D57;font-size:15px">Usuarios del colegio (obligatorio)</h3>
+        <h3 style="margin:0 0 8px;color:#0020C2;font-size:15px">Usuarios del colegio (obligatorio)</h3>
         <p style="font-size:12px;color:#64748b;margin:0 0 12px">Se crearán con clave temporal. Al primer ingreso el sistema les pedirá cambiar la clave.</p>
 
         <label>Rector(a) — nombre completo *</label>
@@ -27072,18 +27137,18 @@ def ventas_comprar():
       <form method="POST" enctype="multipart/form-data" id="form-activar-plan" novalidate style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" onsubmit="return vcSubmitGuard(this)">
         {_promo_banner}
         <label><b>Plan a contratar *</b></label>
-        <select name="plan" required style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;font-weight:600;color:#002060;background:#fff"
+        <select name="plan" required style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;font-weight:600;color:#0F172A;background:#fff"
           onchange="if(this.value){{ window.location='/ventas/comprar?plan='+encodeURIComponent(this.value); }}">
           {opciones_plan}
         </select>
         <p style="font-size:12px;color:#86868b;margin:6px 0 14px">Puede cambiar el plan aquí.</p>
 
         <div style="display:flex;gap:8px;margin-bottom:16px">
-          <button type="button" id="vc-step1-btn" onclick="vcStep(1)" style="border:0;padding:8px 16px;border-radius:980px;background:#005BEA;color:#fff;font-weight:600;font-size:12px;cursor:pointer">1. Identidad</button>
+          <button type="button" id="vc-step1-btn" onclick="vcStep(1)" style="border:0;padding:8px 16px;border-radius:980px;background:#0020C2;color:#fff;font-weight:600;font-size:12px;cursor:pointer">1. Identidad</button>
           <button type="button" id="vc-step2-btn" onclick="vcStep(2)" style="border:0;padding:8px 16px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;font-weight:500;font-size:12px;cursor:pointer">2. Rector y usuarios</button>
         </div>
 
-        <div id="vc-step1"><div style="background:#f5f5f7;border-radius:16px;padding:14px 16px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#002060;text-transform:uppercase;letter-spacing:.04em">Paso 1 · Datos del colegio</div><div style="font-size:13px;color:#86868b;margin-top:4px">Nombre, codigo, NIT, DANE y logo oficial de la institucion.</div></div>
+        <div id="vc-step1"><div style="background:#f5f5f7;border-radius:16px;padding:14px 16px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#0F172A;text-transform:uppercase;letter-spacing:.04em">Paso 1 · Datos del colegio</div><div style="font-size:13px;color:#86868b;margin-top:4px">Nombre, codigo, NIT, DANE y logo oficial de la institucion.</div></div>
           <label>Nombre del colegio *</label>
           <input name="nombre" required placeholder="Nombre oficial" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>Código institución *</label>
@@ -27092,11 +27157,11 @@ def ventas_comprar():
           <input name="dane" placeholder="12 dígitos" style="border-radius:12px;border:1px solid #d2d2d7">
           <label>NIT</label>
           <input name="nit" placeholder="NIT" style="border-radius:12px;border:1px solid #d2d2d7">
-          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 6px;color:#1d1d1f">Logo oficial del colegio *</label><label for="logo_colegio" id="logo-drop-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #d2d2d7;border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:8px"><span style="font-size:22px">📷</span><span id="logo-drop-text">Sube el logotipo oficial de la institucion (.PNG / JPG)</span></label><input type="file" name="logo_colegio" id="logo_colegio" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,.png,.jpg,.jpeg,.webp" style="width:100%;padding:10px;margin:0 0 12px;border:1px solid #d2d2d7;border-radius:12px;box-sizing:border-box;background:#fff"><p id="logo-file-name" style="font-size:12px;color:#15803d;margin:-4px 0 12px;display:none"></p><button type="button" id="btn-vc-siguiente" onclick="vcStep(2)" style="margin-top:4px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;width:100%">Siguiente</button><script>(function(){{function enableSig(){{var f=document.getElementById("logo_colegio");var b=document.getElementById("btn-vc-siguiente");var l=document.getElementById("logo-drop-label");if(!f||!b)return;if(f.files&&f.files[0]){{b.disabled=false;b.style.background="#005BEA";b.style.color="#fff";b.style.cursor="pointer";if(l)l.innerHTML="<span style=\"color:#15803d\">✓ "+f.files[0].name+"</span>";}}else{{b.disabled=true;b.style.background="#d2d2d7";b.style.color="#86868b";b.style.cursor="not-allowed";}}}}document.addEventListener("change",function(e){{if(e.target&&e.target.id==="logo_colegio")enableSig();}});setTimeout(function(){{var f=document.getElementById("logo_colegio");if(f){{f.required=true;var box=document.getElementById("vc-step1");if(box&&f.parentElement&&f.parentElement.id!=="vc-step1"){{box.insertBefore(f,document.getElementById("btn-vc-siguiente"));f.style.display="none";}}}}enableSig();}},300);}})();</script>
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 6px;color:#1d1d1f">Logo oficial del colegio *</label><label for="logo_colegio" id="logo-drop-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #d2d2d7;border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:#fafafa;color:#86868b;font-size:13px;margin-bottom:8px"><span style="font-size:22px">📷</span><span id="logo-drop-text">Sube el logotipo oficial de la institucion (.PNG / JPG)</span></label><input type="file" name="logo_colegio" id="logo_colegio" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,.png,.jpg,.jpeg,.webp" style="width:100%;padding:10px;margin:0 0 12px;border:1px solid #d2d2d7;border-radius:12px;box-sizing:border-box;background:#fff"><p id="logo-file-name" style="font-size:12px;color:#15803d;margin:-4px 0 12px;display:none"></p><button type="button" id="btn-vc-siguiente" onclick="vcStep(2)" style="margin-top:4px;background:#0020C2;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer;width:100%">Siguiente</button><script>(function(){{function enableSig(){{var f=document.getElementById("logo_colegio");var b=document.getElementById("btn-vc-siguiente");var l=document.getElementById("logo-drop-label");if(!f||!b)return;if(f.files&&f.files[0]){{b.disabled=false;b.style.background="#0020C2";b.style.color="#fff";b.style.cursor="pointer";if(l)l.innerHTML="<span style=\"color:#15803d\">✓ "+f.files[0].name+"</span>";}}else{{b.disabled=true;b.style.background="#d2d2d7";b.style.color="#86868b";b.style.cursor="not-allowed";}}}}document.addEventListener("change",function(e){{if(e.target&&e.target.id==="logo_colegio")enableSig();}});setTimeout(function(){{var f=document.getElementById("logo_colegio");if(f){{f.required=true;var box=document.getElementById("vc-step1");if(box&&f.parentElement&&f.parentElement.id!=="vc-step1"){{box.insertBefore(f,document.getElementById("btn-vc-siguiente"));f.style.display="none";}}}}enableSig();}},300);}})();</script>
         </div>
 
         <div id="vc-step2" style="display:block;margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
-          <div style="background:#f5f5f7;border-radius:16px;padding:14px 16px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#002060;text-transform:uppercase;letter-spacing:.04em">Ubicación y periodos</div><div style="font-size:13px;color:#86868b;margin-top:4px">Departamento, municipio, sede principal y periodos del SIEE.</div></div>
+          <div style="background:#f5f5f7;border-radius:16px;padding:14px 16px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#0F172A;text-transform:uppercase;letter-spacing:.04em">Ubicación y periodos</div><div style="font-size:13px;color:#86868b;margin-top:4px">Departamento, municipio, sede principal y periodos del SIEE.</div></div>
           {geo_campos}
           <label>Sede principal</label>
           <input name="sede" placeholder="Principal" style="border-radius:12px;border:1px solid #d2d2d7">
@@ -27109,19 +27174,19 @@ def ventas_comprar():
 
         </div>
         <div style="margin-top:16px;padding:16px;border:1px solid rgba(0,0,0,.06);border-radius:16px;background:#fafafa">
-          <h3 style="margin:0 0 10px;color:#002060;font-size:15px">Consentimiento y canal</h3>
+          <h3 style="margin:0 0 10px;color:#0F172A;font-size:15px">Consentimiento y canal</h3>
           <p style="margin:0 0 10px;font-size:12px;color:#86868b">Texto legal solo editable en Gerencia. Aqui se fusiona con datos del colegio.</p>
           <input type="hidden" name="modalidad" id="modalidad-val" value="PRESENCIAL">
           <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
             <button type="button" id="btn-canal-presencial" onclick="vcCanal('presencial')"
-              style="border:0;cursor:pointer;padding:12px 20px;border-radius:980px;background:#005BEA;color:#fff;font-weight:600;font-size:13px">Canal presencial</button>
+              style="border:0;cursor:pointer;padding:12px 20px;border-radius:980px;background:#0020C2;color:#fff;font-weight:600;font-size:13px">Canal presencial</button>
             <button type="button" id="btn-canal-online" onclick="vcCanal('online')"
               style="border:0;cursor:pointer;padding:12px 20px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;font-weight:500;font-size:13px">Canal online</button>
           </div>
           <label style="font-size:12px;font-weight:600">Cedula del rector</label>
           <input name="rector_doc" id="rector_doc" placeholder="CC representante legal" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;margin:6px 0 12px;box-sizing:border-box">
           <div id="consent-preview" style="display:none;background:#fff;border:1px solid #e5e5ea;border-radius:12px;padding:14px;font-size:13px;line-height:1.55;max-height:240px;overflow:auto;margin-bottom:12px"></div>
-          <button type="button" id="btn-descarga-consent" onclick="vcDescargaConsent()" style="display:none;width:100%;margin-bottom:12px;background:#005BEA;color:#fff;border:0;padding:14px 20px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Descargar consentimiento fusionado (PDF)</button>
+          <button type="button" id="btn-descarga-consent" onclick="vcDescargaConsent()" style="display:none;width:100%;margin-bottom:12px;background:#0020C2;color:#fff;border:0;padding:14px 20px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Descargar consentimiento fusionado (PDF)</button>
           <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">
             <input type="checkbox" name="firma_acepta" id="firma_acepta" value="1" style="margin-top:3px">
             <span>El rector acepta y firma digitalmente el consentimiento (hora legal Colombia + IP).</span>
@@ -27136,8 +27201,8 @@ def ventas_comprar():
           var bp = document.getElementById("btn-canal-presencial");
           var bo = document.getElementById("btn-canal-online");
           if (bp && bo) {{
-            if (c === "presencial") {{ bp.style.background = "#005BEA"; bp.style.color = "#fff"; bo.style.background = "#f5f5f7"; bo.style.color = "#1d1d1f"; }}
-            else {{ bo.style.background = "#005BEA"; bo.style.color = "#fff"; bp.style.background = "#f5f5f7"; bp.style.color = "#1d1d1f"; }}
+            if (c === "presencial") {{ bp.style.background = "#0020C2"; bp.style.color = "#fff"; bo.style.background = "#f5f5f7"; bo.style.color = "#1d1d1f"; }}
+            else {{ bo.style.background = "#0020C2"; bo.style.color = "#fff"; bp.style.background = "#f5f5f7"; bp.style.color = "#1d1d1f"; }}
           }}
           vcPreviewConsent();
         }}
@@ -27178,7 +27243,7 @@ def ventas_comprar():
           if (!html) {{ vcPreviewConsent(); setTimeout(vcDescargaConsent, 700); return; }}
           var w = window.open("", "_blank"); if (!w) return;
           w.document.write("<html><head><title>Consentimiento</title><style>body{{font-family:-apple-system,Segoe UI,sans-serif;padding:32px;line-height:1.55}}</style></head><body>");
-          w.document.write("<h1 style='color:#002060'>PROCSIS · EduTrack</h1>" + html);
+          w.document.write("<h1 style='color:#0F172A'>PROCSIS · EduTrack</h1>" + html);
           w.document.write("<p style='margin-top:24px;font-size:11px;color:#86868b'>Imprimir o Guardar como PDF. Sello IP/hora al confirmar activacion.</p></body></html>");
           w.document.close(); setTimeout(function() {{ w.print(); }}, 350);
         }}
@@ -27197,7 +27262,7 @@ def ventas_comprar():
       var n = this.files[0].name;
       if (p) {{ p.style.display = "block"; p.textContent = "✓ Archivo listo: " + n; }}
       if (t) t.textContent = "✓ " + n;
-      if (lab) {{ lab.style.borderColor = "#005BEA"; lab.style.background = "rgba(0,91,234,.06)"; }}
+      if (lab) {{ lab.style.borderColor = "#0020C2"; lab.style.background = "rgba(0,32,194,.06)"; }}
     }}
   }});
 }})();
@@ -27264,10 +27329,10 @@ function vcSubmitGuard(form) {{
   }}
 }}
 </script>
-<button type="submit" style="background:#005BEA;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:12px">Confirmar y activar plan {plan_nom}</button>
+<button type="submit" style="background:#0020C2;color:#fff;border:0;padding:14px 28px;border-radius:980px;font-weight:600;font-size:14px;cursor:pointer;width:100%;margin-top:12px">Confirmar y activar plan {plan_nom}</button>
       </form>
       <div style="margin-top:22px;padding-top:16px;border-top:1px solid #e2e8f0">
-        <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57;font-weight:800">Confirmación · Planes disponibles</h3>
+        <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2;font-weight:800">Confirmación · Planes disponibles</h3>
         <p style="font-size:12px;color:#64748b;margin:0 0 10px">Plan seleccionado ahora: <b>{plan_nom}</b> (<code>{plan}</code>). Lista completa:</p>
         {lista_planes_confirm}
       </div>
@@ -27283,7 +27348,7 @@ function vcSubmitGuard(form) {{
         safe = (
             "<div style='max-width:560px;margin:40px auto;font-family:Segoe UI;padding:24px;"
             "background:#fff;border-radius:16px;border:1px solid #e2e8f0'>"
-            f"<h1 style='color:#0B2D57'>Activar plan {plan_nom}</h1>"
+            f"<h1 style='color:#0020C2'>Activar plan {plan_nom}</h1>"
             f"<p style='color:#b91c1c'>Hubo un problema al cargar el formulario completo ({e_page}). "
             "Use el formulario simplificado:</p>"
             "<form method='POST' enctype='multipart/form-data'>"
@@ -27301,7 +27366,7 @@ function vcSubmitGuard(form) {{
             "<label>Usuario coordinación *</label><input name='coord_usuario' required>"
             "<label>Nombre coordinación *</label><input name='coord_nombre' required>"
             "<label>Clave temporal *</label><input name='clave_temporal' value='Colegio2026*' minlength='8' required>"
-            "<button style='margin-top:12px;padding:12px;background:#0B2D57;color:#fff;border:0;"
+            "<button style='margin-top:12px;padding:12px;background:#0020C2;color:#fff;border:0;"
             "border-radius:10px;font-weight:800;width:100%'>Activar</button></form>"
             "<p><a href='/ventas'>← Volver a planes</a></p></div>"
         )
@@ -27319,13 +27384,13 @@ def _ventas_comprar_legacy_placeholder():
 <style>
 .vc{{background:#f8fafc;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:24px}}
 .vc-box{{max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:26px;box-shadow:0 12px 32px rgba(15,23,42,.06)}}
-.vc-box h1{{margin:0 0 8px;color:#0B2D57;font-size:22px}}
+.vc-box h1{{margin:0 0 8px;color:#0020C2;font-size:22px}}
 .vc-box label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}}
 .vc-box input, .vc-box select{{width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box}}
 .vc-box button{{width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:#dc2626;color:#fff;font-weight:800;font-size:15px}}
 .vc-err{{background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:10px}}
 .vc-ok{{background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin-bottom:10px}}
-.vc-plan{{display:inline-block;background:#0B2D57;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800}}
+.vc-plan{{display:inline-block;background:#0020C2;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800}}
 </style>
 <div class="vc"><div class="vc-box">
   <h1>Comprar / registrar institución</h1>
@@ -27434,7 +27499,7 @@ puntualmente.</p>
 <h1 style="color:#059669">✓ Cuentas de staff reiniciadas</h1>
 <p><b>Anote estas contraseñas ahora — no se volverán a mostrar.</b> Al entrar, el sistema le va a pedir cambiar la clave y poner su nombre.</p>
 <table style="width:100%;border-collapse:collapse;margin:16px 0">
-<tr style="background:#0B2D57;color:#fff"><th style="padding:8px">Usuario</th><th style="padding:8px">Rol</th><th style="padding:8px">Clave temporal</th><th style="padding:8px">Acceso</th></tr>
+<tr style="background:#0020C2;color:#fff"><th style="padding:8px">Usuario</th><th style="padding:8px">Rol</th><th style="padding:8px">Clave temporal</th><th style="padding:8px">Acceso</th></tr>
 {filas}
 </table>
 <p style="font-size:13px;color:#b91c1c"><b>Importante:</b> esta URL sigue funcionando con el mismo token mientras no cambie el código. Cuando ya no la necesite, pídame que la desactive o le cambie el token en el código.</p>
@@ -27470,7 +27535,7 @@ def _html_hub_gerencia(logo, empresa, usuario=""):
     """Tablero maestro de control — exclusivo Gerencia / Superadmin."""
     return f"""
 <style>
-.bo{{min-height:100vh;background:#0B2D57;font-family:Segoe UI,system-ui,sans-serif;color:#fff;
+.bo{{min-height:100vh;background:#0020C2;font-family:Segoe UI,system-ui,sans-serif;color:#fff;
 display:flex;align-items:center;justify-content:center;padding:24px 16px}}
 .bo-box{{max-width:640px;width:100%}}
 .bo-logo{{text-align:center;margin-bottom:14px}}
@@ -27499,9 +27564,9 @@ font-size:18px;flex:0 0 auto;background:#f1f5f9}}
 .bo-row.f .bo-ico{{background:#ecfdf5}}
 .bo-row.d .bo-ico{{background:#f5f3ff}}
 .bo-mid{{flex:1;min-width:0}}
-.bo-mid h2{{margin:0 0 2px;color:#0B2D57;font-size:15px;font-weight:800}}
+.bo-mid h2{{margin:0 0 2px;color:#0020C2;font-size:15px;font-weight:800}}
 .bo-mid p{{margin:0;font-size:12px;color:#64748b;line-height:1.35}}
-.bo-cta{{flex:0 0 auto;padding:8px 14px;border-radius:4px;background:#0B2D57;color:#fff;
+.bo-cta{{flex:0 0 auto;padding:8px 14px;border-radius:4px;background:#0020C2;color:#fff;
 font-size:12px;font-weight:700;white-space:nowrap}}
 .bo-foot{{text-align:center;margin-top:20px;font-size:12px;opacity:.8}}
 .bo-foot a{{color:#93c5fd;text-decoration:none;font-weight:600;margin:0 6px}}
@@ -27752,30 +27817,30 @@ def _DEPRECATED_portal_backoffice_sin_ruta():
 padding:40px 48px;box-sizing:border-box}}
 .bo-left .brand{{display:flex;align-items:center;gap:12px;margin-bottom:36px}}
 .bo-left .brand img{{height:44px;width:auto;max-width:140px;object-fit:contain}}
-.bo-left .brand span{{font-size:22px;font-weight:700;color:#0B2D57;letter-spacing:-.02em}}
+.bo-left .brand span{{font-size:22px;font-weight:700;color:#0020C2;letter-spacing:-.02em}}
 .bo-left h1{{margin:0 0 8px;font-size:28px;color:#0f172a;font-weight:700;letter-spacing:-.03em}}
 .bo-left .hint{{margin:0 0 28px;font-size:14px;color:#64748b;line-height:1.45}}
 .bo-left label{{display:block;font-size:12px;font-weight:600;color:#334155;margin:0 0 6px}}
 .bo-left input[type=text],.bo-left input[type=password]{{
 width:100%;padding:12px 14px;margin:0 0 16px;border:1px solid #d2d2d7;border-radius:12px;
 box-sizing:border-box;font-size:14px;background:#fff}}
-.bo-left input:focus{{outline:none;border-color:#0B2D57;box-shadow:0 0 0 3px rgba(11,45,87,.12)}}
+.bo-left input:focus{{outline:none;border-color:#0020C2;box-shadow:0 0 0 3px rgba(0,32,194,.12)}}
 .bo-row{{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}}
-.bo-left button[type=submit]{{padding:12px 32px;border:0;border-radius:980px;background:#005BEA;color:#fff;
+.bo-left button[type=submit]{{padding:12px 32px;border:0;border-radius:980px;background:#0020C2;color:#fff;
 font-weight:600;font-size:14px;cursor:pointer;transition:background .2s ease,transform .1s ease}}
-.bo-left button[type=submit]:hover{{background:#002060}}
+.bo-left button[type=submit]:hover{{background:#0F172A}}
 .bo-left button[type=submit]:active{{transform:scale(.98)}}
 .bo-check{{font-size:13px;color:#475569;display:flex;align-items:center;gap:6px}}
 .bo-check input{{width:auto;margin:0}}
 .err{{color:#b91c1c;font-size:13px;background:#fef2f2;padding:10px 12px;border-radius:10px;margin-bottom:14px}}
 .bo-links{{margin-top:28px;font-size:12px;color:#64748b}}
-.bo-links a{{color:#0B2D57;text-decoration:none;font-weight:600;margin-right:12px}}
+.bo-links a{{color:#0020C2;text-decoration:none;font-weight:600;margin-right:12px}}
 .bo-right{{flex:1;min-height:100vh;position:relative;overflow:hidden;padding:28px;box-sizing:border-box;
-background:linear-gradient(135deg,#0B2D57 0%,#1e3a8a 45%,#7c3aed 100%)}}
+background:linear-gradient(135deg,#0020C2 0%,#1e3a8a 45%,#7c3aed 100%)}}
 .bo-stage{{position:relative;width:100%;height:calc(100vh - 56px);border-radius:24px;overflow:hidden;
 box-shadow:0 24px 60px rgba(0,0,0,.28)}}
 .bo-slide{{position:absolute;inset:0;opacity:0;pointer-events:none;
-transition:opacity .6s cubic-bezier(0.25,1,0.5,1);background:#0B2D57}}
+transition:opacity .6s cubic-bezier(0.25,1,0.5,1);background:#0020C2}}
 .bo-slide.active{{opacity:1;pointer-events:auto}}
 .bo-slide-img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(0.85);display:block}}.bo-slide::after{{content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(0,32,96,.4) 0%,rgba(0,0,0,.2) 50%,rgba(0,0,0,.5) 100%)}}
 .bo-slide-copy{{position:absolute;left:8%;right:8%;top:14%;z-index:3;color:#fff;text-shadow:0 1px 12px rgba(0,0,0,.35)}}
@@ -28080,8 +28145,8 @@ def gerencia_backoffice_branding():
 <a class="btn" href="/login" target="_blank" style="margin-left:8px">Ver login →</a>
 </header>
 
-<section class="role-panel" style="max-width:720px;margin-bottom:16px;border:2px solid #0B2D57">
-  <h2 style="margin:0 0 8px;font-size:16px;color:#0B2D57">Salida segura</h2>
+<section class="role-panel" style="max-width:720px;margin-bottom:16px;border:2px solid #0020C2">
+  <h2 style="margin:0 0 8px;font-size:16px;color:#0020C2">Salida segura</h2>
   <p style="font-size:13px;color:#64748b;margin:0 0 12px">Si está activa, al <b>cerrar la pestaña</b> se cierra la sesión del backoffice (no queda abierta).</p>
   <form method="POST">
     <input type="hidden" name="accion" value="salida_segura">
@@ -28089,14 +28154,14 @@ def gerencia_backoffice_branding():
       <input type="checkbox" name="salida_segura" value="1" {"checked" if ss_on else ""} style="width:auto;transform:scale(1.2)">
       Salida segura activada
     </label>
-    <button type="submit" style="margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer">Guardar</button>
+    <button type="submit" style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer">Guardar</button>
   </form>
 </section>
 
 <section class="role-panel" style="max-width:720px;margin-bottom:16px">
   {"<p style='color:#16a34a;font-weight:700'>"+_esc(msg)+"</p>" if msg else ""}
   {"<p style='color:#b91c1c'>"+_esc(err)+"</p>" if err else ""}
-  <h2 style="margin:0 0 10px;font-size:15px;color:#0B2D57">Cargar nueva imagen</h2>
+  <h2 style="margin:0 0 10px;font-size:15px;color:#0020C2">Cargar nueva imagen</h2>
   <form method="POST" enctype="multipart/form-data">
     <input type="hidden" name="accion" value="nuevo">
     <label style="font-size:12px;font-weight:700">Imagen (PNG/JPG horizontal)</label>
@@ -28111,12 +28176,12 @@ def gerencia_backoffice_branding():
       <option value="activo">Activo (ON)</option>
       <option value="inactivo">Inactivo (OFF)</option>
     </select>
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Cargar nueva imagen</button>
+    <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Cargar nueva imagen</button>
   </form>
 </section>
 
 <section class="role-panel" style="max-width:720px;overflow:auto">
-  <h2 style="margin:0 0 10px;font-size:15px;color:#0B2D57">Banners registrados</h2>
+  <h2 style="margin:0 0 10px;font-size:15px;color:#0020C2">Banners registrados</h2>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead><tr style="background:#f1f5f9;text-align:left">
       <th style="padding:8px">Preview</th><th>Título / eslogan</th><th>Estado</th><th>Acciones</th>
@@ -28221,7 +28286,7 @@ def gerencia_web_menu():
       <label style="flex:1;min-width:220px;font-size:11px;font-weight:700;color:#64748b;letter-spacing:.03em;text-transform:uppercase">Ruta o URL
         <input name="url" value="{_esc(url or '')}" style="width:100%;margin-top:5px;padding:10px 12px;border:1px solid #d2d2d7;border-radius:10px;font-size:14px;box-sizing:border-box">
       </label>
-      <button type="submit" style="padding:10px 18px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:700;cursor:pointer;font-size:13px">Guardar</button>
+      <button type="submit" style="padding:10px 18px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:700;cursor:pointer;font-size:13px">Guardar</button>
     </form>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
       <form method="POST"><input type="hidden" name="accion" value="toggle"><input type="hidden" name="id" value="{iid}">
@@ -28238,7 +28303,7 @@ def gerencia_web_menu():
         items_html = "".join(_item_card(r) for r in por_seccion.get(clave, []))
         cards_html += f"""
 <section style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:16px;padding:20px;margin-bottom:22px">
-  <h3 style="font-size:13px;font-weight:800;color:#0B2D57;letter-spacing:.04em;text-transform:uppercase;margin:0 0 14px">{_esc(titulo)}</h3>
+  <h3 style="font-size:13px;font-weight:800;color:#0020C2;letter-spacing:.04em;text-transform:uppercase;margin:0 0 14px">{_esc(titulo)}</h3>
   {items_html or "<p style='color:#94a3b8;font-size:13px'>Sin enlaces en esta sección todavía.</p>"}
   <details style="margin-top:6px">
     <summary style="cursor:pointer;font-size:12px;color:#0B63CE;font-weight:700">+ Agregar enlace nuevo en «{_esc(titulo)}»</summary>
@@ -28368,7 +28433,7 @@ def gerencia_casos_exito():
     <input name="titulo" required style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
     <label style="font-size:12px;font-weight:700">Resumen</label>
     <textarea name="resumen" rows="4" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Publicar caso</button>
+    <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Publicar caso</button>
   </form>
 </section>
 <section class="role-panel" style="max-width:720px;margin-top:12px">
@@ -28608,7 +28673,7 @@ def ventas_login():
 .vl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(15,23,42,.1)}}
 .vl-logo{{display:flex;align-items:center;gap:12px;margin-bottom:18px}}
 .vl-logo img{{height:48px;width:auto;border-radius:8px}}
-.vl-c h1{{margin:0 0 4px;color:#0B2D57;font-size:1.55rem}}
+.vl-c h1{{margin:0 0 4px;color:#0020C2;font-size:1.55rem}}
 .vl-c .sub{{color:#64748b;font-size:13px;margin:0 0 18px}}
 .vl-c label{{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}}
 .vl-c input{{width:100%;padding:12px 14px;margin:0 0 14px;border:1px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;background:#f8fafc}}
@@ -28733,7 +28798,7 @@ def _aud_datos(vista, q="", desde="", hasta="", limite=300):
 
 
 def _pdf_informe_gerencia(titulo, subtitulo, columnas, filas, pesos=None):
-    """PDF horizontal con el diseño corporativo (banda azul #0B2D57, tabla con encabezado, pie con página)."""
+    """PDF horizontal con el diseño corporativo (banda azul #0020C2, tabla con encabezado, pie con página)."""
     from reportlab.platypus import SimpleDocTemplate, Spacer
     from xml.sax.saxutils import escape as _xesc
     buf = BytesIO()
@@ -28813,7 +28878,7 @@ def gerencia_auditoria():
     tabs = "".join(
         f"<a href=\"/gerencia/auditoria?vista={k}&q={quote_plus(q)}&desde={_esc(desde)}&hasta={_esc(hasta)}\" "
         f"style=\"padding:8px 14px;border-radius:999px;text-decoration:none;font-size:13px;font-weight:700;"
-        f"background:{'#0B2D57' if k == vista else '#e2e8f0'};color:{'#fff' if k == vista else '#0f172a'}\">{lab}</a>"
+        f"background:{'#0020C2' if k == vista else '#e2e8f0'};color:{'#fff' if k == vista else '#0f172a'}\">{lab}</a>"
         for k, lab in _AUD_VISTAS.items()
     )
     thead = "".join(f"<th style='padding:8px;text-align:left'>{_esc(c)}</th>" for c in cols)
@@ -28844,7 +28909,7 @@ def gerencia_auditoria():
   <p class="mini-text" style="margin:0 0 8px">{_esc(titulo)} · {len(filas)} registro(s) (máx. 300 en pantalla; el PDF incluye hasta 2.000).</p>
   <div style="overflow:auto">
   <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">{thead}</tr>
+    <tr style="background:#0020C2;color:#fff">{thead}</tr>
     {tbody}
   </table>
   </div>
@@ -29056,9 +29121,9 @@ def gerencia_verificaciones_pendientes():
 {"<div class='msg ok'>"+mensaje+"</div>" if mensaje else ""}
 {"<div class='msg danger'>"+error+"</div>" if error else ""}
 <section class="role-panel" style="overflow:auto">
-  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Pendientes de tu decisión</h2>
+  <h2 style="margin-top:0;font-size:16px;color:#0020C2">Pendientes de tu decisión</h2>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px;text-align:left">Fecha</th>
       <th style="padding:8px;text-align:left">Rector</th>
       <th style="padding:8px;text-align:left">Colegio</th>
@@ -29070,7 +29135,7 @@ def gerencia_verificaciones_pendientes():
   </table>
 </section>
 <section class="role-panel" style="margin-top:16px;overflow:auto">
-  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Historial de autorizaciones</h2>
+  <h2 style="margin-top:0;font-size:16px;color:#0020C2">Historial de autorizaciones</h2>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <tr style="background:#e2e8f0">
       <th style="padding:8px;text-align:left">Fecha decisión</th>
@@ -29644,7 +29709,7 @@ def modulo_rectores():
             pre_ape = (r.apellidos if r and r.apellidos else "") or ((nombre_txt.split(None, 1)[1]) if len(nombre_txt.split(None, 1)) > 1 else "")
             tipo_sel = (r.tipo_id if r else "") or "C.C."
             edit = (
-                "<details><summary style='cursor:pointer;color:#005BEA;font-weight:700'>✏️ Editar</summary>"
+                "<details><summary style='cursor:pointer;color:#0020C2;font-weight:700'>✏️ Editar</summary>"
                 "<form method='POST' style='min-width:250px;padding:8px 0'>"
                 "<input type='hidden' name='accion' value='editar_rector'><input type='hidden' name='institucion_id' value='" + str(inst.id) + "'>"
                 "<label class='mini-text'>Nombres</label><input name='nombres' value='" + _esc(pre_nom) + "' style='" + inp_e + "'>"
@@ -29733,7 +29798,7 @@ def modulo_rectores():
         '<input name="q" placeholder="Buscar nombre, cédula o correo" value="' + q_safe + '"> '
         "<button>Buscar</button></form>"
         '<table style="width:100%;border-collapse:collapse;font-size:13px">'
-        '<tr style="background:#0B2D57;color:#fff">'
+        '<tr style="background:#0020C2;color:#fff">'
         "<th>Colegio</th><th>Rector</th><th>Identificación</th><th>Teléfono</th>"
         "<th>Correo</th><th>NIT / DANE</th><th>Actualizado</th><th>Acciones</th></tr>"
         + "".join(filas)
@@ -30239,7 +30304,7 @@ def gerencia_pqr_limpieza():
     <input type="hidden" name="accion" value="eliminar_ids">
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr style="background:#0B2D57;color:#fff">
+        <tr style="background:#0020C2;color:#fff">
           <th style="padding:8px"></th><th>ID</th><th>Radicado</th><th>Solicitante</th><th>Estado</th><th>Fecha</th><th>Detalle</th>
         </tr>
         {filas or "<tr><td colspan='7' style='padding:16px;text-align:center;color:#64748b'>Sin registros con este filtro</td></tr>"}
@@ -30318,7 +30383,7 @@ def gerencia_plantilla_contrato():
     body = (
         '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
         '<a href="/gerencia/hq" style="color:#86868b;font-size:13px">← Gerencia</a>'
-        '<h1 style="color:#002060;font-size:22px;margin:8px 0">Editor de plantilla contractual</h1>'
+        '<h1 style="color:#0F172A;font-size:22px;margin:8px 0">Editor de plantilla contractual</h1>'
         '<p style="color:#86868b;font-size:13px">Use tokens: '
         "{{NOMBRE_COLEGIO}}, {{NIT_COLEGIO}}, {{DANE_COLEGIO}}, {{NOMBRE_RECTOR}}, "
         "{{PLAN_NOMBRE}}, {{CODIGO_INST}}, {{MODALIDAD}}, {{FECHA}}, {{IP}}</p>"
@@ -30330,9 +30395,9 @@ def gerencia_plantilla_contrato():
         '<label style="font-size:12px;font-weight:600">Texto del contrato</label>'
         '<textarea name="cuerpo" rows="18" style="width:100%;padding:12px;border-radius:12px;border:1px solid #d2d2d7;font-family:ui-monospace,monospace;font-size:13px">'
         + _esc(cuerpo) + "</textarea>"
-        '<button type="submit" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">'
+        '<button type="submit" style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">'
         "Guardar plantilla</button></form>"
-        '<p style="margin-top:16px"><a href="/gerencia/contratos" style="color:#005BEA">Ver contratos generados →</a></p>'
+        '<p style="margin-top:16px"><a href="/gerencia/contratos" style="color:#0020C2">Ver contratos generados →</a></p>'
         "</div>"
     )
     return page("Plantilla contractual", body)
@@ -30351,7 +30416,7 @@ def gerencia_contratos():
     for c in rows:
         cards.append(
             '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px;margin-bottom:10px">'
-            '<div style="font-weight:700;color:#002060">' + _esc(c.nombre_colegio or "") + "</div>"
+            '<div style="font-weight:700;color:#0F172A">' + _esc(c.nombre_colegio or "") + "</div>"
             '<div style="font-size:12px;color:#86868b">NIT ' + _esc(c.nit or "—")
             + " · DANE " + _esc(c.dane or "—")
             + " · Plan " + _esc(c.plan or "")
@@ -30361,7 +30426,7 @@ def gerencia_contratos():
             + " · Asesor: " + _esc(c.asesor or "—") + "</div>"
             + (
                 ('<a href="' + _esc(c.pdf_path) + '" target="_blank" style="display:inline-block;margin-top:8px;'
-                 'background:#005BEA;color:#fff;padding:8px 14px;border-radius:980px;font-size:12px;text-decoration:none">Descargar PDF</a>')
+                 'background:#0020C2;color:#fff;padding:8px 14px;border-radius:980px;font-size:12px;text-decoration:none">Descargar PDF</a>')
                 if c.pdf_path else ""
             )
             + "</div>"
@@ -30369,9 +30434,9 @@ def gerencia_contratos():
     body = (
         '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
         '<a href="/gerencia/hq" style="color:#86868b;font-size:13px">← Gerencia</a>'
-        '<h1 style="color:#002060;font-size:22px;margin:8px 0">Contratos de colegios</h1>'
+        '<h1 style="color:#0F172A;font-size:22px;margin:8px 0">Contratos de colegios</h1>'
         '<p style="color:#86868b;font-size:13px">Generados al activar instituciones desde Ventas.</p>'
-        '<p><a href="/gerencia/plantilla-contrato" style="color:#005BEA">Editar plantilla contractual</a></p>'
+        '<p><a href="/gerencia/plantilla-contrato" style="color:#0020C2">Editar plantilla contractual</a></p>'
         + ("".join(cards) if cards else '<p style="color:#86868b">Aún no hay contratos.</p>')
         + "</div>"
     )
@@ -30482,12 +30547,12 @@ def gerencia_finanzas_promociones():
     body = (
         '<div style="max-width:1000px;margin:0 auto;padding:24px 16px 48px;font-family:-apple-system,sans-serif">'
         '<a href="/gerencia/hq" style="color:#86868b;font-size:13px;text-decoration:none">&larr; Gerencia HQ</a>'
-        '<h1 style="margin:8px 0 4px;color:#002060;font-size:24px">Billing &amp; Promo Engine</h1>'
+        '<h1 style="margin:8px 0 4px;color:#0F172A;font-size:24px">Billing &amp; Promo Engine</h1>'
         '<p style="margin:0 0 16px;color:#86868b;font-size:13px">Reglas de descuento · caducidad automatica a tarifa plena</p>'
         + ((" <div style='background:#ecfdf5;padding:12px;border-radius:12px;color:#065f46;margin-bottom:14px'>" + _esc(msg) + "</div>") if msg else "")
         + ((" <div style='background:#fef2f2;padding:12px;border-radius:12px;color:#991b1b;margin-bottom:14px'>" + _esc(err) + "</div>") if err else "")
         + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02);margin-bottom:18px">'
-        + '<h2 style="margin:0 0 12px;font-size:15px;color:#002060">Activar nueva regla comercial</h2>'
+        + '<h2 style="margin:0 0 12px;font-size:15px;color:#0F172A">Activar nueva regla comercial</h2>'
         + '<form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
         + '<input type="hidden" name="accion" value="crear">'
         + '<div style="grid-column:1/-1"><label style="font-size:12px;font-weight:600">Nombre de la promocion</label>'
@@ -30500,22 +30565,22 @@ def gerencia_finanzas_promociones():
         + '<option value="DIAS">Dias</option><option value="MESES" selected>Meses</option><option value="ANOS">Anos</option></select></div></div>'
         + '<div style="grid-column:1/-1"><label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer">'
         + '<input type="checkbox" name="unica_activa" value="1" checked> Desactivar otras promociones al activar esta</label></div>'
-        + '<div style="grid-column:1/-1"><button type="submit" style="background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">'
+        + '<div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">'
         + "Activar nueva regla comercial</button></div></form></div>"
         + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);margin-bottom:18px">'
-        + '<h2 style="margin:0 0 8px;font-size:15px;color:#002060">Vista previa en planes (datos reales)</h2>'
+        + '<h2 style="margin:0 0 8px;font-size:15px;color:#0F172A">Vista previa en planes (datos reales)</h2>'
         + '<p style="margin:0 0 14px;font-size:12px;color:#86868b">Si cambia el % en Gerencia, estos valores se recalculan al instante.</p>'
         + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">'
         + _promo_preview_cards()
         + '</div></div>'
         + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);margin-bottom:18px">'
-        + '<h2 style="margin:0 0 12px;font-size:15px;color:#002060">Reglas registradas</h2>'
+        + '<h2 style="margin:0 0 12px;font-size:15px;color:#0F172A">Reglas registradas</h2>'
         + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:#86868b;font-size:11px;text-transform:uppercase">'
         + "<th style='padding:8px'>Nombre</th><th>Descuento</th><th>Duracion</th><th>Estado</th><th>Creada</th><th></th></tr></thead><tbody>"
         + ("".join(promo_rows) if promo_rows else "<tr><td colspan='6' style='padding:12px;color:#86868b'>Sin promociones aun.</td></tr>")
         + "</tbody></table></div>"
         + '<div style="background:#fff;border-radius:20px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03)">'
-        + '<h2 style="margin:0 0 12px;font-size:15px;color:#002060">Colegios con promocion / caducidad</h2>'
+        + '<h2 style="margin:0 0 12px;font-size:15px;color:#0F172A">Colegios con promocion / caducidad</h2>'
         + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:#86868b;font-size:11px;text-transform:uppercase">'
         + "<th style='padding:8px'>Colegio</th><th>Promo</th><th>Valor promo</th><th>Tarifa plena</th><th>Activacion</th><th>Caducidad</th><th>Plena?</th></tr></thead><tbody>"
         + ("".join(col_rows) if col_rows else "<tr><td colspan='7' style='padding:12px;color:#86868b'>Ningun colegio con promo aplicada.</td></tr>")
@@ -30590,27 +30655,27 @@ def gerencia_legal_consentimientos():
     body = (
         '<div style="max-width:1100px;margin:0 auto;padding:24px 16px 48px;font-family:-apple-system,sans-serif">'
         '<a href="/gerencia/hq" style="color:#86868b;font-size:13px;text-decoration:none">&larr; Gerencia HQ</a>'
-        '<h1 style="margin:8px 0 4px;color:#002060;font-size:24px">Gestor de consentimientos</h1>'
+        '<h1 style="margin:8px 0 4px;color:#0F172A;font-size:24px">Gestor de consentimientos</h1>'
         '<p style="margin:0 0 12px;color:#86868b;font-size:13px">Solo editable desde Gerencia. Tokens: <code style="font-size:11px">'
         + tokens_hint + "</code></p>"
         + msg_html + err_html
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">'
         + '<div style="background:#fff;border-radius:24px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02)">'
-        + '<h2 style="margin:0 0 6px;font-size:15px;color:#002060">Plantilla canal presencial</h2>'
+        + '<h2 style="margin:0 0 6px;font-size:15px;color:#0F172A">Plantilla canal presencial</h2>'
         + '<p style="margin:0 0 12px;font-size:12px;color:#86868b">Implementaciones en el plantel.</p>'
         + '<form method="POST"><input type="hidden" name="canal_tipo" value="presencial">'
         + '<input name="titulo_publico" value="' + _esc(pre_titulo) + '" style="width:100%;padding:10px 12px;border:1px solid #d2d2d7;border-radius:12px;margin-bottom:10px;box-sizing:border-box">'
         + '<textarea name="contenido_html" rows="14" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-family:ui-monospace,monospace;font-size:12px;box-sizing:border-box">'
         + _esc(pre_cuerpo) + "</textarea>"
-        + '<button type="submit" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Guardar plantilla presencial</button></form></div>'
+        + '<button type="submit" style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Guardar plantilla presencial</button></form></div>'
         + '<div style="background:#fff;border-radius:24px;padding:22px;box-shadow:0 8px 40px rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.02)">'
-        + '<h2 style="margin:0 0 6px;font-size:15px;color:#002060">Plantilla canal online</h2>'
+        + '<h2 style="margin:0 0 6px;font-size:15px;color:#0F172A">Plantilla canal online</h2>'
         + '<p style="margin:0 0 12px;font-size:12px;color:#86868b">Remoto · aviso de grabacion/monitoreo.</p>'
         + '<form method="POST"><input type="hidden" name="canal_tipo" value="online">'
         + '<input name="titulo_publico" value="' + _esc(onl_titulo) + '" style="width:100%;padding:10px 12px;border:1px solid #d2d2d7;border-radius:12px;margin-bottom:10px;box-sizing:border-box">'
         + '<textarea name="contenido_html" rows="14" style="width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:12px;font-family:ui-monospace,monospace;font-size:12px;box-sizing:border-box">'
         + _esc(onl_cuerpo) + "</textarea>"
-        + '<button type="submit" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Guardar plantilla online</button></form></div></div></div>'
+        + '<button type="submit" style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Guardar plantilla online</button></form></div></div></div>'
     )
     return page("Consentimientos · Gerencia", body)
 
@@ -30670,7 +30735,7 @@ def ventas_api_consentimiento_preview():
         + (
             ('<img src="' + prov["logo_url"] + '" alt="logo" style="width:120px;height:auto;max-height:52px;object-fit:contain">')
             if prov.get("logo_url") else
-            ('<div style="font-weight:800;color:#002060;font-size:18px">' + (prov.get("empresa") or "PROCSIS") + "</div>")
+            ('<div style="font-weight:800;color:#0F172A;font-size:18px">' + (prov.get("empresa") or "PROCSIS") + "</div>")
         )
         + '<div style="width:1px;height:36px;background:#d2d2d7"></div>'
         + '<div style="font-size:10px;font-weight:600;color:#1d1d1f;letter-spacing:.04em;text-transform:uppercase;line-height:1.35">'
@@ -30722,14 +30787,14 @@ def gerencia_contrato_plantilla():
     body = (
         '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
         '<a href="/gerencia/hq" style="color:#86868b;font-size:13px">← Gerencia</a>'
-        '<h1 style="color:#002060">Editor de plantilla contractual</h1>'
+        '<h1 style="color:#0F172A">Editor de plantilla contractual</h1>'
         '<p style="color:#86868b;font-size:13px">Tokens: {{NOMBRE_COLEGIO}} {{NIT_COLEGIO}} {{DANE_COLEGIO}} '
         "{{NOMBRE_RECTOR}} {{DOC_RECTOR}} {{PLAN}} {{FECHA}} {{HORA}} {{MODALIDAD}} {{CIUDAD}} {{IP}} {{ASESOR}}</p>"
         + ((" <div style='background:#ecfdf5;padding:10px;border-radius:10px;color:#065f46'>" + _esc(msg) + "</div>") if msg else "")
         + ((" <div style='background:#fef2f2;padding:10px;border-radius:10px;color:#991b1b'>" + _esc(err) + "</div>") if err else "")
         + '<form method="POST"><input name="nombre" value="' + _esc(nombre) + '" style="width:100%;padding:12px;border-radius:12px;border:1px solid #d2d2d7;margin-bottom:10px">'
         '<textarea name="cuerpo" rows="16" style="width:100%;padding:12px;border-radius:12px;border:1px solid #d2d2d7;font-family:monospace">' + _esc(cuerpo) + "</textarea>"
-        '<button style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600">Guardar plantilla</button></form></div>'
+        '<button style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600">Guardar plantilla</button></form></div>'
     )
     return page("Plantilla contractual", body)
 
@@ -30747,17 +30812,17 @@ def lista_contratos_institucion():
     for c in rows:
         cards.append(
             '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px;margin-bottom:10px">'
-            '<b style="color:#002060">' + _esc(c.nombre_colegio or "") + "</b>"
+            '<b style="color:#0F172A">' + _esc(c.nombre_colegio or "") + "</b>"
             '<div style="font-size:12px;color:#86868b">' + _esc(c.codigo_inst or "") + " · NIT " + _esc(c.nit or "")
             + " · " + _esc(c.modalidad or "") + " · " + _esc(c.fecha_firma or "") + "</div>"
-            '<a href="/gerencia/contratos/' + str(c.id) + '" style="display:inline-block;margin-top:8px;background:#f5f5f7;color:#002060;'
+            '<a href="/gerencia/contratos/' + str(c.id) + '" style="display:inline-block;margin-top:8px;background:#f5f5f7;color:#0F172A;'
             'padding:8px 14px;border-radius:980px;font-size:12px;text-decoration:none;font-weight:600">Ver / PDF</a></div>'
         )
     body = (
         '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
         '<a href="/gerencia/hq" style="color:#86868b">← Gerencia</a> · '
-        '<a href="/gerencia/contrato-plantilla" style="color:#005BEA">Plantilla</a>'
-        '<h1 style="color:#002060">Contratos de colegios</h1>'
+        '<a href="/gerencia/contrato-plantilla" style="color:#0020C2">Plantilla</a>'
+        '<h1 style="color:#0F172A">Contratos de colegios</h1>'
         + ("".join(cards) if cards else "<p style='color:#86868b'>Aun no hay contratos.</p>")
         + "</div>"
     )
@@ -30777,10 +30842,10 @@ def contrato_detalle(cid):
     body = (
         '<div style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
         '<a href="/gerencia/contratos" style="color:#86868b">← Contratos</a>'
-        '<h1 style="color:#002060">Contrato #' + str(c.id) + "</h1>"
+        '<h1 style="color:#0F172A">Contrato #' + str(c.id) + "</h1>"
         '<p style="font-size:13px;color:#86868b">' + _esc(c.nombre_colegio) + " · IP " + _esc(c.ip_firma) + " · " + _esc(c.fecha_firma) + "</p>"
         '<div style="background:#fff;border-radius:16px;padding:24px;border:1px solid rgba(0,0,0,.06)">' + (c.cuerpo_html or "") + "</div>"
-        '<button onclick="window.print()" style="margin-top:16px;background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">Imprimir / Guardar PDF</button></div>'
+        '<button onclick="window.print()" style="margin-top:16px;background:#0020C2;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;cursor:pointer">Imprimir / Guardar PDF</button></div>'
     )
     return page("Contrato", body)
 
@@ -30830,19 +30895,19 @@ def gerencia_pie_login():
     body = f"""
 <style>
 .pie-ed{{max-width:720px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}}
-.pie-ed h1{{font-size:22px;color:#002060;margin:0 0 6px}}
+.pie-ed h1{{font-size:22px;color:#0F172A;margin:0 0 6px}}
 .pie-ed .sub{{color:#86868b;font-size:13px;margin:0 0 18px}}
 .pie-ed label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:12px 0 4px}}
 .pie-ed textarea,.pie-ed input{{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:12px;box-sizing:border-box;font-size:14px;font-family:inherit}}
 .pie-ed textarea{{min-height:100px;line-height:1.45}}
 .pie-ed .hint{{font-size:11px;color:#94a3b8;margin:4px 0 0}}
-.pie-ed button{{margin-top:16px;background:#005BEA;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:700;cursor:pointer}}
+.pie-ed button{{margin-top:16px;background:#0020C2;color:#fff;border:0;padding:12px 22px;border-radius:980px;font-weight:700;cursor:pointer}}
 .pie-ed .msg{{padding:12px;border-radius:12px;margin-bottom:12px;font-weight:600;font-size:13px}}
 .ok{{background:#ecfdf5;color:#065f46}}.err{{background:#fef2f2;color:#991b1b}}
 .preview{{margin-top:24px;padding:16px;background:#f5f5f7;border-radius:16px}}
 </style>
 <div class="pie-ed">
-  <a href="/gerencia/hq" style="font-size:13px;color:#005BEA;font-weight:600;text-decoration:none">← HQ</a>
+  <a href="/gerencia/hq" style="font-size:13px;color:#0020C2;font-weight:600;text-decoration:none">← HQ</a>
   <h1>Pie del login (colegios)</h1>
   <p class="sub">Textos legales estilo Apple bajo el portal de acceso. Use <code>{{url}}</code> donde deba ir el enlace al sitio oficial.</p>
   {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
@@ -30937,12 +31002,12 @@ def gerencia_paginas_legales():
         cards.append(
             '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:18px;'
             'box-shadow:0 2px 10px rgba(0,0,0,.03);font-family:-apple-system,sans-serif">'
-            '<div style="font-size:11px;font-weight:600;color:#005BEA;letter-spacing:.04em;text-transform:uppercase">'
+            '<div style="font-size:11px;font-weight:600;color:#0020C2;letter-spacing:.04em;text-transform:uppercase">'
             + _esc(cod) + "</div>"
-            '<div style="font-weight:700;color:#002060;font-size:15px;margin:6px 0">' + _esc(tit) + "</div>"
+            '<div style="font-weight:700;color:#0F172A;font-size:15px;margin:6px 0">' + _esc(tit) + "</div>"
             '<div style="font-size:12px;color:#86868b;margin-bottom:12px">Actualizado: ' + _esc(upd) + "</div>"
             '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-            '<a href="/gerencia/paginas-legales?edit=' + cod + '" style="background:#005BEA;color:#fff;padding:8px 16px;'
+            '<a href="/gerencia/paginas-legales?edit=' + cod + '" style="background:#0020C2;color:#fff;padding:8px 16px;'
             'border-radius:980px;font-size:12px;font-weight:600;text-decoration:none">Editar modulo</a>'
             '<a href="' + href + '" target="_blank" style="background:#f5f5f7;color:#1d1d1f;padding:8px 16px;'
             'border-radius:980px;font-size:12px;font-weight:500;text-decoration:none">Ver publico</a>'
@@ -30961,7 +31026,7 @@ def gerencia_paginas_legales():
         form_html = (
             '<div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px;margin-top:18px;'
             'box-shadow:0 2px 12px rgba(0,0,0,.04);font-family:-apple-system,sans-serif">'
-            '<h2 style="margin:0 0 4px;color:#002060;font-size:18px">Editar: ' + _esc(edit) + "</h2>"
+            '<h2 style="margin:0 0 4px;color:#0F172A;font-size:18px">Editar: ' + _esc(edit) + "</h2>"
             '<p style="margin:0 0 14px;font-size:13px;color:#86868b">Solo este modulo. Los demas no se modifican.</p>'
             '<form method="POST">'
             '<input type="hidden" name="codigo" value="' + _esc(edit) + '">'
@@ -30975,7 +31040,7 @@ def gerencia_paginas_legales():
             'font-family:ui-monospace,monospace;line-height:1.45">' + _esc(cuerpo) + "</textarea>"
             '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px">'
             '<button type="submit" name="accion" value="guardar" '
-            'style="background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;'
+            'style="background:#0020C2;color:#fff;border:0;padding:12px 24px;border-radius:980px;'
             'font-weight:600;font-size:13px;cursor:pointer">Guardar este modulo</button>'
             '<button type="submit" name="accion" value="restaurar" '
             'style="background:#f5f5f7;color:#1d1d1f;border:0;padding:12px 24px;border-radius:980px;'
@@ -31002,7 +31067,7 @@ def gerencia_paginas_legales():
         'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">'
         '<div style="margin-bottom:8px"><a href="/gerencia/hq" style="color:#86868b;font-size:13px;'
         'text-decoration:none">← Gerencia HQ</a></div>'
-        '<h1 style="margin:0 0 6px;color:#002060;font-size:24px;letter-spacing:-.02em">Paginas legales</h1>'
+        '<h1 style="margin:0 0 6px;color:#0F172A;font-size:24px;letter-spacing:-.02em">Paginas legales</h1>'
         '<p style="margin:0 0 18px;color:#86868b;font-size:14px">'
         "Cada bloque es un modulo independiente. Edite solo el que necesite cambiar.</p>"
         + msg_html + err_html
@@ -31082,10 +31147,10 @@ def gerencia_hq():
       <div id="hq-tab-tecnica" class="hq-tab-panel">
         <p class="hq-note" style="color:#86868b">Modulos de desarrollo - Solo roles tecnicos</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;font-family:-apple-system,sans-serif">
-          <a href="/dev-console?tab=versiones" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,91,234,.06);color:#005BEA;line-height:40px;font-weight:700">v</div><div style="color:#002060;font-weight:600;font-size:13px">Actualizaciones</div></a>
-          <a href="/dev-console?tab=anuncios" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,91,234,.06);color:#005BEA;line-height:40px;font-weight:700">!</div><div style="color:#002060;font-weight:600;font-size:13px">Seguridad</div></a>
-          <a href="/dev-console?tab=temas" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,91,234,.06);color:#005BEA;line-height:40px;font-weight:700">Aa</div><div style="color:#002060;font-weight:600;font-size:13px">Diseno</div></a>
-          <a href="/dev-console" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,91,234,.1);color:#005BEA;line-height:40px;font-weight:700">&gt;</div><div style="color:#002060;font-weight:700;font-size:13px">Abrir consola completa</div></a>
+          <a href="/dev-console?tab=versiones" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,32,194,.06);color:#0020C2;line-height:40px;font-weight:700">v</div><div style="color:#0F172A;font-weight:600;font-size:13px">Actualizaciones</div></a>
+          <a href="/dev-console?tab=anuncios" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,32,194,.06);color:#0020C2;line-height:40px;font-weight:700">!</div><div style="color:#0F172A;font-weight:600;font-size:13px">Seguridad</div></a>
+          <a href="/dev-console?tab=temas" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,32,194,.06);color:#0020C2;line-height:40px;font-weight:700">Aa</div><div style="color:#0F172A;font-weight:600;font-size:13px">Diseno</div></a>
+          <a href="/dev-console" style="display:block;padding:16px;border-radius:20px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center;text-decoration:none"><div style="width:40px;height:40px;margin:0 auto 8px;border-radius:50%;background:rgba(0,32,194,.1);color:#0020C2;line-height:40px;font-weight:700">&gt;</div><div style="color:#0F172A;font-weight:700;font-size:13px">Abrir consola completa</div></a>
         </div>
       </div>
 """ if _ver_tecnica else ""
@@ -31152,7 +31217,7 @@ def gerencia_hq():
     body = f"""
 <style>
 .hq{{background:#eef2f6;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}}
-.hq-corp{{background:linear-gradient(180deg,#071428 0%,#0B2D57 55%,#0f3a6e 100%);color:#fff;padding:0 0 8px;border-bottom:3px solid #c9a227}}
+.hq-corp{{background:linear-gradient(180deg,#071428 0%,#0020C2 55%,#0f3a6e 100%);color:#fff;padding:0 0 8px;border-bottom:3px solid #c9a227}}
 .hq-corp-inner{{max-width:1120px;margin:0 auto;padding:18px 20px 16px}}
 .hq-brand{{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px}}
 .hq-logos{{display:flex;align-items:center;gap:14px}}
@@ -31168,14 +31233,14 @@ def gerencia_hq():
 .hq-legal{{max-width:1120px;margin:0 auto;padding:8px 20px;font-size:11px;color:#94a3b8;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;background:#0a1929}}
 .hq-wrap{{max-width:1120px;margin:0 auto;padding:16px}}
 .sec{{background:#fff;border:1px solid #dbe3ee;border-radius:6px;padding:16px 18px;margin-bottom:14px;box-shadow:0 1px 4px rgba(15,23,42,.04)}}
-.sec h2{{margin:0 0 12px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#0B2D57;font-weight:800;border-bottom:2px solid #e8eef5;padding-bottom:8px}}
+.sec h2{{margin:0 0 12px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#0020C2;font-weight:800;border-bottom:2px solid #e8eef5;padding-bottom:8px}}
 .kpis{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}}
 .kpi{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px}}
 .kpi .l{{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em}}
 .kpi .v{{font-size:18px;font-weight:800;color:#0f172a;margin-top:3px}}
 .kpi .s{{font-size:12px;color:#94a3b8;margin-top:2px}}
 .grid-mod{{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}}
-.grid-mod a{{display:block;text-align:center;padding:11px 10px;border-radius:4px;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:.01em;transition:opacity .15s}}
+.grid-mod a{{display:block;text-align:center;padding:11px 10px;border-radius:4px;background:#0020C2;color:#fff;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:.01em;transition:opacity .15s}}
 .grid-mod a:hover{{opacity:.92}}
 .grid-mod a.own{{background:#5c2d0e}}
 .grid-mod a.g{{background:#0f6b3c}}
@@ -31211,10 +31276,10 @@ def gerencia_hq():
   transition:color .18s ease,border-color .18s ease;
   font-family:inherit;box-shadow:none !important;
 }}
-.hq-tab:hover{{color:#0B2D57;background:transparent !important}}
+.hq-tab:hover{{color:#0020C2;background:transparent !important}}
 .hq-tab.active{{
-  background:transparent !important;color:#0B2D57 !important;
-  border-bottom:3px solid #0B2D57;font-weight:700;
+  background:transparent !important;color:#0020C2 !important;
+  border-bottom:3px solid #0020C2;font-weight:700;
 }}
 .hq-tab-panel{{display:none;padding-top:6px}}
 .hq-tab-panel.active{{display:block}}
@@ -31230,7 +31295,7 @@ def gerencia_hq():
 }}
 .kpi{{border-radius:4px !important}}
 .bar{{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin-top:6px}}
-.bar>i{{display:block;height:100%;background:#0B2D57}}
+.bar>i{{display:block;height:100%;background:#0020C2}}
 .srv{{display:inline-flex;align-items:center;gap:8px;font-weight:700}}
 .srv-dot{{width:12px;height:12px;border-radius:50%}}
 .hq-note{{font-size:12px;color:#64748b;margin:10px 0 0;line-height:1.45}}
@@ -31255,7 +31320,7 @@ def gerencia_hq():
             🇨🇴 <span id="hq-reloj-txt">—:—:—</span> · Hora Colombia
           </div>
           <div style="margin-top:14px">
-            <a href="/gerencia/login-banners" style="display:inline-block;padding:12px 22px;border-radius:980px;background:#005BEA;color:#fff;text-decoration:none;font-weight:600;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;box-shadow:0 4px 16px rgba(0,91,234,.35);letter-spacing:-.01em;transition:background .2s">
+            <a href="/gerencia/login-banners" style="display:inline-block;padding:12px 22px;border-radius:980px;background:#0020C2;color:#fff;text-decoration:none;font-weight:600;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;box-shadow:0 4px 16px rgba(0,32,194,.35);letter-spacing:-.01em;transition:background .2s">
               Banners del Login · Salida segura →
             </a>
           </div>
@@ -31316,10 +31381,10 @@ def gerencia_hq():
         .hq-bento-metric{{font-size:34px;font-weight:700;color:#1d1d1f;letter-spacing:-.03em;margin:8px 0 4px;line-height:1.1;font-family:-apple-system,BlinkMacSystemFont,sans-serif}}
         .hq-bento-sub{{font-size:13px;color:#86868b;margin:0 0 18px}}
         .hq-pills{{display:flex;flex-wrap:wrap;gap:8px}}
-        .hq-pills a{{display:inline-block;padding:10px 18px;border-radius:980px;background:#f5f5f7;color:#002060;font-size:13px;font-weight:500;text-decoration:none;transition:background .15s,color .15s;border:0}}
-        .hq-pills a:hover{{background:#e8e8ed;color:#002060}}
-        .hq-pills a.hq-pill-primary{{background:#005BEA;color:#fff;font-weight:600}}
-        .hq-pills a.hq-pill-primary:hover{{background:#002060;color:#fff}}
+        .hq-pills a{{display:inline-block;padding:10px 18px;border-radius:980px;background:#f5f5f7;color:#0F172A;font-size:13px;font-weight:500;text-decoration:none;transition:background .15s,color .15s;border:0}}
+        .hq-pills a:hover{{background:#e8e8ed;color:#0F172A}}
+        .hq-pills a.hq-pill-primary{{background:#0020C2;color:#fff;font-weight:600}}
+        .hq-pills a.hq-pill-primary:hover{{background:#0F172A;color:#fff}}
         .hq-pills a.hq-pill-more{{background:#f5f5f7;color:#1d1d1f}}
         </style>
 
@@ -31409,13 +31474,13 @@ def gerencia_hq():
       </div>
 
       
-      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#005BEA;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details></aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#002060">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#002060">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#005BEA;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#002060">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#002060">v2.6.0</div></div></div></div></div>
+      <div id="hq-tab-gerencia" class="hq-tab-panel"><p class="hq-note">Consola PROCSIS Enterprise</p><div style="display:grid;grid-template-columns:220px 1fr;gap:16px;font-family:-apple-system,sans-serif"><aside style="background:#f5f5f7;border-radius:20px;padding:14px"><details open><summary style="cursor:pointer;font-weight:600;padding:8px">Talento</summary><a href="/gerencia/contabilidad/trabajadores" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Trabajadores</a><a href="/gerencia/hojas-vida" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Hojas de vida</a><a href="/gerencia/comisiones-ventas" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Comisiones</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Legal</summary><a href="/gerencia/boveda-legal" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Boveda legal</a><a href="/gerencia/datos-rut" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">RUT DIAN</a><a href="/gerencia/fondo-formalizacion" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Fondo formalizacion</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Finanzas</summary><a href="/gerencia/indicadores" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Indicadores</a><a href="/gerencia/tesoreria" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Cuentas bancarias</a><a href="/gerencia/wati-conexion" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">API WATI</a></details><details><summary style="cursor:pointer;font-weight:600;padding:8px">Configuracion</summary><a href="/gerencia/parametros" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Feature flags</a><a href="/gerencia/landing-ventas" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Landing</a><a href="/usuarios" style="display:block;padding:7px 10px;color:#0020C2;text-decoration:none;border-radius:980px;font-size:12px">Usuarios y roles</a></details></aside><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">TALENTO</div><div style="font-size:26px;font-weight:700;color:#0F172A">{n_trab} Colaboradores</div><a href="/gerencia/contabilidad/trabajadores" style="display:inline-block;margin-top:10px;background:#0020C2;color:#fff;padding:8px 16px;border-radius:980px;text-decoration:none;font-size:12px">+ Registrar</a></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">FONDO</div><div style="font-size:22px;font-weight:700;color:#0F172A">${fondo_txt} / $400.000</div><div style="height:6px;background:#e8e8ed;border-radius:980px;margin:8px 0"><div style="height:100%;width:{fondo_pct}%;background:#0020C2;border-radius:980px"></div></div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">CARTERA</div><div style="font-size:26px;font-weight:700;color:#0F172A">{_cop(m.get('cartera') or 0)}</div></div><div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px"><div style="font-size:12px;color:#86868b">VERSION</div><div style="font-size:26px;font-weight:700;color:#0F172A">v2.6.0</div></div></div></div></div>
 
-      <div id="hq-tab-contingencia" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Boveda documental, juridica y DRP</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Boveda documental, juridica y DRP</h3><div style="display:flex;flex-wrap:wrap;gap:8px"><a href="/gerencia/documentos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Biblioteca</a><a href="/gerencia/documentos/plan-drp" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan DRP</a><a href="/gerencia/documentos/politica-datos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Politica de datos</a><a href="/gerencia/documentos/plan-contingencia" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan contingencia</a><a href="/gerencia/documentos/contrato-licenciamiento" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contrato SaaS</a></div></div></div>
+      <div id="hq-tab-contingencia" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Boveda documental, juridica y DRP</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#0F172A;margin-top:0">Boveda documental, juridica y DRP</h3><div style="display:flex;flex-wrap:wrap;gap:8px"><a href="/gerencia/documentos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Biblioteca</a><a href="/gerencia/documentos/plan-drp" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan DRP</a><a href="/gerencia/documentos/politica-datos" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Politica de datos</a><a href="/gerencia/documentos/plan-contingencia" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Plan contingencia</a><a href="/gerencia/documentos/contrato-licenciamiento" style="background:#f5f5f7;padding:8px 16px;border-radius:980px;text-decoration:none;color:#1d1d1f;font-size:12px">Contrato SaaS</a></div></div></div>
 
       {tab_tecnica_panel}
 
-      <div id="hq-tab-auditoria" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Monitoreo de trafico, accesos y auditoria de red</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#002060;margin-top:0">Monitoreo de trafico, accesos y auditoria de red</h3><div style="display:flex;flex-direction:column;gap:8px"><a href="/auditoria" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Auditoria global de logs</a><a href="/gerencia/auditoria" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Auditoria IP y ubicacion</a><a href="/dev-console?tab=sistema" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Sesiones tecnicas activas</a></div></div></div>
+      <div id="hq-tab-auditoria" class="hq-tab-panel"><p class="hq-note" style="color:#86868b">Monitoreo de trafico, accesos y auditoria de red</p><div style="background:#fff;border-radius:20px;padding:22px;border:1px solid rgba(0,0,0,.06)"><h3 style="color:#0F172A;margin-top:0">Monitoreo de trafico, accesos y auditoria de red</h3><div style="display:flex;flex-direction:column;gap:8px"><a href="/auditoria" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Auditoria global de logs</a><a href="/gerencia/auditoria" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Auditoria IP y ubicacion</a><a href="/dev-console?tab=sistema" style="padding:10px;background:#f5f5f7;border-radius:12px;text-decoration:none;color:#1d1d1f">Sesiones tecnicas activas</a></div></div></div>
     </div>
 
     <script>
@@ -31443,7 +31508,7 @@ def gerencia_hq():
       <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
         <h2 style="margin:0;font-size:13px">Indicadores (resumen)</h2>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
-          <a href="/gerencia/indicadores" style="background:#005BEA;color:#fff;padding:8px 16px;border-radius:980px;font-weight:600;font-size:12px;text-decoration:none">Ver indicadores</a>
+          <a href="/gerencia/indicadores" style="background:#0020C2;color:#fff;padding:8px 16px;border-radius:980px;font-weight:600;font-size:12px;text-decoration:none">Ver indicadores</a>
           <a href="/gerencia/reportes?periodo=mensual" style="background:#f5f5f7;color:#1d1d1f;padding:8px 16px;border-radius:980px;font-weight:500;font-size:12px;text-decoration:none">Reportes</a>
         </div>
       </div>
@@ -31455,7 +31520,7 @@ def gerencia_hq():
         <div class="kpi" style="padding:8px"><div class="l" style="font-size:9px">Churn</div><div class="v" style="font-size:14px">{m['churn']}%</div></div>
         <div class="kpi" style="padding:8px"><div class="l" style="font-size:9px">Cashflow</div><div class="v" style="font-size:14px">{_cop(m['cashflow'])}</div></div>
       </div>
-      <p style="margin:8px 0 0;font-size:11px;color:#64748b">Vista reducida. Detalle completo en <a href="/gerencia/indicadores" style="color:#0B2D57;font-weight:700">Ver indicadores</a>.</p>
+      <p style="margin:8px 0 0;font-size:11px;color:#64748b">Vista reducida. Detalle completo en <a href="/gerencia/indicadores" style="color:#0020C2;font-weight:700">Ver indicadores</a>.</p>
     </div>
 
 <div class="sec">
@@ -31465,7 +31530,7 @@ def gerencia_hq():
         <span style="color:{'#dc2626' if m.get('storage_pct',0)>=80 else '#0f172a'}">{m.get('storage_pct',0)}%</span>
         {" · ⚠ Optimice o amplíe disco" if m.get('storage_pct',0)>=80 else ""}
       </p>
-      <div class="bar"><i style="width:{min(100, m.get('storage_pct',0))}%;background:{'#dc2626' if m.get('storage_pct',0)>=80 else ('#ca8a04' if m.get('storage_pct',0)>=60 else '#0B2D57')}"></i></div>
+      <div class="bar"><i style="width:{min(100, m.get('storage_pct',0))}%;background:{'#dc2626' if m.get('storage_pct',0)>=80 else ('#ca8a04' if m.get('storage_pct',0)>=60 else '#0020C2')}"></i></div>
       <p style="margin:8px 0 0;font-size:12px;color:#64748b;line-height:1.45">
         Desglose en vivo (disco real):
         fotos alumnos <b>{(m.get('storage_breakdown') or {}).get('fotos_estudiantes', 0)} MB</b> ·
@@ -31479,7 +31544,7 @@ def gerencia_hq():
     </div>
 
     <div class="sec" style="border:1px solid #e2e8f0;border-radius:4px;padding:18px 16px;background:#fafbfc">
-      <h2 style="margin:0 0 6px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0B2D57;font-weight:800;border-left:3px solid #0B2D57;padding-left:10px">
+      <h2 style="margin:0 0 6px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0020C2;font-weight:800;border-left:3px solid #0020C2;padding-left:10px">
         🔒 Acciones críticas de infraestructura y control global
       </h2>
       <p style="font-size:12px;color:#64748b;margin:0 0 14px;line-height:1.5;max-width:720px">
@@ -32722,15 +32787,15 @@ def gerencia_talento_legal():
     body = """
 <style>
 .tl{max-width:920px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif;color:#1e293b}
-.tl h1{color:#0B2D57;margin:0 0 8px}
+.tl h1{color:#0020C2;margin:0 0 8px}
 .tl .sub{color:#64748b;margin-bottom:18px}
 .tl .card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:14px;box-shadow:0 4px 14px rgba(15,23,42,.05)}
-.tl .card h2{margin:0 0 10px;font-size:16px;color:#0B2D57}
+.tl .card h2{margin:0 0 10px;font-size:16px;color:#0020C2}
 .tl .card h3{margin:12px 0 6px;font-size:14px;color:#1e40af}
 .tl ul{margin:6px 0 6px 18px;line-height:1.55;font-size:14px}
 .tl .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:720px){.tl .grid{grid-template-columns:1fr}}
-.tl a.btn{display:inline-block;background:#0B2D57;color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:13px;margin:4px 6px 4px 0}
+.tl a.btn{display:inline-block;background:#0020C2;color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:13px;margin:4px 6px 4px 0}
 .tl .tag{display:inline-block;background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
 </style>
 <div class="tl">
@@ -32903,17 +32968,17 @@ def gerencia_contratos_personal():
     body = (
         "<div style='max-width:1000px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
         "<p><a href='/gerencia/hq'>← HQ</a> · <a href='/gerencia/talento-legal'>Guía legal</a></p>"
-        "<h1 style='color:#0B2D57'>Gestión de contratos</h1>"
+        "<h1 style='color:#0020C2'>Gestión de contratos</h1>"
         "<p style='color:#64748b;font-size:13px'>Prestación de servicios o laboral. Adjunte PDF firmado. Afiliaciones EPS/AFP/ARL/Caja.</p>"
         + (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "")
         + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
         + "<table style='width:100%;border-collapse:collapse;font-size:13px;background:#fff;margin:12px 0'>"
-        "<tr style='background:#0B2D57;color:#fff'><th>Tipo</th><th>Persona</th><th>Cargo</th><th>Área</th>"
+        "<tr style='background:#0020C2;color:#fff'><th>Tipo</th><th>Persona</th><th>Cargo</th><th>Área</th>"
         "<th>Vigencia</th><th>Estado</th><th>Archivo</th><th></th></tr>"
         + "".join(filas)
         + "</table>"
         "<section style='background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-top:12px'>"
-        "<h2 style='margin-top:0;font-size:15px;color:#0B2D57'>Registrar / actualizar</h2>"
+        "<h2 style='margin-top:0;font-size:15px;color:#0020C2'>Registrar / actualizar</h2>"
         "<form method='POST' enctype='multipart/form-data' style='display:grid;grid-template-columns:1fr 1fr;gap:10px'>"
         "<div><label><b>Tipo contrato *</b></label><select name='tipo'>"
         "<option value='PRESTACION'>Prestación de servicios</option>"
@@ -33068,12 +33133,12 @@ def gerencia_planillas_pila():
     body = (
         "<div style='max-width:960px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
         "<p><a href='/gerencia/hq'>← HQ</a> · <a href='/gerencia/talento-legal'>Guía legal</a></p>"
-        "<h1 style='color:#0B2D57'>Historial planillas PILA</h1>"
+        "<h1 style='color:#0020C2'>Historial planillas PILA</h1>"
         "<p style='color:#64748b;font-size:13px'>Comprobantes mensuales de seguridad social para auditoría.</p>"
         + (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "")
         + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
         + "<table style='width:100%;border-collapse:collapse;font-size:13px;background:#fff'>"
-        "<tr style='background:#0B2D57;color:#fff'><th>Periodo</th><th>Operador</th><th>Valor</th><th>Trabajadores</th>"
+        "<tr style='background:#0020C2;color:#fff'><th>Periodo</th><th>Operador</th><th>Valor</th><th>Trabajadores</th>"
         "<th>Archivo</th><th>Registro</th><th></th></tr>"
         + "".join(filas)
         + "</table>"
@@ -33182,12 +33247,12 @@ def gerencia_matriz_epp():
         "<div style='max-width:960px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
         "<p><a href='/gerencia/hq'>← HQ</a> · <a href='/gerencia/talento-legal'>Guía legal</a> · "
         "<a href='/gerencia/documentos/sg-sst'>SG-SST</a></p>"
-        "<h1 style='color:#0B2D57'>Matriz EPP · Visitas a colegios</h1>"
+        "<h1 style='color:#0020C2'>Matriz EPP · Visitas a colegios</h1>"
         "<p style='color:#64748b;font-size:13px'>Entrega de implementos cuando un técnico instala servidores o revisa QR en sede.</p>"
         + (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "")
         + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
         + "<table style='width:100%;border-collapse:collapse;font-size:13px;background:#fff'>"
-        "<tr style='background:#0B2D57;color:#fff'><th>Fecha</th><th>Trabajador</th><th>Elemento</th><th>Cant.</th>"
+        "<tr style='background:#0020C2;color:#fff'><th>Fecha</th><th>Trabajador</th><th>Elemento</th><th>Cant.</th>"
         "<th>Motivo / sede</th><th>Firmado</th><th>Por</th><th></th></tr>"
         + "".join(filas)
         + "</table>"
@@ -33341,15 +33406,15 @@ def gerencia_documentos_lista():
     body = f"""
 <style>
 .dl{{max-width:1040px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif}}
-.dl h1{{color:#0B2D57;font-size:22px;margin:0 0 6px}}
+.dl h1{{color:#0020C2;font-size:22px;margin:0 0 6px}}
 .dl .sm{{font-size:11px;color:#64748b}}
 .dl .bar{{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}}
 .dl .bar input,.dl .bar select{{padding:10px;border:1px solid #cbd5e1;border-radius:10px;font-size:13px;background:#fff}}
 .dl .bar input[type=search]{{flex:1;min-width:220px}}
-.dl .btn1{{background:#0B2D57;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;border:0;cursor:pointer}}
-.dl .btn2{{background:#fff;color:#0B2D57;padding:9px 14px;border-radius:10px;font-weight:700;font-size:13px;border:1px solid #0B2D57;cursor:pointer}}
+.dl .btn1{{background:#0020C2;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px;border:0;cursor:pointer}}
+.dl .btn2{{background:#fff;color:#0020C2;padding:9px 14px;border-radius:10px;font-weight:700;font-size:13px;border:1px solid #0020C2;cursor:pointer}}
 .dl .chips{{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}}
-.dl .chip{{--c:#0B2D57;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid #cbd5e1;color:#0f172a;text-decoration:none;font-size:12.5px;font-weight:600}}
+.dl .chip{{--c:#0020C2;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid #cbd5e1;color:#0f172a;text-decoration:none;font-size:12.5px;font-weight:600}}
 .dl .chip b{{margin-left:4px;color:var(--c)}}
 .dl .chip.on{{background:var(--c);border-color:var(--c);color:#fff}}.dl .chip.on b{{color:#fff}}
 .dl details.grp{{--c:#334155;background:#fff;border-radius:14px;margin-bottom:12px;box-shadow:0 4px 16px rgba(15,23,42,.06);border-left:5px solid var(--c);overflow:hidden}}
@@ -33473,7 +33538,7 @@ def gerencia_documento_nuevo():
     body = f"""
 <div style="max-width:640px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">
   <p><a href="/gerencia/documentos">← Biblioteca</a></p>
-  <h1 style="color:#0B2D57;font-size:20px">Nuevo documento</h1>
+  <h1 style="color:#0020C2;font-size:20px">Nuevo documento</h1>
   {'<p style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;font-weight:600">'+err+'</p>' if err else ''}
   <form method="POST" style="display:flex;flex-direction:column;gap:12px">
     <label style="font-size:13px;font-weight:700;color:#334155">Título
@@ -33499,7 +33564,7 @@ def gerencia_documento_nuevo():
     <label style="font-size:13px;display:flex;align-items:center;gap:8px">
       <input type="checkbox" name="publico" value="1"> Visible en la web pública (/docs/…)
     </label>
-    <button type="submit" style="background:#0B2D57;color:#fff;padding:12px;border:0;border-radius:8px;font-weight:700;cursor:pointer">Crear y editar contenido</button>
+    <button type="submit" style="background:#0020C2;color:#fff;padding:12px;border:0;border-radius:8px;font-weight:700;cursor:pointer">Crear y editar contenido</button>
   </form>
 </div>
 """
@@ -33555,13 +33620,13 @@ def gerencia_documento_editar(clave):
 .de{{max-width:860px;margin:0 auto;padding:16px 16px 48px;font-family:Segoe UI,system-ui,sans-serif;background:#e8eef5;min-height:100vh}}
 .de-bar{{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:14px}}
 .de-paper{{background:#fff;border:1px solid #dbe3ee;box-shadow:0 8px 28px rgba(15,23,42,.08)}}
-.de-paper .corp-mini{{display:flex;align-items:center;justify-content:space-between;padding:16px 48px;border-bottom:3px solid #0B2D57;background:#f8fafc}}
+.de-paper .corp-mini{{display:flex;align-items:center;justify-content:space-between;padding:16px 48px;border-bottom:3px solid #0020C2;background:#f8fafc}}
 .de-paper .corp-mini img{{height:40px;width:40px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid #e2e8f0}}
 #editor{{min-height:380px;outline:none;font-size:14.5px;line-height:1.7;color:#334155;padding:22px 28px}}
-#editor h2{{font-size:15px;color:#0B2D57;margin:20px 0 10px;font-weight:800}}
+#editor h2{{font-size:15px;color:#0020C2;margin:20px 0 10px;font-weight:800}}
 #editor p{{margin:0 0 14px}}
 #editor ul{{margin:0 0 14px;padding-left:22px}}
-.tb{{display:flex;flex-wrap:wrap;gap:6px;background:#0B2D57;border-radius:8px 8px 0 0;padding:8px 10px}}
+.tb{{display:flex;flex-wrap:wrap;gap:6px;background:#0020C2;border-radius:8px 8px 0 0;padding:8px 10px}}
 .tb button{{padding:6px 10px;border:0;background:#1e3a5f;color:#fff;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer}}
 .tb button:hover{{background:#334155}}
 input[type=text]{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-size:15px;font-weight:700}}
@@ -33572,7 +33637,7 @@ input[type=text]{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius
     <div><a href="/gerencia/documentos">← Biblioteca</a> · <a href="/gerencia/hq">Gerencia HQ</a></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <a href="/gerencia/documentos/{clave}/pdf" style="background:#b91c1c;color:#fff;padding:8px 14px;border-radius:8px;font-weight:800;text-decoration:none;font-size:13px">PDF</a>
-      <a href="/gerencia/documentos/{clave}/word" style="background:#1d4ed8;color:#fff;padding:8px 14px;border-radius:8px;font-weight:800;text-decoration:none;font-size:13px">Word</a>
+      <a href="/gerencia/documentos/{clave}/word" style="background:#0020C2;color:#fff;padding:8px 14px;border-radius:8px;font-weight:800;text-decoration:none;font-size:13px">Word</a>
       <a href="/gerencia/documentos/{clave}/imagen.png" style="background:#0f766e;color:#fff;padding:8px 14px;border-radius:8px;font-weight:800;text-decoration:none;font-size:13px">Descargar PNG</a>
       <a href="/gerencia/documentos/{clave}/imagen" style="background:#334155;color:#fff;padding:8px 14px;border-radius:8px;font-weight:800;text-decoration:none;font-size:13px">Vista captura</a>
       {"<a href='/docs/"+clave+"' target='_blank' style='background:#15803d;color:#fff;padding:8px 14px;border-radius:8px;font-weight:800;text-decoration:none;font-size:13px'>Vista pública</a>" if row.publico else ""}
@@ -33600,7 +33665,7 @@ input[type=text]{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius
         <div style="display:flex;align-items:center;gap:10px">
           <img src="{logo_src}" alt="Procsis">
           <div>
-            <div style="font-weight:800;color:#0B2D57;font-size:12px">PROCSIS</div>
+            <div style="font-weight:800;color:#0020C2;font-size:12px">PROCSIS</div>
             <div style="font-size:10px;color:#64748b;letter-spacing:.08em;text-transform:uppercase">Documento corporativo · EduTrack</div>
           </div>
         </div>
@@ -33609,7 +33674,7 @@ input[type=text]{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius
       <div id="editor" contenteditable="true">{row.cuerpo_html or ''}</div>
     </div>
     <textarea name="cuerpo_html" id="cuerpo_html" style="display:none">{cuerpo_esc}</textarea>
-    <button type="submit" style="margin-top:14px;width:100%;padding:12px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:15px">Guardar documento</button>
+    <button type="submit" style="margin-top:14px;width:100%;padding:12px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:15px">Guardar documento</button>
   </form>
   <p style="font-size:12px;color:#64748b;margin-top:10px">Última edición: {row.actualizado_en or '—'} por {row.actualizado_por or '—'} · Escriba en el cuerpo una línea «Lugar: Caracolí, Antioquia» para que salga en el encabezado. Colores: navy + cyan del logo (sin verde). Exporta PDF, Word y PNG.</p>
 </div>
@@ -33698,7 +33763,7 @@ def gerencia_documento_imagen(clave):
   body {{ margin: 0; background: #e8eef5; }}
   .bar {{ max-width: 720px; margin: 0 auto; padding: 12px 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-family: Segoe UI, system-ui, sans-serif; }}
   .bar button, .bar a {{
-    background: #0B2D57; color: #fff; border: 0; padding: 10px 16px; border-radius: 8px;
+    background: #0020C2; color: #fff; border: 0; padding: 10px 16px; border-radius: 8px;
     font-weight: 700; font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block;
   }}
   .bar button.green {{ background: #15803d; }}
@@ -33870,8 +33935,8 @@ def _docs_publico_legacy_tail():
 <style>
 .pub{{max-width:720px;margin:0 auto;padding:28px 18px 48px;font-family:Georgia,serif;color:#1e293b;line-height:1.6}}
 .pub-top{{font-family:Segoe UI,system-ui,sans-serif;font-size:11px;color:#64748b;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}}
-.pub h1{{font-family:Segoe UI,system-ui,sans-serif;font-size:24px;color:#0B2D57;margin:0 0 16px;border-bottom:2px solid #0B2D57;padding-bottom:10px}}
-.pub h2{{font-family:Segoe UI,system-ui,sans-serif;font-size:16px;color:#0B2D57;margin:20px 0 8px}}
+.pub h1{{font-family:Segoe UI,system-ui,sans-serif;font-size:24px;color:#0020C2;margin:0 0 16px;border-bottom:2px solid #0020C2;padding-bottom:10px}}
+.pub h2{{font-family:Segoe UI,system-ui,sans-serif;font-size:16px;color:#0020C2;margin:20px 0 8px}}
 .pub a.back{{font-family:Segoe UI,system-ui,sans-serif;font-size:13px}}
 </style>
 <div class="pub">
@@ -33956,7 +34021,7 @@ def gerencia_suspender():
   <p style="color:#64748b;font-size:14px">Al suspender, el login muestra: <i>«Plataforma en mantenimiento por actualización de cuenta…»</i></p>
   {"<div style='background:#ecfdf5;padding:10px;border-radius:10px;margin:10px 0'>"+msg+"</div>" if msg else ""}
   <table style="width:100%;border-collapse:collapse;background:#fff;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">Código</th><th>Colegio</th><th>Estado</th><th>Motivo</th><th></th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px">Código</th><th>Colegio</th><th>Estado</th><th>Motivo</th><th></th></tr>
     {filas}
   </table>
 </div>
@@ -34266,7 +34331,7 @@ def ventas_verificacion_rector():
             pep_box = f"<div style='background:#ecfdf5;border:1px solid #6ee7b7;padding:10px;border-radius:10px;margin-top:8px;font-size:12.5px'>✔ PEP aprobado por {_esc(v.pep_aprobado_por)} el {v.pep_aprobado_fecha}</div>"
         elif v.es_pep:
             aprobar_btn = (
-                f"<form method='POST' style='margin-top:6px'><input type='hidden' name='accion' value='aprobar_pep'><input type='hidden' name='vid' value='{v.id}'><button style='background:#0B2D57;color:#fff;padding:6px 12px;border:0;border-radius:6px'>Aprobar como Gerencia</button></form>"
+                f"<form method='POST' style='margin-top:6px'><input type='hidden' name='accion' value='aprobar_pep'><input type='hidden' name='vid' value='{v.id}'><button style='background:#0020C2;color:#fff;padding:6px 12px;border:0;border-radius:6px'>Aprobar como Gerencia</button></form>"
                 if rol_actual() in ("Gerente", "Superadmin", "Administrador") else
                 "<p style='font-size:12px;color:#b45309;margin-top:6px'>Pendiente: solo Gerencia puede aprobar este caso.</p>"
             )
@@ -34278,21 +34343,21 @@ def ventas_verificacion_rector():
         <div class="role-panel" style="margin-top:14px">
           <h2>Resultado de la verificación · {_esc(v.nombre_rector)}</h2>
 
-          <h3 style="margin:14px 0 6px;font-size:14px;color:#0B2D57">1. Identidad y pasado judicial</h3>
+          <h3 style="margin:14px 0 6px;font-size:14px;color:#0020C2">1. Identidad y pasado judicial</h3>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <a target="_blank" href="https://antecedentes.policia.gov.co:7005/WebJudicial/" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">🔎 Antecedentes judiciales · Policía Nacional</a>
+            <a target="_blank" href="https://antecedentes.policia.gov.co:7005/WebJudicial/" style="background:#0020C2;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">🔎 Antecedentes judiciales · Policía Nacional</a>
             <a target="_blank" href="https://inhabilidades.policia.gov.co/consulta" style="background:#7c2d12;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">🚨 Ley 1918 · Delitos sexuales contra menores</a>
           </div>
           <p style="font-size:12px;color:#64748b;margin:8px 0 0">Cédula a consultar: <b>{cc}</b> (cópiela y péguela en el portal — no se puede prellenar por el captcha oficial). La consulta de Ley 1918 requiere que Procsis esté previamente autorizada por el ICBF como entidad solicitante.</p>
 
-          <h3 style="margin:16px 0 6px;font-size:14px;color:#0B2D57">2. Control disciplinario y fiscal</h3>
+          <h3 style="margin:16px 0 6px;font-size:14px;color:#0020C2">2. Control disciplinario y fiscal</h3>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <a target="_blank" href="https://apps.procuraduria.gov.co/webcert/Certificado.aspx" style="background:#0f766e;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">🏛️ Procuraduría · Certificado de antecedentes</a>
             <a target="_blank" href="https://www.contraloria.gov.co/control-fiscal/responsabilidad-fiscal/certificado-de-antecedentes-fiscales" style="background:#1e3a8a;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">💰 Contraloría · Antecedentes fiscales</a>
           </div>
           <p style="font-size:12px;color:#64748b;margin:8px 0 0">El certificado de Procuraduría ya incluye penal, fiscal, disciplinario, contractual y pérdida de investidura en un solo documento — la Contraloría es un chequeo complementario.</p>
 
-          <h3 style="margin:16px 0 6px;font-size:14px;color:#0B2D57">3. Listas restrictivas internacionales</h3>
+          <h3 style="margin:16px 0 6px;font-size:14px;color:#0020C2">3. Listas restrictivas internacionales</h3>
           {ofac_box}
           {pep_box}
         </div>
@@ -34314,7 +34379,7 @@ def ventas_verificacion_rector():
     <div><label style="font-size:12px;font-weight:700;display:block">NIT del colegio</label>
       <input name="nit_colegio" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;min-width:140px"></div>
     <div style="grid-column:1/-1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-top:4px">
-      <b style="font-size:13px;color:#0B2D57">Checklist de validación (portales oficiales)</b>
+      <b style="font-size:13px;color:#0020C2">Checklist de validación (portales oficiales)</b>
       <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:13px">
         <label><input type="checkbox" name="val_policia" value="1" style="width:auto"> Policía (antecedentes)</label>
         <label><input type="checkbox" name="val_procuraduria" value="1" style="width:auto"> Procuraduría</label>
@@ -34324,7 +34389,7 @@ def ventas_verificacion_rector():
       <p style="font-size:12px;color:#64748b;margin:8px 0 4px">Si hay lista negra / OFAC / no es exitosa, debe elevar a Gerencia con motivo:</p>
       <textarea name="motivo_gerencia" rows="2" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px" placeholder="Ej. Coincidencia OFAC parcial; requiere visto bueno de Gerencia antes de vender"></textarea>
     </div>
-    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700" style="background:#005BEA;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Verificar y registrar</button>
+    <button style="background:#0020C2;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700" style="background:#0020C2;color:#fff;border:0;padding:12px 24px;border-radius:980px;font-weight:600;font-size:13px;cursor:pointer">Verificar y registrar</button>
   </form>
 </div>
 {r_html}
@@ -34570,7 +34635,7 @@ def demo_invitar_registro(token):
             )
     body = f"""
 <div style="max-width:440px;margin:40px auto;font-family:Segoe UI,sans-serif;background:#fff;padding:28px;border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.1)">
-  <h1 style="color:#0B2D57;margin:0 0 6px;font-size:22px">Prueba EduTrack gratis</h1>
+  <h1 style="color:#0020C2;margin:0 0 6px;font-size:22px">Prueba EduTrack gratis</h1>
   <p style="color:#64748b;font-size:13px;margin:0 0 14px">{inv.dias or 15} días de demo · registre su colegio</p>
   {"<div style='background:#ecfdf5;padding:12px;border-radius:10px;margin-bottom:12px'>"+msg+"</div>" if msg else ""}
   {"<div style='background:#fef2f2;color:#991b1b;padding:10px;border-radius:10px;margin-bottom:10px'>"+error+"</div>" if error else ""}
@@ -34588,7 +34653,7 @@ def demo_invitar_registro(token):
     {_html_campos_dep_mun("departamento", "municipio", required=False)}
     <label style="font-size:12px;font-weight:700">Código DANE (opcional)</label>
     <input name="dane" style="width:100%;padding:10px;margin:4px 0 10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box">
-    <button style="width:100%;background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:12px;font-weight:800">Crear mi cuenta demo</button>
+    <button style="width:100%;background:#0020C2;color:#fff;border:0;padding:12px;border-radius:12px;font-weight:800">Crear mi cuenta demo</button>
   </form>
   '''}
 </div>
@@ -34620,11 +34685,11 @@ def ventas_kit_mensajes():
     for tit, txt in textos:
         bloques += (
             '<div class="kit-box" style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:14px;margin-bottom:10px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">'
-            f'<h3 style="margin:0 0 6px;color:#002060;font-size:15px;font-weight:600">{tit}</h3>'
+            f'<h3 style="margin:0 0 6px;color:#0F172A;font-size:15px;font-weight:600">{tit}</h3>'
             f'<p class="kit-msg" style="font-size:13px;color:#334155;line-height:1.45">{txt}</p>'
             '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
             '<button type="button" class="kit-copy" style="background:#f5f5f7;color:#1d1d1f;border:0;padding:8px 14px;border-radius:980px;font-weight:600;cursor:pointer;font-size:12px">Copiar texto</button>'
-            '<button type="button" class="kit-wa" style="background:#005BEA;color:#fff;border:0;padding:8px 14px;border-radius:980px;font-weight:600;cursor:pointer;font-size:12px">Enviar por WhatsApp</button>'
+            '<button type="button" class="kit-wa" style="background:#0020C2;color:#fff;border:0;padding:8px 14px;border-radius:980px;font-weight:600;cursor:pointer;font-size:12px">Enviar por WhatsApp</button>'
             '</div></div>'
         )
     try:
@@ -34662,7 +34727,7 @@ def ventas_kit_mensajes():
     body = f"""
 <div style="max-width:640px;margin:0 auto;padding:20px;font-family:Segoe UI,sans-serif">
   <p><a href="/ventas/panel">← Panel ventas</a></p>
-  <h1 style="color:#0B2D57">Plantillas de Prospección</h1>
+  <h1 style="color:#0020C2">Plantillas de Prospección</h1>
   <p style="color:#64748b;font-size:14px">Textos listos para WhatsApp según el estado del cliente.</p>
   {bloques}
   <h2 style="color:#92400e;font-size:16px;margin-top:22px">Guiones legales (Colombia)</h2>
@@ -35012,7 +35077,7 @@ def ventas_crm():
                 msg = "Lead eliminado."
     etapas = [
         ("CONTACTO", "1. Contacto inicial", "#64748b"),
-        ("DEMO", "2. Demo presentada", "#1d4ed8"),
+        ("DEMO", "2. Demo presentada", "#0020C2"),
         ("NEGOCIACION", "3. En negociación", "#b45309"),
         ("GANADO", "4. Ganado 🎉", "#15803d"),
     ]
@@ -35026,20 +35091,20 @@ def ventas_crm():
             wa_href = ("https://wa.me/" + tel_digits) if tel_digits else "#"
             cards += f"""
             <div class="crm-card" draggable="true" data-lead-id="{L.id}" style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:14px;padding:12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,.04);cursor:grab;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
-              <b style="color:#002060;font-size:14px">{_esc(L.colegio)}</b>
+              <b style="color:#0F172A;font-size:14px">{_esc(L.colegio)}</b>
               <div style="font-size:12px;color:#86868b;margin:4px 0">{_esc(L.rector or '—')} · {_esc(L.telefono or '')}</div>
               <div style="font-size:11px;color:#a1a1a6">{_esc(L.municipio or '')} · {_esc(L.plan_interes or '')}</div>
-              <div style="margin-top:8px"><a href="{wa_href}" target="_blank" rel="noopener" style="font-size:11px;padding:5px 12px;border-radius:980px;background:#f5f5f7;color:#005BEA;text-decoration:none;font-weight:600">WhatsApp</a></div>
+              <div style="margin-top:8px"><a href="{wa_href}" target="_blank" rel="noopener" style="font-size:11px;padding:5px 12px;border-radius:980px;background:#f5f5f7;color:#0020C2;text-decoration:none;font-weight:600">WhatsApp</a></div>
             </div>"""
         cols += f"""
         <div class="crm-col" data-etapa="{key}" style="background:#f5f5f7;border-radius:16px;padding:12px;min-width:220px;flex:1;min-height:120px">
-          <div style="font-weight:700;color:#002060;margin-bottom:10px;font-size:13px">{titulo}</div>
+          <div style="font-weight:700;color:#0F172A;margin-bottom:10px;font-size:13px">{titulo}</div>
           <div class="crm-col-body">{cards or '<p style="font-size:12px;color:#86868b">Vacío · suelte aquí</p>'}</div>
         </div>"""
     body = f"""
 <div style="max-width:1100px;margin:0 auto;padding:16px;font-family:Segoe UI,sans-serif">
   <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center">
-    <h1 style="color:#0B2D57;margin:0">CRM · Embudo de ventas</h1>
+    <h1 style="color:#0020C2;margin:0">CRM · Embudo de ventas</h1>
     <div>
       <a class="btn" href="/ventas/demos">Crear demo con caducidad</a>
       <a class="btn" href="/ventas/panel">Panel ventas</a>
@@ -35055,7 +35120,7 @@ def ventas_crm():
       card.addEventListener('dragend',function(){{card.style.opacity='1';}});
     }});
     document.querySelectorAll('.crm-col').forEach(function(col){{
-      col.addEventListener('dragover',function(e){{e.preventDefault();col.style.outline='2px solid #005BEA';}});
+      col.addEventListener('dragover',function(e){{e.preventDefault();col.style.outline='2px solid #0020C2';}});
       col.addEventListener('dragleave',function(){{col.style.outline='none';}});
       col.addEventListener('drop',function(e){{
         e.preventDefault();col.style.outline='none';
@@ -35072,7 +35137,7 @@ def ventas_crm():
   }})();
   </script>
   <div style="background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px;max-width:520px">
-    <h2 style="margin:0 0 10px;font-size:16px;color:#002060">Nuevo contacto (rector)</h2>
+    <h2 style="margin:0 0 10px;font-size:16px;color:#0F172A">Nuevo contacto (rector)</h2>
     <form method="POST">
       <input type="hidden" name="accion" value="crear">
       <label style="font-size:12px;font-weight:700">Colegio *</label>
@@ -35089,7 +35154,7 @@ def ventas_crm():
       <input name="plan_interes" placeholder="Básico / Estándar / Premium" style="width:100%;padding:8px;margin-bottom:8px;border:1px solid #cbd5e1;border-radius:8px">
       <label style="font-size:12px;font-weight:700">Notas</label>
       <textarea name="notas" rows="2" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px"></textarea>
-      <button style="margin-top:10px;background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800">Agregar al embudo</button>
+      <button style="margin-top:10px;background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800">Agregar al embudo</button>
     </form>
   </div>
 </div>
@@ -35192,7 +35257,7 @@ def ventas_demos():
     body = f"""
 <div style="max-width:800px;margin:0 auto;padding:20px;font-family:Segoe UI,sans-serif">
   <p><a href="/ventas/crm">← CRM</a> · <a href="/ventas/panel">Panel ventas</a></p>
-  <h1 style="color:#0B2D57">Crear demo con caducidad</h1>
+  <h1 style="color:#0020C2">Crear demo con caducidad</h1>
   <p style="font-size:13px;color:#64748b">Al vencer la fecha, el acceso se bloquea y el rector ve: «¿Te gustó la prueba? Adquiere un plan aquí».</p>
   {"<div style='background:#ecfdf5;padding:10px;border-radius:10px'>"+msg+"</div>" if msg else ""}
   {"<div style='background:#fef2f2;padding:10px;border-radius:10px'>"+err+"</div>" if err else ""}
@@ -35203,10 +35268,10 @@ def ventas_demos():
     <input name="municipio" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px">
     <label style="font-weight:700;font-size:12px">Días de prueba</label>
     <select name="dias"><option value="7">7 días</option><option value="15" selected>15 días</option><option value="30">30 días</option></select>
-    <button style="display:block;margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Crear Demo</button>
+    <button style="display:block;margin-top:12px;background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Crear Demo</button>
   </form>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">ID</th><th>Colegio</th><th>Vigencia</th><th>Días</th><th>Estado</th><th>Creó</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px">ID</th><th>Colegio</th><th>Vigencia</th><th>Días</th><th>Estado</th><th>Creó</th></tr>
     {filas or '<tr><td colspan=6>Sin demos</td></tr>'}
   </table>
 </div>
@@ -35266,7 +35331,7 @@ def soporte_periodos_colegio():
     body = f"""
 <div style="max-width:820px;margin:20px auto;font-family:Segoe UI,sans-serif;padding:16px">
   <p><a href="/soporte_admin">← Soporte</a></p>
-  <h1 style="color:#0B2D57">Periodos académicos por colegio</h1>
+  <h1 style="color:#0020C2">Periodos académicos por colegio</h1>
   <p style="color:#64748b;font-size:14px">Cuando un rector solicita cambiar de 3 a 4 periodos (o al revés), aplique el cambio aquí. Afecta planillas, boletines y listados de periodo.</p>
   {"<p style='background:#f0fdf4;padding:10px;border-radius:8px;color:#166534'>"+msg+"</p>" if msg else ""}
   {"<p style='background:#fef2f2;padding:10px;border-radius:8px;color:#b91c1c'>"+err+"</p>" if err else ""}
@@ -35278,10 +35343,10 @@ def soporte_periodos_colegio():
       <option value="3">3 periodos</option>
       <option value="4">4 periodos</option>
     </select>
-    <button type="submit" style="margin-top:10px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800">Aplicar cambio</button>
+    <button type="submit" style="margin-top:10px;padding:12px 18px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800">Aplicar cambio</button>
   </form>
   <table style="width:100%;border-collapse:collapse;background:#fff;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">ID</th><th>Colegio</th><th>Periodos</th><th>Periodo actual</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px">ID</th><th>Colegio</th><th>Periodos</th><th>Periodo actual</th></tr>
     {filas or '<tr><td colspan="4">Sin instituciones</td></tr>'}
   </table>
 </div>
@@ -35353,10 +35418,10 @@ def soporte_reset_clave():
   {"<div style='background:#fef2f2;padding:10px;border-radius:10px;margin:10px 0;color:#991b1b'>"+err+"</div>" if err else ""}
   <form method="GET" style="margin:12px 0;display:flex;gap:8px">
     <input name="q" value="{q}" placeholder="Usuario o correo" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:10px">
-    <button style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800">Buscar</button>
+    <button style="background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800">Buscar</button>
   </form>
   <table style="width:100%;border-collapse:collapse;background:#fff;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">Usuario</th><th>Rol</th><th>Colegio</th><th></th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px">Usuario</th><th>Rol</th><th>Colegio</th><th></th></tr>
     {filas or '<tr><td colspan=4 style="padding:12px;color:#64748b">Busque un usuario para restablecer su clave.</td></tr>'}
   </table>
 </div>
@@ -35432,7 +35497,7 @@ def soporte_prorroga():
   {"<div style='background:#ecfdf5;padding:10px;border-radius:10px;margin:10px 0'>"+msg+"</div>" if msg else ""}
   {"<div style='background:#fef2f2;padding:10px;border-radius:10px;margin:10px 0;color:#991b1b'>"+err+"</div>" if err else ""}
   <table style="width:100%;border-collapse:collapse;background:#fff;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">Código</th><th>Colegio</th><th>Estado</th><th>Motivo</th><th></th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px">Código</th><th>Colegio</th><th>Estado</th><th>Motivo</th><th></th></tr>
     {filas}
   </table>
 </div>
@@ -35506,7 +35571,7 @@ def soporte_impersonar():
   {"<div style='background:#fef2f2;padding:10px;border-radius:10px'>"+err+"</div>" if err else ""}
   <form method="GET" style="margin:12px 0"><input name="q" value="{q}" placeholder="Usuario o rol"><button>Buscar</button></form>
   <table style="width:100%;border-collapse:collapse;background:#fff;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">Usuario</th><th>Rol</th><th>Colegio</th><th></th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px">Usuario</th><th>Rol</th><th>Colegio</th><th></th></tr>
     {filas or '<tr><td colspan=4>Sin resultados</td></tr>'}
   </table>
 </div>
@@ -35572,7 +35637,7 @@ def soporte_logs_errores():
   <h1 style="color:#b91c1c">Consola de logs de error</h1>
   <p style="font-size:13px;color:#64748b">Errores capturados en vivo. Si una secretaria ve pantalla en blanco, revise aquí el mensaje SQL o de código.</p>
   <table style="width:100%;border-collapse:collapse;background:#fff;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">TS</th><th>Nivel</th><th>Mensaje</th><th>Ruta</th><th>Usuario</th><th></th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px">TS</th><th>Nivel</th><th>Mensaje</th><th>Ruta</th><th>Usuario</th><th></th></tr>
     {filas or '<tr><td colspan=6>Sin errores registrados aún</td></tr>'}
   </table>
 </div>
@@ -35706,12 +35771,12 @@ def _capturar_error_sistema(e):
 <title>EduTrack · PROCSIS</title></head>
 <body style="margin:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue','Segoe UI',Roboto,Arial,sans-serif">
 <div style="max-width:520px;margin:12vh auto 0;background:#fff;border-radius:18px;box-shadow:0 12px 40px rgba(15,23,42,.10);padding:36px 30px;text-align:center">
-  <div style="font-size:12px;font-weight:700;letter-spacing:.12em;color:#0B2D57;margin-bottom:14px">EDUTRACK · PROCSIS</div>
-  <h1 style="color:#0B2D57;font-size:24px;margin:0 0 14px">¡Hola! Estamos optimizando tu experiencia</h1>
+  <div style="font-size:12px;font-weight:700;letter-spacing:.12em;color:#0020C2;margin-bottom:14px">EDUTRACK · PROCSIS</div>
+  <h1 style="color:#0020C2;font-size:24px;margin:0 0 14px">¡Hola! Estamos optimizando tu experiencia</h1>
   <p style="color:#334155;line-height:1.6;margin:0 0 12px">En este momento no pudimos validar tus credenciales de acceso. Esto puede deberse a una actualización programada en nuestra infraestructura o a un dato ingresado de forma incorrecta.</p>
   <p style="color:#334155;line-height:1.6;margin:0 0 22px">Por favor, verifica tus datos de inicio de sesión e inténtalo de nuevo. Si el inconveniente persiste, nuestro equipo de soporte técnico e IT está a tu entera disposición para resolverlo de inmediato.</p>
-  <a href="/login" style="display:inline-block;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px">Intentar de nuevo</a>
-  <a href="/" style="display:inline-block;color:#0B2D57;text-decoration:none;font-weight:600;padding:11px 18px">Ir al inicio</a>
+  <a href="/login" style="display:inline-block;background:#0020C2;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px">Intentar de nuevo</a>
+  <a href="/" style="display:inline-block;color:#0020C2;text-decoration:none;font-weight:600;padding:11px 18px">Ir al inicio</a>
   {ref_html}
   {detalle_staff}
 </div></body></html>"""
@@ -35955,19 +36020,19 @@ def gerencia_web_corporativa():
     content = f"""
 <style>
 .gw{{max-width:820px;margin:0 auto;font-family:Segoe UI,system-ui,sans-serif}}
-.gw h1{{margin:0 0 6px;color:#0B2D57}}
+.gw h1{{margin:0 0 6px;color:#0020C2}}
 .gw .sub{{color:#64748b;margin-bottom:16px}}
 .gw .box{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:14px}}
-.gw .box h2{{margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:#0B2D57}}
+.gw .box h2{{margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:#0020C2}}
 .gw label{{display:block;font-weight:700;font-size:13px;margin:10px 0 4px;color:#334155}}
 .gw input,.gw textarea{{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px}}
 .gw textarea{{min-height:72px;resize:vertical}}
 .gw .row{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 @media(max-width:640px){{.gw .row{{grid-template-columns:1fr}}}}
-.gw button{{background:#0B2D57;color:#fff;border:0;padding:12px 22px;border-radius:999px;font-weight:800;cursor:pointer;margin-top:8px}}
+.gw button{{background:#0020C2;color:#fff;border:0;padding:12px 22px;border-radius:999px;font-weight:800;cursor:pointer;margin-top:8px}}
 .gw .msg{{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-weight:600}}
 .gw .hint{{font-size:12px;color:#94a3b8;margin-top:4px}}
-.gw a.back{{color:#0B2D57;font-weight:700;text-decoration:none}}
+.gw a.back{{color:#0020C2;font-weight:700;text-decoration:none}}
 </style>
 <div class="gw">
   <p><a class="back" href="/gerencia/hq">← HQ</a> · <a class="back" href="/procsis" target="_blank">Ver /procsis</a> · <a class="back" href="/portafolio" target="_blank">Ver /portafolio</a></p>
@@ -36179,13 +36244,13 @@ def gerencia_lideres():
     body = (
         '<div style="background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px">'
         '<div style="max-width:800px;margin:0 auto">'
-        '<a href="/gerencia/hq" style="color:#0B2D57;font-weight:700;text-decoration:none">← HQ</a>'
-        '<h1 style="color:#0B2D57">Nuestros líderes (login)</h1>'
+        '<a href="/gerencia/hq" style="color:#0020C2;font-weight:700;text-decoration:none">← HQ</a>'
+        '<h1 style="color:#0020C2">Nuestros líderes (login)</h1>'
         '<p style="color:#64748b;font-size:14px">Fotos, cargo, año de ingreso y biografía. Se muestran al final del login (scroll abajo de novedades y fotos). Editable desde Gerencia o Soporte: /gerencia/lideres · /soporte/lideres</p>'
         + (('<div style="background:#dcfce7;color:#166534;padding:8px;border-radius:8px;margin:8px 0">' + msg + "</div>") if msg else "")
         + (('<div style="background:#fee2e2;color:#991b1b;padding:8px;border-radius:8px;margin:8px 0">' + error + "</div>") if error else "")
         + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0">'
-        + '<h3 style="color:#0B2D57;margin-top:0">Agregar líder</h3>'
+        + '<h3 style="color:#0020C2;margin-top:0">Agregar líder</h3>'
         + '<form method="POST" enctype="multipart/form-data">'
         + '<input type="hidden" name="lider_id" value="0">'
         + '<label style="display:block;font-size:12px;font-weight:700;margin-top:8px">Nombre</label>'
@@ -36201,10 +36266,10 @@ def gerencia_lideres():
         + '<label style="display:block;font-size:12px;font-weight:700;margin-top:8px">Foto</label>'
         + '<input type="file" name="foto" accept="image/*">'
         + '<label style="display:block;margin-top:8px"><input type="checkbox" name="activo" value="1" checked> Visible en login</label>'
-        + '<button type="submit" style="margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800;cursor:pointer">Guardar líder</button>'
+        + '<button type="submit" style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800;cursor:pointer">Guardar líder</button>'
         + "</form></div>"
         + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px">'
-        + "<h3 style=\"color:#0B2D57;margin-top:0\">Equipo actual</h3>"
+        + "<h3 style=\"color:#0020C2;margin-top:0\">Equipo actual</h3>"
         + (cards or "<p style=\"color:#64748b\">Aún no hay líderes.</p>")
         + "</div></div></div>"
     )
@@ -36251,7 +36316,7 @@ def _formulario_conexion_gmail(titulo, descripcion, campo_correo, campo_password
     <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Contraseña de aplicación de Gmail</label>
     <input type="password" name="password" placeholder="{'Dejar en blanco para no cambiarla' if tiene_password else 'xxxx xxxx xxxx xxxx'}" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:6px">
     <p style="font-size:11.5px;color:#64748b;margin:0 0 14px">No es la contraseña normal de la cuenta. Se genera en Google: Cuenta → Seguridad → Verificación en 2 pasos (debe estar activada) → Contraseñas de aplicaciones.</p>
-    <button style="background:#0B2D57;color:#fff;padding:10px 20px;border:0;border-radius:8px;font-weight:700">Guardar conexión</button>
+    <button style="background:#0020C2;color:#fff;padding:10px 20px;border:0;border-radius:8px;font-weight:700">Guardar conexión</button>
   </form>
 </div>
 <div class="role-panel" style="max-width:520px;margin-top:12px">
@@ -36340,8 +36405,8 @@ def gerencia_tesoreria():
         msg = ((msg + " · ") if msg else "") + "⚠ Falta el secreto de eventos de Wompi: sin él, los pagos automáticos NO se aplican (por seguridad)."
     body = f"""
 <div style="max-width:560px;margin:24px auto;font-family:Segoe UI,sans-serif;padding:16px">
-  <a href="/gerencia/hq" style="color:#0B2D57;font-weight:700">← HQ</a>
-  <h1 style="color:#0B2D57">Tesorería · Cuentas y pasarelas</h1>
+  <a href="/gerencia/hq" style="color:#0020C2;font-weight:700">← HQ</a>
+  <h1 style="color:#0020C2">Tesorería · Cuentas y pasarelas</h1>
   <p style="color:#64748b;font-size:13px">Configuración sensible. Use <b>C.C.</b> del titular (sin guion ni dígito de verificación) si recibe en Nequi/cuenta personal. El NIT de empresa se actualizará cuando exista S.A.S.</p>
   {"<p style='color:#16a34a'>"+msg+"</p>" if msg else ""}
   <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
@@ -36365,7 +36430,7 @@ def gerencia_tesoreria():
     <p style="font-size:11px;color:#64748b;margin:0 0 8px">Si se configura, el QR de la factura abrirá este link (pago en línea). Use plantilla con {{valor}} y {{ref}} (ej. REC-0002).</p>
     <label>Events Secret Wompi (opcional)</label>
     <input name="wompi_events_secret" value="{data.get('wompi_events_secret','')}" placeholder="Secret del dashboard Wompi · Eventos" style="width:100%;padding:10px;margin:6px 0">
-    <p style="font-size:11px;color:#0B2D57;margin:0 0 8px;background:#eff6ff;padding:8px;border-radius:8px">
+    <p style="font-size:11px;color:#0020C2;margin:0 0 8px;background:#eff6ff;padding:8px;border-radius:8px">
       <b>Webhook URL para Wompi:</b> <code>{_base_publica()}/api/webhooks/wompi</code><br>
       Al pagar, Wompi notifica APPROVED → el recibo pasa a PAGADO y el colegio se reactiva al día (datos intactos).
     </p>
@@ -36411,8 +36476,8 @@ def gerencia_descuentos():
     )
     body = f"""
 <div style="max-width:720px;margin:24px auto;font-family:Segoe UI,sans-serif;padding:16px">
-  <a href="/gerencia/hq" style="color:#0B2D57;font-weight:700">← HQ</a>
-  <h1 style="color:#0B2D57">Descuentos especiales</h1>
+  <a href="/gerencia/hq" style="color:#0020C2;font-weight:700">← HQ</a>
+  <h1 style="color:#0020C2">Descuentos especiales</h1>
   <p style="color:#64748b;font-size:13px">Ventas propone; solo gerencia autoriza aquí.</p>
   {"<p style='color:#16a34a'>"+msg+"</p>" if msg else ""}
   <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px">
@@ -36422,7 +36487,7 @@ def gerencia_descuentos():
     <button type="submit" style="padding:12px 16px;background:#7c2d12;color:#fff;border:0;border-radius:10px;font-weight:800">Autorizar</button>
   </form>
   <table style="width:100%;background:#fff;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th>Fecha</th><th>Colegio</th><th>%</th><th>Motivo</th><th>Autoriza</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th>Fecha</th><th>Colegio</th><th>%</th><th>Motivo</th><th>Autoriza</th></tr>
     {filas or '<tr><td colspan=5>Sin descuentos</td></tr>'}
   </table>
 </div>
@@ -36716,8 +36781,8 @@ def gerencia_facturacion():
 <style>
 .fx{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;color:#0f172a;padding:20px 16px 40px}}
 .fx-in{{max-width:1040px;margin:0 auto}}
-.fx a.back{{color:#0B2D57;font-weight:700;text-decoration:none;font-size:14px}}
-.fx h1{{color:#0B2D57;font-size:24px;margin:10px 0 6px}}
+.fx a.back{{color:#0020C2;font-weight:700;text-decoration:none;font-size:14px}}
+.fx h1{{color:#0020C2;font-size:24px;margin:10px 0 6px}}
 .fx .sub{{color:#64748b;font-size:14px;margin-bottom:12px;line-height:1.45}}
 .fx-card{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 4px 14px rgba(15,23,42,.05)}}
 .fx label{{display:block;font-size:13px;font-weight:700;color:#334155;margin:10px 0 4px}}
@@ -36725,14 +36790,14 @@ def gerencia_facturacion():
 .fx .row2{{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:end}}
 .fx .chk{{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13px;font-weight:600}}
 .fx .chk label{{font-weight:600;display:flex;align-items:center;gap:6px;margin:0}}
-.fx button.gen{{margin-top:14px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer}}
+.fx button.gen{{margin-top:14px;padding:12px 18px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer}}
 .fx .msg{{background:#dcfce7;color:#166534;padding:10px 12px;border-radius:8px;font-weight:700;margin-bottom:12px}}
 .fx .err{{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:8px;font-weight:700;margin-bottom:12px}}
-.fx .next{{display:inline-block;background:#e0e7ff;color:#0B2D57;font-weight:800;padding:6px 12px;border-radius:999px;font-size:13px;margin-bottom:10px}}
+.fx .next{{display:inline-block;background:#e0e7ff;color:#0020C2;font-weight:800;padding:6px 12px;border-radius:999px;font-size:13px;margin-bottom:10px}}
 .fx table{{width:100%;border-collapse:collapse;font-size:12.5px}}
-.fx th{{background:#0B2D57;color:#fff;padding:10px 8px;text-align:left}}
+.fx th{{background:#0020C2;color:#fff;padding:10px 8px;text-align:left}}
 .fx td{{padding:9px 8px;border-bottom:1px solid #e2e8f0;vertical-align:middle}}
-.fx .btn-ok{{background:#0B2D57;color:#fff;border:0;padding:5px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer}}
+.fx .btn-ok{{background:#0020C2;color:#fff;border:0;padding:5px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer}}
 .fx .btn-pdf{{background:#15803d;color:#fff;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none}}
 .fx .btn-mail{{background:#0369a1;color:#fff;padding:5px 8px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;margin-left:4px}}
 .fx .empty{{text-align:center;color:#64748b;padding:20px}}
@@ -36746,7 +36811,7 @@ def gerencia_facturacion():
   {"<div class='msg'>"+msg+"</div>" if msg else ""}
   {"<div class='err'>"+error+"</div>" if error else ""}
   <div class="fx-card">
-    <h2 style="margin:0 0 8px;font-size:16px;color:#0B2D57">Días de facturación por institución</h2>
+    <h2 style="margin:0 0 8px;font-size:16px;color:#0020C2">Días de facturación por institución</h2>
     <p class="hint">Desde el día en que se activó la licencia (venta / contrato). Se cuenta 1 el mismo día de activación.</p>
     <div style="overflow-x:auto">
       <table>
@@ -36761,7 +36826,7 @@ def gerencia_facturacion():
     </div>
   </div>
   <div class="fx-card">
-    <h2 style="margin:0 0 8px;font-size:16px;color:#0B2D57">Generar recibo</h2>
+    <h2 style="margin:0 0 8px;font-size:16px;color:#0020C2">Generar recibo</h2>
     <form method="POST" id="formRecibo">
       <label>Colegio</label>
       <select name="institucion_id" id="selColegio" required>
@@ -36799,7 +36864,7 @@ def gerencia_facturacion():
     </form>
   </div>
   <div class="fx-card" id="historial">
-    <h2 style="margin:0 0 12px;font-size:16px;color:#0B2D57">Historial de recibos generados</h2>
+    <h2 style="margin:0 0 12px;font-size:16px;color:#0020C2">Historial de recibos generados</h2>
     <div style="overflow-x:auto">
     <table>
       <tr>
@@ -37418,8 +37483,8 @@ def gerencia_limpieza():
 <style>
 .lx{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:24px;color:#0f172a}}
 .lx-in{{max-width:720px;margin:0 auto}}
-.lx a{{color:#0B2D57;font-weight:700;text-decoration:none}}
-.lx h1{{color:#0B2D57}}
+.lx a{{color:#0020C2;font-weight:700;text-decoration:none}}
+.lx h1{{color:#0020C2}}
 .lx .card{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin:14px 0}}
 .lx input,.lx select{{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box}}
 .lx button{{background:#b91c1c;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800;cursor:pointer}}
@@ -37489,14 +37554,14 @@ def gerencia_gastos():
 <style>
 .gg{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px;color:#0f172a}}
 .gg-in{{max-width:640px;margin:0 auto}}
-.gg a{{color:#0B2D57;font-weight:700;text-decoration:none;font-size:14px}}
-.gg h1{{color:#0B2D57;font-size:24px;margin:10px 0}}
+.gg a{{color:#0020C2;font-weight:700;text-decoration:none;font-size:14px}}
+.gg h1{{color:#0020C2;font-size:24px;margin:10px 0}}
 .gg-card{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 14px rgba(15,23,42,.05)}}
 .gg label{{display:block;font-size:14px;font-weight:700;color:#334155;margin:10px 0 4px}}
 .gg input,.gg select{{width:100%;padding:12px;font-size:15px;border:1px solid #e2e8f0;border-radius:10px;box-sizing:border-box;background:#fff}}
-.gg button{{margin-top:14px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:15px}}
+.gg button{{margin-top:14px;padding:12px 18px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:15px}}
 .gg table{{width:100%;border-collapse:collapse;font-size:14px;margin-top:16px;background:#fff;border-radius:12px;overflow:hidden}}
-.gg th{{background:#0B2D57;color:#fff;padding:10px;text-align:left}}
+.gg th{{background:#0020C2;color:#fff;padding:10px;text-align:left}}
 .gg td{{padding:10px;border-bottom:1px solid #e2e8f0}}
 </style>
 <div class="gg"><div class="gg-in">
@@ -37594,7 +37659,7 @@ def gerencia_facturacion_auto_test():
     opts = "".join(f'<option value="{i.id}">{_esc(i.nombre)}</option>' for i in insts)
     body = f"""
 <div style="max-width:720px;margin:20px auto;font-family:Segoe UI,sans-serif;padding:16px">
-  <h1 style="color:#0B2D57">Facturación automática (prueba 5 min)</h1>
+  <h1 style="color:#0020C2">Facturación automática (prueba 5 min)</h1>
   <p style="color:#64748b;font-size:14px">Módulo temporal para validar que al vender un colegio desde Ventas se generen los recibos solos (con descuento del plan si aplica). Desactívelo después de la prueba.</p>
   {"<p style='background:#f0fdf4;padding:10px;border-radius:8px'>"+msg+"</p>" if msg else ""}
   {"<p style='background:#fef2f2;padding:10px;border-radius:8px;color:#b91c1c'>"+err+"</p>" if err else ""}
@@ -37610,7 +37675,7 @@ def gerencia_facturacion_auto_test():
     <form method="POST">
       <input type="hidden" name="accion" value="generar_ahora">
       <select name="institucion_id" required style="width:100%;padding:10px;margin:8px 0;border:1px solid #e2e8f0;border-radius:8px">{opts}</select>
-      <button type="submit" style="padding:12px 16px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800">Generar recibos</button>
+      <button type="submit" style="padding:12px 16px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800">Generar recibos</button>
     </form>
   </div>
   <p style="margin-top:14px"><a href="/gerencia/hq">← HQ Gerencia</a></p>
@@ -37802,7 +37867,7 @@ def gerencia_usuarios():
               <input type="hidden" name="accion" value="renombrar">
               <input type="hidden" name="uid" value="{u.id}">
               <input name="nuevo_usuario" placeholder="Nuevo usuario" value="{_esc(u.usuario)}" style="width:120px;padding:6px;border:1px solid #e2e8f0;border-radius:6px">
-              <button type="submit" style="padding:6px 10px;background:#0B2D57;color:#fff;border:0;border-radius:6px;font-size:12px">Renombrar</button>
+              <button type="submit" style="padding:6px 10px;background:#0020C2;color:#fff;border:0;border-radius:6px;font-size:12px">Renombrar</button>
             </form>
             <form method="POST" style="display:inline-flex;gap:6px;align-items:center;margin-top:4px">
               <input type="hidden" name="accion" value="cambiar_clave">
@@ -37844,16 +37909,16 @@ def gerencia_usuarios():
   <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
     <img src="/static/img/logo-edutrack.png" alt="PROCSIS" style="height:42px;width:auto" onerror="this.style.display='none'">
     <div>
-      <h1 style="margin:0;color:#0B2D57">Gerencia · Equipo y roles</h1>
+      <h1 style="margin:0;color:#0020C2">Gerencia · Equipo y roles</h1>
       <p style="margin:4px 0 0;color:#64748b;font-size:13px">Cree, renombre, desactive o elimine usuarios de Ventas, Soporte, Cobranza y Gerencia</p>
     </div>
-    <a href="/gerencia/equipo-carnes" style="margin-left:auto;background:#0B2D57;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">🪪 Carnés del equipo</a>
+    <a href="/gerencia/equipo-carnes" style="margin-left:auto;background:#0020C2;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">🪪 Carnés del equipo</a>
   </div>
   {"<p style='color:#16a34a;background:#f0fdf4;padding:10px;border-radius:8px'>"+msg+"</p>" if msg else ""}
   {"<p style='color:#b91c1c;background:#fef2f2;padding:10px;border-radius:8px'>"+error+"</p>" if error else ""}
   <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:20px;box-shadow:0 4px 12px rgba(15,23,42,.04)">
     <input type="hidden" name="accion" value="crear">
-    <h3 style="margin:0 0 12px;color:#0B2D57">Crear usuario de la empresa</h3><p style="margin:0 0 12px;font-size:13px;color:#64748b">Gerencia crea <b>una sola vez</b> el usuario de <b>Recursos Humanos</b> y el de <b>Tecnología (TI)</b>. Después, Recursos Humanos solicita cada ingreso y TI crea las credenciales.</p>
+    <h3 style="margin:0 0 12px;color:#0020C2">Crear usuario de la empresa</h3><p style="margin:0 0 12px;font-size:13px;color:#64748b">Gerencia crea <b>una sola vez</b> el usuario de <b>Recursos Humanos</b> y el de <b>Tecnología (TI)</b>. Después, Recursos Humanos solicita cada ingreso y TI crea las credenciales.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div><label style="font-size:13px;font-weight:600">Usuario (login)</label>
       <input name="usuario" required style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
@@ -37866,11 +37931,11 @@ def gerencia_usuarios():
     <select name="rol" style="width:100%;padding:10px;margin:6px 0;border:1px solid #e2e8f0;border-radius:8px">
       {_opciones_roles_unicos_gerencia()}
     </select>
-    <button type="submit" style="margin-top:10px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;cursor:pointer">Crear usuario</button>
+    <button type="submit" style="margin-top:10px;padding:12px 18px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800;cursor:pointer">Crear usuario</button>
   </form>
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto;box-shadow:0 4px 12px rgba(15,23,42,.04)">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <tr style="background:#0B2D57;color:#fff"><th style="padding:10px">ID</th><th style="padding:10px">Usuario</th><th style="padding:10px">Rol</th><th style="padding:10px">Estado</th><th style="padding:10px">Acciones (renombrar / rol / activar)</th></tr>
+      <tr style="background:#0020C2;color:#fff"><th style="padding:10px">ID</th><th style="padding:10px">Usuario</th><th style="padding:10px">Rol</th><th style="padding:10px">Estado</th><th style="padding:10px">Acciones (renombrar / rol / activar)</th></tr>
       {filas or '<tr><td colspan="5" style="padding:16px">Sin usuarios internos aún</td></tr>'}
     </table>
   </div>
@@ -38178,7 +38243,7 @@ def gerencia_datos_empresa():
     </div>
     <p style="font-size:12px;color:#64748b;margin:8px 0 0">El <b>código DANE</b> no aplica a PROCSIS (solo colegios). Se configura en Instituciones / editar colegio.</p>
     <div style="margin-top:18px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
-      <label style="font-weight:800;color:#0B2D57;display:block;margin-bottom:8px">Logo oficial PROCSIS</label>
+      <label style="font-weight:800;color:#0020C2;display:block;margin-bottom:8px">Logo oficial PROCSIS</label>
       <p style="font-size:12px;color:#64748b;margin:0 0 10px">{_esc(logo_nota)}</p>
       <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-width:140px;text-align:center">
@@ -38191,7 +38256,7 @@ def gerencia_datos_empresa():
             style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff">
           <p style="font-size:11px;color:#64748b;margin:8px 0 0">Al elegir el archivo verá la vista previa aquí. Luego pulse <b>Guardar datos y logo</b>.</p>
           <button type="submit" name="accion_logo" value="restablecer_procsis"
-            style="margin-top:8px;background:#0B2D57;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px">
+            style="margin-top:8px;background:#0020C2;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px">
             Restablecer logo PROCSIS ahora
           </button>
         </div>
@@ -38211,7 +38276,7 @@ def gerencia_datos_empresa():
 </script>
       </div>
     </div>
-    <button type="submit" style="margin-top:14px;background:#0B2D57;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer">Guardar datos y logo</button>
+    <button type="submit" style="margin-top:14px;background:#0020C2;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer">Guardar datos y logo</button>
   </form>
 </section>
 """
@@ -38677,9 +38742,9 @@ def parametros_dinamicos():
     body = f"""
 <div style="max-width:920px;margin:20px auto;font-family:Segoe UI,system-ui,sans-serif;padding:16px">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-    <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#0B2D57,#0369a1);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">P</div>
+    <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#0020C2,#0369a1);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">P</div>
     <div>
-      <h1 style="margin:0;color:#0B2D57">Parámetros dinámicos</h1>
+      <h1 style="margin:0;color:#0020C2">Parámetros dinámicos</h1>
       <p style="margin:4px 0 0;color:#64748b;font-size:13px">Active módulos y edite listas sin tocar código ni reiniciar el servidor</p>
     </div>
   </div>
@@ -38687,10 +38752,10 @@ def parametros_dinamicos():
   {"<p style='background:#fef2f2;color:#b91c1c;padding:10px;border-radius:8px'>"+err+"</p>" if err else ""}
 
   <section style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:0 4px 12px rgba(15,23,42,.04)">
-    <h2 style="margin:0 0 10px;font-size:16px;color:#0B2D57">1. Switches de módulos (global)</h2>
+    <h2 style="margin:0 0 10px;font-size:16px;color:#0020C2">1. Switches de módulos (global)</h2>
     <p style="font-size:13px;color:#64748b">Active o desactive funciones para todos los colegios. Para un colegio puntual use el formulario inferior.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Módulo</th><th>Estado</th><th>Acción</th></tr>
+      <tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Módulo</th><th>Estado</th><th>Acción</th></tr>
       {flags_html}
     </table>
     <form method="POST" style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
@@ -38713,26 +38778,26 @@ def parametros_dinamicos():
   </section>
 
   <section style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:0 4px 12px rgba(15,23,42,.04)">
-    <h2 style="margin:0 0 10px;font-size:16px;color:#0B2D57">2. Editor de listas desplegables</h2>
+    <h2 style="margin:0 0 10px;font-size:16px;color:#0020C2">2. Editor de listas desplegables</h2>
     <p style="font-size:13px;color:#64748b">Un ítem por línea. Los formularios de todos los colegios leen esta lista (ej. motivos de retiro SIMAT).</p>
     <form method="POST" style="margin-bottom:16px">
       <input type="hidden" name="accion" value="guardar_lista">
       <input type="hidden" name="clave" value="lista:motivos_retiro">
       <label style="font-weight:700;font-size:13px">Motivos de retiro (SIMAT)</label>
       <textarea name="items" rows="8" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;box-sizing:border-box">{_esc(chr(10).join(motivos_actuales))}</textarea>
-      <button type="submit" style="margin-top:8px;padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar motivos</button>
+      <button type="submit" style="margin-top:8px;padding:10px 16px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar motivos</button>
     </form>
     <form method="POST">
       <input type="hidden" name="accion" value="guardar_lista">
       <input type="hidden" name="clave" value="lista:materias_siee">
       <label style="font-weight:700;font-size:13px">Materias SIEE sugeridas</label>
       <textarea name="items" rows="6" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;box-sizing:border-box">{_esc(chr(10).join(materias_actuales))}</textarea>
-      <button type="submit" style="margin-top:8px;padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar materias</button>
+      <button type="submit" style="margin-top:8px;padding:10px 16px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar materias</button>
     </form>
   </section>
 
   <section style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:14px;padding:16px;margin-bottom:18px">
-    <h2 style="margin:0 0 8px;font-size:16px;color:#0B2D57">3. Plantillas de documentos (PDF)</h2>
+    <h2 style="margin:0 0 8px;font-size:16px;color:#0020C2">3. Plantillas de documentos (PDF)</h2>
     <p style="font-size:13px;color:#64748b;margin:0">Próximamente: subir HTML/CSS de boletín o acta por colegio desde este panel. Mientras tanto use la generación actual de boletines y el diseño institucional del colegio.</p>
   </section>
 
@@ -38902,7 +38967,7 @@ def ventas_notas_interaccion():
     body = f"""
 <style>
 .nc{{max-width:1100px;margin:0 auto;font-family:Segoe UI,system-ui,sans-serif;padding:16px;color:#0f172a}}
-.nc h1{{margin:0 0 6px;color:#0B2D57}}
+.nc h1{{margin:0 0 6px;color:#0020C2}}
 .nc .sub{{color:#64748b;font-size:14px;margin-bottom:14px}}
 .nc .box{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 18px;margin-bottom:14px;box-shadow:0 4px 12px rgba(15,23,42,.04)}}
 .nc label{{display:block;font-weight:700;font-size:12px;margin:8px 0 4px;color:#334155}}
@@ -38910,11 +38975,11 @@ def ventas_notas_interaccion():
 .nc .row{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 .nc .row3{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}}
 @media(max-width:700px){{.nc .row,.nc .row3{{grid-template-columns:1fr}}}}
-.nc button,.nc .btn{{background:#0B2D57;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-block}}
+.nc button,.nc .btn{{background:#0020C2;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-block}}
 .nc .btn-g{{background:#15803d}}
 .nc .btn-o{{background:#b45309}}
 .nc table{{width:100%;border-collapse:collapse;font-size:12px}}
-.nc th{{background:#0B2D57;color:#fff;padding:8px 10px;text-align:left}}
+.nc th{{background:#0020C2;color:#fff;padding:8px 10px;text-align:left}}
 .nc td{{padding:8px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top}}
 .nc tr:nth-child(even) td{{background:#f8fafc}}
 .nc .ok{{background:#ecfdf5;color:#065f46;padding:10px;border-radius:10px;margin-bottom:10px;font-weight:600}}
@@ -38923,7 +38988,7 @@ def ventas_notas_interaccion():
 .nc .filtros > div{{min-width:120px;flex:1}}
 </style>
 <div class="nc">
-  <p><a class="btn" href="{back}" style="background:#e2e8f0;color:#0B2D57">← Volver</a>
+  <p><a class="btn" href="{back}" style="background:#e2e8f0;color:#0020C2">← Volver</a>
      <a class="btn btn-o" href="/retencion">Módulo Retención</a></p>
   <h1>Notas de cliente</h1>
   <p class="sub">Cuando se comunica con un colegio, deje la nota aquí. Se guarda <b>fecha y hora</b> automáticamente.
@@ -38932,7 +38997,7 @@ def ventas_notas_interaccion():
   {"<div class='err'>"+error+"</div>" if error else ""}
 
   <div class="box">
-    <h2 style="margin:0 0 8px;font-size:15px;color:#0B2D57">Registrar comunicación</h2>
+    <h2 style="margin:0 0 8px;font-size:15px;color:#0020C2">Registrar comunicación</h2>
     <form method="POST">
       <div class="row">
         <div>
@@ -38973,7 +39038,7 @@ def ventas_notas_interaccion():
   </div>
 
   <div class="box">
-    <h2 style="margin:0 0 10px;font-size:15px;color:#0B2D57">Historial · filtros</h2>
+    <h2 style="margin:0 0 10px;font-size:15px;color:#0020C2">Historial · filtros</h2>
     <form method="GET" class="filtros">
       <div>
         <label>Tipo</label>
@@ -39227,7 +39292,7 @@ def modulo_retencion():
             acciones += f"""
             <form method="POST" style="display:inline">
               <input type="hidden" name="caso_id" value="{c.id}">
-              <button name="accion" value="ejecutar" style="background:#0B2D57;color:#fff;border:0;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer"
+              <button name="accion" value="ejecutar" style="background:#0020C2;color:#fff;border:0;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer"
                 onclick="return confirm('¿Ejecutar en el sistema (plan/descuento/cancelación)?')">Ejecutar</button>
             </form>"""
         if not es_ejecutor and c.estado in ("EN_VALIDACION", "PENDIENTE"):
@@ -39258,20 +39323,20 @@ def modulo_retencion():
     body = f"""
 <style>
 .rt{{max-width:1100px;margin:0 auto;font-family:Segoe UI,system-ui,sans-serif;padding:16px}}
-.rt h1{{color:#0B2D57;margin:0 0 8px}}
+.rt h1{{color:#0020C2;margin:0 0 8px}}
 .rt .box{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px}}
 .rt label{{display:block;font-weight:700;font-size:12px;margin:8px 0 4px}}
 .rt input,.rt select,.rt textarea{{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:10px}}
 .rt .row{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 .rt .row3{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}}
 @media(max-width:700px){{.rt .row,.rt .row3{{grid-template-columns:1fr}}}}
-.rt button{{background:#0B2D57;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800;cursor:pointer;margin-top:10px}}
+.rt button{{background:#0020C2;color:#fff;border:0;padding:11px 18px;border-radius:10px;font-weight:800;cursor:pointer;margin-top:10px}}
 .rt table{{width:100%;border-collapse:collapse;font-size:12px}}
 .rt th{{background:#7c2d12;color:#fff;padding:8px;text-align:left}}
 .rt td{{padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top}}
 .rt .ok{{background:#ecfdf5;color:#065f46;padding:10px;border-radius:10px;margin-bottom:10px}}
 .rt .err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:10px;margin-bottom:10px}}
-.rt a.btn{{display:inline-block;background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px}}
+.rt a.btn{{display:inline-block;background:#e2e8f0;color:#0020C2;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px}}
 </style>
 <div class="rt">
   <p><a class="btn" href="/notas-cliente">Notas de cliente</a>
@@ -40185,7 +40250,7 @@ def _plan_form_fields(p=None, crear=False):
                   <div><label>Descuento %</label><input name="descuento_pct" type="number" min="0" max="100" step="0.5" value="{float(getattr(p,'descuento_pct',0) or 0)}"></div>
                   <div><label>Duración descuento (meses)</label><input name="descuento_meses" type="number" min="0" max="36" value="{int(getattr(p,'descuento_meses',0) or 0)}"></div>
                 </div>
-                <label style="margin-top:18px;font-size:14px;color:#0B2D57">Funciones de este plan</label>
+                <label style="margin-top:18px;font-size:14px;color:#0020C2">Funciones de este plan</label>
                 <p class="hint">Active o desactive módulos. Excel/PDF/Word siempre incluidos. La vista previa abajo muestra lo que queda activo.</p>
                 <div class="mod-grid">{boxes_html}</div>
                 <div class="mod-preview">
@@ -40198,7 +40263,7 @@ def _plan_form_fields(p=None, crear=False):
                 .mod-item input{{margin-top:2px;flex-shrink:0;width:16px;height:16px}}
                 .mod-item span{{flex:1;text-align:left}}
                 .mod-item.is-on{{border-color:#93c5fd;background:#eff6ff}}
-                .mod-preview{{margin:14px 0 8px;padding:14px;background:#0B2D57;border-radius:12px;color:#fff}}
+                .mod-preview{{margin:14px 0 8px;padding:14px;background:#0020C2;border-radius:12px;color:#fff}}
                 .mod-preview-title{{font-size:12px;font-weight:700;opacity:.85;margin-bottom:10px;letter-spacing:.02em}}
                 .mod-chips{{display:flex;flex-wrap:wrap;gap:6px}}
                 .mod-chip{{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600}}
@@ -40339,20 +40404,20 @@ def gerencia_planes_editar(pid):
 .gpages{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px 16px 40px}}
 .gpages-in{{max-width:720px;margin:0 auto}}
 .pedit{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px}}
-.pedit h1{{margin:0 0 6px;color:#0B2D57;font-size:20px}}
+.pedit h1{{margin:0 0 6px;color:#0020C2;font-size:20px}}
 .pedit label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:10px 0 4px}}
 .pedit input,.pedit textarea{{width:100%;padding:11px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:14px}}
 .row2{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 .hint{{font-size:11px;color:#64748b;margin:4px 0 0}}
 .actions{{margin-top:18px;display:flex;gap:12px;align-items:center}}
-.actions button{{background:#0B2D57;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer}}
+.actions button{{background:#0020C2;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer}}
 .actions a{{color:#64748b;font-size:13px}}
 .msg{{padding:10px;border-radius:8px;margin-bottom:12px;font-weight:600}}
 .ok{{background:#dcfce7;color:#166534}}.err{{background:#fee2e2;color:#991b1b}}
 @media(max-width:640px){{.row2{{grid-template-columns:1fr}}}}
 </style>
 <div class="gpages"><div class="gpages-in">
-  <a href="/gerencia/planes" style="color:#0B2D57;font-weight:700;text-decoration:none;font-size:13px">← Volver a planes</a>
+  <a href="/gerencia/planes" style="color:#0020C2;font-weight:700;text-decoration:none;font-size:13px">← Volver a planes</a>
   <div class="pedit" style="margin-top:12px">
     <h1>Editar: {_esc(p.nombre)}</h1>
     <p style="color:#64748b;font-size:13px;margin:0 0 12px">Código <b>{_esc(p.codigo)}</b> · los cambios se reflejan en ventas y portal público al instante.</p>
@@ -40417,19 +40482,19 @@ def gerencia_planes_nuevo():
 .gpages{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px 16px 40px}}
 .gpages-in{{max-width:720px;margin:0 auto}}
 .pedit{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px}}
-.pedit h1{{margin:0 0 6px;color:#0B2D57;font-size:20px}}
+.pedit h1{{margin:0 0 6px;color:#0020C2;font-size:20px}}
 .pedit label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:10px 0 4px}}
 .pedit input,.pedit textarea{{width:100%;padding:11px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:14px}}
 .row2{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 .hint{{font-size:11px;color:#64748b;margin:4px 0 0}}
 .actions{{margin-top:18px;display:flex;gap:12px;align-items:center}}
-.actions button{{background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer}}
+.actions button{{background:#0020C2;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer}}
 .actions a{{color:#64748b;font-size:13px}}
 .err{{background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-weight:600}}
 @media(max-width:640px){{.row2{{grid-template-columns:1fr}}}}
 </style>
 <div class="gpages"><div class="gpages-in">
-  <a href="/gerencia/planes" style="color:#0B2D57;font-weight:700;text-decoration:none;font-size:13px">← Volver a planes</a>
+  <a href="/gerencia/planes" style="color:#0020C2;font-weight:700;text-decoration:none;font-size:13px">← Volver a planes</a>
   <div class="pedit" style="margin-top:12px">
     <h1>Crear plan nuevo</h1>
     <p style="color:#64748b;font-size:13px;margin:0 0 12px">Solo alta. Luego podrá editar precios, copy de ventas y límites.</p>
@@ -40523,7 +40588,7 @@ def gerencia_beneficios(pid=None):
 <style>
 .bp{{background:#f5f5f7;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px 16px 48px}}
 .bp-in{{max-width:640px;margin:0 auto}}
-.bp h1{{color:#002060;margin:8px 0 4px;font-size:22px;font-weight:700}}
+.bp h1{{color:#0F172A;margin:8px 0 4px;font-size:22px;font-weight:700}}
 .bp .sub{{color:#86868b;font-size:13px;margin:0 0 16px}}
 .bp-form{{background:#fff;border-radius:18px;padding:22px;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 12px rgba(0,0,0,.03)}}
 .bp-form label{{display:block;font-size:12px;font-weight:700;color:#475569;margin:12px 0 4px}}
@@ -40532,7 +40597,7 @@ def gerencia_beneficios(pid=None):
 .row2{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 .hint{{font-size:11px;color:#86868b;margin:4px 0 0}}
 .actions{{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}}
-.actions button{{background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:700;cursor:pointer}}
+.actions button{{background:#0020C2;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:700;cursor:pointer}}
 .actions a{{padding:12px 18px;border-radius:980px;background:#f5f5f7;color:#1d1d1f;text-decoration:none;font-weight:600;font-size:13px}}
 .msg{{padding:12px;border-radius:12px;margin-bottom:12px;font-weight:600;font-size:13px}}
 .ok{{background:#ecfdf5;color:#065f46}}.err{{background:#fef2f2;color:#991b1b}}
@@ -40661,15 +40726,15 @@ def soporte_verificar_pin(token):
     body = f"""
 <div style="min-height:100vh;background:#f4f6f8;display:flex;align-items:center;justify-content:center;font-family:Segoe UI,system-ui,sans-serif">
   <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:360px;width:100%;box-shadow:0 8px 28px rgba(15,23,42,.08)">
-    <h1 style="margin:0 0 8px;font-size:20px;color:#0B2D57;text-align:center">Verificación por PIN</h1>
+    <h1 style="margin:0 0 8px;font-size:20px;color:#0020C2;text-align:center">Verificación por PIN</h1>
     <p style="font-size:13px;color:#64748b;text-align:center;margin:0 0 16px">Enviamos un PIN de 6 dígitos al correo registrado de <b>{nombre}</b>. Escríbalo aquí para continuar.</p>
     {"<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px'>"+error+"</div>" if error else ""}
     <form method="POST">
       <input name="pin" inputmode="numeric" maxlength="6" placeholder="000000" required
         style="width:100%;box-sizing:border-box;padding:12px;font-size:20px;letter-spacing:8px;text-align:center;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px">
-      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer">Validar e ingresar</button>
+      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:800;cursor:pointer">Validar e ingresar</button>
     </form>
-    <p style="text-align:center;margin-top:12px"><a href="/soporte-login" style="font-size:12px;color:#0B2D57">Cancelar y volver al login</a></p>
+    <p style="text-align:center;margin-top:12px"><a href="/soporte-login" style="font-size:12px;color:#0020C2">Cancelar y volver al login</a></p>
   </div>
 </div>
 """
@@ -40690,14 +40755,14 @@ def biometria_esperar(token):
 <style>
 .be{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
 .be-card{{max-width:460px;width:100%;background:#fff;border-radius:20px;padding:32px 28px;box-shadow:0 20px 50px rgba(15,23,42,.1);border:1px solid #e2e8f0;text-align:center}}
-.be-brand{{font-weight:800;color:#0B2D57;font-size:12px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px}}
-.be-card h1{{margin:0 0 10px;color:#0B2D57;font-size:24px}}
-.be-pin{{font-size:40px;letter-spacing:14px;font-weight:800;color:#0B2D57;margin:16px 0;font-family:ui-monospace,Consolas,monospace}}
+.be-brand{{font-weight:800;color:#0020C2;font-size:12px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px}}
+.be-card h1{{margin:0 0 10px;color:#0020C2;font-size:24px}}
+.be-pin{{font-size:40px;letter-spacing:14px;font-weight:800;color:#0020C2;margin:16px 0;font-family:ui-monospace,Consolas,monospace}}
 .be-linkbox{{background:#f1f5f9;border-radius:12px;padding:12px;font-size:12px;word-break:break-all;color:#334155;margin:12px 0}}
 .be-st{{margin-top:16px;padding:14px;border-radius:12px;background:#eff6ff;color:#1e40af;font-weight:700;font-size:14px}}
 .be-ok{{background:#dcfce7;color:#166534}}
 .be-err{{background:#fee2e2;color:#991b1b}}
-.be-msg{{text-align:left;background:#f8fafc;border-left:4px solid #0B2D57;padding:14px;border-radius:8px;font-size:13px;color:#334155;line-height:1.5;margin:14px 0}}
+.be-msg{{text-align:left;background:#f8fafc;border-left:4px solid #0020C2;padding:14px;border-radius:8px;font-size:13px;color:#334155;line-height:1.5;margin:14px 0}}
 </style>
 <div class="be"><div class="be-card">
   <div class="be-brand">Procsis Secure · Validación de identidad</div>
@@ -40819,16 +40884,16 @@ def biometria_validar_link(token):
 .bv-top{{width:100%;background:#fff;border-bottom:1px solid #e5e7eb;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-sizing:border-box}}
 .bv-top img{{height:36px;max-width:120px;object-fit:contain}}
 .bv-who{{text-align:right;font-size:12px;line-height:1.35;color:#64748b}}
-.bv-who b{{display:block;color:#0B2D57;font-size:13px}}
+.bv-who b{{display:block;color:#0020C2;font-size:13px}}
 .bv-wrap{{width:100%;max-width:420px;padding:16px 14px 28px;box-sizing:border-box}}
 .bv-card{{background:#fff;border-radius:16px;padding:22px 18px;box-shadow:0 8px 28px rgba(15,23,42,.08);border:1px solid #e8eef5}}
-.bv-card h1{{margin:0 0 10px;font-size:22px;color:#0B2D57;text-align:center;font-weight:800}}
+.bv-card h1{{margin:0 0 10px;font-size:22px;color:#0020C2;text-align:center;font-weight:800}}
 .bv-card p{{font-size:14px;color:#475569;line-height:1.5;margin:0 0 10px}}
-.bv-check{{display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-size:14px;color:#0B2D57;font-weight:600}}
+.bv-check{{display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-size:14px;color:#0020C2;font-weight:600}}
 .bv-check input{{width:22px;height:22px;margin-top:2px;flex-shrink:0}}
 .bv-btn{{width:100%;padding:14px;border:0;border-radius:10px;font-weight:800;font-size:16px;cursor:pointer}}
 .bv-btn.red{{background:#dc2626;color:#fff}}
-.bv-btn.blue{{background:#0B2D57;color:#fff}}
+.bv-btn.blue{{background:#0020C2;color:#fff}}
 .bv-btn:disabled{{opacity:.4;cursor:not-allowed}}
 .bv-ok{{background:#dcfce7;color:#166534;padding:12px;border-radius:10px;font-weight:700;text-align:center;margin-bottom:10px}}
 .bv-err{{background:#fee2e2;color:#991b1b;padding:12px;border-radius:10px;margin-bottom:10px}}
@@ -40840,8 +40905,8 @@ def biometria_validar_link(token):
 .bv-oval.on{{border-color:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.35)}}
 .bv-hint{{text-align:center;font-size:13px;color:#64748b;font-weight:600;margin:6px 0}}
 .bv-bar{{height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin:8px 0 4px}}
-.bv-bar>i{{display:block;height:100%;width:0%;background:linear-gradient(90deg,#0B2D57,#2563eb)}}
-.bv-pct{{text-align:center;font-size:13px;font-weight:800;color:#0B2D57}}
+.bv-bar>i{{display:block;height:100%;width:0%;background:linear-gradient(90deg,#0020C2,#2563eb)}}
+.bv-pct{{text-align:center;font-size:13px;font-weight:800;color:#0020C2}}
 .bv-pin{{width:100%;padding:12px;font-size:20px;letter-spacing:8px;text-align:center;border:1px solid #e2e8f0;border-radius:10px;box-sizing:border-box;margin:8px 0 4px}}
 #fileCam,.step2{{display:none}}
 .step2.on{{display:block}}
@@ -41177,20 +41242,20 @@ def soporte_login():
     return page("Soporte técnico", f"""
 <style>
 .sp-wrap{{background:#f8fafc;min-height:100vh;font-family:Segoe UI,system-ui,Arial,sans-serif}}
-.sp-nav{{background:#0B2D57;color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center}}
+.sp-nav{{background:#0020C2;color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center}}
 .sp-nav a{{color:#93c5fd;text-decoration:none;font-weight:700;margin-left:12px;font-size:13px}}
 .sp-grid{{max-width:960px;margin:0 auto;padding:32px 20px;display:grid;grid-template-columns:1fr 1fr;gap:24px}}
 @media(max-width:800px){{.sp-grid{{grid-template-columns:1fr}}}}
-.sp-info{{background:linear-gradient(160deg,#0f172a,#0B2D57);color:#fff;border-radius:18px;padding:32px;box-shadow:0 12px 32px rgba(15,23,42,.15)}}
+.sp-info{{background:linear-gradient(160deg,#0f172a,#0020C2);color:#fff;border-radius:18px;padding:32px;box-shadow:0 12px 32px rgba(15,23,42,.15)}}
 .sp-info h2{{margin:0 0 10px;font-size:26px}}
 .sp-info p{{opacity:.92;line-height:1.5;font-size:14px}}
 .sp-info ul{{margin:14px 0 0;padding-left:18px;font-size:13px;line-height:1.55;opacity:.95}}
 .sp-card{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 6px 20px rgba(15,23,42,.06)}}
-.sp-card h1{{margin:0 0 6px;color:#0B2D57;font-size:22px}}
+.sp-card h1{{margin:0 0 6px;color:#0020C2;font-size:22px}}
 .sp-card .sub{{color:#64748b;font-size:13px;margin-bottom:14px}}
 .sp-card label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}}
 .sp-card input{{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}}
-.sp-card button{{width:100%;margin-top:14px;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer}}
+.sp-card button{{width:100%;margin-top:14px;padding:13px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:800;cursor:pointer}}
 .sp-links{{margin-top:14px;text-align:center;font-size:13px}}
 .sp-links a{{color:#1e3a8a;text-decoration:none;font-weight:700;margin:0 8px}}
 .sp-foot{{text-align:center;padding:16px;color:#94a3b8;font-size:12px}}
@@ -41644,19 +41709,19 @@ def gerencia_reportes():
     body = f"""
 <style>
 .gr{{background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;color:#0f172a}}
-.gr-top{{background:linear-gradient(135deg,#0B2D57,#0f172a);color:#fff;padding:22px 24px}}
+.gr-top{{background:linear-gradient(135deg,#0020C2,#0f172a);color:#fff;padding:22px 24px}}
 .gr-top h1{{margin:4px 0 0;font-size:24px}}
 .gr-top .sub{{opacity:.85;font-size:13px}}
 .gr-wrap{{max-width:1180px;margin:0 auto;padding:16px}}
 .gr-toolbar{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center}}
 .gr-toolbar a,.gr-toolbar .btn{{display:inline-block;padding:9px 14px;border-radius:9px;font-weight:700;font-size:12px;text-decoration:none;border:0;cursor:pointer}}
 .gr-toolbar .p{{background:#e2e8f0;color:#0f172a}}
-.gr-toolbar .p.on{{background:#0B2D57;color:#fff}}
+.gr-toolbar .p.on{{background:#0020C2;color:#fff}}
 .gr-toolbar .ex{{background:#15803d;color:#fff}}
 .gr-toolbar .pd{{background:#b91c1c;color:#fff}}
-.gr-toolbar .bk{{background:#fff;color:#0B2D57;border:1px solid #cbd5e1}}
+.gr-toolbar .bk{{background:#fff;color:#0020C2;border:1px solid #cbd5e1}}
 .sec{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 18px;margin-bottom:14px;box-shadow:0 4px 14px rgba(15,23,42,.04)}}
-.sec h2{{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#0B2D57}}
+.sec h2{{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#0020C2}}
 .kpis{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}}
 .kpi{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px}}
 .kpi .l{{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase}}
@@ -41668,7 +41733,7 @@ def gerencia_reportes():
 .chart-box h3{{margin:0 0 8px;font-size:13px;color:#334155}}
 .badge{{display:inline-block;background:#e0e7ff;color:#1e3a8a;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}}
 table.rep{{width:100%;border-collapse:collapse;font-size:13px}}
-table.rep th{{background:#0B2D57;color:#fff;padding:8px 10px;text-align:left}}
+table.rep th{{background:#0020C2;color:#fff;padding:8px 10px;text-align:left}}
 table.rep td{{padding:8px 10px;border-bottom:1px solid #e2e8f0}}
 table.rep tr:nth-child(even) td{{background:#f8fafc}}
 </style>
@@ -41759,7 +41824,7 @@ const labels = {chart_labels};
 const cobrado = {chart_cobrado};
 const gastos = {chart_gastos};
 const altas = {chart_altas};
-const blue = '#0B2D57', green = '#15803d', red = '#b91c1c', teal = '#0f766e';
+const blue = '#0020C2', green = '#15803d', red = '#b91c1c', teal = '#0f766e';
 new Chart(document.getElementById('chartFin'), {{
   type: 'bar',
   data: {{
@@ -41779,7 +41844,7 @@ new Chart(document.getElementById('chartAltas'), {{
   type: 'line',
   data: {{
     labels,
-    datasets: [{{ label: 'Altas / implementaciones', data: altas, borderColor: blue, backgroundColor: 'rgba(11,45,87,.12)', fill: true, tension: 0.3, pointRadius: 4 }}]
+    datasets: [{{ label: 'Altas / implementaciones', data: altas, borderColor: blue, backgroundColor: 'rgba(0,32,194,.12)', fill: true, tension: 0.3, pointRadius: 4 }}]
   }},
   options: {{ responsive: true, plugins: {{ legend: {{ position: 'bottom' }} }}, scales: {{ y: {{ beginAtZero: true, ticks: {{ stepSize: 1 }} }} }} }}
 }});
@@ -42380,39 +42445,39 @@ def _modulos_por_rol(rol):
     rol = (rol or "").strip()
     # Soporte = operación técnica pura (sin reglas de negocio ni RRHH interno)
     soporte = [
-        ("Información Institucional", "/soporte/info-institucional", "#0B2D57"),
+        ("Información Institucional", "/soporte/info-institucional", "#0020C2"),
         ("Suplantar usuario", "/soporte/impersonar", "#0f766e"),
         ("Resetear contraseñas", "/soporte/reset-clave", "#b45309"),
         ("Usuarios · activo / eliminar", "/usuarios", "#b91c1c"),
         ("Logs de errores", "/soporte/logs-errores", "#b91c1c"),
         ("Prórroga 24h", "/soporte/prorroga", "#7c2d12"),
-        ("Instituciones (ver)", "/tenants", "#1d4ed8"),
+        ("Instituciones (ver)", "/tenants", "#0020C2"),
         ("Bloqueo y Seguridad", "/soporte/info-institucional", "#dc2626"),
-        ("Centro PQR / tickets", "/soporte/pqr", "#1d4ed8"),
-        ("📅 Calendario escolar", "/calendario", "#0B2D57"),
+        ("Centro PQR / tickets", "/soporte/pqr", "#0020C2"),
+        ("📅 Calendario escolar", "/calendario", "#0020C2"),
         ("💬 Inbox WhatsApp", "/whatsapp/inbox?canal=soporte", "#25D366"),
-        ("Radicar PQR interna", "/soporte/pqr/crear", "#1d4ed8"),
-        ("Consulta PQR validada", "/soporte/pqr/consulta", "#1d4ed8"),
+        ("Radicar PQR interna", "/soporte/pqr/crear", "#0020C2"),
+        ("Consulta PQR validada", "/soporte/pqr/consulta", "#0020C2"),
         ("💙 Fidelización CSAT", "/soporte/fidelizacion", "#0d9488"),
         ("Aperturas de notas", "/soporte/aperturas-notas", "#b45309"),
-        ("Actualizaciones / FAQ / Ayuda", "/soporte/actualizaciones", "#1d4ed8"),
-        ("Servidores", "/servidores", "#1d4ed8"),
+        ("Actualizaciones / FAQ / Ayuda", "/soporte/actualizaciones", "#0020C2"),
+        ("Servidores", "/servidores", "#0020C2"),
         ("Planilla accesos Excel", "/soporte/planilla-accesos", "#0f766e"),
         ("Seguridad empleados", "/soporte/seguridad-empleados", "#7c2d12"),
-        ("👥 Turnos", "/soporte/turnos", "#0B2D57"),
+        ("👥 Turnos", "/soporte/turnos", "#0020C2"),
         ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
-        ("Support", "/support", "#005BEA"),
-        ("Redactar en Support", "/support/editor", "#005BEA"),
+        ("Support", "/support", "#0020C2"),
+        ("Redactar en Support", "/support/editor", "#0020C2"),
         ("Vista contacto público", "/contacto", "#0f766e"),
-        ("Buscar planes", "/planes/buscar", "#1d4ed8"),
-        ("Planes activos / vendidos", "/soporte/planes-vendidos", "#1d4ed8"),
-        ("🗺️ Mapa de ubicaciones", "/mapa", "#0071e3"),
+        ("Buscar planes", "/planes/buscar", "#0020C2"),
+        ("Planes activos / vendidos", "/soporte/planes-vendidos", "#0020C2"),
+        ("🗺️ Mapa de ubicaciones", "/mapa", "#0020C2"),
         ("Auditoría de colegios", "/soporte/auditoria-colegios", "#64748b"),
-        ("Periodos por colegio (3/4)", "/soporte/periodos-colegio", "#0B2D57"),
+        ("Periodos por colegio (3/4)", "/soporte/periodos-colegio", "#0020C2"),
     ]
     ventas = [
-        ("📅 Calendario escolar", "/calendario", "#0B2D57"),
-        ("CRM · Embudo", "/ventas/crm", "#1d4ed8"),
+        ("📅 Calendario escolar", "/calendario", "#0020C2"),
+        ("CRM · Embudo", "/ventas/crm", "#0020C2"),
         ("Solicitudes web", "/ventas/solicitudes", "#dc2626"),
         ("Crear link demo", "/ventas/panel", "#15803d"),
         ("Demos caducidad", "/ventas/demos", "#0f766e"),
@@ -42428,55 +42493,55 @@ def _modulos_por_rol(rol):
         ("Generar contrato digital", "/ventas/contrato-digital", "#7c2d12"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
         ("Instituciones (ver / registrar)", "/tenants", "#64748b"),
-        ("👥 Turnos", "/ventas/turnos", "#0B2D57"),
-        ("🗺️ Mapa de ubicaciones", "/mapa", "#0071e3"),
+        ("👥 Turnos", "/ventas/turnos", "#0020C2"),
+        ("🗺️ Mapa de ubicaciones", "/mapa", "#0020C2"),
         ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
     ]
     gerencia = ventas + [
-        ("PROCSIS HQ", "/gerencia/hq", "#0B2D57"),
+        ("PROCSIS HQ", "/gerencia/hq", "#0020C2"),
         ("💙 Fidelización CSAT", "/gerencia/fidelizacion", "#0d9488"),
-        ("📊 Reportes de pago", "/gerencia/reportes-pago", "#0B2D57"),
-        ("Anuncios globales", "/gerencia/anuncios", "#0B2D57"),
-        ("📍 Sedes y puntos de atención", "/gerencia/puntos-atencion", "#0071e3"),
-        ("Marca global", "/soporte/marca", "#0B2D57"),
+        ("📊 Reportes de pago", "/gerencia/reportes-pago", "#0020C2"),
+        ("Anuncios globales", "/gerencia/anuncios", "#0020C2"),
+        ("📍 Sedes y puntos de atención", "/gerencia/puntos-atencion", "#0020C2"),
+        ("Marca global", "/soporte/marca", "#0020C2"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
-        ("Editar planes", "/gerencia/planes", "#0B2D57"),
-        ("📒 Contabilidad comercial", "/gerencia/contabilidad", "#0B2D57"),
-        ("Clientes y proveedores", "/gerencia/contabilidad/partes", "#1d4ed8"),
+        ("Editar planes", "/gerencia/planes", "#0020C2"),
+        ("📒 Contabilidad comercial", "/gerencia/contabilidad", "#0020C2"),
+        ("Clientes y proveedores", "/gerencia/contabilidad/partes", "#0020C2"),
         ("Trabajadores", "/gerencia/contabilidad/trabajadores", "#7c2d12"),
         ("Feature flags", "/feature_flags", "#7c2d12"),
         ("Equipo Procsis", "/soporte/equipo", "#7c2d12"),
         ("Kit RRHH / seguridad", "/soporte/rrhh", "#7c2d12"),
-        ("Crear usuarios Ventas/Soporte", "/gerencia/usuarios", "#0B2D57"),
+        ("Crear usuarios Ventas/Soporte", "/gerencia/usuarios", "#0020C2"),
         ("💳 Facturación y Cobranza", "/gerencia/facturacion-cobranza", "#b45309"),
         ("📧 Correo de Soporte", "/gerencia/correo-soporte", "#0f766e"),
         ("📧 Correo de Notificaciones", "/gerencia/correo-notificaciones", "#0f766e"),
         ("📧 Correo adicional 1", "/gerencia/correo-extra/1", "#0f766e"),
         ("📧 Correo adicional 2", "/gerencia/correo-extra/2", "#0f766e"),
         ("📧 Correo adicional 3", "/gerencia/correo-extra/3", "#0f766e"),
-        ("📨 Notificaciones", "/gerencia/notificaciones", "#005BEA"),
+        ("📨 Notificaciones", "/gerencia/notificaciones", "#0020C2"),
         ("🔌 Mesa de Conexión API (WATI)", "/gerencia/wati-conexion", "#25D366"),
         ("🧠 Conectores IA (EduAura)", "/gerencia/eduaura-ia", "#7c3aed"),
         ("📚 Base de conocimiento de Aura", "/gerencia/base-conocimiento-aura", "#7c3aed"),
         ("⚖️ Recursos y apelaciones PQRS", "/gerencia/pqr-apelaciones", "#5b21b6"),
-        ("🏢 Datos de la empresa", "/gerencia/datos-empresa", "#0B2D57"),
+        ("🏢 Datos de la empresa", "/gerencia/datos-empresa", "#0020C2"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
-        ("Facturación", "/gerencia/facturacion", "#0B2D57"),
-        ("Gastos", "/gerencia/gastos", "#0B2D57"),
+        ("Facturación", "/gerencia/facturacion", "#0020C2"),
+        ("Gastos", "/gerencia/gastos", "#0020C2"),
         ("Notas de cliente", "/notas-cliente", "#0f766e"),
         ("Retención (validar)", "/retencion", "#7c2d12"),
         ("Cancelaciones de servicio", "/gerencia/cancelaciones", "#7c2d12"),
         ("Cancelaciones técnicas", "/soporte/cancelaciones", "#64748b"),
-        ("Soporte completo", "/soporte_admin", "#0B2D57"),
+        ("Soporte completo", "/soporte_admin", "#0020C2"),
     ]
     cobranza = [
-        ("Panel cobranza", "/cobranza/panel", "#0B2D57"),
+        ("Panel cobranza", "/cobranza/panel", "#0020C2"),
         ("Facturación y Cobranza", "/gerencia/facturacion-cobranza", "#b45309"),
         ("💙 Fidelización CSAT", "/cobranza/fidelizacion", "#0d9488"),
         ("Licencias y cobros", "/soporte/licencias", "#0f766e"),
-        ("Instituciones", "/tenants", "#1d4ed8"),
-        ("👥 Turnos", "/cobranza/turnos", "#0B2D57"),
-        ("📒 Contabilidad comercial", "/cobranza/contabilidad", "#0B2D57"),
+        ("Instituciones", "/tenants", "#0020C2"),
+        ("👥 Turnos", "/cobranza/turnos", "#0020C2"),
+        ("📒 Contabilidad comercial", "/cobranza/contabilidad", "#0020C2"),
         ("Cerrar turno", "/cerrar-turno", "#b91c1c"),
         ("👤 Mi perfil", "/mi-perfil", "#334155"),
     ]
@@ -42503,7 +42568,7 @@ def _html_modulos_rol(rol):
         primary = es_ventas and ("Crear link" in lab or "link demo" in lab.lower())
         if es_ventas:
             if primary:
-                st = "background:#005BEA;color:#fff;border-radius:980px;font-weight:600;font-size:12px;padding:10px 16px;text-align:center;text-decoration:none;display:inline-block;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"
+                st = "background:#0020C2;color:#fff;border-radius:980px;font-weight:600;font-size:12px;padding:10px 16px;text-align:center;text-decoration:none;display:inline-block;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"
             else:
                 st = "background:#f5f5f7;color:#1d1d1f;border-radius:980px;font-weight:500;font-size:12px;padding:10px 16px;text-align:center;text-decoration:none;display:inline-block;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;border:1px solid rgba(0,0,0,.04)"
             btns.append(f'<a href="{href}" style="{st}">{lab}</a>')
@@ -42512,7 +42577,7 @@ def _html_modulos_rol(rol):
     btns_html = "".join(btns)
     return f"""
 <section class="role-panel" style="margin:0 0 12px 0;padding:20px 18px;border-radius:20px;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 12px rgba(0,0,0,.03);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
-  <h2 style="margin:0 0 4px;font-size:13px;color:#002060;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Módulos · {titulo}</h2>
+  <h2 style="margin:0 0 4px;font-size:13px;color:#0F172A;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Módulos · {titulo}</h2>
   <p class="mini-text" style="margin:0 0 14px;color:#86868b;font-size:12px">Accesos según su rol (<b>{rol or 'Soporte'}</b>). Soporte = operación técnica · Ventas = clientes y planes.</p>
   <div style="display:flex;flex-wrap:wrap;gap:8px">
     {btns_html}
@@ -42595,7 +42660,7 @@ def soporte_info_institucional():
 <div class="role-panel">
   <form method="GET" style="display:flex;gap:8px">
     <input name="q" value="{_esc(q)}" placeholder="Buscar por código DANE, NIT o nombre del colegio" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
-    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
+    <button style="background:#0020C2;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
   </form>
 </div>
 {r_html}
@@ -42700,7 +42765,7 @@ def soporte_aprovisionamiento():
             <form method="POST"><input type="hidden" name="q" value="{_esc(q)}"><input type="hidden" name="accion" value="limpiar_cache">
               <button style="background:#0f766e;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700">🧹 Limpiar caché del servidor</button></form>
             <form method="POST"><input type="hidden" name="q" value="{_esc(q)}"><input type="hidden" name="accion" value="resync_alumnos">
-              <button style="background:#1d4ed8;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700">🔄 Re-sincronizar base de alumnos</button></form>
+              <button style="background:#0020C2;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700">🔄 Re-sincronizar base de alumnos</button></form>
             <form method="POST"><input type="hidden" name="q" value="{_esc(q)}"><input type="hidden" name="accion" value="reset_permisos_docentes">
               <button style="background:#7c2d12;color:#fff;padding:10px 14px;border:0;border-radius:8px;font-weight:700">👩‍🏫 Reiniciar permisos de profesores</button></form>
           </div>
@@ -42716,7 +42781,7 @@ def soporte_aprovisionamiento():
 <div class="role-panel">
   <form method="GET" style="display:flex;gap:8px">
     <input name="q" value="{_esc(q)}" placeholder="Buscar por código DANE, NIT o nombre del colegio" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
-    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
+    <button style="background:#0020C2;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
   </form>
 </div>
 {r_html}
@@ -42820,7 +42885,7 @@ def soporte_bloqueo_seguridad():
 <div class="role-panel">
   <form method="GET" style="display:flex;gap:8px">
     <input name="q" value="{_esc(q)}" placeholder="Buscar por código DANE, NIT o nombre del colegio" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
-    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
+    <button style="background:#0020C2;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Buscar</button>
   </form>
 </div>
 {r_html}
@@ -42864,7 +42929,7 @@ def soporte_colegio_auditoria(iid=None):
         '<form method="GET" action="/soporte/colegio" style="display:flex;gap:10px;margin:16px 0;flex-wrap:wrap">'
         '<input name="q" value="' + _esc(q) + '" placeholder="Buscar colegio, codigo o NIT" '
         'style="flex:1;min-width:200px;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px">'
-        '<button type="submit" style="background:#005BEA;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:600;cursor:pointer">Buscar</button></form>'
+        '<button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 20px;border-radius:980px;font-weight:600;cursor:pointer">Buscar</button></form>'
     )
     card = ""
     if inst:
@@ -42901,8 +42966,8 @@ def soporte_colegio_auditoria(iid=None):
             logo_html = '<img src="' + _esc(logo) + '" alt="logo" style="width:56px;height:56px;object-fit:contain;border-radius:12px;background:#f5f5f7">'
         if nombre_promo and not flag_plena and neto:
             promo_html = (
-                '<div style="margin-top:14px;padding:12px 14px;background:rgba(0,91,234,.06);border-radius:12px">'
-                '<div style="font-size:13px;font-weight:600;color:#005BEA">Promocion activa: ' + _esc(nombre_promo)
+                '<div style="margin-top:14px;padding:12px 14px;background:rgba(0,32,194,.06);border-radius:12px">'
+                '<div style="font-size:13px;font-weight:600;color:#0020C2">Promocion activa: ' + _esc(nombre_promo)
                 + " (" + str(pct) + "%)</div>"
                 '<div style="font-size:13px;color:#1d1d1f;margin-top:4px">Paga <b>$'
                 + "{:,.0f}".format(neto).replace(",", ".")
@@ -42925,7 +42990,7 @@ def soporte_colegio_auditoria(iid=None):
             'border:1px solid rgba(0,0,0,.02);max-width:560px">'
             '<div style="display:flex;gap:14px;align-items:center">' + logo_html
             + '<div><div style="font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase">Estado de identidad</div>'
-            '<div style="font-size:18px;font-weight:700;color:#002060">' + _esc(inst.nombre or "")
+            '<div style="font-size:18px;font-weight:700;color:#0F172A">' + _esc(inst.nombre or "")
             + (" — VALIDADO" if ok else " — " + _esc(badge)) + "</div>"
             '<div style="font-size:12px;color:#86868b;margin-top:4px">NIT ' + _esc(inst.nit or "—")
             + " · DANE " + _esc(inst.dane or "—") + " · Codigo " + _esc(inst.codigo or "—")
@@ -42937,7 +43002,7 @@ def soporte_colegio_auditoria(iid=None):
     body = (
         '<div style="max-width:900px;margin:0 auto;padding:24px;font-family:-apple-system,sans-serif">'
         '<a href="/soporte_admin" style="color:#86868b;font-size:13px">&larr; Soporte</a>'
-        '<h1 style="color:#002060;margin:8px 0">Auditoria de colegio / ofertas</h1>'
+        '<h1 style="color:#0F172A;margin:8px 0">Auditoria de colegio / ofertas</h1>'
         '<p style="color:#86868b;font-size:13px;margin:0">Identidad, descuento activo y caducidad a tarifa plena.</p>'
         + search_html + card + "</div>"
     )
@@ -42970,7 +43035,7 @@ def soporte_admin():
                 inst_nom = (t.nombre_colegio or t.razon_social or "—")[:50]
                 filas_tk += (
                     f"<tr>"
-                    f"<td style='font-weight:800;color:#0B2D57'>{_esc(t.ticket or t.radicado)}</td>"
+                    f"<td style='font-weight:800;color:#0020C2'>{_esc(t.ticket or t.radicado)}</td>"
                     f"<td>{_esc(inst_nom)}</td>"
                     f"<td>{_esc(contacto)}</td>"
                     f"<td>{_esc(falla)}</td>"
@@ -42998,8 +43063,8 @@ def soporte_admin():
   </div>
 </section>
 
-<section style="background:#fff;border:2px solid #0B2D57;border-radius:10px;overflow:hidden;margin-bottom:14px">
-  <div style="background:#0B2D57;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE SOPORTE TÉCNICO · CASOS</div>
+<section style="background:#fff;border:2px solid #0020C2;border-radius:10px;overflow:hidden;margin-bottom:14px">
+  <div style="background:#0020C2;color:#fff;padding:8px 12px;font-weight:800;font-size:13px;letter-spacing:.04em">DETALLE SOPORTE TÉCNICO · CASOS</div>
   <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12.5px;font-family:Segoe UI,Tahoma,sans-serif">
       <tr style="background:#1e40af;color:#fff">
@@ -43013,30 +43078,30 @@ def soporte_admin():
     </table>
   </div>
   <div style="padding:8px 12px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px">
-    <a href="/soporte/pqr" style="font-weight:700;color:#0B2D57">Abrir centro PQR completo →</a>
+    <a href="/soporte/pqr" style="font-weight:700;color:#0020C2">Abrir centro PQR completo →</a>
     · <a href="/soporte/logs-errores" style="font-weight:700;color:#7c3aed">Bugs / escalamiento →</a>
     · <a href="/soporte/fidelizacion" style="font-weight:700;color:#0d9488">💙 Fidelización CSAT →</a>
   </div>
 </section>
 
 
-<section class="role-panel" style="margin-bottom:14px;border-top:4px solid #0B2D57">
-  <h2 style="margin:0 0 6px;font-size:15px;color:#0B2D57;text-transform:uppercase;letter-spacing:.04em">Módulos operativos · Soporte PROCSIS</h2>
+<section class="role-panel" style="margin-bottom:14px;border-top:4px solid #0020C2">
+  <h2 style="margin:0 0 6px;font-size:15px;color:#0020C2;text-transform:uppercase;letter-spacing:.04em">Módulos operativos · Soporte PROCSIS</h2>
   <p class="mini-text" style="margin:0 0 12px">Accesos directos para asesores. Todo lo técnico del día a día en un solo lugar.</p>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px">
-    <a class="btn" href="/soporte/pqr" style="background:#1d4ed8;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🎫 Centro PQR</a>
+    <a class="btn" href="/soporte/pqr" style="background:#0020C2;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🎫 Centro PQR</a>
     <a class="btn" href="/soporte/pqr/crear" style="background:#1e40af;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">➕ Radicar PQR</a>
     <a class="btn" href="/soporte/fidelizacion" style="background:#0d9488;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">💙 CSAT / Fidelización</a>
     <a class="btn" href="/usuarios" style="background:#b91c1c;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">👥 Usuarios</a>
-    <a class="btn" href="/soporte/reinicio-acceso" style="background:#0B2D57;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🔑 Reinicio acceso</a>
+    <a class="btn" href="/soporte/reinicio-acceso" style="background:#0020C2;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🔑 Reinicio acceso</a>
     <a class="btn" href="/soporte/reset-clave" style="background:#b45309;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🔐 Restablecer clave</a>
     <a class="btn" href="/soporte/impersonar" style="background:#0f766e;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🎭 Impersonar</a>
     <a class="btn" href="/interno/buscar-colegio" style="background:#334155;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🔍 Buscar colegio</a>
-    <a class="btn" href="/tenants" style="background:#1d4ed8;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🏫 Instituciones</a>
-    <a class="btn" href="/soporte/info-institucional" style="background:#0B2D57;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📋 Info institucional</a>
+    <a class="btn" href="/tenants" style="background:#0020C2;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🏫 Instituciones</a>
+    <a class="btn" href="/soporte/info-institucional" style="background:#0020C2;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📋 Info institucional</a>
     <a class="btn" href="/soporte/aperturas-notas" style="background:#b45309;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📝 Aperturas notas</a>
     <a class="btn" href="/soporte/prorroga" style="background:#7c2d12;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📅 Prórroga 24h</a>
-    <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📆 Periodos 3/4</a>
+    <a class="btn" href="/soporte/periodos-colegio" style="background:#0020C2;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">📆 Periodos 3/4</a>
     <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">🚨 Logs errores</a>
     <a class="btn" href="/soporte/actualizaciones" style="background:#0d9488;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">❓ Preguntas frecuentes / Ayuda</a>
     <a class="btn" href="/mi-perfil" style="background:#334155;text-align:center;padding:12px 8px;font-size:12px;font-weight:800">👤 Mi perfil</a>
@@ -43054,7 +43119,7 @@ def soporte_admin():
 <section class="role-panel" style="margin-bottom:14px">
   <h2 style="margin:0 0 10px">⚙️ Permisos escolares</h2>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-    <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;color:#fff">Periodos / fechas</a>
+    <a class="btn" href="/soporte/periodos-colegio" style="background:#0020C2;color:#fff">Periodos / fechas</a>
     <a class="btn" href="/soporte/aperturas-notas" style="background:#334155;color:#fff">Aperturas de notas</a>
     <a class="btn" href="/soporte/prorroga" style="background:#475569;color:#fff">Prórrogas</a>
   </div>
@@ -43062,9 +43127,9 @@ def soporte_admin():
 <section class="role-panel">
   <h2 style="margin:0 0 10px">🏫 Instituciones</h2>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-    <a class="btn" href="/interno/buscar-colegio" style="background:#0B2D57;color:#fff">🔍 Buscar colegio</a>
+    <a class="btn" href="/interno/buscar-colegio" style="background:#0020C2;color:#fff">🔍 Buscar colegio</a>
     <a class="btn" href="/tenants" style="background:#334155;color:#fff">Ver instituciones</a>
-    <a class="btn" href="/soporte/info-institucional" style="background:#1d4ed8;color:#fff">📋 Información institucional</a>
+    <a class="btn" href="/soporte/info-institucional" style="background:#0020C2;color:#fff">📋 Información institucional</a>
     <a class="btn" href="/soporte/aprovisionamiento" style="background:#0f766e;color:#fff">🛠️ Aprovisionamiento escolar</a>
     <a class="btn" href="/soporte/bloqueo-seguridad" style="background:#b91c1c;color:#fff">🔒 Bloqueo y seguridad</a>
   </div>
@@ -43115,7 +43180,7 @@ def soporte_admin():
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a class="btn" href="/soporte/impersonar" style="background:#0f766e;color:#fff">🎭 Suplantar</a>
     <a class="btn" href="/soporte/reset-clave" style="background:#b45309;color:#fff">🔑 Reset clave</a>
-    <a class="btn" href="/soporte/periodos-colegio" style="background:#0B2D57;color:#fff">📅 Periodos 3/4</a>
+    <a class="btn" href="/soporte/periodos-colegio" style="background:#0020C2;color:#fff">📅 Periodos 3/4</a>
     <a class="btn" href="/usuarios" style="background:#b91c1c;color:#fff;font-weight:800">👥 Usuarios · eliminar</a>
     <a class="btn" href="/soporte/logs-errores" style="background:#7c2d12;color:#fff">🚨 Logs</a>
     <a class="btn" href="/soporte/prorroga" style="background:#1e3a5f;color:#fff;border:1px solid #fff3">📅 Prórroga 24h</a>
@@ -43670,7 +43735,7 @@ def soporte_equipo_carnet(id):
     qr = qrcode.QRCode(version=1, box_size=8, border=1)
     qr.add_data(f"PROCSIS|{p.codigo}|{p.documento}|{p.nombre}")
     qr.make(fit=True)
-    img = qr.make_image(fill_color="#0B2D57", back_color="white")
+    img = qr.make_image(fill_color="#0020C2", back_color="white")
     buf = _io.BytesIO()
     img.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
@@ -43701,8 +43766,8 @@ body {{
 }}
 .toolbar a, .toolbar button {{
   appearance: none; border: 0; cursor: pointer; text-decoration: none;
-  background: #0B2D57; color: #fff; font-weight: 700; font-size: 13px;
-  padding: 11px 20px; border-radius: 12px; box-shadow: 0 4px 14px rgba(11,45,87,.25);
+  background: #0020C2; color: #fff; font-weight: 700; font-size: 13px;
+  padding: 11px 20px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,32,194,.25);
 }}
 .toolbar a.sec {{ background: #334155; }}
 .stage {{
@@ -43719,11 +43784,11 @@ body {{
 /* ——— ANVERSO ——— */
 .front .accent-bar {{
   position: absolute; left: 0; top: 0; bottom: 0; width: 10px;
-  background: linear-gradient(180deg, #0B2D57, #1d4ed8);
+  background: linear-gradient(180deg, #0020C2, #0020C2);
 }}
 .front .header-strip {{
   height: 52px; margin-left: 10px;
-  background: linear-gradient(90deg, #0B2D57 0%, #1e3a8a 60%, #2563eb 100%);
+  background: linear-gradient(90deg, #0020C2 0%, #1e3a8a 60%, #2563eb 100%);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 14px 0 12px;
 }}
@@ -43757,12 +43822,12 @@ body {{
   line-height: 1.2; letter-spacing: .01em;
 }}
 .front .meta .role {{
-  margin: 0 0 8px; font-size: 11px; color: #1d4ed8; font-weight: 700;
+  margin: 0 0 8px; font-size: 11px; color: #0020C2; font-weight: 700;
 }}
 .front .meta .row {{
   margin: 3px 0; font-size: 11px; color: #334155; line-height: 1.35;
 }}
-.front .meta .row b {{ color: #0B2D57; font-weight: 700; min-width: 28px; display: inline-block; }}
+.front .meta .row b {{ color: #0020C2; font-weight: 700; min-width: 28px; display: inline-block; }}
 .front .footer-strip {{
   position: absolute; left: 10px; right: 0; bottom: 0; height: 36px;
   background: #f8fafc; border-top: 1px solid #e2e8f0;
@@ -43770,12 +43835,12 @@ body {{
   padding: 0 14px; font-size: 10px; color: #64748b; font-weight: 600;
 }}
 .front .footer-strip .cod {{
-  color: #0B2D57; font-family: ui-monospace, Consolas, monospace; font-weight: 800;
+  color: #0020C2; font-family: ui-monospace, Consolas, monospace; font-weight: 800;
 }}
 /* ——— REVERSO ——— */
 .back .top {{
   height: 48px;
-  background: linear-gradient(90deg, #0B2D57, #1e40af);
+  background: linear-gradient(90deg, #0020C2, #1e40af);
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase;
@@ -43798,7 +43863,7 @@ body {{
 }}
 .back .bottom {{
   position: absolute; left: 0; right: 0; bottom: 0; height: 34px;
-  background: #0B2D57; color: #e2e8f0;
+  background: #0020C2; color: #e2e8f0;
   display: flex; align-items: center; justify-content: center;
   font-size: 9px; padding: 0 12px; text-align: center;
 }}
@@ -43975,7 +44040,7 @@ def tenants():
               <td>{i.fecha_creacion or ''}</td>
               <td>
                 <span class="mini-text" style="color:#64748b">Solo consulta</span><br>
-                <a href="/soporte/solicitud-plan?inst={i.id}" style="font-weight:700;color:#005BEA;font-size:12px">Solicitar cambio de plan</a>
+                <a href="/soporte/solicitud-plan?inst={i.id}" style="font-weight:700;color:#0020C2;font-size:12px">Solicitar cambio de plan</a>
               </td>
             </tr>"""
         else:
@@ -44692,7 +44757,7 @@ def servidores():
   <p><b>Instituciones:</b> {total_i} · <b>Usuarios:</b> {total_u} · <b>Estudiantes:</b> {total_e}</p>
   <p>Railway/Render: variables de entorno (<code>DATABASE_URL</code>, <code>SECRET_KEY</code>) se gestionan en el panel del hosting.</p>
 </section>
-<section class='role-panel' style="border-top:4px solid #0B2D57">
+<section class='role-panel' style="border-top:4px solid #0020C2">
   <h2>Monitoreo Railway · estado del servicio</h2>
   <p class="mini-text">Soporte vigila carga sin entrar al dashboard de Railway. API: <code>/api/health/railway</code></p>
   <div id="rw-status" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:10px">
@@ -44861,10 +44926,10 @@ def encabezado_institucional_html():
     telefax = (getattr(cfg, "contacto_cartera", None) or "") or "—"
     logo = logo_actual()
     return f"""
-<div class="membrete-oficial" style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #0B2D57;padding:12px 8px 14px;margin-bottom:18px;background:#fff">
+<div class="membrete-oficial" style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #0020C2;padding:12px 8px 14px;margin-bottom:18px;background:#fff">
   <img src="{logo}" alt="Logo" style="width:72px;height:72px;object-fit:contain">
   <div style="flex:1;text-align:center;line-height:1.35">
-    <div style="font-size:15px;font-weight:800;color:#0B2D57;letter-spacing:.3px">{nombre}</div>
+    <div style="font-size:15px;font-weight:800;color:#0020C2;letter-spacing:.3px">{nombre}</div>
     <div style="font-size:11px;color:#334155">{resol}</div>
     <div style="font-size:11px;color:#334155">E-mail: <b>{correo}</b> · Contacto: {telefax}</div>
     <div style="font-size:11px;color:#334155">NIT: {nit} · DANE: {dane}</div>
@@ -45179,8 +45244,8 @@ def horarios():
     content = f"""
 <style>
 .hz-wrap{{background:#fff;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden;box-shadow:0 4px 18px rgba(15,23,42,.06)}}
-.hz-head{{text-align:center;padding:16px 12px 8px;border-bottom:2px solid #0B2D57}}
-.hz-head h1{{margin:0;font-size:18px;color:#0B2D57;letter-spacing:.04em;font-weight:800}}
+.hz-head{{text-align:center;padding:16px 12px 8px;border-bottom:2px solid #0020C2}}
+.hz-head h1{{margin:0;font-size:18px;color:#0020C2;letter-spacing:.04em;font-weight:800}}
 .hz-head p{{margin:4px 0 0;font-size:12px;color:#64748b}}
 .hz-tools{{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0}}
 .hz-tools select{{width:auto;min-width:140px;margin:0;padding:8px 10px;font-size:13px}}
@@ -45188,14 +45253,14 @@ def horarios():
 .hz-btns a,.hz-btns button{{padding:9px 14px;font-size:12px;border-radius:8px}}
 .hz-table-wrap{{overflow-x:auto;padding:0}}
 table.hz{{width:100%;border-collapse:collapse;font-size:12.5px;min-width:720px}}
-table.hz th{{background:#0B2D57;color:#fff;padding:11px 6px;font-weight:800;font-size:11px;letter-spacing:.03em;border:1px solid #1e3a5f;text-align:center}}
+table.hz th{{background:#0020C2;color:#fff;padding:11px 6px;font-weight:800;font-size:11px;letter-spacing:.03em;border:1px solid #1e3a5f;text-align:center}}
 table.hz td{{border:1px solid #94a3b8;padding:0;text-align:center;vertical-align:middle}}
-.hz-grado{{font-weight:800;background:#e8eef6!important;color:#0B2D57;padding:8px 6px!important;min-width:56px}}
+.hz-grado{{font-weight:800;background:#e8eef6!important;color:#0020C2;padding:8px 6px!important;min-width:56px}}
 .hz-td{{min-width:100px}}
 .hz-in{{width:100%;border:0!important;border-radius:0!important;margin:0!important;padding:10px 4px!important;font-size:11px!important;font-weight:700!important;text-align:center;text-transform:uppercase;background:transparent}}
-.hz-in:focus{{outline:2px solid #0B2D57;outline-offset:-2px;background:#f0f7ff}}
+.hz-in:focus{{outline:2px solid #0020C2;outline-offset:-2px;background:#f0f7ff}}
 .hz-notes{{padding:14px 18px 18px;font-size:13px;color:#0f172a;line-height:1.45}}
-.hz-notes h3{{margin:0 0 8px;font-size:13px;color:#0B2D57;text-decoration:underline}}
+.hz-notes h3{{margin:0 0 8px;font-size:13px;color:#0020C2;text-decoration:underline}}
 .hz-note{{margin:4px 0;font-style:italic}}
 .hz-leg{{font-size:11px;color:#64748b;padding:0 18px 14px}}
 .hz-del{{border:0;background:#fee2e2;color:#b91c1c;border-radius:4px;font-size:10px;padding:2px 6px;cursor:pointer;font-weight:800}}
@@ -45213,7 +45278,7 @@ table.hz td{{border:1px solid #94a3b8;padding:0;text-align:center;vertical-align
   </div>
   <div class="hz-tools">
     <form method="GET" style="display:flex;gap:8px;align-items:center;margin:0">
-      <label style="font-size:12px;font-weight:700;color:#0B2D57">Día</label>
+      <label style="font-size:12px;font-weight:700;color:#0020C2">Día</label>
       <select name="dia" onchange="this.form.submit()">{opts_dia}</select>
     </form>
     <div class="hz-btns">
@@ -45265,7 +45330,7 @@ table.hz td{{border:1px solid #94a3b8;padding:0;text-align:center;vertical-align
       <button type="submit" class="btn" style="background:#0d9488">Sincronizar grupos desde estudiantes</button>
     </form>
     <div style="margin-top:12px">
-      <b style="font-size:12px;color:#0B2D57">Quitar grupo</b>
+      <b style="font-size:12px;color:#0020C2">Quitar grupo</b>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">{chips_quitar}</div>
     </div>
     <p class="mini-text" style="margin-top:8px">Grupos actuales: <b>{", ".join(grados_filas) if grados_filas else "ninguno"}</b></p>
@@ -45417,19 +45482,19 @@ def horarios_imagen():
 <style>
 body{{font-family:Segoe UI,Arial,sans-serif;background:#e2e8f0;margin:0;padding:20px;color:#0f172a}}
 .sheet{{max-width:960px;margin:0 auto;background:#fff;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,.12)}}
-.head{{text-align:center;border-bottom:2px solid #0B2D57;padding-bottom:12px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:14px}}
+.head{{text-align:center;border-bottom:2px solid #0020C2;padding-bottom:12px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:14px}}
 .head img{{width:56px;height:56px;object-fit:contain}}
-.head h1{{margin:0;font-size:20px;color:#0B2D57;letter-spacing:.03em}}
+.head h1{{margin:0;font-size:20px;color:#0020C2;letter-spacing:.03em}}
 .head p{{margin:4px 0 0;font-size:12px;color:#64748b}}
 table{{width:100%;border-collapse:collapse;font-size:13px}}
-th{{background:#0B2D57;color:#fff;padding:10px 6px;border:1px solid #0B2D57;font-size:11px}}
+th{{background:#0020C2;color:#fff;padding:10px 6px;border:1px solid #0020C2;font-size:11px}}
 td{{border:1px solid #64748b;padding:9px 5px;text-align:center;font-weight:600;text-transform:uppercase}}
-td.g{{background:#e8eef6;font-weight:800;color:#0B2D57}}
+td.g{{background:#e8eef6;font-weight:800;color:#0020C2}}
 .notes{{margin-top:18px;font-size:13px;font-style:italic;line-height:1.5}}
-.notes h3{{font-style:normal;font-size:13px;color:#0B2D57;text-decoration:underline;margin:0 0 6px}}
+.notes h3{{font-style:normal;font-size:13px;color:#0020C2;text-decoration:underline;margin:0 0 6px}}
 .foot{{margin-top:16px;font-size:10px;color:#94a3b8;text-align:center}}
 .bar{{text-align:center;margin-bottom:14px}}
-.bar button{{padding:10px 16px;margin:4px;border:0;border-radius:8px;background:#0B2D57;color:#fff;font-weight:700;cursor:pointer}}
+.bar button{{padding:10px 16px;margin:4px;border:0;border-radius:8px;background:#0020C2;color:#fff;font-weight:700;cursor:pointer}}
 @media print{{.bar{{display:none}} body{{background:#fff;padding:0}} .sheet{{box-shadow:none;max-width:none}}}}
 </style></head><body>
 <div class="bar">
@@ -45866,7 +45931,7 @@ def soporte_cancelaciones():
               </select>
               <input name="fecha_efectiva" type="date" value="{fe}" style="padding:4px;border-radius:6px;border:1px solid #cbd5e1">
               <input name="respuesta" placeholder="Respuesta" value="{(s.respuesta_soporte or '').replace(chr(34),'')}" style="padding:4px;border-radius:6px;border:1px solid #cbd5e1">
-              <button style="background:#0B2D57;color:#fff;border:0;padding:6px;border-radius:6px;font-weight:700;cursor:pointer">Guardar</button>
+              <button style="background:#0020C2;color:#fff;border:0;padding:6px;border-radius:6px;font-weight:700;cursor:pointer">Guardar</button>
             </form>
           </td>
         </tr>"""
@@ -45963,7 +46028,7 @@ def docente_escritorio():
         per_label = "Periodo actual"
 
     tools = [
-        ("/notas/planilla", "Planilla", "Notas por materia y periodo", "#0B2D57", "N"),
+        ("/notas/planilla", "Planilla", "Notas por materia y periodo", "#0020C2", "N"),
         ("/notas/ficha", "Ficha", "Seguimiento y disciplina", "#0f766e", "F"),
         ("/notas/faltas", "Faltas", "Presente / ausente / tarde", "#c2410c", "A"),
         ("/docente-movil", "Asistencia QR", "QR en el aula", "#b91c1c", "Q"),
@@ -45971,14 +46036,14 @@ def docente_escritorio():
         ("/certi-procsis", "Certi-Procsis", "Solicitud express de certificado o logro", "#b45309", "S"),
         ("/riesgo-escolar", "Riesgo escolar", "Reportar alerta temprana", "#b91c1c", "R"),
         ("/horarios", "Horarios", "Mi jornada", "#1e3a5f", "H"),
-        ("/calendario", "Calendario", "Agenda escolar", "#0B2D57", "C"),
+        ("/calendario", "Calendario", "Agenda escolar", "#0020C2", "C"),
         ("/perfil", "Mi perfil", "Mis datos y contacto", "#475569", "M"),
         ("/pqr", "Soporte", "PQR y fallas técnicas", "#4c1d95", "P"),
     ]
 
     try:
         if puede_componentes():
-            tools.insert(1, ("/notas/componentes", "Componentes", "Casillas de evaluación", "#1d4ed8", "C"))
+            tools.insert(1, ("/notas/componentes", "Componentes", "Casillas de evaluación", "#0020C2", "C"))
     except Exception:
         pass
 
@@ -45993,22 +46058,22 @@ def docente_escritorio():
     content = f"""
 <style>
 .de-wrap{{max-width:1100px;margin:0 auto}}
-.de-hero{{background:linear-gradient(135deg,#0B1220 0%,#0B2D57 50%,#1e3a5f 100%);color:#fff;border-radius:18px;padding:22px 24px;margin-bottom:16px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;border-top:4px solid #c9a227}}
+.de-hero{{background:linear-gradient(135deg,#0B1220 0%,#0020C2 50%,#1e3a5f 100%);color:#fff;border-radius:18px;padding:22px 24px;margin-bottom:16px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;border-top:4px solid #c9a227}}
 .de-hero h1{{margin:0;font-size:22px;letter-spacing:.02em}}
 .de-hero p{{margin:6px 0 0;opacity:.92;font-size:13px}}
 .de-hero .tag{{display:inline-block;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;margin-top:8px}}
 .de-actions{{display:flex;gap:8px;flex-wrap:wrap}}
-.de-actions a{{background:#fff;color:#0B2D57;padding:10px 14px;border-radius:10px;font-weight:800;text-decoration:none;font-size:13px}}
+.de-actions a{{background:#fff;color:#0020C2;padding:10px 14px;border-radius:10px;font-weight:800;text-decoration:none;font-size:13px}}
 .de-actions a.sec{{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25)}}
 .de-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}}
 .de-card{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:16px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;text-decoration:none;color:#0f172a;box-shadow:0 4px 14px rgba(15,23,42,.05);transition:.15s;min-height:120px}}
-.de-card:hover{{transform:translateY(-2px);border-color:#93c5fd;box-shadow:0 10px 24px rgba(11,45,87,.12)}}
+.de-card:hover{{transform:translateY(-2px);border-color:#93c5fd;box-shadow:0 10px 24px rgba(0,32,194,.12)}}
 .de-ico{{width:48px;height:48px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px}}
-.de-card b{{font-size:13px;color:#0B2D57}}
+.de-card b{{font-size:13px;color:#0020C2}}
 .de-card small{{font-size:11px;color:#64748b;line-height:1.3}}
 .de-foot{{margin-top:16px;text-align:center;font-size:12px;color:#94a3b8}}
 .de-tip{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#334155}}
-.de-tip b{{color:#0B2D57}}
+.de-tip b{{color:#0020C2}}
 </style>
 <div class="de-wrap">
   <div class="de-hero">
@@ -46073,10 +46138,10 @@ def notas_hub():
 .nh-box h2{{margin:0 0 12px;font-size:15px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:8px}}
 .nh-link{{display:flex;align-items:center;gap:12px;padding:12px 14px;margin:0 0 8px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;text-decoration:none;color:#0f172a;transition:.15s}}
 .nh-link:hover{{background:#eff6ff;border-color:#93c5fd}}
-.nh-ico{{width:36px;height:36px;border-radius:10px;background:#0B2D57;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}}
+.nh-ico{{width:36px;height:36px;border-radius:10px;background:#0020C2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}}
 .nh-link b{{display:block;font-size:14px}}
 .nh-link span{{display:block;font-size:12px;color:#64748b;margin-top:2px}}
-.nh-primary .nh-ico{{background:#1d4ed8}}
+.nh-primary .nh-ico{{background:#0020C2}}
 .nh-muted{{font-size:12px;color:#94a3b8;margin-top:8px}}
 </style>
 
@@ -46088,7 +46153,7 @@ def notas_hub():
 <div class="nh-cols">
   <div class="nh-box">
     <h2>{"Mi trabajo en el aula" if es_docente else "Trabajo académico"}</h2>
-    <a class="nh-link" href="/calendario" style="border-color:#0B2D57">📅 Calendario escolar</a>
+    <a class="nh-link" href="/calendario" style="border-color:#0020C2">📅 Calendario escolar</a>
 <a class="nh-link nh-primary" href="/notas/planilla">
       <div class="nh-ico">▦</div>
       <div><b>Planilla de notas</b><span>Por materia · diseño Excel · Seguimiento 40% + Otros 60%</span></div>
@@ -47355,7 +47420,7 @@ def notas_ficha():
         ) or "<tr><td colspan='2'>Sin registros de seguimiento</td></tr>"
 
         detalle = (
-            '<section id="ficha-detalle" class="role-panel" style="margin:14px 0;border:2px solid #0B2D57;border-radius:14px;padding:16px">'
+            '<section id="ficha-detalle" class="role-panel" style="margin:14px 0;border:2px solid #0020C2;border-radius:14px;padding:16px">'
             "<h2 style=\"margin-top:0\">" + _h(e.apellido) + " " + _h(e.nombre) + "</h2>"
             "<p>Código <b>" + _h(e.codigo) + "</b> · Grado <b>" + _h(e.grado) + "</b></p>"
             "<h3>Registrar seguimiento (disciplinario / meta / falencia)</h3>"
@@ -48360,7 +48425,7 @@ def notas_planilla():
     # headers por grupo
     group_th = ""
     sub_th = ""
-    colors_g = ["#1d4ed8", "#0d9488", "#7c3aed", "#b45309", "#be123c"]
+    colors_g = ["#0020C2", "#0d9488", "#7c3aed", "#b45309", "#be123c"]
     for i, (d, slots) in enumerate(dim_slots):
         col = colors_g[i % len(colors_g)]
         pct_val = float(d.porcentaje or 0)
@@ -48472,19 +48537,19 @@ def notas_planilla():
 <style>
 *{{box-sizing:border-box}}
 html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri,Segoe UI,Arial,sans-serif}}
-.px-top{{position:sticky;top:0;z-index:20;background:#0B2D57;color:#fff;padding:8px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}}
+.px-top{{position:sticky;top:0;z-index:20;background:#0020C2;color:#fff;padding:8px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}}
 .px-top h1{{margin:0;font-size:15px;font-weight:800}}
 .px-top .meta{{font-size:11px;opacity:.9}}
 .px-top a,.px-top button{{font-size:12px;border-radius:8px;border:0;padding:7px 12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}}
-.btn-back{{background:#fff;color:#0B2D57}}
+.btn-back{{background:#fff;color:#0020C2}}
 .btn-exp{{background:#0d9488;color:#fff}}
 .btn-imp{{background:#2563eb;color:#fff}}
 .btn-comp{{background:#475569;color:#fff}}
 .px-tools{{display:flex;flex-wrap:wrap;gap:8px;align-items:end;padding:8px 12px;background:#dbeafe;border-bottom:1px solid #93c5fd}}
-.px-tools label{{display:block;font-size:10px;font-weight:700;color:#0B2D57;margin-bottom:1px}}
+.px-tools label{{display:block;font-size:10px;font-weight:700;color:#0020C2;margin-bottom:1px}}
 .px-tools select{{font-size:12px;padding:4px 6px}}
 .chip{{padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid #94a3b8;background:#fff;color:#334155;text-decoration:none}}
-.chip.on{{background:#0B2D57;color:#fff;border-color:#0B2D57}}
+.chip.on{{background:#0020C2;color:#fff;border-color:#0020C2}}
 .chip.fail{{background:#fef2f2;color:#b91c1c;border-color:#fca5a5}}
 .chip.fail.on{{background:#dc2626;color:#fff}}
 .px-status{{font-size:12px;padding:5px 12px;background:#f8fafc;border-bottom:1px solid #cbd5e1;color:#475569;display:flex;align-items:center;gap:8px}}
@@ -48511,7 +48576,7 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 /* Barra horizontal siempre visible (con o sin estudiantes) */
 .px-wrap::-webkit-scrollbar{{height:18px;width:14px;display:block!important}}
 .px-wrap::-webkit-scrollbar-thumb{{background:#64748b;border-radius:10px;border:2px solid #e2e8f0;min-width:48px}}
-.px-wrap::-webkit-scrollbar-thumb:hover{{background:#0B2D57}}
+.px-wrap::-webkit-scrollbar-thumb:hover{{background:#0020C2}}
 .px-wrap::-webkit-scrollbar-track{{background:#e2e8f0;border-radius:10px;box-shadow:inset 0 0 0 1px #cbd5e1}}
 .px-wrap::-webkit-scrollbar-corner{{background:#e2e8f0}}
 .px-table{{min-width:2800px!important;width:max-content!important;border-collapse:collapse;table-layout:auto}}
@@ -48520,11 +48585,11 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 .px-scroll-bar{{
   height:18px;width:100%;overflow-x:scroll!important;overflow-y:hidden;display:block!important;
   background:#e2e8f0;border-top:1px solid #94a3b8;
-  scrollbar-width:thin;scrollbar-color:#0B2D57 #e2e8f0;
+  scrollbar-width:thin;scrollbar-color:#0020C2 #e2e8f0;
   position:sticky;bottom:0;z-index:30;flex-shrink:0;
 }}
 .px-scroll-bar::-webkit-scrollbar{{height:20px}}
-.px-scroll-bar::-webkit-scrollbar-thumb{{background:#0B2D57;border-radius:10px;border:2px solid #e2e8f0;min-width:64px}}
+.px-scroll-bar::-webkit-scrollbar-thumb{{background:#0020C2;border-radius:10px;border:2px solid #e2e8f0;min-width:64px}}
 .px-scroll-bar::-webkit-scrollbar-track{{background:#e2e8f0}}
 .px-scroll-bar-inner{{height:1px;min-width:2800px;width:2800px}}
 .px-page{{display:flex;flex-direction:column;height:100vh;overflow:hidden}}
@@ -48609,7 +48674,7 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 
 <div class="px-status" id="px-status" style="justify-content:space-between">
   <span><span class="dot"></span> <span id="px-status-text">Comprobando conexión…</span></span>
-  <button type="button" id="btn-sync-notas" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:8px;border:0;background:#0B2D57;color:#fff;cursor:pointer">Subir / sincronizar notas</button>
+  <button type="button" id="btn-sync-notas" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:8px;border:0;background:#0020C2;color:#fff;cursor:pointer">Subir / sincronizar notas</button>
 </div>
 
 <div class="px-scroll-hint">↔ Desliza o usa la barra inferior para ver más columnas (materias / casillas)</div>
@@ -48678,7 +48743,7 @@ html,body{{margin:0;padding:0;height:100%;background:#e8eef5;font-family:Calibri
 
 <div id="import-panel" onclick="if(event.target===this)this.classList.remove('on')">
   <div id="import-box">
-    <h3 style="margin:0 0 8px;color:#0B2D57">Importar notas desde Excel</h3>
+    <h3 style="margin:0 0 8px;color:#0020C2">Importar notas desde Excel</h3>
     <p style="font-size:13px;color:#475569;margin:0 0 12px">Descarga la planilla, llénala sin internet y súbela aquí.</p>
     <form method="POST" action="/notas/planilla/importar" enctype="multipart/form-data">
       <input type="hidden" name="grado" value="{grado}">
@@ -49668,7 +49733,7 @@ def notas_observaciones():
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <button type="submit" name="auto" value="1" title="Generar según nota"
                   style="background:#7c3aed;color:#fff;border:0;padding:6px 12px;border-radius:8px;font-weight:700;cursor:pointer">🪄 Auto</button>
-                <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:6px 12px;border-radius:8px;font-weight:700;cursor:pointer">Guardar</button>
+                <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:6px 12px;border-radius:8px;font-weight:700;cursor:pointer">Guardar</button>
               </div>
             </form>
           </td>
@@ -49676,7 +49741,7 @@ def notas_observaciones():
     gopts = "".join(f'<option {"selected" if grupo==g else ""}>{g}</option>' for g in grados_disponibles())
     content = f"""
 <div style="max-width:900px;margin:0 auto;font-family:Segoe UI,sans-serif;padding:12px">
-  <h1 style="color:#0B2D57;margin:0 0 8px">Observaciones de boletín 🪄</h1>
+  <h1 style="color:#0020C2;margin:0 0 8px">Observaciones de boletín 🪄</h1>
   <p style="color:#64748b;font-size:13px">Pulse <b>🪄 Auto</b> para generar el texto según el promedio del periodo. Puede editarlo antes de guardar.</p>
   {"<div class='msg ok'>"+msg+"</div>" if msg else ""}
   <form method="GET" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -49687,7 +49752,7 @@ def notas_observaciones():
     <button>Filtrar</button>
   </form>
   <table style="width:100%;border-collapse:collapse;background:#fff;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px">Estudiante</th><th>Prom.</th><th>Observación</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px">Estudiante</th><th>Prom.</th><th>Observación</th></tr>
     {filas or '<tr><td colspan=3>Sin estudiantes</td></tr>'}
   </table>
 </div>
@@ -49757,9 +49822,9 @@ def cierres_periodo():
     content = f"""
 <style>
 .cp{{max-width:820px;margin:0 auto;font-family:Segoe UI,sans-serif}}
-.cp h1{{color:#0B2D57}}
+.cp h1{{color:#0020C2}}
 .cp table{{width:100%;border-collapse:collapse;background:#fff}}
-.cp th{{background:#0B2D57;color:#fff;padding:8px;text-align:left}}
+.cp th{{background:#0020C2;color:#fff;padding:8px;text-align:left}}
 .cp td{{padding:8px;border-bottom:1px solid #e2e8f0}}
 .cp input{{padding:8px;border:1px solid #cbd5e1;border-radius:8px}}
 .cp .box{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:12px 0}}
@@ -49779,10 +49844,10 @@ def cierres_periodo():
       <tr><th>Periodo</th><th>Fecha cierre</th><th>Hora</th><th>Estado</th><th>Apertura</th></tr>
       {filas}
     </table>
-    <button style="margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800">Guardar calendario</button>
+    <button style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:800">Guardar calendario</button>
   </form>
   <form method="POST" class="box">
-    <h2 style="margin:0 0 8px;font-size:16px;color:#0B2D57">Solicitar apertura extraordinaria</h2>
+    <h2 style="margin:0 0 8px;font-size:16px;color:#0020C2">Solicitar apertura extraordinaria</h2>
     <p style="font-size:13px;color:#64748b">Requiere resolución física del rector por fuerza mayor. Procsis aprueba y abre el sistema 2 horas.</p>
     <input type="hidden" name="accion" value="solicitar_apertura">
     <label style="font-weight:700;font-size:12px">Periodo</label>
@@ -50356,7 +50421,7 @@ def matricula_publica(codigo=None):
         )
         body = f"""
 <style>
-body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0B2D57,#1e40af 50%,#0d9488);min-height:100vh}}
+body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0020C2,#1e40af 50%,#0d9488);min-height:100vh}}
 .wrap{{max-width:820px;margin:0 auto;padding:28px 16px}}
 .hero{{background:rgba(255,255,255,.12);backdrop-filter:blur(8px);color:#fff;border-radius:18px;padding:22px;margin-bottom:18px}}
 .hero h1{{margin:0 0 6px;font-size:24px}}
@@ -50388,7 +50453,7 @@ body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0B2
     body = f"""
 <style>
 body{{margin:0;font-family:Segoe UI,Arial;background:#f1f5f9;min-height:100vh}}
-.top{{background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:18px 16px}}
+.top{{background:linear-gradient(135deg,#0020C2,#1e40af);color:#fff;padding:18px 16px}}
 .top-inner{{max-width:760px;margin:0 auto}}
 .top h1{{margin:0;font-size:22px;letter-spacing:.3px}}
 .top p{{margin:6px 0 0;opacity:.92;font-size:13px}}
@@ -50410,7 +50475,7 @@ button{{border:0;border-radius:10px;padding:11px 18px;font-weight:800;cursor:poi
 .btn-p{{background:#1e40af;color:#fff}}
 .btn-ok{{background:#059669;color:#fff;width:100%}}
 .summary{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;font-size:14px;line-height:1.55}}
-.sec{{font-weight:800;color:#0B2D57;margin:10px 0 4px}}
+.sec{{font-weight:800;color:#0020C2;margin:10px 0 4px}}
 .habeas-box{{background:#eff6ff;border:1px solid #93c5fd;border-radius:12px;padding:14px;margin:16px 0;font-size:13px;color:#1e3a8a;line-height:1.45}}
 .habeas-box label{{display:flex;gap:10px;align-items:flex-start;font-weight:600;cursor:pointer;margin:0}}
 .habeas-box input[type=checkbox]{{width:auto;margin-top:3px;flex-shrink:0}}
@@ -50440,7 +50505,7 @@ function fillMun(depSelectId, munSelectId){{
   </div>
 
   <div class="panel on" id="p1">
-    <h3 style="margin:0 0 8px;color:#0B2D57">1. Identificación del estudiante (SIMAT)</h3>
+    <h3 style="margin:0 0 8px;color:#0020C2">1. Identificación del estudiante (SIMAT)</h3>
     <div class="row">
       <div><label>Primer apellido *</label><input name="est_primer_apellido" required></div>
       <div><label>Segundo apellido</label><input name="est_segundo_apellido"></div>
@@ -50497,7 +50562,7 @@ function fillMun(depSelectId, munSelectId){{
       <div><label>Grupo (si aplica)</label><input name="grupo_asignado" placeholder="Ej. 6A"></div>
       <div><label>Colegio de procedencia</label><input name="est_colegio_anterior"></div>
     </div>
-    <h3 style="margin:16px 0 8px;color:#0B2D57">Residencia y caracterización</h3>
+    <h3 style="margin:16px 0 8px;color:#0020C2">Residencia y caracterización</h3>
     <label>Dirección de residencia *</label>
     <input name="acu_direccion" id="est_dir_mirror" required placeholder="Se confirma con datos del acudiente">
     <div class="row">
@@ -50543,7 +50608,7 @@ function fillMun(depSelectId, munSelectId){{
   </div>
 
   <div class="panel" id="p2">
-    <h3 style="margin:0 0 8px;color:#0B2D57">Datos del acudiente</h3>
+    <h3 style="margin:0 0 8px;color:#0020C2">Datos del acudiente</h3>
     <div class="row">
       <div><label>Nombres *</label><input name="acu_nombres" required></div>
       <div><label>Apellidos *</label><input name="acu_apellidos" required></div>
@@ -50573,7 +50638,7 @@ function fillMun(depSelectId, munSelectId){{
   </div>
 
   <div class="panel" id="p3">
-    <h3 style="margin:0 0 8px;color:#0B2D57">Resumen y finalizar</h3>
+    <h3 style="margin:0 0 8px;color:#0020C2">Resumen y finalizar</h3>
     <div class="summary" id="sum"></div>
     <div class="habeas-box">
       <label>
@@ -50741,11 +50806,11 @@ def matricula_enviar(codigo):
     pdf_url = f"/matricula/pdf/{pm.id}?t={rad}"
     body = f"""
 <style>
-body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0B2D57,#1e40af);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}}
+body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0020C2,#1e40af);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}}
 .card{{background:#fff;border-radius:20px;padding:28px 24px;max-width:480px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25);text-align:center}}
-.card h1{{margin:0 0 8px;color:#0B2D57;font-size:22px}}
-.rad{{font-size:20px;font-weight:800;color:#1d4ed8;letter-spacing:.04em;margin:14px 0;padding:12px;background:#eff6ff;border-radius:12px}}
-.btn{{display:inline-block;margin:8px 4px;padding:14px 22px;background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;text-decoration:none;border-radius:12px;font-weight:700}}
+.card h1{{margin:0 0 8px;color:#0020C2;font-size:22px}}
+.rad{{font-size:20px;font-weight:800;color:#0020C2;letter-spacing:.04em;margin:14px 0;padding:12px;background:#eff6ff;border-radius:12px}}
+.btn{{display:inline-block;margin:8px 4px;padding:14px 22px;background:linear-gradient(135deg,#0020C2,#0020C2);color:#fff;text-decoration:none;border-radius:12px;font-weight:700}}
 .btn2{{background:#e2e8f0;color:#0f172a}}
 p{{color:#64748b;font-size:14px;line-height:1.5}}
 </style>
@@ -50814,7 +50879,7 @@ def colegio_portal(codigo=None):
         ) or "<p>No hay instituciones activas.</p>"
         return page("Portal padres", f"""
 <style>
-body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0B2D57,#1e3a8a);min-height:100vh}}
+body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0020C2,#1e3a8a);min-height:100vh}}
 .w{{max-width:720px;margin:0 auto;padding:28px 16px;color:#fff}}
 .card{{display:block;background:#fff;color:#0f172a;border-radius:14px;padding:14px 16px;margin:8px 0;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.15)}}
 .card span{{display:block;color:#64748b;font-size:13px;margin-top:4px}}
@@ -50845,14 +50910,14 @@ body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(160deg,#0B2
             logo = "/static/img/logo.png"
     body = f"""
 <style>
-body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(165deg,#0B2D57 0%,#1e40af 55%,#0ea5e9 120%);min-height:100vh}}
+body{{margin:0;font-family:Segoe UI,Arial;background:linear-gradient(165deg,#0020C2 0%,#1e40af 55%,#0ea5e9 120%);min-height:100vh}}
 .wrap{{max-width:520px;margin:0 auto;padding:28px 16px}}
 .card{{background:rgba(255,255,255,.97);border-radius:20px;padding:24px 20px;box-shadow:0 20px 50px rgba(0,0,0,.25);text-align:center}}
 .logo{{width:88px;height:88px;object-fit:contain;border-radius:16px;background:#fff;border:1px solid #e2e8f0;margin-bottom:10px}}
-h1{{margin:0;font-size:22px;color:#0B2D57}}
+h1{{margin:0;font-size:22px;color:#0020C2}}
 .sub{{color:#64748b;font-size:14px;margin:8px 0 18px;line-height:1.45}}
-.btnx{{display:block;width:100%;box-sizing:border-box;margin:10px 0;padding:14px 16px;border-radius:14px;font-weight:800;font-size:15px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#0B2D57,#1d4ed8)}}
-.btnx.sec{{background:#f1f5f9;color:#0B2D57;border:1px solid #cbd5e1}}
+.btnx{{display:block;width:100%;box-sizing:border-box;margin:10px 0;padding:14px 16px;border-radius:14px;font-weight:800;font-size:15px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#0020C2,#0020C2)}}
+.btnx.sec{{background:#f1f5f9;color:#0020C2;border:1px solid #cbd5e1}}
 .btnx.warn{{background:linear-gradient(135deg,#b45309,#f59e0b)}}
 .mini{{font-size:12px;color:#94a3b8;margin-top:16px}}
 .linkcopy{{font-size:11px;word-break:break-all;background:#f8fafc;padding:8px;border-radius:8px;color:#475569}}
@@ -50942,8 +51007,8 @@ def colegio_pqr(codigo):
         body = f"""
 <style>body{{margin:0;font-family:Segoe UI;background:#ecfdf5;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}}
 .card{{background:#fff;border-radius:18px;padding:28px;max-width:440px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.1)}}
-.rad{{font-size:18px;font-weight:800;color:#1d4ed8;background:#eff6ff;padding:12px;border-radius:12px;margin:14px 0}}
-a{{color:#1d4ed8;font-weight:700}}</style>
+.rad{{font-size:18px;font-weight:800;color:#0020C2;background:#eff6ff;padding:12px;border-radius:12px;margin:14px 0}}
+a{{color:#0020C2;font-weight:700}}</style>
 <div class="card">
   <h1 style="color:#065f46;margin:0">Solicitud radicada</h1>
   <p>Su PQR fue enviada a <b>{inst.nombre}</b>.</p>
@@ -50960,12 +51025,12 @@ body{{margin:0;font-family:Segoe UI,Arial;background:#f1f5f9}}
 label{{display:block;font-size:12px;font-weight:700;margin:8px 0 4px;color:#334155}}
 input,select,textarea{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}}
 .row{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
-button{{width:100%;margin-top:14px;padding:12px;border:0;border-radius:12px;background:linear-gradient(135deg,#0B2D57,#1d4ed8);color:#fff;font-weight:800}}
+button{{width:100%;margin-top:14px;padding:12px;border:0;border-radius:12px;background:linear-gradient(135deg,#0020C2,#0020C2);color:#fff;font-weight:800}}
 .err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:10px;margin-bottom:10px}}
 @media(max-width:600px){{.row{{grid-template-columns:1fr}}}}
 </style>
 <div class="box">
-  <h1 style="margin:0 0 4px;color:#0B2D57;font-size:20px">PQR · Padres de familia</h1>
+  <h1 style="margin:0 0 4px;color:#0020C2;font-size:20px">PQR · Padres de familia</h1>
   <p style="color:#64748b;font-size:14px;margin:0 0 14px"><b>{inst.nombre}</b> — Quejas, peticiones y reclamos institucionales (docentes, convivencia, atención, etc.).</p>
   {"<div class='err'>"+mensaje+"</div>" if mensaje else ""}
   <form method="POST">
@@ -51062,12 +51127,12 @@ def colegio_pqr_consulta(codigo):
 body{{margin:0;font-family:Segoe UI;background:#f1f5f9}}
 .box{{max-width:480px;margin:40px auto;background:#fff;padding:22px;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08)}}
 input{{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}}
-button{{width:100%;padding:12px;border:0;border-radius:12px;background:#1d4ed8;color:#fff;font-weight:700}}
+button{{width:100%;padding:12px;border:0;border-radius:12px;background:#0020C2;color:#fff;font-weight:700}}
 .ok{{background:#ecfdf5;padding:12px;border-radius:10px;margin-top:12px;font-size:14px;line-height:1.5}}
 .err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:10px;margin-top:12px}}
 </style>
 <div class="box">
-  <h1 style="margin:0 0 8px;font-size:20px;color:#0B2D57">Consultar PQR</h1>
+  <h1 style="margin:0 0 8px;font-size:20px;color:#0020C2">Consultar PQR</h1>
   <p style="color:#64748b;font-size:14px">{inst.nombre}</p>
   <form method="POST">
     <label>Número de radicado o ticket</label>
@@ -51224,7 +51289,7 @@ def pqr_colegio():
               <input type="hidden" name="id" value="{t.id}">
               <input type="hidden" name="accion" value="cerrar">
               <textarea name="respuesta" rows="3" required placeholder="Respuesta oficial al acudiente (definitiva)"></textarea>
-              <button style="margin-top:6px;padding:8px 12px;font-size:12px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">Responder y cerrar</button>
+              <button style="margin-top:6px;padding:8px 12px;font-size:12px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">Responder y cerrar</button>
             </form>
             {detalle_html}
             """
@@ -51317,11 +51382,11 @@ def pqr_portal():
     body = """
 <style>
 html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#334155}
-.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,113,227,.10),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.12),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,32,194,.10),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.12),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .navbar-light-glass{background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid rgba(226,232,240,.8);color:#0f172a;position:sticky;top:0;z-index:5}
 .top{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 .top h1{margin:0;font-size:18px;font-weight:800;color:#0f172a}
-.top a{color:#0071e3;text-decoration:none;font-size:13px;font-weight:600}
+.top a{color:#0020C2;text-decoration:none;font-size:13px;font-weight:600}
 .top a:hover{text-decoration:underline}
 .centro-pqr{flex:1;display:flex;justify-content:center;align-items:center;padding:32px 16px}
 .tarjeta-corporativa-white{width:100%;max-width:560px;box-sizing:border-box;background:rgba(255,255,255,.65);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.7);border-radius:20px;box-shadow:0 10px 30px rgba(148,163,184,.12);color:#334155;padding:40px;text-align:center}
@@ -51330,12 +51395,12 @@ html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system
 .texto-intro-pqr{margin:0 0 22px;font-size:16px;line-height:1.5;color:#334155}
 .btn-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
 .btn-presentar-light,.btn-consultar-light{display:inline-block;min-width:170px;box-sizing:border-box;text-align:center;text-decoration:none;border-radius:10px;padding:14px 28px;font-weight:600;font-size:15px;transition:all .2s ease;cursor:pointer}
-.btn-presentar-light{background:#0071e3;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,113,227,.25)}
+.btn-presentar-light{background:#0020C2;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,32,194,.25)}
 .btn-presentar-light:hover{background:#0059b3;transform:translateY(-1px)}
 .btn-consultar-light{background:#fff;color:#475569;border:1px solid #cbd5e1}
 .btn-consultar-light:hover{background:#f8fafc;border-color:#94a3b8}
 .mini{margin:20px 0 0;font-size:13px;color:#64748b}
-.mini a{color:#0071e3;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(0,113,227,.4)}
+.mini a{color:#0020C2;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(0,32,194,.4)}
 .mini a:hover{color:#0059b3;border-bottom-color:#0059b3}
 @media(max-width:520px){
   .tarjeta-corporativa-white{padding:28px 20px;border-radius:18px}
@@ -51404,14 +51469,14 @@ def pqr_info():
     body = f"""
 <style>
 body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;color:#0f172a}}
-.top{{background:linear-gradient(90deg,#0B2D57,#1e40af);color:#fff;padding:14px 20px}}
+.top{{background:linear-gradient(90deg,#0020C2,#1e40af);color:#fff;padding:14px 20px}}
 .top h1{{margin:0;font-size:18px}}
 .wrap{{max-width:1000px;margin:0 auto;padding:24px 16px;display:grid;grid-template-columns:240px 1fr;gap:24px}}
 .side{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;height:fit-content}}
 .side a{{display:block;padding:8px 6px;color:#1e40af;text-decoration:none;font-size:14px;border-radius:8px}}
 .side a.on{{background:#eff6ff;font-weight:700}}
 .content{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:26px}}
-.content h2{{color:#0B2D57;border-bottom:2px solid #e2e8f0;padding-bottom:8px}}
+.content h2{{color:#0020C2;border-bottom:2px solid #e2e8f0;padding-bottom:8px}}
 .content h3{{color:#1e40af;margin-top:22px}}
 .content p{{line-height:1.6;color:#334155}}
 .canal{{background:#f1f5f9;border-radius:10px;padding:14px;margin-top:10px}}
@@ -51581,7 +51646,7 @@ button{{background:#1e40af;color:#fff;border:0;padding:12px 18px;border-radius:1
 a{{color:#1e40af}}
 </style>
 <div class="box">
-  <h1 style="margin-top:0;color:#0B2D57">Radicar PQR</h1>
+  <h1 style="margin-top:0;color:#0020C2">Radicar PQR</h1>
   {"<div class='msg'>"+mensaje+"</div>" if mensaje else ""}
   <form method="POST">
   {_script_divipola_subtipos()}
@@ -51651,11 +51716,11 @@ _PQR_CHAT_PRIORIDADES = ("BAJA", "MEDIA", "ALTA", "CRITICA")
 _PQR_CHAT_HTML = r"""
 <style>
 html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#334155}
-.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,113,227,.10),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.12),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,32,194,.10),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.12),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .navbar-light-glass{background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid rgba(226,232,240,.8);color:#0f172a;position:sticky;top:0;z-index:5}
 .top{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 .top h1{margin:0;font-size:18px;font-weight:800;color:#0f172a}
-.top a{color:#0071e3;text-decoration:none;font-size:13px;font-weight:600}
+.top a{color:#0020C2;text-decoration:none;font-size:13px;font-weight:600}
 .top a:hover{text-decoration:underline}
 .centro-pqr{flex:1;display:flex;justify-content:center;align-items:center;padding:24px 14px}
 .tarjeta-corporativa-white{background:rgba(255,255,255,.65);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.7);border-radius:20px;box-shadow:0 10px 30px rgba(148,163,184,.12);color:#334155}
@@ -51666,7 +51731,7 @@ html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system
 .chat-head p{margin:4px 0 10px;font-size:13px;color:#64748b}
 .chat-nav{display:flex;gap:8px;flex-wrap:wrap}
 .prog{height:4px;background:#e2e8f0;border-radius:4px;margin-top:12px;overflow:hidden}
-#progbar{height:100%;width:0;background:linear-gradient(90deg,#00a9e0,#0071e3);transition:width .4s ease}
+#progbar{height:100%;width:0;background:linear-gradient(90deg,#00a9e0,#0020C2);transition:width .4s ease}
 .chat-log{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
 .msg{max-width:86%;padding:11px 15px;font-size:14.5px;line-height:1.5;white-space:pre-line;word-wrap:break-word;overflow-wrap:anywhere;animation:pop .25s ease}
 @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -51677,23 +51742,23 @@ html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system
 .chat-input{display:flex;gap:10px;padding:14px 16px;border-top:1px solid #e2e8f0;background:rgba(255,255,255,.5)}
 .msg{font-weight:400}
 .chat-glass .pestana-navegacion-light{display:inline-block;background:rgba(255,255,255,.8)!important;border:1px solid #cbd5e1!important;color:#1e293b!important;font-weight:500;font-size:13px;border-radius:20px;padding:6px 16px;box-shadow:none!important;filter:none;transform:none;cursor:pointer}
-.chat-glass .pestana-navegacion-light:hover{background:#f0f7ff!important;border-color:#0071e3!important;color:#0071e3!important;box-shadow:none!important;filter:none;transform:none}
+.chat-glass .pestana-navegacion-light:hover{background:#f0f7ff!important;border-color:#0020C2!important;color:#0020C2!important;box-shadow:none!important;filter:none;transform:none}
 .chat-glass .btn-seleccion-light{display:block;text-align:left;background:#ffffff!important;color:#0f172a!important;border:1px solid #e2e8f0!important;border-radius:12px;padding:14px 20px;font-weight:600;font-size:14px;box-shadow:0 4px 6px -1px rgba(0,0,0,.05)!important;filter:none;transition:all .2s ease;cursor:pointer}
-.chat-glass .btn-seleccion-light:hover{background:#f0f7ff!important;border-color:#0071e3!important;color:#0071e3!important;box-shadow:0 4px 6px -1px rgba(0,0,0,.05)!important;filter:none;transform:translateX(4px)}
+.chat-glass .btn-seleccion-light:hover{background:#f0f7ff!important;border-color:#0020C2!important;color:#0020C2!important;box-shadow:0 4px 6px -1px rgba(0,0,0,.05)!important;filter:none;transform:translateX(4px)}
 .chat-glass .btn-seleccion-light.sug{border-color:#00a9e0!important;box-shadow:0 0 0 3px rgba(0,169,224,.14)!important}
-.chat-glass .btn-seleccion-light.go{background:#0071e3!important;color:#fff!important;border:none!important;box-shadow:0 4px 14px rgba(0,113,227,.25)!important}
+.chat-glass .btn-seleccion-light.go{background:#0020C2!important;color:#fff!important;border:none!important;box-shadow:0 4px 14px rgba(0,32,194,.25)!important}
 .chat-glass .btn-seleccion-light.go:hover{background:#0059b3!important;color:#fff!important;border:none!important;transform:translateY(-1px)}
 .chat-glass .input-chat-light{flex:1;min-width:0;width:auto;margin:0;padding:12px 14px;font-size:14.5px;outline:none;color:#0f172a;background:rgba(255,255,255,.9)!important;border:1px solid #cbd5e1!important;border-radius:12px!important;box-shadow:none!important}
 .chat-glass .input-chat-light::placeholder{color:#94a3b8}
-.chat-glass .input-chat-light:focus{border-color:#0071e3!important;box-shadow:0 0 0 4px rgba(0,113,227,.1)!important}
+.chat-glass .input-chat-light:focus{border-color:#0020C2!important;box-shadow:0 0 0 4px rgba(0,32,194,.1)!important}
 .chat-glass .chat-input{align-items:center}
-.chat-glass .chat-input button{align-self:stretch;background:#0071e3!important;color:#fff!important;border:none!important;border-radius:10px;padding:0 22px;font-weight:600;font-size:14.5px;box-shadow:0 4px 14px rgba(0,113,227,.25)!important;filter:none;cursor:pointer}
+.chat-glass .chat-input button{align-self:stretch;background:#0020C2!important;color:#fff!important;border:none!important;border-radius:10px;padding:0 22px;font-weight:600;font-size:14.5px;box-shadow:0 4px 14px rgba(0,32,194,.25)!important;filter:none;cursor:pointer}
 .chat-glass .chat-input button:hover{background:#0059b3!important;transform:translateY(-1px)}
 .chat-glass .chat-input button:disabled,.chat-glass .chat-input input:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .alt{text-align:center;font-size:12.5px;padding:0 0 12px;color:#64748b;background:rgba(255,255,255,.5)}
-.alt a{color:#0071e3;font-weight:700;text-decoration:none}
+.alt a{color:#0020C2;font-weight:700;text-decoration:none}
 .alt a:hover{text-decoration:underline}
-.lnk{display:inline-block;margin-top:8px;color:#0071e3;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(0,113,227,.4)}
+.lnk{display:inline-block;margin-top:8px;color:#0020C2;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(0,32,194,.4)}
 @media(max-width:520px){.chat-glass{border-radius:16px;height:calc(100vh - 110px)}.msg{max-width:94%}.chat-head{padding:14px 16px 10px}.chat-head h2{font-size:17px}}
 </style>
 <div class="fondo-corporativo-light">
@@ -52115,7 +52180,7 @@ def pqr_chat_radicar():
 _PQR_CONSULTA_HTML = r"""
 <style>
 html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#334155}
-.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,113,227,.08),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.10),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh}
+.fondo-corporativo-light{background:radial-gradient(circle at 12% 18%,rgba(0,32,194,.08),transparent 38%),radial-gradient(circle at 88% 82%,rgba(0,169,224,.10),transparent 40%),linear-gradient(135deg,#eef2f7 0%,#f8fafc 100%);min-height:100vh}
 .header-consulta-light{background:#ffffff;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:700;font-size:14px;letter-spacing:.5px;padding:16px 24px}
 .box-consulta{max-width:1400px;margin:0 auto;padding:24px 20px 40px}
 .panel-busqueda-light{background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,.02)}
@@ -52123,16 +52188,16 @@ html,body{margin:0;min-height:100vh;background:#eef2f7;font-family:-apple-system
 .opciones-consulta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
 .opcion-consulta{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#475569;font-size:13.5px;font-weight:600;cursor:pointer;margin:0;transition:all .2s ease}
 .opcion-consulta:hover{background:#f8fafc;border-color:#94a3b8}
-.opcion-consulta:has(input:checked){background:#f0f7ff;border-color:#0071e3;color:#0071e3}
-.opcion-consulta input[type=radio]{width:16px!important;height:16px!important;min-height:0!important;margin:0!important;padding:0!important;accent-color:#0071e3;box-shadow:none!important;flex:none}
+.opcion-consulta:has(input:checked){background:#f0f7ff;border-color:#0020C2;color:#0020C2}
+.opcion-consulta input[type=radio]{width:16px!important;height:16px!important;min-height:0!important;margin:0!important;padding:0!important;accent-color:#0020C2;box-shadow:none!important;flex:none}
 .fila-busqueda{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .panel-busqueda-light .input-busqueda-ticket{flex:1 1 260px;width:100%;max-width:400px;margin:0;padding:10px 16px;font-size:14px;color:#0f172a;outline:none;background:#f8fafc!important;border:1px solid #cbd5e1!important;border-radius:8px!important;box-shadow:none!important}
 .panel-busqueda-light .input-busqueda-ticket::placeholder{color:#94a3b8}
-.panel-busqueda-light .input-busqueda-ticket:focus{background:#ffffff!important;border-color:#0071e3!important;box-shadow:0 0 0 4px rgba(0,113,227,.1)!important}
-.panel-busqueda-light .btn-buscar-light{background:#0071e3!important;color:#fff!important;border:none!important;border-radius:10px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,113,227,.25)!important;filter:none}
+.panel-busqueda-light .input-busqueda-ticket:focus{background:#ffffff!important;border-color:#0020C2!important;box-shadow:0 0 0 4px rgba(0,32,194,.1)!important}
+.panel-busqueda-light .btn-buscar-light{background:#0020C2!important;color:#fff!important;border:none!important;border-radius:10px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,32,194,.25)!important;filter:none}
 .panel-busqueda-light .btn-buscar-light:hover{background:#0059b3!important;transform:translateY(-1px);filter:none}
 .panel-busqueda-light .lnk-regresar{color:#475569;font-weight:600;font-size:13.5px;text-decoration:none;padding:10px 6px}
-.panel-busqueda-light .lnk-regresar:hover{color:#0071e3;text-decoration:underline}
+.panel-busqueda-light .lnk-regresar:hover{color:#0020C2;text-decoration:underline}
 .tbl-wrap{overflow-x:auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,.02);margin-top:20px}
 .pqr-tbl{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;margin:0}
 .pqr-tbl .tabla-pqr-headers{background:#f1f5f9!important}
@@ -52373,7 +52438,7 @@ def soporte_actualizaciones():
   <p class="mini-text">La <b>versión del sistema</b> ahora se publica exclusivamente desde <a href="/dev-console?tab=versiones">Consola de Desarrollo → Versiones</a>, para que nunca se sobrescriba sin querer al guardar aquí. Versión actual: <b>{(getattr(p,'version_sistema',None) or '2.5.0')}</b></p>
   <form method="POST" enctype="multipart/form-data">
     <input type="hidden" name="accion" value="guardar">
-    <h3 style="margin-top:16px;color:#0B2D57">Panel derecho del login (mensaje ejecutivo)</h3>
+    <h3 style="margin-top:16px;color:#0020C2">Panel derecho del login (mensaje ejecutivo)</h3>
     <label>Chip / etiqueta</label>
     <input name="hero_chip" value="{(getattr(p,'hero_chip',None) or '')}" placeholder="Plataforma institucional · Acceso seguro">
     <label>Título</label>
@@ -52398,7 +52463,7 @@ def soporte_actualizaciones():
     <textarea name="habeas_data" rows="4"{_ro_faq}>{(getattr(p,'habeas_data',None) or '')}</textarea>
     <label><b>Aviso corto de reinicio / plataforma</b></label>
     <input name="reinicio_aviso" value="{(getattr(p,'reinicio_aviso',None) or '')}" placeholder="Opcional: reinicio en 30 min"{_ro_faq}>
-    <h3 style="margin-top:18px;color:#0B2D57">Imágenes de novedades (máx. 3)</h3>
+    <h3 style="margin-top:18px;color:#0020C2">Imágenes de novedades (máx. 3)</h3>
     <p class="mini-text">Se muestran en una columna estrecha al lado del texto en el login. PNG/JPG/WebP o URL.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
       <div>
@@ -53326,7 +53391,7 @@ def _cta_nav(activo=""):
             continue
         on = (url == activo)
         pills += (f"<a href='{url}' style='padding:7px 13px;border-radius:999px;text-decoration:none;font-size:12.5px;"
-                  f"font-weight:700;background:{'#0B2D57' if on else '#e2e8f0'};color:{'#fff' if on else '#0f172a'}'>{lab}</a>")
+                  f"font-weight:700;background:{'#0020C2' if on else '#e2e8f0'};color:{'#fff' if on else '#0f172a'}'>{lab}</a>")
     return f"<div style='display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px'>{pills}</div>"
 
 
@@ -53356,7 +53421,7 @@ def _cta_filtro_periodo(base, periodo, desde, hasta):
             f"<button class='btn' type='submit'>Aplicar</button></form>")
 
 
-def _cta_card(titulo, valor, color="#0B2D57", sub=""):
+def _cta_card(titulo, valor, color="#0020C2", sub=""):
     return (f"<div style='background:#fff;border:1px solid #e2e8f0;border-left:5px solid {color};border-radius:12px;padding:12px 14px'>"
             f"<div style='font-size:11px;font-weight:800;color:#64748b;letter-spacing:.04em'>{titulo}</div>"
             f"<div style='font-size:19px;font-weight:800;color:{color};margin-top:4px'>{valor}</div>"
@@ -53417,7 +53482,7 @@ def contabilidad_dashboard():
         _cta_card("COSTOS", _cta_fmt(cos), warn),
         _cta_card("UTILIDAD / PÉRDIDA", _cta_fmt(util), ok if util >= 0 else "#b91c1c"),
         _cta_card("ACTIVOS", _cta_fmt(act)), _cta_card("PASIVOS", _cta_fmt(pas)), _cta_card("PATRIMONIO", _cta_fmt(pat)),
-        _cta_card("CUENTAS POR COBRAR", _cta_fmt(cxc_pend), "#0B2D57", "Facturas pendientes y vencidas"),
+        _cta_card("CUENTAS POR COBRAR", _cta_fmt(cxc_pend), "#0020C2", "Facturas pendientes y vencidas"),
         _cta_card("CUENTAS POR PAGAR", _cta_fmt(cxp), warn), _cta_card("BANCOS", _cta_fmt(bancos)),
         _cta_card("IMPUESTOS PENDIENTES", _cta_fmt(imp), warn), _cta_card("NÓMINA PENDIENTE", _cta_fmt(nom), warn),
         _cta_card("FLUJO DE CAJA (PERÍODO)", _cta_fmt(flujo), ok if flujo >= 0 else "#b91c1c"),
@@ -53425,7 +53490,7 @@ def contabilidad_dashboard():
     cuerpo = (_cta_filtro_periodo("/contabilidad", periodo, d, h)
               + f"<p class='mini-text'>{et}: {d} → {h}. Activos, pasivos y patrimonio son acumulados al {h}.</p>"
               + f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px'>{cards}</div>"
-              + f"<section class='role-panel'><h2 style='margin-top:0;color:#0B2D57'>🔔 Alertas contables</h2><ul style='margin:0;padding-left:18px'>{al_html}</ul></section>")
+              + f"<section class='role-panel'><h2 style='margin-top:0;color:#0020C2'>🔔 Alertas contables</h2><ul style='margin:0;padding-left:18px'>{al_html}</ul></section>")
     return _cta_page("Dashboard contable", "/contabilidad", cuerpo, "Portada del área contable de Procsis")
 
 
@@ -53528,7 +53593,7 @@ def contabilidad_libro():
   </form>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">{nuevo}{exp}</div>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
-    <tr style="background:#0B2D57;color:#fff"><th style="{th}">Fecha</th><th style="{th}">Comprobante</th><th style="{th}">Cuenta</th><th style="{th}">Tercero</th><th style="{th}">Descripción</th><th style="{th};text-align:right">Débito</th><th style="{th};text-align:right">Crédito</th><th style="{th}">Centro</th><th style="{th}">Estado / registró</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="{th}">Fecha</th><th style="{th}">Comprobante</th><th style="{th}">Cuenta</th><th style="{th}">Tercero</th><th style="{th}">Descripción</th><th style="{th};text-align:right">Débito</th><th style="{th};text-align:right">Crédito</th><th style="{th}">Centro</th><th style="{th}">Estado / registró</th></tr>
     {tr}
     <tr style="background:#f1f5f9;font-weight:800"><td colspan="5" style="padding:8px;text-align:right">Totales (sin anulados)</td><td style="padding:8px;text-align:right">{_cta_fmt(tot_d)}</td><td style="padding:8px;text-align:right">{_cta_fmt(tot_c)}</td><td colspan="2" style="padding:8px">{'✅ Equilibrado' if tot_d == tot_c else '⚠️ Diferencia ' + _cta_fmt(tot_d - tot_c)}</td></tr>
   </table></div>
@@ -53722,7 +53787,7 @@ calc();})();
   <label style="display:block;margin-top:10px"><b>Descripción *</b></label>
   <textarea name="descripcion" rows="2" required style="{inp}">{_esc(f.get('descripcion') or '')}</textarea>
   <div style="overflow:auto;margin-top:12px"><table style="width:100%;border-collapse:collapse">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Cuenta</th><th style="padding:8px;text-align:left">Detalle</th><th style="padding:8px;text-align:right">Débito</th><th style="padding:8px;text-align:right">Crédito</th><th></th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Cuenta</th><th style="padding:8px;text-align:left">Detalle</th><th style="padding:8px;text-align:right">Débito</th><th style="padding:8px;text-align:right">Crédito</th><th></th></tr>
     <tbody id="lineas"></tbody>
     <tr style="background:#f1f5f9;font-weight:800"><td colspan="2" style="padding:8px;text-align:right">Totales</td><td style="padding:8px;text-align:right" id="t-deb">0,00</td><td style="padding:8px;text-align:right" id="t-cre">0,00</td><td></td></tr>
   </table></div>
@@ -53774,7 +53839,7 @@ def contabilidad_asiento_ver(aid):
   </div>
   <p style="margin:12px 0 8px"><b>Descripción:</b> {_esc(a.descripcion)}</p>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Cuenta</th><th style="padding:8px;text-align:left">Detalle</th><th style="padding:8px;text-align:right">Débito</th><th style="padding:8px;text-align:right">Crédito</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Cuenta</th><th style="padding:8px;text-align:left">Detalle</th><th style="padding:8px;text-align:right">Débito</th><th style="padding:8px;text-align:right">Crédito</th></tr>
     {filas}
     <tr style="background:#f1f5f9;font-weight:800"><td colspan="2" style="padding:8px;text-align:right">Totales</td><td style="padding:8px;text-align:right">{_cta_fmt(a.total_debito)}</td><td style="padding:8px;text-align:right">{_cta_fmt(a.total_credito)}</td></tr>
   </table></div>
@@ -53895,7 +53960,7 @@ def contabilidad_plan():
     filtro_nivel = (request.args.get("nivel") or "").upper()
     filas = ""
     contadores = {"CLASE": 0, "GRUPO": 0, "CUENTA": 0, "SUBCUENTA": 0, "AUXILIAR": 0}
-    colores = {"CLASE": "#0B2D57", "GRUPO": "#1d4ed8", "CUENTA": "#0369a1", "SUBCUENTA": "#047857", "AUXILIAR": "#b45309"}
+    colores = {"CLASE": "#0020C2", "GRUPO": "#0020C2", "CUENTA": "#0369a1", "SUBCUENTA": "#047857", "AUXILIAR": "#b45309"}
     sangria = {"CLASE": 0, "GRUPO": 10, "CUENTA": 22, "SUBCUENTA": 36, "AUXILIAR": 50}
     for f in saldos:
         c = f["cuenta"]
@@ -53927,7 +53992,7 @@ def contabilidad_plan():
         opt = "".join(f"<option>{t}</option>" for t in _CTA_TIPOS)
         formularios = f"""
 <section class="role-panel">
-  <h2 style="margin-top:0;color:#0B2D57">Nueva cuenta, subcuenta o auxiliar</h2>
+  <h2 style="margin-top:0;color:#0020C2">Nueva cuenta, subcuenta o auxiliar</h2>
   <p class="mini-text" style="margin-top:0">Escribe solo el <b>código</b>: el nombre, el tipo y la naturaleza se completan solos desde el PUC.
   Niveles: 1 dígito clase · 2 grupo · 4 cuenta · 6 subcuenta · 8 o más <b>auxiliar</b> (el nombre del auxiliar lo defines tú).</p>
   <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap" autocomplete="off">
@@ -53940,7 +54005,7 @@ def contabilidad_plan():
   <div id="puc-hint" class="mini-text" style="margin-top:6px;min-height:18px"></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
     <form method="POST" style="margin:0"><input type="hidden" name="accion" value="cargar_puc">
-      <button class="btn" style="background:#0B2D57;color:#fff">📚 Cargar PUC completo (clases, grupos, cuentas y subcuentas)</button></form>
+      <button class="btn" style="background:#0020C2;color:#fff">📚 Cargar PUC completo (clases, grupos, cuentas y subcuentas)</button></form>
     <form method="POST" style="margin:0"><input type="hidden" name="accion" value="cargar_inicial">
       <button class="btn" style="background:#334155;color:#fff">Cargar plan inicial sugerido</button></form>
   </div>
@@ -53970,9 +54035,9 @@ if(q){{q.addEventListener('input',function(){{var v=q.value.toLowerCase();docume
     th = "padding:8px;text-align:left;font-size:12px"
     chips = "".join(
         f"<a href='/contabilidad/plan?nivel={n}' style='padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;"
-        f"background:{'#0B2D57' if filtro_nivel == n else '#e2e8f0'};color:{'#fff' if filtro_nivel == n else '#0f172a'}'>{n.capitalize()}s · {k}</a>"
+        f"background:{'#0020C2' if filtro_nivel == n else '#e2e8f0'};color:{'#fff' if filtro_nivel == n else '#0f172a'}'>{n.capitalize()}s · {k}</a>"
         for n, k in contadores.items())
-    chips = f"<a href='/contabilidad/plan' style='padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;background:{'#0B2D57' if not filtro_nivel else '#e2e8f0'};color:{'#fff' if not filtro_nivel else '#0f172a'}'>Todas</a>" + chips
+    chips = f"<a href='/contabilidad/plan' style='padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;background:{'#0020C2' if not filtro_nivel else '#e2e8f0'};color:{'#fff' if not filtro_nivel else '#0f172a'}'>Todas</a>" + chips
     cuerpo = f"""{formularios}
 <section class="role-panel" style="margin-top:14px">
   <div style="background:#fffbeb;border:1px solid #fde68a;padding:9px 12px;border-radius:8px;font-size:12.5px;margin-bottom:10px">
@@ -53981,7 +54046,7 @@ if(q){{q.addEventListener('input',function(){{var v=q.value.toLowerCase();docume
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">{chips}
     <input id="puc-q" type="search" placeholder="🔎 Buscar por código o nombre…" style="margin-left:auto;padding:8px 12px;border:1px solid #cbd5e1;border-radius:999px;min-width:240px"></div>
   <div style="overflow:auto"><table id="puc-tabla" style="width:100%;border-collapse:collapse">
-    <tr style="background:#0B2D57;color:#fff"><th style="{th}">Código</th><th style="{th}">Cuenta</th><th style="{th}">Nivel</th><th style="{th}">Tipo</th><th style="{th}">Naturaleza</th><th style="{th};text-align:right">Saldo consolidado</th><th style="{th}"></th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="{th}">Código</th><th style="{th}">Cuenta</th><th style="{th}">Nivel</th><th style="{th}">Tipo</th><th style="{th}">Naturaleza</th><th style="{th};text-align:right">Saldo consolidado</th><th style="{th}"></th></tr>
     {filas}
   </table></div>
 </section>"""
@@ -54049,7 +54114,7 @@ def contabilidad_centros():
   <button class="btn">Crear</button></form>
   <form method="POST"><input type="hidden" name="accion" value="cargar_inicial"><button class="btn" style="background:#334155;color:#fff">Cargar centros sugeridos</button></form>"""
     cuerpo = f"""<section class="role-panel">{form}
-  <table style="width:100%;border-collapse:collapse;margin-top:10px"><tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Centro</th><th style="padding:8px;text-align:right">Gastos y costos acumulados</th><th></th></tr>{filas}</table>
+  <table style="width:100%;border-collapse:collapse;margin-top:10px"><tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Centro</th><th style="padding:8px;text-align:right">Gastos y costos acumulados</th><th></th></tr>{filas}</table>
   <p class="mini-text">Los asientos sin centro no se atribuyen a ningún área.</p></section>"""
     return _cta_page("Centros de costo", "/contabilidad/centros", cuerpo, "Qué área consumió cada peso", msg=msg, err=err)
 
@@ -54085,7 +54150,7 @@ def contabilidad_cxc():
     th = "padding:8px;text-align:left;font-size:12px"
     cuerpo = f"""<section class="role-panel">
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
-  <tr style="background:#0B2D57;color:#fff"><th style="{th}">Institución</th><th style="{th};text-align:right">Facturado</th><th style="{th};text-align:right">Pagado</th><th style="{th};text-align:right">Pendiente</th><th style="{th};text-align:right">Vencido</th></tr>
+  <tr style="background:#0020C2;color:#fff"><th style="{th}">Institución</th><th style="{th};text-align:right">Facturado</th><th style="{th};text-align:right">Pagado</th><th style="{th};text-align:right">Pendiente</th><th style="{th};text-align:right">Vencido</th></tr>
   {tr}
   <tr style="background:#f1f5f9;font-weight:800"><td style="padding:8px">Total</td><td style="padding:8px;text-align:right">{_cta_fmt(tf)}</td><td style="padding:8px;text-align:right">{_cta_fmt(tp)}</td><td style="padding:8px;text-align:right">{_cta_fmt(tn)}</td><td></td></tr>
   </table></div>
@@ -54222,7 +54287,7 @@ def contabilidad_nomina():
   <p class="mini-text">Cada liquidación genera un asiento de <b>devengo</b> (gasto de personal, horas extras y recargos, aportes y provisiones contra salarios, seguridad social y prestaciones por pagar)
   y, al marcarse PAGADA, un asiento de <b>pago</b> (salarios por pagar contra bancos o caja). Las cuentas se toman del PUC (51 · gastos de personal; 23/25 · pasivos laborales).</p>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
-    <tr style="background:#0B2D57;color:#fff"><th style="{th}">Periodo</th><th style="{th}">Trabajador</th><th style="{th};text-align:right">Devengado</th><th style="{th};text-align:right">Extras y recargos</th><th style="{th};text-align:right">Deducciones</th><th style="{th};text-align:right">Neto</th><th style="{th};text-align:right">Costo empresa</th><th style="{th}">Estado</th><th style="{th}">Contabilidad</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="{th}">Periodo</th><th style="{th}">Trabajador</th><th style="{th};text-align:right">Devengado</th><th style="{th};text-align:right">Extras y recargos</th><th style="{th};text-align:right">Deducciones</th><th style="{th};text-align:right">Neto</th><th style="{th};text-align:right">Costo empresa</th><th style="{th}">Estado</th><th style="{th}">Contabilidad</th></tr>
     {filas}
     <tr style="background:#f1f5f9;font-weight:800"><td colspan="2" style="padding:8px;text-align:right">Totales</td><td style="padding:8px;text-align:right">{_cta_fmt(t_dev)}</td><td></td><td style="padding:8px;text-align:right">{_cta_fmt(t_ded)}</td><td style="padding:8px;text-align:right">{_cta_fmt(t_neto)}</td><td style="padding:8px;text-align:right">{_cta_fmt(t_costo)}</td><td colspan="2"></td></tr>
   </table></div>
@@ -54245,7 +54310,7 @@ def contabilidad_estados():
 
     pt = _cta_patrimonio_datos(d, h)
     _td = "padding:5px 8px;text-align:right"
-    pat_filas = "<tr style='background:#0B2D57;color:#fff'><th style='padding:6px 8px;text-align:left'>Cuenta de patrimonio</th><th style='padding:6px 8px;text-align:right'>Saldo inicial</th><th style='padding:6px 8px;text-align:right'>Aumentos</th><th style='padding:6px 8px;text-align:right'>Disminuciones</th><th style='padding:6px 8px;text-align:right'>Saldo final</th></tr>"
+    pat_filas = "<tr style='background:#0020C2;color:#fff'><th style='padding:6px 8px;text-align:left'>Cuenta de patrimonio</th><th style='padding:6px 8px;text-align:right'>Saldo inicial</th><th style='padding:6px 8px;text-align:right'>Aumentos</th><th style='padding:6px 8px;text-align:right'>Disminuciones</th><th style='padding:6px 8px;text-align:right'>Saldo final</th></tr>"
     _grupo_act = None
     for r_ in sorted(pt["filas"], key=lambda z: (z["grupo"], z["codigo"])):
         if r_["grupo"] != _grupo_act:
@@ -54255,18 +54320,18 @@ def contabilidad_estados():
                       f"<td style='{_td}'>{_cta_fmt(r_['aum'])}</td><td style='{_td}'>{_cta_fmt(r_['dis'])}</td><td style='{_td}'>{_cta_fmt(r_['fin'])}</td></tr>")
     if not pt["filas"]:
         pat_filas += "<tr><td colspan='5' style='padding:12px;text-align:center;color:#64748b'>Sin movimientos de patrimonio en el período.</td></tr>"
-    pat_filas += (f"<tr style='background:#0B2D57;color:#fff;font-weight:800'><td style='padding:8px'>Total patrimonio {'✅' if pt['cuadra'] else '⚠️ no concilia'}</td>"
+    pat_filas += (f"<tr style='background:#0020C2;color:#fff;font-weight:800'><td style='padding:8px'>Total patrimonio {'✅' if pt['cuadra'] else '⚠️ no concilia'}</td>"
                   f"<td style='padding:8px;text-align:right'>{_cta_fmt(pt['tot']['ini'])}</td><td style='padding:8px;text-align:right'>{_cta_fmt(pt['tot']['aum'])}</td>"
                   f"<td style='padding:8px;text-align:right'>{_cta_fmt(pt['tot']['dis'])}</td><td style='padding:8px;text-align:right'>{_cta_fmt(pt['tot']['fin'])}</td></tr>")
     dif = x["act"] - x["pas"] - x["pat"]
     resultados = (bloque("Ingresos", x["per"], "INGRESO") + bloque("Costos", x["per"], "COSTO") + bloque("Gastos", x["per"], "GASTO")
-                  + f"<tr style='background:#0B2D57;color:#fff'><td style='padding:8px;font-weight:800'>Resultado del período</td><td style='padding:8px;text-align:right;font-weight:800'>{_cta_fmt(x['res'])}</td></tr>")
+                  + f"<tr style='background:#0020C2;color:#fff'><td style='padding:8px;font-weight:800'>Resultado del período</td><td style='padding:8px;text-align:right;font-weight:800'>{_cta_fmt(x['res'])}</td></tr>")
     situacion = (bloque("Activo", x["acum"], "ACTIVO") + bloque("Pasivo", x["acum"], "PASIVO") + bloque("Patrimonio", x["acum"], "PATRIMONIO")
                  + f"<tr><td style='padding:5px 8px'>Resultado acumulado del ejercicio</td><td style='padding:5px 8px;text-align:right'>{_cta_fmt(x['res_acum'])}</td></tr>"
-                 + f"<tr style='background:#0B2D57;color:#fff'><td style='padding:8px;font-weight:800'>{'✅ Activo = Pasivo + Patrimonio' if dif == 0 else '⚠️ No cuadra por ' + _cta_fmt(dif)}</td><td></td></tr>")
+                 + f"<tr style='background:#0020C2;color:#fff'><td style='padding:8px;font-weight:800'>{'✅ Activo = Pasivo + Patrimonio' if dif == 0 else '⚠️ No cuadra por ' + _cta_fmt(dif)}</td><td></td></tr>")
     flujo = (f"<tr><td style='padding:6px 8px'>Entradas de efectivo (débitos a caja y bancos)</td><td style='padding:6px 8px;text-align:right'>{_cta_fmt(x['ent'])}</td></tr>"
              f"<tr><td style='padding:6px 8px'>− Salidas de efectivo (créditos)</td><td style='padding:6px 8px;text-align:right'>{_cta_fmt(x['sal'])}</td></tr>"
-             f"<tr style='background:#0B2D57;color:#fff'><td style='padding:8px;font-weight:800'>Variación del efectivo</td><td style='padding:8px;text-align:right;font-weight:800'>{_cta_fmt(x['ent'] - x['sal'])}</td></tr>")
+             f"<tr style='background:#0020C2;color:#fff'><td style='padding:8px;font-weight:800'>Variación del efectivo</td><td style='padding:8px;text-align:right;font-weight:800'>{_cta_fmt(x['ent'] - x['sal'])}</td></tr>")
     bp = ""
     td = tc = _D("0")
     for f in x["acum"]:
@@ -54277,14 +54342,14 @@ def contabilidad_estados():
                    f"<td style='padding:5px 8px;text-align:right'>{_cta_fmt(f['credito'])}</td><td style='padding:5px 8px;text-align:right'>{_cta_fmt(f['saldo'])}</td></tr>")
     bp += (f"<tr style='background:#f1f5f9;font-weight:800'><td style='padding:6px 8px'>Sumas {'✅' if td == tc else '⚠️'}</td><td style='padding:6px 8px;text-align:right'>{_cta_fmt(td)}</td><td style='padding:6px 8px;text-align:right'>{_cta_fmt(tc)}</td><td></td></tr>")
     pdf = f"/contabilidad/estados/pdf?periodo={periodo}&desde={_esc(d)}&hasta={_esc(h)}"
-    caja = lambda t, c: f"<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0B2D57'>{t}</h2><table style='width:100%;border-collapse:collapse;font-size:13px'>{c}</table></section>"  # noqa: E731
+    caja = lambda t, c: f"<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0020C2'>{t}</h2><table style='width:100%;border-collapse:collapse;font-size:13px'>{c}</table></section>"  # noqa: E731
     cuerpo = (_cta_filtro_periodo("/contabilidad/estados", periodo, d, h)
               + f"<a class='btn' style='background:#b91c1c;color:#fff' href='{pdf}'>📄 Descargar PDF</a>"
               + f"<p class='mini-text'>Resultados y flujo: {d} → {h}. Situación financiera y balance de prueba: acumulado al {h}.</p>"
               + caja("Estado de resultados", resultados) + caja("Estado de situación financiera", situacion)
               + caja("Estado de cambios en el patrimonio", pat_filas)
               + caja("Flujo de efectivo", flujo)
-              + caja("Balance de prueba", "<tr style='background:#0B2D57;color:#fff'><th style='padding:6px 8px;text-align:left'>Cuenta</th><th style='padding:6px 8px;text-align:right'>Débitos</th><th style='padding:6px 8px;text-align:right'>Créditos</th><th style='padding:6px 8px;text-align:right'>Saldo</th></tr>" + bp))
+              + caja("Balance de prueba", "<tr style='background:#0020C2;color:#fff'><th style='padding:6px 8px;text-align:left'>Cuenta</th><th style='padding:6px 8px;text-align:right'>Débitos</th><th style='padding:6px 8px;text-align:right'>Créditos</th><th style='padding:6px 8px;text-align:right'>Saldo</th></tr>" + bp))
     return _cta_page("Estados financieros", "/contabilidad/estados", cuerpo, "Generados automáticamente desde el libro")
 
 
@@ -54333,7 +54398,7 @@ def contabilidad_auditoria():
     cuerpo = f"""<section class="role-panel">
   <form method="GET" style="display:flex;gap:8px;margin-bottom:10px"><input name="q" value="{_esc(q)}" placeholder="Usuario o acción…" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:8px"><button class="btn">Filtrar</button></form>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
-  <tr style="background:#0B2D57;color:#fff"><th style="{th}">Fecha / hora</th><th style="{th}">Usuario</th><th style="{th}">Acción</th><th style="{th}">Valor anterior</th><th style="{th}">Valor nuevo</th><th style="{th}">IP</th></tr>{tr}</table></div>
+  <tr style="background:#0020C2;color:#fff"><th style="{th}">Fecha / hora</th><th style="{th}">Usuario</th><th style="{th}">Acción</th><th style="{th}">Valor anterior</th><th style="{th}">Valor nuevo</th><th style="{th}">IP</th></tr>{tr}</table></div>
   <p class="mini-text">Quién creó, anuló o configuró cada cosa. Los movimientos no se borran: se anulan y quedan aquí.</p></section>"""
     return _cta_page("Auditoría contable", "/contabilidad/auditoria", cuerpo, "Trazabilidad de cada operación")
 
@@ -54782,7 +54847,7 @@ def proveedor_carnes():
   {botones}
   <p class="mini-text">{total} estudiante(s) · {n_listos} con información completa en pantalla. Solo se descargan los carnés con foto, documento, nombre, grado y código. Cada descarga queda registrada con fecha, hora y usuario.</p>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
-    <tr style="background:#0B2D57;color:#fff;font-size:12px"><th style="padding:8px"></th><th style="padding:8px;text-align:left">Foto</th><th style="padding:8px;text-align:left">Estudiante</th><th style="padding:8px;text-align:left">Grado / sede</th><th style="padding:8px;text-align:left">Datos del carné</th><th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Acción</th></tr>
+    <tr style="background:#0020C2;color:#fff;font-size:12px"><th style="padding:8px"></th><th style="padding:8px;text-align:left">Foto</th><th style="padding:8px;text-align:left">Estudiante</th><th style="padding:8px;text-align:left">Grado / sede</th><th style="padding:8px;text-align:left">Datos del carné</th><th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Acción</th></tr>
     {tr}
   </table></div>{aviso_tope}
 </section>
@@ -54983,7 +55048,7 @@ def proveedor_carnes_cierre():
   <label style="display:flex;gap:8px;margin:10px 0;font-size:13px"><input type="checkbox" name="confirmo" value="1" required> Confirmo que imprimí y empaqué los {g['desc']} carnés de esta tanda.</label>
   <button class="btn" style="background:#15803d;color:#fff">✅ Marcar como «Carné impreso / En camino»</button>
 </form>"""
-        tarjetas += ("<section class='role-panel' style='margin-bottom:12px'><h3 style='margin:0;color:#0B2D57'>%s</h3>"
+        tarjetas += ("<section class='role-panel' style='margin-bottom:12px'><h3 style='margin:0;color:#0020C2'>%s</h3>"
                      "<p class='mini-text' style='margin:2px 0'>Sede: %s · Grado: <b>%s</b> · %d carné(s) descargados por cerrar</p>%s</section>") % (
             _esc(nombres.get(iid, "")), _esc(sede or "—"), _esc(grado), g["desc"], cuerpo_f)
     if not tarjetas:
@@ -55027,7 +55092,7 @@ def proveedor_carnes_entregas():
         tr = "<tr><td colspan='5' style='padding:16px;text-align:center;color:#64748b'>Aún no has cerrado tandas.</td></tr>"
     cuerpo = ("<header class='role-hero'><div><h1>🚚 Mis entregas</h1><p>Historial de tandas cerradas y su fecha estimada de llegada.</p></div></header>"
               "<section class='role-panel'><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse'>"
-              "<tr style='background:#0B2D57;color:#fff;font-size:12px'><th style='padding:8px;text-align:left'>Cierre</th><th style='padding:8px;text-align:left'>Colegio / grado</th>"
+              "<tr style='background:#0020C2;color:#fff;font-size:12px'><th style='padding:8px;text-align:left'>Cierre</th><th style='padding:8px;text-align:left'>Colegio / grado</th>"
               "<th style='padding:8px;text-align:left'>Operario</th><th style='padding:8px;text-align:left'>Entrega estimada</th><th style='padding:8px;text-align:left'>Estado</th></tr>%s</table></div></section>") % tr
     return page("Mis entregas", shell(cuerpo))
 
@@ -55062,7 +55127,7 @@ def gerencia_carnes():
         "<input type='checkbox' name='colegio' value='%d' %s> %s</label>" % (i.id, "checked" if i.id in _aut else "", _esc(i.nombre))
         for i in Institucion.query.filter(Institucion.estado == "ACTIVA").order_by(Institucion.nombre).all())
     panel_aut = (
-        "<section class='role-panel' style='margin-bottom:14px'><h2 style='margin-top:0;color:#0B2D57;font-size:16px'>🔐 Colegios autorizados para el proveedor</h2>"
+        "<section class='role-panel' style='margin-bottom:14px'><h2 style='margin-top:0;color:#0020C2;font-size:16px'>🔐 Colegios autorizados para el proveedor</h2>"
         "<p class='mini-text'>El proveedor solo ve estudiantes de los colegios marcados aquí (principio de mínimo dato · Ley 1581 de 2012). "
         "Sin ninguno marcado no ve nada. Conviene firmar con el proveedor un contrato de transmisión de datos.</p>"
         "<form method='POST' action='/gerencia/carnes/autorizar'><div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin:10px 0'>%s</div>"
@@ -55088,7 +55153,7 @@ def gerencia_carnes():
         return ("<div style='background:#fff;border:1px solid #e2e8f0;border-left:5px solid %s;border-radius:12px;padding:12px 14px'>"
                 "<div style='font-size:11px;font-weight:800;color:#64748b'>%s</div><div style='font-size:26px;font-weight:800;color:%s'>%s</div></div>") % (col, t, col, v)
     pct = int(round(100.0 * impresos / completos)) if completos else 0
-    cards = (tarjeta("CARNÉS LISTOS EN EL SISTEMA", completos, "#0B2D57") + tarjeta("DESCARGADOS POR EL PROVEEDOR", descargados, "#1e40af")
+    cards = (tarjeta("CARNÉS LISTOS EN EL SISTEMA", completos, "#0020C2") + tarjeta("DESCARGADOS POR EL PROVEEDOR", descargados, "#1e40af")
              + tarjeta("IMPRESOS / EN CAMINO", impresos, "#15803d") + tarjeta("FALTAN POR IMPRIMIR", faltan, "#b45309"))
     filas_c = ""
     for iid, v in sorted(por_cole.items(), key=lambda kv: nombres.get(kv[0], "")):
@@ -55147,11 +55212,11 @@ def gerencia_carnes():
 {aviso}
 {panel_aut}
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">{cards}</div>
-<section class="role-panel"><h2 style="margin-top:0;color:#0B2D57">Avance por colegio <span style="font-size:13px;color:#64748b">· {pct}% impreso en total</span></h2>
+<section class="role-panel"><h2 style="margin-top:0;color:#0020C2">Avance por colegio <span style="font-size:13px;color:#64748b">· {pct}% impreso en total</span></h2>
 <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
-<tr style="background:#0B2D57;color:#fff"><th style="{th}">Colegio</th><th style="{th};text-align:right">Estudiantes</th><th style="{th};text-align:right">Listos</th><th style="{th};text-align:right">Descargados</th><th style="{th};text-align:right">Impresos</th><th style="{th}">Avance</th></tr>
+<tr style="background:#0020C2;color:#fff"><th style="{th}">Colegio</th><th style="{th};text-align:right">Estudiantes</th><th style="{th};text-align:right">Listos</th><th style="{th};text-align:right">Descargados</th><th style="{th};text-align:right">Impresos</th><th style="{th}">Avance</th></tr>
 {filas_c or "<tr><td colspan='6' style='padding:14px;text-align:center;color:#64748b'>Sin estudiantes.</td></tr>"}</table></div></section>
-<section class="role-panel" style="margin-top:14px"><h2 style="margin-top:0;color:#0B2D57">🔐 Historial de descargas (auditoría)</h2>
+<section class="role-panel" style="margin-top:14px"><h2 style="margin-top:0;color:#0020C2">🔐 Historial de descargas (auditoría)</h2>
 <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
   <input name="q" value="{_esc(q)}" placeholder="Usuario, colegio o grado…" style="flex:1;min-width:190px;padding:8px;border:1px solid #cbd5e1;border-radius:8px">
   <label style="font-size:12px">Desde <input type="date" name="desde" value="{_esc(desde)}" style="padding:7px;border-radius:8px;border:1px solid #cbd5e1"></label>
@@ -55159,10 +55224,10 @@ def gerencia_carnes():
   <button class="btn" type="submit">Filtrar</button>
   <a class="btn" href="{pdf_href}" style="background:#b91c1c;color:#fff">📄 Descargar PDF</a>
 </form>
-<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><tr style="background:#0B2D57;color:#fff"><th style="{th}">Fecha y hora exactas</th><th style="{th}">Evento</th></tr>{tr_log}</table></div>
+<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><tr style="background:#0020C2;color:#fff"><th style="{th}">Fecha y hora exactas</th><th style="{th}">Evento</th></tr>{tr_log}</table></div>
 <p class="mini-text">Cada descarga guarda usuario, IP, navegador, lista de códigos y una huella SHA-256 del PDF: evidencia ante Habeas Data (Ley 1581 de 2012).</p></section>
-<section class="role-panel" style="margin-top:14px"><h2 style="margin-top:0;color:#0B2D57">📦 Validación de entregas</h2>
-<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><tr style="background:#0B2D57;color:#fff"><th style="{th}">Evidencia</th><th style="{th}">Tanda</th><th style="{th}">Fecha estimada</th><th style="{th}">Validación</th></tr>{tr_lot}</table></div></section>"""
+<section class="role-panel" style="margin-top:14px"><h2 style="margin-top:0;color:#0020C2">📦 Validación de entregas</h2>
+<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><tr style="background:#0020C2;color:#fff"><th style="{th}">Evidencia</th><th style="{th}">Tanda</th><th style="{th}">Fecha estimada</th><th style="{th}">Validación</th></tr>{tr_lot}</table></div></section>"""
     return page("Carnés · Gerencia", shell(cuerpo))
 
 
@@ -55536,10 +55601,10 @@ def notificaciones_leer(nid):
 
 _NOTIF_JS = """<style>
 #nw-box{position:fixed;right:14px;bottom:14px;z-index:2147483300;display:flex;flex-direction:column;gap:8px;max-width:min(360px,calc(100vw - 28px));font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif}
-.nw-it{background:#0B2D57;color:#fff;border-radius:14px;padding:11px 14px;box-shadow:0 8px 28px rgba(0,0,0,.3);font-size:13px;line-height:1.4}
+.nw-it{background:#0020C2;color:#fff;border-radius:14px;padding:11px 14px;box-shadow:0 8px 28px rgba(0,0,0,.3);font-size:13px;line-height:1.4}
 .nw-it.al{background:#b91c1c}.nw-it b{display:block;font-size:13.5px;margin-bottom:2px}
 .nw-it a{color:#fff;font-weight:700}.nw-x{float:right;border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:8px;cursor:pointer;margin-left:8px;padding:0 8px;min-height:0}
-#nw-tk{position:fixed;left:14px;bottom:14px;z-index:2147483200;background:#fff;border:1px solid #cbd5e1;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;color:#0B2D57;text-decoration:none;box-shadow:0 4px 14px rgba(15,23,42,.15)}
+#nw-tk{position:fixed;left:14px;bottom:14px;z-index:2147483200;background:#fff;border:1px solid #cbd5e1;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;color:#0020C2;text-decoration:none;box-shadow:0 4px 14px rgba(15,23,42,.15)}
 </style><div id="nw-box"></div>__TK__<script>(function(){
 var box=document.getElementById('nw-box');if(!box)return;var vistos={};
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
@@ -55867,8 +55932,8 @@ def soporte_bloqueo_carne():
     opt_i = "<option value=''>— Colegio —</option>" + "".join("<option value='%d'>%s</option>" % (i.id, _esc(i.nombre)) for i in insts)
     inp = "padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%;box-sizing:border-box"
     aviso = ("<div class='msg ok'>%s</div>" % _esc(msg) if msg else "") + ("<div class='msg danger'>%s</div>" % _esc(err) if err else "")
-    _c1 = ("#0B2D57", "#fff") if modo == "id" else ("#e2e8f0", "#0f172a")
-    _c2 = ("#0B2D57", "#fff") if modo == "preguntas" else ("#e2e8f0", "#0f172a")
+    _c1 = ("#0020C2", "#fff") if modo == "id" else ("#e2e8f0", "#0f172a")
+    _c2 = ("#0020C2", "#fff") if modo == "preguntas" else ("#e2e8f0", "#0f172a")
     tabs = ("<div style='display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap'><a class='btn' style='background:%s;color:%s' href='?modo=id'>Capa 1 · Con ID del estudiante</a>"
             "<a class='btn' style='background:%s;color:%s' href='?modo=preguntas'>Capa 2 · Sin ID (preguntas de validación)</a></div>") % (_c1[0], _c1[1], _c2[0], _c2[1])
     cuerpo = ""
@@ -55954,7 +56019,7 @@ _TD_LIMITE_DESC = 15.0  # % de descuento sobre el cual el ticket salta al CEO
 _TD_ESTADOS = {"PEND_CONTABILIDAD": ("Pendiente Contabilidad", "#b45309"), "PEND_CEO": ("Pendiente CEO", "#b91c1c"),
                "APROBADO": ("Aprobado", "#15803d"), "AUTORIZADO": ("Autorizado por el CEO", "#15803d"),
                "APLICADO": ("Aplicado", "#334155"), "RECHAZADO": ("Rechazado", "#7f1d1d"),
-               "ABIERTO": ("Abierto", "#b45309"), "EN_PROCESO": ("En proceso", "#1d4ed8"), "RESUELTO": ("Resuelto", "#15803d")}
+               "ABIERTO": ("Abierto", "#b45309"), "EN_PROCESO": ("En proceso", "#0020C2"), "RESUELTO": ("Resuelto", "#15803d")}
 
 
 def _td_evento(t, accion, detalle=""):
@@ -56118,7 +56183,7 @@ def tickets_doc_lista():
                "<section class='role-panel'><div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px'><a class='btn' href='/tickets-doc/nuevo'>➕ Nuevo ticket</a>%s</div>"
                "<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px'><span class='mini-text' style='align-self:center'>Área:</span>%s</div>"
                "<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px'><span class='mini-text' style='align-self:center'>Estado:</span>%s</div>"
-               "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'><tr style='background:#0B2D57;color:#fff'>"
+               "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'><tr style='background:#0020C2;color:#fff'>"
                "<th style='padding:8px;text-align:left'>Ticket</th><th style='text-align:left'>Asunto</th><th style='text-align:left'>Área</th><th style='text-align:left'>Colegio</th><th style='text-align:left'>Importancia</th><th style='text-align:left'>Estado</th><th style='text-align:left'>Creado</th></tr>%s</table></div></section>") % (ch_vista, ch_area, ch_est, tr)
     return page("Tickets", shell(content))
 
@@ -56467,12 +56532,12 @@ def gerencia_proveedores():
     aviso = ("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else ""
     content = ("<header class='role-hero'><div><h1>🕵️ Proveedores · todo lo que hacen</h1><p>Línea de tiempo de actividad del proveedor de carnés, tandas y reimpresiones por cobrar.</p></div>"
                "<a class='btn' href='/gerencia/hq'>← HQ</a></header>%s"
-               "<section class='role-panel'><h2 style='margin-top:0;color:#0B2D57'>Reimpresiones por cobrar (<b>$ %s COP</b> pendientes)</h2><div style='overflow:auto'>"
+               "<section class='role-panel'><h2 style='margin-top:0;color:#0020C2'>Reimpresiones por cobrar (<b>$ %s COP</b> pendientes)</h2><div style='overflow:auto'>"
                "<table style='width:100%%;border-collapse:collapse;font-size:12.5px'><tr style='background:#f1f5f9'><th>Fecha</th><th>Estudiante</th><th>Grado</th><th>Valor</th><th>Motivo</th><th>Bloqueó</th><th></th></tr>%s</table></div></section>"
-               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0B2D57'>Actividad</h2>"
+               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0020C2'>Actividad</h2>"
                "<form method='GET' style='display:flex;gap:8px;margin-bottom:10px'><input name='q' value='%s' placeholder='Buscar…' style='flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:8px'>"
                "<button class='btn'>Filtrar</button><a class='btn' style='background:#b91c1c;color:#fff' href='%s'>📄 PDF</a></form>"
-               "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:12.5px'><tr style='background:#0B2D57;color:#fff'><th style='padding:7px;text-align:left'>Fecha</th><th>Usuario</th><th>Tipo</th><th>Acción</th><th>Detalle</th><th>IP</th></tr>%s</table></div></section>") % (
+               "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:12.5px'><tr style='background:#0020C2;color:#fff'><th style='padding:7px;text-align:left'>Fecha</th><th>Usuario</th><th>Tipo</th><th>Acción</th><th>Detalle</th><th>IP</th></tr>%s</table></div></section>") % (
         aviso, "{:,}".format(pend).replace(",", "."), cob or "<tr><td colspan='7' style='padding:12px;color:#64748b'>Sin reimpresiones.</td></tr>", _esc(q), pdf, tr)
     return page("Proveedores (Gerencia)", shell(content))
 
@@ -56660,15 +56725,15 @@ def gerencia_api_conexiones():
         aviso += ("<div class='msg ok' style='font-size:14px'>Clave creada (<b>cópiala ahora, no se vuelve a mostrar</b>):<br><code style='font-size:15px;word-break:break-all'>%s</code></div>") % _esc(nueva)
     content = ("<header class='role-hero'><div><h1>🔌 Conexión API · EduTrack ↔ QGIS</h1><p>Claves de lectura para conectar sistemas externos. Solo datos agregados por colegio: nunca expone estudiantes ni menores.</p></div>"
                "<a class='btn' href='/gerencia/hq'>← HQ</a></header>%s"
-               "<section class='role-panel'><h2 style='margin-top:0;color:#0B2D57'>Claves</h2><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
+               "<section class='role-panel'><h2 style='margin-top:0;color:#0020C2'>Claves</h2><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
                "<tr style='background:#f1f5f9'><th>Nombre</th><th>Prefijo</th><th>Estado</th><th>Último uso</th><th>Usos</th><th></th></tr>%s</table></div>"
                "<form method='POST' style='margin-top:12px'><input type='hidden' name='accion' value='crear'><input name='nombre' placeholder='Nombre de la conexión (ej. QGIS oficina)' required style='padding:9px;border:1px solid #cbd5e1;border-radius:8px;width:100%%;box-sizing:border-box'>%s<button class='btn'>Crear clave</button></form></section>"
-               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0B2D57'>Cómo conectar</h2>"
+               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0020C2'>Cómo conectar</h2>"
                "<p><b>Endpoints</b> (cabecera <code>X-API-Key: &lt;clave&gt;</code>, máx. 120 por minuto):</p><ul style='line-height:1.7'>"
                "<li><code>%s/api/v1/health</code></li><li><code>%s/api/v1/instituciones</code> (JSON)</li><li><code>%s/api/v1/instituciones.geojson</code> (capa de puntos para QGIS)</li><li><code>%s/api/v1/estadisticas</code></li></ul>"
                "<p><b>En QGIS:</b> Preferencias → Autenticación → «+» → tipo <i>HTTP Header</i> con nombre <code>X-API-Key</code> y tu clave. Luego Capa → Añadir capa vectorial → Protocolo HTTP(S) → URL del GeoJSON y elige esa configuración de autenticación.</p>"
                "<p class='mini-text'>Todas las llamadas quedan contadas por clave. Revoca una clave si se expone.</p></section>"
-               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0B2D57'>Coordenadas de los colegios (latitud / longitud)</h2>"
+               "<section class='role-panel' style='margin-top:14px'><h2 style='margin-top:0;color:#0020C2'>Coordenadas de los colegios (latitud / longitud)</h2>"
                "<form method='POST'><input type='hidden' name='accion' value='geo'><div style='overflow:auto;max-height:420px'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
                "<tr style='background:#f1f5f9'><th>Código</th><th>Colegio</th><th>Latitud</th><th>Longitud</th></tr>%s</table></div>%s<button class='btn'>Guardar coordenadas</button></form></section>") % (
         aviso, filas, _step_up_campos(), base, base, base, base, gi, _step_up_campos())
@@ -56740,18 +56805,18 @@ def gerencia_sesiones_tecnicas():
 </div>
 <a class="btn" href="/gerencia/hq">← HQ</a></header>
 <section class="role-panel">
-  <h2 style="color:#0B2D57;font-size:16px;margin-top:0">Consola técnica (Desarrollo y Soporte · últimos 15 min)</h2>
+  <h2 style="color:#0020C2;font-size:16px;margin-top:0">Consola técnica (Desarrollo y Soporte · últimos 15 min)</h2>
   {_dev_sessions_html()}
 </section>
 <section class="role-panel" style="margin-top:14px">
-  <h2 style="color:#0B2D57;font-size:16px;margin-top:0">Personal técnico con sesión abierta (últimos 30 min)</h2>
+  <h2 style="color:#0020C2;font-size:16px;margin-top:0">Personal técnico con sesión abierta (últimos 30 min)</h2>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
     <tr style="background:#f8fafc"><th style="{th}">Usuario / Rol</th><th style="{th}">IP</th><th style="{th}">Navegador</th><th style="{th}">Inicio</th><th style="{th}">Último ping</th></tr>
     {filas_bd or vacio}
   </table></div>
 </section>
 <section class="role-panel" style="margin-top:14px">
-  <h2 style="color:#0B2D57;font-size:16px;margin-top:0">Últimas acciones de Soporte y Desarrollo</h2>
+  <h2 style="color:#0020C2;font-size:16px;margin-top:0">Últimas acciones de Soporte y Desarrollo</h2>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
     <tr style="background:#f8fafc"><th style="{th}">Fecha / hora</th><th style="{th}">Usuario / Rol</th><th style="{th}">Acción</th><th style="{th}">IP</th></tr>
     {filas_act or vacio_a}
@@ -56803,7 +56868,7 @@ def gerencia_actualizaciones():
         return (
             "<div style='border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff'>"
             f"<div style='display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap'>"
-            f"<b style='color:#0B2D57'>v{_esc(v.version)}</b>{_upd_badge(etiqueta, color)}</div>"
+            f"<b style='color:#0020C2'>v{_esc(v.version)}</b>{_upd_badge(etiqueta, color)}</div>"
             f"<div style='font-size:12px;color:#64748b;margin:2px 0 6px'>{_esc(v.fecha)} · {_esc(v.creado_por or '')}</div>"
             f"<div style='font-size:13px;color:#1e293b;white-space:normal;word-break:break-word'>{resumen}</div></div>")
 
@@ -56841,11 +56906,11 @@ def gerencia_actualizaciones():
 </div>
 <a class="btn" href="/gerencia/hq">← HQ</a></header>
 <section class="role-panel">
-  <h2 style="color:#0B2D57;margin-top:0">⏳ En progreso</h2>
+  <h2 style="color:#0020C2;margin-top:0">⏳ En progreso</h2>
   {prog or "<p class='mini-text'>Nada en progreso por ahora.</p>"}
 </section>
 <section class="role-panel" style="margin-top:14px">
-  <h2 style="color:#0B2D57;margin-top:0">✅ Procesadas</h2>
+  <h2 style="color:#0020C2;margin-top:0">✅ Procesadas</h2>
   {proc_html}
 </section>
 <section class="role-panel" style="margin-top:14px">
@@ -57471,7 +57536,7 @@ def soporte_config_notas():
     <h2>Diseño rápido</h2>
     <div class="form-row">
       <div><label><b>Color primario</b></label>
-        <input type="color" name="primario" value="{getattr(p,'tema_color_primario',None) or '#0B2D57'}" style="height:42px;padding:4px">
+        <input type="color" name="primario" value="{getattr(p,'tema_color_primario',None) or '#0020C2'}" style="height:42px;padding:4px">
       </div>
       <div><label><b>Color acento</b></label>
         <input type="color" name="acento" value="{getattr(p,'tema_color_acento',None) or '#1e40af'}" style="height:42px;padding:4px">
@@ -57507,7 +57572,7 @@ def soporte_diseno():
     mensaje = ""
     if request.method == "POST":
         p.tema_fuente = (request.form.get("fuente") or "Segoe UI").strip()[:80]
-        p.tema_color_primario = (request.form.get("primario") or "#0B2D57").strip()[:20]
+        p.tema_color_primario = (request.form.get("primario") or "#0020C2").strip()[:20]
         p.tema_color_acento = (request.form.get("acento") or "#1e40af").strip()[:20]
         p.tema_color_fondo = (request.form.get("fondo") or "#f1f5f9").strip()[:20]
         db.session.commit()
@@ -57530,7 +57595,7 @@ def soporte_diseno():
     <select name="fuente">{opts}</select>
     <div class="form-row" style="margin-top:12px">
       <div><label><b>Color primario</b></label>
-        <input type="color" name="primario" value="{getattr(p,"tema_color_primario",None) or "#0B2D57"}" style="height:42px;padding:4px">
+        <input type="color" name="primario" value="{getattr(p,"tema_color_primario",None) or "#0020C2"}" style="height:42px;padding:4px">
       </div>
       <div><label><b>Color acento</b></label>
         <input type="color" name="acento" value="{getattr(p,"tema_color_acento",None) or "#1e40af"}" style="height:42px;padding:4px">
@@ -57602,7 +57667,7 @@ def soporte_pqr_probar_correo():
                     )
                     _m.add_alternative(
                         f"<div style='font-family:Segoe UI,Arial;padding:20px'>"
-                        f"<h2 style='color:#0B2D57'>Prueba de correo OK</h2>"
+                        f"<h2 style='color:#0020C2'>Prueba de correo OK</h2>"
                         f"<p>Si ves este mensaje, SMTP de Gmail funciona en Railway.</p>"
                         f"<p style='color:#64748b;font-size:13px'>Remitente: {correo_envio}</p>"
                         f"</div>",
@@ -57635,7 +57700,7 @@ def soporte_pqr_probar_correo():
 <div class="role-panel" style="margin-top:12px">
   <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap">
     <input type="email" name="destino" required placeholder="tu-correo@ejemplo.com" style="flex:1;min-width:240px;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
-    <button style="background:#0B2D57;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Enviar correo de prueba</button>
+    <button style="background:#0020C2;color:#fff;padding:10px 18px;border:0;border-radius:8px;font-weight:700">Enviar correo de prueba</button>
   </form>
   <p style="font-size:12px;color:#64748b;margin-top:10px">Esto NO crea un ticket real — solo envía el mismo diseño de correo con datos ficticios, para que lo veas llegar a tu bandeja.</p>
 </div>
@@ -57733,7 +57798,7 @@ def soporte_pqr_centro():
     <select name="ciudad" id="fil_mun" style="padding:10px;border-radius:8px;border:1px solid #cbd5e1;max-width:180px">
       <option value="">Municipio / Ciudad</option>
     </select>
-    <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Filtrar</button>
+    <button style="padding:10px 16px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700">Filtrar</button>
   </form>
   <script>document.addEventListener('DOMContentLoaded',function(){{var m=document.getElementById('fil_mun');if(m)m.setAttribute('data-sel','{_esc(f_ciudad)}');fillMun('fil_dep','fil_mun');}});</script>
   <div>{tabs}{limpiar}</div>
@@ -58476,7 +58541,7 @@ def pqr_pdf_publico(codigo):
         "PDF no disponible",
         """
         <div style="max-width:480px;margin:40px auto;font-family:Segoe UI,Arial;padding:24px;background:#fff;border-radius:12px;border:1px solid #e2e8f0">
-          <h1 style="color:#0B2D57;font-size:18px">Documento solo por correo</h1>
+          <h1 style="color:#0020C2;font-size:18px">Documento solo por correo</h1>
           <p>La respuesta formal en PDF <b>no se descarga desde la consulta</b>. Se envía únicamente al correo electrónico que registró al radicar la PQR.</p>
           <p>Si no la recibió, revise spam o solicite reenvío a soporte con su número de ticket o Radicado.</p>
           <p><a href="/pqr/consulta">← Volver a consultar</a></p>
@@ -58506,12 +58571,12 @@ def encuesta_csat_publica(token):
         if not enc:
             return page("Encuesta no válida",
                 "<div style='max-width:480px;margin:40px auto;font-family:Segoe UI,Arial;text-align:center'>"
-                "<h1 style='color:#0B2D57'>Enlace no válido o vencido</h1>"
+                "<h1 style='color:#0020C2'>Enlace no válido o vencido</h1>"
                 "<p style='color:#64748b'>Solicite un nuevo link a soporte PROCSIS.</p></div>")
     if enc.respondida and request.method == "GET":
         return page("Gracias",
             "<div style='max-width:480px;margin:40px auto;font-family:Segoe UI,Arial;text-align:center;padding:24px'>"
-            "<h1 style='color:#0B2D57'>Ya registramos su evaluación</h1>"
+            "<h1 style='color:#0020C2'>Ya registramos su evaluación</h1>"
             f"<p>Promedio: <b>{enc.promedio:.1f}</b> / 5</p>"
             "<p style='color:#64748b'>Gracias por ayudarnos a mejorar · PROCSIS · EduTrack</p></div>")
 
@@ -58574,7 +58639,7 @@ def encuesta_csat_publica(token):
                     "<div style='max-width:520px;margin:40px auto;font-family:Segoe UI,Arial;text-align:center;padding:28px;"
                     "background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08)'>"
                     "<div style='font-size:42px'>✅</div>"
-                    "<h1 style='color:#0B2D57;margin:8px 0'>¡Gracias por su evaluación!</h1>"
+                    "<h1 style='color:#0020C2;margin:8px 0'>¡Gracias por su evaluación!</h1>"
                     f"<p style='font-size:18px'>Promedio: <b style='color:#0d9488'>{enc.promedio:.1f}</b> / 5</p>"
                     + ("<p style='color:#b91c1c;font-size:14px'>Hemos registrado su inconformidad. Un asesor de PROCSIS podrá contactarle.</p>" if alerta else "")
                     + "<p style='color:#64748b;font-size:13px;margin-top:16px'>PROCSIS · EduTrack · Su IP fue registrada para trazabilidad (Ley 1581 de 2012).</p></div>")
@@ -58601,11 +58666,11 @@ body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0
 .wrap{{max-width:560px;margin:24px auto;padding:16px}}
 .card{{background:#fff;border-radius:16px;padding:22px;box-shadow:0 8px 28px rgba(15,23,42,.08);border:1px solid #e2e8f0}}
 .q{{margin:18px 0;padding-bottom:14px;border-bottom:1px solid #f1f5f9}}
-.q b{{display:block;margin-bottom:8px;color:#0B2D57;font-size:14px}}
+.q b{{display:block;margin-bottom:8px;color:#0020C2;font-size:14px}}
 .stars{{display:flex;gap:2px;align-items:center}}
 .stars label{{color:#cbd5e1;transition:color .15s}}
 textarea{{width:100%;min-height:90px;padding:10px;border-radius:10px;border:1px solid #cbd5e1;box-sizing:border-box}}
-button{{background:#0B2D57;color:#fff;border:0;padding:14px 22px;border-radius:12px;font-weight:800;width:100%;cursor:pointer;margin-top:12px;font-size:15px}}
+button{{background:#0020C2;color:#fff;border:0;padding:14px 22px;border-radius:12px;font-weight:800;width:100%;cursor:pointer;margin-top:12px;font-size:15px}}
 button:hover{{background:#1e3a8a}}
 .hint{{font-size:12px;color:#94a3b8;margin-top:8px}}
 </style></head><body>
@@ -58614,7 +58679,7 @@ button:hover{{background:#1e3a8a}}
     <div style="text-align:center;margin-bottom:8px">
       <img src="{logo}" alt="PROCSIS" style="max-height:56px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
       <div style="font-size:12px;letter-spacing:1px;color:#64748b;margin-top:6px">PROCSIS · EVALUACIÓN DE SERVICIO</div>
-      <h1 style="margin:8px 0 4px;font-size:20px;color:#0B2D57">¿Cómo fue su experiencia?</h1>
+      <h1 style="margin:8px 0 4px;font-size:20px;color:#0020C2">¿Cómo fue su experiencia?</h1>
       <p style="margin:0;font-size:13px;color:#64748b">Caso { _esc(enc.radicado or '') } · 1 = muy malo · 5 = excelente</p>
     </div>
     {err_html}
@@ -59053,7 +59118,7 @@ def reportes_pago_staff():
     if not (solo_consulta and rol == "Soporte"):
         form_gen = f"""
 <section class="role-panel">
-  <h2 style="margin-top:0;color:#0B2D57">Generar reporte de pagos / facturación</h2>
+  <h2 style="margin-top:0;color:#0020C2">Generar reporte de pagos / facturación</h2>
   <p style="font-size:13px;color:#64748b">Validación: mes obligatorio + justificación del motivo de descarga (Ley 1581). La descarga queda auditada con IP, ubicación y hora.</p>
   <form method="POST" id="form-rep-pago" onsubmit="return validarReportePago()">
     <input type="hidden" name="accion" value="descargar">
@@ -59077,7 +59142,7 @@ def reportes_pago_staff():
       <option value="PDF">PDF</option>
     </select>
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-      <button type="submit" id="btn-desc-rep" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Descargar reporte</button>
+      <button type="submit" id="btn-desc-rep" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Descargar reporte</button>
       <button type="submit" formaction="?preview=1" formmethod="get" style="background:#64748b;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:700;cursor:pointer">Solo previsualizar</button>
     </div>
   </form>
@@ -59097,14 +59162,14 @@ def reportes_pago_staff():
   </script>
 </section>
 <section class="role-panel" style="margin-top:12px">
-  <h2 style="margin-top:0;font-size:15px;color:#0B2D57">Vista previa · { _esc(mes_sel) }</h2>
+  <h2 style="margin-top:0;font-size:15px;color:#0020C2">Vista previa · { _esc(mes_sel) }</h2>
   <p><b>{len(facturas)}</b> registros · Total <b>$ {total_valor:,.0f}</b> · Pagado <b style="color:#16a34a">$ {pagado:,.0f}</b> · Pendiente <b style="color:#b45309">$ {pend:,.0f}</b></p>
 </section>
 """
     else:
         form_gen = """
 <section class="role-panel">
-  <h2 style="margin-top:0;color:#0B2D57">Consulta de descargas (Soporte)</h2>
+  <h2 style="margin-top:0;color:#0020C2">Consulta de descargas (Soporte)</h2>
   <p style="font-size:13px;color:#64748b">Solo consulta quién descargó reportes y por qué. La generación con archivo la hacen Cobranza o Gerencia.</p>
   <p><a class="btn" href="/soporte/reportes-pago">Ver también panel con generación (si tiene permiso)</a></p>
 </section>
@@ -59120,10 +59185,10 @@ def reportes_pago_staff():
 {"<div class='msg ok'>"+_esc(mensaje)+"</div>" if mensaje else ""}
 {form_gen}
 <section class="role-panel" style="margin-top:14px">
-  <h2 style="margin-top:0;font-size:15px;color:#0B2D57">🔒 Historial de descargas (sello de auditoría)</h2>
+  <h2 style="margin-top:0;font-size:15px;color:#0020C2">🔒 Historial de descargas (sello de auditoría)</h2>
   <p style="font-size:12px;color:#64748b">IP, ubicación, hora y motivo — inmutable para trazabilidad (Ley 1581 de 2012).</p>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px">Fecha/hora</th><th>Usuario</th><th>Mes</th><th>Formato</th><th>Colegio</th><th>Justificación</th><th>IP / Ubicación</th><th>N°</th>
     </tr>
     {filas_h}
@@ -59201,7 +59266,7 @@ def reporte_financiero_rectoria():
     <label style="font-weight:700">Formato</label>
     <select name="formato"><option value="PDF">PDF</option><option value="XLSX">Excel</option></select>
     <p style="margin-top:8px;font-size:13px">Registros del mes: <b>{len(facturas)}</b></p>
-    <button type="submit" id="btn-r" style="margin-top:12px;background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Descargar reporte</button>
+    <button type="submit" id="btn-r" style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Descargar reporte</button>
   </form>
   <script>
   function validarRect(){{
@@ -59260,14 +59325,14 @@ def soporte_consultas_descargas_reportes():
   <p>Solo lectura: quién descargó, cuándo, desde dónde y por qué.</p>
 </div>
 <a class="btn" href="/soporte_admin">← Soporte</a>
-<a class="btn" href="/soporte/reportes-pago" style="background:#0B2D57">Reportes pago</a></header>
+<a class="btn" href="/soporte/reportes-pago" style="background:#0020C2">Reportes pago</a></header>
 <section class="role-panel">
   <form method="GET" style="display:flex;gap:8px;margin-bottom:12px">
     <input name="q" value="{_esc(q)}" placeholder="Usuario, IP, colegio, motivo, mes…" style="flex:1;padding:10px;border-radius:8px;border:1px solid #cbd5e1">
     <button type="submit" class="btn">Buscar</button>
   </form>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px">Fecha</th><th>Usuario</th><th>Portal</th><th>Mes/Fmt</th><th>Colegio</th><th>Motivo</th><th>IP / Ubicación</th>
     </tr>
     {filas}
@@ -59579,7 +59644,7 @@ def _panel_fidelizacion_csat_inner():
 {"<div class='msg ok'><b>Link encuesta:</b> <code style='word-break:break-all'>" + _esc(encuesta_url_nueva) + "</code><br><a target='_blank' href='" + _esc(encuesta_url_nueva) + "'>Abrir</a> · <a target='_blank' href='https://wa.me/?text=" + _esc(encuesta_url_nueva) + "'>WhatsApp</a></div>" if encuesta_url_nueva else ""}
 
 <section class="role-panel">
-  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Generar encuesta o registrar consulta</h2>
+  <h2 style="margin-top:0;font-size:16px;color:#0020C2">Generar encuesta o registrar consulta</h2>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
     <form method="POST" style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:14px">
       <input type="hidden" name="accion" value="generar_colegio">
@@ -59609,24 +59674,24 @@ def _panel_fidelizacion_csat_inner():
 </section>
 
 <section class="role-panel">
-  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Índice de Felicidad (CSAT)</h2>
+  <h2 style="margin-top:0;font-size:16px;color:#0020C2">Índice de Felicidad (CSAT)</h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
-    <div style="background:#0B2D57;color:#fff;border-radius:12px;padding:16px;text-align:center">
+    <div style="background:#0020C2;color:#fff;border-radius:12px;padding:16px;text-align:center">
       <div style="font-size:12px;opacity:.85">Promedio global</div>
       <div style="font-size:32px;font-weight:800">{prom_global}</div>
       <div style="font-size:11px">/ 5 · {n} respuestas</div>
     </div>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
-      <div style="font-size:11px;color:#64748b">1. Chat</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a1}</div>
+      <div style="font-size:11px;color:#64748b">1. Chat</div><div style="font-size:24px;font-weight:800;color:#0020C2">{a1}</div>
     </div>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
-      <div style="font-size:11px;color:#64748b">2. Asesor</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a2}</div>
+      <div style="font-size:11px;color:#64748b">2. Asesor</div><div style="font-size:24px;font-weight:800;color:#0020C2">{a2}</div>
     </div>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
-      <div style="font-size:11px;color:#64748b">3. App EduTrack</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a3}</div>
+      <div style="font-size:11px;color:#64748b">3. App EduTrack</div><div style="font-size:24px;font-weight:800;color:#0020C2">{a3}</div>
     </div>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center">
-      <div style="font-size:11px;color:#64748b">4. Experiencia</div><div style="font-size:24px;font-weight:800;color:#0B2D57">{a4}</div>
+      <div style="font-size:11px;color:#64748b">4. Experiencia</div><div style="font-size:24px;font-weight:800;color:#0020C2">{a4}</div>
     </div>
     <div style="border:1px solid #fecaca;border-radius:12px;padding:14px;text-align:center;background:#fef2f2">
       <div style="font-size:11px;color:#991b1b">Alertas retención</div>
@@ -59652,10 +59717,10 @@ def _panel_fidelizacion_csat_inner():
 </section>
 
 <section class="role-panel" style="margin-top:14px">
-  <h2 style="margin-top:0;font-size:16px;color:#0B2D57">Últimas evaluaciones</h2>
+  <h2 style="margin-top:0;font-size:16px;color:#0020C2">Últimas evaluaciones</h2>
   <p class="mini-text">Pendientes de respuesta: <b>{len(pendientes)}</b></p>
   <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px">Fecha</th><th>Radicado</th><th>Cliente</th><th>Chat</th><th>Asesor</th><th>App</th><th>Global</th><th>Prom.</th><th>Comentario</th>
     </tr>
     {filas_r}
@@ -60361,7 +60426,7 @@ def _rec_enviar_correo(destino, asunto, texto, html, adjunto=None, nombre_adj="d
 def _rec_html_correo(titulo, cuerpo_html):
     return (
         "<div style='font-family:Segoe UI,Arial,sans-serif;max-width:620px;margin:0 auto;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden'>"
-        "<div style='background:linear-gradient(135deg,#0B2D57,#1e40af);color:#fff;padding:20px 24px'>"
+        "<div style='background:linear-gradient(135deg,#0020C2,#1e40af);color:#fff;padding:20px 24px'>"
         "<div style='font-size:11px;letter-spacing:1.2px;opacity:.9'>PROCSIS · EDUTRACK</div>"
         "<h1 style='margin:8px 0 0;font-size:19px'>" + _esc(titulo) + "</h1></div>"
         "<div style='padding:22px 24px;color:#0f172a;font-size:14px;line-height:1.55'>" + cuerpo_html + "</div>"
@@ -60453,7 +60518,7 @@ def _rec_enviar_notificacion(n, rec, t):
         "<p>Estimado(a) <b>%s</b>,</p><p>Le notificamos la <b>resolución del recurso de %s</b> correspondiente al radicado "
         "<b>%s</b>. La encuentra adjunta en PDF.</p>"
         "<p style='font-size:12px;color:#475569'>Huella de integridad (SHA-256) del documento:<br><code>%s</code></p>"
-        "<p><a href='%s' style='display:inline-block;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:8px'>Ver seguimiento del caso</a></p>"
+        "<p><a href='%s' style='display:inline-block;background:#0020C2;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:8px'>Ver seguimiento del caso</a></p>"
         % (_esc((t.razon_social or "usuario")), etapa_txt, _esc(rec.radicado_recurso), n.sha256, _esc(link))
     )
     ok = _rec_enviar_correo(
@@ -60533,7 +60598,7 @@ def _rec_radicar(t, tipo, fundamentos, pretension, canal, usuario=""):
         "<p>Estimado(a) <b>%s</b>,</p><p>Recibimos su <b>%s</b>.</p>"
         "<p><b>Radicado del recurso:</b> %s<br><b>Fecha y hora de radicación:</b> %s<br>"
         "<b>Resolveremos y notificaremos a más tardar el:</b> %s (%d días hábiles)</p>"
-        "<p><a href='%s' style='display:inline-block;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:8px'>Ver seguimiento</a></p>"
+        "<p><a href='%s' style='display:inline-block;background:#0020C2;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:8px'>Ver seguimiento</a></p>"
         % (_esc(t.razon_social or "usuario"), _esc(_REC_TIPOS[tipo].lower()), _esc(rec.radicado_recurso),
            ahora_dt.strftime("%Y-%m-%d %H:%M:%S"), rec.fecha_limite_resolucion, PQR_RECURSO_DIAS_EMPRESA, _esc(link)))
     _rec_enviar_correo((t.email or "").strip(), "Recibimos su recurso · %s" % rec.radicado_recurso,
@@ -60729,12 +60794,12 @@ def _rec_banner_alertas():
 
 # ───────────────────────── Página pública del cliente ─────────────────────────
 _REC_PUB_CSS = ("<style>body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a}"
-                ".rp-top{background:#0B2D57;color:#fff;padding:14px 22px;font-weight:700}.rp-w{max-width:720px;margin:0 auto;padding:22px 16px 40px}"
+                ".rp-top{background:#0020C2;color:#fff;padding:14px 22px;font-weight:700}.rp-w{max-width:720px;margin:0 auto;padding:22px 16px 40px}"
                 ".rp-c{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 8px 24px rgba(15,23,42,.06)}"
-                ".rp-c h2{margin:0 0 10px;color:#0B2D57;font-size:20px}.rp-c label{display:block;font-weight:700;font-size:13px;margin:12px 0 4px}"
+                ".rp-c h2{margin:0 0 10px;color:#0020C2;font-size:20px}.rp-c label{display:block;font-weight:700;font-size:13px;margin:12px 0 4px}"
                 ".rp-c textarea,.rp-c input[type=text]{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit}"
                 ".rp-opt{display:block;border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;margin:6px 0;font-weight:400!important;cursor:pointer}"
-                ".rp-b{margin-top:14px;background:#0B2D57;color:#fff;border:0;border-radius:10px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:15px}"
+                ".rp-b{margin-top:14px;background:#0020C2;color:#fff;border:0;border-radius:10px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:15px}"
                 ".rp-m{background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px;margin-bottom:12px}.rp-ok{background:#dcfce7;color:#166534;border-radius:8px;padding:10px;margin-bottom:12px}"
                 ".rp-s{font-size:13px;color:#475569;line-height:1.55}.rp-l{border-left:3px solid #cbd5e1;padding:2px 0 2px 12px;margin:10px 0;font-size:14px}</style>")
 
@@ -60754,7 +60819,7 @@ def _rec_box_publico(t, token):
             return ("<div style='margin-top:18px;padding:14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff'>"
                     "<b>¿No está de acuerdo con la respuesta?</b><br><span style='font-size:13px;color:#334155'>Puede interponer un recurso de reposición "
                     "(y, en subsidio, de apelación) hasta el <b>%s</b> (%d días hábiles desde la notificación).</span><br>"
-                    "<a href='/pqr/recurso/%s' style='display:inline-block;margin-top:8px;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;padding:9px 16px;border-radius:8px'>Interponer recurso</a></div>"
+                    "<a href='/pqr/recurso/%s' style='display:inline-block;margin-top:8px;background:#0020C2;color:#fff;text-decoration:none;font-weight:700;padding:9px 16px;border-radius:8px'>Interponer recurso</a></div>"
                     % (lim.isoformat(), PQR_RECURSO_DIAS_CLIENTE, _esc(token)))
         return "<p style='margin-top:18px;font-size:12px;color:#64748b'>El plazo para interponer recursos venció el %s.</p>" % lim.isoformat()
     except Exception as ex:
@@ -60872,8 +60937,8 @@ def gerencia_pqr_apelaciones():
     th = "<tr><th>Recurso</th><th>Solicitante</th><th>Estado</th><th>Tipo</th><th>Plazo / decisión</th></tr>"
     body = (
         "<div style='background:#f1f5f9;min-height:100vh;font-family:Segoe UI,system-ui,sans-serif;padding:20px'><div style='max-width:980px;margin:0 auto'>"
-        "<a href='/gerencia/hq' style='color:#0B2D57;font-weight:700;text-decoration:none'>← HQ</a>"
-        "<h1 style='color:#0B2D57;margin:8px 0 4px'>⚖️ Recursos y apelaciones PQRS</h1>"
+        "<a href='/gerencia/hq' style='color:#0020C2;font-weight:700;text-decoration:none'>← HQ</a>"
+        "<h1 style='color:#0020C2;margin:8px 0 4px'>⚖️ Recursos y apelaciones PQRS</h1>"
         "<p style='color:#64748b;font-size:14px'>Reposiciones en trámite y apelaciones escaladas a Gerencia. Plazo del cliente: %d días hábiles · plazo de la empresa: %d días hábiles (calendario con festivos de Colombia).</p>"
         "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0;overflow:auto'><h3 style='margin-top:0'>En trámite (%d)</h3>"
         "<table style='width:100%%;border-collapse:collapse;font-size:13px'>%s%s</table></div>"
@@ -61075,26 +61140,26 @@ def mfa_pagina():
     <form method="POST"><input type="hidden" name="accion" value="validar">
       <input name="pin" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" required autofocus
         style="width:100%;box-sizing:border-box;padding:12px;font-size:20px;letter-spacing:8px;text-align:center;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px">
-      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer">Validar e ingresar</button>
+      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:800;cursor:pointer">Validar e ingresar</button>
     </form>
     <form method="POST" style="text-align:center;margin-top:10px"><input type="hidden" name="accion" value="reiniciar">
-      <button style="background:none;border:0;color:#0B2D57;font-size:12px;cursor:pointer;text-decoration:underline">Cambiar correo / reenviar PIN</button></form>"""
+      <button style="background:none;border:0;color:#0020C2;font-size:12px;cursor:pointer;text-decoration:underline">Cambiar correo / reenviar PIN</button></form>"""
     else:
         cuerpo = f"""
     <p style="font-size:13px;color:#64748b;text-align:center;margin:0 0 14px">Para validar su identidad, escriba el correo donde recibirá el PIN de verificación.</p>
     <form method="POST"><input type="hidden" name="accion" value="enviar">
       <input name="correo" type="email" required autofocus value="{_esc(registrado)}" placeholder="correo@ejemplo.com"
         style="width:100%;box-sizing:border-box;padding:12px;font-size:15px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px">
-      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer">Enviar PIN</button>
+      <button style="width:100%;padding:13px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:800;cursor:pointer">Enviar PIN</button>
     </form>"""
     body = f"""
 <div style="min-height:100vh;background:#f4f6f8;display:flex;align-items:center;justify-content:center;font-family:Segoe UI,system-ui,sans-serif">
   <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:380px;width:100%;box-shadow:0 8px 28px rgba(15,23,42,.08)">
-    <h1 style="margin:0 0 8px;font-size:20px;color:#0B2D57;text-align:center">Verificación de ingreso</h1>
+    <h1 style="margin:0 0 8px;font-size:20px;color:#0020C2;text-align:center">Verificación de ingreso</h1>
     {"<div style='background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:10px 0;font-size:13px'>"+_esc(info)+"</div>" if info else ""}
     {"<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0;font-size:13px'>"+_esc(error)+"</div>" if error else ""}
     {cuerpo}
-    <p style="text-align:center;margin-top:12px"><a href="/logout" style="font-size:12px;color:#0B2D57">Cancelar</a></p>
+    <p style="text-align:center;margin-top:12px"><a href="/logout" style="font-size:12px;color:#0020C2">Cancelar</a></p>
   </div>
 </div>"""
     return page("Verificación de ingreso", body)
@@ -61609,7 +61674,7 @@ def _pqr_panel_cobro(t, B):
     """Cruce de información + resolución de PQRS de cobro (solo roles que gestionan)."""
     from urllib.parse import quote as _qq
     inst = _pqr_institucion(t)
-    cab = "<div style='margin:14px 0;padding:14px;border:2px solid #0B2D57;border-radius:12px;background:#f8fafc'><h3 style='margin:0 0 8px;color:#0B2D57'>💳 PQRS de cobro · cruce de información</h3>"
+    cab = "<div style='margin:14px 0;padding:14px;border:2px solid #0020C2;border-radius:12px;background:#f8fafc'><h3 style='margin:0 0 8px;color:#0020C2'>💳 PQRS de cobro · cruce de información</h3>"
     if not inst:
         return cab + f"""<p style="font-size:13px;color:#92400e">No se encontró la institución de esta PQR (sin código/NIT coincidente).
         Puede vincularla escribiendo el código del colegio al resolver.</p>
@@ -61642,7 +61707,7 @@ def _pqr_panel_cobro(t, B):
   <a class="btn" style="background:#b45309" href="{_tk('Cobranza', 'Verificar pago · ' + inst.nombre[:60] + ' · ' + ref, just)}">🧾 Consultar a Facturación / Cobranza</a>
   <a class="btn" style="background:#475569" href="{_tk('Gerencia', 'Revisión · ' + inst.nombre[:60] + ' · ' + ref, just)}">🏛 Consultar a Gerencia</a>
 </div>
-<details><summary style="cursor:pointer;font-weight:800;color:#0B2D57">✅ Resolver PQR de cobro (pago verificado)</summary>{_pqr_form_resolver(t, inst)}</details></div>"""
+<details><summary style="cursor:pointer;font-weight:800;color:#0020C2">✅ Resolver PQR de cobro (pago verificado)</summary>{_pqr_form_resolver(t, inst)}</details></div>"""
 
 
 def _pqr_form_resolver(t, inst):
@@ -61746,7 +61811,7 @@ def soluciones_clientes():
 <a class="btn" href="/soluciones-procsis">Volver</a></header>
 <div class="role-panel"><form method="GET" style="display:flex;gap:8px">
 <input name="q" value="{_esc(q)}" placeholder="Nombre, código, NIT, municipio o rector" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px">
-<button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button></form></div>
+<button style="padding:10px 16px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button></form></div>
 <div class="role-panel" style="overflow:auto;margin-top:12px"><table>
 <tr><th>Institución</th><th>NIT</th><th>Municipio</th><th>Plan</th><th>Estado</th><th>Satisfacción</th></tr>
 {filas or "<tr><td colspan=6>Sin resultados</td></tr>"}</table></div>"""
@@ -61940,9 +62005,9 @@ def soluciones_cliente_detalle(iid):
     <option value="AUTO">Automático (según facturas)</option><option value="VERDE">🟢 Al día</option>
     <option value="AMARILLO">🟡 Próximo a vencer</option><option value="ROJO">🔴 En mora</option></select></div>
   <input name="motivo" required minlength="10" placeholder="Motivo del cambio (obligatorio)" style="flex:1;min-width:220px;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
-  <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar</button>
+  <button style="padding:10px 16px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar</button>
 </form>
-<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:800;color:#0B2D57">✅ Registrar pago verificado</summary>
+<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:800;color:#0020C2">✅ Registrar pago verificado</summary>
 <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
   <input type="hidden" name="accion" value="pago">
   <select name="medio" style="padding:9px;border-radius:8px;border:1px solid #cbd5e1">{medios}</select>
@@ -61959,7 +62024,7 @@ def soluciones_cliente_detalle(iid):
   <input type="hidden" name="accion" value="etiqueta">
   <select name="etiqueta" style="padding:9px;border-radius:8px;border:1px solid #cbd5e1">{opts}</select>
   <input name="nota" value="{_esc(reg.nota if reg else '')}" placeholder="Nota interna (opcional)" style="flex:1;min-width:200px;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
-  <button style="padding:10px 16px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar etiqueta</button>
+  <button style="padding:10px 16px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700">Guardar etiqueta</button>
 </form></div>
 <div class="role-panel" style="margin-top:12px"><h3 style="margin-top:0">Historial de actividad de la cuenta</h3>
 <h4>Bloqueos y contenciones previas</h4>{t_blq}
@@ -62549,19 +62614,19 @@ def planillas_menu():
     body = f"""
 <style>
 .pl{{font-family:Segoe UI,system-ui,sans-serif;max-width:920px;margin:24px auto;padding:16px;color:#0f172a}}
-.pl h1{{color:#0B2D57;margin:0 0 8px;font-size:24px}}
+.pl h1{{color:#0020C2;margin:0 0 8px;font-size:24px}}
 .pl p{{color:#64748b;font-size:14px;line-height:1.5}}
 .pl-grid{{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}}
 @media(max-width:700px){{.pl-grid{{grid-template-columns:1fr}}}}
 .pl-card{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 14px rgba(15,23,42,.05)}}
-.pl-card h2{{margin:0 0 8px;color:#0B2D57;font-size:17px}}
+.pl-card h2{{margin:0 0 8px;color:#0020C2;font-size:17px}}
 .pl-card label{{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}}
 .pl-card select,.pl-card input{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;box-sizing:border-box}}
-.pl-card button,.pl-card a.btn{{display:inline-block;margin-top:12px;padding:11px 16px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;font-size:14px;text-decoration:none;cursor:pointer}}
+.pl-card button,.pl-card a.btn{{display:inline-block;margin-top:12px;padding:11px 16px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:800;font-size:14px;text-decoration:none;cursor:pointer}}
 .pl-card a.btn2{{background:#15803d}}
 </style>
 <div class="pl">
-  <a href="/dashboard" style="color:#0B2D57;font-weight:700;text-decoration:none">← Panel</a>
+  <a href="/dashboard" style="color:#0020C2;font-weight:700;text-decoration:none">← Panel</a>
   <h1>Planillas institucionales</h1>
   <p>Descargue planillas en PDF filtradas por grado. Incluyen el código único del estudiante de la institución.</p>
   <div class="pl-grid">
@@ -63514,7 +63579,7 @@ def gerencia_facturacion_cron():
     return page(
         "Cron facturación",
         f"<div style='font-family:Segoe UI;padding:24px;max-width:560px;margin:40px auto'>"
-        f"<h1 style='color:#0B2D57'>Ciclo de facturación</h1>"
+        f"<h1 style='color:#0020C2'>Ciclo de facturación</h1>"
         f"<p>Facturas generadas: <b>{r.get('generadas', 0)}</b></p>"
         f"<p>Instituciones bloqueadas por mora: <b>{r.get('bloqueadas', 0)}</b></p>"
         f"<p><a href='/gerencia/facturacion'>← Volver a facturación</a></p></div>",
@@ -63532,7 +63597,7 @@ _TURNOS_CSS = r"""
 .pt-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px}
 .pt-head p{margin:4px 0 0;font-size:12.5px;color:#64748b;max-width:660px;line-height:1.45}
 .pt-count{background:#d1fae5;color:#065f46;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;margin-left:6px}
-.lnk-actualizar{color:#0071e3!important;font-weight:600;font-size:13px;text-decoration:none}
+.lnk-actualizar{color:#0020C2!important;font-weight:600;font-size:13px;text-decoration:none}
 .lnk-actualizar:hover{text-decoration:underline}
 .pt-vacio{color:#94a3b8;font-size:13px;margin:0 0 4px}
 .tarjeta-asesor-turno{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid #e2e8f0;border-left:5px solid #10b981;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 4px 6px -1px rgba(148,163,184,.05)}
@@ -63558,15 +63623,15 @@ details.panel-docs>summary{cursor:pointer;font-weight:600;font-size:14px;color:#
 details.panel-docs .nota-docs{font-size:12.5px;color:#64748b;margin:0 0 10px;line-height:1.45}
 .form-doc{display:flex;gap:8px;margin:0;flex-wrap:wrap}
 .panel-turnos-container input.input-doc{width:220px;margin:0;padding:8px 12px;font-size:13px;color:#0f172a;background:#f8fafc!important;border:1px solid #cbd5e1!important;border-radius:8px!important;box-shadow:none!important}
-.panel-turnos-container input.input-doc:focus{background:#fff!important;border-color:#0071e3!important;box-shadow:0 0 0 4px rgba(0,113,227,.1)!important}
-.panel-turnos-container .btn-guardar-doc{background:#0071e3!important;color:#fff!important;border:none!important;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;box-shadow:none!important;filter:none}
+.panel-turnos-container input.input-doc:focus{background:#fff!important;border-color:#0020C2!important;box-shadow:0 0 0 4px rgba(0,32,194,.1)!important}
+.panel-turnos-container .btn-guardar-doc{background:#0020C2!important;color:#fff!important;border:none!important;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;box-shadow:none!important;filter:none}
 .panel-turnos-container .btn-guardar-doc:hover{background:#0059b3!important;transform:none;filter:none}
 .tu-wrap .tu-tbl th{background:#f1f5f9;color:#475569;border:0;border-bottom:2px solid #e2e8f0;text-transform:uppercase;font-size:12px;font-weight:600;letter-spacing:.3px;position:sticky;top:0}
 .tu-wrap .tu-tbl td{color:#334155;text-align:left}
 .cola-light{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;margin-bottom:16px}
 .cola-light-head{background:#f8fafc;color:#0f172a;border-bottom:1px solid #e2e8f0;padding:14px 18px;font-weight:700;font-size:13px;letter-spacing:.4px}
 .tu-wrap .tu-filt a{color:#475569;border-radius:20px;border-color:#cbd5e1}
-.tu-wrap .tu-filt a.on{background:#0071e3!important;border-color:#0071e3!important;color:#fff!important}
+.tu-wrap .tu-filt a.on{background:#0020C2!important;border-color:#0020C2!important;color:#fff!important}
 .turno-wrap{max-width:520px;margin:40px auto;padding:0 14px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .turno-card{background:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid #e2e8f0;border-radius:20px;padding:30px 26px;box-shadow:0 10px 30px rgba(148,163,184,.14);text-align:center;color:#334155}
 .turno-marca{font-size:11px;letter-spacing:.12em;color:#64748b;font-weight:700;margin-bottom:14px}
@@ -63581,9 +63646,9 @@ details.panel-docs .nota-docs{font-size:12.5px;color:#64748b;margin:0 0 10px;lin
 .turno-aviso{background:#fef3c7;color:#92400e;border-radius:10px;padding:10px 12px;font-size:12.5px;margin:0 0 14px;text-align:left}
 .turno-error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;font-size:13px;margin:0 0 14px;text-align:left}
 .turno-card details{text-align:left;margin:0 0 14px}
-.turno-card details summary{cursor:pointer;font-size:13px;font-weight:600;color:#0071e3}
+.turno-card details summary{cursor:pointer;font-size:13px;font-weight:600;color:#0020C2}
 .turno-card textarea{margin:10px 0 0;width:100%;box-sizing:border-box;padding:10px 12px;font-size:13.5px;color:#0f172a;background:#f8fafc!important;border:1px solid #cbd5e1!important;border-radius:10px!important;box-shadow:none!important}
-.turno-card .btn-apertura-turno{width:100%;background:#0071e3!important;color:#fff!important;border:none!important;border-radius:12px;padding:15px;font-size:15px;font-weight:700;box-shadow:0 4px 14px rgba(0,113,227,.25)!important;cursor:pointer;filter:none}
+.turno-card .btn-apertura-turno{width:100%;background:#0020C2!important;color:#fff!important;border:none!important;border-radius:12px;padding:15px;font-size:15px;font-weight:700;box-shadow:0 4px 14px rgba(0,32,194,.25)!important;cursor:pointer;filter:none}
 .turno-card .btn-apertura-turno:hover{background:#0059b3!important;transform:translateY(-1px);filter:none}
 .turno-pie{font-size:11.5px;color:#94a3b8;margin:14px 0 0;line-height:1.5}
 @media(max-width:560px){.panel-turnos-container{padding:18px}.tat-form{width:100%}.panel-turnos-container input.tat-motivo{flex:1;width:auto}}
@@ -64107,7 +64172,7 @@ def modulo_turnos():
             pass
         filas += f"""
         <tr>
-          <td style="font-weight:800;color:#0B2D57">#{c.id}</td>
+          <td style="font-weight:800;color:#0020C2">#{c.id}</td>
           <td>{_esc(c.cuenta or '—')}</td>
           <td>{_esc(c.colegio or '—')}</td>
           <td>{_esc(c.documento or '—')}</td>
@@ -64125,7 +64190,7 @@ def modulo_turnos():
                 <option value="EN_PROCESO">EN_PROCESO</option>
                 <option value="CERRADO">CERRADO</option>
               </select>
-              <button style="font-size:11px;padding:3px 6px;background:#0B2D57;color:#fff;border:0;border-radius:4px">OK</button>
+              <button style="font-size:11px;padding:3px 6px;background:#0020C2;color:#fff;border:0;border-radius:4px">OK</button>
             </form>
             <form method="POST" style="display:inline-block;margin:2px 0">
               <input type="hidden" name="accion" value="reasignar">
@@ -64134,7 +64199,7 @@ def modulo_turnos():
               <button style="font-size:11px;padding:3px 6px;background:#b45309;color:#fff;border:0;border-radius:4px">Pasar turno</button>
             </form>
             <details style="margin-top:4px">
-              <summary style="cursor:pointer;font-size:11px;color:#0B2D57;font-weight:700">+ Nota</summary>
+              <summary style="cursor:pointer;font-size:11px;color:#0020C2;font-weight:700">+ Nota</summary>
               <form method="POST" style="margin-top:4px">
                 <input type="hidden" name="accion" value="nueva_nota">
                 <input type="hidden" name="caso_id" value="{c.id}">
@@ -64147,7 +64212,7 @@ def modulo_turnos():
                   <option value="EN_PROCESO">EN_PROCESO</option>
                   <option value="CERRADO">CERRADO</option>
                 </select>
-                <button style="margin-top:4px;padding:6px 10px;background:#0B2D57;color:#fff;border:0;border-radius:6px;font-size:12px;font-weight:700">Guardar nota</button>
+                <button style="margin-top:4px;padding:6px 10px;background:#0020C2;color:#fff;border:0;border-radius:6px;font-size:12px;font-weight:700">Guardar nota</button>
               </form>
             </details>
           </td>
@@ -64181,11 +64246,11 @@ def modulo_turnos():
 <style>
 .tu-wrap{{font-family:Segoe UI,Tahoma,sans-serif}}
 .tu-tbl{{width:100%;border-collapse:collapse;font-size:12.5px}}
-.tu-tbl th{{background:#0B2D57;color:#fff;padding:8px 10px;text-align:left;border:1px solid #1e3a8a;position:sticky;top:0}}
+.tu-tbl th{{background:#0020C2;color:#fff;padding:8px 10px;text-align:left;border:1px solid #1e3a8a;position:sticky;top:0}}
 .tu-tbl td{{padding:8px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top}}
 .tu-tbl tr:nth-child(even){{background:#f8fafc}}
-.tu-filt a{{display:inline-block;padding:6px 12px;margin:2px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;border:1px solid #cbd5e1;color:#0B2D57}}
-.tu-filt a.on{{background:#0B2D57;color:#fff;border-color:#0B2D57}}
+.tu-filt a{{display:inline-block;padding:6px 12px;margin:2px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;border:1px solid #cbd5e1;color:#0020C2}}
+.tu-filt a.on{{background:#0020C2;color:#fff;border-color:#0020C2}}
 </style>
 {_TURNOS_CSS}
 <div class="tu-wrap">
@@ -64206,7 +64271,7 @@ def modulo_turnos():
   <form method="GET" style="display:inline;margin-left:12px">
     <input type="hidden" name="estado" value="{_esc(f_estado)}">
     <input name="asignado" value="{_esc(f_asignado)}" placeholder="Asesor asignado" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px">
-    <button style="padding:6px 10px;background:#0B2D57;color:#fff;border:0;border-radius:6px;font-size:12px">Filtrar</button>
+    <button style="padding:6px 10px;background:#0020C2;color:#fff;border:0;border-radius:6px;font-size:12px">Filtrar</button>
   </form>
 </section>
 
@@ -64224,7 +64289,7 @@ def modulo_turnos():
 </section>
 
 <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
-  <h3 style="margin:0 0 10px;color:#0B2D57">Nuevo caso de turno</h3>
+  <h3 style="margin:0 0 10px;color:#0020C2">Nuevo caso de turno</h3>
   <form method="POST">
     <input type="hidden" name="accion" value="nuevo_caso">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -64238,7 +64303,7 @@ def modulo_turnos():
       <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Asunto</label>
       <input name="asunto" placeholder="Ej: Mora agosto · Confirmar cheque" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></div>
     </div>
-    <button type="submit" style="margin-top:12px;padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800">Crear caso PENDIENTE</button>
+    <button type="submit" style="margin-top:12px;padding:12px 18px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800">Crear caso PENDIENTE</button>
   </form>
   <p style="font-size:12px;color:#64748b;margin-top:10px">Al guardar una nota el sistema registra automáticamente fecha, hora y usuario (ej. <b>{ahora_txt} | {usuario_nom}</b>). Use <b>Pasar turno</b> para heredar el caso al compañero.</p>
 </section>
@@ -64729,7 +64794,7 @@ def gerencia_cartera():
             color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c"}.get(est, "#b45309")
             filas += (
                 f"<tr>"
-                f"<td style='font-weight:800;color:#0B2D57'>{_esc(inst.codigo)}</td>"
+                f"<td style='font-weight:800;color:#0020C2'>{_esc(inst.codigo)}</td>"
                 f"<td>{_esc(inst.nit or '—')}</td>"
                 f"<td>{_esc(inst.nombre)[:45]}</td>"
                 f"<td>{_esc(inst.plan or '—')}</td>"
@@ -64760,7 +64825,7 @@ def gerencia_cartera():
 </header>
 <form method="GET" style="margin:10px 0">
   <input name="q" value="{_esc(q)}" placeholder="Buscar colegio, codigo o NIT" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;min-width:240px">
-  <button style="padding:8px 12px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button>
+  <button style="padding:8px 12px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700">Buscar</button>
 </form>
 <div class="w32-box">
   <div class="w32-title">DETALLE GERENCIA · CONTRATOS / CARTERA</div>
@@ -64838,7 +64903,7 @@ def cobranza_login():
 <style>
 .gl{{min-height:100vh;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
 .gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(15,23,42,.08)}}
-.gl-c h1{{margin:0 0 4px;color:#0B2D57;font-size:1.45rem}}
+.gl-c h1{{margin:0 0 4px;color:#0020C2;font-size:1.45rem}}
 .gl-c .sub{{color:#64748b;font-size:13px;margin:0 0 18px}}
 .gl-c label{{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}}
 .gl-c input{{width:100%;padding:12px 14px;margin:0 0 14px;border:1px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;background:#f8fafc}}
@@ -64861,7 +64926,7 @@ def cobranza_login():
     <input name="password" type="password" required autocomplete="current-password">
     <button type="submit">Entrar a cobranza</button>
   </form>
-  <p style="margin-top:14px;font-size:12px;text-align:center"><a href="/login" style="color:#0B2D57;font-weight:600">Portal de acceso</a></p>
+  <p style="margin-top:14px;font-size:12px;text-align:center"><a href="/login" style="color:#0020C2;font-weight:600">Portal de acceso</a></p>
 </div></div>
 """
     return page("Login Cobranza", body)
@@ -64895,7 +64960,7 @@ def cobranza_panel():
             rc = {"ALTO": "#b91c1c", "MEDIO": "#b45309", "BAJO": "#16a34a"}[riesgo]
             filas += (
                 f"<tr>"
-                f"<td style='font-weight:800;color:#0B2D57'>{_esc(inst.codigo)}</td>"
+                f"<td style='font-weight:800;color:#0020C2'>{_esc(inst.codigo)}</td>"
                 f"<td>{_esc(inst.nit or '—')}</td>"
                 f"<td>{_esc(inst.nombre)[:42]}</td>"
                 f"<td>{_esc(inst.contacto_facturacion or '—')}</td>"
@@ -64918,7 +64983,7 @@ def cobranza_panel():
 .w32-tbl td{{border:1px solid #c0c0c0;padding:3px 6px;background:#fff}}
 .w32-tbl tr:nth-child(even) td{{background:#f0f0f0}}
 .cb-hero{{background:linear-gradient(135deg,#7c2d12,#b45309);color:#fff;border-radius:16px;padding:20px 22px;margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}}
-.cb-btn{{display:inline-block;padding:10px 14px;border-radius:10px;background:#0B2D57;color:#fff;text-decoration:none;font-weight:700;font-size:13px;margin:4px}}
+.cb-btn{{display:inline-block;padding:10px 14px;border-radius:10px;background:#0020C2;color:#fff;text-decoration:none;font-weight:700;font-size:13px;margin:4px}}
 .cb-btn.warn{{background:#b45309}}
 .cb-btn.red{{background:#b91c1c}}
 </style>
@@ -64955,7 +65020,7 @@ def cobranza_panel():
   <p class="mini-text">Sin acceso a soporte técnico, impersonar, prórrogas académicas ni almacenamiento GB.</p>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
     <a class="cb-btn warn" href="/gerencia/facturacion-cobranza">💳 Facturación y cartera</a>
-    <a class="cb-btn" href="/cobranza/plazos-cuotas" style="background:#0B2D57">⏱ Plazos, cuotas y abonos</a>
+    <a class="cb-btn" href="/cobranza/plazos-cuotas" style="background:#0020C2">⏱ Plazos, cuotas y abonos</a>
     <a class="cb-btn" href="/cobranza/conciliacion">🏦 Conciliación bancaria</a>
     <a class="cb-btn" href="/gerencia/facturacion">Generar / ver recibos</a>
     <a class="cb-btn" href="/cobranza/turnos">👥 Turnos y notas</a>
@@ -65091,7 +65156,7 @@ def gerencia_facturacion_cobranza():
         color = {"ACTIVA": "#16a34a", "SUSPENDIDA": "#b91c1c", "MANTENIMIENTO": "#b45309"}.get(est, "#64748b")
         filas_busqueda += (
             f"<tr style='cursor:pointer' onclick=\"location.href='?q={_esc(q_busqueda)}&iid={r.id}'\">"
-            f"<td style='font-weight:700;color:#0B2D57'>{_esc(r.codigo)}</td>"
+            f"<td style='font-weight:700;color:#0020C2'>{_esc(r.codigo)}</td>"
             f"<td>{_esc(r.nombre)}</td>"
             f"<td>{_esc(r.nit or '—')}</td>"
             f"<td>{_esc(r.contacto_facturacion or '—')}</td>"
@@ -65135,8 +65200,8 @@ def gerencia_facturacion_cobranza():
               <button type="submit" style="background:#16a34a;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer">✅ Reactivar colegio</button>
             </form>"""
         ficha_html = f"""
-<section style="background:#fff;border:2px solid #0B2D57;border-radius:14px;overflow:hidden;margin:16px 0;box-shadow:0 8px 24px rgba(11,45,87,.08)">
-  <div style="background:#0B2D57;color:#fff;padding:12px 18px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:13px">
+<section style="background:#fff;border:2px solid #0020C2;border-radius:14px;overflow:hidden;margin:16px 0;box-shadow:0 8px 24px rgba(0,32,194,.08)">
+  <div style="background:#0020C2;color:#fff;padding:12px 18px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:13px">
     Detalle agencia de cobranza · ficha del colegio
   </div>
   <div style="padding:0;overflow-x:auto">
@@ -65149,7 +65214,7 @@ def gerencia_facturacion_cobranza():
         <th style="padding:10px 14px;text-align:left">PLAN</th>
       </tr>
       <tr style="background:#f8fafc">
-        <td style="padding:12px 14px;font-weight:800;color:#0B2D57">{_esc(c.codigo)}</td>
+        <td style="padding:12px 14px;font-weight:800;color:#0020C2">{_esc(c.codigo)}</td>
         <td style="padding:12px 14px">{_esc(c.nit or '—')}</td>
         <td style="padding:12px 14px">{_esc(c.contacto_facturacion or '—')}</td>
         <td style="padding:12px 14px"><span style="background:{color};color:#fff;padding:4px 10px;border-radius:6px;font-weight:700;font-size:12px">{est}</span></td>
@@ -65166,10 +65231,10 @@ def gerencia_facturacion_cobranza():
     <div><b>Motivo bloqueo:</b> {_esc(c.motivo_bloqueo or '—')}</div>
   </div>
   <div style="padding:0 18px 14px;display:flex;gap:10px;flex-wrap:wrap">{btn_susp}
-    <a href="/gerencia/facturacion" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:700">Generar cobro</a>
+    <a href="/gerencia/facturacion" style="background:#0020C2;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:700">Generar cobro</a>
   </div>
   <div style="padding:0 18px 18px">
-    <h3 style="margin:0 0 8px;color:#0B2D57;font-size:14px">Historial de facturas</h3>
+    <h3 style="margin:0 0 8px;color:#0020C2;font-size:14px">Historial de facturas</h3>
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <tr style="background:#e2e8f0"><th style="padding:8px">N°</th><th>Estado</th><th>Valor</th><th>Vence</th><th>Pagada</th></tr>
@@ -65185,9 +65250,9 @@ def gerencia_facturacion_cobranza():
 <style>
 .cb-search{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 4px 14px rgba(15,23,42,.04)}}
 .cb-search input{{width:100%;max-width:420px;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;box-sizing:border-box}}
-.cb-search button{{padding:12px 18px;background:#0B2D57;color:#fff;border:0;border-radius:10px;font-weight:800;cursor:pointer;margin-left:8px}}
+.cb-search button{{padding:12px 18px;background:#0020C2;color:#fff;border:0;border-radius:10px;font-weight:800;cursor:pointer;margin-left:8px}}
 .cb-table{{width:100%;border-collapse:collapse;font-size:13px}}
-.cb-table th{{background:#0B2D57;color:#fff;padding:10px 12px;text-align:left}}
+.cb-table th{{background:#0020C2;color:#fff;padding:10px 12px;text-align:left}}
 .cb-table td{{padding:10px 12px;border-bottom:1px solid #e2e8f0}}
 .cb-table tr:hover td{{background:#eff6ff}}
 </style>
@@ -65411,7 +65476,7 @@ def plataforma_bloqueada():
     <b>Ningún dato académico se elimina</b>: notas, estudiantes y boletines permanecen guardados.
     Al registrar el pago (Wompi o cartera Procsis) el acceso se reactiva automáticamente.
   </p>
-  <p style="margin-top:18px"><a href="/logout" style="color:#0B2D57;font-weight:700">Cerrar sesión</a>
+  <p style="margin-top:18px"><a href="/logout" style="color:#0020C2;font-weight:700">Cerrar sesión</a>
   · <a href="/whatsapp" style="color:#15803d;font-weight:700">WhatsApp soporte</a></p>
 </div>
 """,
@@ -65487,13 +65552,13 @@ def estudiante_login():
                 return redirect("/estudiante/portal")
     body = f"""
 <style>
-.el{{min-height:100vh;background:linear-gradient(160deg,#071a33,#0B2D57);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Segoe UI,sans-serif}}
+.el{{min-height:100vh;background:linear-gradient(160deg,#071a33,#0020C2);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Segoe UI,sans-serif}}
 .el-c{{background:#fff;border-radius:18px;padding:28px 24px;max-width:440px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}}
-.el-c h1{{margin:0 0 6px;color:#0B2D57;font-size:24px}}
+.el-c h1{{margin:0 0 6px;color:#0020C2;font-size:24px}}
 .el-c p{{color:#64748b;font-size:13px;margin:0 0 14px}}
 .el-c label{{font-size:12px;font-weight:700;color:#334155}}
 .el-c input,.el-c select{{width:100%;padding:11px;margin:4px 0 10px;border:1px solid #e2e8f0;border-radius:10px;box-sizing:border-box}}
-.el-c button{{width:100%;padding:13px;border:0;border-radius:10px;background:#0B2D57;color:#fff;font-weight:800;margin-top:6px}}
+.el-c button{{width:100%;padding:13px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:800;margin-top:6px}}
 .err{{background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:10px;font-size:13px}}
 </style>
 <div class="el"><div class="el-c">
@@ -65554,7 +65619,7 @@ def estudiante_portal():
         est = f"<span style='color:#15803d;font-weight:700'>Entregada {ya.fecha} {ya.hora}</span>" if ya else "<span style='color:#b45309'>Pendiente de entrega</span>"
         cards += f"""
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:12px">
-          <b style="color:#0B2D57">{a.titulo}</b>
+          <b style="color:#0020C2">{a.titulo}</b>
           <div style="font-size:13px;color:#64748b;margin:6px 0">{a.asignatura} · Grado {a.grado or '—'} · Docente {a.docente_nombre or a.docente_usuario}</div>
           <p style="font-size:13px;color:#334155">{(a.descripcion or '')[:220]}</p>
           <div style="font-size:12px;margin:8px 0">{est} · Límite: {a.fecha_limite or '—'}</div>
@@ -65564,12 +65629,12 @@ def estudiante_portal():
 <div style="max-width:720px;margin:0 auto;padding:20px;font-family:Segoe UI,sans-serif">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
     <div>
-      <h1 style="margin:0;color:#0B2D57">Hola, {session.get('est_portal_nombre') or e.nombre}</h1>
+      <h1 style="margin:0;color:#0020C2">Hola, {session.get('est_portal_nombre') or e.nombre}</h1>
       <p style="color:#64748b;margin:4px 0 0;font-size:13px">Grado {e.grado or '—'} · Código {e.codigo or '—'} · Portal de actividades</p>
     </div>
     <a href="/estudiante/salir" style="font-weight:700;color:#b91c1c">Salir</a>
   </div>
-  <h2 style="color:#0B2D57;font-size:18px;margin-top:22px">Actividades asignadas</h2>
+  <h2 style="color:#0020C2;font-size:18px;margin-top:22px">Actividades asignadas</h2>
   {cards or "<p style='color:#64748b'>No hay actividades publicadas para su grado por ahora.</p>"}
 </div>
 """
@@ -65652,7 +65717,7 @@ def estudiante_entregar(aid):
     body = f"""
 <div style="max-width:640px;margin:20px auto;font-family:Segoe UI,sans-serif;padding:16px">
   <a href="/estudiante/portal">← Volver</a>
-  <h1 style="color:#0B2D57">{a.titulo}</h1>
+  <h1 style="color:#0020C2">{a.titulo}</h1>
   <p style="color:#64748b;font-size:13px">{a.asignatura} · {a.docente_nombre or a.docente_usuario} · Límite {a.fecha_limite or '—'}</p>
   <p>{a.descripcion or ''}</p>
   {"<div class='msg ok'>"+msg+"</div>" if msg else ""}
@@ -65734,7 +65799,7 @@ def docente_actividades():
 {"<div class='msg ok'>"+msg+"</div>" if msg else ""}
 {"<div class='msg danger'>"+error+"</div>" if error else ""}
 <section class="role-panel">
-  <h2 style="color:#0B2D57;margin-top:0">Nueva actividad</h2>
+  <h2 style="color:#0020C2;margin-top:0">Nueva actividad</h2>
   <form method="POST">
     <input type="hidden" name="accion" value="crear">
     <label>Título *</label><input name="titulo" required>
@@ -65751,7 +65816,7 @@ def docente_actividades():
   </form>
 </section>
 <section class="role-panel" style="margin-top:14px">
-  <h2 style="color:#0B2D57">Mis actividades</h2>
+  <h2 style="color:#0020C2">Mis actividades</h2>
   {cards or "<p>Aún no ha publicado actividades.</p>"}
 </section>
 <p style="font-size:13px;color:#64748b">Los estudiantes entran en <b>/estudiante-login</b> o <b>/portal-estudiante</b>.</p>
@@ -65810,7 +65875,7 @@ def docente_actividad_detalle(aid):
         fl = "".join(f'<li><a href="{f.ruta}" target="_blank">{f.nombre_original}</a></li>' for f in files)
         bloques += f"""
         <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px;background:#fff">
-          <b>{nom}</b> · {ent.fecha} {ent.hora} · <span style="color:#0B2D57">{ent.estado}</span>
+          <b>{nom}</b> · {ent.fecha} {ent.hora} · <span style="color:#0020C2">{ent.estado}</span>
           <div style="font-size:13px;color:#475569;margin:6px 0">Envia: {ent.enviado_por or '—'} · Integrantes: {ent.integrantes or '—'}</div>
           <div style="font-size:13px">{ent.comentario or ''}</div>
           <ul>{fl or '<li>Sin archivos</li>'}</ul>
@@ -65825,10 +65890,10 @@ def docente_actividad_detalle(aid):
     body = f"""
 <div style="max-width:800px;margin:16px auto;padding:12px;font-family:Segoe UI,sans-serif">
   <a href="/docente/actividades">← Actividades</a>
-  <h1 style="color:#0B2D57">{a.titulo}</h1>
+  <h1 style="color:#0020C2">{a.titulo}</h1>
   <p style="color:#64748b">{a.asignatura} · Grado {a.grado} · {a.docente_nombre}</p>
   {"<div class='msg ok'>"+msg+"</div>" if msg else ""}
-  <h2 style="font-size:17px;color:#0B2D57">Entregas recibidas</h2>
+  <h2 style="font-size:17px;color:#0020C2">Entregas recibidas</h2>
   {bloques or "<p>Aún no hay entregas.</p>"}
 </div>
 """
@@ -65875,14 +65940,14 @@ def _shell_coord_reportes(titulo, body_inner, activo=""):
 .cr-side{{width:210px;padding:14px 10px;flex-shrink:0}}
 .cr-nav{{display:block;background:#fff;color:#1e3a5f;text-decoration:none;font-weight:700;font-size:13px;
   padding:14px 12px;margin:0 0 10px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.12);line-height:1.25}}
-.cr-nav:hover,.cr-nav.is-on{{background:#e8f0fe;color:#0B2D57}}
+.cr-nav:hover,.cr-nav.is-on{{background:#e8f0fe;color:#0020C2}}
 .cr-main{{flex:1;padding:16px 16px 28px;overflow:auto}}
 .cr-card{{background:#fff;border-radius:14px;padding:18px 16px 22px;box-shadow:0 4px 18px rgba(0,0,0,.12);max-width:1100px}}
 .cr-card h1{{margin:0 0 4px;text-align:center;color:#0f172a;font-size:20px}}
 .cr-card h2{{margin:0 0 14px;text-align:center;color:#334155;font-size:15px;font-weight:600}}
 .cr-filters{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:14px}}
 .cr-filters select,.cr-filters button{{padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px}}
-.cr-filters button{{background:#0B2D57;color:#fff;border:0;font-weight:700;cursor:pointer}}
+.cr-filters button{{background:#0020C2;color:#fff;border:0;font-weight:700;cursor:pointer}}
 .cr-table{{width:100%;border-collapse:collapse;font-size:12px}}
 .cr-table th,.cr-table td{{border:1px solid #94a3b8;padding:6px 5px;text-align:center}}
 .cr-table th{{background:#e2e8f0;color:#0f172a;font-weight:800}}
@@ -66535,7 +66600,7 @@ def pagina_corporativa_procsis():
             t, d = line.split("|", 1)
         else:
             t, d = line, ""
-        cards_soft += f'<div class="pc-card"><div class="ico" style="background:rgba(0,91,234,.06);color:#005BEA;border-radius:8px;font-size:16px">✓</div><h3>{_esc(t.strip())}</h3><p>{_esc(d.strip())}</p></div>'
+        cards_soft += f'<div class="pc-card"><div class="ico" style="background:rgba(0,32,194,.06);color:#0020C2;border-radius:8px;font-size:16px">✓</div><h3>{_esc(t.strip())}</h3><p>{_esc(d.strip())}</p></div>'
     if not empresa_pts:
         empresa_pts = "Empresa colombiana de software educativo\nCumplimiento Ley 1581 de 2012\nImplementación y capacitación\nSoporte técnico continuo\nPlanes EduTrack y Solo QR\nInnovación que gestiona"
         empresa_pts = empresa_pts.replace("\\n", chr(10))
@@ -66614,7 +66679,7 @@ def pagina_corporativa_procsis():
     nos_tit, nos_txt = _esc(nos_tit), _esc(nos_txt)
     cta_tit, cta_txt, foot_txt = _esc(cta_tit), _esc(cta_txt), _esc(foot_txt)
     # Icono globo / red global (SVG)
-    globe_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0B2D57" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M12 2v20"/></svg>"""
+    globe_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0020C2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M12 2v20"/></svg>"""
     link_planes_nav = '<a href="/ventas">Planes</a>' if _puede_planes else ""
     link_planes_cta = (
         f'<a class="pc-cta-primary" href="/ventas">Ver planes</a>' if _puede_planes
@@ -66654,37 +66719,37 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
 .nav-logo-apple span{{font-size:12px}}
 }}
 .pc-hero{{background:linear-gradient(135deg,#f1f5f9 0%,#e8eef5 50%,#dbe3ee 100%);color:#0f172a;position:relative;overflow:hidden;min-height:420px}}
-.pc-hero::after{{content:"";position:absolute;right:-60px;top:-30px;width:320px;height:320px;border-radius:50%;background:rgba(11,45,87,.04);pointer-events:none}}
+.pc-hero::after{{content:"";position:absolute;right:-60px;top:-30px;width:320px;height:320px;border-radius:50%;background:rgba(0,32,194,.04);pointer-events:none}}
 .pc-hero-in{{max-width:1120px;margin:0 auto;padding:64px 20px 72px;position:relative;z-index:1}}
-.pc-hero .tag{{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#0B2D57;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(15,23,42,.06);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:600;letter-spacing:.04em;margin-bottom:16px}}
+.pc-hero .tag{{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#0020C2;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(15,23,42,.06);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:600;letter-spacing:.04em;margin-bottom:16px}}
 .pc-hero .tag svg{{width:16px;height:16px;stroke:#93c5fd}}
-.pc-hero h1{{margin:0 0 14px;font-size:42px;line-height:1.12;font-weight:700;max-width:640px;color:#0B2D57;letter-spacing:-.02em}}
+.pc-hero h1{{margin:0 0 14px;font-size:42px;line-height:1.12;font-weight:700;max-width:640px;color:#0020C2;letter-spacing:-.02em}}
 .pc-hero p{{margin:0 0 22px;font-size:16px;line-height:1.55;max-width:520px;color:#475569;font-weight:400}}
 .pc-hero-btns{{display:flex;flex-wrap:wrap;gap:12px}}
 .pc-hero-btns a{{padding:10px 20px;border-radius:980px;font-weight:500;font-size:14px;text-decoration:none}}
 .pc-btn-w{{background:#0B63CE;color:#fff}}
-.pc-btn-g{{background:#0B2D57;color:#fff}}
+.pc-btn-g{{background:#0020C2;color:#fff}}
 .pc-btn-o{{background:#f5f5f7;color:#1d1d1f;border:1px solid rgba(0,0,0,.08)}}
 .pc-sec{{max-width:1120px;margin:0 auto;padding:56px 20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
-.pc-sec h2{{margin:0 0 8px;font-size:28px;color:#002060;text-align:center;font-weight:700;letter-spacing:-.02em;padding-top:8px}}
+.pc-sec h2{{margin:0 0 8px;font-size:28px;color:#0F172A;text-align:center;font-weight:700;letter-spacing:-.02em;padding-top:8px}}
 .pc-sec .sub{{text-align:center;color:#86868b;margin:0 0 28px;font-size:15px}}
 .pc-grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}}
 .pc-grid2{{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center}}
 @media(max-width:860px){{.pc-grid3,.pc-grid2{{grid-template-columns:1fr}}.pc-hero h1{{font-size:30px}}}}
 .pc-card{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:22px 20px;box-shadow:0 2px 12px rgba(0,0,0,.03)}}
-.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:rgba(0,91,234,.08);color:#005BEA;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;margin-bottom:12px}}
-.pc-card h3{{margin:0 0 8px;font-size:16px;color:#002060;font-weight:600;letter-spacing:-.01em}}
+.pc-card .ico{{width:44px;height:44px;border-radius:12px;background:rgba(0,32,194,.08);color:#0020C2;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;margin-bottom:12px}}
+.pc-card h3{{margin:0 0 8px;font-size:16px;color:#0F172A;font-weight:600;letter-spacing:-.01em}}
 .pc-card p{{margin:0;font-size:14px;color:#86868b;line-height:1.5}}
 .pc-band{{background:#f5f5f7;border-top:0;border-bottom:0}}
 .pc-stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
 @media(max-width:700px){{.pc-stats{{grid-template-columns:1fr 1fr}}}}
-.pc-stat b{{display:block;font-size:20px;color:#002060;font-weight:700;letter-spacing:-.02em}}
+.pc-stat b{{display:block;font-size:20px;color:#0F172A;font-weight:700;letter-spacing:-.02em}}
 .pc-stat span{{font-size:12px;color:#86868b;font-weight:500}}
-.pc-cta{{background:linear-gradient(145deg,#002060 0%,#0B2D57 55%,#0a3a78 100%);color:#fff;border-radius:24px;padding:36px 28px;text-align:center;box-shadow:0 12px 36px rgba(0,32,96,.2)}}
+.pc-cta{{background:linear-gradient(145deg,#0F172A 0%,#0020C2 55%,#0a3a78 100%);color:#fff;border-radius:24px;padding:36px 28px;text-align:center;box-shadow:0 12px 36px rgba(0,32,96,.2)}}
 .pc-cta h2{{margin:0 0 10px;font-size:24px;color:#fff;font-weight:700;letter-spacing:-.02em}}
 .pc-cta p{{margin:0 0 20px;opacity:.88;font-size:14px;line-height:1.5}}
 .pc-cta a{{display:inline-block;font-weight:600;padding:12px 24px;border-radius:980px;margin:4px;font-size:14px;text-decoration:none;transition:background .25s,transform .1s}}
-.pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{{background:#fff;color:#005BEA}}
+.pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{{background:#fff;color:#0020C2}}
 .pc-cta a:first-of-type:hover,.pc-cta a.pc-cta-primary:hover{{background:#f5f5f7}}
 .pc-cta a:not(:first-of-type),.pc-cta a.pc-cta-secondary{{background:rgba(255,255,255,.15);color:#fff;border:none}}
 .pc-cta a:not(:first-of-type):hover,.pc-cta a.pc-cta-secondary:hover{{background:rgba(255,255,255,.25)}}
@@ -66693,7 +66758,7 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
 @media(max-width:500px){{.pc-emp-grid{{grid-template-columns:1fr}}}}
 .pc-emp-item{{background:#f5f5f7;border-radius:16px;padding:18px 16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;color:#1d1d1f;line-height:1.45;border:0}}
 .pc-soft-row{{background:#f5f5f7;border:0;border-radius:12px;padding:16px 18px;margin-bottom:10px;box-shadow:none}}
-.pc-soft-row h3{{margin:0 0 4px;color:#002060;font-size:15px;font-weight:600}}
+.pc-soft-row h3{{margin:0 0 4px;color:#0F172A;font-size:15px;font-weight:600}}
 .pc-soft-row p{{margin:0;color:#86868b;font-size:13px}}
 .pc-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:32px}}
@@ -66707,8 +66772,8 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
 <div class="pc">
   <nav class="navbar-apple-glass">
     <a class="nav-logo-apple" href="/procsis">
-      <img src="{logo}" alt="PROCSIS" class="logo-micro" onerror="this.style.display='none'">
-      <span>EduTrack · {brand_nom}</span>
+      <img src="/static/img/logo-procsis-mark.png" alt="PROCSIS" class="logo-micro" onerror="this.style.display='none'">
+      <span>PROCSIS <i>|</i> EduTrack</span>
     </a>
     <div class="nav-links-center">
       <a href="/procsis" class="link-apple on">Procsis</a>
@@ -66815,25 +66880,25 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
       {"".join(
         f'''<div class="pc-card">
           {f'<img src="{_esc(p.imagen)}" style="width:100%;border-radius:12px;margin-bottom:10px;max-height:160px;object-fit:cover">' if p.imagen else '<div class="ico">▣</div>'}
-          <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,91,234,.08);color:#005BEA;margin-bottom:8px">{_esc(p.estado)}</span>
+          <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,32,194,.08);color:#0020C2;margin-bottom:8px">{_esc(p.estado)}</span>
           <h3>{_esc(p.nombre)}</h3><p>{_esc(p.descripcion)}</p></div>'''
         for p in _productos_pub
       ) or '''
       <div class="pc-card">
         <div class="ico">▣</div>
-        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,91,234,.08);color:#005BEA;margin-bottom:10px">Disponible</span>
+        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,32,194,.08);color:#0020C2;margin-bottom:10px">Disponible</span>
         <h3>EduTrack Core</h3>
         <p>Plataforma de gestión académica integral. Módulos de notas SIEE, generación de boletines en PDF, pre-matrícula SIMAT y portal interactivo para docentes.</p>
       </div>
       <div class="pc-card">
         <div class="ico">⬡</div>
-        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,91,234,.08);color:#005BEA;margin-bottom:10px">Disponible</span>
+        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,32,194,.08);color:#0020C2;margin-bottom:10px">Disponible</span>
         <h3>Portería y Asistencia QR</h3>
         <p>Control de acceso perimetral automatizado. Registro en milisegundos, alertas de retardos (7:00 AM) y bloqueo de anti-suplantación en portería.</p>
       </div>
       <div class="pc-card">
         <div class="ico">◉</div>
-        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,91,234,.08);color:#005BEA;margin-bottom:10px">Disponible</span>
+        <span style="display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:980px;background:rgba(0,32,194,.08);color:#0020C2;margin-bottom:10px">Disponible</span>
         <h3>Portal de Padres y Salida Segura</h3>
         <p>Conectividad familiar en la nube. Firmas de autorización expresa, capturas de direcciones IP, marcas de tiempo inmutables y pasaporte de salud.</p>
       </div>
@@ -66911,27 +66976,27 @@ def pagina_portafolio():
         return (s or "").replace("<", "&lt;").replace(">", "&gt;")
     brand_nom, brand_sub = _esc(brand_nom), _esc(brand_sub)
     pf_tit, pf_txt, top_der = _esc(pf_tit), _esc(pf_txt), _esc(top_der)
-    globe_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#005BEA" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M12 2v20"/></svg>"""
+    globe_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0020C2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M12 2v20"/></svg>"""
     body = f"""
 <style>
 .pf{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#1d1d1f;background:#f5f5f7;margin:0}}
 .pf a{{text-decoration:none}}
 .pf-top{{background:transparent;color:#86868b;font-size:11px;padding:8px 16px;position:relative;z-index:41}}
 .pf-top-in{{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 18px;justify-content:space-between}}
-.pf-top a{{color:#005BEA}}
+.pf-top a{{color:#0020C2}}
 .pf-nav{{background:rgba(255,255,255,0.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);position:sticky;top:0;z-index:40;border-bottom:1px solid rgba(0,0,0,.06);box-shadow:0 1px 0 rgba(255,255,255,.4)}}
 .pf-nav-in{{max-width:1200px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}}
-.pf-brand{{display:flex;align-items:center;gap:10px;color:#002060}}
-.pf-brand .globe{{display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:rgba(0,91,234,.08);border-radius:12px}}
-.pf-brand b{{font-size:16px;color:#002060;font-weight:700;letter-spacing:-.01em}}
+.pf-brand{{display:flex;align-items:center;gap:10px;color:#0F172A}}
+.pf-brand .globe{{display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:rgba(0,32,194,.08);border-radius:12px}}
+.pf-brand b{{font-size:16px;color:#0F172A;font-weight:700;letter-spacing:-.01em}}
 .pf-brand small{{font-size:10px;color:#86868b;font-weight:600;letter-spacing:.04em;text-transform:uppercase;display:block}}
 .pf-links{{display:flex;align-items:center;gap:4px;flex-wrap:wrap}}
 .pf-links a{{color:#1d1d1f;font-weight:500;font-size:13px;padding:8px 12px;border-radius:980px;transition:background .2s}}
 .pf-links a:hover{{background:rgba(0,0,0,.04)}}
-.pf-links a.on{{color:#005BEA;background:rgba(0,91,234,.08)}}
-.pf-links a.pf-access{{background:#005BEA;color:#fff;font-weight:600;padding:8px 18px;margin-left:6px}}
-.pf-links a.pf-access:hover{{background:#002060;color:#fff}}
-.pf-hero{{background:linear-gradient(145deg,#002060 0%,#0B2D57 50%,#0a3a78 100%);color:#fff;padding:56px 20px 48px;text-align:center}}
+.pf-links a.on{{color:#0020C2;background:rgba(0,32,194,.08)}}
+.pf-links a.pf-access{{background:#0020C2;color:#fff;font-weight:600;padding:8px 18px;margin-left:6px}}
+.pf-links a.pf-access:hover{{background:#0F172A;color:#fff}}
+.pf-hero{{background:linear-gradient(145deg,#0F172A 0%,#0020C2 50%,#0a3a78 100%);color:#fff;padding:56px 20px 48px;text-align:center}}
 .pf-hero h1{{margin:0 0 10px;font-size:34px;font-weight:700;letter-spacing:-.02em;color:#fff}}
 .pf-hero p{{margin:0 auto;max-width:560px;opacity:.88;font-size:15px;line-height:1.5;color:rgba(255,255,255,.9)}}
 .pf-sec{{max-width:1100px;margin:0 auto;padding:40px 20px 56px}}
@@ -66939,8 +67004,8 @@ def pagina_portafolio():
 @media(max-width:800px){{.pf-grid{{grid-template-columns:1fr}}.pf-hero h1{{font-size:28px}}}}
 .pf-card{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:24px;padding:24px 20px;box-shadow:0 2px 12px rgba(0,0,0,.03);transition:transform .3s ease,box-shadow .3s ease;cursor:pointer}}
 .pf-card:hover{{transform:scale(1.03);box-shadow:0 8px 28px rgba(0,0,0,.08)}}
-.pf-card .ico{{width:44px;height:44px;border-radius:50%;background:rgba(0,91,234,.06);color:#005BEA;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;margin-bottom:14px}}
-.pf-card h3{{margin:0 0 8px;color:#002060;font-size:16px;font-weight:600;letter-spacing:-.01em}}
+.pf-card .ico{{width:44px;height:44px;border-radius:50%;background:rgba(0,32,194,.06);color:#0020C2;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;margin-bottom:14px}}
+.pf-card h3{{margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;letter-spacing:-.01em}}
 .pf-card p{{margin:0;font-size:14px;color:#86868b;line-height:1.5}}
 .pf-foot{{background:#1d1d1f;color:#6e6e73;padding:28px 20px;text-align:center;font-size:11px;line-height:1.6}}
 .pf-foot a{{color:#2997ff}}
@@ -67005,19 +67070,19 @@ def pagina_tecnologia_edutrack():
 <style>
 .tech{font-family:Segoe UI,system-ui,sans-serif;background:#fff;color:#0f172a}
 .tech-hero{max-width:1040px;margin:0 auto;padding:48px 20px 20px}
-.tech-hero .eyebrow{color:#0B2D57;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.tech-hero .eyebrow{color:#0020C2;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
 .tech-hero h1{font-size:40px;line-height:1.15;margin:10px 0 0;font-weight:800}
 .tech-hero h1 span{color:#16a34a}
 .tech-grid{max-width:1040px;margin:0 auto;padding:20px 20px 56px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
 @media(max-width:800px){.tech-grid{grid-template-columns:1fr}.tech-hero h1{font-size:28px}}
 .tech-card{background:#f8fafc;border-radius:16px;padding:22px 20px;border:1px solid #e2e8f0}
 .tech-card .ico{width:42px;height:42px;border-radius:12px;background:#e0f2fe;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}
-.tech-card h3{margin:0 0 8px;font-size:17px;color:#0B2D57}
+.tech-card h3{margin:0 0 8px;font-size:17px;color:#0020C2}
 .tech-card p{margin:0;font-size:14px;color:#475569;line-height:1.5}
 .tech-cta{text-align:center;padding-bottom:40px}
 .tech-cta a{display:inline-block;background:#0B63CE;color:#fff;font-weight:500;text-decoration:none;padding:10px 22px;border-radius:980px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}
 .tech-top{border-bottom:1px solid #e2e8f0;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
-.tech-top a{color:#0B2D57;font-weight:700;text-decoration:none;font-size:14px}
+.tech-top a{color:#0020C2;font-weight:700;text-decoration:none;font-size:14px}
 </style>
 <div class="tech">
   <div class="tech-top">
@@ -67401,7 +67466,7 @@ def gerencia_eduaura_ia():
 .ia-box input,.ia-box select{{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-size:14px}}
 .ia-status{{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-weight:800;font-size:13px;background:#ede9fe;color:#6d28d9}}
 .ia-spec{{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}}
-.ia-spec th{{background:#0B2D57;color:#fff;padding:6px 10px;text-align:left}}
+.ia-spec th{{background:#0020C2;color:#fff;padding:6px 10px;text-align:left}}
 .ia-prompt{{background:#f8fafc;border:1px dashed #94a3b8;border-radius:10px;padding:12px;font-size:12px;color:#475569;white-space:pre-wrap}}
 </style>
 <header class="role-hero"><div>
@@ -67834,26 +67899,26 @@ def whatsapp_inbox():
 .wa-app{{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 120px);min-height:480px;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;background:#fff;font-family:Segoe UI,system-ui,sans-serif}}
 @media(max-width:800px){{.wa-app{{grid-template-columns:1fr;height:auto}}}}
 .wa-left{{border-right:1px solid #e2e8f0;background:#f8fafc;display:flex;flex-direction:column}}
-.wa-left-h{{padding:12px 14px;background:#0B2D57;color:#fff;font-weight:800}}
+.wa-left-h{{padding:12px 14px;background:#0020C2;color:#fff;font-weight:800}}
 .wa-list{{overflow-y:auto;flex:1}}
 .wa-item{{display:flex;gap:10px;padding:12px 14px;text-decoration:none;color:#0f172a;border-bottom:1px solid #e2e8f0;align-items:center}}
 .wa-item:hover,.wa-item.on{{background:#e0f2fe}}
-.wa-avatar{{width:42px;height:42px;border-radius:50%;background:#0B2D57;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}}
+.wa-avatar{{width:42px;height:42px;border-radius:50%;background:#0020C2;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}}
 .wa-meta{{flex:1;min-width:0}}
 .wa-name{{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}}
 .wa-preview{{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .wa-time{{font-size:10px;color:#94a3b8}}
 .wa-badge{{background:#25D366;color:#fff;border-radius:999px;font-size:10px;font-weight:800;padding:2px 6px}}
 .wa-right{{display:flex;flex-direction:column;background:#ece5dd}}
-.wa-right-h{{padding:12px 16px;background:#0B2D57;color:#fff;font-weight:700}}
+.wa-right-h{{padding:12px 16px;background:#0020C2;color:#fff;font-weight:700}}
 .wa-thread{{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}}
 .wa-bubble{{max-width:75%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4}}
 .wa-bubble.in{{align-self:flex-start;background:#fff;border-top-left-radius:2px}}
-.wa-bubble.out{{align-self:flex-end;background:#dbeafe;border-top-right-radius:2px;color:#0B2D57}}
+.wa-bubble.out{{align-self:flex-end;background:#dbeafe;border-top-right-radius:2px;color:#0020C2}}
 .wa-ts{{font-size:10px;color:#94a3b8;margin-top:4px;text-align:right}}
 .wa-compose{{display:flex;gap:8px;padding:10px;background:#f0f2f5;border-top:1px solid #e2e8f0}}
 .wa-compose input{{flex:1;padding:12px 14px;border:0;border-radius:24px;font-size:14px}}
-.wa-compose button{{background:#0B2D57;color:#fff;border:0;border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer}}
+.wa-compose button{{background:#0020C2;color:#fff;border:0;border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer}}
 .wa-empty{{padding:24px;color:#64748b;text-align:center;font-size:13px}}
 .wa-banner{{padding:8px 12px;font-size:12px;font-weight:700}}
 .wa-banner.on{{background:#dcfce7;color:#15803d}}
@@ -67861,13 +67926,13 @@ def whatsapp_inbox():
 </style>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
   <div>
-    <h1 style="margin:0;font-size:20px;color:#0B2D57">Inbox WhatsApp · {canal.upper()}</h1>
+    <h1 style="margin:0;font-size:20px;color:#0020C2">Inbox WhatsApp · {canal.upper()}</h1>
     <p class="mini-text" style="margin:4px 0 0">Respuestas de la mesa PROCSIS vía WATI</p>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a class="btn" href="{volver}">← Volver</a>
     <a class="btn" href="/whatsapp/inbox?canal={canal}&sync=1" style="background:#25D366">↻ Sincronizar chats WATI</a>
-    {"<a class='btn' href='/gerencia/wati-conexion' style='background:#0B2D57'>API</a>" if rol_actual() in ("Gerente","Superadmin","Administrador") else ""}
+    {"<a class='btn' href='/gerencia/wati-conexion' style='background:#0020C2'>API</a>" if rol_actual() in ("Gerente","Superadmin","Administrador") else ""}
   </div>
 </div>
 {"<div class='msg ok' style='margin:8px 0'>"+_esc(sync_msg)+"</div>" if sync_msg else ""}
@@ -68038,7 +68103,7 @@ def calendario_escolar():
                                 "CREATE TABLE IF NOT EXISTS calendario_eventos ("
                                 "id SERIAL PRIMARY KEY, institucion_id INTEGER, titulo VARCHAR(200) DEFAULT '',"
                                 "descripcion TEXT DEFAULT '', fecha VARCHAR(10) DEFAULT '', fecha_fin VARCHAR(10) DEFAULT '',"
-                                "tipo VARCHAR(40) DEFAULT 'institucional', color VARCHAR(20) DEFAULT '#0B2D57',"
+                                "tipo VARCHAR(40) DEFAULT 'institucional', color VARCHAR(20) DEFAULT '#0020C2',"
                                 "creado_por VARCHAR(120) DEFAULT '', creado_en VARCHAR(30) DEFAULT '')"
                             ))
                         else:
@@ -68046,7 +68111,7 @@ def calendario_escolar():
                                 "CREATE TABLE IF NOT EXISTS calendario_eventos ("
                                 "id INTEGER PRIMARY KEY AUTOINCREMENT, institucion_id INTEGER, titulo VARCHAR(200) DEFAULT '',"
                                 "descripcion TEXT DEFAULT '', fecha VARCHAR(10) DEFAULT '', fecha_fin VARCHAR(10) DEFAULT '',"
-                                "tipo VARCHAR(40) DEFAULT 'institucional', color VARCHAR(20) DEFAULT '#0B2D57',"
+                                "tipo VARCHAR(40) DEFAULT 'institucional', color VARCHAR(20) DEFAULT '#0020C2',"
                                 "creado_por VARCHAR(120) DEFAULT '', creado_en VARCHAR(30) DEFAULT '')"
                             ))
         except Exception as te:
@@ -68086,14 +68151,14 @@ def calendario_escolar():
                     tipo = (request.form.get("tipo") or "institucional").strip()[:40]
                     desc = (request.form.get("descripcion") or "").strip()[:2000]
                     if titulo and fecha:
-                        colores = {"festivo": "#b91c1c", "academico": "#1d4ed8", "reunion": "#7c3aed", "institucional": "#0B2D57"}
+                        colores = {"festivo": "#b91c1c", "academico": "#0020C2", "reunion": "#7c3aed", "institucional": "#0020C2"}
                         try:
                             ahora_txt = fecha_hoy() + " " + hora_actual()
                         except Exception:
                             ahora_txt = ""
                         db.session.add(CalendarioEvento(
                             institucion_id=iid, titulo=titulo, descripcion=desc, fecha=fecha,
-                            fecha_fin=fecha_fin, tipo=tipo, color=colores.get(tipo, "#0B2D57"),
+                            fecha_fin=fecha_fin, tipo=tipo, color=colores.get(tipo, "#0020C2"),
                             creado_por=session.get("usuario") or "", creado_en=ahora_txt,
                         ))
                         db.session.commit()
@@ -68175,7 +68240,7 @@ def calendario_escolar():
                 chips = []
                 for e in by_day.get(key, [])[:4]:
                     tit = _h((getattr(e, "titulo", None) or "")[:28])
-                    col = _h(getattr(e, "color", None) or "#0B2D57")
+                    col = _h(getattr(e, "color", None) or "#0020C2")
                     chips.append('<div class="cal-chip" style="background:' + col + '">' + tit + "</div>")
                 cells.append(
                     '<td class="cal-day"><div class="cal-num">' + str(d) + "</div>" + "".join(chips) + "</td>"
@@ -68231,13 +68296,13 @@ def calendario_escolar():
         css = (
             "<style>"
             ".cal-table{width:100%;border-collapse:collapse;background:#fff;table-layout:fixed}"
-            ".cal-table th{background:#0B2D57;color:#fff;padding:8px;font-size:12px}"
+            ".cal-table th{background:#0020C2;color:#fff;padding:8px;font-size:12px}"
             ".cal-day{border:1px solid #e2e8f0;vertical-align:top;height:88px;padding:4px}"
             ".cal-empty{border:1px solid #f1f5f9;background:#f8fafc}"
             ".cal-num{font-weight:800;font-size:12px;color:#0f172a;margin-bottom:4px}"
             ".cal-chip{font-size:10px;color:#fff;border-radius:4px;padding:2px 4px;margin:2px 0;"
             "overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
-            ".cal-nav a{display:inline-block;padding:8px 12px;background:#0B2D57;color:#fff;"
+            ".cal-nav a{display:inline-block;padding:8px 12px;background:#0020C2;color:#fff;"
             "border-radius:8px;text-decoration:none;font-weight:700;margin:0 4px}"
             "</style>"
         )
@@ -68408,7 +68473,7 @@ def ventas_solicitudes():
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
 <div class="role-panel" style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff;text-align:left">
+    <tr style="background:#0020C2;color:#fff;text-align:left">
       <th style="padding:8px">ID</th><th style="padding:8px">Colegio</th><th style="padding:8px">Contacto</th>
       <th style="padding:8px">Plan / etapa</th><th style="padding:8px">Notas</th><th style="padding:8px"></th>
     </tr>
@@ -68491,7 +68556,7 @@ def ventas_solicitud_detalle(lid):
     <div style="grid-column:1/-1"><label><b>Agregar nota / pedir más info</b></label>
       <textarea name="notas_extra" rows="3" placeholder="Ej: Se pidió NIT, logo y usuarios de rectoría/secretaría" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></textarea></div>
     <div style="grid-column:1/-1">
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar y completar datos</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar y completar datos</button>
       <a class="btn" href="/ventas/crm" style="margin-left:8px">Ver en CRM</a>
     </div>
   </form>
@@ -68585,7 +68650,7 @@ def portal_pagar_servicios():
         url = _url_wompi(f)
         btn = (
             f'<a href="{_esc(url)}" target="_blank" rel="noopener" '
-            f'style="display:inline-block;background:#0B2D57;color:#fff;padding:12px 18px;border-radius:10px;'
+            f'style="display:inline-block;background:#0020C2;color:#fff;padding:12px 18px;border-radius:10px;'
             f'font-weight:800;text-decoration:none">Pagar con Wompi</a>'
             if url else
             '<span style="color:#b45309;font-size:13px">Configure el link de pago en Gerencia → Tesorería</span>'
@@ -68595,11 +68660,11 @@ def portal_pagar_servicios():
           <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
             <div>
               <div style="font-size:12px;color:#64748b">{_esc(f.consecutivo or ('#'+str(f.id)))} · {_esc(f.estado)}</div>
-              <div style="font-weight:800;color:#0B2D57;font-size:16px">{_esc(f.concepto or 'Mensualidad EduTrack')}</div>
+              <div style="font-weight:800;color:#0020C2;font-size:16px">{_esc(f.concepto or 'Mensualidad EduTrack')}</div>
               <div style="font-size:13px;color:#475569">Vence: {_esc(f.vencimiento or '—')} · Ciclo {_esc(f.ciclo or '—')}</div>
             </div>
             <div style="text-align:right">
-              <div style="font-size:22px;font-weight:900;color:#0B2D57">{_cop(f.valor)}</div>
+              <div style="font-size:22px;font-weight:900;color:#0020C2">{_cop(f.valor)}</div>
               {btn}
             </div>
           </div>
@@ -68611,7 +68676,7 @@ def portal_pagar_servicios():
         lista_html = f"""
         <div style="margin-top:20px">
           <div style="background:#eff6ff;border-radius:12px;padding:14px 16px;margin-bottom:14px">
-            <b style="color:#0B2D57">{_esc(inst.nombre)}</b>
+            <b style="color:#0020C2">{_esc(inst.nombre)}</b>
             <div style="font-size:13px;color:#475569">Código {_esc(inst.codigo)} · NIT {_esc(getattr(inst,'nit',None) or '—')}</div>
           </div>
           {"<p style='color:#64748b'>No hay facturas pendientes. Si acaba de pagar, el estado se actualiza cuando Wompi confirma (webhook).</p>" if not facturas else cards_f}
@@ -68619,7 +68684,7 @@ def portal_pagar_servicios():
             Tras pagar en Wompi, la factura pasa a PAGADO automáticamente si el webhook está configurado:
             <code>/api/webhooks/wompi</code>
           </p>
-          <a href="/pagar" style="font-size:13px;color:#0B2D57">← Consultar otro colegio</a>
+          <a href="/pagar" style="font-size:13px;color:#0020C2">← Consultar otro colegio</a>
         </div>
         """
 
@@ -68629,17 +68694,17 @@ def portal_pagar_servicios():
 <title>Pagar servicios · PROCSIS EduTrack</title>
 <style>
 body{{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f4f7fb;color:#0f172a}}
-.top{{background:#0B2D57;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}}
+.top{{background:#0020C2;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}}
 .top a{{color:#fff;text-decoration:none;font-weight:700}}
 .box{{max-width:560px;margin:32px auto;background:#fff;border-radius:16px;padding:28px 24px;box-shadow:0 8px 30px rgba(15,23,42,.08)}}
-h1{{font-size:18px;color:#0B2D57;margin:0 0 18px;display:flex;align-items:center;gap:8px}}
+h1{{font-size:18px;color:#0020C2;margin:0 0 18px;display:flex;align-items:center;gap:8px}}
 .tabs{{display:flex;gap:10px;margin-bottom:18px}}
 .tab{{flex:1;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center;font-size:13px;font-weight:700;color:#334155;background:#fff}}
 .tab.on{{border-color:#38bdf8;background:#e0f2fe;color:#0369a1}}
 label{{font-size:12px;font-weight:700;color:#475569;display:block;margin:10px 0 4px}}
 .row{{display:flex;gap:8px}}
 input,select{{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px;font-size:14px;box-sizing:border-box}}
-button{{width:100%;margin-top:16px;padding:14px;border:0;border-radius:12px;background:#0B2D57;color:#fff;font-weight:800;font-size:15px;cursor:pointer}}
+button{{width:100%;margin-top:16px;padding:14px;border:0;border-radius:12px;background:#0020C2;color:#fff;font-weight:800;font-size:15px;cursor:pointer}}
 button:disabled{{background:#cbd5e1;cursor:not-allowed}}
 .err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:10px;margin-bottom:12px;font-size:13px}}
 .foot{{text-align:center;font-size:11px;color:#94a3b8;margin:24px 16px}}
@@ -68723,13 +68788,13 @@ def _cont_shell(title, body, back="/gerencia/contabilidad"):
     return (
         '<div style="max-width:1100px;margin:0 auto;padding:16px 16px 48px;font-family:Segoe UI,system-ui,sans-serif">'
         '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px">'
-        '<h1 style="margin:0;font-size:20px;color:#0B2D57">' + title + "</h1>"
+        '<h1 style="margin:0;font-size:20px;color:#0020C2">' + title + "</h1>"
         '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-        '<a href="/gerencia/contabilidad" style="background:#0B2D57;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Operaciones</a>'
+        '<a href="/gerencia/contabilidad" style="background:#0020C2;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Operaciones</a>'
         '<a href="/gerencia/contabilidad/nueva" style="background:#15803d;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">+ Nueva operación</a>'
-        '<a href="/gerencia/contabilidad/partes" style="background:#1d4ed8;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Clientes / Proveedores</a>'
+        '<a href="/gerencia/contabilidad/partes" style="background:#0020C2;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Clientes / Proveedores</a>'
         '<a href="/gerencia/contabilidad/trabajadores" style="background:#7c2d12;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Trabajadores</a>'
-        '<a href="' + back + '" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Volver</a>'
+        '<a href="' + back + '" style="background:#e2e8f0;color:#0020C2;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;font-size:12px">Volver</a>'
         "</div></div>" + body + "</div>"
     )
 
@@ -68799,8 +68864,8 @@ def contabilidad_comercial():
         'text-decoration:none;margin:0 4px 6px 0;background:%s;color:%s">%s</a>'
         % (
             t[0],
-            "#0B2D57" if filtro == t[0] else "#e2e8f0",
-            "#fff" if filtro == t[0] else "#0B2D57",
+            "#0020C2" if filtro == t[0] else "#e2e8f0",
+            "#fff" if filtro == t[0] else "#0020C2",
             t[0],
         )
         for t in TIPOS_OPERACION_CONT
@@ -68808,17 +68873,17 @@ def contabilidad_comercial():
     chips = (
         '<a href="?" style="display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;'
         'text-decoration:none;margin:0 4px 6px 0;background:%s;color:%s">TODAS</a>'
-        % ("#0B2D57" if not filtro else "#e2e8f0", "#fff" if not filtro else "#0B2D57")
+        % ("#0020C2" if not filtro else "#e2e8f0", "#fff" if not filtro else "#0020C2")
         + chips
     )
 
     filas = ""
     for o in ops:
-        color = {"ANULADO": "#94a3b8", "PAGADO": "#16a34a", "PARCIAL": "#ca8a04", "PENDIENTE": "#b45309"}.get(o.estado, "#0B2D57")
+        color = {"ANULADO": "#94a3b8", "PAGADO": "#16a34a", "PARCIAL": "#ca8a04", "PENDIENTE": "#b45309"}.get(o.estado, "#0020C2")
         filas += (
             "<tr>"
             "<td><b>%s</b><br><span style='font-size:11px;color:#64748b'>%s %s</span></td>"
-            "<td><span style='background:#0B2D57;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px'>%s</span></td>"
+            "<td><span style='background:#0020C2;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px'>%s</span></td>"
             "<td>%s</td><td>%s</td>"
             "<td style='text-align:right'>%s</td><td style='text-align:right'>%s</td>"
             "<td style='color:%s;font-weight:700'>%s</td>"
@@ -68909,22 +68974,22 @@ def contabilidad_comercial():
         <div style="font-size:11px;color:#64748b;font-weight:700">NÓMINA PENDIENTE</div>
         <div style="font-size:20px;font-weight:800;color:#7c2d12">{_cop(tot_nom_pend)}</div>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #0B2D57;border-radius:10px;padding:12px">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #0020C2;border-radius:10px;padding:12px">
         <div style="font-size:11px;color:#64748b;font-weight:700">BALANCE APROX.</div>
-        <div style="font-size:20px;font-weight:800;color:#0B2D57">{_cop(tot_ing - tot_gas - tot_nom_pagado)}</div>
+        <div style="font-size:20px;font-weight:800;color:#0020C2">{_cop(tot_ing - tot_gas - tot_nom_pagado)}</div>
       </div>
     </div>
     <p style="font-size:13px;color:#64748b;margin:0 0 10px">Registrar · Organizar · Controlar · Comprobar · Informar · Decidir. Cada operación queda con fecha, parte, valores e IP.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
       <a href="/gerencia/contabilidad/export/ops.xlsx{'?tipo='+filtro if filtro else ''}" style="background:#15803d;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ Excel operaciones</a>
       <a href="/gerencia/contabilidad/export/ops.pdf{'?tipo='+filtro if filtro else ''}" style="background:#b91c1c;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">⬇ PDF documento interno</a>
-      <a href="/gerencia/contabilidad/nueva" style="background:#0B2D57;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">+ Nueva operación</a>
+      <a href="/gerencia/contabilidad/nueva" style="background:#0020C2;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">+ Nueva operación</a>
       <a href="/gerencia/nomina" style="background:#7c2d12;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none">💵 Nómina / Pagos empleados</a>
     </div>
     <div style="margin-bottom:12px">{chips}</div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto;margin-bottom:18px">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr style="background:#0B2D57;color:#fff">
+        <tr style="background:#0020C2;color:#fff">
           <th style="padding:8px;text-align:left">Código / Fecha</th>
           <th style="padding:8px;text-align:left">Tipo</th>
           <th style="padding:8px;text-align:left">Quién / A quién</th>
@@ -69243,7 +69308,7 @@ def contabilidad_editar(oid):
       <input type="file" name="evidencia_archivo" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.docx,.doc,.csv" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1">
       <p style="font-size:11px;color:#64748b;margin:0 0 12px">Máx. 6 MB. Si ya hay archivo, el nuevo lo reemplaza.</p>
 
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar corrección</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar corrección</button>
       <a href="/gerencia/contabilidad/op/{op.id}" style="margin-left:10px">Cancelar</a>
     </form>
     """
@@ -69267,7 +69332,7 @@ def contabilidad_op_detalle(oid):
     color_estado = {"PAGADO": "#16a34a", "PARCIAL": "#d97706", "ANULADO": "#b91c1c"}.get((op.estado or "").upper(), "#0B63CE")
     archivo_html = (
         f'<a href="/gerencia/contabilidad/op/{op.id}/evidencia" target="_blank" '
-        f'style="display:inline-block;background:#0B2D57;color:#fff;padding:9px 16px;border-radius:8px;'
+        f'style="display:inline-block;background:#0020C2;color:#fff;padding:9px 16px;border-radius:8px;'
         f'text-decoration:none;font-weight:700;font-size:13px">📎 Ver archivo adjunto ({_esc(op.evidencia_nombre or "archivo")})</a>'
         if tiene_archivo else
         '<p style="color:#94a3b8;font-size:13px;font-style:italic">Sin archivo adjunto para esta operación.</p>'
@@ -69304,7 +69369,7 @@ def contabilidad_op_detalle(oid):
   {fila("Institución", op.institucion_nombre)}
   {fila("Nota / evidencia (texto)", op.evidencia)}
   {fila("IP de registro", op.ip)}
-  <h3 style="font-size:13px;color:#0B2D57;margin-top:20px">Archivo adjunto</h3>
+  <h3 style="font-size:13px;color:#0020C2;margin-top:20px">Archivo adjunto</h3>
   {archivo_html}
 </section>
 """
@@ -69356,10 +69421,10 @@ def contabilidad_detalle(oid):
             _nom = _esc(getattr(op, "evidencia_nombre", None) or "comprobante")
             _adj = (
                 '<div style="margin-top:12px;padding:14px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0">'
-                '<div style="font-size:12px;font-weight:700;color:#0B2D57;margin-bottom:8px">Archivo de evidencia / comprobante</div>'
+                '<div style="font-size:12px;font-weight:700;color:#0020C2;margin-bottom:8px">Archivo de evidencia / comprobante</div>'
                 '<div style="font-size:13px;margin-bottom:10px">' + _nom + '</div>'
                 '<a href="/gerencia/contabilidad/op/' + str(op.id) + '/evidencia" target="_blank" '
-                'style="display:inline-block;background:#005BEA;color:#fff;padding:10px 18px;border-radius:980px;'
+                'style="display:inline-block;background:#0020C2;color:#fff;padding:10px 18px;border-radius:980px;'
                 'text-decoration:none;font-weight:600;font-size:13px;margin-right:8px">Ver / descargar comprobante</a>'
             )
             mime = (getattr(op, "evidencia_mime", None) or "")
@@ -69379,7 +69444,7 @@ def contabilidad_detalle(oid):
     body = f"""
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;max-width:720px">
       <div style="font-size:12px;color:#64748b">Documento de operación · respaldo contable</div>
-      <h2 style="margin:4px 0 12px;color:#0B2D57">{_esc(op.codigo)} · {_esc(op.tipo)}</h2>
+      <h2 style="margin:4px 0 12px;color:#0020C2">{_esc(op.codigo)} · {_esc(op.tipo)}</h2>
       <table style="width:100%;font-size:14px;border-collapse:collapse">
         <tr><td style="padding:6px 0;color:#64748b;width:40%">Fecha / hora</td><td><b>{_esc(op.fecha)} {_esc(op.hora or '')}</b></td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Quién / a quién</td><td><b>{_esc(op.parte_nombre)}</b></td></tr>
@@ -69400,7 +69465,7 @@ def contabilidad_detalle(oid):
       {_adj}
       <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
         <a href="/gerencia/contabilidad/op/{op.id}/pdf" style="background:#b91c1c;color:#fff;padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none">⬇ PDF documento interno</a>
-        <a href="/gerencia/contabilidad/op/{op.id}/editar" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none">✎ Corregir / editar</a>
+        <a href="/gerencia/contabilidad/op/{op.id}/editar" style="background:#0020C2;color:#fff;padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none">✎ Corregir / editar</a>
       </div>
       <form method="POST" action="/gerencia/contabilidad" style="margin-top:12px" onsubmit="return confirm('¿Anular esta operación?')">
         <input type="hidden" name="accion" value="anular"><input type="hidden" name="id" value="{op.id}">
@@ -69465,11 +69530,11 @@ def contabilidad_partes():
       <div><label style="font-size:12px;font-weight:700">Ciudad</label><input name="ciudad" style="width:100%;padding:8px"></div>
       <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Dirección / notas</label>
       <input name="direccion" style="width:100%;padding:8px;margin-bottom:6px"><input name="notas" style="width:100%;padding:8px"></div>
-      <div style="grid-column:1/-1"><button type="submit" style="background:#1d4ed8;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Guardar parte</button></div>
+      <div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Guardar parte</button></div>
     </form>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px;text-align:left">NIT/CC</th><th style="padding:8px;text-align:left">Tel</th><th style="padding:8px;text-align:left">Categoría</th><th style="padding:8px;text-align:left">Ciudad</th></tr>
+        <tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px;text-align:left">NIT/CC</th><th style="padding:8px;text-align:left">Tel</th><th style="padding:8px;text-align:left">Categoría</th><th style="padding:8px;text-align:left">Ciudad</th></tr>
         {filas}
       </table>
     </div>
@@ -69634,7 +69699,7 @@ def contabilidad_trabajadores():
 
     def tab(label, key):
         active = filtro == key or (key == "activos" and filtro not in ("inactivos", "todos", "historial", "viejos"))
-        bg = "#0B2D57;color:#fff" if active else "#e2e8f0;color:#0f172a"
+        bg = "#0020C2;color:#fff" if active else "#e2e8f0;color:#0f172a"
         return (
             '<a href="/gerencia/contabilidad/trabajadores?f=%s" style="background:%s;padding:8px 12px;'
             'border-radius:8px;text-decoration:none;font-weight:700;font-size:12px;margin-right:6px">%s</a>'
@@ -69655,10 +69720,10 @@ def contabilidad_trabajadores():
       (también se genera el contrato editable con opción de firma digital).
       Aquí solo gestiona el estado (activo / inactivo) y consulta el historial.
     </p>
-    <h3 style="margin:0 0 8px;color:#0B2D57">{_esc(titulo_lista)}</h3>
+    <h3 style="margin:0 0 8px;color:#0020C2">{_esc(titulo_lista)}</h3>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr style="background:#0B2D57;color:#fff">
+        <tr style="background:#0020C2;color:#fff">
           <th style="padding:8px;text-align:left">Nombre</th>
           <th style="padding:8px;text-align:left">Documento</th>
           <th style="padding:8px;text-align:left">Cargo</th>
@@ -70270,7 +70335,7 @@ def contabilidad_trabajador_memos(tid):
             ) % m.id
         historial.append(
             "<div style='border-bottom:1px solid #e2e8f0;padding:10px 0'>"
-            "<div style='font-size:12px;font-weight:700;color:#0B2D57'>%s %s · %s</div>"
+            "<div style='font-size:12px;font-weight:700;color:#0020C2'>%s %s · %s</div>"
             "<p style='margin:6px 0;font-size:13px;color:#334155;white-space:pre-wrap'>%s</p>"
             "<div style='font-size:11px;color:#64748b'>Registrado por: %s (%s)%s</div>"
             "</div>" % (
@@ -70284,7 +70349,7 @@ def contabilidad_trabajador_memos(tid):
     if puede_crear:
         form_html = f"""
   <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:16px">
-    <h3 style="margin:0 0 10px;font-size:14px;color:#0B2D57">Agregar nota / memo</h3>
+    <h3 style="margin:0 0 10px;font-size:14px;color:#0020C2">Agregar nota / memo</h3>
     {"<div style='background:#dcfce7;color:#166534;padding:8px;border-radius:6px;margin-bottom:8px;font-size:13px'>"+_esc(msg)+"</div>" if msg else ""}
     {"<div style='background:#fee2e2;color:#991b1b;padding:8px;border-radius:6px;margin-bottom:8px;font-size:13px'>"+_esc(err)+"</div>" if err else ""}
     <form method="POST" style="display:grid;gap:10px">
@@ -70318,7 +70383,7 @@ def contabilidad_trabajador_memos(tid):
 </div></header>
 <section class="role-panel">
   {form_html}
-  <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Historial de notas ({len(memos)})</h3>
+  <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Historial de notas ({len(memos)})</h3>
   {''.join(historial) or "<p style='color:#64748b;font-size:13px'>Sin notas registradas aún.</p>"}
 </section>
 """
@@ -70414,10 +70479,10 @@ def contabilidad_constancia_laboral(tid):
         fecha_retiro_val = ""
         content = f"""
         <div style="max-width:680px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px">
-          <h2 style="margin:0 0 6px;color:#0B2D57">Certificación Laboral · {_esc(hv_nombres or t.nombre)}</h2>
+          <h2 style="margin:0 0 6px;color:#0020C2">Certificación Laboral · {_esc(hv_nombres or t.nombre)}</h2>
           <p style="font-size:13px;color:#64748b;margin:0 0 14px">Documento formal PROCSIS. Los campos se cargan desde la base de datos. Confirme y descargue el PDF.</p>
           <form method="POST">
-            <h3 style="margin:12px 0 8px;font-size:13px;color:#0B2D57;border-bottom:1px solid #e2e8f0;padding-bottom:4px">1. Identificación del trabajador</h3>
+            <h3 style="margin:12px 0 8px;font-size:13px;color:#0020C2;border-bottom:1px solid #e2e8f0;padding-bottom:4px">1. Identificación del trabajador</h3>
             <label style="font-size:12px;font-weight:700">Nombres y apellidos completos *</label>
             <input name="nombre_completo" required value="{_esc(hv_nombres or t.nombre)}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -70438,7 +70503,7 @@ def contabilidad_constancia_laboral(tid):
             <label style="font-size:12px;font-weight:700">Nacionalidad *</label>
             <input name="nacionalidad" required value="{_esc(hv_nacionalidad)}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
 
-            <h3 style="margin:16px 0 8px;font-size:13px;color:#0B2D57;border-bottom:1px solid #e2e8f0;padding-bottom:4px">2. Vínculo contractual</h3>
+            <h3 style="margin:16px 0 8px;font-size:13px;color:#0020C2;border-bottom:1px solid #e2e8f0;padding-bottom:4px">2. Vínculo contractual</h3>
             <label style="font-size:12px;font-weight:700">Cargo oficial desempeñado *</label>
             <input name="cargo" required value="{_esc(t.cargo or 'SUPERVISOR DE VENTAS Y DESARROLLO')}" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
             <label style="font-size:12px;font-weight:700">Objeto de sus funciones</label>
@@ -70462,7 +70527,7 @@ def contabilidad_constancia_laboral(tid):
               <option value="Obra o labor">Obra o labor</option>
             </select>
 
-            <h3 style="margin:16px 0 8px;font-size:13px;color:#0B2D57;border-bottom:1px solid #e2e8f0;padding-bottom:4px">3. Remuneración</h3>
+            <h3 style="margin:16px 0 8px;font-size:13px;color:#0020C2;border-bottom:1px solid #e2e8f0;padding-bottom:4px">3. Remuneración</h3>
             <label style="font-size:12px;font-weight:700">Honorarios / Sueldo</label>
             <textarea name="honorarios" rows="2" style="width:100%;padding:10px;margin-bottom:6px;border-radius:8px;border:1px solid #cbd5e1">{_esc(getattr(t,'honorarios',None) or 'Honorarios variables calculados según el cumplimiento de metas comerciales y cierres de implementación de la suite')}</textarea>
             <p style="font-size:11px;color:#64748b;margin:0 0 10px">Modelo comisiones PROCSIS: declare variables, no sueldo fijo, para evitar enredos contables.</p>
@@ -70470,7 +70535,7 @@ def contabilidad_constancia_laboral(tid):
               <input type="checkbox" name="incluir_honorarios" value="1" checked style="width:auto"> Incluir asignación económica en el PDF
             </label>
 
-            <h3 style="margin:16px 0 8px;font-size:13px;color:#0B2D57;border-bottom:1px solid #e2e8f0;padding-bottom:4px">4. Destinatario y expedición</h3>
+            <h3 style="margin:16px 0 8px;font-size:13px;color:#0020C2;border-bottom:1px solid #e2e8f0;padding-bottom:4px">4. Destinatario y expedición</h3>
             <label style="font-size:12px;font-weight:700">Entidad / persona a quien se dirige *</label>
             <input name="solicitante" required value="{_esc(getattr(t,'solicitante',None) or '')}" placeholder="Empresa, banco, entidad o interesado" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid #cbd5e1">
             <label style="font-size:12px;font-weight:700">Ciudad de expedición</label>
@@ -70484,7 +70549,7 @@ def contabilidad_constancia_laboral(tid):
             <label style="font-size:12px;font-weight:700;margin-top:10px;display:block">Dirección / residencia</label>
             <input name="direccion" value="{_esc(getattr(t,'direccion',None) or '')}" style="width:100%;padding:10px;margin-bottom:14px;border-radius:8px;border:1px solid #cbd5e1">
             <input type="hidden" name="accion" value="pdf">
-            <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Descargar PDF Certificación Laboral</button>
+            <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">Descargar PDF Certificación Laboral</button>
             <a href="/gerencia/contabilidad/trabajadores" style="margin-left:10px;font-size:13px">Cancelar</a>
           </form>
         </div>
@@ -70822,7 +70887,7 @@ def gerencia_certificaciones():
 
     chips = ""
     for code, label in TIPOS_CERT_CORP:
-        on = "background:#0B2D57;color:#fff" if code == tip else "background:#e2e8f0;color:#0B2D57"
+        on = "background:#0020C2;color:#fff" if code == tip else "background:#e2e8f0;color:#0020C2"
         chips += (
             '<a href="?tipo=%s" style="%s;padding:8px 12px;border-radius:999px;font-size:12px;'
             'font-weight:800;text-decoration:none;display:inline-block;margin:2px">%s</a>'
@@ -70840,7 +70905,7 @@ def gerencia_certificaciones():
   <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;max-width:760px">
     <input type="hidden" name="tipo" value="{_esc(tip)}">
     <input type="hidden" name="accion" value="pdf">
-    <h3 style="margin:0 0 12px;color:#0B2D57">{_esc(titulos.get(tip, tip))}</h3>
+    <h3 style="margin:0 0 12px;color:#0020C2">{_esc(titulos.get(tip, tip))}</h3>
 
     <label style="font-size:12px;font-weight:700">Institución / colegio (lista)</label>
     <select name="institucion_sel" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid #cbd5e1" onchange="if(this.value)document.getElementById('inst_txt').value=this.value">
@@ -70878,7 +70943,7 @@ def gerencia_certificaciones():
     <label style="font-size:12px;font-weight:700">Objeto del servicio / caso de éxito</label>
     <textarea name="objeto" rows="2" placeholder="Descripción breve del servicio o del caso de éxito" style="width:100%;padding:10px;margin-bottom:14px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
 
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">⬇ Generar PDF documento interno</button>
+    <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">⬇ Generar PDF documento interno</button>
   </form>
 </section>
 """
@@ -71294,7 +71359,7 @@ def gerencia_req_autoridades():
         ("ENTREGADO", "Entregados"),
         ("RECHAZADO", "Rechazados"),
     ]:
-        on = "background:#0B2D57;color:#fff" if filtro == st else "background:#e2e8f0;color:#0B2D57"
+        on = "background:#0020C2;color:#fff" if filtro == st else "background:#e2e8f0;color:#0020C2"
         chips += '<a href="?estado=%s" style="%s;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;margin:2px;display:inline-block">%s</a>' % (
             st, on, lab,
         )
@@ -71304,7 +71369,7 @@ def gerencia_req_autoridades():
         color = {
             "ESPERANDO_VALIDACION": "#b45309",
             "AUTORIZADO": "#15803d",
-            "ENTREGADO": "#0B2D57",
+            "ENTREGADO": "#0020C2",
             "RECHAZADO": "#b91c1c",
         }.get(r.estado or "", "#64748b")
         filas += (
@@ -71332,7 +71397,7 @@ def gerencia_req_autoridades():
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
 {"<div class='msg' style='background:#fef2f2;color:#991b1b'>"+_esc(err)+"</div>" if err else ""}
 <section class="role-panel">
-  <h3 style="margin-top:0;color:#0B2D57">1. Radicar oficio</h3>
+  <h3 style="margin-top:0;color:#0020C2">1. Radicar oficio</h3>
   <form method="POST" enctype="multipart/form-data" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f8fafc;padding:16px;border-radius:12px;border:1px solid #e2e8f0">
     <input type="hidden" name="accion" value="radicar">
     <div><label style="font-size:12px;font-weight:700">Entidad *</label>
@@ -71357,14 +71422,14 @@ def gerencia_req_autoridades():
     <textarea name="solicitud_detalle" required rows="3" style="width:100%;padding:9px" placeholder="Ej: Logs de asistencia QR del estudiante X del día Y"></textarea></div>
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">PDF del oficio (opcional)</label>
     <input type="file" name="oficio_pdf" accept="application/pdf,image/*" style="width:100%;padding:9px"></div>
-    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Radicar requerimiento</button></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Radicar requerimiento</button></div>
   </form>
 </section>
 <section class="role-panel" style="margin-top:16px">
   <div style="margin-bottom:10px">{chips}</div>
   <div style="overflow:auto">
   <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px;text-align:left">Código / Oficio</th>
       <th style="padding:8px;text-align:left">Autoridad</th>
       <th style="padding:8px;text-align:left">Solicitud</th>
@@ -71433,7 +71498,7 @@ def gerencia_req_autoridad_detalle(rid):
           <h4 style="margin:0 0 8px;color:#166534">3. Entrega controlada</h4>
           <p style="font-size:12px;color:#64748b">Describe exactamente qué información se entregó (logs, reporte, archivos). Queda en auditoría con hash.</p>
           <textarea name="info_entregada" required rows="4" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Detalle de la información entregada..."></textarea>
-          <button type="submit" style="margin-top:10px;background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Registrar entrega</button>
+          <button type="submit" style="margin-top:10px;background:#0020C2;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Registrar entrega</button>
         </form>
         """
 
@@ -71456,9 +71521,9 @@ def gerencia_req_autoridad_detalle(rid):
   {('<p style="margin:12px 0"><a href="/gerencia/requerimientos-autoridades/%s/acta.pdf" style="background:#b91c1c;color:#fff;padding:10px 16px;border-radius:8px;font-weight:800;text-decoration:none">⬇ Descargar acta PDF de entrega</a></p>' % r.id) if (r.estado or "") == "ENTREGADO" else ""}
   {checklist}
   {entregar}
-  <h3 style="color:#0B2D57">Auditoría de la operación</h3>
+  <h3 style="color:#0020C2">Auditoría de la operación</h3>
   <table style="width:100%;border-collapse:collapse;font-size:12px">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:6px;text-align:left">Fecha/hora</th><th style="padding:6px;text-align:left">Acción</th><th style="padding:6px;text-align:left">Usuario</th><th style="padding:6px;text-align:left">IP</th><th style="padding:6px;text-align:left">Detalle</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:6px;text-align:left">Fecha/hora</th><th style="padding:6px;text-align:left">Acción</th><th style="padding:6px;text-align:left">Usuario</th><th style="padding:6px;text-align:left">IP</th><th style="padding:6px;text-align:left">Detalle</th></tr>
     {audit_html}
   </table>
 </section>
@@ -72459,17 +72524,17 @@ def gerencia_hojas_vida():
 {"<div class='msg' style='background:#fef2f2;color:#991b1b'>"+_esc(err)+"</div>" if err else ""}
 <section class="role-panel">
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-    <a href="/gerencia/hojas-vida/formato.pdf" style="background:#0B2D57;color:#fff;padding:10px 14px;border-radius:8px;font-weight:800;text-decoration:none">📥 Descargar Formato Hoja de Vida (Imprimir)</a>
+    <a href="/gerencia/hojas-vida/formato.pdf" style="background:#0020C2;color:#fff;padding:10px 14px;border-radius:8px;font-weight:800;text-decoration:none">📥 Descargar Formato Hoja de Vida (Imprimir)</a>
     <a href="/gerencia/hojas-vida/nueva" style="background:#15803d;color:#fff;padding:10px 14px;border-radius:8px;font-weight:800;text-decoration:none">+ Registrar hoja de vida recibida</a>
-    <a href="?decision=CONTRATADO" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Contratados</a>
-    <a href="?decision=EN_PROCESO" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">En proceso</a>
-    <a href="?decision=PRESELECCIONADO" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Preseleccionados</a>
-    <a href="?decision=NO_CONTINUA" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">No continúa</a>
-    <a href="?" style="background:#e2e8f0;color:#0B2D57;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Todos</a>
+    <a href="?decision=CONTRATADO" style="background:#e2e8f0;color:#0020C2;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Contratados</a>
+    <a href="?decision=EN_PROCESO" style="background:#e2e8f0;color:#0020C2;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">En proceso</a>
+    <a href="?decision=PRESELECCIONADO" style="background:#e2e8f0;color:#0020C2;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Preseleccionados</a>
+    <a href="?decision=NO_CONTINUA" style="background:#e2e8f0;color:#0020C2;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">No continúa</a>
+    <a href="?" style="background:#e2e8f0;color:#0020C2;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none">Todos</a>
   </div>
   <div style="overflow:auto">
   <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px;text-align:left">Código</th>
       <th style="padding:8px;text-align:left">Nombre</th>
       <th style="padding:8px;text-align:left">Documento</th>
@@ -72510,7 +72575,7 @@ def gerencia_hv_nueva():
     def _emp_block(i):
         return f"""
         <fieldset style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px">
-          <legend style="font-weight:800;color:#0B2D57">Empleo {i}</legend>
+          <legend style="font-weight:800;color:#0020C2">Empleo {i}</legend>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <input name="emp_nombre_{i}" placeholder="Empresa" style="padding:8px">
             <input name="emp_tel_{i}" placeholder="Teléfono RRHH" style="padding:8px">
@@ -72538,7 +72603,7 @@ def gerencia_hv_nueva():
 <section class="role-panel">
 <form method="POST" action="/gerencia/hojas-vida" enctype="multipart/form-data" style="max-width:900px">
   <input type="hidden" name="accion" value="registrar">
-  <h3 style="color:#0B2D57">1. Cargo y vacante</h3>
+  <h3 style="color:#0020C2">1. Cargo y vacante</h3>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
     <div><label style="font-size:12px;font-weight:700">Cargo al que se postula *</label>
     <input name="cargo_postula" required placeholder="Ej. Desarrollador, Soporte, Ventas" style="width:100%;padding:9px"></div>
@@ -72548,7 +72613,7 @@ def gerencia_hv_nueva():
   <label style="font-size:12px;font-weight:700;margin-top:8px;display:block">Perfil breve</label>
   <textarea name="perfil_breve" rows="3" style="width:100%;padding:9px" placeholder="Experiencia y habilidades principales..."></textarea>
 
-  <h3 style="color:#0B2D57">2. Datos personales</h3>
+  <h3 style="color:#0020C2">2. Datos personales</h3>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
     <input name="primer_apellido" placeholder="Primer apellido *" required style="padding:9px">
     <input name="segundo_apellido" placeholder="Segundo apellido" style="padding:9px">
@@ -72570,15 +72635,15 @@ def gerencia_hv_nueva():
     <select name="vehiculo" style="padding:9px"><option value="">Vehículo</option><option>Ninguno</option><option>Carro</option><option>Moto</option></select>
   </div>
 
-  <h3 style="color:#0B2D57">3. Formación académica</h3>
+  <h3 style="color:#0020C2">3. Formación académica</h3>
   {_est_row(1)}{_est_row(2)}{_est_row(3)}{_est_row(4)}{_est_row(5)}
   <label style="font-size:12px;font-weight:700">Habilidades técnicas / aptitudes</label>
   <textarea name="habilidades" rows="2" placeholder="PostgreSQL, JavaScript, Atención al cliente, AWS..." style="width:100%;padding:9px"></textarea>
 
-  <h3 style="color:#0B2D57">4. Experiencia laboral</h3>
+  <h3 style="color:#0020C2">4. Experiencia laboral</h3>
   {_emp_block(1)}{_emp_block(2)}{_emp_block(3)}
 
-  <h3 style="color:#0B2D57">5. Referencias</h3>
+  <h3 style="color:#0020C2">5. Referencias</h3>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
     <input name="ref_nombre_1" placeholder="Referencia 1 · Nombre" style="padding:9px">
     <input name="ref_ocup_1" placeholder="Ocupación" style="padding:9px">
@@ -72588,7 +72653,7 @@ def gerencia_hv_nueva():
     <input name="ref_tel_2" placeholder="Teléfono" style="padding:9px">
   </div>
 
-  <h3 style="color:#0B2D57">6. Proceso de selección (Gerencia)</h3>
+  <h3 style="color:#0020C2">6. Proceso de selección (Gerencia)</h3>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <input name="fecha_entrevista" placeholder="Fecha entrevista" style="padding:9px">
     <input name="resultado_prueba" placeholder="Resultado prueba (ej. 85/100 Apto)" style="padding:9px">
@@ -72596,9 +72661,9 @@ def gerencia_hv_nueva():
   </div>
   <textarea name="concepto_entrevistador" rows="2" placeholder="Concepto del entrevistador" style="width:100%;padding:9px;margin-top:8px"></textarea>
 
-  <h3 style="color:#0B2D57">7. Soportes</h3>
+  <h3 style="color:#0020C2">7. Soportes</h3>
   <input type="file" name="adjunto" accept="application/pdf,image/*" style="width:100%;padding:9px;margin-bottom:12px">
-  <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar hoja de vida</button>
+  <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar hoja de vida</button>
 </form>
 </section>
 """
@@ -72672,7 +72737,7 @@ def gerencia_hv_detalle(hid):
   <p><b>Concepto:</b> {_esc(h.concepto_entrevistador)}</p>
   <p style="font-size:12px;color:#64748b">Registrado por {_esc(h.registrado_por)} · {_esc(h.creado_en)}</p>
   <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0">
-  <h3 style="color:#0B2D57;margin:0 0 8px">Actualizar decisión de selección</h3>
+  <h3 style="color:#0020C2;margin:0 0 8px">Actualizar decisión de selección</h3>
   <p style="font-size:12px;color:#64748b;margin:0 0 10px">Si marcas <b>CONTRATADO</b>, el sistema da de alta al colaborador en <b>Trabajadores</b>, genera el <b>contrato editable</b> (nombre, C.C., cargo) y permite cargar la <b>firma digital</b> del empleado.</p>
   <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:640px">
     <input type="hidden" name="accion" value="decision">
@@ -72689,7 +72754,7 @@ def gerencia_hv_detalle(hid):
     <input name="resultado_prueba" value="{_esc(h.resultado_prueba)}" style="width:100%;padding:9px"></div>
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Concepto</label>
     <textarea name="concepto_entrevistador" rows="2" style="width:100%;padding:9px">{_esc(h.concepto_entrevistador)}</textarea></div>
-    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Guardar decisión</button>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Guardar decisión</button>
     <a href="/gerencia/contabilidad/trabajadores" style="margin-left:10px;font-weight:700">Ir a Trabajadores →</a>
     <a href="/gerencia/hojas-vida/{h.id}/contrato" style="margin-left:10px;font-weight:700;color:#1e40af">Ver / editar contrato →</a></div>
   </form>
@@ -73332,7 +73397,7 @@ def gerencia_hv_contrato(hid):
     <input type="hidden" name="nombres" value="{_esc(nom)}">
     <input type="hidden" name="documento" value="{_esc(h.documento)}">
     <input type="hidden" name="cargo" value="{_esc(h.cargo_postula)}">
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Generar contrato ahora</button>
+    <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:800">Generar contrato ahora</button>
   </form>
 </section>
 """
@@ -73438,7 +73503,7 @@ def gerencia_hv_contrato(hid):
     </div>
 
     <div style="grid-column:1/-1">
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar y regenerar PDF con firmas</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar y regenerar PDF con firmas</button>
     </div>
   </form>
 </section>
@@ -73602,7 +73667,7 @@ def gerencia_contrato_editar(cid):
     </div>
 
     <div style="grid-column:1/-1">
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;width:100%">Guardar y regenerar PDF con firmas grandes</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;width:100%">Guardar y regenerar PDF con firmas grandes</button>
     </div>
   </form>
 </section>
@@ -74172,7 +74237,7 @@ def gerencia_nomina():
         )
         btn_pdf = (
             "<a href='/gerencia/nomina/" + str(p.id) + "/pdf' target='_blank' "
-            "style='font-size:11px;padding:3px 8px;background:#0B2D57;color:#fff;border-radius:4px;"
+            "style='font-size:11px;padding:3px 8px;background:#0020C2;color:#fff;border-radius:4px;"
             "text-decoration:none;margin-right:4px'>PDF</a>"
         )
         det = (
@@ -74234,7 +74299,7 @@ def gerencia_nomina():
   {"<div class='msg ok'>" + _esc(msg) + "</div>" if msg else ""}
   {"<div class='msg danger'>" + _esc(err) + "</div>" if err else ""}
 
-  <h3 style="color:#0B2D57;margin-top:0">Registrar pago / liquidación</h3>
+  <h3 style="color:#0020C2;margin-top:0">Registrar pago / liquidación</h3>
   <form method="POST" id="form-nomina" style="max-width:980px">
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
       <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Trabajador activo *</label>
@@ -74496,7 +74561,7 @@ def gerencia_nomina():
   </form>
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <tr style="background:#0B2D57;color:#fff">
+      <tr style="background:#0020C2;color:#fff">
         <th style="padding:8px;text-align:left">Periodo</th>
         <th style="padding:8px;text-align:left">Trabajador</th>
         <th style="padding:8px;text-align:left">Documento</th>
@@ -74683,7 +74748,7 @@ def gerencia_contratos_firmas():
 
     def chip(label, key):
         active = filtro == key
-        bg = "#0B2D57;color:#fff" if active else "#e2e8f0;color:#0f172a"
+        bg = "#0020C2;color:#fff" if active else "#e2e8f0;color:#0f172a"
         href = "/gerencia/contratos-firmas?f=%s%s" % (key, ("&q=" + qtxt) if qtxt else "")
         return (
             '<a href="%s" style="background:%s;padding:7px 12px;border-radius:8px;text-decoration:none;'
@@ -74747,7 +74812,7 @@ def gerencia_contratos_firmas():
     <form method="GET" style="display:inline-flex;gap:6px;margin-left:8px">
       <input type="hidden" name="f" value="{_esc(filtro)}">
       <input name="q" value="{_esc(qtxt)}" placeholder="Buscar nombre, C.C. o cargo" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;min-width:200px">
-      <button type="submit" style="padding:7px 12px;border-radius:8px;border:0;background:#0B2D57;color:#fff;font-weight:700;font-size:12px">Buscar</button>
+      <button type="submit" style="padding:7px 12px;border-radius:8px;border:0;background:#0020C2;color:#fff;font-weight:700;font-size:12px">Buscar</button>
     </form>
   </div>
 
@@ -74760,7 +74825,7 @@ def gerencia_contratos_firmas():
 
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <tr style="background:#0B2D57;color:#fff">
+      <tr style="background:#0020C2;color:#fff">
         <th style="padding:8px;text-align:left">Nombre</th>
         <th style="padding:8px;text-align:left">Documento</th>
         <th style="padding:8px;text-align:left">Cargo</th>
@@ -75127,7 +75192,7 @@ def gerencia_datos_rut():
 
   <form method="POST" style="max-width:920px;display:grid;gap:14px">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
-      <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">1. Identificación (casillas 5–36 del RUT)</h3>
+      <h3 style="margin:0 0 12px;color:#0020C2;font-size:15px">1. Identificación (casillas 5–36 del RUT)</h3>
       <div style="display:grid;grid-template-columns:2fr 80px 1fr;gap:10px">
         <div>
           <label style="font-size:12px;font-weight:700">NIT / Cédula</label>
@@ -75157,7 +75222,7 @@ def gerencia_datos_rut():
     </div>
 
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
-      <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">2. Ubicación (casillas 38–44)</h3>
+      <h3 style="margin:0 0 12px;color:#0020C2;font-size:15px">2. Ubicación (casillas 38–44)</h3>
       <div style="display:grid;grid-template-columns:1fr 100px 1fr 100px;gap:10px">
         <div>
           <label style="font-size:12px;font-weight:700">Departamento</label>
@@ -75192,7 +75257,7 @@ def gerencia_datos_rut():
     </div>
 
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
-      <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">2b. Formulario y Dirección Seccional DIAN</h3>
+      <h3 style="margin:0 0 12px;color:#0020C2;font-size:15px">2b. Formulario y Dirección Seccional DIAN</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div>
           <label style="font-size:12px;font-weight:700">Número de formulario RUT</label>
@@ -75218,7 +75283,7 @@ def gerencia_datos_rut():
     </div>
 
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
-      <h3 style="margin:0 0 12px;color:#0B2D57;font-size:15px">3. Clasificación y responsabilidades (casillas 46–53)</h3>
+      <h3 style="margin:0 0 12px;color:#0020C2;font-size:15px">3. Clasificación y responsabilidades (casillas 46–53)</h3>
       <div style="display:grid;grid-template-columns:120px 1fr;gap:10px">
         <div>
           <label style="font-size:12px;font-weight:700">CIIU principal</label>
@@ -75239,7 +75304,7 @@ def gerencia_datos_rut():
       </div>
     </div>
 
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar datos del RUT</button>
+    <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800">Guardar datos del RUT</button>
   </form>
 </section>
 """
@@ -75512,7 +75577,7 @@ def gerencia_fondo_formalizacion():
   {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px">
     <div style="background:#eff6ff;border-radius:12px;padding:14px"><div style="font-size:12px;color:#64748b">Meta</div>
-      <div style="font-size:22px;font-weight:800;color:#0B2D57">{_cop(f.meta_monto)}</div></div>
+      <div style="font-size:22px;font-weight:800;color:#0020C2">{_cop(f.meta_monto)}</div></div>
     <div style="background:#f0fdf4;border-radius:12px;padding:14px"><div style="font-size:12px;color:#64748b">Acumulado congelado</div>
       <div style="font-size:22px;font-weight:800;color:#166534">{_cop(f.acumulado)}</div></div>
     <div style="background:#fefce8;border-radius:12px;padding:14px"><div style="font-size:12px;color:#64748b">Avance</div>
@@ -75521,7 +75586,7 @@ def gerencia_fondo_formalizacion():
       <div style="font-size:18px;font-weight:800">{_esc(f.estado)}</div></div>
   </div>
   <div style="background:#e2e8f0;border-radius:999px;height:12px;margin-bottom:18px;overflow:hidden">
-    <div style="background:#0B2D57;height:12px;width:{pct}%"></div>
+    <div style="background:#0020C2;height:12px;width:{pct}%"></div>
   </div>
   <p style="font-size:13px;color:#475569;margin:0 0 16px">{_esc(f.descripcion)}</p>
   <p style="font-size:13px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px;color:#991b1b">
@@ -75543,7 +75608,7 @@ def gerencia_fondo_formalizacion():
     </form>
     <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px">
       <input type="hidden" name="accion" value="gasto_formalizacion">
-      <h3 style="margin:0 0 10px;font-size:14px;color:#0B2D57">Pago formalización (Cámara de Comercio)</h3>
+      <h3 style="margin:0 0 10px;font-size:14px;color:#0020C2">Pago formalización (Cámara de Comercio)</h3>
       <label style="font-size:12px;font-weight:700">Valor del trámite</label>
       <input name="valor" placeholder="2500000" style="width:100%;padding:8px;margin-bottom:8px">
       <label style="font-size:12px;font-weight:700">Concepto</label>
@@ -75551,7 +75616,7 @@ def gerencia_fondo_formalizacion():
       <label style="font-size:12px;font-weight:700">Referencia</label>
       <input name="referencia" placeholder="Recibo Cámara de Comercio" style="width:100%;padding:8px;margin-bottom:8px">
       <label style="font-size:12px"><input type="checkbox" name="cerrar" value="1"> Cerrar fondo al pagar</label>
-      <div style="margin-top:8px"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Registrar pago formalización</button></div>
+      <div style="margin-top:8px"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Registrar pago formalización</button></div>
     </form>
   </div>
 
@@ -75568,10 +75633,10 @@ def gerencia_fondo_formalizacion():
     <button type="submit" name="accion" value="reactivar" style="padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;margin-left:8px">Reactivar fondo</button></div>
   </form></details>
 
-  <h3 style="font-size:14px;color:#0B2D57">Movimientos</h3>
+  <h3 style="font-size:14px;color:#0020C2">Movimientos</h3>
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <tr style="background:#0B2D57;color:#fff">
+      <tr style="background:#0020C2;color:#fff">
         <th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Tipo</th>
         <th style="padding:8px;text-align:left">Concepto</th><th style="padding:8px;text-align:right">Valor</th>
         <th style="padding:8px;text-align:left">Ref.</th><th style="padding:8px;text-align:left">Congelado</th>
@@ -75737,10 +75802,10 @@ def gerencia_contratos_saas():
     <input name="valor_mensual" placeholder="0" style="width:100%;padding:8px"></div>
     <div><label style="font-size:12px;font-weight:700">Fecha inicio</label>
     <input name="fecha_inicio" placeholder="YYYY-MM-DD" style="width:100%;padding:8px"></div>
-    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Crear contrato SaaS</button></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Crear contrato SaaS</button></div>
   </form>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px;text-align:left">Colegio</th><th style="padding:8px;text-align:left">Rector</th>
       <th style="padding:8px;text-align:left">Plan</th><th style="padding:8px;text-align:left">Estado</th>
       <th style="padding:8px;text-align:left">NIT proveedor</th><th style="padding:8px;text-align:left"></th>
@@ -75929,10 +75994,10 @@ def certificados_apoyo_familiar():
     </select></div>
     <div><label style="font-size:12px;font-weight:700">Concepto</label>
     <input name="concepto" value="Apoyo familiar / mandato ad honorem fase pre-lanzamiento" style="width:100%;padding:8px"></div>
-    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Emitir y descargar PDF</button></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Emitir y descargar PDF</button></div>
   </form>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px;text-align:left">Periodo</th><th style="padding:8px;text-align:left">Beneficiario</th>
       <th style="padding:8px;text-align:left">Concepto</th><th style="padding:8px;text-align:right">Valor</th>
       <th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:left">PDF</th>
@@ -76153,7 +76218,7 @@ def gerencia_comisiones_ventas():
     <h3 style="margin:0 0 10px;font-size:14px">Comisión por cierre (mes { _esc(mes_act) })</h3>
     <label style="font-size:12px;font-weight:700">Valor COP por colegio GANADO</label>
     <input name="comision_por_cierre" value="{int(global_val)}" style="width:100%;padding:9px;margin:6px 0 10px">
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Aplicar a asesores del mes</button>
+    <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:800">Aplicar a asesores del mes</button>
   </form>
   <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;max-width:640px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <input type="hidden" name="accion" value="meta_asesor">
@@ -76169,7 +76234,7 @@ def gerencia_comisiones_ventas():
     <div style="grid-column:1/-1"><button type="submit" style="padding:9px 12px;border:0;border-radius:8px;background:#15803d;color:#fff;font-weight:800">Guardar meta asesor</button></div>
   </form>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px;text-align:left">Mes</th><th style="padding:8px;text-align:left">Asesor</th>
       <th style="padding:8px;text-align:center">Cerrados / Meta</th>
       <th style="padding:8px;text-align:right">$/cierre</th><th style="padding:8px;text-align:right">Comisión</th>
@@ -76619,10 +76684,10 @@ def gerencia_libro_actas():
     <textarea name="resumen" rows="3" style="width:100%;padding:8px"></textarea></div>
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">PDF firmado (opcional)</label>
     <input type="file" name="pdf" accept="application/pdf"></div>
-    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:700">Registrar acta</button></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:700">Registrar acta</button></div>
   </form>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Consecutivo</th><th style="padding:8px;text-align:left">Título</th><th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">PDF</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Consecutivo</th><th style="padding:8px;text-align:left">Título</th><th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">PDF</th></tr>
     {filas}
   </table>
 </section>
@@ -76697,10 +76762,10 @@ def gerencia_boveda_legal():
     <textarea name="descripcion" rows="2" style="width:100%;padding:8px"></textarea></div>
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Archivo PDF</label>
     <input type="file" name="pdf" accept="application/pdf"></div>
-    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:700">Indexar en bóveda</button></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:700">Indexar en bóveda</button></div>
   </form>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Categoría</th><th style="padding:8px;text-align:left">Título</th><th style="padding:8px;text-align:left">Fecha doc.</th><th style="padding:8px;text-align:left">Indexado</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Categoría</th><th style="padding:8px;text-align:left">Título</th><th style="padding:8px;text-align:left">Fecha doc.</th><th style="padding:8px;text-align:left">Indexado</th></tr>
     {filas}
   </table>
 </section>
@@ -76752,7 +76817,7 @@ def changelog_institucional():
             pass
     items = "".join(
         "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-bottom:10px'>"
-        "<div style='font-weight:800;color:#0B2D57'>Versión %s · %s</div>"
+        "<div style='font-weight:800;color:#0020C2'>Versión %s · %s</div>"
         "<p style='margin:6px 0 0;font-size:13px;color:#334155'>%s</p></div>" % (
             _esc(r.version), _esc(r.fecha), _esc(r.resumen),
         )
@@ -76767,7 +76832,7 @@ def changelog_institucional():
     <input name="fecha" value="{(fecha_hoy() or '')}" style="padding:8px">
     <textarea name="resumen" rows="3" placeholder="Qué se actualizó..." style="padding:8px" required></textarea>
     <label style="font-size:12px"><input type="checkbox" name="publico" value="1" checked> Visible públicamente</label>
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px;border-radius:4px;font-weight:700">Publicar versión</button>
+    <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px;border-radius:4px;font-weight:700">Publicar versión</button>
   </form>
 """
     body = f"""
@@ -76849,10 +76914,10 @@ def cobranza_conciliacion():
     <select name="estado" style="width:100%;padding:8px"><option>PENDIENTE</option><option>CONCILIADO</option><option>DESCARTADO</option></select></div>
     <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:700">Descripción</label>
     <input name="descripcion" style="width:100%;padding:8px"></div>
-    <div style="grid-column:1/-1"><button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px;border-radius:4px;font-weight:700">Registrar movimiento</button></div>
+    <div style="grid-column:1/-1"><button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px;border-radius:4px;font-weight:700">Registrar movimiento</button></div>
   </form>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
-    <tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Ref.</th><th style="padding:8px;text-align:right">Valor</th><th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Descripción</th></tr>
+    <tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Ref.</th><th style="padding:8px;text-align:right">Valor</th><th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Descripción</th></tr>
     {filas}
   </table>
 </section>
@@ -77075,7 +77140,7 @@ def gerencia_plazos_cuotas():
       <label style="font-size:12px"><input type="checkbox" name="reactivar" value="1" checked> Reactivar colegio (estado ACTIVA)</label>
     </div>
     <div style="grid-column:1/-1">
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:11px 16px;border-radius:4px;font-weight:800">Registrar plazo / cuota</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:11px 16px;border-radius:4px;font-weight:800">Registrar plazo / cuota</button>
     </div>
   </form>
 """
@@ -77109,9 +77174,9 @@ def gerencia_plazos_cuotas():
     {info}
   </div>
   {form_block}
-  <h3 style="font-size:14px;color:#0B2D57">Historial</h3>
+  <h3 style="font-size:14px;color:#0020C2">Historial</h3>
   <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
-    <tr style="background:#0B2D57;color:#fff">
+    <tr style="background:#0020C2;color:#fff">
       <th style="padding:8px;text-align:left">Fecha</th><th style="padding:8px;text-align:left">Colegio</th>
       <th style="padding:8px;text-align:left">Tipo</th><th style="padding:8px;text-align:right">Valor</th>
       <th style="padding:8px;text-align:left">Nuevo venc.</th><th style="padding:8px;text-align:left">Estado</th>
@@ -77125,7 +77190,7 @@ def gerencia_plazos_cuotas():
 
 # Paletas sugeridas por colores de uniforme / institución
 _PALETAS_CARNET_QR = [
-    {"id": "marino_oro", "nombre": "Marino institucional", "primario": "#0B2D57", "acento": "#f59e0b", "fondo": "#ffffff", "texto": "#0f172a"},
+    {"id": "marino_oro", "nombre": "Marino institucional", "primario": "#0020C2", "acento": "#f59e0b", "fondo": "#ffffff", "texto": "#0f172a"},
     {"id": "verde_colegio", "nombre": "Verde académico", "primario": "#166534", "acento": "#facc15", "fondo": "#ffffff", "texto": "#14532d"},
     {"id": "rojo_uniforme", "nombre": "Rojo uniforme", "primario": "#9f1239", "acento": "#fde68a", "fondo": "#ffffff", "texto": "#1f2937"},
     {"id": "azul_cielo", "nombre": "Azul cielo", "primario": "#0369a1", "acento": "#38bdf8", "fondo": "#f0f9ff", "texto": "#0c4a6e"},
@@ -77182,7 +77247,7 @@ def ventas_preview_carnet_qr():
         '<span style="width:14px;height:14px;border-radius:2px;background:%s;display:inline-block"></span>'
         '<span style="width:14px;height:14px;border-radius:2px;background:%s;display:inline-block"></span>'
         '<span style="font-size:12px;font-weight:700">%s</span></label>' % (
-            "outline:2px solid #0B2D57" if p["id"] == elegida["id"] else "",
+            "outline:2px solid #0020C2" if p["id"] == elegida["id"] else "",
             p["id"],
             "checked" if p["id"] == elegida["id"] else "",
             p["primario"], p["acento"], _esc(p["nombre"]),
@@ -77223,7 +77288,7 @@ def ventas_preview_carnet_qr():
       {chips}
     </div>
     <div style="grid-column:1/-1">
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:4px;font-weight:800">Actualizar vista previa</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:4px;font-weight:800">Actualizar vista previa</button>
     </div>
   </form>
 
@@ -77429,7 +77494,7 @@ def gerencia_indicadores():
     <button type="button" class="ind-tab active" data-chart="cobertura" onclick="indTab(this,'cobertura')">Cobertura</button>
     <button type="button" class="ind-tab" data-chart="trafico" onclick="indTab(this,'trafico')">Tráfico web</button>
     <button type="button" class="ind-tab" data-chart="finanzas" onclick="indTab(this,'finanzas')">Finanzas</button>
-    <a href="/gerencia/reportes?periodo=mensual" style="margin-left:auto;font-size:12px;font-weight:700;color:#0B2D57;align-self:center">Reportes detallados →</a>
+    <a href="/gerencia/reportes?periodo=mensual" style="margin-left:auto;font-size:12px;font-weight:700;color:#0020C2;align-self:center">Reportes detallados →</a>
   </div>
 
   <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:16px 16px 8px">
@@ -77455,8 +77520,8 @@ def gerencia_indicadores():
   letter-spacing:.08em;text-transform:uppercase;background:transparent;color:#64748b;
   border-bottom:3px solid transparent;
 }}
-.ind-tab:hover{{color:#0B2D57;background:#f1f5f9}}
-.ind-tab.active{{color:#0B2D57;border-bottom-color:#0B2D57}}
+.ind-tab:hover{{color:#0020C2;background:#f1f5f9}}
+.ind-tab.active{{color:#0020C2;border-bottom-color:#0020C2}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
@@ -77837,7 +77902,7 @@ def gerencia_metas():
   {"<div class='msg danger'>"+_esc(err)+"</div>" if err else ""}
 
   <details style="margin-bottom:14px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px">
-    <summary style="cursor:pointer;font-weight:800;color:#0B2D57;font-size:13px">+ Crear nueva meta</summary>
+    <summary style="cursor:pointer;font-weight:800;color:#0020C2;font-size:13px">+ Crear nueva meta</summary>
     <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
       <input type="hidden" name="accion" value="crear">
       <div style="grid-column:1/-1">
@@ -77884,7 +77949,7 @@ def gerencia_metas():
         <input type="date" name="fecha_limite" style="width:100%;padding:8px">
       </div>
       <div style="grid-column:1/-1">
-        <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:800">Guardar meta</button>
+        <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:10px 14px;border-radius:4px;font-weight:800">Guardar meta</button>
       </div>
     </form>
   </details>
@@ -77954,7 +78019,7 @@ def _ensure_ventas_landing_cols():
             ("ventas_landing_nota_planes", "VARCHAR(255) DEFAULT ''"),
             ("ventas_landing_h2_planes", "VARCHAR(160) DEFAULT ''"),
             ("ventas_landing_img", "VARCHAR(255) DEFAULT ''"),
-            ("login_color_primario", "VARCHAR(20) DEFAULT '#0B2D57'"),
+            ("login_color_primario", "VARCHAR(20) DEFAULT '#0020C2'"),
             ("login_color_acento", "VARCHAR(20) DEFAULT '#f59e0b'"),
             ("login_color_fondo", "VARCHAR(20) DEFAULT '#f8fafc'"),
             ("login_titulo", "VARCHAR(160) DEFAULT ''"),
@@ -78140,11 +78205,11 @@ def gerencia_landing_ventas():
         <input name="email" value="{_esc(_g('contacto_publico_email', ''))}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">
       </div>
     </div>
-    <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800">Guardar cambios en /ventas</button>
+    <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800">Guardar cambios en /ventas</button>
   </form>
   <p style="font-size:13px;color:#64748b;margin-top:14px">
     Los <b>precios de cada plan</b> (Básico, Estándar, Pro, Solo QR…) se editan en
-    <a href="/gerencia/planes" style="color:#0B2D57;font-weight:700">Planes · precios · paywalls</a>.
+    <a href="/gerencia/planes" style="color:#0020C2;font-weight:700">Planes · precios · paywalls</a>.
     Esta pantalla controla el <b>texto y el precio «Desde»</b> del panel público.
   </p>
 </section>
@@ -78280,7 +78345,7 @@ def gerencia_colegios_config():
 <form method="POST" style="display:grid;grid-template-columns:1.2fr 0.7fr 0.9fr 0.9fr 0.7fr 1.1fr;gap:6px;align-items:center;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-bottom:8px">
   <input type="hidden" name="institucion_id" value="{i.id}">
   <div>
-    <div style="font-weight:800;color:#0B2D57">{_esc(i.codigo)}</div>
+    <div style="font-weight:800;color:#0020C2">{_esc(i.codigo)}</div>
     <div style="font-size:12px;color:#64748b">{_esc((i.nombre or '')[:40])}</div>
     <div style="font-size:11px;color:{color};font-weight:700">{_esc(i.estado or '—')} · saldo $ {saldo:,.0f}</div>
   </div>
@@ -78308,7 +78373,7 @@ def gerencia_colegios_config():
     </label>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:4px">
-    <button name="accion" value="guardar" style="background:#0B2D57;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Guardar</button>
+    <button name="accion" value="guardar" style="background:#0020C2;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Guardar</button>
     <button name="accion" value="reactivar_30" style="background:#15803d;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">+30 días</button>
     <button name="accion" value="reactivar_90" style="background:#0f766e;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">+90 sin auto</button>
     <button name="accion" value="desactivar_auto" style="background:#64748b;color:#fff;border:0;padding:6px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Solo ACTIVA</button>
@@ -78349,7 +78414,7 @@ def gerencia_diseno_login():
     p = plataforma()
     if request.method == "POST":
         try:
-            prim = (request.form.get("color_primario") or "#0B2D57")[:20]
+            prim = (request.form.get("color_primario") or "#0020C2")[:20]
             acento = (request.form.get("color_acento") or "#f59e0b")[:20]
             fondo = (request.form.get("color_fondo") or "#f8fafc")[:20]
             titulo = (request.form.get("titulo") or "")[:160]
@@ -78413,7 +78478,7 @@ def gerencia_diseno_login():
             db.session.rollback()
             err = str(e)[:150]
 
-    prim = str(_landing_get("login_color_primario", "#0B2D57") or "#0B2D57")
+    prim = str(_landing_get("login_color_primario", "#0020C2") or "#0020C2")
     acento = str(_landing_get("login_color_acento", "#f59e0b") or "#f59e0b")
     fondo = str(_landing_get("login_color_fondo", "#f8fafc") or "#f8fafc")
     titulo = str(_landing_get("login_titulo", "") or "")
@@ -78457,7 +78522,7 @@ def gerencia_diseno_login():
       <input type="file" name="logo" accept="image/*" style="width:100%;padding:8px">
       {('<img src="'+_esc(logo)+'" alt="" style="max-height:64px;margin-top:8px">') if logo else ''}
     </div>
-    <h3 style="margin:10px 0 0;color:#0B2D57;font-size:15px">Carrusel de fotos · Acceso institucional (login)</h3>
+    <h3 style="margin:10px 0 0;color:#0020C2;font-size:15px">Carrusel de fotos · Acceso institucional (login)</h3>
     <p style="font-size:12px;color:#64748b;margin:0 0 6px">Hasta 5 fotos que rotan automáticamente en el login (colegio). Recomendado: fotos horizontales, mismo tamaño, imagen institucional/corporativa.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
       {"".join(
@@ -78505,11 +78570,11 @@ def _login_theme_css():
     except Exception:
         pass
     try:
-        prim = str(_landing_get("login_color_primario", "#0B2D57") or "#0B2D57")
+        prim = str(_landing_get("login_color_primario", "#0020C2") or "#0020C2")
         acento = str(_landing_get("login_color_acento", "#f59e0b") or "#f59e0b")
         fondo = str(_landing_get("login_color_fondo", "#f8fafc") or "#f8fafc")
     except Exception:
-        prim, acento, fondo = "#0B2D57", "#f59e0b", "#f8fafc"
+        prim, acento, fondo = "#0020C2", "#f59e0b", "#f8fafc"
     return (
         ":root{--login-prim:%s;--login-acento:%s;--login-fondo:%s}"
         ".gl{background:var(--login-fondo)!important}"
@@ -78924,7 +78989,7 @@ def dev_console():
         return (
             '<a href="/dev-console?tab=%s" style="padding:10px 14px;font-size:12px;font-weight:800;text-decoration:none;'
             'border-bottom:3px solid %s;color:%s;letter-spacing:.04em">%s</a>'
-            % (id_, "#0B2D57" if active else "transparent", "#0B2D57" if active else "#64748b", label)
+            % (id_, "#0020C2" if active else "transparent", "#0020C2" if active else "#64748b", label)
         )
 
     tabs_nav = (
@@ -78942,7 +79007,7 @@ def dev_console():
         panel = f"""
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
-      <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Infraestructura</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Infraestructura</h3>
       <p style="font-size:12px;margin:4px 0">Memoria proceso: <b>{_esc(mem_info)}</b></p>
       <p style="font-size:12px;margin:4px 0">Colegios en BD: <b>{n_inst}</b></p>
       <p style="font-size:12px;margin:4px 0">Estudiantes: <b>{n_est}</b></p>
@@ -78950,20 +79015,20 @@ def dev_console():
       <p style="font-size:12px;margin:4px 0">Mantenimiento: <b style="color:{'#b91c1c' if mant else '#15803d'}">{'ON' if mant else 'OFF'}</b></p>
       <form method="POST" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <input type="hidden" name="tab" value="sistema">
-        <button name="accion" value="ping_db" style="background:#0B2D57;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Probar DB</button>
+        <button name="accion" value="ping_db" style="background:#0020C2;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Probar DB</button>
         <button name="accion" value="backup_csv" style="background:#334155;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Backup CSV</button>
         <button name="accion" value="mantenimiento_on" style="background:#b91c1c;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Mant. ON</button>
         <button name="accion" value="mantenimiento_off" style="background:#15803d;color:#fff;border:0;padding:8px 12px;border-radius:4px;font-weight:700;cursor:pointer">Mant. OFF</button>
       </form>
     </div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
-      <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Restricciones</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Restricciones</h3>
       <p style="font-size:12px;color:#991b1b;margin:0">Sin acceso a: NIT/RUT, cuentas bancarias, nómina, contratos firmados, noticias comerciales ni facturación.</p>
     </div>
   </div>
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
     <div style="display:flex;justify-content:space-between;align-items:center">
-      <h3 style="margin:0;font-size:14px;color:#0B2D57">Visor de errores (logs)</h3>
+      <h3 style="margin:0;font-size:14px;color:#0020C2">Visor de errores (logs)</h3>
       <form method="POST"><input type="hidden" name="tab" value="sistema">
         <button name="accion" value="clear_logs" style="border:1px solid #cbd5e1;background:#f8fafc;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer">Limpiar</button>
       </form>
@@ -78971,7 +79036,7 @@ def dev_console():
     <div style="max-height:300px;overflow:auto;margin-top:8px">{log_html}</div>
   </div>
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-top:14px">
-    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Sesiones activas (Consola técnica)</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Sesiones activas (Consola técnica)</h3>
     <p style="font-size:12px;color:#64748b;margin:0 0 10px">Usuarios con la consola abierta en los últimos 15 minutos · IP · navegador · última acción.</p>
     {_dev_sessions_html()}
   </div>
@@ -78983,7 +79048,7 @@ def dev_console():
             for r in hist_rows:
                 hist_html += (
                     "<div style='border-bottom:1px solid #e2e8f0;padding:8px 0'>"
-                    "<div style='font-weight:800;color:#0B2D57;font-size:13px'>v%s · %s</div>"
+                    "<div style='font-weight:800;color:#0020C2;font-size:13px'>v%s · %s</div>"
                     "<p style='margin:4px 0 0;font-size:12px;color:#334155;white-space:pre-wrap'>%s</p>"
                     "<div style='font-size:11px;color:#94a3b8'>%s · %s</div></div>"
                 ) % (_esc(r.version), _esc(r.fecha), _esc(r.resumen or ""), _esc(r.creado_en or ""), _esc(r.creado_por or ""))
@@ -78991,7 +79056,7 @@ def dev_console():
             hist_html = "<p style='color:#64748b;font-size:12px'>Sin historial aún.</p>"
         panel = f"""
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:640px">
-    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Control de versión (changelog)</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Control de versión (changelog)</h3>
     <p style="font-size:12px;color:#64748b;margin:0 0 12px">Al publicar, el número se refleja en el login de colegios y en el pie de página. <b>Cada publicación se guarda en historial inmutable</b> (no se puede borrar).</p>
     <form method="POST" style="display:grid;gap:10px">
       <input type="hidden" name="tab" value="versiones">
@@ -79004,16 +79069,16 @@ def dev_console():
         <label style="font-size:12px;font-weight:700">Notas de las mejoras (texto plano)</label>
         <textarea name="changelog_publico" rows="8" placeholder="Ej: Se optimizó el escáner QR en porterías.&#10;• Memos de trabajadores&#10;• Certificación laboral mejorada" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px">{_esc(chg)}</textarea>
       </div>
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Publicar versión</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Publicar versión</button>
     </form>
-    <h4 style="margin:20px 0 8px;font-size:13px;color:#0B2D57">Historial inmutable de versiones</h4>
+    <h4 style="margin:20px 0 8px;font-size:13px;color:#0020C2">Historial inmutable de versiones</h4>
     <div style="max-height:320px;overflow:auto">{hist_html or "<p style='color:#64748b;font-size:12px'>Aún no hay publicaciones.</p>"}</div>
   </div>
 """
     elif tab == "anuncios":
         panel = f"""
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:640px">
-    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Anuncios técnicos</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Anuncios técnicos</h3>
     <p style="font-size:12px;color:#64748b;margin:0 0 12px">Solo alertas de mantenimiento o nueva versión. <b>No</b> noticias comerciales ni precios.</p>
     <form method="POST" style="display:grid;gap:10px">
       <input type="hidden" name="tab" value="anuncios">
@@ -79026,7 +79091,7 @@ def dev_console():
         <input type="checkbox" name="anuncio_tecnico_activo" value="1" {"checked" if anuncio_on else ""}>
         Activar anuncio en pantallas de colegios
       </label>
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar anuncio técnico</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar anuncio técnico</button>
     </form>
   </div>
 """
@@ -79040,7 +79105,7 @@ def dev_console():
             prim_v, sec_v, fondo_v, css_extra_v = "#0B4A8F", "#F2C12E", "#F8FAFC", ""
         panel = f"""
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;max-width:560px">
-    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Sistema de Personalización Corporativa (Temas CSS)</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Sistema de Personalización Corporativa (Temas CSS)</h3>
     <p style="font-size:12px;color:#64748b;margin:0 0 14px">Colores en base de datos como variables globales. Al guardar se inyectan <code>--primary-color</code>, <code>--secondary-color</code> y <code>--dashboard-bg</code> en toda la suite.</p>
     <form method="POST" style="display:grid;gap:14px">
       <input type="hidden" name="tab" value="temas">
@@ -79066,7 +79131,7 @@ def dev_console():
         <p style="font-size:11px;color:#64748b;margin:4px 0 6px">Código CSS adicional (sin alterar el fuente en Railway). Ej: botones cuadrados, tipografía de un colegio exigente.</p>
         <textarea name="css_inyectado" rows="8" placeholder=".btn {{ border-radius: 0 !important; }}&#10;body {{ font-family: Georgia, serif !important; }}" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:4px;font-family:ui-monospace,Consolas,monospace;font-size:12px">{_esc(css_extra_v)}</textarea>
       </div>
-      <button type="submit" style="background:#0B2D57;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar paleta y CSS</button>
+      <button type="submit" style="background:#0020C2;color:#fff;border:0;padding:12px;border-radius:4px;font-weight:800;cursor:pointer">Guardar paleta y CSS</button>
     </form>
   </div>
 """
@@ -79104,7 +79169,7 @@ def dev_console():
   </div>""")
         panel = f"""
   <div style="max-width:640px">
-    <h3 style="margin:0 0 8px;font-size:14px;color:#0B2D57">Gestor de Nuevas Funciones (Feature Flags)</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;color:#0020C2">Gestor de Nuevas Funciones (Feature Flags)</h3>
     <p style="font-size:12px;color:#64748b;margin:0 0 14px">Interruptores globales ON/OFF. Con <b>Sandbox ON</b>, WhatsApp / Carnés / Prestaciones solo aplican a colegios de prueba (nombre/código con «prueba», «test» o «sandbox»). Uso: <code>if feature_enabled('whatsapp_api'):</code></p>
     {''.join(filas_f)}
   </div>
@@ -79131,7 +79196,7 @@ def dev_console():
     body = f"""
 <style>
 .dev-apple{{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:1100px;margin:0 auto;padding:0 0 40px}}
-.dev-hero{{background:linear-gradient(135deg,#002060 0%,#005BEA 100%);border-radius:20px;padding:22px 24px;color:#fff;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center;box-shadow:0 8px 28px rgba(0,32,96,.22)}}
+.dev-hero{{background:linear-gradient(135deg,#0F172A 0%,#0020C2 100%);border-radius:20px;padding:22px 24px;color:#fff;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center;box-shadow:0 8px 28px rgba(0,32,96,.22)}}
 .dev-hero-left{{display:flex;gap:14px;align-items:center}}
 .dev-hero-left img{{width:52px;height:52px;border-radius:12px;background:#fff;object-fit:contain;padding:4px}}
 .dev-hero h1{{margin:0;font-size:20px;font-weight:700;letter-spacing:-.02em}}
@@ -79143,7 +79208,7 @@ def dev_console():
 .dev-note{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:12px 16px;margin:14px 0;font-size:12px;color:#64748b}}
 .dev-tabs{{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 14px;padding:6px;background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,.06)}}
 .dev-tabs a{{padding:10px 14px;border-radius:12px;font-size:12px;font-weight:600;text-decoration:none;color:#64748b}}
-.dev-tabs a.on{{background:#005BEA;color:#fff}}
+.dev-tabs a.on{{background:#0020C2;color:#fff}}
 .dev-panel{{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:20px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.03)}}
 .dev-msg{{padding:12px 14px;border-radius:12px;margin-bottom:12px;font-weight:600;font-size:13px}}
 .dev-ok{{background:#ecfdf5;color:#065f46}}.dev-err{{background:#fef2f2;color:#991b1b}}
@@ -79256,11 +79321,11 @@ def dev_console_login():
 <style>
 .gl{{min-height:100vh;background:#0f172a;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Segoe UI,system-ui,sans-serif}}
 .gl-c{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:28px;max-width:400px;width:100%}}
-.gl-c h1{{margin:0 0 4px;color:#0B2D57;font-size:1.35rem}}
+.gl-c h1{{margin:0 0 4px;color:#0020C2;font-size:1.35rem}}
 .gl-c .sub{{color:#64748b;font-size:13px;margin:0 0 16px}}
 .gl-c label{{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}}
 .gl-c input{{width:100%;padding:11px 12px;margin:0 0 12px;border:1px solid #e2e8f0;border-radius:4px;box-sizing:border-box;font-size:14px}}
-.gl-c button{{width:100%;padding:12px;border:0;border-radius:4px;background:#0B2D57;color:#fff;font-weight:800;cursor:pointer}}
+.gl-c button{{width:100%;padding:12px;border:0;border-radius:4px;background:#0020C2;color:#fff;font-weight:800;cursor:pointer}}
 .gl-c .err{{background:#fef2f2;color:#991b1b;padding:10px;border-radius:4px;font-size:13px;margin-bottom:12px}}
 </style>
 <div class="gl"><div class="gl-c">
@@ -79417,7 +79482,7 @@ def acudiente_asistencia_viva():
                         if str(est_txt).lower() in ("tarde", "retardo") or st == "RETARDO":
                             badge = "<span style='color:#b91c1c;font-weight:700'>Tarde</span>"
                         elif "hueco" in str(est_txt).lower():
-                            badge = "<span style='color:#1d4ed8;font-weight:700'>Hora hueco</span>"
+                            badge = "<span style='color:#0020C2;font-weight:700'>Hora hueco</span>"
                         else:
                             badge = "<span style='color:#15803d;font-weight:700'>A tiempo</span>"
                         filas.append("<tr><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td><td style='padding:6px'>%s</td></tr>" % (
@@ -79469,7 +79534,7 @@ def acudiente_asistencia_viva():
     <tbody>{hist}</tbody>
   </table>
   <div style="margin-top:14px;text-align:center">
-    <a href="tel:{_esc(tel_sec)}" style="display:inline-block;background:#0B2D57;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px">
+    <a href="tel:{_esc(tel_sec)}" style="display:inline-block;background:#0020C2;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px">
       Llamar a secretaría del colegio
     </a>
   </div>
@@ -79478,7 +79543,7 @@ def acudiente_asistencia_viva():
     body = f"""
 <div style="min-height:100vh;background:#f1f5f9;font-family:Segoe UI,system-ui,sans-serif;padding:24px 16px">
   <div style="max-width:440px;margin:0 auto">
-    <h1 style="font-size:1.25rem;color:#0B2D57;margin:0 0 4px">Consulta de asistencia</h1>
+    <h1 style="font-size:1.25rem;color:#0020C2;margin:0 0 4px">Consulta de asistencia</h1>
     <p style="font-size:13px;color:#64748b;margin:0 0 16px">Acudientes · validación por documento y código del carné</p>
     {"<div style='background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px'>"+_esc(err)+"</div>" if err else ""}
     <form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px">
@@ -79590,7 +79655,7 @@ def retardos_acumulados():
                 '<input type="hidden" name="estudiante_id" value="%s">'
                 '<input type="hidden" name="mes" value="%s">'
                 '<input type="hidden" name="motivo" value="Cita médica / calamidad justificada">'
-                '<button type="submit" style="font-size:11px;padding:4px 8px;background:#0B2D57;color:#fff;border:0;border-radius:6px;cursor:pointer">Excusar Retardo</button></form>'
+                '<button type="submit" style="font-size:11px;padding:4px 8px;background:#0020C2;color:#fff;border:0;border-radius:6px;cursor:pointer">Excusar Retardo</button></form>'
             ) % (e.id, _esc(mes))
         filas.append(
             "<tr><td>%s</td><td>%s %s</td><td>%s</td><td><b>%s</b></td>"
@@ -79783,7 +79848,7 @@ function vcStep(n){{
                     err = str(ex)[:140]
     body = (
         '<div style="max-width:440px;margin:24px auto;font-family:Segoe UI,sans-serif;padding:16px">'
-        '<h1 style="color:#0B2D57;font-size:1.2rem">Autorizar salida</h1>'
+        '<h1 style="color:#0020C2;font-size:1.2rem">Autorizar salida</h1>'
         + (('<div style="background:#ecfdf5;color:#065f46;padding:10px;border-radius:8px;margin:8px 0">' + _esc(msg) + "</div>") if msg else "")
         + (('<div style="background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;margin:8px 0">' + _esc(err) + "</div>") if err else "")
         + '<form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">'
@@ -79807,7 +79872,7 @@ function vcStep(n){{
         + '<label style="display:flex;gap:8px;font-size:11px;margin:12px 0"><input type="checkbox" name="acepto_legal" value="1" required>'
         + '<span>AUTORIZO de manera expresa, libre y voluntaria el retiro del menor por la persona indicada '
         + "y exonero a la institucion una vez cruce el control perimetral (Ley 527 de 1999).</span></label>"
-        + '<button type="submit" style="width:100%;padding:12px;border:0;border-radius:6px;background:#0B2D57;color:#fff;font-weight:800">Confirmar y firmar</button>'
+        + '<button type="submit" style="width:100%;padding:12px;border:0;border-radius:6px;background:#0020C2;color:#fff;font-weight:800">Confirmar y firmar</button>'
         + '</form><p style="text-align:center;margin-top:12px"><a href="/acudiente-asistencia">Asistencia</a> · '
         + '<a href="/acudiente/ficha-medica">Ficha medica</a></p></div>'
     )
@@ -79973,7 +80038,7 @@ def coordinacion_salidas():
     body = f"""
 <style>
 .scard{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px}}
-.shead{{color:#0B2D57;margin-bottom:6px}}.smeta{{font-size:13px;color:#475569;margin:2px 0}}
+.shead{{color:#0020C2;margin-bottom:6px}}.smeta{{font-size:13px;color:#475569;margin:2px 0}}
 .sform label{{display:block;font-size:12px;font-weight:700;margin:8px 0 4px;color:#334155}}
 .sform textarea,.sform input{{width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box}}
 .sbtns{{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}}
@@ -79991,9 +80056,9 @@ table.st th,table.st td{{border-bottom:1px solid #e2e8f0;padding:8px;text-align:
 <section class="role-panel">
   {"<div class='msg okm'>"+_esc(msg)+"</div>" if msg else ""}
   {"<div class='msg errm'>"+_esc(err)+"</div>" if err else ""}
-  <h2 style="font-size:16px;color:#0B2D57">Pendientes ({len(pendientes)})</h2>
+  <h2 style="font-size:16px;color:#0020C2">Pendientes ({len(pendientes)})</h2>
   {"".join(_fila_pend(a) for a in pendientes) or "<p style='color:#64748b'>No hay solicitudes pendientes.</p>"}
-  <h2 style="font-size:16px;color:#0B2D57;margin-top:24px">Recientes</h2>
+  <h2 style="font-size:16px;color:#0020C2;margin-top:24px">Recientes</h2>
   <table class="st"><tr><th>#</th><th>Estudiante</th><th>Fecha</th><th>Estado</th><th>Motivo</th><th>Decisión</th></tr>
   {"".join(_fila_hist(a) for a in recientes) or "<tr><td colspan='6'>Sin historial</td></tr>"}
   </table>
@@ -80103,7 +80168,7 @@ def formato_salida(aid):
 <style>
 @media print {{ .no-print {{ display:none }} }}
 .fmt {{ max-width:720px;margin:24px auto;font-family:Segoe UI,Arial,sans-serif;background:#fff;padding:28px;border:1px solid #cbd5e1 }}
-.fmt h1 {{ color:#0B2D57;font-size:18px;margin:0 0 4px;text-align:center }}
+.fmt h1 {{ color:#0020C2;font-size:18px;margin:0 0 4px;text-align:center }}
 .fmt .sub {{ text-align:center;color:#64748b;font-size:12px;margin-bottom:18px }}
 .fmt table {{ width:100%;border-collapse:collapse;font-size:13px }}
 .fmt td {{ padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top }}
@@ -80113,7 +80178,7 @@ def formato_salida(aid):
 .badge {{ display:inline-block;background:#dcfce7;color:#14532d;font-weight:800;padding:4px 10px;border-radius:999px;font-size:12px }}
 </style>
 <div class="no-print" style="text-align:center;padding:12px">
-  <button onclick="window.print()" style="padding:10px 18px;background:#0B2D57;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">Imprimir formato</button>
+  <button onclick="window.print()" style="padding:10px 18px;background:#0020C2;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">Imprimir formato</button>
   <a href="/coordinacion/salidas" style="margin-left:12px">Volver</a>
 </div>
 <div class="fmt">
@@ -80258,7 +80323,7 @@ def acudiente_ficha_medica():
                 err = str(ex)[:120]
     body = (
         '<div style="max-width:440px;margin:24px auto;font-family:Segoe UI,sans-serif;padding:16px">'
-        '<h1 style="color:#0B2D57;font-size:1.2rem">Ficha medica digital</h1>'
+        '<h1 style="color:#0020C2;font-size:1.2rem">Ficha medica digital</h1>'
         + (('<div style="background:#ecfdf5;padding:10px;border-radius:8px">' + _esc(msg) + "</div>") if msg else "")
         + (('<div style="background:#fef2f2;padding:10px;border-radius:8px">' + _esc(err) + "</div>") if err else "")
         + '<form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">'
@@ -80465,7 +80530,7 @@ def _html_carrusel_clientes():
             "</p></section>"
             "<style>.cli-strip{padding:48px 16px;background:#f5f5f7;text-align:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}"
             ".cli-kicker{margin:0 0 8px;font-size:12px;letter-spacing:.08em;font-weight:600;color:#86868b;text-transform:uppercase}"
-            ".cli-title{margin:0 0 16px;font-size:1.75rem;font-weight:700;color:#002060}</style>"
+            ".cli-title{margin:0 0 16px;font-size:1.75rem;font-weight:700;color:#0F172A}</style>"
         )
     logos = []
     for it in items:
@@ -80484,7 +80549,7 @@ def _html_carrusel_clientes():
         '<div class="cli-viewport"><div class="cli-track">' + track + "</div></div></section>"
         "<style>.cli-strip{padding:48px 16px 56px;background:#f5f5f7;text-align:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}"
         ".cli-kicker{margin:0 0 8px;font-size:12px;letter-spacing:.08em;font-weight:600;color:#86868b;text-transform:uppercase}"
-        ".cli-title{margin:0 0 28px;font-size:1.75rem;font-weight:700;color:#002060;letter-spacing:-.02em}"
+        ".cli-title{margin:0 0 28px;font-size:1.75rem;font-weight:700;color:#0F172A;letter-spacing:-.02em}"
         ".cli-viewport{max-width:1100px;margin:0 auto;padding:0 12px}"
         ".cli-track{display:flex;flex-wrap:wrap;gap:40px;align-items:center;justify-content:center}"
         ".cli-logo{flex:0 0 auto;width:120px;height:80px;display:flex;align-items:center;justify-content:center}"
@@ -82116,11 +82181,11 @@ def _seg_bloqueado(modo):
         "<title>Medida de seguridad</title><body style=\"font-family:Segoe UI,system-ui,sans-serif;background:#f5f5f7;margin:0;"
         "display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px\">"
         "<div style=\"max-width:520px;background:#fff;border-radius:20px;padding:32px;box-shadow:0 12px 40px rgba(0,0,0,.08);text-align:center\">"
-        "<h1 style=\"color:#0B2D57;font-size:22px;margin:0 0 12px\">Medida de seguridad en curso</h1>"
+        "<h1 style=\"color:#0020C2;font-size:22px;margin:0 0 12px\">Medida de seguridad en curso</h1>"
         "<p style=\"color:#475569;line-height:1.55;margin:0 0 18px\">%s</p>"
         "<p style=\"color:#64748b;font-size:13px;margin:0\">Estamos trabajando para restablecer el servicio. "
         "Si necesita ayuda, comuníquese con el soporte de PROCSIS.</p>"
-        "<p style=\"margin:20px 0 0\"><a href=\"/logout\" style=\"color:#005BEA\">Cerrar sesión</a></p></div></body></html>" % txt
+        "<p style=\"margin:20px 0 0\"><a href=\"/logout\" style=\"color:#0020C2\">Cerrar sesión</a></p></div></body></html>" % txt
     )
     return Response(html, status=423, mimetype="text/html")
 
@@ -82389,7 +82454,7 @@ def _seg_pdf_bytes(titulo, subtitulo, bloques):
 _SEG_CSS = """<style id="sg-css">
 .sg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:8px 0 20px}
 .sg-mod{display:block;background:#fff;border:1px solid #dbe5f5;border-radius:16px;padding:16px 18px;text-decoration:none;color:#0f172a}
-.sg-mod:hover{border-color:#005BEA;box-shadow:0 6px 20px rgba(0,91,234,.10)}
+.sg-mod:hover{border-color:#0020C2;box-shadow:0 6px 20px rgba(0,32,194,.10)}
 .sg-mod b{display:block;color:#0a2a7a;font-size:15px;margin-bottom:4px}
 .sg-mod span{font-size:13px;color:#475569;line-height:1.4}
 .sg-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 16px}
@@ -83935,8 +84000,8 @@ def soporte_solicitud_plan():
     )
     body = (
         '<div style="max-width:800px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
-        '<p><a href="/soporte_admin" style="color:#0B2D57;font-weight:700">&larr; Soporte</a> · <a href="/tenants">Instituciones</a></p>'
-        '<h1 style="color:#0B2D57">Solicitud de cambio de plan</h1>'
+        '<p><a href="/soporte_admin" style="color:#0020C2;font-weight:700">&larr; Soporte</a> · <a href="/tenants">Instituciones</a></p>'
+        '<h1 style="color:#0020C2">Solicitud de cambio de plan</h1>'
         '<p style="color:#64748b;font-size:14px">Soporte <b>no cambia</b> el plan. Solo envia solicitud a Gerencia (max. 5 dias para responder).</p>'
         '%s%s'
         '<form method="POST" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px">'
@@ -83946,11 +84011,11 @@ def soporte_solicitud_plan():
         '<select name="plan_solicitado" required style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:10px">%s</select>'
         '<label style="font-size:12px;font-weight:700">Motivo</label>'
         '<textarea name="motivo" rows="3" style="width:100%%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box"></textarea>'
-        '<button type="submit" style="margin-top:12px;background:#005BEA;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">'
+        '<button type="submit" style="margin-top:12px;background:#0020C2;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-weight:800;cursor:pointer">'
         'Enviar solicitud a Gerencia</button></form>'
-        '<h2 style="color:#0B2D57;font-size:16px;margin-top:24px">Solicitudes recientes</h2>'
+        '<h2 style="color:#0020C2;font-size:16px;margin-top:24px">Solicitudes recientes</h2>'
         '<table style="width:100%%;border-collapse:collapse;background:#fff;font-size:13px">'
-        '<tr style="background:#0B2D57;color:#fff"><th style="padding:8px;text-align:left">ID</th><th style="padding:8px;text-align:left">Colegio</th>'
+        '<tr style="background:#0020C2;color:#fff"><th style="padding:8px;text-align:left">ID</th><th style="padding:8px;text-align:left">Colegio</th>'
         '<th style="padding:8px;text-align:left">Plan</th><th style="padding:8px;text-align:left">Estado</th><th style="padding:8px;text-align:left">Fechas</th></tr>'
         '%s</table></div>'
     ) % (
@@ -84067,12 +84132,12 @@ def gerencia_solicitudes_plan():
         )
     body = (
         '<div style="max-width:1000px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif">'
-        '<p><a href="/gerencia/hq" style="color:#0B2D57;font-weight:700">&larr; HQ</a></p>'
-        '<h1 style="color:#0B2D57">Solicitudes de cambio de plan</h1>'
+        '<p><a href="/gerencia/hq" style="color:#0020C2;font-weight:700">&larr; HQ</a></p>'
+        '<h1 style="color:#0020C2">Solicitudes de cambio de plan</h1>'
         '<p style="color:#64748b;font-size:14px">Enviadas por Soporte. Al <b>Aceptar</b> se aplica el plan al colegio. Plazo 5 dias.</p>'
         '%s%s'
         '<table style="width:100%%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:13px">'
-        '<tr style="background:#0B2D57;color:#fff">'
+        '<tr style="background:#0020C2;color:#fff">'
         '<th style="padding:10px;text-align:left">Solicitud</th><th style="padding:10px;text-align:left">Colegio</th>'
         '<th style="padding:10px;text-align:left">Plan</th><th style="padding:10px;text-align:left">Estado</th>'
         '<th style="padding:10px;text-align:left">Plazo</th><th style="padding:10px;text-align:left">Accion</th></tr>'
@@ -84354,7 +84419,7 @@ def soporte_validacion_identidad():
             "<input id='vi-link' readonly value='%s' style='width:100%%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px'>"
             "<button type='button' class='btn' style='margin-top:8px' onclick=\"var i=document.getElementById('vi-link');i.select();document.execCommand('copy');this.textContent='✅ Copiado'\">Copiar enlace</button>"
             "<div style='margin-top:12px;font-size:13px'>PIN de activación:</div>"
-            "<div style='font-size:40px;font-weight:900;letter-spacing:10px;color:#0B2D57'>%s</div></section>"
+            "<div style='font-size:40px;font-weight:900;letter-spacing:10px;color:#0020C2'>%s</div></section>"
         ) % (nv.get("id"), _esc(nv.get("link", "")), _esc(nv.get("pin", "")))
 
     insts = Institucion.query.filter(Institucion.estado == "ACTIVA").order_by(Institucion.nombre).all()
@@ -84394,7 +84459,7 @@ def soporte_validacion_identidad():
                    "<form method='POST' style='display:inline'><input type='hidden' name='accion' value='aplicar_carne'><input type='hidden' name='id' value='%d'>"
                    "<button class='btn' style='background:#16a34a;color:#fff'>🚫 Anular carné</button></form> ") % (_esc(quien), v.id)
         elif v.estado == "APROBADO" and v.tipo == "RECTOR":
-            acc = ("<div style='color:#166534;font-weight:700;margin-bottom:4px'>✅ Rectoría verificada · <a href='/soporte/instituciones/%s' style='color:#005BEA'>Abrir panel de la institución</a></div>"
+            acc = ("<div style='color:#166534;font-weight:700;margin-bottom:4px'>✅ Rectoría verificada · <a href='/soporte/instituciones/%s' style='color:#0020C2'>Abrir panel de la institución</a></div>"
                    "<form method='POST' style='display:inline-flex;gap:6px;flex-wrap:wrap'><input type='hidden' name='accion' value='aplicar_rector'><input type='hidden' name='id' value='%d'>"
                    "<input name='nota' maxlength='200' placeholder='Cambio autorizado' required style='padding:6px;border:1px solid #cbd5e1;border-radius:6px;min-width:180px'>"
                    "<button class='btn' style='background:#16a34a;color:#fff'>Aplicar cambio</button></form> ") % (v.institucion_id, v.id)
@@ -84432,9 +84497,9 @@ p.forEach(function(r){var id=r.getAttribute('data-vi');if(j[id]&&j[id]!==r.getAt
 
 
 # ───────────────────────── USUARIO (enlace público) ─────────────────────────
-def _vi_pub(titulo, cuerpo, color="#0B2D57"):
+def _vi_pub(titulo, cuerpo, color="#0020C2"):
     html = ("<div style='max-width:460px;margin:0 auto;padding:22px 16px;font-family:Segoe UI,system-ui,sans-serif'>"
-            "<div style='text-align:center;font-weight:900;color:#0B2D57;font-size:22px;margin-bottom:14px'>PROCSIS</div>"
+            "<div style='text-align:center;font-weight:900;color:#0020C2;font-size:22px;margin-bottom:14px'>PROCSIS</div>"
             "<div style='background:#fff;border:1px solid #e2e8f0;border-top:5px solid %s;border-radius:14px;padding:20px'>%s</div>"
             "<p style='text-align:center;color:#94a3b8;font-size:11px;margin-top:12px'>Conexión protegida · Este enlace es de un solo uso</p></div>") % (color, cuerpo)
     return page(titulo, html)
@@ -84588,9 +84653,9 @@ def validar_identidad_publico(token):
                   "<label style='font-size:13px;font-weight:700'>Nombre de la sede</label>"
                   "<input class='nopaste' name='sede' autocomplete='off' required style='%s'>") % (st, st, st)
     chk = ("<label style='display:flex;gap:8px;font-size:13px;margin:6px 0;align-items:flex-start'><input type='checkbox' name='acepto_habeas' id='c1' value='1' style='margin-top:3px'>"
-           "<span>Acepto la <a href='#' onclick=\"return procsisLegal('habeas')\" style='color:#005BEA;font-weight:700'>Política de Tratamiento de Datos Personales (Habeas Data - Ley 1581 de 2012)</a>. <i style='color:#64748b'>Toque para leerla completa.</i></span></label>"
+           "<span>Acepto la <a href='#' onclick=\"return procsisLegal('habeas')\" style='color:#0020C2;font-weight:700'>Política de Tratamiento de Datos Personales (Habeas Data - Ley 1581 de 2012)</a>. <i style='color:#64748b'>Toque para leerla completa.</i></span></label>"
            "<label style='display:flex;gap:8px;font-size:13px;margin:6px 0 14px;align-items:flex-start'><input type='checkbox' name='acepto_terminos' id='c2' value='1' style='margin-top:3px'>"
-           "<span>Acepto los <a href='#' onclick=\"return procsisLegal('terminos')\" style='color:#005BEA;font-weight:700'>Términos, Condiciones y Políticas de Privacidad de la Empresa PROCSIS</a>. <i style='color:#64748b'>Toque para leerlos completos.</i></span></label>")
+           "<span>Acepto los <a href='#' onclick=\"return procsisLegal('terminos')\" style='color:#0020C2;font-weight:700'>Términos, Condiciones y Políticas de Privacidad de la Empresa PROCSIS</a>. <i style='color:#64748b'>Toque para leerlos completos.</i></span></label>")
     aviso_e = ("<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:12px;font-size:14px'>%s</div>" % _esc(error)) if error else ""
     js = """<script>(function(){var espera=__ESPERA__,bt=document.getElementById('bt'),c1=document.getElementById('c1'),c2=document.getElementById('c2'),lbl=bt.getAttribute('data-lbl');
 function upd(){bt.disabled=!(c1.checked&&c2.checked)||espera>0;}
@@ -84600,9 +84665,9 @@ document.querySelectorAll('input.nopaste').forEach(function(el){
 ['paste','drop','dragover','contextmenu','copy','cut'].forEach(function(ev){el.addEventListener(ev,function(e){e.preventDefault();});});
 el.addEventListener('keydown',function(e){if(((e.ctrlKey||e.metaKey)&&(e.key==='v'||e.key==='V'))||(e.shiftKey&&e.key==='Insert'))e.preventDefault();});
 el.addEventListener('beforeinput',function(e){if(e.inputType==='insertFromPaste'||e.inputType==='insertFromDrop'||e.inputType==='insertFromPasteAsQuotation')e.preventDefault();});});})();</script>""".replace("__ESPERA__", str(espera))
-    cuerpo = ("<h2 style='margin-top:0;color:#0B2D57'>%s</h2><p style='font-size:13px;color:#64748b'>Escriba cada dato con el teclado. No se permite pegar.</p>%s"
+    cuerpo = ("<h2 style='margin-top:0;color:#0020C2'>%s</h2><p style='font-size:13px;color:#64748b'>Escriba cada dato con el teclado. No se permite pegar.</p>%s"
               "<form method='POST' autocomplete='off'>%s%s<button id='bt' data-lbl='Aceptar y validar' disabled "
-              "style='width:100%%;padding:14px;border:0;border-radius:12px;background:#005BEA;color:#fff;font-weight:800;font-size:16px;cursor:pointer'>Aceptar y validar</button></form>%s") % (
+              "style='width:100%%;padding:14px;border:0;border-radius:12px;background:#0020C2;color:#fff;font-weight:800;font-size:16px;cursor:pointer'>Aceptar y validar</button></form>%s") % (
         titulo_f, aviso_e, campos, chk, js)
     return _vi_pub("Validación de identidad", cuerpo + _legal_modal())
 
@@ -84629,7 +84694,7 @@ def gerencia_validaciones_identidad():
                   "<td style='padding:8px'>%s %s</td></tr>") % (
             v.id, "Rectoría" if v.tipo == "RECTOR" else "Carné", _esc(nombres.get(v.institucion_id, "—")), _esc(v.asunto),
             _vi_badge(v.estado), _esc(v.creado_por), _esc((v.creado_en or "")[:16]), _esc(v.ip_usuario or "—"), cif,
-            ("<a href='/gerencia/validaciones-identidad/%d' style='font-weight:700;color:#005BEA'>Ver detalle</a>" % v.id) if v.datos_cifrados else "")
+            ("<a href='/gerencia/validaciones-identidad/%d' style='font-weight:700;color:#0020C2'>Ver detalle</a>" % v.id) if v.datos_cifrados else "")
     rep = ""
     try:
         for r in CarneReimpresion.query.order_by(CarneReimpresion.id.desc()).limit(30).all():
@@ -84647,16 +84712,16 @@ def gerencia_validaciones_identidad():
     th = "style='padding:8px;text-align:left'"
     body = (
         "<div style='max-width:1100px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
-        "<p><a href='/gerencia/hq' style='color:#0B2D57;font-weight:700'>&larr; HQ</a></p>"
-        "<h1 style='color:#0B2D57'>Validaciones de identidad</h1>"
+        "<p><a href='/gerencia/hq' style='color:#0020C2;font-weight:700'>&larr; HQ</a></p>"
+        "<h1 style='color:#0020C2'>Validaciones de identidad</h1>"
         "<p style='color:#64748b;font-size:14px'>Solo visualización. Lo que digitó el usuario se guarda <b>cifrado</b>; para verlo se pide tu contraseña y queda en auditoría.</p>"
         "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;background:#fff;font-size:13px'>"
-        "<tr style='background:#0B2D57;color:#fff'><th " + th + ">Caso</th><th " + th + ">Trámite</th><th " + th + ">Colegio / asunto</th>"
+        "<tr style='background:#0020C2;color:#fff'><th " + th + ">Caso</th><th " + th + ">Trámite</th><th " + th + ">Colegio / asunto</th>"
         "<th " + th + ">Estado</th><th " + th + ">Operador</th><th " + th + ">IP usuario</th><th " + th + ">Datos</th></tr>%s</table></div>"
-        "<h2 style='color:#0B2D57;font-size:16px;margin-top:26px'>Bloqueos de carné (reimpresiones)</h2>"
+        "<h2 style='color:#0020C2;font-size:16px;margin-top:26px'>Bloqueos de carné (reimpresiones)</h2>"
         "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;background:#fff;font-size:12.5px'>"
         "<tr style='background:#f1f5f9'><th " + th + ">Fecha</th><th " + th + ">Estudiante</th><th " + th + ">Motivo</th><th " + th + ">Vía</th><th " + th + ">Operador</th></tr>%s</table></div>"
-        "<h2 style='color:#0B2D57;font-size:16px;margin-top:26px'>Intentos con carné anulado (alertas de fraude)</h2>"
+        "<h2 style='color:#0020C2;font-size:16px;margin-top:26px'>Intentos con carné anulado (alertas de fraude)</h2>"
         "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;background:#fff;font-size:12.5px'>"
         "<tr style='background:#f1f5f9'><th " + th + ">Fecha</th><th " + th + ">Detalle</th><th " + th + ">IP</th></tr>%s</table></div></div>"
     ) % (filas or "<tr><td colspan='7' style='padding:14px;color:#64748b'>Sin casos.</td></tr>",
@@ -84691,11 +84756,11 @@ def gerencia_validacion_identidad_detalle(vid):
                 lc = "".join("<li><b>%s:</b> %s</li>" % (_esc(k), _esc(val)) for k, val in (cons or {}).items())
                 revelado = ("<h3>Datos entregados por el usuario</h3><ul>%s</ul><h3>Consentimiento legal</h3><ul>%s</ul>") % (li, lc)
     aviso = ("<div style='background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin:10px 0'>%s</div>" % _esc(err)) if err else ""
-    form = ("<form method='POST' style='max-width:420px'>%s<button style='background:#0B2D57;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer'>"
+    form = ("<form method='POST' style='max-width:420px'>%s<button style='background:#0020C2;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer'>"
             "🔓 Descifrar y ver</button></form>") % _step_up_campos()
     body = ("<div style='max-width:760px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
-            "<p><a href='/gerencia/validaciones-identidad' style='color:#0B2D57;font-weight:700'>&larr; Validaciones</a></p>"
-            "<h1 style='color:#0B2D57'>Caso #%d · %s</h1><p>Estado: %s · Resuelto: %s · IP: %s</p>"
+            "<p><a href='/gerencia/validaciones-identidad' style='color:#0020C2;font-weight:700'>&larr; Validaciones</a></p>"
+            "<h1 style='color:#0020C2'>Caso #%d · %s</h1><p>Estado: %s · Resuelto: %s · IP: %s</p>"
             "<p style='font-size:12px;color:#64748b'>Agente: %s</p>%s%s</div>") % (
         v.id, "Rectoría" if v.tipo == "RECTOR" else "Carné", _vi_badge(v.estado), _esc(v.resuelto_en or "—"),
         _esc(v.ip_usuario or "—"), _esc(v.ua_usuario or "—"), aviso, revelado or form)
@@ -84842,7 +84907,7 @@ def gerencia_correo_extra(n):
     aviso = (("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else "") + (("<div class='msg danger'>%s</div>" % _esc(err)) if err else "")
     inp = "width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"
     tabs = "".join("<a class='btn' style='background:%s;color:%s' href='/gerencia/correo-extra/%d'>Correo adicional %d</a> " % (
-        (("#0B2D57", "#fff") if k == n else ("#e2e8f0", "#0f172a")) + (k, k)) for k in _CE_SLOTS)
+        (("#0020C2", "#fff") if k == n else ("#e2e8f0", "#0f172a")) + (k, k)) for k in _CE_SLOTS)
     probar = ""
     if conectado:
         probar = ("<div class='role-panel' style='max-width:520px;margin-top:12px'><form method='POST'><input type='hidden' name='accion' value='probar'>"
@@ -84866,7 +84931,7 @@ def gerencia_correo_extra(n):
         "<input type='password' name='password' autocomplete='new-password' placeholder='%s' style='%s'>"
         "<p style='font-size:11.5px;color:#64748b;margin:0 0 14px'>No es la contraseña normal de la cuenta. Se genera en Google: Cuenta → Seguridad → "
         "Verificación en 2 pasos (debe estar activada) → Contraseñas de aplicaciones.</p>"
-        "<button style='background:#0B2D57;color:#fff;padding:10px 20px;border:0;border-radius:8px;font-weight:700'>Guardar conexión</button></form></div>%s"
+        "<button style='background:#0020C2;color:#fff;padding:10px 20px;border:0;border-radius:8px;font-weight:700'>Guardar conexión</button></form></div>%s"
     ) % (n, (" · " + _esc(r.etiqueta)) if (r and r.etiqueta) else "", tabs, aviso, estado,
          _esc(r.etiqueta if r else ""), inp, _esc(correo_act), inp,
          "Dejar en blanco para no cambiarla" if conectado else "xxxx xxxx xxxx xxxx", inp, probar)
@@ -84997,7 +85062,7 @@ _NT_DEFAULTS = [
          cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Su solicitud fue recibida correctamente por PROCSIS y quedó registrada con el siguiente radicado:</p>"
                  "<div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;margin:14px 0\">"
                  "<div style=\"font-size:11px;font-weight:800;color:#1e40af;letter-spacing:.05em\">RADICADO</div>"
-                 "<div style=\"font-size:20px;font-weight:800;color:#0B2D57\">{{radicado}}</div></div>"
+                 "<div style=\"font-size:20px;font-weight:800;color:#0020C2\">{{radicado}}</div></div>"
                  "<p><b>Fecha:</b> {{fecha}}<br><b>Tipo:</b> {{tipo_pqr}}<br><b>Fecha máxima de respuesta:</b> {{fecha_limite}}</p>"
                  "<p>Su solicitud será revisada por nuestro equipo.</p>"),
          boton_texto="Consultar solicitud", boton_url="{{enlace_pqr}}"),
@@ -85030,7 +85095,7 @@ _NT_DEFAULTS = [
          asunto="🔐 Su PIN de verificación · EduTrack", titulo="Verifique este dispositivo",
          cuerpo=("<p>Estimado(a) {{nombre}}:</p><p>Detectamos un ingreso a EduTrack (<b>{{institucion}}</b>) desde un dispositivo nuevo. "
                  "Su PIN de verificación es:</p><div style=\"text-align:center;margin:14px 0\"><span style=\"display:inline-block;"
-                 "background:#eef2f9;border-radius:12px;padding:12px 26px;font-size:32px;font-weight:800;letter-spacing:10px;color:#0B2D57\">"
+                 "background:#eef2f9;border-radius:12px;padding:12px 26px;font-size:32px;font-weight:800;letter-spacing:10px;color:#0020C2\">"
                  "{{mensaje}}</span></div><p>Vence en 10 minutos. Si usted no intentó ingresar, ignore este mensaje y avise a Secretaría "
                  "o a Soporte PROCSIS.</p>"),
          boton_texto="", boton_url=""),
@@ -85157,11 +85222,11 @@ def _nt_url_ok(u):
 def _nt_envolver(titulo, cuerpo, btn_texto="", btn_url=""):
     boton = ""
     if btn_texto and btn_url:
-        boton = ('<div style="text-align:center;margin:26px 0 8px"><a href="' + btn_url + '" style="background:#005BEA;color:#fff;text-decoration:none;'
+        boton = ('<div style="text-align:center;margin:26px 0 8px"><a href="' + btn_url + '" style="background:#0020C2;color:#fff;text-decoration:none;'
                  'font-weight:800;padding:13px 34px;border-radius:999px;display:inline-block;font-size:15px">' + btn_texto + '</a></div>')
-    tit = ('<div style="padding:22px 26px 4px;color:#0B2D57"><p style="margin:0;font-size:20px;font-weight:800;line-height:1.3">' + titulo + '</p></div>') if titulo else ""
+    tit = ('<div style="padding:22px 26px 4px;color:#0020C2"><p style="margin:0;font-size:20px;font-weight:800;line-height:1.3">' + titulo + '</p></div>') if titulo else ""
     return ('<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">'
-            '<div style="background:#0B2D57;color:#fff;padding:20px 26px"><div style="font-weight:900;font-size:20px;letter-spacing:1.5px;font-family:Georgia,Times New Roman,serif">PROCSIS</div>'
+            '<div style="background:#0020C2;color:#fff;padding:20px 26px"><div style="font-weight:900;font-size:20px;letter-spacing:1.5px;font-family:Georgia,Times New Roman,serif">PROCSIS</div>'
             '<div style="font-size:12px;opacity:.85">EduTrack</div></div>' + tit +
             '<div style="padding:10px 26px 18px;color:#0f172a;font-size:14px;line-height:1.65">' + cuerpo + boton + '</div>'
             '<div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 26px;font-size:11px;color:#64748b;text-align:center">'
@@ -85313,13 +85378,13 @@ def gerencia_notificaciones_log(lid):
     marco = ("<iframe sandbox='' srcdoc=\"%s\" style='width:100%%;height:560px;border:1px solid #e2e8f0;border-radius:10px;background:#f1f5f9'></iframe>"
              % _nt_html.escape("<body style='margin:0;padding:14px;background:#f1f5f9'>" + (r.contenido or ""), quote=True))
     body = ("<div style='max-width:860px;margin:0 auto;padding:20px;font-family:Segoe UI,system-ui,sans-serif'>"
-            "<p><a href='/gerencia/notificaciones?tab=historial' style='color:#0B2D57;font-weight:700'>&larr; Historial</a></p>"
-            "<h1 style='color:#0B2D57;font-size:22px'>Notificación #%d</h1>"
+            "<p><a href='/gerencia/notificaciones?tab=historial' style='color:#0020C2;font-weight:700'>&larr; Historial</a></p>"
+            "<h1 style='color:#0020C2;font-size:22px'>Notificación #%d</h1>"
             "<table style='font-size:14px;line-height:1.8'><tr><td><b>Fecha</b></td><td>%s</td></tr><tr><td><b>Tipo</b></td><td>%s · %s</td></tr>"
             "<tr><td><b>Destinatario</b></td><td>%s</td></tr><tr><td><b>Asunto</b></td><td>%s</td></tr>"
             "<tr><td><b>Estado</b></td><td style='color:%s;font-weight:800'>%s</td></tr><tr><td><b>Enviado por</b></td><td>%s</td></tr>"
             "<tr><td style='vertical-align:top'><b>Respuesta del proveedor</b></td><td><code style='word-break:break-all'>%s</code></td></tr>%s</table>"
-            "<h3 style='color:#0B2D57'>Contenido enviado</h3>%s</div>") % (
+            "<h3 style='color:#0020C2'>Contenido enviado</h3>%s</div>") % (
         r.id, _esc(r.creado_en), _esc(r.tipo), _esc(r.origen), _esc(r.destinatario), _esc(r.asunto), color, _esc(r.estado), _esc(r.enviado_por),
         _esc(r.respuesta or "—"), ("<tr><td><b>Error</b></td><td style='color:#991b1b'>%s</td></tr>" % _esc(r.detalle)) if r.detalle else "", marco)
     return page("Notificación #%d" % r.id, body)
@@ -85424,7 +85489,7 @@ def gerencia_notificaciones():
     aviso = (("<div class='msg ok'>%s</div>" % _esc(msg)) if msg else "") + (("<div class='msg danger'>%s</div>" % _esc(err)) if err else "")
     _tabs = (("enviar", "📤 Enviar"), ("plantillas", "🎨 Plantillas"), ("auto", "🔔 Automatización"), ("historial", "🧠 Historial"))
     tabs_html = "".join("<a class='btn' style='background:%s;color:%s' href='?tab=%s'>%s</a> " % (
-        (("#0B2D57", "#fff") if k == tab else ("#e2e8f0", "#0f172a")) + (k, t)) for k, t in _tabs)
+        (("#0020C2", "#fff") if k == tab else ("#e2e8f0", "#0f172a")) + (k, t)) for k, t in _tabs)
     inp = "width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:10px;font-family:inherit"
     lbl = "font-size:12px;font-weight:700;display:block;margin-bottom:3px"
     _, _, de = _nt_remitente()
@@ -85534,7 +85599,7 @@ form.addEventListener('input',function(){clearTimeout(t);t=setTimeout(prev,350);
         filas = ""
         for r in qq.order_by(NotifLog.id.desc()).limit(100).all():
             filas += ("<tr style='border-bottom:1px solid #e2e8f0'><td style='padding:8px;white-space:nowrap'>%s</td><td style='padding:8px'>%s<br><span class='mini-text'>%s</span></td>"
-                      "<td style='padding:8px'>%s</td><td style='padding:8px;font-weight:800;color:%s'>%s</td><td style='padding:8px'><a href='/gerencia/notificaciones/log/%d' style='color:#005BEA;font-weight:700'>Ver</a></td></tr>") % (
+                      "<td style='padding:8px'>%s</td><td style='padding:8px;font-weight:800;color:%s'>%s</td><td style='padding:8px'><a href='/gerencia/notificaciones/log/%d' style='color:#0020C2;font-weight:700'>Ver</a></td></tr>") % (
                 _esc(r.creado_en), _esc(r.tipo), _esc(r.origen), _esc(r.destinatario), "#166534" if r.estado == "ENVIADO" else "#991b1b",
                 "✅ Enviado" if r.estado == "ENVIADO" else "❌ Error", r.id)
         cuerpo = ("<section class='role-panel'><h2 style='margin-top:0'>Historial de notificaciones</h2>"
@@ -86378,7 +86443,7 @@ def soporte_institucion_ficha(iid):
                        ("<div class='mini-text'>Se muestra una sola vez. Envía el enlace por SMS (Inalambria) y tú conserva el PIN.</div>"
                         "<input id='vin-link' readonly value='" + _esc(nv.get("link", "")) + "' style='" + _VIN_INP + "'>" if nv.get("link") else "<div class='mini-text'>El enlace salió solo por correo. Conserva el PIN para activarlo.</div><input id='vin-link' type='hidden'>") + ""
                        "<button type='button' class='btn' style='margin-top:6px' onclick=\"var i=document.getElementById('vin-link');i.select();document.execCommand('copy');this.textContent='✅ Copiado'\">Copiar enlace</button>"
-                       "<div style='font-size:36px;font-weight:900;letter-spacing:8px;color:#0B2D57'>" + _esc(nv.get("pin", "")) + "</div></div>")
+                       "<div style='font-size:36px;font-weight:900;letter-spacing:8px;color:#0020C2'>" + _esc(nv.get("pin", "")) + "</div></div>")
         if not vi:
             cuerpo += ("<form method='POST' style='display:flex;gap:6px;flex-wrap:wrap;align-items:center'><input type='hidden' name='accion' value='gen_enlace'>"
                        "<select name='canal' style='" + _VIN_INP + ";max-width:330px'>"
@@ -86489,7 +86554,7 @@ def soporte_institucion_ficha(iid):
                    "<button class='btn' style='background:#dc2626;color:#fff'>Confirmar</button></form></div>")
         elif nivel >= 1:
             tec = "<p class='mini-text' style='margin-top:12px'>🔒 Cédula, cierre de sesiones y reinicio de configuración requieren Nivel 2 (validación reforzada).</p>"
-        qr = ("<div style='margin-top:12px'><b>📱 QR / carnés:</b> <a href='/soporte/bloqueo-carne' style='color:#005BEA;font-weight:700'>Ir a Bloqueo de carné</a></div>" if nivel >= 1 else "")
+        qr = ("<div style='margin-top:12px'><b>📱 QR / carnés:</b> <a href='/soporte/bloqueo-carne' style='color:#0020C2;font-weight:700'>Ir a Bloqueo de carné</a></div>" if nivel >= 1 else "")
         ops = "<section class='role-panel' style='margin-top:14px'><h3 style='margin-top:0'>✅ Operaciones autorizadas</h3>" + form + tec + qr + "</section>"
     else:
         ops = ("<section class='role-panel' style='margin-top:14px;opacity:.85'><h3 style='margin-top:0'>🔒 Operaciones bloqueadas (Nivel 0)</h3>"
@@ -86524,7 +86589,7 @@ def soporte_institucion_ficha(iid):
     sig = _vin_sig(iid)
     poll = ("<script>(function(){var s=" + json.dumps(sig) + ";setInterval(function(){fetch('" + base + "/estado.json',{credentials:'same-origin'}).then(function(r){return r.json();})"
             ".then(function(j){if(j.sig&&j.sig!==s){location.href='" + base + "';}}).catch(function(){});},4000);})();</script>") if (v and v.estado in ("LLAMADA", "PIN", "SECUNDARIA")) else ""
-    contenido = ("<p><a href='/soporte/instituciones' style='color:#0B2D57;font-weight:700'>&larr; Instituciones</a></p>" + aviso + cabecera + panel + bio_panel + ops + carne_html + ger_html + esc + aud + poll)
+    contenido = ("<p><a href='/soporte/instituciones' style='color:#0020C2;font-weight:700'>&larr; Instituciones</a></p>" + aviso + cabecera + panel + bio_panel + ops + carne_html + ger_html + esc + aud + poll)
     return page("Ficha de institución", shell(contenido))
 
 
@@ -86787,14 +86852,14 @@ def soporte_biometria_revisar(bid):
     else:
         vista = "<p>Estado: <b>" + _esc(b.estado) + "</b>. " + ("Las imágenes ya fueron eliminadas." if b.imagenes_borradas else "Aún no hay captura del rector.") + "</p>"
     aviso = (("<div class='msg ok'>" + _esc(msg) + "</div>") if msg else "") + (("<div class='msg danger'>" + _esc(err) + "</div>") if err else "")
-    cont = ("<p><a href='" + base + "' style='color:#0B2D57;font-weight:700'>&larr; Ficha de la institución</a></p>" + aviso +
+    cont = ("<p><a href='" + base + "' style='color:#0020C2;font-weight:700'>&larr; Ficha de la institución</a></p>" + aviso +
             "<section class='role-panel'><h2 style='margin-top:0'>🧬 " + _esc(b.codigo) + " · " + _esc(inst.nombre if inst else "") + "</h2>"
             "<div class='mini-text'>Operación a autorizar: " + _esc(_BIO_OPS.get(b.operacion, b.operacion)) + "</div>" + vista + "</section>")
     return _bio_nocache(app.make_response(page("Revisión biométrica", shell(cont))))
 
 
 # ── Rector: captura en el celular (público, un solo uso) ──
-def _bio_pub(titulo, cuerpo, color="#0B2D57"):
+def _bio_pub(titulo, cuerpo, color="#0020C2"):
     return _bio_nocache(app.make_response(_vi_pub(titulo, cuerpo, color)))
 
 
@@ -86806,49 +86871,49 @@ body{margin:0;background:#eef3fa}
 .bx-h img{height:34px;border-radius:6px}
 .bx-dots{display:flex;gap:8px;justify-content:center;padding:6px 0 10px}
 .bx-dots i{width:34px;height:5px;border-radius:5px;background:#d6e0f0;transition:background .3s}
-.bx-dots i.on{background:#005BEA}
+.bx-dots i.on{background:#0020C2}
 .bx-s{display:none;flex:1;flex-direction:column;padding:8px 22px 28px}
 .bx-s.act{display:flex}
-.bx h2{margin:6px 0 6px;font-size:24px;color:#0B2D57;line-height:1.2}
+.bx h2{margin:6px 0 6px;font-size:24px;color:#0020C2;line-height:1.2}
 .bx p{margin:0 0 10px;font-size:14px;line-height:1.5;color:#475569}
 .bx .mut{font-size:12px;color:#64748b}
 .bx label.k{display:flex;gap:10px;font-size:13px;margin:8px 0;line-height:1.45;color:#1e293b;align-items:flex-start}
 .bx label.k input{margin-top:3px;width:18px;height:18px;flex:none}
-.bx a{color:#005BEA;font-weight:700}
+.bx a{color:#0020C2;font-weight:700}
 .bx input.t{width:100%;box-sizing:border-box;padding:14px;border:1.5px solid #c9d6ea;border-radius:12px;font-size:18px;letter-spacing:1px;margin:6px 0 14px;background:#fff}
-.bx input.t:focus{outline:none;border-color:#005BEA;box-shadow:0 0 0 3px rgba(0,91,234,.15)}
-.bx .bt{display:block;width:100%;box-sizing:border-box;text-align:center;padding:16px;border:0;border-radius:999px;background:linear-gradient(135deg,#0B2D57,#005BEA);color:#fff;font-weight:800;font-size:16px;cursor:pointer;margin-top:10px;box-shadow:0 8px 20px rgba(0,91,234,.28)}
+.bx input.t:focus{outline:none;border-color:#0020C2;box-shadow:0 0 0 3px rgba(0,32,194,.15)}
+.bx .bt{display:block;width:100%;box-sizing:border-box;text-align:center;padding:16px;border:0;border-radius:999px;background:linear-gradient(135deg,#0020C2,#0020C2);color:#fff;font-weight:800;font-size:16px;cursor:pointer;margin-top:10px;box-shadow:0 8px 20px rgba(0,32,194,.28)}
 .bx .bt:disabled{opacity:.45;box-shadow:none;cursor:not-allowed}
-.bx .bt.sec{background:#fff;color:#0B2D57;border:1.5px solid #c9d6ea;box-shadow:none}
+.bx .bt.sec{background:#fff;color:#0020C2;border:1.5px solid #c9d6ea;box-shadow:none}
 .bx .mm{display:none;margin-top:10px;padding:10px 12px;border-radius:10px;font-size:13px}
 .bx .mm.ok{background:#dcfce7;color:#166534}.bx .mm.danger{background:#fee2e2;color:#991b1b}
 /* pantalla oscura "Identidad facial" */
 .bx-d{color:#fff}
-.bx.dk{background:radial-gradient(120% 90% at 50% 0%,#0f4aa8 0%,#0B2D57 55%,#071c38 100%)}
+.bx.dk{background:radial-gradient(120% 90% at 50% 0%,#0f4aa8 0%,#0020C2 55%,#071c38 100%)}
 .bx.dk .bx-dots i{background:rgba(255,255,255,.28)}.bx.dk .bx-dots i.on{background:#fff}.bx.dk .mut{color:#b7c9ea}
 .bx-d h2{color:#fff;text-align:center;font-size:28px;margin-top:22px}
 .bx-d p{color:#dbe7fb;text-align:center}
-.bx-av{width:230px;height:230px;margin:26px auto 22px;border-radius:50%;padding:9px;background:conic-gradient(from 200deg,#fff,#7fb2ff,#005BEA,#fff);box-sizing:border-box}
+.bx-av{width:230px;height:230px;margin:26px auto 22px;border-radius:50%;padding:9px;background:conic-gradient(from 200deg,#fff,#7fb2ff,#0020C2,#fff);box-sizing:border-box}
 .bx-av div{width:100%;height:100%;border-radius:50%;background:#e4efff;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
-.bx-d .bt{background:#fff;color:#0B2D57;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.bx-d .bt{background:#fff;color:#0020C2;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 /* cámara circular con silueta */
 .bx-cam{position:relative;width:min(78vw,320px);height:min(78vw,320px);margin:14px auto 18px;border-radius:50%;box-shadow:0 0 0 10px #e3ebf7;transition:box-shadow .3s}
-.bx-cam.ok{box-shadow:0 0 0 10px #005BEA}
+.bx-cam.ok{box-shadow:0 0 0 10px #0020C2}
 .bx-cam video{width:100%;height:100%;object-fit:cover;border-radius:50%;transform:scaleX(-1);background:#0f172a;display:block}
 .bx-cam svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.bx-ins{font-size:21px;font-weight:700;text-align:center;color:#0B2D57;line-height:1.3;margin:6px 4px 14px;min-height:56px}
+.bx-ins{font-size:21px;font-weight:700;text-align:center;color:#0020C2;line-height:1.3;margin:6px 4px 14px;min-height:56px}
 .bx-pil{display:flex;gap:8px;justify-content:center;margin-bottom:6px}
 .bx-pil span{font-size:12px;font-weight:700;padding:6px 10px;border-radius:999px;background:#e3ebf7;color:#64748b}
-.bx-pil span.ok{background:#005BEA;color:#fff}
+.bx-pil span.ok{background:#0020C2;color:#fff}
 /* cédula */
 .bx-id{width:100%;max-width:330px;aspect-ratio:1.586;margin:14px auto;border:3px dashed #7fa8e8;border-radius:16px;background:#fff;display:flex;gap:14px;align-items:center;padding:16px;box-sizing:border-box}
 .bx-id .f{width:34%;aspect-ratio:.8;border-radius:10px;background:#dbe7fb}
 .bx-id .l{flex:1;display:flex;flex-direction:column;gap:10px}.bx-id .l i{height:9px;border-radius:5px;background:#dbe7fb}
 .bx-fin{text-align:center;padding-top:40px}
-.bx-ck{width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,#0B2D57,#005BEA);margin:0 auto 18px;display:flex;align-items:center;justify-content:center}
+.bx-ck{width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,#0020C2,#0020C2);margin:0 auto 18px;display:flex;align-items:center;justify-content:center}
 </style>
 <div class="bx">
- <div class="bx-h"><img src="/static/img/logo-procsis.svg" alt="PROCSIS" onerror="this.outerHTML='<b style=&quot;color:#0B2D57;font-size:22px&quot;>PROCSIS</b>'"></div>
+ <div class="bx-h"><img src="/static/img/logo-procsis.svg" alt="PROCSIS" onerror="this.outerHTML='<b style=&quot;color:#0020C2;font-size:22px&quot;>PROCSIS</b>'"></div>
  <div class="bx-dots" id="dots"><i class="on"></i><i></i><i></i></div>
 
  <section class="bx-s act" id="paso0">
@@ -86876,7 +86941,7 @@ body{margin:0;background:#eef3fa}
  <section class="bx-s bx-d" id="paso2a">
   <h2>Identidad Facial</h2>
   <p>Confirma que eres tú para continuar.</p>
-  <div class="bx-av"><div><svg viewBox="0 0 200 200" width="190" height="190"><ellipse cx="100" cy="82" rx="42" ry="52" fill="#fff"/><path d="M28 200c4-40 34-58 72-58s68 18 72 58z" fill="#005BEA"/></svg></div></div>
+  <div class="bx-av"><div><svg viewBox="0 0 200 200" width="190" height="190"><ellipse cx="100" cy="82" rx="42" ry="52" fill="#fff"/><path d="M28 200c4-40 34-58 72-58s68 18 72 58z" fill="#0020C2"/></svg></div></div>
   <p style="margin-top:auto">Tomaremos la foto automáticamente una vez estés en posición. Después te pediremos girar la cabeza hacia cada lado.</p>
   <button id="b2i" class="bt">Comenzar prueba facial</button>
  </section>
@@ -87129,10 +87194,10 @@ def _legal_modal():
     return ("<div id='lg-ov' style='display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;align-items:center;justify-content:center;padding:12px'>"
             "<div style='background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column'>"
             "<div style='padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;gap:8px;align-items:flex-start'>"
-            "<b id='lg-t' style='color:#0B2D57'></b><button type='button' id='lg-x' aria-label='Cerrar' style='border:0;background:none;font-size:20px;cursor:pointer'>✕</button></div>"
+            "<b id='lg-t' style='color:#0020C2'></b><button type='button' id='lg-x' aria-label='Cerrar' style='border:0;background:none;font-size:20px;cursor:pointer'>✕</button></div>"
             "<div id='lg-b' style='padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55;color:#1e293b'></div>"
             "<div style='padding:10px 16px;border-top:1px solid #e2e8f0;text-align:right'>"
-            "<button type='button' id='lg-ok' style='padding:10px 18px;border:0;border-radius:10px;background:#005BEA;color:#fff;font-weight:800;cursor:pointer'>Entendido</button></div></div></div>"
+            "<button type='button' id='lg-ok' style='padding:10px 18px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:800;cursor:pointer'>Entendido</button></div></div></div>"
             "<script>(function(){var o=document.getElementById('lg-ov');function c(){o.style.display='none';}"
             "document.getElementById('lg-x').onclick=c;document.getElementById('lg-ok').onclick=c;o.addEventListener('click',function(e){if(e.target===o)c();});"
             "window.procsisLegal=function(k){document.getElementById('lg-t').textContent='Cargando…';document.getElementById('lg-b').innerHTML='';o.style.display='flex';"
@@ -87299,7 +87364,7 @@ def _vin_html_carne(inst, nivel, base, qe):
                     "<select name='motivo' required style='" + inp + "'><option value=''>— Motivo —</option>" + "".join("<option>" + m + "</option>" for m in _VIN_MOTIVOS_CARNE) + "</select>"
                     "<button class='btn' style='background:#b91c1c;color:#fff'>🚫 Bloquear</button></form>")
         if nivel >= 2:
-            acc += ("<details><summary style='cursor:pointer;color:#005BEA;font-weight:700'>✏️ Cambiar datos del carné</summary>"
+            acc += ("<details><summary style='cursor:pointer;color:#0020C2;font-weight:700'>✏️ Cambiar datos del carné</summary>"
                     "<form method='POST' style='padding:6px 0'><input type='hidden' name='accion' value='carne_editar'><input type='hidden' name='est' value='" + str(e.id) + "'><input type='hidden' name='qe' value='" + _esc(qe) + "'>"
                     "<input name='nombre' value='" + _esc(e.nombre) + "' style='" + inp + "'><input name='apellido' value='" + _esc(e.apellido) + "' style='" + inp + "'>"
                     "<input name='grado' value='" + _esc(e.grado) + "' style='" + inp + "'><button class='btn'>Guardar (auditado)</button></form></details>")
@@ -87392,9 +87457,9 @@ _CAR_TAM = {"M": 280, "L": 360, "XL": 440}
 _CAR_SLOGANS = ("EduTrack. Una infraestructura que te dejará sin aliento.",
                 "Un solo acceso · Rectoría · Coordinación · Secretaría · Docente",
                 "Tecnología educativa moderna y responsable")
-_CAR_FONDOS = ("linear-gradient(135deg,#000F66 0%,#001EB3 58%,#0119B9 100%)",
-               "linear-gradient(135deg,#00104D 0%,#001EB3 50%,#0A2FD6 100%)",
-               "linear-gradient(135deg,#000F66 0%,#0119B9 55%,#1A3BE0 100%)")
+_CAR_FONDOS = ("linear-gradient(135deg,#000F66 0%,#0020C2 58%,#0018A8 100%)",
+               "linear-gradient(135deg,#00104D 0%,#0020C2 50%,#0A2FD6 100%)",
+               "linear-gradient(135deg,#000F66 0%,#0018A8 55%,#1A3BE0 100%)")
 
 
 def _car_cfg():
@@ -88291,7 +88356,7 @@ def _act_arranque():
 # ---------------------------------------------------------------- vistas comunes
 _ACT_CSS = """<style>
 .ac{max-width:1080px;margin:0 auto;padding:6px 4px 40px;font-family:-apple-system,Segoe UI,system-ui,sans-serif;color:#0f172a}
-.ac h1{font-size:22px;color:#0B2D57;margin:0 0 4px}.ac h2{font-size:15px;color:#0B2D57;margin:0 0 10px}
+.ac h1{font-size:22px;color:#0020C2;margin:0 0 4px}.ac h2{font-size:15px;color:#0020C2;margin:0 0 10px}
 .ac .sub{color:#64748b;font-size:13px;margin:0 0 16px}
 .ac .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 4px 18px rgba(15,23,42,.04)}
 .ac .chip{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800}
@@ -88299,10 +88364,10 @@ _ACT_CSS = """<style>
 .ac label{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}
 .ac input,.ac select,.ac textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box;font:inherit}
 .ac textarea{min-height:110px}
-.ac .btn{display:inline-block;background:#005BEA;color:#fff;border:0;border-radius:980px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;width:auto}
-.ac .btn.sec{background:#e8eef9;color:#0B2D57}.ac .btn.rojo{background:#dc2626}.ac .btn.verde{background:#16a34a}
+.ac .btn{display:inline-block;background:#0020C2;color:#fff;border:0;border-radius:980px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;width:auto}
+.ac .btn.sec{background:#e8eef9;color:#0020C2}.ac .btn.rojo{background:#dc2626}.ac .btn.verde{background:#16a34a}
 .ac .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.ac .grid{grid-template-columns:1fr}}
-.ac table{width:100%;border-collapse:collapse;font-size:13px}.ac th{background:#0B2D57;color:#fff;text-align:left;padding:9px;font-size:12px}
+.ac table{width:100%;border-collapse:collapse;font-size:13px}.ac th{background:#0020C2;color:#fff;text-align:left;padding:9px;font-size:12px}
 .ac td{padding:9px;border-bottom:1px solid #eef2f7;vertical-align:top}
 .ac .aviso{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:12px}
 .ac .ok{background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:12px}
@@ -88485,7 +88550,7 @@ def ventas_activacion(cid):
     ver_ok = all(s[5] for s in slots)
     contrato_ok = c.estado in ("CONTRATO_ENVIADO", "PROGRAMADA", "ACTIVANDO", "ACTIVADA")
     acepto = bool(c.aceptado_en)
-    tl = ("<div class='row' style='font-size:13px;font-weight:700;color:#0B2D57;gap:18px'>"
+    tl = ("<div class='row' style='font-size:13px;font-weight:700;color:#0020C2;gap:18px'>"
           "<span>%s Datos</span><span>%s Entidades</span><span>%s Contrato enviado</span><span>%s Aceptado</span><span>%s Activo</span></div>" % (
               paso_ok(datos_ok), paso_ok(ver_ok), paso_ok(contrato_ok), paso_ok(acepto), paso_ok(c.estado == "ACTIVADA")))
     bloques = ""
@@ -88564,7 +88629,7 @@ def ventas_activacion(cid):
 # ---------------------------------------------------------------- página pública del rector
 def _act_pub(titulo, cuerpo_html):
     return page(titulo, "<div style='min-height:100vh;background:#f4f6fb;padding:22px 12px;font-family:-apple-system,Segoe UI,system-ui,sans-serif'>"
-                "<div style='max-width:820px;margin:0 auto'><div style='text-align:center;margin-bottom:14px'><div style='display:inline-block;background:#005BEA;color:#fff;font-weight:800;padding:8px 18px;border-radius:999px;letter-spacing:.04em'>PROCSIS · EduTrack</div></div>"
+                "<div style='max-width:820px;margin:0 auto'><div style='text-align:center;margin-bottom:14px'><div style='display:inline-block;background:#0020C2;color:#fff;font-weight:800;padding:8px 18px;border-radius:999px;letter-spacing:.04em'>PROCSIS · EduTrack</div></div>"
                 + cuerpo_html + "<p style='text-align:center;color:#94a3b8;font-size:11px;margin-top:16px'>Conexión protegida · su aceptación queda registrada con fecha, hora y dirección IP.</p></div></div>")
 
 
@@ -88573,14 +88638,14 @@ def contrato_activacion_publico(token):
     c = _act_por_token(token)
     caja = "background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:22px;box-shadow:0 10px 30px rgba(15,23,42,.06)"
     if not c:
-        return _act_pub("Contrato", "<div style='%s;text-align:center'><h1 style='color:#0B2D57'>Enlace no válido o vencido</h1><p style='color:#475569'>Pida a su asesor de PROCSIS un enlace nuevo.</p></div>" % caja)
+        return _act_pub("Contrato", "<div style='%s;text-align:center'><h1 style='color:#0020C2'>Enlace no válido o vencido</h1><p style='color:#475569'>Pida a su asesor de PROCSIS un enlace nuevo.</p></div>" % caja)
     if c.bloqueado:
         return _act_pub("Contrato", "<div style='%s;text-align:center'><h1 style='color:#991b1b'>Enlace bloqueado</h1><p style='color:#475569'>Se superó el número de intentos. Comuníquese con su asesor de PROCSIS.</p></div>" % caja)
     clave = "act_ok_%d" % c.id
     autenticado = (session.get(clave) or 0) > _atm.time() - 1800
     msg = ""
     inp = "width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:12px;box-sizing:border-box;font-size:15px;margin-top:4px"
-    btn = "width:100%;margin-top:16px;padding:14px;border:0;border-radius:980px;background:#005BEA;color:#fff;font-weight:700;font-size:15px;cursor:pointer"
+    btn = "width:100%;margin-top:16px;padding:14px;border:0;border-radius:980px;background:#0020C2;color:#fff;font-weight:700;font-size:15px;cursor:pointer"
     if request.method == "POST":
         accion = request.form.get("accion") or ""
         if accion == "verificar":
@@ -88620,7 +88685,7 @@ def contrato_activacion_publico(token):
                     pass
     if not autenticado:
         return _act_pub("Contrato", (
-            "<div style='%s'><h1 style='color:#0B2D57;margin:0 0 6px;font-size:22px'>Confirme su identidad</h1>"
+            "<div style='%s'><h1 style='color:#0020C2;margin:0 0 6px;font-size:22px'>Confirme su identidad</h1>"
             "<p style='color:#475569;font-size:14px'>Para proteger su institución, escriba el número de cédula del representante legal y el código DANE del colegio <b>%s</b>.</p>%s"
             "<form method='POST'><input type='hidden' name='accion' value='verificar'>"
             "<label style='font-size:12px;font-weight:700;color:#334155'>Cédula del representante legal</label><input name='cedula' inputmode='numeric' autocomplete='off' style='%s'>"
@@ -88630,15 +88695,15 @@ def contrato_activacion_publico(token):
     if c.estado in ("PROGRAMADA", "ACTIVANDO", "ACTIVADA"):
         hora = c.activar_en or ""
         return _act_pub("Contrato aceptado", (
-            "<div style='%s;text-align:center'><div style='font-size:46px'>✅</div><h1 style='color:#0B2D57;font-size:22px'>Contrato aceptado</h1>"
+            "<div style='%s;text-align:center'><div style='font-size:46px'>✅</div><h1 style='color:#0020C2;font-size:22px'>Contrato aceptado</h1>"
             "<p style='color:#475569;font-size:14px'>Gracias, %s. Su aceptación quedó registrada el %s.</p>"
             "<p style='color:#475569;font-size:14px'>%s</p></div>") % (
                 caja, _esc(c.aceptado_nombre), _esc(c.aceptado_en),
                 "Su colegio ya está activo." if c.estado == "ACTIVADA" else "Estamos configurando su servicio. Estará listo hacia las <b>%s</b> (aprox. %d horas). Le avisaremos por correo." % (_esc(hora), _ACT_HORAS)))
     if c.estado != "CONTRATO_ENVIADO":
-        return _act_pub("Contrato", "<div style='%s;text-align:center'><h1 style='color:#0B2D57'>Este contrato no está disponible</h1></div>" % caja)
+        return _act_pub("Contrato", "<div style='%s;text-align:center'><h1 style='color:#0020C2'>Este contrato no está disponible</h1></div>" % caja)
     return _act_pub("Su contrato", (
-        "<div style='%s'><h1 style='color:#0B2D57;margin:0 0 6px;font-size:22px'>Revise y acepte su contrato</h1>"
+        "<div style='%s'><h1 style='color:#0020C2;margin:0 0 6px;font-size:22px'>Revise y acepte su contrato</h1>"
         "<p style='color:#475569;font-size:13px'>Colegio: <b>%s</b> · Código DANE %s</p>"
         "<div style='border:1px solid #e2e8f0;border-radius:12px;padding:16px;max-height:420px;overflow:auto;background:#fafcff;font-size:13px;line-height:1.55'>%s</div>"
         "<p style='font-size:11px;color:#64748b;margin-top:8px'>Huella digital del documento (SHA-256): <span style='font-family:monospace;word-break:break-all'>%s</span></p>%s"
@@ -88843,7 +88908,7 @@ def gerencia_activacion_expediente(cid):
     fa = "".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s · %s</td><td style='font-family:monospace;font-size:10px'>%s</td></tr>" % (
         _esc(a.ts), _esc(a.accion), _esc(a.detalle), _esc(a.actor), _esc(a.ip), _esc(a.hash)) for a in aud)
     html = ("<!doctype html><html lang='es'><head><meta charset='utf-8'><meta name='robots' content='noindex'><title>Expediente %s</title>"
-            "<style>body{font-family:Segoe UI,Arial,sans-serif;color:#0f172a;margin:28px;font-size:12px}h1{color:#0B2D57;font-size:20px}h2{color:#0B2D57;font-size:14px;margin-top:22px;border-bottom:2px solid #005BEA;padding-bottom:4px}"
+            "<style>body{font-family:Segoe UI,Arial,sans-serif;color:#0f172a;margin:28px;font-size:12px}h1{color:#0020C2;font-size:20px}h2{color:#0020C2;font-size:14px;margin-top:22px;border-bottom:2px solid #0020C2;padding-bottom:4px}"
             "table{width:100%%;border-collapse:collapse}td,th{border:1px solid #cbd5e1;padding:5px;vertical-align:top;text-align:left}th{background:#eef2f9}.b{background:#f8fafc;border:1px solid #cbd5e1;padding:10px;margin:8px 0}"
             "@media print{.np{display:none}}</style></head><body><p class='np'><button onclick='window.print()'>Imprimir / Guardar como PDF</button></p>"
             "<h1>Expediente de activación y no repudio</h1><div class='b'><b>Colegio:</b> %s · código %s · NIT %s · DANE %s<br><b>Plan:</b> %s · <b>Asesor:</b> %s<br>"
@@ -89045,14 +89110,14 @@ def _enviar_credenciales_usuario(correo, nombre, id_acc, clave, rol, inst=None):
                         "Ingrese en %s y cambie la clave en su primer ingreso.\n\n%s" % (nombre or "", rol, colegio, id_acc, clave, enlace, colegio))
         msg.add_alternative(
             "<div style='font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden'>"
-            "<div style='background:#0B2D57;color:#fff;padding:18px 22px'><div style='font-size:18px;font-weight:700'>%s</div>"
+            "<div style='background:#0020C2;color:#fff;padding:18px 22px'><div style='font-size:18px;font-weight:700'>%s</div>"
             "<div style='font-size:12px;opacity:.85'>Acceso a la plataforma académica</div></div>"
             "<div style='padding:22px;color:#1d1d1f;font-size:14px;line-height:1.55'>"
             "<p>Hola <b>%s</b>,</p><p>Se creó su acceso como <b>%s</b>.</p>"
             "<table style='border-collapse:collapse;margin:12px 0'>"
             "<tr><td style='padding:6px 14px 6px 0;color:#64748b'>ID de acceso (su cédula)</td><td style='font-weight:700;font-size:16px'>%s</td></tr>"
             "<tr><td style='padding:6px 14px 6px 0;color:#64748b'>Clave temporal</td><td style='font-weight:700;font-size:16px'>%s</td></tr></table>"
-            "<p><a href='%s' style='background:#0B2D57;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:600'>Ingresar</a></p>"
+            "<p><a href='%s' style='background:#0020C2;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:600'>Ingresar</a></p>"
             "<p style='color:#64748b;font-size:12px'>Por seguridad, el sistema le pedirá cambiar la clave en su primer ingreso.</p></div></div>"
             % (_esc(colegio), _esc(nombre or ""), _esc(rol), _esc(id_acc), _esc(clave), _esc(enlace)), subtype="html")
         _smtp_enviar(msg, corr, pw)
@@ -89224,7 +89289,7 @@ _DISP_PLANTILLA_PIN = {
     "cuerpo": ("<p>Estimado(a) {{nombre}}:</p><p>Detectamos un ingreso a EduTrack (<b>{{institucion}}</b>) desde un dispositivo nuevo. "
                "Su PIN de verificación es:</p>"
                "<div style=\"text-align:center;margin:14px 0\"><span style=\"display:inline-block;background:#eef2f9;border-radius:12px;"
-               "padding:12px 26px;font-size:32px;font-weight:800;letter-spacing:10px;color:#0B2D57\">{{mensaje}}</span></div>"
+               "padding:12px 26px;font-size:32px;font-weight:800;letter-spacing:10px;color:#0020C2\">{{mensaje}}</span></div>"
                "<p>Vence en 10 minutos. Si usted no intentó ingresar, ignore este mensaje y avise a Secretaría o a Soporte PROCSIS.</p>"),
     "boton_texto": "", "boton_url": "",
 }
@@ -89921,17 +89986,17 @@ def _don_nueva_factura(d, inst, concepto=None):
 # --------------------------------------------------------------- pantallas
 _DON_CSS = """<style>
 .dn{max-width:1180px;margin:0 auto;padding:6px}
-.dn h1{color:#0B2D57;margin:0 0 4px}.dn .sub{color:#64748b;font-size:13px;margin-bottom:14px}
+.dn h1{color:#0020C2;margin:0 0 4px}.dn .sub{color:#64748b;font-size:13px;margin-bottom:14px}
 .dn-k{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:12px 0}
 .dn-k div{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px}
-.dn-k b{display:block;font-size:22px;color:#0B2D57}.dn-k span{font-size:12px;color:#64748b}
+.dn-k b{display:block;font-size:22px;color:#0020C2}.dn-k span{font-size:12px;color:#64748b}
 .dn-c{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;margin:12px 0}
 .dn table{width:100%;border-collapse:collapse;font-size:13px}.dn th{background:#f1f5f9;text-align:left;padding:8px}
 .dn td{padding:8px;border-top:1px solid #e2e8f0;vertical-align:top}
 .dn label{display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 4px}
 .dn input,.dn select,.dn textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}
 .dn .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:760px){.dn .g2{grid-template-columns:1fr}}
-.dn .bt{display:inline-block;background:#0B2D57;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;text-decoration:none;cursor:pointer;width:auto}
+.dn .bt{display:inline-block;background:#0020C2;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;text-decoration:none;cursor:pointer;width:auto}
 .dn .bt.s{background:#475569;padding:5px 10px;font-size:12px}.dn .bt.r{background:#b91c1c}
 .dn .ok{background:#dcfce7;color:#166534;padding:10px;border-radius:10px;margin:10px 0}
 .dn .er{background:#fee2e2;color:#991b1b;padding:10px;border-radius:10px;margin:10px 0}
@@ -90010,7 +90075,7 @@ ENVIO_PROVEEDORES = {
     "Servientrega": {"normal": 3, "remoto": 7},
     "Otro": {"normal": 5, "remoto": 8},
 }
-_ENVIO_ESTADOS = (("PREPARANDO", "Preparando", "#475569"), ("DESPACHADO", "Despachado", "#1d4ed8"),
+_ENVIO_ESTADOS = (("PREPARANDO", "Preparando", "#475569"), ("DESPACHADO", "Despachado", "#0020C2"),
                   ("EN_TRANSITO", "En tránsito", "#b45309"), ("ENTREGADO", "Entregado", "#166534"), ("NOVEDAD", "Novedad", "#b91c1c"))
 _DESTINOS_REMOTOS = ("amazonas", "leticia", "guainia", "guainía", "inirida", "inírida", "vaupes", "vaupés", "mitu", "mitú",
                      "vichada", "puerto carreño", "guaviare", "san jose del guaviare", "putumayo", "mocoa", "san andres", "san andrés")
@@ -90851,7 +90916,7 @@ def _don_form_plan(plan, error, csrf):
         "<div class='g2'><div><label>Valor comercial real mensual (COP) *</label><input name='valor' required inputmode='numeric' value='%s' placeholder='Ej: 249000'></div>"
         "<div><label>Meses del convenio *</label><input name='meses' required inputmode='numeric' value='%s'></div></div>"
         "<label>Descripción interna</label><textarea name='descripcion' rows='2'>%s</textarea></div>"
-        "<h2 style='margin:16px 0 4px;color:#0B2D57'>Funciones del colegio</h2>%s"
+        "<h2 style='margin:16px 0 4px;color:#0020C2'>Funciones del colegio</h2>%s"
         "<p><button class='bt'>%s</button> <a class='bt s' href='/gerencia/donaciones'>Cancelar</a></p></form>"
         "<script>function dnTodo(b,v){var c=b.closest('.dn-c');[].forEach.call(c.querySelectorAll('input[type=checkbox]:not(:disabled)'),function(x){x.checked=v;});}</script>"
     ) % ("Editar plan de donación" if editar else "Crear plan de donación",
@@ -91205,9 +91270,9 @@ _N_CSS = """<style>
 .nx-grid input,.nx-grid select,.nx-grid textarea{width:100%;box-sizing:border-box}
 .nx-kpis{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px}
 .nx-kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 14px;min-width:110px}
-.nx-kpi b{display:block;font-size:20px;color:#0B2D57}.nx-kpi span{font-size:12px;color:#64748b}
+.nx-kpi b{display:block;font-size:20px;color:#0020C2}.nx-kpi span{font-size:12px;color:#64748b}
 .nx-chip{display:inline-block;padding:5px 11px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;font-size:12px;text-decoration:none;margin:0 6px 6px 0}
-.nx-chip.on{background:#0B2D57;color:#fff;border-color:#0B2D57}
+.nx-chip.on{background:#0020C2;color:#fff;border-color:#0020C2}
 .nx-tag{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:800}
 .nx-t-ok{background:#dcfce7;color:#166534}.nx-t-warn{background:#fef3c7;color:#92400e}
 .nx-t-bad{background:#fee2e2;color:#991b1b}.nx-t-info{background:#dbeafe;color:#1e40af}.nx-t-gray{background:#e2e8f0;color:#334155}
@@ -92288,11 +92353,11 @@ _N_GUARD_JS = r"""
     document.getElementById("nx-m").textContent="Por seguridad se cerrará en "+fmt(left)+(dirty?". Tienes cambios sin guardar: guárdalos ahora.":". ¿Quieres seguir conectado?");
     var bar=document.getElementById("nx-b"); if(!bar.childNodes.length||bar.dataset.d!==String(!!dirty)){ bar.innerHTML=""; bar.dataset.d=String(!!dirty);
       if(dirty&&dform) bar.appendChild(btn("💾 Guardar ahora","#16a34a",function(){ try{dform.requestSubmit?dform.requestSubmit():dform.submit();}catch(e){dform.submit();} }));
-      bar.appendChild(btn("Seguir conectado","#0B2D57",extend)); } }
+      bar.appendChild(btn("Seguir conectado","#0020C2",extend)); } }
   function expire(){ if(expired) return; expired=true; saveDraft(); var b=ensure(); b.style.display="flex";
     document.getElementById("nx-t").textContent="🔒 Sesión expirada";
     document.getElementById("nx-m").textContent="Cerramos tu sesión por inactividad."+(dirty?" Guardamos un borrador en este navegador: al volver a entrar podrás restaurarlo.":"");
-    var bar=document.getElementById("nx-b"); bar.innerHTML=""; bar.appendChild(btn("Iniciar sesión","#0B2D57",function(){ dirty=false; location.href="/login"; })); }
+    var bar=document.getElementById("nx-b"); bar.innerHTML=""; bar.appendChild(btn("Iniciar sesión","#0020C2",function(){ dirty=false; location.href="/login"; })); }
   function sync(){ var now=Date.now(); if(now-lastSync<10000) return; lastSync=now;
     fetch("/api/sesion-estado",{credentials:"same-origin"}).then(function(r){ if(!r.ok||(r.headers.get("content-type")||"").indexOf("json")<0) throw 0; return r.json(); })
     .then(function(j){ if(!j||!j.ok) return expire(); t0=Date.now()-((LIMIT-j.left)*1000); if(j.left>WARN) hide(); else if(j.left<=0) expire(); }).catch(function(){ expire(); }); }
@@ -92476,10 +92541,10 @@ def _login_pagina_elegir(ids):
     insts = Institucion.query.filter(Institucion.id.in_(ids)).order_by(Institucion.nombre.asc()).all()
     btns = "".join(
         "<form method='POST' action='/login' style='margin:0 0 10px'><input type='hidden' name='pick_inst' value='%d'>"
-        "<button type='submit' style='width:100%%;padding:13px;border:0;border-radius:12px;background:#0B2D57;color:#fff;font-weight:700;cursor:pointer'>%s</button></form>"
+        "<button type='submit' style='width:100%%;padding:13px;border:0;border-radius:12px;background:#0020C2;color:#fff;font-weight:700;cursor:pointer'>%s</button></form>"
         % (i.id, _esc(i.nombre)) for i in insts)
     body = ("<div style='max-width:460px;margin:10vh auto;padding:28px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;"
-            "font-family:system-ui,Segoe UI,Arial,sans-serif'><h1 style='margin:0 0 6px;color:#0B2D57;font-size:21px'>¿A cuál institución ingresas?</h1>"
+            "font-family:system-ui,Segoe UI,Arial,sans-serif'><h1 style='margin:0 0 6px;color:#0020C2;font-size:21px'>¿A cuál institución ingresas?</h1>"
             "<p style='color:#475569;margin:0 0 16px;font-size:14px'>Tu cuenta existe en más de una institución. Elige una para continuar.</p>"
             + btns + "<p style='margin:12px 0 0;font-size:12px'><a href='/login'>Volver</a></p></div>")
     return page("Elige tu institución", body)
@@ -92488,7 +92553,7 @@ def _login_pagina_elegir(ids):
 def _login_host_desconocido():
     body = ("<div style='max-width:460px;margin:12vh auto;padding:28px;background:#fff;border:1px solid #e2e8f0;"
             "border-radius:16px;font-family:system-ui,Segoe UI,Arial,sans-serif;text-align:center'>"
-            "<h1 style='margin:0 0 8px;color:#0B2D57;font-size:22px'>Institución no encontrada</h1>"
+            "<h1 style='margin:0 0 8px;color:#0020C2;font-size:22px'>Institución no encontrada</h1>"
             "<p style='color:#475569;line-height:1.5'>Esta dirección no corresponde a ninguna institución registrada. "
             "Revisa que la hayas escrito bien o pide a tu colegio el enlace correcto de acceso.</p></div>")
     return page("Institución no encontrada", body)
@@ -94205,32 +94270,32 @@ _C48_CSS = """
 <style>
 .c48{max-width:760px;margin:0 auto;padding:18px 12px 48px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;box-sizing:border-box;width:100%;overflow-x:hidden}
 .c48 *,.c48 *::before,.c48 *::after{box-sizing:border-box}
-.c48 h1{font-size:clamp(22px,5vw,36px);margin:0 0 6px;letter-spacing:-.02em;color:#0B2D57}
-.c48 h2{font-size:clamp(17px,4vw,20px);margin:0 0 8px;color:#0B2D57}
+.c48 h1{font-size:clamp(22px,5vw,36px);margin:0 0 6px;letter-spacing:-.02em;color:#0020C2}
+.c48 h2{font-size:clamp(17px,4vw,20px);margin:0 0 8px;color:#0020C2}
 .c48 p{line-height:1.5;color:#475569;word-wrap:break-word;overflow-wrap:anywhere}
-.c48-card{background:#fff;border-radius:18px;padding:18px 14px;box-shadow:0 12px 36px rgba(11,45,87,.12);border:1px solid #e2e8f0;margin-bottom:16px;overflow:visible;max-width:100%}
+.c48-card{background:#fff;border-radius:18px;padding:18px 14px;box-shadow:0 12px 36px rgba(0,32,194,.12);border:1px solid #e2e8f0;margin-bottom:16px;overflow:visible;max-width:100%}
 .c48 label{display:block;font-size:12px;font-weight:800;margin:10px 0 4px;color:#334155}
 .c48 input[type=text],.c48 input[type=email],.c48 input[type=tel],.c48 input[type=password],.c48 select,.c48 textarea{width:100%;max-width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:11px 12px;font-size:16px;box-sizing:border-box;background:#fff;font-family:inherit}
-.c48 input[type=checkbox],.c48 input[type=radio]{width:18px;height:18px;min-width:18px;max-width:18px;margin:0;padding:0;flex-shrink:0;accent-color:#0b63ce}
+.c48 input[type=checkbox],.c48 input[type=radio]{width:18px;height:18px;min-width:18px;max-width:18px;margin:0;padding:0;flex-shrink:0;accent-color:#0020C2}
 .c48-legal{display:flex!important;flex-direction:row;align-items:flex-start;gap:10px;font-weight:600!important;font-size:13px!important;line-height:1.45;margin:16px 0 8px!important;color:#334155;max-width:100%}
 .c48-legal span{flex:1;min-width:0;word-wrap:break-word;overflow-wrap:anywhere;font-weight:600}
-.c48-legal a{color:#0b63ce;text-decoration:underline}
-.c48-btn{display:inline-block;background:linear-gradient(135deg,#0b63ce,#0B2D57);color:#fff!important;border:0;border-radius:14px;padding:12px 22px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;text-align:center}
-.c48-btn.sec{background:#e2e8f0;color:#0B2D57!important}
+.c48-legal a{color:#0020C2;text-decoration:underline}
+.c48-btn{display:inline-block;background:linear-gradient(135deg,#0020C2,#0020C2);color:#fff!important;border:0;border-radius:14px;padding:12px 22px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;text-align:center}
+.c48-btn.sec{background:#e2e8f0;color:#0020C2!important}
 .c48-btn.full{width:100%;margin-top:14px;box-sizing:border-box}
 .c48-err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:10px;word-wrap:break-word}
 .c48-ok{background:#dcfce7;color:#166534;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:10px;word-wrap:break-word}
 .c48-mods{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0}
-.c48-mod{display:block;text-align:center;text-decoration:none;background:#f8fafc;border:2px solid #e2e8f0;border-radius:18px;padding:16px 10px;color:#0B2D57}
-.c48-mod:hover{border-color:#0b63ce;background:#eff6ff}
+.c48-mod{display:block;text-align:center;text-decoration:none;background:#f8fafc;border:2px solid #e2e8f0;border-radius:18px;padding:16px 10px;color:#0020C2}
+.c48-mod:hover{border-color:#0020C2;background:#eff6ff}
 .c48-mod .ic{font-size:36px;display:block}
 .c48-mod b{display:block;font-size:15px;margin:6px 0 2px}
 .c48-mod small{color:#64748b;font-size:11px}
 .c48-bar{height:16px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:8px 0}
-.c48-bar>div{height:100%;background:linear-gradient(90deg,#0b63ce,#0B2D57)}
-.c48-chip{display:inline-block;background:#eff6ff;color:#0b63ce;border-radius:99px;padding:4px 12px;font-weight:800;font-size:13px}
+.c48-bar>div{height:100%;background:linear-gradient(90deg,#0020C2,#0020C2)}
+.c48-chip{display:inline-block;background:#eff6ff;color:#0020C2;border-radius:99px;padding:4px 12px;font-weight:800;font-size:13px}
 .c48-opt{display:block;border:2px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin:8px 0;cursor:pointer;color:#0f172a;font-size:15px;font-weight:600;word-wrap:break-word}
-.c48-opt:hover{border-color:#0b63ce;background:#eff6ff}
+.c48-opt:hover{border-color:#0020C2;background:#eff6ff}
 .c48-opt input{margin-right:8px}
 .c48 .small{font-size:12px;color:#64748b}
 @media (max-width:480px){
@@ -94381,7 +94446,7 @@ def _c48_enviar_pin(correo, prop):
     texto = ("Tu PIN de verificación es: %s\n\nVence en 10 minutos. Si no fuiste tú, ignora este mensaje.\n\n"
              "Convocatoria de 48 Horas · PROCSIS" % pin)
     html = ("<div style='font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:20px'>"
-            "<h2 style='color:#0B2D57'>%s</h2><p>Tu PIN de verificación es:</p>"
+            "<h2 style='color:#0020C2'>%s</h2><p>Tu PIN de verificación es:</p>"
             "<p style='font-size:34px;font-weight:800;letter-spacing:8px;color:#047857'>%s</p>"
             "<p style='color:#64748b;font-size:13px'>Vence en 10 minutos. Si no fuiste tú, ignora este mensaje.</p>"
             "<p style='color:#64748b;font-size:13px'>Convocatoria de 48 Horas · PROCSIS</p></div>" % (titulo, pin))
@@ -94472,13 +94537,13 @@ def _c48_cards_modulos(prefijo="/convocatoria48/registro?modulo="):
 def _c48_login_card():
     """Tarjeta para el login principal (desplegable con los 3 módulos)."""
     return (
-        "<style>.c48-lg{margin:12px 0}.c48-lg summary{list-style:none;cursor:pointer;background:linear-gradient(135deg,#047857,#0b63ce);"
+        "<style>.c48-lg{margin:12px 0}.c48-lg summary{list-style:none;cursor:pointer;background:linear-gradient(135deg,#047857,#0020C2);"
         "color:#fff;border-radius:16px;padding:14px 16px;font-weight:800;font-size:15px;text-align:center;box-shadow:0 10px 24px rgba(4,120,87,.28)}"
         ".c48-lg summary::-webkit-details-marker{display:none}.c48-lg .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:12px;margin-top:8px}"
         ".c48-lg .row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.c48-lg .row a{display:block;text-align:center;text-decoration:none;"
-        "background:#fff;border:2px solid #e2e8f0;border-radius:14px;padding:10px 4px;color:#0B2D57;font-weight:800;font-size:13px}"
-        ".c48-lg .row a span{display:block;font-size:26px}.c48-lg .row a:hover{border-color:#0b63ce}.c48-lg .lk{text-align:center;font-size:12px;margin-top:8px}"
-        ".c48-lg .lk a{color:#0b63ce;font-weight:700;margin:0 6px}</style>"
+        "background:#fff;border:2px solid #e2e8f0;border-radius:14px;padding:10px 4px;color:#0020C2;font-weight:800;font-size:13px}"
+        ".c48-lg .row a span{display:block;font-size:26px}.c48-lg .row a:hover{border-color:#0020C2}.c48-lg .lk{text-align:center;font-size:12px;margin-top:8px}"
+        ".c48-lg .lk a{color:#0020C2;font-weight:700;margin:0 6px}</style>"
         "<details class='c48-lg'><summary>🌱 ¿Participas en la Convocatoria de 48 Horas? Inicia aquí</summary><div class='box'>"
         "<div style='text-align:center;font-size:13px;color:#475569;margin-bottom:8px'>Elige tu módulo para comenzar el reto:</div><div class='row'>"
         + "".join("<a href='/convocatoria48/registro?modulo=%s'><span>%s</span>%s</a>" % (k, v[0], _esc(v[1])) for k, v in _C48_MODULOS.items())
@@ -94935,7 +95000,7 @@ def _c48_panel_actividades(p):
             estado_html = "<b style='color:%s'>%s</b>" % (color, txt)
             boton = "<a class='c48-btn sec' href='/convocatoria48/actividad/%d'>%s</a>" % (n, "Corregir y reenviar" if f["estado"] == "ajustes" else "Ver mi respuesta")
         elif en_act and previa:
-            estado_html = "<b style='color:#0b63ce'>Disponible</b>"
+            estado_html = "<b style='color:#0020C2'>Disponible</b>"
             boton = "<a class='c48-btn' href='/convocatoria48/actividad/%d'>Comenzar</a>" % n
         elif not en_act:
             estado_html = "<b style='color:#64748b'>🔒 Se habilita al aprobar la Actividad 1 (preguntas)</b>"
@@ -95374,7 +95439,7 @@ def _c48_correo_final(p, prueba=False):
     html = (
         "<div style='background:#f1f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif'>"
         "<div style='max-width:560px;margin:auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0'>" + banner +
-        "<div style='background:#0B2D57;color:#ffffff;padding:30px 24px;text-align:center'>"
+        "<div style='background:#0020C2;color:#ffffff;padding:30px 24px;text-align:center'>"
         "<div style='font-size:12px;letter-spacing:2px;opacity:.85'>PROCSIS EDU · CONVOCATORIA DE 48 HORAS</div>"
         "<div style='font-size:27px;font-weight:bold;margin-top:12px'>¡Has culminado con éxito!</div></div>"
         "<div style='padding:26px 28px;color:#1e293b;font-size:15px;line-height:1.65'>"
@@ -95384,7 +95449,7 @@ def _c48_correo_final(p, prueba=False):
         "<p>En el documento PDF adjunto encontrarás:</p>"
         "<ul style='padding-left:20px'><li><b>Certificado</b> de aprobación del módulo.</li><li><b>Constancia</b> de intensidad horaria y evaluación.</li></ul>"
         "<div style='background:#f1f5f9;border-radius:10px;padding:12px 14px;margin:16px 0;font-size:13px;color:#475569'>"
-        "Código de verificación: <b style='color:#0B2D57'>%s</b><br>%s</div>"
+        "Código de verificación: <b style='color:#0020C2'>%s</b><br>%s</div>"
         "<p>Conserva este documento para tu hoja de vida. Es un proceso 100%% digital: cero papel y cero contaminación.</p>"
         "<p style='margin-bottom:0'>Con aprecio,<br><b>Equipo PROCSIS EDU</b><br>"
         "<span style='color:#64748b;font-size:13px'>Tecnología para una educación moderna y responsable</span></p></div>"
@@ -96026,7 +96091,7 @@ def _soporte_c48_actualizacion_impl():
                 link = _c48_base_url() + "/convocatoria48/actualizar/" + token
                 nombre = (p.get("nombres") or "participante").split()[0]
                 texto = "Hola %s,\n\nAbre este enlace (4 h), anota el PIN de 6 dígitos y dictáselo a Soporte PROCSIS:\n%s\n\nPROCSIS" % (nombre, link)
-                html = "<div style='font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:20px'><h2 style='color:#0B2D57'>Verificación · Convocatoria 48 Horas</h2><p>Hola <b>%s</b>, abre el enlace, anota el PIN y dictáselo a Soporte.</p><p style='text-align:center'><a href='%s' style='background:#0b63ce;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700'>Abrir enlace</a></p></div>" % (_esc(nombre), _esc(link))
+                html = "<div style='font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:20px'><h2 style='color:#0020C2'>Verificación · Convocatoria 48 Horas</h2><p>Hola <b>%s</b>, abre el enlace, anota el PIN y dictáselo a Soporte.</p><p style='text-align:center'><a href='%s' style='background:#0020C2;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700'>Abrir enlace</a></p></div>" % (_esc(nombre), _esc(link))
                 enviado = _c48_enviar_correo(p.get("correo") or "", "Verificación de datos · Convocatoria 48 Horas", texto, html)
                 session["c48_upd_nuevo"] = {"pid": pid, "link": link, "nombre": p.get("nombres") or "", "enviado": bool(enviado)}
                 try: registrar_auditoria("C48: enlace verificación", "pid=%s" % pid)
@@ -96097,7 +96162,7 @@ def _soporte_c48_actualizacion_impl():
             link = _c48_base_url() + "/convocatoria48/nueva-clave/" + token
             nombre = (p.get("nombres") or "participante").split()[0]
             texto = "Hola %s,\n\nDefine tu nueva contraseña (4 h):\n%s\n\nPROCSIS" % (nombre, link)
-            html = "<div style='font-family:Arial,sans-serif;padding:20px'><h2 style='color:#0B2D57'>Nueva contraseña</h2><p><a href='%s' style='background:#0b63ce;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none'>Definir contraseña</a></p></div>" % _esc(link)
+            html = "<div style='font-family:Arial,sans-serif;padding:20px'><h2 style='color:#0020C2'>Nueva contraseña</h2><p><a href='%s' style='background:#0020C2;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none'>Definir contraseña</a></p></div>" % _esc(link)
             enviado = _c48_enviar_correo(p.get("correo") or "", "Nueva contraseña · Convocatoria 48 Horas", texto, html)
             session["c48_upd_clave"] = {"link": link, "enviado": bool(enviado)}
             return redirect("/soporte/convocatoria48-actualizacion")
@@ -96108,7 +96173,7 @@ def _soporte_c48_actualizacion_impl():
     nuevo_html = ""
     nv = session.pop("c48_upd_nuevo", None)
     if isinstance(nv, dict):
-        nuevo_html = "<section class='role-panel' style='border:2px solid #0b63ce;margin-bottom:14px'><h2 style='margin-top:0'>🔗 Enlace generado</h2><p class='mini-text'>Correo: <b>%s</b>. El participante abre el enlace, ve el PIN y te lo dicta.</p><input readonly value='%s' style='width:100%%;font-size:12px' onclick='this.select()'></section>" % ("sí" if nv.get("enviado") else "no", _esc(nv.get("link") or ""))
+        nuevo_html = "<section class='role-panel' style='border:2px solid #0020C2;margin-bottom:14px'><h2 style='margin-top:0'>🔗 Enlace generado</h2><p class='mini-text'>Correo: <b>%s</b>. El participante abre el enlace, ve el PIN y te lo dicta.</p><input readonly value='%s' style='width:100%%;font-size:12px' onclick='this.select()'></section>" % ("sí" if nv.get("enviado") else "no", _esc(nv.get("link") or ""))
     nv2 = session.pop("c48_upd_clave", None)
     if isinstance(nv2, dict):
         nuevo_html += "<section class='role-panel' style='border:2px solid #047857;margin-bottom:14px'><h2 style='margin-top:0'>🔑 Enlace contraseña</h2><input readonly value='%s' style='width:100%%;font-size:12px' onclick='this.select()'></section>" % _esc(nv2.get("link") or "")
@@ -96192,7 +96257,7 @@ def c48_actualizar_datos(token):
             "<h1>🔐 Tu PIN de verificación</h1>"
             "<p>Identidad confirmada. Dicta este número a <b>Soporte PROCSIS</b>. "
             "No lo compartas con nadie más.</p>"
-            "<p style='font-size:42px;font-weight:900;letter-spacing:10px;color:#0B2D57;margin:24px 0'>%s</p>"
+            "<p style='font-size:42px;font-weight:900;letter-spacing:10px;color:#0020C2;margin:24px 0'>%s</p>"
             "<p class='small'>La contraseña se cambia con otro enlace que te enviará Soporte.</p>"
             "<p class='small' style='color:#64748b'>PROCSIS · Convocatoria de 48 Horas</p></div>"
             % _esc(pin_mostrar),
@@ -96223,7 +96288,7 @@ def c48_actualizar_datos(token):
                 "<div class='c48-card' style='text-align:center'>"
                 "<h1>🔐 Tu PIN de verificación</h1>"
                 "<p>Identidad confirmada. Dicta este número a <b>Soporte PROCSIS</b>.</p>"
-                "<p style='font-size:42px;font-weight:900;letter-spacing:10px;color:#0B2D57;margin:24px 0'>%s</p>"
+                "<p style='font-size:42px;font-weight:900;letter-spacing:10px;color:#0020C2;margin:24px 0'>%s</p>"
                 "<p class='small'>No lo compartas con nadie más. La contraseña se cambia con otro enlace.</p></div>"
                 % _esc(pin_mostrar),
             )
@@ -98619,7 +98684,7 @@ def contabilidad_tickets_internos():
     csrf = _acc_csrf()
     puede = _cta_puede_escribir()
     filtros = "".join("<a href='/contabilidad/tickets-internos%s' style='padding:6px 12px;border-radius:999px;text-decoration:none;font-size:12px;font-weight:700;background:%s;color:%s'>%s</a>"
-                      % (("?estado=" + quote(e)) if e else "", "#0B2D57" if e == fest else "#e2e8f0", "#fff" if e == fest else "#0f172a", e or "Todos")
+                      % (("?estado=" + quote(e)) if e else "", "#0020C2" if e == fest else "#e2e8f0", "#fff" if e == fest else "#0f172a", e or "Todos")
                       for e in ("",) + _CTK_ESTADOS)
     filas = ""
     for r in rows:
@@ -98641,7 +98706,7 @@ def contabilidad_tickets_internos():
     th = "padding:8px;text-align:left;font-size:12px"
     cuerpo = ("<section class='role-panel'><div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px'>%s</div>"
               "<div style='overflow:auto'><table style='width:100%%;border-collapse:collapse'>"
-              "<tr style='background:#0B2D57;color:#fff'><th style='%s'>Radicado</th><th style='%s'>Solicitante / área</th><th style='%s'>Ticket</th><th style='%s'>Estado</th><th style='%s'>Respuesta</th></tr>%s</table></div></section>"
+              "<tr style='background:#0020C2;color:#fff'><th style='%s'>Radicado</th><th style='%s'>Solicitante / área</th><th style='%s'>Ticket</th><th style='%s'>Estado</th><th style='%s'>Respuesta</th></tr>%s</table></div></section>"
               % (filtros, th, th, th, th, th, filas))
     return _cta_page("Tickets de las áreas", "/contabilidad/tickets-internos", cuerpo, "Solicitudes que radican las demás áreas a Contabilidad", msg=msg, err=err)
 
@@ -98861,7 +98926,7 @@ def contabilidad_presupuestos():
     tarjetas = ("<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px'>%s%s%s%s</div>" % (
         _cta_card("INGRESOS PRESUPUESTADOS", _cta_fmt(g(tot_p, "Ingresos")), "#15803d", "Ejecutado " + _cta_fmt(g(tot_e, "Ingresos"))),
         _cta_card("COSTOS Y GASTOS PRESUPUESTADOS", _cta_fmt(g(tot_p, *gastos)), "#b91c1c", "Ejecutado " + _cta_fmt(g(tot_e, *gastos))),
-        _cta_card("RESULTADO PROYECTADO", _cta_fmt(res_p), "#0B2D57", "Ejecutado " + _cta_fmt(res_e)),
+        _cta_card("RESULTADO PROYECTADO", _cta_fmt(res_p), "#0020C2", "Ejecutado " + _cta_fmt(res_e)),
         _cta_card("INVERSIÓN + CONSTITUCIÓN", _cta_fmt(g(tot_p, "Inversión en activos", "Constitución y legalización")), "#7c3aed", "Ejecutado " + _cta_fmt(g(tot_e, "Inversión en activos", "Constitución y legalización")))))
     filtro = ("<form method='GET' style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px'>"
               "<label style='font-size:12px;font-weight:700'>Año <input type='number' name='anio' value='%d' style='padding:7px;width:90px'></label>"
@@ -98870,7 +98935,7 @@ def contabilidad_presupuestos():
               % (anio, "".join("<option%s>%s</option>" % (" selected" if m == modo else "", m) for m in _PRES_MODOS)))
     form = ""
     if puede:
-        form = ("<section class='role-panel' style='margin-bottom:14px'><h3 style='margin-top:0;color:#0B2D57'>Agregar línea al presupuesto %d · %s</h3>"
+        form = ("<section class='role-panel' style='margin-bottom:14px'><h3 style='margin-top:0;color:#0020C2'>Agregar línea al presupuesto %d · %s</h3>"
                 "<form method='POST' style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;align-items:end'>"
                 "<input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='agregar'><input type='hidden' name='anio' value='%d'><input type='hidden' name='modo' value='%s'>"
                 "<div><label style='font-size:11px;font-weight:700'>Clase</label><select name='clase' id='pr-cl' style='width:100%%;padding:8px'></select></div>"
@@ -98894,7 +98959,7 @@ def contabilidad_presupuestos():
             "Los códigos son de referencia: confírmelos con su contador.</p>"
             % (" y los gastos de constitución y legalización (Cámara de Comercio, DIAN, registro de marca)" if modo == "Empresa en constitución" else ""))
     tabla = ("<section class='role-panel'><div style='overflow:auto'><table style='width:100%%;border-collapse:collapse;font-size:13px'>"
-             "<tr style='background:#0B2D57;color:#fff'><th style='%s'>Categoría / subcategoría</th><th style='%s'>PUC</th><th style='%s;text-align:right'>Presupuestado</th>"
+             "<tr style='background:#0020C2;color:#fff'><th style='%s'>Categoría / subcategoría</th><th style='%s'>PUC</th><th style='%s;text-align:right'>Presupuestado</th>"
              "<th style='%s;text-align:right'>Ejecutado</th><th style='%s;text-align:right'>%% ejec.</th><th style='%s'>%s</th></tr>%s</table></div></section>"
              % (th, th, th, th, th, th, "Valor / acciones" if puede else "Presupuestado", cuerpo_tabla))
     return _cta_page("Presupuestos", "/contabilidad/presupuestos", filtro + tarjetas + form + nota + tabla,
@@ -99031,8 +99096,8 @@ def api_public_cobertura():
 
 _COB_WIDGET = r"""<style>
 .cob{position:relative;display:inline-flex;align-items:center;margin-right:10px}
-.cob .cob-b{display:inline-flex!important;align-items:center;gap:8px;margin:0!important;padding:8px 12px!important;border-radius:999px!important;border:1px solid rgba(0,30,179,.18)!important;background:rgba(255,255,255,.82)!important;color:#0f1d4d!important;font-size:13px!important;font-weight:500!important;line-height:1.1!important;box-shadow:none!important;cursor:pointer;width:auto!important;letter-spacing:0!important}
-.cob .cob-b:hover{border-color:#001EB3!important;background:#fff!important}
+.cob .cob-b{display:inline-flex!important;align-items:center;gap:8px;margin:0!important;padding:8px 12px!important;border-radius:999px!important;border:1px solid rgba(0,32,194,.18)!important;background:rgba(255,255,255,.82)!important;color:#0f1d4d!important;font-size:13px!important;font-weight:500!important;line-height:1.1!important;box-shadow:none!important;cursor:pointer;width:auto!important;letter-spacing:0!important}
+.cob .cob-b:hover{border-color:#0020C2!important;background:#fff!important}
 .cob .cob-fl{width:20px;height:14px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1px rgba(15,29,77,.14)}
 .cob .cob-ch{opacity:.65;transition:transform .2s}
 .cob .cob-b[aria-expanded=true] .cob-ch{transform:rotate(180deg)}
@@ -99045,20 +99110,20 @@ _COB_WIDGET = r"""<style>
 .cob .cob-l{border-right:1px solid #edf0f8;overflow:auto;padding:8px}
 .cob .cob-c{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;font-size:13px;font-weight:500;color:#334155;cursor:pointer}
 .cob .cob-c:hover,.cob .cob-c:focus{background:#f3f6ff;outline:none}
-.cob .cob-c.on{background:#e8edff;color:#001EB3}
+.cob .cob-c.on{background:#e8edff;color:#0020C2}
 .cob .cob-c img{width:22px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1px rgba(15,29,77,.14);flex:0 0 22px}
 .cob .cob-c small{margin-left:auto;font-size:11px;font-weight:500;color:#94a3b8}
 .cob .cob-r{display:flex;flex-direction:column;min-width:0}
 .cob .cob-rt{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 8px}
 .cob .cob-rt b{font-size:13px;font-weight:600;color:#0b1437}
 .cob .cob-rt input{width:150px;max-width:48%;padding:6px 11px;border:1px solid #dfe5f5;border-radius:999px;font-size:12px;font-weight:400;color:#334155;background:#f8faff;outline:none;min-height:0}
-.cob .cob-rt input:focus{border-color:#001EB3;background:#fff}
+.cob .cob-rt input:focus{border-color:#0020C2;background:#fff}
 .cob .cob-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px;padding:4px 12px 14px;overflow:auto}
 .cob .cob-d{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:10px;font-size:12.5px;font-weight:500;color:#334155}
 .cob .cob-d:hover{background:#f3f6ff}
 .cob .cob-d img,.cob .cob-d i{width:26px;height:26px;border-radius:8px;flex:0 0 26px}
 .cob .cob-d img{object-fit:contain;background:#fff;box-shadow:0 0 0 1px rgba(15,29,77,.10);padding:2px;box-sizing:border-box}
-.cob .cob-d i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10.5px;font-weight:600;color:#001EB3;background:rgba(0,30,179,.08)}
+.cob .cob-d i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10.5px;font-weight:600;color:#0020C2;background:rgba(0,32,194,.08)}
 .cob .cob-vac{grid-column:1/-1;padding:18px 6px;font-size:12.5px;color:#64748b}
 @media(max-width:720px){
 .cob{position:static;margin-right:6px}
@@ -99136,17 +99201,17 @@ _CB_CSS = """<style>
 .cb{max-width:1180px;margin:0 auto;padding:6px 4px 34px;color:#0b1437}
 .cb h1{font-size:24px;font-weight:700;color:#000F66;margin:4px 0 4px;letter-spacing:-.01em}
 .cb p.sub{color:#5b6785;margin:0 0 16px;font-size:14px;line-height:1.5}
-.cb-card{background:#fff;border:1px solid #e3e8f7;border-radius:16px;padding:18px 20px;margin:0 0 16px;box-shadow:0 8px 28px rgba(0,30,179,.06)}
-.cb-card h2{font-size:16px;font-weight:700;color:#001EB3;margin:0 0 4px}
+.cb-card{background:#fff;border:1px solid #e3e8f7;border-radius:16px;padding:18px 20px;margin:0 0 16px;box-shadow:0 8px 28px rgba(0,32,194,.06)}
+.cb-card h2{font-size:16px;font-weight:700;color:#0020C2;margin:0 0 4px}
 .cb-card p{font-size:13.5px;color:#475569;line-height:1.5;margin:6px 0}
 .cb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 .cb label{display:block;font-size:12px;font-weight:600;color:#334155;margin:10px 0 4px}
 .cb input[type=text],.cb input[type=email],.cb select{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #cfd8f3;border-radius:10px;font-size:13px;background:#fff;color:#0b1437}
-.cb input:focus,.cb select:focus{outline:none;border-color:#001EB3;box-shadow:0 0 0 3px rgba(0,30,179,.12)}
-.cb-btn{display:inline-block;background:#001EB3!important;color:#fff!important;border:0!important;border-radius:999px!important;padding:9px 18px!important;font-size:13px!important;font-weight:600!important;cursor:pointer;text-decoration:none;line-height:1.2;width:auto!important;margin:0!important}
-.cb-btn:hover{background:#0119B9!important}
-.cb-btn.g{background:#01F501!important;color:#00164d!important}.cb-btn.g:hover{background:#3dff3d!important}
-.cb-btn.o{background:#fff!important;color:#001EB3!important;border:1.5px solid #001EB3!important}.cb-btn.o:hover{background:#eef1ff!important}
+.cb input:focus,.cb select:focus{outline:none;border-color:#0020C2;box-shadow:0 0 0 3px rgba(0,32,194,.12)}
+.cb-btn{display:inline-block;background:#0020C2!important;color:#fff!important;border:0!important;border-radius:999px!important;padding:9px 18px!important;font-size:13px!important;font-weight:600!important;cursor:pointer;text-decoration:none;line-height:1.2;width:auto!important;margin:0!important}
+.cb-btn:hover{background:#0018A8!important}
+.cb-btn.g{background:#00FF66!important;color:#00164d!important}.cb-btn.g:hover{background:#33FF85!important}
+.cb-btn.o{background:#fff!important;color:#0020C2!important;border:1.5px solid #0020C2!important}.cb-btn.o:hover{background:#eef1ff!important}
 .cb-btn.r{background:#fff!important;color:#b91c1c!important;border:1.5px solid #fca5a5!important}.cb-btn.r:hover{background:#fef2f2!important}
 .cb-btn.s{padding:5px 12px!important;font-size:12px!important}
 .cb-tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600}
@@ -99154,14 +99219,14 @@ _CB_CSS = """<style>
 .cb-ok{background:#ecfdf3;border:1px solid #86efac;color:#14532d;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-size:13.5px}
 .cb-err{background:#fef2f2;border:1px solid #fca5a5;color:#7f1d1d;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-size:13.5px}
 .cb table{width:100%;border-collapse:collapse;font-size:13px}
-.cb th{background:#f4f6ff;color:#001EB3;text-align:left;padding:9px 10px;font-weight:600;font-size:12px}
+.cb th{background:#f4f6ff;color:#0020C2;text-align:left;padding:9px 10px;font-weight:600;font-size:12px}
 .cb td{padding:9px 10px;border-bottom:1px solid #edf0f8;vertical-align:middle;color:#1e293b}
 .cb form.in{display:inline;margin:0}
 .cb-logo{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .cb-logo input[type=text]{width:180px}.cb-logo input[type=file]{font-size:11px;max-width:180px}
 .cb-fl{width:30px;height:21px;border-radius:3px;object-fit:cover;box-shadow:0 0 0 1px #dbe1f3}
 .cb-sw{width:30px;height:30px;border-radius:8px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px #dbe1f3;padding:2px;box-sizing:border-box}
-.cb-mono{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:rgba(0,30,179,.08);color:#001EB3;font-size:11px;font-weight:600}
+.cb-mono{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:rgba(0,32,194,.08);color:#0020C2;font-size:11px;font-weight:600}
 .cb-steps{margin:8px 0 0;padding-left:18px;font-size:13px;color:#475569;line-height:1.6}
 .cb-note{font-size:12px;color:#64748b;margin-top:10px;line-height:1.5}
 .cb-scroll{overflow:auto}
