@@ -99685,3 +99685,416 @@ def _resp_tarjeta(clave, a, es_super, csrf):
 
 @app.route("/gerencia/respaldo-areas", methods=["GET", "POST"])
 def gerencia_respaldo_areas():
+    """Gerencia crea UNA sola vez el acceso inicial de Recursos Humanos y el de TI. Lo demás lo hacen esas áreas."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _ti_init()
+    rol = rol_actual()
+    es_super = rol == "Superadmin"
+    csrf = _acc_csrf()
+    areas = dict(_RESP_AREAS)
+    if request.method == "POST":
+        a = areas.get((request.form.get("area") or "").strip())
+        if a is None or not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+            return redirect("/gerencia/respaldo-areas")
+        titulo = AREAS_PROCSIS.get(a["rol"], {}).get("titulo", a["rol"])
+        marca = _ti_cfg(a["cfg"])
+        if marca and not es_super:
+            session["ti_msg"] = ("err", "El acceso inicial de %s ya fue creado. Desde ahora lo gestiona esa área." % titulo)
+            return redirect("/gerencia/respaldo-areas")
+        quien = session.get("usuario") or rol
+        reservado = False
+        if not marca:
+            try:
+                # reserva atómica: si dos personas envían a la vez, solo una pasa (clave primaria)
+                _c48_x("INSERT INTO ti_config (clave, valor) VALUES (:c, :v)", c=a["cfg"], v="pendiente|%s|%s" % (quien, _c48_now()))
+                reservado = True
+            except Exception:
+                db.session.rollback()
+                session["ti_msg"] = ("err", "El acceso inicial de %s ya fue creado." % titulo)
+                return redirect("/gerencia/respaldo-areas")
+        u, clave = _ti_crear_usuario(request.form.get("usuario"), request.form.get("nombre"), request.form.get("correo"), a["rol"], True,
+                                     genero=request.form.get("genero"))
+        if u is None:
+            if reservado:
+                _c48_x("DELETE FROM ti_config WHERE clave=:c", c=a["cfg"])
+            session["ti_msg"] = ("err", clave)
+            return redirect("/gerencia/respaldo-areas")
+        if reservado:
+            _c48_x("UPDATE ti_config SET valor=:v WHERE clave=:c", v="%s|%s|%s" % (u.usuario, quien, _c48_now()), c=a["cfg"])
+        registrar_auditoria("Respaldo de áreas", "%s creó el acceso inicial de %s: %s" % (quien, titulo, u.usuario))
+        return _ti_pagina_credencial("Acceso inicial de %s creado" % titulo, u.usuario, clave, a["rol"], "/gerencia/respaldo-areas",
+                                     "<p>Este usuario ya puede entrar al área de <b>%s</b>. Quedó con MFA obligatorio.</p>" % _esc(titulo))
+    tarjetas = "".join(_resp_tarjeta(k, a, es_super, csrf) for k, a in _RESP_AREAS)
+    pasos = ("<div class='cb-card'><h2>Cómo funciona</h2><ol class='cb-steps'>"
+             "<li>Gerencia crea aquí, <b>una sola vez</b>, el acceso inicial de Recursos Humanos y el de TI.</li>"
+             "<li>Recursos Humanos gestiona su equipo y solicita a TI las credenciales del personal.</li>"
+             "<li>TI crea y gestiona las cuentas y los accesos de las demás áreas.</li>"
+             "<li>Gerencia queda como supervisión: ve los módulos, pero no los opera.</li></ol></div>")
+    cuerpo = ("<h1>🧩 Respaldo de áreas</h1><p class='sub'>Las dos áreas base de la organización. Se crean una sola vez; "
+              "después cada área administra lo suyo.</p><div class='cb-grid'>%s</div>%s" % (tarjetas, pasos))
+    return _cb_pagina("Respaldo de áreas", cuerpo)
+
+
+# ───────────────────────── Búsqueda tolerante de logos de marca + diagnóstico ─────────────────────────
+_LOGO_EXTS = (".svg", ".png", ".webp", ".jpg", ".jpeg", ".gif")
+
+
+def _logo_flexible(fname, bases):
+    """Encuentra el logo aunque cambie la extensión, las mayúsculas o los separadores
+    (logo-procsis.svg → Logo_Procsis.PNG). Devuelve (carpeta, archivo) o None."""
+    nombre = os.path.basename(fname or "")
+    if not nombre or nombre != fname:
+        return None
+    stem, ext = os.path.splitext(nombre)
+    if ext.lower() not in _LOGO_EXTS:
+        return None
+    clave = re.sub(r"[^a-z0-9]", "", stem.lower())
+    marca = clave[4:] if clave.startswith("logo") else clave
+    if not marca:
+        return None
+    mejor = None
+    for base in bases:
+        try:
+            nombres = os.listdir(base)
+        except Exception:
+            continue
+        for n in nombres:
+            s, e = os.path.splitext(n)
+            if e.lower() not in _LOGO_EXTS:
+                continue
+            k = re.sub(r"[^a-z0-9]", "", s.lower())
+            if marca == "procsis" and "edutrack" in k:
+                continue
+            if k == clave:
+                rango = 0
+            elif k == marca:
+                rango = 1
+            elif k.startswith(clave) or k.startswith("logo" + marca) or k.startswith(marca + "logo"):
+                rango = 2
+            else:
+                continue
+            cand = (rango, _LOGO_EXTS.index(e.lower()), len(n), base, n)
+            if mejor is None or cand < mejor:
+                mejor = cand
+        if mejor is not None:
+            break
+    return (mejor[3], mejor[4]) if mejor else None
+
+
+@app.route("/gerencia/diagnostico-logos")
+def gerencia_diagnostico_logos():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    base = os.path.dirname(os.path.abspath(__file__))
+    carpetas = (("static/img", os.path.join(base, "static", "img")), ("static/uploads/logos", os.path.join(base, "static", "uploads", "logos")))
+    listado = ""
+    for rel, ruta in carpetas:
+        try:
+            nombres = sorted(os.listdir(ruta))
+        except Exception:
+            nombres = None
+        if nombres is None:
+            listado += "<p><b>%s</b>: la carpeta no existe o no se puede leer en este servidor.</p>" % _esc(rel)
+        else:
+            rel_logo = [n for n in nombres if re.search(r"logo|procsis|edutrack|favicon", n, re.I)]
+            listado += "<p><b>%s</b>: %d archivos. Relacionados con la marca: %s</p>" % (_esc(rel), len(nombres), ", ".join(_esc(n) for n in rel_logo[:60]) or "ninguno")
+    fila = _c48_q("SELECT logo_path FROM plataforma ORDER BY id ASC LIMIT 1")
+    lp = (fila[0][0] or "").strip() if fila else ""
+    if lp.startswith("data:image"):
+        guardado = "imagen guardada en la base de datos (%d KB)" % max(1, len(lp) // 1365)
+    else:
+        guardado = _esc(lp[:140]) if lp else "sin logo guardado (se usa el de respaldo del proyecto)"
+    bases = [os.path.join(base, "static", "img"), os.path.join("static", "img"), os.path.join(base, "static", "uploads", "logos")]
+    filas = ""
+    for nm in ("logo-procsis.svg", "logo-procsis.png", "logo-procsis.jpeg", "logo-procsis.jpg", "logo-edutrack.png", "logo-edutrack.jpeg", "favicon.png"):
+        exacto = any(os.path.isfile(os.path.join(b, nm)) for b in bases)
+        try:
+            alt = _logo_flexible(nm, bases)
+        except Exception:
+            alt = None
+        if exacto:
+            res = "<span class='cb-tag on'>Existe</span>"
+        elif alt:
+            res = "<span class='cb-tag wait'>Se sirve desde %s</span>" % _esc(alt[1])
+        else:
+            res = "<span class='cb-tag off'>No está: se muestra el logo de respaldo</span>"
+        filas += "<tr><td><code>/static/img/%s</code></td><td>%s</td><td><img src='/static/img/%s' alt='' style='height:38px;background:#fff;border:1px solid #e3e8f7;border-radius:8px;padding:3px'></td></tr>" % (_esc(nm), res, _esc(nm))
+    entorno = "Vercel (disco del proyecto de solo lectura)" if os.environ.get("VERCEL") else "servidor propio, Railway o Render"
+    cuerpo = ("<h1>🖼️ Diagnóstico de logos</h1><p class='sub'>Muestra qué archivos de marca encuentra el servidor y qué logo se está sirviendo.</p>"
+              "<div class='cb-card'><h2>Entorno</h2><p>%s</p><p>Logo corporativo guardado en Datos de la empresa: <b>%s</b></p>"
+              "<p>Así se ve ahora <code>/media/logo-corporativo</code>: <img src='/media/logo-corporativo' alt='' style='height:44px;vertical-align:middle;background:#fff;border:1px solid #e3e8f7;border-radius:8px;padding:3px'></p></div>"
+              "<div class='cb-card'><h2>Carpetas</h2>%s</div>"
+              "<div class='cb-card'><h2>Archivos que el sistema pide</h2><div class='cb-scroll'><table><tr><th>Dirección</th><th>Estado</th><th>Vista</th></tr>%s</table></div></div>"
+              % (_esc(entorno), guardado, listado, filas))
+    return _cb_pagina("Diagnóstico de logos", cuerpo)
+
+
+# --- Acceso del equipo (validar/solicitar usuarios con foto de cara) ---
+try:
+    from acceso_equipo import registrar_acceso_equipo
+    registrar_acceso_equipo(app, db, Usuario, crear_hash,
+                            registrar_auditoria=registrar_auditoria,
+                            rate_limit=_rate_limit, areas=AREAS_PROCSIS)
+except Exception as _e_ae:
+    print("acceso_equipo no cargó:", repr(_e_ae), flush=True)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  LOGOS DEL INICIO Y BANNER DE /procsis (administrados desde Gerencia)
+#  - Logo de PROCSIS (la "P" de la barra superior) y logo de la empresa / EduTrack (inicio y carrusel de acceso).
+#    Se cambian sin tocar archivos: Gerencia sube la imagen y el sistema la sirve en la misma dirección de siempre.
+#  - Banner con foto bajo "¿Quiénes somos?" en la página /procsis.
+# ════════════════════════════════════════════════════════════════════════════
+_MARCA_CLAVES = ("logo_ini_procsis", "logo_ini_empresa", "banner_proc_img", "banner_proc_url", "banner_proc_alt", "banner_proc_on")
+_MARCA_CACHE = {"t": 0.0, "v": {}, "init": False}
+
+
+def _marca_get(clave):
+    """Valores guardados por Gerencia (copia en memoria de 60 s para no consultar la base en cada imagen)."""
+    import time
+    if time.time() - _MARCA_CACHE["t"] > 60:
+        v = {}
+        try:
+            if not _MARCA_CACHE["init"]:
+                _ti_init()
+                _MARCA_CACHE["init"] = True
+            marcas = ",".join("'%s'" % k for k in _MARCA_CLAVES)
+            for k, val in _c48_q("SELECT clave, valor FROM ti_config WHERE clave IN (%s)" % marcas):
+                v[k] = val or ""
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        _MARCA_CACHE["v"] = v
+        _MARCA_CACHE["t"] = time.time()
+    return _MARCA_CACHE["v"].get(clave, "")
+
+
+def _marca_invalidar():
+    _MARCA_CACHE["t"] = 0.0
+
+
+def _marca_decodificar(uri):
+    m = re.match(r"^data:(image/(?:png|jpeg|webp|svg\+xml));base64,([A-Za-z0-9+/=]+)$", uri or "")
+    if not m:
+        return None, None
+    import base64 as _b64
+    try:
+        return _b64.b64decode(m.group(2)), m.group(1)
+    except Exception:
+        return None, None
+
+
+def _marca_img_de_archivo(f, max_kb):
+    """Imagen subida → data URI. '' si no hay archivo; None si no es una imagen válida o pesa de más."""
+    if f is None or not getattr(f, "filename", ""):
+        return ""
+    raw = f.read(max_kb * 1024 + 1)
+    if not raw:
+        return ""
+    if len(raw) > max_kb * 1024:
+        return None
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        mime = "image/png"
+    elif raw[:3] == b"\xff\xd8\xff":
+        mime = "image/jpeg"
+    elif raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        mime = "image/webp"
+    elif raw.lstrip()[:4] in (b"<svg", b"<?xm"):
+        mime = "image/svg+xml"
+    else:
+        return None
+    import base64 as _b64
+    return "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+
+
+def _marca_respuesta(raw, mime, cache):
+    r = Response(raw, mimetype=mime)
+    r.headers["Cache-Control"] = cache
+    r.headers["X-Content-Type-Options"] = "nosniff"
+    r.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
+    return r
+
+
+def _registrar_logo_override(ruta, clave, endpoint):
+    """Si Gerencia subió un logo propio, se sirve ese en la misma dirección del archivo original; si no, el original."""
+    def vista():
+        raw, mime = _marca_decodificar(_marca_get(clave))
+        if raw:
+            return _marca_respuesta(raw, mime, "no-cache")
+        from flask import send_from_directory
+        return send_from_directory(app.static_folder, ruta[len("/static/"):])
+    vista.__name__ = endpoint
+    app.add_url_rule(ruta, endpoint, vista)
+
+
+_registrar_logo_override("/static/img/logo-procsis-mark.png", "logo_ini_procsis", "marca_logo_procsis")
+_registrar_logo_override("/static/img/logo-edutrack.png", "logo_ini_empresa", "marca_logo_empresa_png")
+_registrar_logo_override("/static/img/logo-edutrack.jpeg", "logo_ini_empresa", "marca_logo_empresa_jpeg")
+
+
+@app.route("/media/banner-procsis")
+def media_banner_procsis():
+    raw, mime = _marca_decodificar(_marca_get("banner_proc_img"))
+    if not raw:
+        return Response(status=404)
+    return _marca_respuesta(raw, mime, "public, max-age=3600")
+
+
+def _banner_procsis_html():
+    """Área con foto (estilo banner corporativo) que va debajo de «Quiénes somos» en /procsis. Vacío si Gerencia no la activó."""
+    try:
+        if _marca_get("banner_proc_on") != "1" or not _marca_get("banner_proc_img"):
+            return ""
+        import hashlib
+        ver = hashlib.md5(_marca_get("banner_proc_img").encode("utf-8")).hexdigest()[:8]
+        url = (_marca_get("banner_proc_url") or "").strip()
+        alt = _esc(_marca_get("banner_proc_alt") or "PROCSIS")
+        img = "<img src='/media/banner-procsis?v=%s' alt='%s' loading='lazy'>" % (ver, alt)
+        if url:
+            ext = " target='_blank' rel='noopener noreferrer'" if url.startswith("http") else ""
+            img = "<a href='%s'%s>%s</a>" % (_esc(url), ext, img)
+        return ("<style>.pcb{max-width:1120px;margin:0 auto;padding:6px 20px 30px;box-sizing:border-box}"
+                ".pcb a{display:block}.pcb img{width:100%;height:auto;display:block;border-radius:18px;"
+                "box-shadow:0 12px 34px rgba(0,32,194,.16)}</style>"
+                "<section class='pcb' id='banner-procsis'>" + img + "</section>")
+    except Exception:
+        return ""
+
+
+def _marca_accion(f, files):
+    """Guarda los logos y el banner. Devuelve (ok, mensaje)."""
+    a = (f.get("accion") or "").strip()
+    quien = session.get("usuario") or rol_actual() or ""
+    if a in ("logo_procsis", "logo_empresa"):
+        clave = "logo_ini_procsis" if a == "logo_procsis" else "logo_ini_empresa"
+        nombre = "PROCSIS" if a == "logo_procsis" else "de la empresa"
+        if f.get("quitar"):
+            _ti_cfg_set(clave, "")
+            _marca_invalidar()
+            registrar_auditoria("Logos del inicio", "%s restableció el logo %s" % (quien, nombre))
+            return True, "Listo: se volvió al logo original."
+        v = _marca_img_de_archivo(files.get("archivo") if files else None, 1024)
+        if v is None:
+            return False, "El archivo no es una imagen válida (PNG, JPG, WebP o SVG) o pesa más de 1 MB."
+        if not v:
+            return False, "Elija el archivo de la imagen."
+        _ti_cfg_set(clave, v)
+        _marca_invalidar()
+        registrar_auditoria("Logos del inicio", "%s cambió el logo %s" % (quien, nombre))
+        return True, "Logo guardado. Si todavía ve el anterior, recargue con Ctrl+F5."
+    if a == "banner":
+        if f.get("quitar"):
+            for k in ("banner_proc_img", "banner_proc_url", "banner_proc_alt"):
+                _ti_cfg_set(k, "")
+            _ti_cfg_set("banner_proc_on", "0")
+            _marca_invalidar()
+            registrar_auditoria("Banner PROCSIS", "%s quitó el banner" % quien)
+            return True, "Banner quitado."
+        url = (f.get("url") or "").strip()
+        if url and (url.startswith("//") or not re.match(r"^(https://[^\s\"'<>]{3,400}|/[A-Za-z0-9_\-./?=&#%]{0,300})$", url)):
+            return False, "El enlace debe empezar por https:// o por / (por ejemplo /ventas)."
+        alt = " ".join((f.get("alt") or "").split())[:160]
+        v = _marca_img_de_archivo(files.get("archivo") if files else None, 2048)
+        if v is None:
+            return False, "El archivo no es una imagen válida (PNG, JPG, WebP o SVG) o pesa más de 2 MB."
+        if v:
+            _ti_cfg_set("banner_proc_img", v)
+        elif not _ti_cfg("banner_proc_img"):
+            return False, "Suba primero la foto del banner."
+        _ti_cfg_set("banner_proc_url", url)
+        _ti_cfg_set("banner_proc_alt", alt)
+        _ti_cfg_set("banner_proc_on", "1" if f.get("activo") else "0")
+        _marca_invalidar()
+        registrar_auditoria("Banner PROCSIS", "%s actualizó el banner" % quien)
+        return True, "Banner guardado."
+    return False, "Acción no reconocida."
+
+
+@app.route("/gerencia/logos-inicio", methods=["GET", "POST"])
+def gerencia_logos_inicio():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _ti_init()
+    csrf = _acc_csrf()
+    if request.method == "POST":
+        if not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+            return redirect("/gerencia/logos-inicio")
+        try:
+            ok, mensaje = _marca_accion(request.form, request.files)
+        except Exception as e:
+            db.session.rollback()
+            print("logos inicio:", e)
+            ok, mensaje = False, "No se pudo guardar el cambio. Intente de nuevo."
+        session["ti_msg"] = ("ok" if ok else "err", mensaje)
+        return redirect("/gerencia/logos-inicio")
+    import time
+    _marca_invalidar()
+    sello = int(time.time())
+
+    def tarjeta_logo(accion, titulo, texto, ruta, personalizado):
+        estado = ("<span class='cb-tag on'>Logo propio activo</span>" if personalizado
+                  else "<span class='cb-tag off'>Usando el logo original del sistema</span>")
+        quitar = ("<label style='display:inline-flex;gap:6px;align-items:center;margin-top:10px'>"
+                  "<input type='checkbox' name='quitar' value='1'> Volver al logo original</label>") if personalizado else ""
+        return ("<div class='cb-card'><h2>%s</h2><p>%s</p><p>%s</p>"
+                "<div style='display:flex;flex-wrap:wrap;gap:18px;align-items:center'>"
+                "<div style='background:#f4f6ff;border:1px solid #e3e8f7;border-radius:14px;padding:14px;min-width:150px;text-align:center'>"
+                "<img src='%s?v=%d' alt='' style='max-height:84px;max-width:220px;object-fit:contain'></div>"
+                "<form method='POST' action='/gerencia/logos-inicio' enctype='multipart/form-data' style='flex:1;min-width:240px'>%s"
+                "<label>Subir logo nuevo (PNG, JPG, WebP o SVG · máx. 1 MB)</label>"
+                "<input type='file' name='archivo' accept='image/png,image/jpeg,image/webp,image/svg+xml'>%s"
+                "<p style='margin-top:12px'><button class='cb-btn'>Guardar</button></p></form></div></div>"
+                % (_esc(titulo), estado, _esc(texto), ruta, sello, _cob_hidden(csrf, accion, {}), quitar))
+
+    t1 = tarjeta_logo("logo_procsis", "Logo de PROCSIS",
+                      "La marca de la barra superior (la «P» a color junto a «PROCSIS | EduTrack»): inicio, acceso y paneles de Gerencia.",
+                      "/static/img/logo-procsis-mark.png", bool(_marca_get("logo_ini_procsis")))
+    t2 = tarjeta_logo("logo_empresa", "Logo de la empresa (EduTrack)",
+                      "El logo principal que se ve en el inicio y en el carrusel del portal de acceso.",
+                      "/static/img/logo-edutrack.png", bool(_marca_get("logo_ini_empresa")))
+    tiene_b = bool(_marca_get("banner_proc_img"))
+    prev_b = ("<img src='/media/banner-procsis?v=%d' alt='' style='width:100%%;max-width:640px;border-radius:14px;display:block;margin:6px 0 10px'>" % sello) if tiene_b else ""
+    quitar_b = ("<label style='display:inline-flex;gap:6px;align-items:center;margin-top:10px'>"
+                "<input type='checkbox' name='quitar' value='1'> Quitar el banner</label>") if tiene_b else ""
+    t3 = ("<div class='cb-card'><h2>Banner con foto en la página de PROCSIS</h2>"
+          "<p>Es un área con una foto ancha (tipo banner) que aparece justo debajo de «¿Quiénes somos?» en <a href='/procsis' target='_blank'>/procsis</a>. "
+          "Medida recomendada: 1600 × 400 px.</p>%s"
+          "<form method='POST' action='/gerencia/logos-inicio' enctype='multipart/form-data'>%s"
+          "<label>Foto del banner (PNG, JPG, WebP o SVG · máx. 2 MB)</label>"
+          "<input type='file' name='archivo' accept='image/png,image/jpeg,image/webp,image/svg+xml'>"
+          "<label>Enlace al hacer clic (opcional, por ejemplo /ventas o https://…)</label><input type='text' name='url' value='%s' maxlength='400'>"
+          "<label>Texto alternativo de la foto</label><input type='text' name='alt' value='%s' maxlength='160'>"
+          "<label style='display:inline-flex;gap:6px;align-items:center;margin-top:12px'><input type='checkbox' name='activo' value='1'%s> Mostrar el banner en la página</label>"
+          "<br>%s<p style='margin-top:12px'><button class='cb-btn'>Guardar banner</button></p></form></div>"
+          % (prev_b, _cob_hidden(csrf, "banner", {}), _esc(_marca_get("banner_proc_url")), _esc(_marca_get("banner_proc_alt")),
+             " checked" if _marca_get("banner_proc_on") == "1" else "", quitar_b))
+    cuerpo = ("<h1>🖼️ Logos y banner del inicio</h1><p class='sub'>Cambie desde aquí los logos de la empresa y de PROCSIS que se ven en el inicio, "
+              "y el área con foto de la página de PROCSIS. Los cambios pueden tardar hasta un minuto en verse en todo el sitio.</p>"
+              + t1 + t2 + t3)
+    return _cb_pagina("Logos y banner del inicio", cuerpo)
+
+
+if __name__ == "__main__":
+    with app.app_context():
+        inicializar_bd()
+        try:
+            sincronizar_licencias()
+            aplicar_cambios_plan_pendientes()
+            _ciclo_facturacion_automatica()
+        except Exception as _e:
+            print("ciclo facturacion:", _e)
+    # debug=True en producción es lento (recarga automática, sin caché de templates)
+    # y un riesgo de seguridad grave (consola interactiva remota). threaded=True permite
+    # atender varias peticiones a la vez en vez de una por una. PORT lo asigna Railway/Render.
+    _debug_on = os.environ.get("FLASK_DEBUG", "0") == "1"
+    _port = int(os.environ.get("PORT", 5000))
+    app.run(debug=_debug_on, host="0.0.0.0", port=_port, threaded=True)
+
