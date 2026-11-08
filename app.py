@@ -296,6 +296,13 @@ def serve_static_img(fname):
         path = os.path.join(base, fname)
         if os.path.isfile(path):
             return send_from_directory(base, fname)
+    # Búsqueda tolerante: el mismo logo con otra extensión, mayúsculas o separadores (logo-procsis.svg → Logo_Procsis.PNG)
+    try:
+        _alt = _logo_flexible(fname, bases)
+    except Exception:
+        _alt = None
+    if _alt:
+        return send_from_directory(_alt[0], _alt[1])
     # fallback SVG response
     from flask import Response
     # Si piden logo-procsis o logo corporativo → texto PROCSIS; resto EduTrack solo producto
@@ -303,11 +310,13 @@ def serve_static_img(fname):
     low = (fname or "").lower()
     if "edutrack" in low and "procsis" not in low:
         label = "EduTrack"
-    svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80'>
-      <rect width='240' height='80' rx='8' fill='#0B2D57'/>
-      <text x='120' y='48' text-anchor='middle' fill='white' font-family='Arial,sans-serif' font-size='22' font-weight='bold'>""" + label + """</text>
-    </svg>"""
-    return Response(svg, mimetype="image/svg+xml")
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80'>"
+        "<defs><linearGradient id='pg' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#001EB3'/><stop offset='1' stop-color='#0119B9'/></linearGradient></defs>"
+        "<rect width='240' height='80' rx='16' fill='url(#pg)'/><rect x='24' y='62' width='192' height='4' rx='2' fill='#01F501'/>"
+        "<text x='120' y='45' text-anchor='middle' fill='white' font-family='-apple-system,Helvetica,Arial,sans-serif' font-size='24' font-weight='700' letter-spacing='3'>" + label + "</text></svg>"
+    )
+    return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
 
@@ -4600,6 +4609,11 @@ _MODULOS_GERENCIA = [
         ('/ti/reportar', '🎫 Reportar un problema a TI'),
         ('/gerencia/ti-acceso-inicial', '🔑 Acceso inicial de TI (una sola vez)'),
     ]),
+    ('Respaldo y cobertura', [
+        ('/gerencia/respaldo-areas', '🧩 Respaldo: áreas de RR. HH. y TI'),
+        ('/gerencia/cobertura', '🌎 Cobertura: países y departamentos'),
+        ('/gerencia/diagnostico-logos', '🖼️ Diagnóstico de logos'),
+    ]),
 ]
 _GRUPOS_MODULOS_GERENCIA = [(g, tuple(h for h, _l in its)) for g, its in _MODULOS_GERENCIA]
 
@@ -5043,6 +5057,12 @@ border:1px solid var(--tg-glass-line)!important;box-shadow:var(--tg-shadow),inse
 .pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{background:var(--tg-green)!important;color:#00164d!important}
 .pc-cta a:first-of-type:hover,.pc-cta a.pc-cta-primary:hover{background:#3dff3d!important}
 .pc-foot a{color:var(--tg-green)!important}
+/* Contraste del bloque azul de la landing: título y texto SIEMPRE en blanco */
+.pc-sec .pc-cta h2,.pc-cta h2{color:#fff!important}
+.pc-sec .pc-cta p,.pc-cta p{color:rgba(255,255,255,.94)!important;opacity:1!important}
+.pc-sec .pc-cta a.pc-cta-secondary,.pc-cta a:not(:first-of-type){background:rgba(255,255,255,.14)!important;color:#fff!important;border:1.5px solid rgba(255,255,255,.7)!important}
+.pc-cta a.pc-cta-secondary:hover,.pc-cta a:not(:first-of-type):hover{background:rgba(255,255,255,.26)!important}
+.pc-cta a:first-of-type,.pc-cta a.pc-cta-primary{box-shadow:0 8px 22px rgba(1,245,1,.35)}
 </style>"""
 
 def page(title, body):
@@ -5192,6 +5212,10 @@ window.addEventListener('pageshow', function (event) {
         _n_guard = _n_guard_js()  # aviso antes de cerrar pestaña / sesión por expirar (todos los paneles)
     except Exception:
         _n_guard = ""
+    try:
+        body = _cobertura_inyectar(body)
+    except Exception:
+        pass
     return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#001EB3"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{_TEMA_TIGO_GLASS_CSS}{html_anuncio_global()}{_bfcache_fix}{_n_guard}</body></html>"""
 
 
@@ -8082,6 +8106,10 @@ def media_logo_corporativo():
             _fs2 = _os2.path.join(_base2, "static", "img", _nm)
             if _os2.path.isfile(_fs2):
                 return _sf2(_fs2)
+        _bases2 = [_os2.path.join(_base2, "static", "img"), _os2.path.join("static", "img"), _os2.path.join(_base2, "static", "uploads", "logos")]
+        _alt2 = _logo_flexible("logo-procsis.png", _bases2)
+        if _alt2:
+            return _sf2(_os2.path.join(_alt2[0], _alt2[1]))
     except Exception:
         pass
     # Marcador PROCSIS (solo hasta que Gerencia suba el logo en Datos de la empresa)
@@ -11737,6 +11765,30 @@ background:linear-gradient(135deg,rgba(0,113,227,.95),rgba(52,152,255,.88));bord
 .eap-in:focus{border-color:#005BEA;box-shadow:0 0 0 3px rgba(0,91,234,.15)}.eap-in:disabled{background:rgba(226,232,240,.7)}
 .eap-root .eap-send{background:#0071e3!important;box-shadow:none!important;color:#fff;border:0!important;border-radius:999px;padding:0 18px;font-weight:700;cursor:pointer;font-family:inherit}
 .eap-send:disabled{opacity:.5;cursor:default}
+/* Paleta Tigo (azul #001EB3 + verde #01F501) con contraste legible */
+.eap-root .eap-btn{background:linear-gradient(135deg,#000F66 0%,#001EB3 60%,#0119B9 100%)!important;color:#fff!important;border:1px solid rgba(255,255,255,.35)!important;box-shadow:0 10px 28px rgba(0,30,179,.38),inset 0 1px 0 rgba(255,255,255,.25)!important}
+.eap-root .eap-btn:hover{background:linear-gradient(135deg,#001EB3,#0119B9)!important}
+.eap-root .eap-box{background:rgba(247,249,255,.94)!important;border:1px solid rgba(0,30,179,.16)!important}
+.eap-root .eap-head{background:linear-gradient(135deg,#000F66 0%,#001EB3 55%,#0119B9 100%)!important;border-bottom:3px solid #01F501!important}
+.eap-root .eap-ttl .eap-ic{background:#01F501!important;border:0!important;color:#00164d!important}
+.eap-root .eap-x{background:rgba(255,255,255,.16)!important;color:#fff!important}
+.eap-root .eap-a{background:#fff!important;color:#0b1437!important;border:1px solid #e3e8f7!important}
+.eap-root .eap-u{background:#001EB3!important;color:#fff!important}
+.eap-root .eap-box .eap-act{display:flex!important;align-items:center;justify-content:center;gap:8px;width:calc(100% - 20px)!important;margin:8px 10px 0!important;padding:11px 12px!important;border:1.5px solid #001EB3!important;border-radius:12px!important;background:#fff!important;color:#001EB3!important;font-size:14px!important;font-weight:700!important;box-shadow:none!important}
+.eap-root .eap-box .eap-act:nth-of-type(1){background:#01F501!important;border-color:#01F501!important;color:#00164d!important}
+.eap-root .eap-box .eap-act:nth-of-type(1):hover{background:#3dff3d!important}
+.eap-root .eap-box .eap-act:nth-of-type(2):hover{background:#eef1ff!important}
+.eap-root .eap-box .eap-act:last-child{margin-bottom:10px!important}
+.eap-root .eap-box .eap-act:disabled{opacity:.5!important}
+.eap-root .eap-form{background:rgba(255,255,255,.92)!important;border-top:1px solid #e3e8f7!important}
+.eap-root .eap-in{background:#fff!important;border:1px solid #cfd8f3!important;color:#0b1437!important}
+.eap-root .eap-in:focus{border-color:#001EB3!important;box-shadow:0 0 0 3px rgba(0,30,179,.14)!important}
+.eap-root .eap-in:disabled{background:#eef1f8!important;color:#64748b!important}
+.eap-root .eap-send{background:#001EB3!important;color:#fff!important}
+.eap-root .eap-send:disabled{background:#c5cdea!important;color:#fff!important;opacity:1!important}
+.eap-root .eap-chips button{background:#fff!important;color:#001EB3!important;border:1px solid #cfd8f3!important}
+.eap-root .eap-chips button:hover{background:#e8edff!important}
+.eap-root .eap-wa{background:#07A83A!important}
 @media print{.eap-root{display:none}}
 """
 
@@ -15765,7 +15817,7 @@ def login():
 .sinai-portal{{background:radial-gradient(900px 520px at 15% 0%,#dbe8ff,transparent 60%),radial-gradient(700px 420px at 100% 8%,#e3eeff,transparent 60%),#f5f7fb;padding:28px 20px 36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .sinai-grid{{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:1.45fr .85fr;gap:30px;align-items:stretch}}
 @media(max-width:900px){{.sinai-grid{{grid-template-columns:1fr}}}}
-.sinai-carousel{{position:relative;border-radius:30px;overflow:hidden;height:470px;background:#071c38;box-shadow:0 30px 80px rgba(7,28,56,.35);border:1px solid rgba(255,255,255,.35);isolation:isolate}}
+.sinai-carousel{{position:relative;border-radius:30px;overflow:hidden;height:470px;background:linear-gradient(135deg,#000F66 0%,#001EB3 55%,#0119B9 100%);box-shadow:0 30px 80px rgba(0,30,179,.32);border:1px solid rgba(255,255,255,.35);isolation:isolate}}
 .sinai-carousel::after{{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,0) 38%,rgba(255,255,255,0) 70%,rgba(255,255,255,.08) 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.12)}}
 @media(max-width:900px){{.sinai-carousel{{height:400px;border-radius:26px}}.sinai-brand-slogan{{font-size:15px!important}}}}
 .sinai-viewport{{width:100%;height:100%;overflow:hidden}}
@@ -15774,41 +15826,41 @@ def login():
 .sinai-slide-photo{{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.55)}}
 .sinai-slide-veil{{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.55) 100%);pointer-events:none}}
 .sinai-slide-ph{{width:100%;height:100%;position:relative;overflow:hidden}}
-.sinai-slide-ph::before{{content:"";position:absolute;width:75%;height:75%;left:-15%;top:-20%;background:radial-gradient(circle,rgba(0,190,255,.5),rgba(0,190,255,0) 65%);filter:blur(12px)}}
-.sinai-slide-ph::after{{content:"";position:absolute;width:80%;height:80%;right:-20%;bottom:-30%;background:radial-gradient(circle,rgba(0,91,234,.7),rgba(0,91,234,0) 65%);filter:blur(12px)}}
+.sinai-slide-ph::before{{content:"";position:absolute;width:75%;height:75%;left:-15%;top:-20%;background:radial-gradient(circle,rgba(1,245,1,.26),rgba(1,245,1,0) 65%);filter:blur(12px)}}
+.sinai-slide-ph::after{{content:"";position:absolute;width:80%;height:80%;right:-20%;bottom:-30%;background:radial-gradient(circle,rgba(0,30,179,.9),rgba(0,30,179,0) 65%);filter:blur(12px)}}
 .sinai-slide-brand{{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px 16px 56px;text-align:center;pointer-events:none}}
 .sinai-brand-tile{{background:rgba(255,255,255,.88);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.8);border-radius:24px;padding:8px;box-shadow:0 24px 60px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.95);width:min(var(--car-logo,440px),94%);box-sizing:border-box}}
 .sinai-brand-tile.sin-fondo{{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-color:transparent;box-shadow:none}}
 .sinai-brand-logo{{display:block;width:100%;height:auto;max-height:290px;object-fit:contain;border-radius:16px}}
 .sinai-slide-bgblur{{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(26px) saturate(1.3) brightness(.55);opacity:.85;z-index:0}}
-.sinai-brand-slogan{{margin:0;font-size:clamp(15px,1.6vw,21px);font-weight:600;letter-spacing:-.02em;line-height:1.25;color:#fff;max-width:600px;padding:8px 20px;border-radius:20px;background:rgba(255,255,255,.14);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.4);text-shadow:0 1px 8px rgba(0,0,0,.25)}}
+.sinai-brand-slogan{{margin:0;font-size:clamp(15px,1.6vw,21px);font-weight:600;letter-spacing:-.02em;line-height:1.25;color:#fff;max-width:600px;padding:8px 20px;border-radius:20px;background:rgba(0,15,102,.62);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid rgba(1,245,1,.55);box-shadow:0 10px 30px rgba(0,15,102,.35),inset 0 1px 0 rgba(255,255,255,.25);text-shadow:none}}
 .sinai-brand-sub{{font-size:11px;font-weight:600;color:rgba(255,255,255,.78);letter-spacing:.1em;text-transform:uppercase}}
 @keyframes sinai-kenburns{{from{{transform:scale(1)}}to{{transform:scale(1.06)}}}}
 .sinai-card{{animation:sinai-fade-in .5s ease}}
 @keyframes sinai-fade-in{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
 .sinai-visual-badge{{display:none}}
-.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.42);background:rgba(255,255,255,.16);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);color:#fff;font-size:28px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.45);transition:background .2s;padding:0;display:flex;align-items:center;justify-content:center}}
-.sinai-nav:hover{{background:rgba(255,255,255,.3)}}
+.sinai-nav{{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.55);background:rgba(0,15,102,.6);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);color:#fff;font-size:28px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.45);transition:background .2s;padding:0;display:flex;align-items:center;justify-content:center}}
+.sinai-nav:hover{{background:rgba(0,30,179,.9)}}
 .sinai-prev{{left:12px}}.sinai-next{{right:12px}}
-.sinai-dots{{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.16);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 8px 24px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.4)}}
+.sinai-dots{{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(0,15,102,.55);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);border:1px solid rgba(255,255,255,.38);box-shadow:0 8px 24px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.4)}}
 .sinai-dot{{width:8px;height:8px;border-radius:999px;border:0;background:rgba(255,255,255,.5);cursor:pointer;padding:0;opacity:1;transition:width .35s cubic-bezier(.25,.1,.25,1),background .35s}}
-.sinai-dot.is-on{{width:26px;background:#fff}}
+.sinai-dot.is-on{{width:26px;background:#01F501}}
 .sinai-access h1{{margin:0 0 6px;color:#1d1d1f;font-size:26px;font-weight:700;letter-spacing:-.02em}}
 .sinai-sub{{margin:0 0 16px;color:#86868b;font-size:14px;line-height:1.45}}
 .sinai-card{{background:#fff;border-radius:16px;padding:26px 24px;box-shadow:0 4px 24px rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.06)}}
 .sinai-card-label{{font-size:11px;font-weight:600;letter-spacing:.06em;color:#86868b;margin-bottom:12px;text-transform:uppercase}}
 .sinai-form label{{display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin:12px 0 6px}}
 .sinai-form input,.sinai-form select{{width:100%;padding:12px 14px;border:1px solid #d2d2d7;border-radius:12px;font-size:14px;box-sizing:border-box;background:#fff;font-family:-apple-system,sans-serif;color:#1d1d1f;transition:border-color .2s,box-shadow .2s}}
-.sinai-form input:focus,.sinai-form select:focus{{outline:none;border-color:#005BEA;background:#fff;box-shadow:0 0 0 4px rgba(0,91,234,.1)}}
+.sinai-form input:focus,.sinai-form select:focus{{outline:none;border-color:#001EB3;background:#fff;box-shadow:0 0 0 4px rgba(0,30,179,.12)}}
 .sinai-search{{position:relative}}
 .sinai-search-ico{{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#86868b}}
 .sinai-search select{{padding-left:34px}}
-.sinai-btn{{width:100%;margin-top:16px;padding:14px 24px;border:0;border-radius:980px;background:#005BEA;color:#fff;font-weight:600;font-size:15px;cursor:pointer;font-family:-apple-system,sans-serif;letter-spacing:-.01em;transition:background .2s cubic-bezier(.25,1,.5,1),transform .1s}}
-.sinai-btn:hover{{background:#002060}}
+.sinai-btn{{width:100%;margin-top:16px;padding:14px 24px;border:0;border-radius:980px;background:#001EB3;color:#fff;font-weight:600;font-size:15px;cursor:pointer;font-family:-apple-system,sans-serif;letter-spacing:-.01em;transition:background .2s cubic-bezier(.25,1,.5,1),transform .1s}}
+.sinai-btn:hover{{background:#000F66}}
 .sinai-btn:active{{transform:scale(.98)}}
 .sinai-roles{{display:none}}
 .sinai-help{{margin-top:16px;text-align:center;font-size:12px;color:#86868b;line-height:1.5}}
-.sinai-help a{{color:#005BEA;text-decoration:none;font-weight:500}}
+.sinai-help a{{color:#001EB3;text-decoration:none;font-weight:500}}
 .sinai-help a:hover{{text-decoration:underline}}
 .sinai-portals{{display:flex;flex-direction:column;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(0,0,0,.06)}}
 .sinai-pill-row{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}}
@@ -87340,9 +87392,9 @@ _CAR_TAM = {"M": 280, "L": 360, "XL": 440}
 _CAR_SLOGANS = ("EduTrack. Una infraestructura que te dejará sin aliento.",
                 "Un solo acceso · Rectoría · Coordinación · Secretaría · Docente",
                 "Tecnología educativa moderna y responsable")
-_CAR_FONDOS = ("linear-gradient(135deg,#041226 0%,#0B2D57 55%,#0a58d6 100%)",
-               "linear-gradient(135deg,#06214a 0%,#0B2D57 45%,#005BEA 100%)",
-               "linear-gradient(135deg,#071c38 0%,#0f3b86 50%,#1f7bff 100%)")
+_CAR_FONDOS = ("linear-gradient(135deg,#000F66 0%,#001EB3 58%,#0119B9 100%)",
+               "linear-gradient(135deg,#00104D 0%,#001EB3 50%,#0A2FD6 100%)",
+               "linear-gradient(135deg,#000F66 0%,#0119B9 55%,#1A3BE0 100%)")
 
 
 def _car_cfg():
@@ -98848,6 +98900,698 @@ def contabilidad_presupuestos():
     return _cta_page("Presupuestos", "/contabilidad/presupuestos", filtro + tarjetas + form + nota + tabla,
                      "Presupuesto anual por categoría y subcategoría · régimen colombiano", msg=msg, err=err)
 
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  COBERTURA (países y departamentos activos) · RESPALDO DE ÁREAS (RR. HH. y TI) · DIAGNÓSTICO DE LOGOS
+#  - Selector corporativo en la barra pública: carga solo lo que Gerencia deja activo, con bandera/logo de cada uno.
+#  - Gerencia > Cobertura: activar/desactivar países y departamentos y subir el logo de cada uno.
+#  - Gerencia > Respaldo de áreas: crea UNA sola vez el acceso inicial de Recursos Humanos y de TI.
+#  - Gerencia > Diagnóstico de logos: muestra qué archivos de marca encuentra el servidor.
+# ════════════════════════════════════════════════════════════════════════════
+_COB_INIT = {"ok": False}
+
+# (código ISO, nombre, cómo se llama su primera división)
+_COB_PAISES = (
+    ("BO", "Bolivia", "departamentos"), ("CO", "Colombia", "departamentos"), ("CR", "Costa Rica", "provincias"),
+    ("GT", "Guatemala", "departamentos"), ("HN", "Honduras", "departamentos"), ("NI", "Nicaragua", "departamentos y regiones"),
+    ("PA", "Panamá", "provincias y comarcas"), ("PY", "Paraguay", "departamentos"), ("SV", "El Salvador", "departamentos"),
+    ("UY", "Uruguay", "departamentos"),
+)
+_COB_DIVISIONES = ("departamentos", "provincias", "estados", "regiones", "provincias y comarcas", "departamentos y regiones")
+_COB_DEPTOS = {
+    "BO": ("Beni", "Chuquisaca", "Cochabamba", "La Paz", "Oruro", "Pando", "Potosí", "Santa Cruz", "Tarija"),
+    "CO": ("Amazonas", "Antioquia", "Arauca", "Atlántico", "Bogotá D.C.", "Bolívar", "Boyacá", "Caldas", "Caquetá", "Casanare", "Cauca",
+           "Cesar", "Chocó", "Córdoba", "Cundinamarca", "Guainía", "Guaviare", "Huila", "La Guajira", "Magdalena", "Meta", "Nariño",
+           "Norte de Santander", "Putumayo", "Quindío", "Risaralda", "San Andrés y Providencia", "Santander", "Sucre", "Tolima",
+           "Valle del Cauca", "Vaupés", "Vichada"),
+    "CR": ("Alajuela", "Cartago", "Guanacaste", "Heredia", "Limón", "Puntarenas", "San José"),
+    "GT": ("Alta Verapaz", "Baja Verapaz", "Chimaltenango", "Chiquimula", "El Progreso", "Escuintla", "Guatemala", "Huehuetenango",
+           "Izabal", "Jalapa", "Jutiapa", "Petén", "Quetzaltenango", "Quiché", "Retalhuleu", "Sacatepéquez", "San Marcos", "Santa Rosa",
+           "Sololá", "Suchitepéquez", "Totonicapán", "Zacapa"),
+    "HN": ("Atlántida", "Choluteca", "Colón", "Comayagua", "Copán", "Cortés", "El Paraíso", "Francisco Morazán", "Gracias a Dios",
+           "Intibucá", "Islas de la Bahía", "La Paz", "Lempira", "Ocotepeque", "Olancho", "Santa Bárbara", "Valle", "Yoro"),
+    "NI": ("Boaco", "Carazo", "Chinandega", "Chontales", "Estelí", "Granada", "Jinotega", "León", "Madriz", "Managua", "Masaya",
+           "Matagalpa", "Nueva Segovia", "Río San Juan", "Rivas", "Costa Caribe Norte", "Costa Caribe Sur"),
+    "PA": ("Bocas del Toro", "Chiriquí", "Coclé", "Colón", "Darién", "Herrera", "Los Santos", "Panamá", "Panamá Oeste", "Veraguas",
+           "Emberá-Wounaan", "Guna Yala", "Ngäbe-Buglé", "Madugandí", "Wargandí"),
+    "PY": ("Asunción", "Concepción", "San Pedro", "Cordillera", "Guairá", "Caaguazú", "Caazapá", "Itapúa", "Misiones", "Paraguarí",
+           "Alto Paraná", "Central", "Ñeembucú", "Amambay", "Canindeyú", "Presidente Hayes", "Boquerón", "Alto Paraguay"),
+    "SV": ("Ahuachapán", "Cabañas", "Chalatenango", "Cuscatlán", "La Libertad", "La Paz", "La Unión", "Morazán", "San Miguel",
+           "San Salvador", "San Vicente", "Santa Ana", "Sonsonate", "Usulután"),
+    "UY": ("Artigas", "Canelones", "Cerro Largo", "Colonia", "Durazno", "Flores", "Florida", "Lavalleja", "Maldonado", "Montevideo",
+           "Paysandú", "Río Negro", "Rivera", "Rocha", "Salto", "San José", "Soriano", "Tacuarembó", "Treinta y Tres"),
+}
+
+
+def _cob_flag(cod):
+    """Bandera del país (CDN público). Si Gerencia sube un logo propio, ese tiene prioridad."""
+    return "https://flagcdn.com/w80/%s.png" % (cod or "").strip().lower()
+
+
+def _cob_init():
+    """Crea las tablas la primera vez y las siembra con los países del selector y sus departamentos."""
+    if _COB_INIT["ok"]:
+        return
+    pk = "INTEGER PRIMARY KEY AUTOINCREMENT" if db.engine.dialect.name == "sqlite" else "SERIAL PRIMARY KEY"
+    try:
+        db.session.execute(text("CREATE TABLE IF NOT EXISTS cobertura_paises (codigo VARCHAR(2) PRIMARY KEY, nombre VARCHAR(80), "
+                                "activo INTEGER DEFAULT 1, logo TEXT DEFAULT '', orden INTEGER DEFAULT 0, division VARCHAR(40) DEFAULT 'departamentos')"))
+        db.session.execute(text("CREATE TABLE IF NOT EXISTS cobertura_deptos (id %s, pais VARCHAR(2), nombre VARCHAR(80), "
+                                "activo INTEGER DEFAULT 1, logo TEXT DEFAULT '', orden INTEGER DEFAULT 0)" % pk))
+        db.session.commit()
+        n = db.session.execute(text("SELECT COUNT(*) FROM cobertura_paises")).scalar() or 0
+        if int(n) == 0:
+            for i, (cod, nom, div) in enumerate(_COB_PAISES):
+                db.session.execute(text("INSERT INTO cobertura_paises (codigo, nombre, activo, logo, orden, division) VALUES (:c, :n, 1, '', :o, :d)"),
+                                   {"c": cod, "n": nom, "o": i, "d": div})
+                for j, dep in enumerate(_COB_DEPTOS.get(cod, ())):
+                    db.session.execute(text("INSERT INTO cobertura_deptos (pais, nombre, activo, logo, orden) VALUES (:p, :n, 1, '', :o)"),
+                                       {"p": cod, "n": dep, "o": j})
+            db.session.commit()
+        _COB_INIT["ok"] = True
+    except Exception as e:
+        db.session.rollback()
+        print("cobertura init:", e)
+
+
+def _cob_logo_ok(v, permitir_data=False):
+    """Valida la dirección de un logo. Devuelve '' (vacío), la dirección válida, o None si no es válida."""
+    v = (v or "").strip()
+    if not v:
+        return ""
+    if re.match(r"^https://[^\s\"'<>]{4,490}$", v) or re.match(r"^/static/[^\s\"'<>]{1,200}$", v):
+        return v
+    if permitir_data and len(v) <= 400000 and re.match(r"^data:image/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$", v):
+        return v
+    return None
+
+
+def _cob_logo_de_archivo(f):
+    """Convierte la imagen subida en data URI. '' si no hay archivo; None si no es una imagen válida o pesa de más."""
+    if f is None or not getattr(f, "filename", ""):
+        return ""
+    raw = f.read(250 * 1024 + 1)
+    if not raw:
+        return ""
+    if len(raw) > 250 * 1024:
+        return None
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        mime = "image/png"
+    elif raw[:3] == b"\xff\xd8\xff":
+        mime = "image/jpeg"
+    elif raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        mime = "image/webp"
+    elif raw.lstrip()[:4] in (b"<svg", b"<?xm"):
+        mime = "image/svg+xml"
+    else:
+        return None
+    import base64 as _b64
+    return "data:%s;base64,%s" % (mime, _b64.b64encode(raw).decode("ascii"))
+
+
+@app.route("/api/public/cobertura")
+def api_public_cobertura():
+    """Países y departamentos ACTIVOS (con su bandera o logo). Público: alimenta el selector de la barra del sitio."""
+    _cob_init()
+    try:
+        paises = db.session.execute(text("SELECT codigo, nombre, logo, division FROM cobertura_paises WHERE activo=1 ORDER BY orden, nombre")).fetchall()
+        deptos = db.session.execute(text("SELECT pais, nombre, logo FROM cobertura_deptos WHERE activo=1 ORDER BY orden, nombre")).fetchall()
+    except Exception:
+        db.session.rollback()
+        paises, deptos = [], []
+    por = {}
+    for p, n, lg in deptos:
+        por.setdefault(p, []).append({"n": n, "l": lg or ""})
+    out = [{"c": c, "n": n, "f": lg or _cob_flag(c), "t": div or "departamentos", "d": por.get(c, [])} for c, n, lg, div in paises]
+    r = jsonify({"paises": out})
+    r.headers["Cache-Control"] = "public, max-age=120"
+    return r
+
+
+_COB_WIDGET = r"""<style>
+.cob{position:relative;display:inline-flex;align-items:center;margin-right:10px}
+.cob .cob-b{display:inline-flex!important;align-items:center;gap:8px;margin:0!important;padding:8px 12px!important;border-radius:999px!important;border:1px solid rgba(0,30,179,.18)!important;background:rgba(255,255,255,.82)!important;color:#0f1d4d!important;font-size:13px!important;font-weight:500!important;line-height:1.1!important;box-shadow:none!important;cursor:pointer;width:auto!important;letter-spacing:0!important}
+.cob .cob-b:hover{border-color:#001EB3!important;background:#fff!important}
+.cob .cob-fl{width:20px;height:14px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1px rgba(15,29,77,.14)}
+.cob .cob-ch{opacity:.65;transition:transform .2s}
+.cob .cob-b[aria-expanded=true] .cob-ch{transform:rotate(180deg)}
+.cob .cob-p{position:absolute;right:0;top:calc(100% + 10px);width:min(580px,92vw);background:#fff;border:1px solid #e3e8f7;border-radius:16px;box-shadow:0 24px 60px rgba(0,15,102,.18),0 2px 8px rgba(0,15,102,.06);z-index:100000;overflow:hidden;text-align:left}
+.cob .cob-p[hidden]{display:none}
+.cob .cob-h{padding:14px 18px 12px;border-bottom:1px solid #edf0f8;background:linear-gradient(180deg,#f6f8ff,#fff)}
+.cob .cob-h b{display:block;font-size:14px;font-weight:600;color:#0b1437}
+.cob .cob-h span{display:block;font-size:12px;font-weight:400;color:#64748b;margin-top:2px}
+.cob .cob-body{display:grid;grid-template-columns:196px 1fr;max-height:min(420px,70vh)}
+.cob .cob-l{border-right:1px solid #edf0f8;overflow:auto;padding:8px}
+.cob .cob-c{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;font-size:13px;font-weight:500;color:#334155;cursor:pointer}
+.cob .cob-c:hover,.cob .cob-c:focus{background:#f3f6ff;outline:none}
+.cob .cob-c.on{background:#e8edff;color:#001EB3}
+.cob .cob-c img{width:22px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1px rgba(15,29,77,.14);flex:0 0 22px}
+.cob .cob-c small{margin-left:auto;font-size:11px;font-weight:500;color:#94a3b8}
+.cob .cob-r{display:flex;flex-direction:column;min-width:0}
+.cob .cob-rt{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 8px}
+.cob .cob-rt b{font-size:13px;font-weight:600;color:#0b1437}
+.cob .cob-rt input{width:150px;max-width:48%;padding:6px 11px;border:1px solid #dfe5f5;border-radius:999px;font-size:12px;font-weight:400;color:#334155;background:#f8faff;outline:none;min-height:0}
+.cob .cob-rt input:focus{border-color:#001EB3;background:#fff}
+.cob .cob-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px;padding:4px 12px 14px;overflow:auto}
+.cob .cob-d{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:10px;font-size:12.5px;font-weight:500;color:#334155}
+.cob .cob-d:hover{background:#f3f6ff}
+.cob .cob-d img,.cob .cob-d i{width:26px;height:26px;border-radius:8px;flex:0 0 26px}
+.cob .cob-d img{object-fit:contain;background:#fff;box-shadow:0 0 0 1px rgba(15,29,77,.10);padding:2px;box-sizing:border-box}
+.cob .cob-d i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10.5px;font-weight:600;color:#001EB3;background:rgba(0,30,179,.08)}
+.cob .cob-vac{grid-column:1/-1;padding:18px 6px;font-size:12.5px;color:#64748b}
+@media(max-width:720px){
+.cob{position:static;margin-right:6px}
+.cob .cob-p{position:fixed;left:8px;right:8px;top:64px;width:auto}
+.cob .cob-body{grid-template-columns:1fr;max-height:70vh}
+.cob .cob-l{border-right:0;border-bottom:1px solid #edf0f8;display:flex;gap:6px;overflow-x:auto;padding:8px}
+.cob .cob-c{flex:0 0 auto;white-space:nowrap}
+.cob .cob-c small{display:none}
+.cob .cob-b span{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+</style>
+<div class="cob" id="cobW">
+<button type="button" class="cob-b" id="cobB" aria-haspopup="dialog" aria-expanded="false" aria-controls="cobP">
+<img class="cob-fl" id="cobFl" alt="" width="20" height="14" style="display:none"><span id="cobN">Cobertura</span>
+<svg class="cob-ch" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
+<div class="cob-p" id="cobP" role="dialog" aria-label="Países y departamentos con cobertura" hidden>
+<div class="cob-h"><b>Presencia de PROCSIS</b><span>Países y departamentos donde operamos</span></div>
+<div class="cob-body"><div class="cob-l" id="cobL" role="listbox" aria-label="Países"></div>
+<div class="cob-r"><div class="cob-rt"><b id="cobT"></b><input type="search" id="cobQ" placeholder="Buscar" aria-label="Buscar departamento" autocomplete="off"></div><div class="cob-g" id="cobG"></div></div></div>
+</div></div>
+<script>
+(function(){
+var W=document.getElementById('cobW');if(!W||W.getAttribute('data-on'))return;W.setAttribute('data-on','1');
+var B=document.getElementById('cobB'),P=document.getElementById('cobP'),L=document.getElementById('cobL'),G=document.getElementById('cobG'),
+T=document.getElementById('cobT'),Q=document.getElementById('cobQ'),FL=document.getElementById('cobFl'),NM=document.getElementById('cobN');
+var D=null,sel='';
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v);}catch(e){}return null;}
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e;}
+function ini(n){var w=n.split(/[\s\-]+/).filter(function(x){return x&&!/^(de|del|la|las|los|y|el|d\.c\.)$/i.test(x);});
+ if(w.length<2)return (w[0]||n).slice(0,2).toUpperCase();return (w[0].charAt(0)+w[1].charAt(0)).toUpperCase();}
+function cur(){for(var i=0;i<D.length;i++)if(D[i].c===sel)return D[i];return null;}
+function head(){var p=cur();if(!p)return;FL.src=p.f;FL.style.display='';FL.onerror=function(){FL.style.visibility='hidden';};NM.textContent=p.n;
+ T.textContent=p.n+' · '+p.d.length+' '+p.t;}
+function paintL(){L.textContent='';D.forEach(function(p){var r=el('div','cob-c'+(p.c===sel?' on':''));r.setAttribute('role','option');
+ r.setAttribute('tabindex','0');r.setAttribute('aria-selected',p.c===sel?'true':'false');
+ var im=el('img');im.alt='';im.width=22;im.height=16;im.src=p.f;im.onerror=function(){im.style.visibility='hidden';};r.appendChild(im);
+ r.appendChild(el('span','',p.n));r.appendChild(el('small','',String(p.d.length)));
+ function go(){sel=p.c;ls('cobPais',sel);Q.value='';head();paintL();paintG();}
+ r.onclick=go;r.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};L.appendChild(r);});}
+function paintG(){var p=cur();G.textContent='';if(!p)return;var q=(Q.value||'').toLowerCase().trim(),n=0;
+ p.d.forEach(function(d){if(q&&d.n.toLowerCase().indexOf(q)<0)return;n++;var r=el('div','cob-d');
+  if(d.l){var im=el('img');im.alt='';im.loading='lazy';im.src=d.l;im.onerror=function(){if(im.parentNode)im.parentNode.replaceChild(el('i','',ini(d.n)),im);};r.appendChild(im);}
+  else{r.appendChild(el('i','',ini(d.n)));}
+  r.appendChild(el('span','',d.n));G.appendChild(r);});
+ if(!n)G.appendChild(el('div','cob-vac',p.d.length?'Sin resultados para esa búsqueda.':'Aún no hay zonas cargadas para este país.'));}
+function load(cb){if(D){cb();return;}
+ fetch('/api/public/cobertura',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(j){
+  D=(j&&j.paises)||[];if(!D.length){W.style.display='none';return;}
+  var g=ls('cobPais'),ok=false,i;for(i=0;i<D.length;i++)if(D[i].c===g)ok=true;
+  if(ok)sel=g;else{sel=D[0].c;for(i=0;i<D.length;i++)if(D[i].c==='CO')sel='CO';}
+  head();cb();}).catch(function(){D=[];W.style.display='none';});}
+function open(on){P.hidden=!on;B.setAttribute('aria-expanded',on?'true':'false');if(on)load(function(){paintL();paintG();});}
+B.onclick=function(e){e.stopPropagation();open(P.hidden);};
+document.addEventListener('click',function(e){if(!W.contains(e.target))open(false);});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!P.hidden){open(false);B.focus();}});
+Q.oninput=paintG;
+load(function(){});
+})();
+</script>
+"""
+
+
+def _cobertura_inyectar(body):
+    """Pone el selector de cobertura al inicio de la zona de botones de la barra pública (si la página la tiene)."""
+    if not body or 'id="cobW"' in body:
+        return body
+    if "navbar-apple-glass" not in body or '<div class="nav-button-right">' not in body:
+        return body
+    return body.replace('<div class="nav-button-right">', '<div class="nav-button-right">' + _COB_WIDGET, 1)
+
+
+# ───────────────────────── Estilo común de las pantallas nuevas de Gerencia (paleta Tigo) ─────────────────────────
+_CB_CSS = """<style>
+.cb{max-width:1180px;margin:0 auto;padding:6px 4px 34px;color:#0b1437}
+.cb h1{font-size:24px;font-weight:700;color:#000F66;margin:4px 0 4px;letter-spacing:-.01em}
+.cb p.sub{color:#5b6785;margin:0 0 16px;font-size:14px;line-height:1.5}
+.cb-card{background:#fff;border:1px solid #e3e8f7;border-radius:16px;padding:18px 20px;margin:0 0 16px;box-shadow:0 8px 28px rgba(0,30,179,.06)}
+.cb-card h2{font-size:16px;font-weight:700;color:#001EB3;margin:0 0 4px}
+.cb-card p{font-size:13.5px;color:#475569;line-height:1.5;margin:6px 0}
+.cb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.cb label{display:block;font-size:12px;font-weight:600;color:#334155;margin:10px 0 4px}
+.cb input[type=text],.cb input[type=email],.cb select{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #cfd8f3;border-radius:10px;font-size:13px;background:#fff;color:#0b1437}
+.cb input:focus,.cb select:focus{outline:none;border-color:#001EB3;box-shadow:0 0 0 3px rgba(0,30,179,.12)}
+.cb-btn{display:inline-block;background:#001EB3!important;color:#fff!important;border:0!important;border-radius:999px!important;padding:9px 18px!important;font-size:13px!important;font-weight:600!important;cursor:pointer;text-decoration:none;line-height:1.2;width:auto!important;margin:0!important}
+.cb-btn:hover{background:#0119B9!important}
+.cb-btn.g{background:#01F501!important;color:#00164d!important}.cb-btn.g:hover{background:#3dff3d!important}
+.cb-btn.o{background:#fff!important;color:#001EB3!important;border:1.5px solid #001EB3!important}.cb-btn.o:hover{background:#eef1ff!important}
+.cb-btn.r{background:#fff!important;color:#b91c1c!important;border:1.5px solid #fca5a5!important}.cb-btn.r:hover{background:#fef2f2!important}
+.cb-btn.s{padding:5px 12px!important;font-size:12px!important}
+.cb-tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600}
+.cb-tag.on{background:#dcfce7;color:#166534}.cb-tag.off{background:#eef1f8;color:#64748b}.cb-tag.wait{background:#fef3c7;color:#92400e}
+.cb-ok{background:#ecfdf3;border:1px solid #86efac;color:#14532d;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-size:13.5px}
+.cb-err{background:#fef2f2;border:1px solid #fca5a5;color:#7f1d1d;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-size:13.5px}
+.cb table{width:100%;border-collapse:collapse;font-size:13px}
+.cb th{background:#f4f6ff;color:#001EB3;text-align:left;padding:9px 10px;font-weight:600;font-size:12px}
+.cb td{padding:9px 10px;border-bottom:1px solid #edf0f8;vertical-align:middle;color:#1e293b}
+.cb form.in{display:inline;margin:0}
+.cb-logo{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cb-logo input[type=text]{width:180px}.cb-logo input[type=file]{font-size:11px;max-width:180px}
+.cb-fl{width:30px;height:21px;border-radius:3px;object-fit:cover;box-shadow:0 0 0 1px #dbe1f3}
+.cb-sw{width:30px;height:30px;border-radius:8px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px #dbe1f3;padding:2px;box-sizing:border-box}
+.cb-mono{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:rgba(0,30,179,.08);color:#001EB3;font-size:11px;font-weight:600}
+.cb-steps{margin:8px 0 0;padding-left:18px;font-size:13px;color:#475569;line-height:1.6}
+.cb-note{font-size:12px;color:#64748b;margin-top:10px;line-height:1.5}
+.cb-scroll{overflow:auto}
+</style>"""
+
+
+def _cb_pagina(titulo, cuerpo):
+    msg = session.pop("ti_msg", None)
+    aviso = ""
+    if isinstance(msg, (list, tuple)) and len(msg) == 2:
+        aviso = "<div class='%s'>%s</div>" % ("cb-ok" if msg[0] == "ok" else "cb-err", _esc(msg[1]))
+    return page(titulo, shell(_CB_CSS + "<div class='cb'>" + aviso + cuerpo + "</div>"))
+
+
+# ───────────────────────── Gerencia · Cobertura (países y departamentos) ─────────────────────────
+def _cob_hidden(csrf, accion, campos):
+    h = "<input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='%s'>" % (_esc(csrf), _esc(accion))
+    for k, v in campos.items():
+        h += "<input type='hidden' name='%s' value='%s'>" % (_esc(k), _esc(str(v)))
+    return h
+
+
+def _cob_boton(csrf, accion, campos, texto, clase="", confirmar=""):
+    conf = (" onclick=\"return confirm('%s');\"" % _esc(confirmar)) if confirmar else ""
+    return ("<form class='in' method='POST' action='/gerencia/cobertura'>%s<button class='cb-btn s %s'%s>%s</button></form> "
+            % (_cob_hidden(csrf, accion, campos), clase, conf, _esc(texto)))
+
+
+def _cob_form_logo(csrf, accion, campos, tiene):
+    quitar = ("<label style='display:inline-flex;gap:4px;align-items:center;font-size:11px;font-weight:500;margin:0'>"
+              "<input type='checkbox' name='quitar' value='1'> Quitar logo propio</label>") if tiene else ""
+    return ("<form method='POST' action='/gerencia/cobertura' enctype='multipart/form-data' class='cb-logo'>%s"
+            "<input type='text' name='logo_url' placeholder='https://… (opcional)' maxlength='490'>"
+            "<input type='file' name='logo_file' accept='image/png,image/jpeg,image/webp,image/svg+xml'>%s"
+            "<button class='cb-btn s o'>Guardar logo</button></form>" % (_cob_hidden(csrf, accion, campos), quitar))
+
+
+def _cob_mini(logo, nombre):
+    if logo:
+        return "<img class='cb-sw' src='%s' alt=''>" % _esc(logo)
+    partes = [w for w in re.split(r"[\s\-]+", nombre or "") if w and w.lower() not in ("de", "del", "la", "las", "los", "y", "el", "d.c.")]
+    ini = ((partes[0][:1] + partes[1][:1]) if len(partes) > 1 else (partes[0][:2] if partes else "")).upper()
+    return "<span class='cb-mono'>%s</span>" % _esc(ini)
+
+
+def _cob_html_admin(pais_sel, csrf):
+    paises = _c48_q("SELECT codigo, nombre, activo, logo, division FROM cobertura_paises ORDER BY orden, nombre")
+    cuentas = {}
+    for r in _c48_q("SELECT pais, COUNT(*), SUM(CASE WHEN activo=1 THEN 1 ELSE 0 END) FROM cobertura_deptos GROUP BY pais"):
+        cuentas[r[0]] = (int(r[1] or 0), int(r[2] or 0))
+    filas = ""
+    for cod, nom, act, logo, div in paises:
+        tot, on = cuentas.get(cod, (0, 0))
+        activo = int(act or 0) == 1
+        filas += ("<tr><td><img class='cb-fl' src='%s' alt=''></td><td><b>%s</b> <span class='cb-tag off'>%s</span></td>"
+                  "<td><span class='cb-tag %s'>%s</span></td><td>%d de %d %s</td><td>%s<a class='cb-btn s o' href='/gerencia/cobertura?pais=%s'>Gestionar</a></td><td>%s</td></tr>"
+                  % (_esc(logo or _cob_flag(cod)), _esc(nom), _esc(cod), "on" if activo else "off", "Activo" if activo else "Inactivo",
+                     on, tot, _esc(div or "departamentos"),
+                     _cob_boton(csrf, "pais_toggle", {"codigo": cod}, "Desactivar" if activo else "Activar", "r" if activo else "g",
+                                ("¿Ocultar %s del selector público?" % nom) if activo else ""),
+                     _esc(cod), _cob_form_logo(csrf, "pais_logo", {"codigo": cod}, bool(logo))))
+    tabla = ("<div class='cb-card'><h2>Países</h2><p>Solo los países <b>activos</b> aparecen en el selector de la barra pública. "
+             "Sin logo propio se muestra la bandera oficial.</p><div class='cb-scroll'><table><tr><th></th><th>País</th><th>Estado</th><th>Zonas activas</th><th>Acciones</th><th>Logo propio</th></tr>%s</table></div></div>" % filas)
+    opts = "".join("<option>%s</option>" % _esc(d) for d in _COB_DIVISIONES)
+    agregar = ("<div class='cb-card'><h2>Agregar país</h2><form method='POST' action='/gerencia/cobertura' "
+               "style='display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end'>%s"
+               "<div><label>Código ISO (2 letras)</label><input type='text' name='codigo' required maxlength='2' pattern='[A-Za-z]{2}' placeholder='MX'></div>"
+               "<div><label>Nombre del país</label><input type='text' name='nombre' required maxlength='80'></div>"
+               "<div><label>Cómo se llaman sus zonas</label><select name='division'>%s</select></div>"
+               "<div><button class='cb-btn g'>Agregar país</button></div></form></div>" % (_cob_hidden(csrf, "pais_agregar", {}), opts))
+    detalle = ""
+    sel = next((p for p in paises if p[0] == pais_sel), None)
+    if sel:
+        cod, nom, _a, _l, div = sel
+        deps = _c48_q("SELECT id, nombre, activo, logo FROM cobertura_deptos WHERE pais=:p ORDER BY orden, nombre", p=cod)
+        fd = ""
+        for did, dn, da, dl in deps:
+            dact = int(da or 0) == 1
+            fd += ("<tr><td>%s</td><td><b>%s</b></td><td><span class='cb-tag %s'>%s</span></td><td>%s%s</td><td>%s</td></tr>"
+                   % (_cob_mini(dl, dn), _esc(dn), "on" if dact else "off", "Activo" if dact else "Inactivo",
+                      _cob_boton(csrf, "depto_toggle", {"id": did, "pais": cod}, "Desactivar" if dact else "Activar", "r" if dact else "g"),
+                      _cob_boton(csrf, "depto_eliminar", {"id": did, "pais": cod}, "Eliminar", "r", "¿Eliminar %s de la lista?" % dn),
+                      _cob_form_logo(csrf, "depto_logo", {"id": did, "pais": cod}, bool(dl))))
+        if not fd:
+            fd = "<tr><td colspan='5'>Este país aún no tiene zonas cargadas.</td></tr>"
+        masivo = (_cob_boton(csrf, "depto_todos", {"pais": cod, "valor": 1}, "Activar todas", "g")
+                  + _cob_boton(csrf, "depto_todos", {"pais": cod, "valor": 0}, "Desactivar todas", "r", "¿Ocultar todas las zonas de %s?" % nom))
+        detalle = ("<div class='cb-card' id='zonas'><h2>%s · %s</h2><p>Activas = visibles en el selector público. El logo de cada zona es opcional: sin logo se muestra su sigla. "
+                   "Acepta una dirección https:// o un archivo PNG, JPG, WebP o SVG de hasta 250 KB.</p><p>%s</p>"
+                   "<div class='cb-scroll'><table><tr><th></th><th>Zona</th><th>Estado</th><th>Acciones</th><th>Logo</th></tr>%s</table></div>"
+                   "<form method='POST' action='/gerencia/cobertura' style='display:flex;gap:8px;margin-top:14px;align-items:end;flex-wrap:wrap'>%s"
+                   "<div style='flex:1;min-width:220px'><label>Agregar zona a %s</label><input type='text' name='nombre' required maxlength='80'></div>"
+                   "<button class='cb-btn g'>Agregar zona</button></form></div>"
+                   % (_esc(nom), _esc(div or "departamentos"), masivo, fd, _cob_hidden(csrf, "depto_agregar", {"pais": cod}), _esc(nom)))
+    return tabla + detalle + agregar + ("<p class='cb-note'>Los cambios se reflejan en el sitio público en un par de minutos (el selector guarda una copia breve para cargar rápido).</p>")
+
+
+def _cob_accion(f, files):
+    """Ejecuta una acción del panel de Cobertura. Devuelve (ok, mensaje)."""
+    a = (f.get("accion") or "").strip()
+    quien = session.get("usuario") or rol_actual() or ""
+
+    def leer_logo():
+        arch = files.get("logo_file") if files else None
+        if arch is not None and getattr(arch, "filename", ""):
+            v = _cob_logo_de_archivo(arch)
+            if v is None:
+                return "err", "El archivo no es una imagen válida (PNG, JPG, WebP o SVG) o pesa más de 250 KB."
+            if v:
+                return "ok", v
+        u = (f.get("logo_url") or "").strip()
+        if u:
+            v = _cob_logo_ok(u)
+            if v is None:
+                return "err", "La dirección del logo debe empezar por https:// (o /static/)."
+            return "ok", v
+        return "vacio", ""
+
+    def cod_valido():
+        c = (f.get("codigo") or f.get("pais") or "").strip().upper()
+        return c if re.match(r"^[A-Z]{2}$", c) else ""
+
+    def id_valido():
+        try:
+            return int(f.get("id") or 0)
+        except Exception:
+            return 0
+
+    if a == "pais_toggle":
+        c = cod_valido()
+        if not c:
+            return False, "País no válido."
+        db.session.execute(text("UPDATE cobertura_paises SET activo = CASE WHEN activo=1 THEN 0 ELSE 1 END WHERE codigo=:c"), {"c": c})
+        db.session.commit()
+        registrar_auditoria("Cobertura", "%s cambió el estado del país %s" % (quien, c))
+        return True, "Estado del país actualizado."
+    if a == "pais_logo" or a == "depto_logo":
+        estado, v = leer_logo()
+        if estado == "err":
+            return False, v
+        if estado == "vacio":
+            if not f.get("quitar"):
+                return False, "Indique una dirección o un archivo, o marque «Quitar logo propio»."
+            v = ""
+        if a == "pais_logo":
+            c = cod_valido()
+            if not c:
+                return False, "País no válido."
+            db.session.execute(text("UPDATE cobertura_paises SET logo=:l WHERE codigo=:c"), {"l": v, "c": c})
+            detalle = "país %s" % c
+        else:
+            did = id_valido()
+            if not did:
+                return False, "Zona no válida."
+            db.session.execute(text("UPDATE cobertura_deptos SET logo=:l WHERE id=:i"), {"l": v, "i": did})
+            detalle = "zona #%d" % did
+        db.session.commit()
+        registrar_auditoria("Cobertura", "%s %s el logo de %s" % (quien, "quitó" if not v else "cambió", detalle))
+        return True, "Logo quitado: se usará la bandera o la sigla." if not v else "Logo guardado."
+    if a == "pais_agregar":
+        c = (f.get("codigo") or "").strip().upper()
+        nombre = " ".join((f.get("nombre") or "").split())[:80]
+        div = (f.get("division") or "departamentos").strip()
+        if not re.match(r"^[A-Z]{2}$", c) or not nombre:
+            return False, "Escriba el código de 2 letras y el nombre del país."
+        if div not in _COB_DIVISIONES:
+            div = "departamentos"
+        if db.session.execute(text("SELECT 1 FROM cobertura_paises WHERE codigo=:c"), {"c": c}).first():
+            return False, "Ese país ya está en la lista."
+        mx = db.session.execute(text("SELECT COALESCE(MAX(orden), 0) FROM cobertura_paises")).scalar() or 0
+        db.session.execute(text("INSERT INTO cobertura_paises (codigo, nombre, activo, logo, orden, division) VALUES (:c, :n, 1, '', :o, :d)"),
+                           {"c": c, "n": nombre, "o": int(mx) + 1, "d": div})
+        db.session.commit()
+        registrar_auditoria("Cobertura", "%s agregó el país %s (%s)" % (quien, nombre, c))
+        return True, "País agregado. Ahora puede cargar sus zonas."
+    if a == "depto_toggle":
+        did = id_valido()
+        if not did:
+            return False, "Zona no válida."
+        db.session.execute(text("UPDATE cobertura_deptos SET activo = CASE WHEN activo=1 THEN 0 ELSE 1 END WHERE id=:i"), {"i": did})
+        db.session.commit()
+        return True, "Estado de la zona actualizado."
+    if a == "depto_eliminar":
+        did = id_valido()
+        if not did:
+            return False, "Zona no válida."
+        db.session.execute(text("DELETE FROM cobertura_deptos WHERE id=:i"), {"i": did})
+        db.session.commit()
+        registrar_auditoria("Cobertura", "%s eliminó la zona #%d" % (quien, did))
+        return True, "Zona eliminada."
+    if a == "depto_todos":
+        c = cod_valido()
+        if not c:
+            return False, "País no válido."
+        v = 1 if str(f.get("valor")) == "1" else 0
+        db.session.execute(text("UPDATE cobertura_deptos SET activo=:v WHERE pais=:p"), {"v": v, "p": c})
+        db.session.commit()
+        registrar_auditoria("Cobertura", "%s %s todas las zonas de %s" % (quien, "activó" if v else "desactivó", c))
+        return True, "Zonas actualizadas."
+    if a == "depto_agregar":
+        c = cod_valido()
+        nombre = " ".join((f.get("nombre") or "").split())[:80]
+        if not c or not nombre:
+            return False, "Escriba el nombre de la zona."
+        if not db.session.execute(text("SELECT 1 FROM cobertura_paises WHERE codigo=:c"), {"c": c}).first():
+            return False, "País no válido."
+        if db.session.execute(text("SELECT 1 FROM cobertura_deptos WHERE pais=:p AND lower(nombre)=lower(:n)"), {"p": c, "n": nombre}).first():
+            return False, "Esa zona ya existe en este país."
+        mx = db.session.execute(text("SELECT COALESCE(MAX(orden), 0) FROM cobertura_deptos WHERE pais=:p"), {"p": c}).scalar() or 0
+        db.session.execute(text("INSERT INTO cobertura_deptos (pais, nombre, activo, logo, orden) VALUES (:p, :n, 1, '', :o)"),
+                           {"p": c, "n": nombre, "o": int(mx) + 1})
+        db.session.commit()
+        registrar_auditoria("Cobertura", "%s agregó la zona %s en %s" % (quien, nombre, c))
+        return True, "Zona agregada."
+    return False, "Acción no reconocida."
+
+
+@app.route("/gerencia/cobertura", methods=["GET", "POST"])
+def gerencia_cobertura():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _cob_init()
+    csrf = _acc_csrf()
+    if request.method == "POST":
+        pr = (request.form.get("pais") or request.form.get("codigo") or "").strip().upper()
+        destino = "/gerencia/cobertura" + (("?pais=" + pr + "#zonas") if re.match(r"^[A-Z]{2}$", pr) and (request.form.get("accion") or "").startswith("depto_") else "")
+        if not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+            return redirect(destino)
+        try:
+            ok, mensaje = _cob_accion(request.form, request.files)
+        except Exception as e:
+            db.session.rollback()
+            print("cobertura accion:", e)
+            ok, mensaje = False, "No se pudo guardar el cambio. Intente de nuevo."
+        session["ti_msg"] = ("ok" if ok else "err", mensaje)
+        return redirect(destino)
+    pais_sel = (request.args.get("pais") or "").strip().upper()
+    cuerpo = ("<h1>🌎 Cobertura · países y departamentos</h1><p class='sub'>Defina en qué países y departamentos opera PROCSIS. "
+              "Lo que deje activo aparece en el selector de la barra del sitio público, con su bandera o logo.</p>"
+              + _cob_html_admin(pais_sel, csrf))
+    return _cb_pagina("Cobertura", cuerpo)
+
+
+# ───────────────────────── Gerencia · Respaldo de áreas (RR. HH. y TI, una sola vez) ─────────────────────────
+# cfg = clave en ti_config que marca que el acceso inicial ya se creó. La de TI es la misma que usa /gerencia/ti-acceso-inicial.
+_RESP_AREAS = (
+    ("rrhh", {"rol": "Talento", "cfg": "rrhh_lider_creado", "ejemplo": "rrhh.lider"}),
+    ("ti", {"rol": "Tecnologia", "cfg": "lider_creado", "ejemplo": "ti.lider"}),
+)
+
+
+def _resp_tarjeta(clave, a, es_super, csrf):
+    info = AREAS_PROCSIS.get(a["rol"], {})
+    titulo = info.get("titulo", a["rol"])
+    marca = _ti_cfg(a["cfg"])
+    cab = "<h2>%s %s</h2><p>%s</p>" % (_esc(info.get("icono", "")), _esc(titulo), _esc(info.get("desc", "")))
+    hecho = bool(marca)
+    if hecho:
+        partes = marca.split("|")
+        if partes and partes[0] == "pendiente":
+            estado = "<p><span class='cb-tag wait'>En proceso</span> La creación quedó iniciada y no se completó. Un Superadmin puede repetirla.</p>"
+        else:
+            estado = ("<p><span class='cb-tag on'>Ya creado</span> Acceso <b>%s</b>, creado el %s por %s. Solo se puede hacer una vez: desde ahora el área gestiona a su equipo.</p>"
+                      % (_esc(partes[0] if partes else ""), _esc((partes[2] if len(partes) > 2 else "")[:10]), _esc(partes[1] if len(partes) > 1 else "")))
+    else:
+        estado = "<p><span class='cb-tag off'>Pendiente</span> <b>Solo se puede crear una vez.</b></p>"
+    form = ""
+    if (not hecho) or es_super:
+        form = ("<form method='POST' action='/gerencia/respaldo-areas'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='area' value='%s'>"
+                "<label>Usuario de acceso</label><input type='text' name='usuario' required minlength='4' maxlength='40' pattern='[a-z0-9._-]+' placeholder='por ejemplo: %s'>"
+                "<label>Nombre completo</label><input type='text' name='nombre' required>"
+                "<label>Género (para saludar correctamente)</label>%s"
+                "<label>Correo</label><input type='email' name='correo'>"
+                "<p style='margin-top:14px'><button class='cb-btn' onclick=\"return confirm('Esta acción solo se puede hacer UNA vez. ¿Crear el acceso inicial?');\">Crear acceso inicial</button></p></form>"
+                % (_esc(csrf), _esc(clave), _esc(a["ejemplo"]), _ti_html_genero()))
+        if hecho and es_super:
+            form = "<p class='cb-note'>Como Superadmin puede repetirlo si hace falta (recuperación).</p>" + form
+    return "<div class='cb-card'>%s%s%s</div>" % (cab, estado, form)
+
+
+@app.route("/gerencia/respaldo-areas", methods=["GET", "POST"])
+def gerencia_respaldo_areas():
+    """Gerencia crea UNA sola vez el acceso inicial de Recursos Humanos y el de TI. Lo demás lo hacen esas áreas."""
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    _ti_init()
+    rol = rol_actual()
+    es_super = rol == "Superadmin"
+    csrf = _acc_csrf()
+    areas = dict(_RESP_AREAS)
+    if request.method == "POST":
+        a = areas.get((request.form.get("area") or "").strip())
+        if a is None or not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+            return redirect("/gerencia/respaldo-areas")
+        titulo = AREAS_PROCSIS.get(a["rol"], {}).get("titulo", a["rol"])
+        marca = _ti_cfg(a["cfg"])
+        if marca and not es_super:
+            session["ti_msg"] = ("err", "El acceso inicial de %s ya fue creado. Desde ahora lo gestiona esa área." % titulo)
+            return redirect("/gerencia/respaldo-areas")
+        quien = session.get("usuario") or rol
+        reservado = False
+        if not marca:
+            try:
+                # reserva atómica: si dos personas envían a la vez, solo una pasa (clave primaria)
+                _c48_x("INSERT INTO ti_config (clave, valor) VALUES (:c, :v)", c=a["cfg"], v="pendiente|%s|%s" % (quien, _c48_now()))
+                reservado = True
+            except Exception:
+                db.session.rollback()
+                session["ti_msg"] = ("err", "El acceso inicial de %s ya fue creado." % titulo)
+                return redirect("/gerencia/respaldo-areas")
+        u, clave = _ti_crear_usuario(request.form.get("usuario"), request.form.get("nombre"), request.form.get("correo"), a["rol"], True,
+                                     genero=request.form.get("genero"))
+        if u is None:
+            if reservado:
+                _c48_x("DELETE FROM ti_config WHERE clave=:c", c=a["cfg"])
+            session["ti_msg"] = ("err", clave)
+            return redirect("/gerencia/respaldo-areas")
+        if reservado:
+            _c48_x("UPDATE ti_config SET valor=:v WHERE clave=:c", v="%s|%s|%s" % (u.usuario, quien, _c48_now()), c=a["cfg"])
+        registrar_auditoria("Respaldo de áreas", "%s creó el acceso inicial de %s: %s" % (quien, titulo, u.usuario))
+        return _ti_pagina_credencial("Acceso inicial de %s creado" % titulo, u.usuario, clave, a["rol"], "/gerencia/respaldo-areas",
+                                     "<p>Este usuario ya puede entrar al área de <b>%s</b>. Quedó con MFA obligatorio.</p>" % _esc(titulo))
+    tarjetas = "".join(_resp_tarjeta(k, a, es_super, csrf) for k, a in _RESP_AREAS)
+    pasos = ("<div class='cb-card'><h2>Cómo funciona</h2><ol class='cb-steps'>"
+             "<li>Gerencia crea aquí, <b>una sola vez</b>, el acceso inicial de Recursos Humanos y el de TI.</li>"
+             "<li>Recursos Humanos gestiona su equipo y solicita a TI las credenciales del personal.</li>"
+             "<li>TI crea y gestiona las cuentas y los accesos de las demás áreas.</li>"
+             "<li>Gerencia queda como supervisión: ve los módulos, pero no los opera.</li></ol></div>")
+    cuerpo = ("<h1>🧩 Respaldo de áreas</h1><p class='sub'>Las dos áreas base de la organización. Se crean una sola vez; "
+              "después cada área administra lo suyo.</p><div class='cb-grid'>%s</div>%s" % (tarjetas, pasos))
+    return _cb_pagina("Respaldo de áreas", cuerpo)
+
+
+# ───────────────────────── Búsqueda tolerante de logos de marca + diagnóstico ─────────────────────────
+_LOGO_EXTS = (".svg", ".png", ".webp", ".jpg", ".jpeg", ".gif")
+
+
+def _logo_flexible(fname, bases):
+    """Encuentra el logo aunque cambie la extensión, las mayúsculas o los separadores
+    (logo-procsis.svg → Logo_Procsis.PNG). Devuelve (carpeta, archivo) o None."""
+    nombre = os.path.basename(fname or "")
+    if not nombre or nombre != fname:
+        return None
+    stem, ext = os.path.splitext(nombre)
+    if ext.lower() not in _LOGO_EXTS:
+        return None
+    clave = re.sub(r"[^a-z0-9]", "", stem.lower())
+    marca = clave[4:] if clave.startswith("logo") else clave
+    if not marca:
+        return None
+    mejor = None
+    for base in bases:
+        try:
+            nombres = os.listdir(base)
+        except Exception:
+            continue
+        for n in nombres:
+            s, e = os.path.splitext(n)
+            if e.lower() not in _LOGO_EXTS:
+                continue
+            k = re.sub(r"[^a-z0-9]", "", s.lower())
+            if marca == "procsis" and "edutrack" in k:
+                continue
+            if k == clave:
+                rango = 0
+            elif k == marca:
+                rango = 1
+            elif k.startswith(clave) or k.startswith("logo" + marca) or k.startswith(marca + "logo"):
+                rango = 2
+            else:
+                continue
+            cand = (rango, _LOGO_EXTS.index(e.lower()), len(n), base, n)
+            if mejor is None or cand < mejor:
+                mejor = cand
+        if mejor is not None:
+            break
+    return (mejor[3], mejor[4]) if mejor else None
+
+
+@app.route("/gerencia/diagnostico-logos")
+def gerencia_diagnostico_logos():
+    _g = _guard_gerencia()
+    if _g is not None:
+        return _g
+    base = os.path.dirname(os.path.abspath(__file__))
+    carpetas = (("static/img", os.path.join(base, "static", "img")), ("static/uploads/logos", os.path.join(base, "static", "uploads", "logos")))
+    listado = ""
+    for rel, ruta in carpetas:
+        try:
+            nombres = sorted(os.listdir(ruta))
+        except Exception:
+            nombres = None
+        if nombres is None:
+            listado += "<p><b>%s</b>: la carpeta no existe o no se puede leer en este servidor.</p>" % _esc(rel)
+        else:
+            rel_logo = [n for n in nombres if re.search(r"logo|procsis|edutrack|favicon", n, re.I)]
+            listado += "<p><b>%s</b>: %d archivos. Relacionados con la marca: %s</p>" % (_esc(rel), len(nombres), ", ".join(_esc(n) for n in rel_logo[:60]) or "ninguno")
+    fila = _c48_q("SELECT logo_path FROM plataforma ORDER BY id ASC LIMIT 1")
+    lp = (fila[0][0] or "").strip() if fila else ""
+    if lp.startswith("data:image"):
+        guardado = "imagen guardada en la base de datos (%d KB)" % max(1, len(lp) // 1365)
+    else:
+        guardado = _esc(lp[:140]) if lp else "sin logo guardado (se usa el de respaldo del proyecto)"
+    bases = [os.path.join(base, "static", "img"), os.path.join("static", "img"), os.path.join(base, "static", "uploads", "logos")]
+    filas = ""
+    for nm in ("logo-procsis.svg", "logo-procsis.png", "logo-procsis.jpeg", "logo-procsis.jpg", "logo-edutrack.png", "logo-edutrack.jpeg", "favicon.png"):
+        exacto = any(os.path.isfile(os.path.join(b, nm)) for b in bases)
+        try:
+            alt = _logo_flexible(nm, bases)
+        except Exception:
+            alt = None
+        if exacto:
+            res = "<span class='cb-tag on'>Existe</span>"
+        elif alt:
+            res = "<span class='cb-tag wait'>Se sirve desde %s</span>" % _esc(alt[1])
+        else:
+            res = "<span class='cb-tag off'>No está: se muestra el logo de respaldo</span>"
+        filas += "<tr><td><code>/static/img/%s</code></td><td>%s</td><td><img src='/static/img/%s' alt='' style='height:38px;background:#fff;border:1px solid #e3e8f7;border-radius:8px;padding:3px'></td></tr>" % (_esc(nm), res, _esc(nm))
+    entorno = "Vercel (disco del proyecto de solo lectura)" if os.environ.get("VERCEL") else "servidor propio, Railway o Render"
+    cuerpo = ("<h1>🖼️ Diagnóstico de logos</h1><p class='sub'>Muestra qué archivos de marca encuentra el servidor y qué logo se está sirviendo.</p>"
+              "<div class='cb-card'><h2>Entorno</h2><p>%s</p><p>Logo corporativo guardado en Datos de la empresa: <b>%s</b></p>"
+              "<p>Así se ve ahora <code>/media/logo-corporativo</code>: <img src='/media/logo-corporativo' alt='' style='height:44px;vertical-align:middle;background:#fff;border:1px solid #e3e8f7;border-radius:8px;padding:3px'></p></div>"
+              "<div class='cb-card'><h2>Carpetas</h2>%s</div>"
+              "<div class='cb-card'><h2>Archivos que el sistema pide</h2><div class='cb-scroll'><table><tr><th>Dirección</th><th>Estado</th><th>Vista</th></tr>%s</table></div></div>"
+              % (_esc(entorno), guardado, listado, filas))
+    return _cb_pagina("Diagnóstico de logos", cuerpo)
 
 
 # --- Acceso del equipo (validar/solicitar usuarios con foto de cara) ---
