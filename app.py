@@ -14305,6 +14305,47 @@ _PA_PAGE = r"""
   .sa-list{max-height:none;overflow:visible}
 }
 @media(prefers-reduced-motion:reduce){.sa *{transition:none!important}}
+/* ═══ Identidad EduTrack · Sedes y puntos de atención (una sola sección fluida) ═══ */
+:root{--et-green:#00E676;--et-cyan:#00B8D4;--et-blue:#0020C2;--et-navy:#0B1B4D;--et-grad:linear-gradient(100deg,var(--et-green) 0%,var(--et-cyan) 32%,var(--et-blue) 100%);--et-cyan-soft:rgba(0,184,212,.10);--et-cyan-line:rgba(0,184,212,.38);--et-shadow:0 18px 50px rgba(0,32,194,.14)}
+/* 1. Fusión: un solo fondo continuo entre el título y el buscador */
+.sa{background:#F8F9FA}
+.sa .sa-hero{background:transparent;min-height:0;padding:84px 20px 36px}
+.sa .sa-find{background:transparent;padding:12px 20px 72px}
+.sa .sa-res{background:transparent}
+.sa .sa-hero h1{color:var(--et-navy)}
+/* 2. Botón principal (Buscar una sede) y botón Ir */
+.sa .sa-cta,.sa .sa-go{background:var(--et-grad);color:#fff;font-weight:700;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,20,90,.4);box-shadow:0 8px 20px rgba(0,32,194,.22);transition:transform .2s ease,box-shadow .2s ease,filter .2s ease}
+.sa .sa-cta:hover,.sa .sa-go:hover{background:var(--et-grad);transform:translateY(-2px);box-shadow:0 14px 28px rgba(0,32,194,.30);filter:brightness(1.05) saturate(1.1)}
+.sa .sa-cta:active,.sa .sa-go:active{transform:translateY(0) scale(.98)}
+.sa .sa-cta:focus-visible,.sa .sa-go:focus-visible,.sa .sa-cat:focus-visible,.sa .sa-item:focus-visible,.sa .sa-gps:focus-visible{outline:3px solid rgba(0,184,212,.5);outline-offset:3px}
+/* 5. Botón inferior (Ir) cuando aún no hay categoría: contorno cian minimalista */
+.sa .sa-go.is-off{background:transparent;box-shadow:none;text-shadow:none;color:var(--et-cyan);border:1.5px solid var(--et-cyan-line)}
+.sa .sa-go.is-off:hover{transform:none;filter:none;box-shadow:none;background:transparent}
+/* 3. Tarjetas de categoría */
+.sa .sa-cat{background:rgba(255,255,255,.7);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--et-cyan-line);box-shadow:0 4px 14px rgba(0,32,194,.05)}
+.sa .sa-cat svg{stroke:var(--et-blue);transition:stroke .2s}
+.sa .sa-cat span{color:var(--et-navy)}
+.sa .sa-cat:hover{transform:translateY(-3px);border-color:transparent;background:linear-gradient(#fff,#fff) padding-box,var(--et-grad) border-box;box-shadow:0 14px 32px rgba(0,32,194,.16)}
+.sa .sa-cat:hover svg{stroke:var(--et-cyan)}
+.sa .sa-cat.on{border:1.5px solid transparent;background:linear-gradient(#F1FBFF,#F1FBFF) padding-box,var(--et-grad) border-box;box-shadow:0 0 0 4px rgba(0,184,212,.14),0 14px 32px rgba(0,32,194,.14)}
+.sa .sa-cat.on svg{stroke:var(--et-cyan)}
+/* 4. Barra de búsqueda: sombra difuminada, lupa y ubicación en cian */
+.sa .sa-search{background:#fff;border:1px solid transparent;box-shadow:0 8px 30px rgba(0,32,194,.10)}
+.sa .sa-search:focus-within{border-color:transparent;box-shadow:0 10px 34px rgba(0,184,212,.22),0 0 0 3px rgba(0,184,212,.28)}
+.sa .sa-search svg{stroke:var(--et-cyan)}
+.sa .sa-gps{color:var(--et-cyan)}
+.sa .sa-gps:hover{background:var(--et-cyan-soft)}
+.sa .sa-gps.on{color:var(--et-blue);background:var(--et-cyan-soft)}
+.sa .sa-search .sa-gps svg{stroke:currentColor}
+/* Resultados */
+.sa .sa-item{background:rgba(255,255,255,.78);border:1.5px solid var(--et-cyan-line)}
+.sa .sa-item:hover{background:#fff;border-color:var(--et-cyan)}
+.sa .sa-item.on{border-color:var(--et-cyan);background:#F1FBFF}
+.sa .sa-how{background:var(--et-grad);text-shadow:0 1px 2px rgba(0,20,90,.35)}
+.sa .sa-how:hover{background:var(--et-grad);filter:brightness(1.05)}
+.sa .sa-tel{color:var(--et-blue)}
+.sa .sa-mapbox{box-shadow:var(--et-shadow)}
+@media(prefers-reduced-motion:reduce){.sa .sa-cta:hover,.sa .sa-go:hover,.sa .sa-cat:hover{transform:none}}
 </style>
 
 <div class="sa">
@@ -14890,6 +14931,15 @@ def mapa_api_geo():
     return jsonify(r)
 
 
+def _like_q(t):
+    """Patrón LIKE para buscar nombres. Si la búsqueda exacta no halló nada, se repite ignorando tildes (vocales como comodín)."""
+    from flask import g as _g_mp
+    t = (t or "").replace("%", "")
+    if getattr(_g_mp, "_mp_plegar", False):
+        t = "".join("_" if c in "aeiouáéíóúüAEIOUÁÉÍÓÚÜ" else c for c in t)
+    return "%" + t + "%"
+
+
 @app.route("/mapa/api/lugares")
 def mapa_api_lugares():
     """Colegios y puntos por departamento / municipio / texto, tengan o no sedes registradas."""
@@ -14899,6 +14949,7 @@ def mapa_api_lugares():
     mun = (request.args.get("mun") or "").strip()[:80]
     q = (request.args.get("q") or "").strip()[:80]
     capas = {c for c in (request.args.get("capas") or "cliente,sede,prospecto,directorio,punto").split(",") if c}
+    from flask import g as _g_mp
     LIM = 120
     out, truncado = [], False
 
@@ -14911,9 +14962,9 @@ def mapa_api_lugares():
 
     try:
         if "cliente" in capas:
-            qq = _f(Institucion.query.filter(Institucion.estado != "ARCHIVADA"), Institucion.departamento, Institucion.municipio)
+            qq = _f(Institucion.query.filter(or_(Institucion.estado.is_(None), Institucion.estado != "ARCHIVADA")), Institucion.departamento, Institucion.municipio)
             if q:
-                like = "%" + q.replace("%", "") + "%"
+                like = _like_q(q)
                 qq = qq.filter(or_(Institucion.nombre.ilike(like), Institucion.dane.ilike(like), Institucion.nit.ilike(like)))
             rows = qq.order_by(Institucion.nombre).limit(LIM + 1).all()
             truncado = truncado or len(rows) > LIM
@@ -14924,7 +14975,7 @@ def mapa_api_lugares():
             qq = db.session.query(SedeInstitucion, Institucion.nombre).join(Institucion, Institucion.id == SedeInstitucion.institucion_id).filter(SedeInstitucion.activa == True)  # noqa: E712
             qq = _f(qq, SedeInstitucion.departamento, SedeInstitucion.municipio)
             if q:
-                like = "%" + q.replace("%", "") + "%"
+                like = _like_q(q)
                 qq = qq.filter(or_(SedeInstitucion.nombre.ilike(like), Institucion.nombre.ilike(like), SedeInstitucion.codigo_dane.ilike(like)))
             rows = qq.limit(LIM + 1).all()
             truncado = truncado or len(rows) > LIM
@@ -14944,7 +14995,7 @@ def mapa_api_lugares():
                 else:
                     saltar = True
             if q:
-                qq = qq.filter(LeadCRM.colegio.ilike("%" + q.replace("%", "") + "%"))
+                qq = qq.filter(LeadCRM.colegio.ilike(_like_q(q)))
             rows = [] if saltar else qq.order_by(LeadCRM.id.desc()).limit(LIM + 1).all()
             truncado = truncado or len(rows) > LIM
             for r in rows[:LIM]:
@@ -14953,7 +15004,7 @@ def mapa_api_lugares():
         if "directorio" in capas and (dep or mun or q):
             qq = _f(DirectorioMEN.query, DirectorioMEN.departamento, DirectorioMEN.municipio)
             if q:
-                like = "%" + q.replace("%", "") + "%"
+                like = _like_q(q)
                 qq = qq.filter(or_(DirectorioMEN.nombre.ilike(like), DirectorioMEN.codigo_dane.ilike(like), DirectorioMEN.nit.ilike(like)))
             rows = qq.order_by(DirectorioMEN.nombre).limit(LIM + 1).all()
             truncado = truncado or len(rows) > LIM
@@ -14963,7 +15014,7 @@ def mapa_api_lugares():
         if "punto" in capas:
             qq = _f(PuntoAtencion.query.filter(PuntoAtencion.activo == True), None, PuntoAtencion.ciudad)  # noqa: E712
             if q:
-                qq = qq.filter(PuntoAtencion.nombre.ilike("%" + q.replace("%", "") + "%"))
+                qq = qq.filter(PuntoAtencion.nombre.ilike(_like_q(q)))
             for r in qq.limit(LIM).all():
                 out.append({"tipo": "punto", "nombre": r.nombre or "", "direccion": r.direccion or "", "municipio": r.ciudad or "",
                             "departamento": "", "dane": "", "lat": r.lat, "lng": r.lng, "extra": "Punto de atención Procsis"})
@@ -14974,7 +15025,19 @@ def mapa_api_lugares():
         except Exception:
             pass
         return jsonify({"ok": False, "error": "No se pudo consultar"}), 200
-    return jsonify({"ok": True, "items": out, "truncado": truncado})
+    if q and not out and not getattr(_g_mp, "_mp_plegar", False):
+        _g_mp._mp_plegar = True
+        try:
+            return mapa_api_lugares()
+        finally:
+            _g_mp._mp_plegar = False
+    dir_total = None
+    if not out:
+        try:
+            dir_total = DirectorioMEN.query.count()
+        except Exception:
+            db.session.rollback()
+    return jsonify({"ok": True, "items": out, "truncado": truncado, "dir_total": dir_total})
 
 
 _MP_PAGE = r"""
@@ -15107,7 +15170,7 @@ async function buscar(){
   if(!dep&&!mun&&!q){list.innerHTML='<div class="mp-empty">Elige un departamento, escribe un municipio o busca un colegio.</div>';st.busy=false;return;}
   list.innerHTML='<div class="mp-empty">Buscando…</div>';
   var ok=initMap();
-  if(ok){st.layer.clearLayers();st.markers={};}
+  if(ok){st.layer.clearLayers();st.markers={};st.ap={};}
   var ctr=null;
   if(mun){
     try{var g=await (await fetch("/mapa/api/geo?"+new URLSearchParams({dep:dep,mun:mun}),{credentials:"same-origin"})).json();
@@ -15118,13 +15181,14 @@ async function buscar(){
   st.items=data.items||[];
   render(data);
   if(ok){st.items.forEach(function(it,i){if(it.lat!=null&&it.lng!=null)place(i,it.lat,it.lng,false);});}
+  await autoAprox(ok);
   $("mp-chip").textContent=(mun||dep||"Colombia")+" · "+st.items.length+(st.items.length===1?" resultado":" resultados");
   st.busy=false;
 }
 function render(data){
   var list=$("mp-list");
   if(!data.ok){list.innerHTML='<div class="mp-empty">No se pudo consultar ahora. Intenta de nuevo.</div>';return;}
-  if(!st.items.length){list.innerHTML='<div class="mp-empty">No hay colegios ni puntos registrados con ese criterio. El mapa quedó centrado en la zona: puedes validar la ubicación igual.</div>';return;}
+  if(!st.items.length){list.innerHTML='<div class="mp-empty">No hay colegios ni puntos registrados con ese criterio. El mapa quedó centrado en la zona: puedes validar la ubicación igual.'+(data.dir_total===0?'<br><b>El Directorio MEN está vacío</b> (no se ha importado), por eso solo se buscan tus clientes, sedes y prospectos.':'')+'</div>';return;}
   list.innerHTML=st.items.map(function(it,i){
     return '<div class="mp-it" role="button" tabindex="0" data-i="'+i+'"><span class="mp-tag" style="background:'+COL[it.tipo]+'">'+esc(NOM[it.tipo]||it.tipo)+'</span>'
       +'<h4>'+esc(it.nombre)+'</h4>'
@@ -15152,13 +15216,13 @@ function place(i,lat,lng,aprox){
   if(aprox){var a=(i*2.399)%(Math.PI*2),r=0.0011*(1+(i%5));lat+=Math.sin(a)*r;lng+=Math.cos(a)*r;}
   var mk=L.marker([lat,lng],{icon:L.divIcon({className:"mp-pin"+(aprox?" aprox":""),html:'<span style="background:'+COL[it.tipo]+'"></span>',iconSize:[20,20],iconAnchor:[10,10],popupAnchor:[0,-12]})})
     .bindPopup("<b>"+esc(it.nombre)+"</b><br>"+esc(it.direccion||it.municipio||"")+(aprox?"<br><i>Ubicación aproximada (municipio)</i>":""));
-  mk.on("click",function(){sel(i,false);});mk.addTo(st.layer);st.markers[i]=mk;
+  mk.on("click",function(){sel(i,false);});mk.addTo(st.layer);st.markers[i]=mk;(st.ap=st.ap||{})[i]=!!aprox;
 }
 async function ubicar(i,abrir){
   var it=st.items[i];if(!it)return false;
   var btn=document.querySelector('[data-loc="'+i+'"]'),s=$("mp-st-"+i);
   if(!initMap())return false;
-  if(st.markers[i]){if(abrir)sel(i,true);return true;}
+  if(st.markers[i]&&!(st.ap&&st.ap[i])){if(abrir)sel(i,true);return true;}
   if(s){s.className="mp-st";s.textContent="Ubicando…";}
   try{
     var p=new URLSearchParams({dep:it.departamento||$("mp-dep").value,mun:it.municipio||"",dir:it.direccion||"",nombre:it.direccion?"":it.nombre});
@@ -15171,11 +15235,37 @@ async function ubicar(i,abrir){
     return true;
   }catch(e){if(s)s.textContent="Error de red";return false;}
 }
+async function autoAprox(ok){
+  if(!ok||!st.items.length)return;
+  var grupos={},orden=[];
+  st.items.forEach(function(it,i){
+    if(it.lat!=null&&it.lng!=null)return;
+    var dep=it.departamento||$("mp-dep").value,mun=it.municipio||"";
+    if(!dep&&!mun)return;
+    var k=norm(dep)+"|"+norm(mun);
+    if(!grupos[k]){grupos[k]={dep:dep,mun:mun,idx:[]};orden.push(k);}
+    grupos[k].idx.push(i);
+  });
+  var pts=[];
+  for(var n=0;n<orden.length&&n<8;n++){
+    var g=grupos[orden[n]];
+    try{
+      var r=await (await fetch("/mapa/api/geo?"+new URLSearchParams({dep:g.dep,mun:g.mun}),{credentials:"same-origin"})).json();
+      if(!r.ok)continue;
+      g.idx.slice(0,40).forEach(function(i){
+        place(i,r.lat,r.lng,true);
+        var s=$("mp-st-"+i);if(s){s.className="mp-st";s.textContent="≈ Aproximada ("+(g.mun?"municipio":"departamento")+")";}
+      });
+      pts.push([r.lat,r.lng]);
+    }catch(e){}
+  }
+  if(pts.length&&st.map)st.map.fitBounds(pts,{padding:[50,50],maxZoom:13});
+}
 async function todos(){
   if(!st.items.length)return;
   var n=0;
   for(var i=0;i<st.items.length&&n<15;i++){
-    if(st.markers[i])continue;n++;
+    if(st.markers[i]&&!(st.ap&&st.ap[i]))continue;n++;
     await ubicar(i,false);await sleep(1200);
   }
   if(st.map&&Object.keys(st.markers).length>1){
@@ -16164,12 +16254,6 @@ def login():
           </script>
           {_c48_login_card()}
           <div class="sinai-portals">
-            <div class="sinai-pill-row">
-              <div class="pill-label">Accesos institucionales</div>
-              <a href="/login">Portal Docente</a>
-              <a href="/login">Secretaría</a>
-              <a href="/pqr">Radicar PQR</a>
-            </div>
             <div class="sinai-pill-row">
               <div class="pill-label">Conectividad para familias</div>
               <a href="/acudiente-asistencia">Consulta de Asistencia</a>
