@@ -5126,6 +5126,17 @@ body{background:#F8FAFC!important;color:#0F172A}
 .sinai-sub{color:rgba(255,255,255,.84)!important}
 .sinai-ver,.sinai-ver b{color:rgba(255,255,255,.78)!important}
 .sinai-card{border:1px solid #E2E8F0!important;border-radius:16px!important;box-shadow:0 20px 50px rgba(0,0,40,.28)!important}
+/* Portal de acceso: dos áreas separadas (marca | acceso) */
+.sinai-grid{gap:0!important;max-width:1180px!important;border-radius:26px;overflow:hidden;background:#fff;box-shadow:0 30px 80px rgba(0,0,40,.42)}
+.sinai-carousel{border-radius:0!important;box-shadow:none!important;border:0!important;height:auto!important;min-height:580px}
+.sinai-carousel .sinai-viewport{position:absolute!important;inset:0;height:auto!important}
+.sinai-access{position:relative;background:#fff!important;padding:38px 34px 24px;display:flex;flex-direction:column;justify-content:center}
+.sinai-access::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(180deg,#0020C2,#00C2FF,#00FF66)}
+.sinai-access h1{color:#0B1B4D!important}
+.sinai-sub{color:#475569!important}
+.sinai-ver,.sinai-ver b{color:#64748b!important}
+.sinai-card{box-shadow:none!important;border:1px solid #E2E8F0!important;background:#fff!important}
+@media(max-width:900px){.sinai-grid{border-radius:20px}.sinai-carousel{min-height:400px}.sinai-access{padding:30px 22px 20px}.sinai-access::before{right:0;bottom:auto;width:auto;height:5px;background:linear-gradient(90deg,#0020C2,#00C2FF,#00FF66)}}
 .sinai-btn{background:#0020C2!important}.sinai-btn:hover{background:#0018A8!important}
 /* Banner de convocatoria: gris oscuro con borde lateral neón */
 .c48-lg summary{background:#1E293B!important;border-left:6px solid #00FF66!important;border-radius:12px!important;box-shadow:0 6px 18px rgba(15,23,42,.18)!important;text-align:left!important;font-weight:600!important}
