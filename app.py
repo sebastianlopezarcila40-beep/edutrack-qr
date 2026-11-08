@@ -5126,17 +5126,18 @@ body{background:#F8FAFC!important;color:#0F172A}
 .sinai-sub{color:rgba(255,255,255,.84)!important}
 .sinai-ver,.sinai-ver b{color:rgba(255,255,255,.78)!important}
 .sinai-card{border:1px solid #E2E8F0!important;border-radius:16px!important;box-shadow:0 20px 50px rgba(0,0,40,.28)!important}
-/* Portal de acceso: dos áreas separadas (marca | acceso) */
-.sinai-grid{gap:0!important;max-width:1180px!important;border-radius:26px;overflow:hidden;background:#fff;box-shadow:0 30px 80px rgba(0,0,40,.42)}
-.sinai-carousel{border-radius:0!important;box-shadow:none!important;border:0!important;height:auto!important;min-height:580px}
-.sinai-carousel .sinai-viewport{position:absolute!important;inset:0;height:auto!important}
-.sinai-access{position:relative;background:#fff!important;padding:38px 34px 24px;display:flex;flex-direction:column;justify-content:center}
-.sinai-access::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(180deg,#0020C2,#00C2FF,#00FF66)}
-.sinai-access h1{color:#0B1B4D!important}
-.sinai-sub{color:#475569!important}
+/* Portal de acceso: tarjetas separadas, compacto */
+.sinai-portal{background:radial-gradient(900px 520px at 15% 0%,#dbe8ff,transparent 60%),radial-gradient(700px 420px at 100% 8%,#e3eeff,transparent 60%),#f5f7fb!important;padding:18px 20px 26px!important}
+.sinai-grid{max-width:1020px!important;gap:24px!important;grid-template-columns:1.3fr .9fr!important;align-items:center}
+.sinai-carousel{--car-logo:360px!important;border-radius:26px!important;height:380px!important;box-shadow:0 22px 56px rgba(0,32,194,.26)!important;border:1px solid rgba(255,255,255,.55)!important}
+.sinai-brand-logo{max-height:200px!important}
+.sinai-brand-slogan{font-size:clamp(13px,1.3vw,17px)!important}
+.sinai-nav{width:38px;height:38px;font-size:24px}
+.sinai-access h1{color:#0B1B4D!important;font-size:23px!important}
+.sinai-sub{color:#64748b!important;font-size:13px!important;margin-bottom:12px!important}
 .sinai-ver,.sinai-ver b{color:#64748b!important}
-.sinai-card{box-shadow:none!important;border:1px solid #E2E8F0!important;background:#fff!important}
-@media(max-width:900px){.sinai-grid{border-radius:20px}.sinai-carousel{min-height:400px}.sinai-access{padding:30px 22px 20px}.sinai-access::before{right:0;bottom:auto;width:auto;height:5px;background:linear-gradient(90deg,#0020C2,#00C2FF,#00FF66)}}
+.sinai-card{background:#fff!important;border:1px solid #E2E8F0!important;border-radius:16px!important;padding:20px 20px!important;box-shadow:0 10px 30px rgba(0,32,194,.10)!important}
+@media(max-width:900px){.sinai-grid{grid-template-columns:1fr!important}.sinai-carousel{height:320px!important;border-radius:22px!important}}
 .sinai-btn{background:#0020C2!important}.sinai-btn:hover{background:#0018A8!important}
 /* Banner de convocatoria: gris oscuro con borde lateral neón */
 .c48-lg summary{background:#1E293B!important;border-left:6px solid #00FF66!important;border-radius:12px!important;box-shadow:0 6px 18px rgba(15,23,42,.18)!important;text-align:left!important;font-weight:600!important}
