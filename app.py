@@ -4611,7 +4611,8 @@ _MODULOS_GERENCIA = [
     ]),
     ('Respaldo y cobertura', [
         ('/gerencia/respaldo-areas', '🧩 Respaldo: áreas de RR. HH. y TI'),
-        ('/gerencia/cobertura', '🌎 Cobertura: países y departamentos'),
+        ('/gerencia/cobertura', '🌎 Cobertura: países, departamentos y pueblos'),
+        ('/gerencia/logos-inicio', '🖼️ Logos y banner del inicio'),
         ('/gerencia/diagnostico-logos', '🖼️ Diagnóstico de logos'),
     ]),
 ]
@@ -5085,6 +5086,18 @@ body{background:#F8FAFC!important;color:#0F172A}
 .nav-logo-apple img.logo-micro{height:34px!important;width:auto!important;background:transparent!important;border-radius:0!important;padding:0!important;box-shadow:none!important}
 .sidebar-apple-glass{background:linear-gradient(180deg,#0020C2 0%,#001A9E 100%)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 .user-profile-circle{background:#0020C2!important}
+/* Barra superior de Gerencia/staff: una sola fila (antes se partía en dos y «Producción», el nombre y «Salir» quedaban abajo) */
+.navbar-top-apple{height:auto!important;min-height:60px;gap:12px;flex-wrap:nowrap!important;padding:0 18px!important;overflow:hidden}
+.navbar-top-apple .navbar-left{flex:1 1 auto;min-width:0;flex-wrap:nowrap!important;gap:12px}
+.navbar-top-apple .nb-brand{flex:0 0 auto;white-space:nowrap}
+.navbar-top-apple .navbar-module-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.navbar-top-apple .badge-env{flex:0 0 auto;white-space:nowrap}
+.navbar-top-apple .navbar-actions-right{flex:0 0 auto;flex-wrap:nowrap!important;gap:8px;white-space:nowrap}
+.navbar-top-apple .navbar-actions-right>*{flex:0 0 auto;white-space:nowrap}
+.navbar-top-apple .nav-ntp-clock,.navbar-top-apple .nav-api-ping,.navbar-top-apple .badge-periodo{font-size:11.5px}
+@media(max-width:1500px){.navbar-top-apple .nav-user-fullname{display:none}}
+@media(max-width:1320px){.navbar-top-apple .nav-ntp-clock{display:none}}
+@media(max-width:1120px){.navbar-top-apple .nav-api-ping,.navbar-top-apple .badge-periodo{display:none}}
 /* Tablero de roles de colegio */
 .role-topbar{background:#fff!important;color:#0F172A!important;border-bottom:1px solid #E2E8F0!important}
 .role-topbar .tb-left{gap:12px}
@@ -13874,16 +13887,16 @@ _FOOTER_COLS = [
 ]
 
 _FOOTER_CSS = """<style>
-.cf-foot{background:#1d1d1f;color:#a1a1a6;padding:52px 20px 24px;margin-top:12px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.cf-foot{background:linear-gradient(135deg,#0020C2,#000F66);color:rgba(255,255,255,.82);padding:52px 20px 24px;margin-top:12px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 .cf-in{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1.25fr repeat(4,1fr);gap:28px}
-.cf-foot h4{margin:0 0 14px;font-size:12px;font-weight:600;color:#f5f5f7;letter-spacing:.01em;line-height:1.3}
-.cf-foot a{display:block;margin:0 0 9px;font-size:12px;font-weight:400;line-height:1.4;color:#a1a1a6;text-decoration:none;transition:color .2s ease}
+.cf-foot h4{margin:0 0 14px;font-size:12px;font-weight:600;color:#fff;letter-spacing:.01em;line-height:1.3}
+.cf-foot a{display:block;margin:0 0 9px;font-size:12px;font-weight:400;line-height:1.4;color:rgba(255,255,255,.84);text-decoration:none;transition:color .2s ease}
 .cf-foot a:hover,.cf-foot a:focus-visible{color:#fff;text-decoration:none}
-.cf-foot a:focus-visible{outline:2px solid #6e6e73;outline-offset:2px;border-radius:4px}
-.cf-brand{font-weight:600;font-size:15px;color:#f5f5f7;margin-bottom:12px}
-.cf-foot p{margin:0 0 14px;font-size:12px;line-height:1.55;color:#a1a1a6}
-.cf-bot{max-width:1180px;margin:34px auto 0;padding-top:16px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;font-size:11px;font-weight:300;color:#86868b}
-.cf-foot .cf-bot a{display:inline;margin:0 0 0 16px;font-size:11px;font-weight:300;color:#86868b}
+.cf-foot a:focus-visible{outline:2px solid #fff;outline-offset:2px;border-radius:4px}
+.cf-brand{font-weight:600;font-size:15px;color:#fff;margin-bottom:12px}
+.cf-foot p{margin:0 0 14px;font-size:12px;line-height:1.55;color:rgba(255,255,255,.84)}
+.cf-bot{max-width:1180px;margin:34px auto 0;padding-top:16px;border-top:1px solid rgba(255,255,255,.28);display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;font-size:11px;font-weight:300;color:rgba(255,255,255,.78)}
+.cf-foot .cf-bot a{display:inline;margin:0 0 0 16px;font-size:11px;font-weight:300;color:rgba(255,255,255,.82)}
 .cf-foot .cf-bot a:hover{color:#fff}
 @media(max-width:1000px){.cf-in{grid-template-columns:repeat(2,1fr)}.cf-first{grid-column:1/-1}}
 @media(max-width:560px){.cf-in{grid-template-columns:1fr}.cf-foot .cf-bot a{margin:0 16px 0 0}}
@@ -66686,6 +66699,7 @@ def pagina_corporativa_procsis():
         else f'<a class="pc-cta-primary" href="{wa_link}" target="_blank" rel="noopener">Solicitar información</a>'
     )
     link_planes_foot = '<a href="/ventas">Planes</a>' if _puede_planes else '<a href="/contacto">Contacto comercial</a>'
+    banner_html = _banner_procsis_html()
     body = f"""
 <style>
 .pc{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;color:#0f172a;background:#fff;margin:0}}
@@ -66760,7 +66774,7 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
 .pc-soft-row{{background:#f5f5f7;border:0;border-radius:12px;padding:16px 18px;margin-bottom:10px;box-shadow:none}}
 .pc-soft-row h3{{margin:0 0 4px;color:#0F172A;font-size:15px;font-weight:600}}
 .pc-soft-row p{{margin:0;color:#86868b;font-size:13px}}
-.pc-foot{{background:#1d1d1f;color:#a1a1a6;padding:48px 20px 28px;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
+.pc-foot{{background:linear-gradient(135deg,#0020C2,#000F66);color:rgba(255,255,255,.84);padding:48px 20px 28px;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}}
 .pc-foot-in{{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:32px}}
 @media(max-width:800px){{.pc-foot-in{{grid-template-columns:1fr}}}}
 .pc-foot h4{{margin:0 0 12px;color:#f5f5f7;font-size:13px;font-weight:600;letter-spacing:-0.01em}}
@@ -66817,6 +66831,7 @@ border:1px solid rgba(0,0,0,.12);text-decoration:none;opacity:.9;background:#f5f
         <p>SIEE, boletines, reportes de reprobación y lenguaje alineados al contexto escolar del país.</p></div>
     </div>
   </section>
+  {banner_html}
   <section class="pc-band">
     <div class="pc-sec" style="padding-top:32px;padding-bottom:32px">
       <div class="pc-stats">
@@ -99024,6 +99039,8 @@ def _cob_init():
                                 "activo INTEGER DEFAULT 1, logo TEXT DEFAULT '', orden INTEGER DEFAULT 0, division VARCHAR(40) DEFAULT 'departamentos')"))
         db.session.execute(text("CREATE TABLE IF NOT EXISTS cobertura_deptos (id %s, pais VARCHAR(2), nombre VARCHAR(80), "
                                 "activo INTEGER DEFAULT 1, logo TEXT DEFAULT '', orden INTEGER DEFAULT 0)" % pk))
+        db.session.execute(text("CREATE TABLE IF NOT EXISTS cobertura_munis (id %s, depto_id INTEGER, nombre VARCHAR(120), "
+                                "activo INTEGER DEFAULT 1, orden INTEGER DEFAULT 0)" % pk))
         db.session.commit()
         n = db.session.execute(text("SELECT COUNT(*) FROM cobertura_paises")).scalar() or 0
         if int(n) == 0:
@@ -99081,13 +99098,19 @@ def api_public_cobertura():
     _cob_init()
     try:
         paises = db.session.execute(text("SELECT codigo, nombre, logo, division FROM cobertura_paises WHERE activo=1 ORDER BY orden, nombre")).fetchall()
-        deptos = db.session.execute(text("SELECT pais, nombre, logo FROM cobertura_deptos WHERE activo=1 ORDER BY orden, nombre")).fetchall()
+        deptos = db.session.execute(text("SELECT pais, nombre, logo, id FROM cobertura_deptos WHERE activo=1 ORDER BY orden, nombre")).fetchall()
     except Exception:
         db.session.rollback()
         paises, deptos = [], []
     por = {}
-    for p, n, lg in deptos:
-        por.setdefault(p, []).append({"n": n, "l": lg or ""})
+    munis = {}
+    try:
+        for _dm, _nm in db.session.execute(text("SELECT depto_id, nombre FROM cobertura_munis WHERE activo=1 ORDER BY nombre")).fetchall():
+            munis.setdefault(_dm, []).append(_nm)
+    except Exception:
+        db.session.rollback()
+    for p, n, lg, did in deptos:
+        por.setdefault(p, []).append({"n": n, "l": lg or "", "m": munis.get(did, [])})
     out = [{"c": c, "n": n, "f": lg or _cob_flag(c), "t": div or "departamentos", "d": por.get(c, [])} for c, n, lg, div in paises]
     r = jsonify({"paises": out})
     r.headers["Cache-Control"] = "public, max-age=120"
@@ -99168,7 +99191,7 @@ function paintG(){var p=cur();G.textContent='';if(!p)return;var q=(Q.value||'').
  p.d.forEach(function(d){if(q&&d.n.toLowerCase().indexOf(q)<0)return;n++;var r=el('div','cob-d');
   if(d.l){var im=el('img');im.alt='';im.loading='lazy';im.src=d.l;im.onerror=function(){if(im.parentNode)im.parentNode.replaceChild(el('i','',ini(d.n)),im);};r.appendChild(im);}
   else{r.appendChild(el('i','',ini(d.n)));}
-  r.appendChild(el('span','',d.n));G.appendChild(r);});
+  r.appendChild(el('span','',d.n));if(d.m&&d.m.length){var sm=el('small','',d.m.length+' pueblos');sm.style.cssText='margin-left:auto;font-size:10.5px;color:#64748b';r.appendChild(sm);r.title=d.m.join(', ');}G.appendChild(r);});
  if(!n)G.appendChild(el('div','cob-vac',p.d.length?'Sin resultados para esa búsqueda.':'Aún no hay zonas cargadas para este país.'));}
 function load(cb){if(D){cb();return;}
  fetch('/api/public/cobertura',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(j){
@@ -99272,7 +99295,7 @@ def _cob_mini(logo, nombre):
     return "<span class='cb-mono'>%s</span>" % _esc(ini)
 
 
-def _cob_html_admin(pais_sel, csrf):
+def _cob_html_admin(pais_sel, csrf, depto_sel=0):
     paises = _c48_q("SELECT codigo, nombre, activo, logo, division FROM cobertura_paises ORDER BY orden, nombre")
     cuentas = {}
     for r in _c48_q("SELECT pais, COUNT(*), SUM(CASE WHEN activo=1 THEN 1 ELSE 0 END) FROM cobertura_deptos GROUP BY pais"):
@@ -99303,12 +99326,15 @@ def _cob_html_admin(pais_sel, csrf):
         cod, nom, _a, _l, div = sel
         deps = _c48_q("SELECT id, nombre, activo, logo FROM cobertura_deptos WHERE pais=:p ORDER BY orden, nombre", p=cod)
         fd = ""
+        munis_cnt = {}
+        for _r in _c48_q("SELECT depto_id, COUNT(*), SUM(CASE WHEN activo=1 THEN 1 ELSE 0 END) FROM cobertura_munis GROUP BY depto_id"):
+            munis_cnt[_r[0]] = (int(_r[1] or 0), int(_r[2] or 0))
         for did, dn, da, dl in deps:
             dact = int(da or 0) == 1
             fd += ("<tr><td>%s</td><td><b>%s</b></td><td><span class='cb-tag %s'>%s</span></td><td>%s%s</td><td>%s</td></tr>"
                    % (_cob_mini(dl, dn), _esc(dn), "on" if dact else "off", "Activo" if dact else "Inactivo",
                       _cob_boton(csrf, "depto_toggle", {"id": did, "pais": cod}, "Desactivar" if dact else "Activar", "r" if dact else "g"),
-                      _cob_boton(csrf, "depto_eliminar", {"id": did, "pais": cod}, "Eliminar", "r", "¿Eliminar %s de la lista?" % dn),
+                      _cob_pueblos_link(cod, did, munis_cnt) + _cob_boton(csrf, "depto_eliminar", {"id": did, "pais": cod}, "Eliminar", "r", "¿Eliminar %s de la lista?" % dn),
                       _cob_form_logo(csrf, "depto_logo", {"id": did, "pais": cod}, bool(dl))))
         if not fd:
             fd = "<tr><td colspan='5'>Este país aún no tiene zonas cargadas.</td></tr>"
@@ -99321,7 +99347,94 @@ def _cob_html_admin(pais_sel, csrf):
                    "<div style='flex:1;min-width:220px'><label>Agregar zona a %s</label><input type='text' name='nombre' required maxlength='80'></div>"
                    "<button class='cb-btn g'>Agregar zona</button></form></div>"
                    % (_esc(nom), _esc(div or "departamentos"), masivo, fd, _cob_hidden(csrf, "depto_agregar", {"pais": cod}), _esc(nom)))
-    return tabla + detalle + agregar + ("<p class='cb-note'>Los cambios se reflejan en el sitio público en un par de minutos (el selector guarda una copia breve para cargar rápido).</p>")
+    pueblos = ""
+    try:
+        _did = int(depto_sel or 0)
+    except Exception:
+        _did = 0
+    if sel and _did:
+        pueblos = _cob_html_pueblos(sel[0], _did, csrf)
+    return tabla + detalle + pueblos + agregar + ("<p class='cb-note'>Los cambios se reflejan en el sitio público en un par de minutos (el selector guarda una copia breve para cargar rápido).</p>")
+
+
+def _cob_norm(s):
+    import unicodedata
+    s = unicodedata.normalize("NFD", str(s or ""))
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn").lower()
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def _cob_cargar_munis(depto_id=None):
+    """Carga los municipios de Colombia (DIVIPOLA) en los departamentos que todavía no tienen pueblos.
+    Quedan INACTIVOS hasta que Gerencia marque en cuáles opera PROCSIS. Devuelve cuántos agregó."""
+    data = _cargar_divipola() or {}
+    por_norm = {}
+    for k, v in data.items():
+        por_norm[_cob_norm(k)] = v or []
+    if depto_id:
+        filas = _c48_q("SELECT id, nombre FROM cobertura_deptos WHERE pais='CO' AND id=:i", i=depto_id)
+    else:
+        filas = _c48_q("SELECT id, nombre FROM cobertura_deptos WHERE pais='CO'")
+    total = 0
+    for did, dn in filas:
+        ya = db.session.execute(text("SELECT COUNT(*) FROM cobertura_munis WHERE depto_id=:i"), {"i": did}).scalar() or 0
+        if int(ya) > 0:
+            continue
+        vistos = set()
+        for j, m in enumerate(por_norm.get(_cob_norm(dn)) or []):
+            if isinstance(m, (list, tuple)) and m:
+                m = m[0]
+            nombre = " ".join(str(m).split())[:120]
+            if not nombre or nombre.lower() in vistos:
+                continue
+            vistos.add(nombre.lower())
+            db.session.execute(text("INSERT INTO cobertura_munis (depto_id, nombre, activo, orden) VALUES (:d, :n, 0, :o)"),
+                               {"d": did, "n": nombre, "o": j})
+            total += 1
+    db.session.commit()
+    return total
+
+
+def _cob_pueblos_link(cod, did, cnt):
+    tot, on = cnt.get(did, (0, 0))
+    return "<a class='cb-btn s o' href='/gerencia/cobertura?pais=%s&amp;depto=%d#pueblos'>Pueblos (%d/%d)</a> " % (_esc(cod), int(did), on, tot)
+
+
+def _cob_html_pueblos(cod, depto_id, csrf):
+    """Tarjeta con los pueblos (municipios) de un departamento: cuáles están activos y cuáles no."""
+    d = _c48_q("SELECT id, nombre FROM cobertura_deptos WHERE id=:i AND pais=:p", i=depto_id, p=cod)
+    if not d:
+        return ""
+    dn = d[0][1]
+    ms = _c48_q("SELECT id, nombre, activo FROM cobertura_munis WHERE depto_id=:i ORDER BY nombre", i=depto_id)
+    on = sum(1 for m in ms if int(m[2] or 0) == 1)
+    base = {"pais": cod, "depto_id": depto_id}
+    filas = ""
+    for mid, mn, ma in ms:
+        act = int(ma or 0) == 1
+        filas += ("<tr class='cb-mrow'><td><b>%s</b></td><td><span class='cb-tag %s'>%s</span></td><td>%s%s</td></tr>"
+                  % (_esc(mn), "on" if act else "off", "Activo" if act else "Inactivo",
+                     _cob_boton(csrf, "muni_toggle", dict(base, id=mid), "Desactivar" if act else "Activar", "r" if act else "g"),
+                     _cob_boton(csrf, "muni_eliminar", dict(base, id=mid), "Eliminar", "r", "¿Eliminar %s de la lista?" % mn.replace("'", ""))))
+    if not filas:
+        filas = ("<tr><td colspan='3'>Este departamento aún no tiene pueblos cargados. "
+                 "Agréguelos abajo o use «Cargar municipios oficiales».</td></tr>")
+    masivo = (_cob_boton(csrf, "muni_todos", dict(base, valor=1), "Activar todos", "g")
+              + _cob_boton(csrf, "muni_todos", dict(base, valor=0), "Desactivar todos", "r",
+                           "¿Marcar todos los pueblos de %s como inactivos?" % dn.replace("'", "")))
+    cargar = _cob_boton(csrf, "muni_cargar", base, "Cargar municipios oficiales (DIVIPOLA)", "o") if cod == "CO" else ""
+    buscar = ("<input type='text' id='cbMq' placeholder='Buscar pueblo…' style='max-width:260px;margin:10px 0' "
+              "oninput=\"var q=this.value.toLowerCase();document.querySelectorAll('.cb-mrow').forEach(function(r){"
+              "r.style.display=r.textContent.toLowerCase().indexOf(q)<0?'none':'';});\">")
+    return ("<div class='cb-card' id='pueblos'><h2>Pueblos de %s · %d activos de %d</h2>"
+            "<p>Marque en qué pueblos opera PROCSIS (activos) y en cuáles no. También puede agregar los que falten.</p>"
+            "<p>%s %s</p>%s<div class='cb-scroll'><table><tr><th>Pueblo / municipio</th><th>Estado</th><th>Acciones</th></tr>%s</table></div>"
+            "<form method='POST' action='/gerencia/cobertura' style='display:flex;gap:8px;margin-top:14px;align-items:end;flex-wrap:wrap'>%s"
+            "<div style='flex:1;min-width:240px'><label>Agregar pueblos a %s (separados por coma)</label>"
+            "<input type='text' name='nombre' required maxlength='400'></div>"
+            "<button class='cb-btn g'>Agregar</button></form>"
+            "<p style='margin-top:10px'><a class='cb-btn s o' href='/gerencia/cobertura?pais=%s#zonas'>← Volver a los departamentos</a></p></div>"
+            % (_esc(dn), on, len(ms), masivo, cargar, buscar, filas, _cob_hidden(csrf, "muni_agregar", base), _esc(dn), _esc(cod)))
 
 
 def _cob_accion(f, files):
@@ -99441,6 +99554,63 @@ def _cob_accion(f, files):
         db.session.commit()
         registrar_auditoria("Cobertura", "%s agregó la zona %s en %s" % (quien, nombre, c))
         return True, "Zona agregada."
+    if a.startswith("muni_"):
+        try:
+            dep = int(f.get("depto_id") or 0)
+        except Exception:
+            dep = 0
+        if a == "muni_toggle":
+            mid = id_valido()
+            if not mid:
+                return False, "Pueblo no válido."
+            db.session.execute(text("UPDATE cobertura_munis SET activo = CASE WHEN activo=1 THEN 0 ELSE 1 END WHERE id=:i"), {"i": mid})
+            db.session.commit()
+            return True, "Estado del pueblo actualizado."
+        if a == "muni_eliminar":
+            mid = id_valido()
+            if not mid:
+                return False, "Pueblo no válido."
+            db.session.execute(text("DELETE FROM cobertura_munis WHERE id=:i"), {"i": mid})
+            db.session.commit()
+            registrar_auditoria("Cobertura", "%s eliminó el pueblo #%d" % (quien, mid))
+            return True, "Pueblo eliminado."
+        if a == "muni_todos":
+            if not dep:
+                return False, "Departamento no válido."
+            v = 1 if str(f.get("valor")) == "1" else 0
+            db.session.execute(text("UPDATE cobertura_munis SET activo=:v WHERE depto_id=:d"), {"v": v, "d": dep})
+            db.session.commit()
+            registrar_auditoria("Cobertura", "%s %s todos los pueblos del departamento #%d" % (quien, "activó" if v else "desactivó", dep))
+            return True, "Pueblos actualizados."
+        if a == "muni_agregar":
+            c = cod_valido()
+            if not dep or not c or not db.session.execute(text("SELECT 1 FROM cobertura_deptos WHERE id=:i AND pais=:p"), {"i": dep, "p": c}).first():
+                return False, "Departamento no válido."
+            nombres = [" ".join(n.split())[:120] for n in re.split(r"[,;\n]+", f.get("nombre") or "")]
+            nombres = [n for n in nombres if n]
+            if not nombres:
+                return False, "Escriba al menos un pueblo."
+            mx = int(db.session.execute(text("SELECT COALESCE(MAX(orden), 0) FROM cobertura_munis WHERE depto_id=:d"), {"d": dep}).scalar() or 0)
+            agregados = 0
+            for n in nombres:
+                if db.session.execute(text("SELECT 1 FROM cobertura_munis WHERE depto_id=:d AND lower(nombre)=lower(:n)"), {"d": dep, "n": n}).first():
+                    continue
+                mx += 1
+                db.session.execute(text("INSERT INTO cobertura_munis (depto_id, nombre, activo, orden) VALUES (:d, :n, 1, :o)"), {"d": dep, "n": n, "o": mx})
+                agregados += 1
+            db.session.commit()
+            if not agregados:
+                return False, "Esos pueblos ya estaban en la lista."
+            registrar_auditoria("Cobertura", "%s agregó %d pueblo(s) al departamento #%d" % (quien, agregados, dep))
+            return True, "%d pueblo(s) agregado(s)." % agregados
+        if a == "muni_cargar":
+            if cod_valido() != "CO":
+                return False, "La carga automática de municipios solo está disponible para Colombia."
+            n = _cob_cargar_munis(dep or None)
+            if not n:
+                return False, "No se cargó nada: ese departamento ya tiene pueblos o no se encontró el archivo colombia_divipola.py junto a app.py."
+            registrar_auditoria("Cobertura", "%s cargó %d municipios oficiales" % (quien, n))
+            return True, "Se cargaron %d municipios. Quedaron inactivos: marque en cuáles opera PROCSIS." % n
     return False, "Acción no reconocida."
 
 
@@ -99454,6 +99624,10 @@ def gerencia_cobertura():
     if request.method == "POST":
         pr = (request.form.get("pais") or request.form.get("codigo") or "").strip().upper()
         destino = "/gerencia/cobertura" + (("?pais=" + pr + "#zonas") if re.match(r"^[A-Z]{2}$", pr) and (request.form.get("accion") or "").startswith("depto_") else "")
+        _acc_m = (request.form.get("accion") or "")
+        _dep_m = str(request.form.get("depto_id") or "")
+        if _acc_m.startswith("muni_") and re.match(r"^[A-Z]{2}$", pr):
+            destino = ("/gerencia/cobertura?pais=%s&depto=%s#pueblos" % (pr, _dep_m)) if _dep_m.isdigit() else ("/gerencia/cobertura?pais=%s#zonas" % pr)
         if not _ti_csrf_ok():
             session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
             return redirect(destino)
@@ -99466,9 +99640,9 @@ def gerencia_cobertura():
         session["ti_msg"] = ("ok" if ok else "err", mensaje)
         return redirect(destino)
     pais_sel = (request.args.get("pais") or "").strip().upper()
-    cuerpo = ("<h1>🌎 Cobertura · países y departamentos</h1><p class='sub'>Defina en qué países y departamentos opera PROCSIS. "
+    cuerpo = ("<h1>🌎 Cobertura · países, departamentos y pueblos</h1><p class='sub'>Defina en qué países y departamentos opera PROCSIS. "
               "Lo que deje activo aparece en el selector de la barra del sitio público, con su bandera o logo.</p>"
-              + _cob_html_admin(pais_sel, csrf))
+              + _cob_html_admin(pais_sel, csrf, request.args.get("depto")))
     return _cb_pagina("Cobertura", cuerpo)
 
 
@@ -99511,177 +99685,3 @@ def _resp_tarjeta(clave, a, es_super, csrf):
 
 @app.route("/gerencia/respaldo-areas", methods=["GET", "POST"])
 def gerencia_respaldo_areas():
-    """Gerencia crea UNA sola vez el acceso inicial de Recursos Humanos y el de TI. Lo demás lo hacen esas áreas."""
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    _ti_init()
-    rol = rol_actual()
-    es_super = rol == "Superadmin"
-    csrf = _acc_csrf()
-    areas = dict(_RESP_AREAS)
-    if request.method == "POST":
-        a = areas.get((request.form.get("area") or "").strip())
-        if a is None or not _ti_csrf_ok():
-            session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
-            return redirect("/gerencia/respaldo-areas")
-        titulo = AREAS_PROCSIS.get(a["rol"], {}).get("titulo", a["rol"])
-        marca = _ti_cfg(a["cfg"])
-        if marca and not es_super:
-            session["ti_msg"] = ("err", "El acceso inicial de %s ya fue creado. Desde ahora lo gestiona esa área." % titulo)
-            return redirect("/gerencia/respaldo-areas")
-        quien = session.get("usuario") or rol
-        reservado = False
-        if not marca:
-            try:
-                # reserva atómica: si dos personas envían a la vez, solo una pasa (clave primaria)
-                _c48_x("INSERT INTO ti_config (clave, valor) VALUES (:c, :v)", c=a["cfg"], v="pendiente|%s|%s" % (quien, _c48_now()))
-                reservado = True
-            except Exception:
-                db.session.rollback()
-                session["ti_msg"] = ("err", "El acceso inicial de %s ya fue creado." % titulo)
-                return redirect("/gerencia/respaldo-areas")
-        u, clave = _ti_crear_usuario(request.form.get("usuario"), request.form.get("nombre"), request.form.get("correo"), a["rol"], True,
-                                     genero=request.form.get("genero"))
-        if u is None:
-            if reservado:
-                _c48_x("DELETE FROM ti_config WHERE clave=:c", c=a["cfg"])
-            session["ti_msg"] = ("err", clave)
-            return redirect("/gerencia/respaldo-areas")
-        if reservado:
-            _c48_x("UPDATE ti_config SET valor=:v WHERE clave=:c", v="%s|%s|%s" % (u.usuario, quien, _c48_now()), c=a["cfg"])
-        registrar_auditoria("Respaldo de áreas", "%s creó el acceso inicial de %s: %s" % (quien, titulo, u.usuario))
-        return _ti_pagina_credencial("Acceso inicial de %s creado" % titulo, u.usuario, clave, a["rol"], "/gerencia/respaldo-areas",
-                                     "<p>Este usuario ya puede entrar al área de <b>%s</b>. Quedó con MFA obligatorio.</p>" % _esc(titulo))
-    tarjetas = "".join(_resp_tarjeta(k, a, es_super, csrf) for k, a in _RESP_AREAS)
-    pasos = ("<div class='cb-card'><h2>Cómo funciona</h2><ol class='cb-steps'>"
-             "<li>Gerencia crea aquí, <b>una sola vez</b>, el acceso inicial de Recursos Humanos y el de TI.</li>"
-             "<li>Recursos Humanos gestiona su equipo y solicita a TI las credenciales del personal.</li>"
-             "<li>TI crea y gestiona las cuentas y los accesos de las demás áreas.</li>"
-             "<li>Gerencia queda como supervisión: ve los módulos, pero no los opera.</li></ol></div>")
-    cuerpo = ("<h1>🧩 Respaldo de áreas</h1><p class='sub'>Las dos áreas base de la organización. Se crean una sola vez; "
-              "después cada área administra lo suyo.</p><div class='cb-grid'>%s</div>%s" % (tarjetas, pasos))
-    return _cb_pagina("Respaldo de áreas", cuerpo)
-
-
-# ───────────────────────── Búsqueda tolerante de logos de marca + diagnóstico ─────────────────────────
-_LOGO_EXTS = (".svg", ".png", ".webp", ".jpg", ".jpeg", ".gif")
-
-
-def _logo_flexible(fname, bases):
-    """Encuentra el logo aunque cambie la extensión, las mayúsculas o los separadores
-    (logo-procsis.svg → Logo_Procsis.PNG). Devuelve (carpeta, archivo) o None."""
-    nombre = os.path.basename(fname or "")
-    if not nombre or nombre != fname:
-        return None
-    stem, ext = os.path.splitext(nombre)
-    if ext.lower() not in _LOGO_EXTS:
-        return None
-    clave = re.sub(r"[^a-z0-9]", "", stem.lower())
-    marca = clave[4:] if clave.startswith("logo") else clave
-    if not marca:
-        return None
-    mejor = None
-    for base in bases:
-        try:
-            nombres = os.listdir(base)
-        except Exception:
-            continue
-        for n in nombres:
-            s, e = os.path.splitext(n)
-            if e.lower() not in _LOGO_EXTS:
-                continue
-            k = re.sub(r"[^a-z0-9]", "", s.lower())
-            if marca == "procsis" and "edutrack" in k:
-                continue
-            if k == clave:
-                rango = 0
-            elif k == marca:
-                rango = 1
-            elif k.startswith(clave) or k.startswith("logo" + marca) or k.startswith(marca + "logo"):
-                rango = 2
-            else:
-                continue
-            cand = (rango, _LOGO_EXTS.index(e.lower()), len(n), base, n)
-            if mejor is None or cand < mejor:
-                mejor = cand
-        if mejor is not None:
-            break
-    return (mejor[3], mejor[4]) if mejor else None
-
-
-@app.route("/gerencia/diagnostico-logos")
-def gerencia_diagnostico_logos():
-    _g = _guard_gerencia()
-    if _g is not None:
-        return _g
-    base = os.path.dirname(os.path.abspath(__file__))
-    carpetas = (("static/img", os.path.join(base, "static", "img")), ("static/uploads/logos", os.path.join(base, "static", "uploads", "logos")))
-    listado = ""
-    for rel, ruta in carpetas:
-        try:
-            nombres = sorted(os.listdir(ruta))
-        except Exception:
-            nombres = None
-        if nombres is None:
-            listado += "<p><b>%s</b>: la carpeta no existe o no se puede leer en este servidor.</p>" % _esc(rel)
-        else:
-            rel_logo = [n for n in nombres if re.search(r"logo|procsis|edutrack|favicon", n, re.I)]
-            listado += "<p><b>%s</b>: %d archivos. Relacionados con la marca: %s</p>" % (_esc(rel), len(nombres), ", ".join(_esc(n) for n in rel_logo[:60]) or "ninguno")
-    fila = _c48_q("SELECT logo_path FROM plataforma ORDER BY id ASC LIMIT 1")
-    lp = (fila[0][0] or "").strip() if fila else ""
-    if lp.startswith("data:image"):
-        guardado = "imagen guardada en la base de datos (%d KB)" % max(1, len(lp) // 1365)
-    else:
-        guardado = _esc(lp[:140]) if lp else "sin logo guardado (se usa el de respaldo del proyecto)"
-    bases = [os.path.join(base, "static", "img"), os.path.join("static", "img"), os.path.join(base, "static", "uploads", "logos")]
-    filas = ""
-    for nm in ("logo-procsis.svg", "logo-procsis.png", "logo-procsis.jpeg", "logo-procsis.jpg", "logo-edutrack.png", "logo-edutrack.jpeg", "favicon.png"):
-        exacto = any(os.path.isfile(os.path.join(b, nm)) for b in bases)
-        try:
-            alt = _logo_flexible(nm, bases)
-        except Exception:
-            alt = None
-        if exacto:
-            res = "<span class='cb-tag on'>Existe</span>"
-        elif alt:
-            res = "<span class='cb-tag wait'>Se sirve desde %s</span>" % _esc(alt[1])
-        else:
-            res = "<span class='cb-tag off'>No está: se muestra el logo de respaldo</span>"
-        filas += "<tr><td><code>/static/img/%s</code></td><td>%s</td><td><img src='/static/img/%s' alt='' style='height:38px;background:#fff;border:1px solid #e3e8f7;border-radius:8px;padding:3px'></td></tr>" % (_esc(nm), res, _esc(nm))
-    entorno = "Vercel (disco del proyecto de solo lectura)" if os.environ.get("VERCEL") else "servidor propio, Railway o Render"
-    cuerpo = ("<h1>🖼️ Diagnóstico de logos</h1><p class='sub'>Muestra qué archivos de marca encuentra el servidor y qué logo se está sirviendo.</p>"
-              "<div class='cb-card'><h2>Entorno</h2><p>%s</p><p>Logo corporativo guardado en Datos de la empresa: <b>%s</b></p>"
-              "<p>Así se ve ahora <code>/media/logo-corporativo</code>: <img src='/media/logo-corporativo' alt='' style='height:44px;vertical-align:middle;background:#fff;border:1px solid #e3e8f7;border-radius:8px;padding:3px'></p></div>"
-              "<div class='cb-card'><h2>Carpetas</h2>%s</div>"
-              "<div class='cb-card'><h2>Archivos que el sistema pide</h2><div class='cb-scroll'><table><tr><th>Dirección</th><th>Estado</th><th>Vista</th></tr>%s</table></div></div>"
-              % (_esc(entorno), guardado, listado, filas))
-    return _cb_pagina("Diagnóstico de logos", cuerpo)
-
-
-# --- Acceso del equipo (validar/solicitar usuarios con foto de cara) ---
-try:
-    from acceso_equipo import registrar_acceso_equipo
-    registrar_acceso_equipo(app, db, Usuario, crear_hash,
-                            registrar_auditoria=registrar_auditoria,
-                            rate_limit=_rate_limit, areas=AREAS_PROCSIS)
-except Exception as _e_ae:
-    print("acceso_equipo no cargó:", repr(_e_ae), flush=True)
-
-
-if __name__ == "__main__":
-    with app.app_context():
-        inicializar_bd()
-        try:
-            sincronizar_licencias()
-            aplicar_cambios_plan_pendientes()
-            _ciclo_facturacion_automatica()
-        except Exception as _e:
-            print("ciclo facturacion:", _e)
-    # debug=True en producción es lento (recarga automática, sin caché de templates)
-    # y un riesgo de seguridad grave (consola interactiva remota). threaded=True permite
-    # atender varias peticiones a la vez en vez de una por una. PORT lo asigna Railway/Render.
-    _debug_on = os.environ.get("FLASK_DEBUG", "0") == "1"
-    _port = int(os.environ.get("PORT", 5000))
-    app.run(debug=_debug_on, host="0.0.0.0", port=_port, threaded=True)
-
