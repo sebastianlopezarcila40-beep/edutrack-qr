@@ -5214,13 +5214,14 @@ _REVEAL_SNIPPET = r'''
 .sa-list .sa-item:nth-child(5){animation-delay:.24s}
 .sa-list .sa-item:nth-child(6){animation-delay:.30s}
 .sa-list .sa-item:nth-child(n+7){animation-delay:.36s}
-@media(prefers-reduced-motion:reduce){.rv,.sa-hero>*,.sa-list .sa-item{animation:none!important;transition:none!important;opacity:1!important;transform:none!important}}
+html.rv-fade .rv{transform:none!important;transition:opacity .6s ease var(--rv-d,0ms)!important}
+@media(prefers-reduced-motion:reduce){.sa-hero>*,.sa-list .sa-item{animation:none!important}}
 @media print{.rv{opacity:1!important;transform:none!important}}
 </style>
 <script>
 (function(){
   if(!("IntersectionObserver" in window))return;
-  if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)document.documentElement.className+=" rv-fade";
   /* [selector, retardo base en ms]. Dentro de cada grupo, cada hermano entra +100 ms después del anterior (máx. 6 pasos). */
   var GRUPOS=[
     [".sa-find .sa-wrap > h2, .sa-find .sa-wrap > .sa-lead, .sa-find .sa-wrap > .sa-search",0],
