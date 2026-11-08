@@ -5197,6 +5197,84 @@ body{background:#F8FAFC!important;color:#0F172A}
 .pc-foot a{color:#CBD5E1!important}.pc-foot a:hover{color:#fff!important}
 </style>"""
 
+_REVEAL_SNIPPET = r'''
+<style id="rv-css">
+/* ── Animaciones de entrada (solo transform + opacity: aceleradas por GPU) ── */
+@keyframes rvUp{from{opacity:0;transform:translate3d(0,24px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+.rv{opacity:0;transform:translate3d(0,30px,0);transition:opacity .7s cubic-bezier(.22,.61,.36,1) var(--rv-d,0ms),transform .7s cubic-bezier(.22,.61,.36,1) var(--rv-d,0ms);will-change:opacity,transform}
+.rv.in{opacity:1;transform:translate3d(0,0,0)}
+/* Entrada inmediata (sin JS) del encabezado de Sedes y de los resultados que se pintan al buscar */
+.sa-hero>*{animation:rvUp .8s cubic-bezier(.22,.61,.36,1) backwards}
+.sa-hero>*:nth-child(2){animation-delay:.1s}
+.sa-hero>*:nth-child(3){animation-delay:.2s}
+.sa-list .sa-item{animation:rvUp .55s cubic-bezier(.22,.61,.36,1) backwards}
+.sa-list .sa-item:nth-child(2){animation-delay:.06s}
+.sa-list .sa-item:nth-child(3){animation-delay:.12s}
+.sa-list .sa-item:nth-child(4){animation-delay:.18s}
+.sa-list .sa-item:nth-child(5){animation-delay:.24s}
+.sa-list .sa-item:nth-child(6){animation-delay:.30s}
+.sa-list .sa-item:nth-child(n+7){animation-delay:.36s}
+@media(prefers-reduced-motion:reduce){.rv,.sa-hero>*,.sa-list .sa-item{animation:none!important;transition:none!important;opacity:1!important;transform:none!important}}
+@media print{.rv{opacity:1!important;transform:none!important}}
+</style>
+<script>
+(function(){
+  if(!("IntersectionObserver" in window))return;
+  if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  /* [selector, retardo base en ms]. Dentro de cada grupo, cada hermano entra +100 ms después del anterior (máx. 6 pasos). */
+  var GRUPOS=[
+    [".sa-find .sa-wrap > h2, .sa-find .sa-wrap > .sa-lead, .sa-find .sa-wrap > .sa-search",0],
+    [".sa-cat",200],
+    [".sa-find .sa-actions",600],
+    [".promo-card",0],
+    [".corp-support-left, .corp-support-right",0],
+    [".corp-cta-card",0],
+    [".lp-section",0],
+    [".sx-card, .sx-sec, .sx-cta",0],
+    ["[data-reveal]",0]
+  ];
+  function revelar(el){
+    el.classList.add("in");
+    var fin=function(ev){
+      if(ev&&ev.target!==el)return;
+      el.removeEventListener("transitionend",fin);
+      el.classList.remove("rv","in");
+      el.style.removeProperty("--rv-d");
+    };
+    el.addEventListener("transitionend",fin);
+    setTimeout(fin,2500);
+  }
+  function crear(umbral){
+    return new IntersectionObserver(function(es,ob){
+      es.forEach(function(e){
+        if(!e.isIntersecting||e.intersectionRatio<umbral)return;
+        ob.unobserve(e.target);
+        revelar(e.target);
+      });
+    },{threshold:umbral,rootMargin:"0px 0px -6% 0px"});
+  }
+  try{
+    var io=crear(0.12),ioAlto=crear(0.001);
+    GRUPOS.forEach(function(g){
+      var padres=[],cuenta=[];
+      [].slice.call(document.querySelectorAll(g[0])).forEach(function(el){
+        if(el.classList.contains("rv"))return;
+        var i=padres.indexOf(el.parentNode);
+        if(i<0){padres.push(el.parentNode);cuenta.push(0);i=padres.length-1;}
+        var n=Math.min(cuenta[i]++,6);
+        el.style.setProperty("--rv-d",(g[1]+n*100)+"ms");
+        el.classList.add("rv");
+        (el.offsetHeight>window.innerHeight*1.2?ioAlto:io).observe(el);
+      });
+    });
+  }catch(err){
+    [].slice.call(document.querySelectorAll(".rv")).forEach(function(el){el.classList.remove("rv");});
+  }
+})();
+</script>
+'''
+
+
 def page(title, body):
     body = body or ""
     try:
@@ -5348,7 +5426,7 @@ window.addEventListener('pageshow', function (event) {
         body = _cobertura_inyectar(body)
     except Exception:
         pass
-    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0020C2"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{_TEMA_TIGO_GLASS_CSS}{html_anuncio_global()}{_bfcache_fix}{_n_guard}</body></html>"""
+    return f"""<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0020C2"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><title>{_tab}</title><link rel="icon" type="image/png" href="{_icon}"><link rel="shortcut icon" href="{_icon}"><link rel="apple-touch-icon" href="{_icon}"><style>:root{{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}}body{{padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right)}}@media(max-width:480px){{button,.btn,a.btn,input,select,textarea{{min-height:44px}}}}html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}img,video,canvas{{max-width:100%}}a,button,[role=button],label,select{{touch-action:manipulation;-webkit-tap-highlight-color:transparent}}input,select,textarea,button{{font-family:inherit}}@media(max-width:820px){{input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{{font-size:16px}}}}@supports(height:100dvh){{.app-layout-enterprise,.main-content-container{{min-height:100dvh}}}}</style>{CSS}</head><body>{body}{cookie_banner}{css_tema_global()}{_TEMA_TIGO_GLASS_CSS}{html_anuncio_global()}{_REVEAL_SNIPPET}{_bfcache_fix}{_n_guard}</body></html>"""
 
 
 
