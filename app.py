@@ -16100,6 +16100,8 @@ def login():
             "demostración y prueba piloto con Procsis. ¡Gracias!"
         )
         wa_link = (f"https://wa.me/{wa_num}?text={_uq(_wa_txt)}" if wa_num else "/ventas")
+        if _ctc_hay("Ventas", "whatsapp"):
+            wa_link = "/lineas/ventas/whatsapp"
         hor_lun = (getattr(_pp, "horario_lunes", None) or "8:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
         hor_sem = (getattr(_pp, "horario_semana", None) or "7:00 a.m. - 12:30 p.m. / 2:00 p.m. - 5:00 p.m.")
         hor_lun = (hor_lun or "").replace(" y ", " / ")
@@ -16380,8 +16382,7 @@ def login():
       </div>
       <div class="corp-support-right">
         <div class="corp-chan">
-          <div class="corp-pill"><span>📞</span><div><b>Línea telefónica</b><br>{corp_tel}</div></div>
-          <div class="corp-pill"><span>✉️</span><div><b>Correo electrónico</b><br>{corp_email}</div></div>
+          {_ctc_pills_html(corp_tel, corp_email)}
         </div>
         <div class="corp-hours">
           <div class="corp-hour"><b>Lunes</b><br>{hor_lun}</div>
@@ -25854,6 +25855,8 @@ def portal_whatsapp_soporte():
         "Mi consulta es: "
     )
     wa = f"https://wa.me/{wa_num}?text={quote(msg)}" if wa_num else ""
+    if _ctc_hay("Soporte", "whatsapp"):
+        wa = "/lineas/soporte/whatsapp"
     body = f"""
 <style>
 .w{{background:#f8fafc;min-height:100vh;font-family:Segoe UI,system-ui,Arial,sans-serif;color:#0f172a}}
@@ -100324,6 +100327,33 @@ _DCX_TITULOS = {"Gerencia": "Gerencia General", "CRTP": "Comisión de Regulació
 _DCX_LOGO = "/static/img/logo-procsis-mark.png"
 
 
+def _dcx_tipo_txt(t):
+    return {"resolucion": "Resolución interna", "comunicado": "Comunicado"}.get(t, "Oficio")
+
+
+def _dcx_md(t):
+    """Texto seguro con **negrita**."""
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", _esc(t))
+
+
+def _dcx_parrafos_md(t):
+    partes = [p.strip() for p in re.split(r"\n\s*\n", (t or "").replace("\r", "")) if p.strip()]
+    return "".join("<p>%s</p>" % _dcx_md(p).replace("\n", "<br>") for p in partes)
+
+
+_DCX_ONDA = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 240'><defs>"
+             "<linearGradient id='a' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#0B2A6B'/><stop offset='1' stop-color='#0A56E0'/></linearGradient>"
+             "<linearGradient id='b' x1='0' y1='1' x2='1' y2='0'><stop offset='0' stop-color='#00B8D4'/><stop offset='.55' stop-color='#22C55E'/>"
+             "<stop offset='1' stop-color='#86EFAC'/></linearGradient></defs>"
+             "<path d='M0 0H250C165 30 65 90 0 170Z' fill='url(#a)'/>"
+             "<path d='M0 176C66 96 168 34 262 4C196 46 84 124 0 214Z' fill='url(#b)'/></svg>")
+
+
+def _dcx_onda_uri():
+    from urllib.parse import quote
+    return "data:image/svg+xml;utf8," + quote(_DCX_ONDA)
+
+
 def _dcx_area_de_rol(rol):
     rol = (rol or "").strip()
     if rol in _DCX_GERENCIA:
@@ -100524,6 +100554,23 @@ _DCX_CSS = r"""<style>
 .dc-qr img{width:84px;height:84px;flex:0 0 auto}
 .dc-qr i{font-style:normal;word-break:break-all;color:#555}
 .dc-esp{width:250px}
+/* Comunicado a la opinión pública (diseño corporativo con ondas azul y verde) */
+.dc-com{padding:0 58px 130px;font-family:"Segoe UI",Arial,Helvetica,sans-serif;color:#0B2A6B;background:#fff}
+.dc-com .dc-wv1,.dc-com .dc-wv2{position:absolute;width:300px;height:240px;pointer-events:none}
+.dc-com .dc-wv1{left:0;top:0}
+.dc-com .dc-wv2{right:0;bottom:24px;transform:rotate(180deg)}
+.dc-com .dc-cbar{position:absolute;left:0;right:0;bottom:0;height:26px;background:linear-gradient(100deg,#0B2A6B,#0020C2,#0A56E0)}
+.dc-com .dc-clogo{text-align:center;padding-top:36px;position:relative}
+.dc-com .dc-clogo img{height:128px;display:block;margin:0 auto}
+.dc-com .dc-ctit{text-align:center;font-weight:800;font-size:30px;line-height:1.2;color:#0B2A6B;margin:30px 0 0;padding-bottom:12px;border-bottom:2px solid #1a56c4;text-transform:uppercase;position:relative}
+.dc-com .dc-cfecha{font-weight:800;font-size:16.5px;margin:22px 0 18px;position:relative}
+.dc-com .dc-cuerpo{position:relative}
+.dc-com .dc-cuerpo p{margin:0 0 14px;font-size:16.5px;line-height:1.55;text-align:justify;color:#0B2A6B}
+.dc-com .dc-cuerpo b{font-weight:800}
+.dc-com .dc-cfirma{display:flex;align-items:center;gap:18px;margin:26px 0 0;font-weight:800;font-size:16px;text-transform:uppercase;position:relative}
+.dc-com .dc-cfirma span{flex:1;height:1.5px;background:#1a56c4}
+.dc-com .dc-cfirma div{flex:0 0 auto}
+.dc-com .dc-qr{position:absolute;left:58px;bottom:44px;color:#0B2A6B}
 /* Oficio (carta corporativa con radicado y QR) */
 .dc-of{padding:0 56px 130px;font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.5;color:#222}
 .dc-of .dc-bar{height:8px;margin:0 -56px 34px;background:linear-gradient(100deg,#00E676,#00B8D4 32%,#0020C2)}
@@ -100600,6 +100647,23 @@ def _dcx_html_resolucion(d, qr, url):
              'Escanee el QR para validar su autenticidad.<br><i>%s</i></div></div>'
              '<div class="dc-firma">%s<div class="dc-fl"></div><b>%s</b><span>%s</span></div><div class="dc-esp"></div></div></div>'
              % (qr, _esc(d.get("codigo")), _esc(url), firma, _esc(d.get("firmante") or ""), _esc(d.get("cargo") or "")))
+    return "".join(p)
+
+
+def _dcx_html_comunicado(d, qr, url):
+    x = d.get("datos_j") or {}
+    onda = _dcx_onda_uri()
+    p = ['<div class="dc-page dc-com" id="dc-page">']
+    if d.get("estado") == "ANULADO":
+        p.append('<div class="dc-anulado">ANULADO</div>')
+    p.append('<img class="dc-wv1" src="%s" alt=""><img class="dc-wv2" src="%s" alt=""><div class="dc-cbar"></div>' % (onda, onda))
+    p.append('<div class="dc-clogo"><img src="%s" alt="PROCSIS"></div>' % _DCX_LOGO)
+    p.append('<div class="dc-ctit">%s</div>' % _esc(d.get("asunto") or ""))
+    p.append('<div class="dc-cfecha">%s, %s.</div>' % (_esc(d.get("ciudad")), _esc(_dcx_fecha_larga(d.get("fecha")))))
+    p.append('<div class="dc-cuerpo">%s</div>' % _dcx_parrafos_md(x.get("cuerpo") or ""))
+    p.append('<div class="dc-cfirma"><span></span><div>%s</div><span></span></div>' % _esc(d.get("firmante") or ""))
+    p.append('<div class="dc-qr"><img src="%s" alt="QR"><div><b>Documento verificable</b><br>%s<br>Escanee el QR para validar su autenticidad.</div></div></div>'
+             % (qr, _esc(d.get("codigo"))))
     return "".join(p)
 
 
@@ -100705,7 +100769,7 @@ def _dcx_pagina_lista(titulo, sub, area_fijo, ruta, nuevos):
     if area_fijo:
         cond.append("area=:af")
         p["af"] = area_fijo
-    if tipo in ("oficio", "resolucion"):
+    if tipo in ("oficio", "resolucion", "comunicado"):
         cond.append("tipo=:tp")
         p["tp"] = tipo
     if q:
@@ -100718,13 +100782,13 @@ def _dcx_pagina_lista(titulo, sub, area_fijo, ruta, nuevos):
         etq = "<span class='cb-tag %s'>%s</span>" % ("on" if es == "VIGENTE" else "off", "Vigente" if es == "VIGENTE" else "Anulado")
         filas += ("<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
                   "<td><a class='cb-btn s' href='/documentos-oficiales/ver/%d'>Ver / descargar</a></td></tr>"
-                  % (_esc(cod), "Resolución" if tp == "resolucion" else "Oficio", _esc((asu or "")[:90]), _esc(_dcx_area_titulo(ar)),
+                  % (_esc(cod), _dcx_tipo_txt(tp), _esc((asu or "")[:90]), _esc(_dcx_area_titulo(ar)),
                      _esc(fe), etq, did))
     if not filas:
         filas = "<tr><td colspan='7'>Aún no hay documentos aquí. Crea el primero con los botones de arriba.</td></tr>"
     botones = "".join("<a class='cb-btn g' href='%s'>%s</a> " % (_esc(h), _esc(t)) for t, h in nuevos)
     tabs = "".join("<a class='cb-btn s %s' href='%s?tipo=%s'>%s</a> " % ("" if tipo == k else "o", ruta, k, n)
-                   for k, n in (("", "Todos"), ("oficio", "Oficios"), ("resolucion", "Resoluciones")))
+                   for k, n in (("", "Todos"), ("oficio", "Oficios"), ("resolucion", "Resoluciones"), ("comunicado", "Comunicados")))
     buscar = ("<form method='GET' action='%s' style='display:inline-flex;gap:6px;margin-left:8px'><input type='text' name='q' value='%s' "
               "placeholder='Buscar código o asunto' style='width:210px'><button class='cb-btn s'>Buscar</button></form>" % (ruta, _esc(q)))
     cuerpo = ("<h1>%s</h1><p class='sub'>%s</p><div class='dcx-bar'>%s</div>"
@@ -100742,6 +100806,7 @@ def dcx_lista():
     nuevos = [("➕ Nuevo oficio", "/documentos-oficiales/nuevo/oficio")]
     if rol_actual() in _DCX_GERENCIA:
         nuevos.append(("➕ Nueva resolución", "/documentos-oficiales/nuevo/resolucion?area=Gerencia"))
+        nuevos.append(("➕ Nuevo comunicado", "/documentos-oficiales/nuevo/comunicado?area=Gerencia"))
     return _dcx_pagina_lista("📄 Documentos oficiales", "Oficios y resoluciones de PROCSIS con código único y QR de verificación. Se pueden descargar en PDF o imagen.",
                              None, "/documentos-oficiales", nuevos)
 
@@ -100752,9 +100817,10 @@ def dcx_comunicaciones():
     if g is not None:
         return g
     _dcx_init()
-    return _dcx_pagina_lista("📜 Comunicaciones de Gerencia", "Resoluciones internas y oficios emitidos por la Gerencia General.", "Gerencia",
+    return _dcx_pagina_lista("📜 Comunicaciones de Gerencia", "Comunicados públicos, resoluciones internas y oficios emitidos por la Gerencia General.", "Gerencia",
                              "/gerencia/comunicaciones", [("➕ Nueva resolución", "/documentos-oficiales/nuevo/resolucion?area=Gerencia"),
-                                                          ("➕ Nuevo oficio", "/documentos-oficiales/nuevo/oficio?area=Gerencia")])
+                                                          ("➕ Nuevo oficio", "/documentos-oficiales/nuevo/oficio?area=Gerencia"),
+                                                          ("➕ Nuevo comunicado", "/documentos-oficiales/nuevo/comunicado?area=Gerencia")])
 
 
 @app.route("/gerencia/crtp")
@@ -100766,7 +100832,8 @@ def dcx_crtp():
     return _dcx_pagina_lista("⚖️ Comisión de Regulación Tecnológica (CRTP)",
                              "Resoluciones internas y oficios de la CRTP: directrices de avance tecnológico, estándares operativos y regulación interna.",
                              "CRTP", "/gerencia/crtp", [("➕ Nueva resolución CRTP", "/documentos-oficiales/nuevo/resolucion?area=CRTP"),
-                                                         ("➕ Nuevo oficio CRTP", "/documentos-oficiales/nuevo/oficio?area=CRTP")])
+                                                         ("➕ Nuevo oficio CRTP", "/documentos-oficiales/nuevo/oficio?area=CRTP"),
+                                                         ("➕ Nuevo comunicado CRTP", "/documentos-oficiales/nuevo/comunicado?area=CRTP")])
 
 
 # ───────────────────────── Formularios
@@ -100799,7 +100866,39 @@ _DCX_RES_DEF = {
 }
 
 
+_DCX_COM_DEF = (
+    "**PROCSIS** informa a sus usuarios, aliados estratégicos y a la opinión pública en general que, en el marco de nuestro proceso de evolución, "
+    "actualización de identidad corporativa y consolidación en el mercado, nos mantenemos firmes en nuestra misión de ofrecer tecnología de alto impacto.\n\n"
+    "La compañía agradece el respaldo constante de nuestra comunidad, reafirmando que la innovación, el trabajo constante y el rigor en el servicio son, "
+    "y seguirán siendo, nuestra máxima prioridad.\n\n"
+    "Ante recientes comentarios, rumores e imprecisiones difundidas por terceros y actores del sector que intentan desviar la atención, **PROCSIS** expresa su "
+    "total postura de seriedad. Ningún tipo de especulación, estrategia de desinformación o intento de desacreditación por parte de otras compañías nos "
+    "apartará de nuestro rumbo ni del compromiso con el desarrollo tecnológico que lideramos.\n\n"
+    "Construir soluciones sólidas como **EduTrack** y actuar con rectitud es parte esencial de nuestra identidad. Las empresas serias responden con hechos, "
+    "innovación y resultados, no con controversias ajenas.\n\n"
+    "**PROCSIS** reafirma su confianza en el valor de su trabajo y en su determinación de continuar cumpliendo con total responsabilidad a todos nuestros usuarios.")
+
+
+def _dcx_form_com(area, csrf):
+    opts = "".join("<option value='%s'%s>%s</option>" % (_esc(a), " selected" if a == area else "", _esc(_dcx_area_titulo(a))) for a in ("Gerencia", "CRTP"))
+    campos = ("<div><label>Área que emite</label><select name='area'>%s</select></div>" % opts
+              + _dcx_campo("Título del comunicado", "asunto", "COMUNICADO A LA OPINIÓN PÚBLICA")
+              + _dcx_campo("Ciudad", "ciudad", "Caracolí, Antioquia")
+              + _dcx_campo("Fecha", "fecha", fecha_hoy(), "date")
+              + _dcx_area_txt("Texto del comunicado", "cuerpo", _DCX_COM_DEF, 16, "Separa los párrafos con una línea en blanco. Usa **texto** para resaltar en negrita.")
+              + _dcx_campo("Firma (entidad que firma)", "firmante", "GERENCIA GENERAL – PROCSIS"))
+    return ("<h1>Nuevo comunicado</h1><p class='sub'>Comunicado público con el diseño corporativo de PROCSIS. Al emitirlo recibe un código único y un QR "
+            "de verificación, y se puede descargar en PDF o imagen. Un comunicado emitido no se edita: si hay un error, se anula y se emite otro.</p>"
+            "<form method='POST' action='/documentos-oficiales/nuevo/comunicado'>"
+            "<input type='hidden' name='csrf' value='%s'><input type='hidden' name='area_def' value='%s'>"
+            "<div class='cb-card'><div class='dcx-fg'>%s</div>"
+            "<p style='margin-top:14px'><button class='cb-btn g'>Emitir comunicado</button> "
+            "<a class='cb-btn o' href='/documentos-oficiales'>Cancelar</a></p></div></form>" % (_esc(csrf), _esc(area), campos))
+
+
 def _dcx_form(tipo, area, csrf):
+    if tipo == "comunicado":
+        return _dcx_form_com(area, csrf)
     rol = rol_actual()
     es_ger = rol in _DCX_GERENCIA
     hoy = fecha_hoy()
@@ -100872,13 +100971,13 @@ def _dcx_form(tipo, area, csrf):
 def _dcx_crear(tipo, f, files, usuario, rol):
     """Crea el documento. Devuelve (ok, mensaje_o_id)."""
     es_ger = rol in _DCX_GERENCIA
-    if tipo == "resolucion" and not es_ger:
-        return False, "Las resoluciones solo las emite la Gerencia."
+    if tipo in ("resolucion", "comunicado") and not es_ger:
+        return False, "Las resoluciones y comunicados solo los emite la Gerencia."
     area = _dcx_area_de_rol(rol)
     if es_ger:
         a = (f.get("area") or f.get("area_def") or "Gerencia").strip()
         area = a if a in _dcx_areas_validas() else "Gerencia"
-        if tipo == "resolucion" and area not in ("Gerencia", "CRTP"):
+        if tipo in ("resolucion", "comunicado") and area not in ("Gerencia", "CRTP"):
             area = "Gerencia"
     fecha = (f.get("fecha") or "").strip()
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", fecha):
@@ -100914,6 +101013,12 @@ def _dcx_crear(tipo, f, files, usuario, rol):
                  "considerandos": lim_p("considerandos", 6000), "verbo": lim("verbo", 40) or "RESUELVEN:", "articulos": arts,
                  "cierre": lim("cierre", 80)}
         pref = "RES"
+    elif tipo == "comunicado":
+        emisor = "COMISIÓN DE REGULACIÓN TECNOLÓGICA (CRTP)" if area == "CRTP" else "GERENCIA GENERAL"
+        if not lim_p("cuerpo", 9000):
+            return False, "Escribe el texto del comunicado."
+        datos = {"cuerpo": lim_p("cuerpo", 9000)}
+        pref = "CMD"
     else:
         emisor = _dcx_area_titulo(area)
         if not lim_p("cuerpo", 8000):
@@ -100957,11 +101062,11 @@ def dcx_nuevo(tipo):
     g = _dcx_guard()
     if g is not None:
         return g
-    if tipo not in ("oficio", "resolucion"):
+    if tipo not in ("oficio", "resolucion", "comunicado"):
         return redirect("/documentos-oficiales")
     rol = rol_actual()
-    if tipo == "resolucion" and rol not in _DCX_GERENCIA:
-        return acceso_denegado("Las resoluciones solo las emite la Gerencia.")
+    if tipo in ("resolucion", "comunicado") and rol not in _DCX_GERENCIA:
+        return acceso_denegado("Las resoluciones y comunicados solo los emite la Gerencia.")
     csrf = _acc_csrf()
     if request.method == "POST":
         if not _ti_csrf_ok():
@@ -100996,7 +101101,12 @@ def dcx_ver(did):
         return acceso_denegado("Documento no disponible.")
     url = "%s/docs/verificar/%s" % (_dcx_base(), d["token"])
     qr = _dcx_qr_uri(url)
-    doc = _dcx_html_resolucion(d, qr, url) if d["tipo"] == "resolucion" else _dcx_html_oficio(d, qr, url, did)
+    if d["tipo"] == "resolucion":
+        doc = _dcx_html_resolucion(d, qr, url)
+    elif d["tipo"] == "comunicado":
+        doc = _dcx_html_comunicado(d, qr, url)
+    else:
+        doc = _dcx_html_oficio(d, qr, url, did)
     nombre = re.sub(r"[^A-Za-z0-9_-]", "_", d["codigo"] or "documento")
     js = _DCX_VISOR_JS.replace("__NOMBRE__", nombre).replace("__URL__", url.replace('"', ""))
     anular = ""
@@ -101013,7 +101123,7 @@ def dcx_ver(did):
              "<button id='dcx-copiar' class='cb-btn o'>🔗 Copiar enlace de verificación</button>"
              "<a class='cb-btn o' href='/documentos-oficiales'>← Volver</a> %s %s<span id='dcx-st' class='dcx-st'></span></div>" % (estado, anular))
     cuerpo = ("<h1>%s</h1><p class='sub'>%s · %s</p>%s<div class='dcx-lienzo' id='dcx-lienzo'><div class='dcx-escala' id='dc-escala'>%s</div></div>%s"
-              % (_esc(d["codigo"]), "Resolución interna" if d["tipo"] == "resolucion" else "Oficio", _esc(_dcx_area_titulo(d["area"])),
+              % (_esc(d["codigo"]), _dcx_tipo_txt(d["tipo"]), _esc(_dcx_area_titulo(d["area"])),
                  barra, doc, js))
     return _cb_pagina(d["codigo"], _DCX_CSS + cuerpo)
 
@@ -101061,7 +101171,7 @@ def dcx_verificar(token):
     integro = _dcx_huella(d) == (d.get("huella") or "")
     vigente = d["estado"] == "VIGENTE" and integro
     x = d.get("datos_j") or {}
-    filas = [("Código", d["codigo"]), ("Tipo", "Resolución interna" if d["tipo"] == "resolucion" else "Oficio"),
+    filas = [("Código", d["codigo"]), ("Tipo", _dcx_tipo_txt(d["tipo"])),
              ("Número", "%s de %s" % (d["numero"], d["anio"])), ("Área emisora", _dcx_area_titulo(d["area"])), ("Fecha", _dcx_fecha_larga(d["fecha"])),
              ("Asunto", d["asunto"])]
     if d["tipo"] == "oficio" and x.get("dest_nombre"):
@@ -101081,6 +101191,320 @@ def dcx_verificar(token):
               "<small>La verificación confirma que el documento está registrado en el sistema de PROCSIS y su estado actual. "
               "Por privacidad no se muestra el contenido completo.</small></div></div>" % (_DCX_LOGO, titulo, dl))
     return page("Verificación de documento", estilo + cuerpo)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  CORREOS Y LÍNEAS CORPORATIVAS (Soporte y Ventas) · se muestran en el panel principal
+#  - Gerencia registra números de WhatsApp, líneas telefónicas y correos por área.
+#  - El sistema normaliza los números (+57), ordena por área y reparte los chats de WhatsApp entre las líneas activas.
+# ════════════════════════════════════════════════════════════════════════════
+_CTC_INIT = {"ok": False}
+_CTC_CACHE = {"t": 0.0, "v": []}
+_CTC_AREAS = (("Soporte", "🎧", "soporte"), ("Ventas", "💼", "ventas"))
+_CTC_TIPOS = (("whatsapp", "WhatsApp", "💬"), ("telefono", "Línea telefónica", "📞"), ("correo", "Correo", "✉️"))
+_CTC_MSG = {"Soporte": "Hola, necesito soporte técnico de EduTrack.", "Ventas": "Hola, quiero información sobre los planes de EduTrack."}
+
+
+def _ctc_init():
+    if _CTC_INIT["ok"]:
+        return
+    pk = "INTEGER PRIMARY KEY AUTOINCREMENT" if db.engine.dialect.name == "sqlite" else "SERIAL PRIMARY KEY"
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS contactos_corp (id %s, area VARCHAR(40), tipo VARCHAR(12), etiqueta VARCHAR(80), valor VARCHAR(160), "
+            "mensaje VARCHAR(240) DEFAULT '', horario VARCHAR(120) DEFAULT '', activo INTEGER DEFAULT 1, orden INTEGER DEFAULT 0, "
+            "usos INTEGER DEFAULT 0)" % pk))
+        db.session.commit()
+        _CTC_INIT["ok"] = True
+    except Exception as e:
+        db.session.rollback()
+        print("contactos init:", e)
+
+
+def _ctc_invalidar():
+    _CTC_CACHE["t"] = 0.0
+
+
+def _ctc_num(v):
+    d = re.sub(r"\D", "", v or "")
+    if d.startswith("00"):
+        d = d[2:]
+    if len(d) == 10 and d.startswith("3"):
+        d = "57" + d
+    return d
+
+
+def _ctc_mostrar(d):
+    if d.startswith("57") and len(d) == 12:
+        return "+57 %s %s %s" % (d[2:5], d[5:8], d[8:])
+    return "+" + d
+
+
+def _ctc_correo_ok(v):
+    return bool(re.match(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$", v or ""))
+
+
+def _ctc_activos():
+    """Líneas y correos activos (copia en memoria de 30 s para no consultar la base en cada visita al inicio)."""
+    import time
+    if time.time() - _CTC_CACHE["t"] > 30:
+        filas = []
+        try:
+            _ctc_init()
+            for r in _c48_q("SELECT id, area, tipo, etiqueta, valor, mensaje, horario FROM contactos_corp WHERE activo=1 ORDER BY area, tipo, orden, id"):
+                filas.append({"id": r[0], "area": r[1], "tipo": r[2], "etiqueta": r[3] or "", "valor": r[4] or "", "mensaje": r[5] or "", "horario": r[6] or ""})
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        _CTC_CACHE["v"] = filas
+        _CTC_CACHE["t"] = time.time()
+    return _CTC_CACHE["v"]
+
+
+def _ctc_hay(area, tipo):
+    try:
+        return any(f["area"] == area and f["tipo"] == tipo for f in _ctc_activos())
+    except Exception:
+        return False
+
+
+def _ctc_wa_proximo(area):
+    """Reparte los chats: elige la línea de WhatsApp activa del área con menos chats enviados."""
+    from urllib.parse import quote
+    rows = _c48_q("SELECT id, valor, mensaje FROM contactos_corp WHERE area=:a AND tipo='whatsapp' AND activo=1 ORDER BY usos, orden, id LIMIT 1", a=area)
+    if not rows:
+        return None
+    cid, num, msg = rows[0]
+    _c48_x("UPDATE contactos_corp SET usos=COALESCE(usos,0)+1 WHERE id=:i", i=cid)
+    return "https://wa.me/%s?text=%s" % (num, quote(msg or _CTC_MSG.get(area, "")))
+
+
+@app.route("/lineas/<slug>/whatsapp")
+def ctc_whatsapp(slug):
+    area = {"soporte": "Soporte", "ventas": "Ventas"}.get((slug or "").lower())
+    url = None
+    if area:
+        try:
+            _ctc_init()
+            url = _ctc_wa_proximo(area)
+        except Exception as e:
+            db.session.rollback()
+            print("contactos wa:", e)
+    resp = redirect(url or "/contacto")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+_CTC_CSS = """<style>
+.ctc-g{display:grid;gap:12px;grid-template-columns:1fr;width:100%}
+.ctc-a{background:rgba(255,255,255,.82);border:1px solid rgba(0,184,212,.38);border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,32,194,.08);text-align:left}
+.ctc-h{font-weight:800;color:#0B1B4D;font-size:15px;margin-bottom:10px}
+.ctc-wa{display:block;text-align:center;background:linear-gradient(100deg,#00E676,#00B8D4 32%,#0020C2);color:#fff!important;font-weight:700;text-decoration:none;padding:12px 16px;border-radius:12px;margin-bottom:6px;text-shadow:0 1px 2px rgba(0,20,90,.4);transition:transform .2s ease,box-shadow .2s ease}
+.ctc-wa:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,32,194,.28)}
+.ctc-l{display:flex;gap:10px;align-items:center;text-decoration:none;color:#0B1B4D!important;padding:8px 10px;border:1px solid rgba(0,184,212,.28);border-radius:12px;margin-top:8px;font-size:13.5px;transition:background .2s,border-color .2s}
+.ctc-l:hover{background:rgba(0,184,212,.10);border-color:#00B8D4}
+.ctc-l small{display:block;color:#64748b;font-size:11.5px;font-weight:400}
+</style>"""
+
+
+def _ctc_pills_html(corp_tel, corp_email):
+    """Panel principal: líneas y correos organizados por área. Si Gerencia aún no configuró nada, deja las dos píldoras de siempre."""
+    from urllib.parse import quote
+    viejo = ('<div class="corp-pill"><span>📞</span><div><b>Línea telefónica</b><br>%s</div></div>'
+             '<div class="corp-pill"><span>✉️</span><div><b>Correo electrónico</b><br>%s</div></div>' % (_esc(corp_tel), _esc(corp_email)))
+    try:
+        filas = _ctc_activos()
+    except Exception:
+        return viejo
+    if not filas:
+        return viejo
+    bloques = []
+    for area, ico, slug in _CTC_AREAS:
+        mias = [f for f in filas if f["area"] == area]
+        if not mias:
+            continue
+        items = []
+        for tipo_k, tipo_n, tipo_i in _CTC_TIPOS:
+            for f in [x for x in mias if x["tipo"] == tipo_k]:
+                if tipo_k == "whatsapp":
+                    href = "https://wa.me/%s?text=%s" % (f["valor"], quote(f["mensaje"] or _CTC_MSG.get(area, "")))
+                    extra, dato = ' target="_blank" rel="noopener"', _ctc_mostrar(f["valor"])
+                elif tipo_k == "telefono":
+                    href, extra, dato = "tel:+" + f["valor"], "", _ctc_mostrar(f["valor"])
+                else:
+                    href, extra, dato = "mailto:" + f["valor"], "", f["valor"]
+                horario = ("<small>%s</small>" % _esc(f["horario"])) if f["horario"] else ""
+                items.append('<a class="ctc-l" href="%s"%s><span>%s</span><div><b>%s</b> · %s%s</div></a>'
+                             % (_esc(href), extra, tipo_i, _esc(f["etiqueta"] or tipo_n), _esc(dato), horario))
+        boton = ('<a class="ctc-wa" href="/lineas/%s/whatsapp" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>' % slug
+                 if any(x["tipo"] == "whatsapp" for x in mias) else "")
+        bloques.append('<div class="ctc-a"><div class="ctc-h">%s %s</div>%s%s</div>' % (ico, _esc(area if area != "Soporte" else "Soporte técnico"), boton, "".join(items)))
+    if not bloques:
+        return viejo
+    return _CTC_CSS + '<div class="ctc-g">%s</div>' % "".join(bloques)
+
+
+# ───────────────────────── Administración en Gerencia
+def _ctc_hidden(csrf, accion, campos):
+    h = "<input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='%s'>" % (_esc(csrf), _esc(accion))
+    for k, v in campos.items():
+        h += "<input type='hidden' name='%s' value='%s'>" % (_esc(k), _esc(v))
+    return h
+
+
+def _ctc_boton(csrf, accion, campos, texto, clase="", confirmar=""):
+    conf = (" onsubmit=\"return confirm('%s');\"" % _esc(confirmar).replace("'", "")) if confirmar else ""
+    return ("<form method='POST' action='/gerencia/contactos' style='display:inline'%s>%s<button class='cb-btn s %s'>%s</button></form> "
+            % (conf, _ctc_hidden(csrf, accion, campos), clase, _esc(texto)))
+
+
+def _ctc_accion(f):
+    a = (f.get("accion") or "").strip()
+    quien = session.get("usuario") or ""
+
+    def cid():
+        v = (f.get("id") or "").strip()
+        return int(v) if v.isdigit() else 0
+    if a == "agregar":
+        area = (f.get("area") or "").strip()
+        tipo = (f.get("tipo") or "").strip()
+        if area not in [x[0] for x in _CTC_AREAS] or tipo not in [x[0] for x in _CTC_TIPOS]:
+            return False, "Elige el área y el tipo."
+        bruto = (f.get("valor") or "").strip()
+        if tipo == "correo":
+            valor = bruto.lower()
+            if not _ctc_correo_ok(valor):
+                return False, "Ese correo no es válido."
+        else:
+            valor = _ctc_num(bruto)
+            if not (10 <= len(valor) <= 15):
+                return False, "El número debe tener entre 10 y 15 dígitos (ej.: 310 561 5621)."
+        if _c48_q("SELECT 1 FROM contactos_corp WHERE area=:a AND tipo=:t AND valor=:v", a=area, t=tipo, v=valor):
+            return False, "Ese dato ya está registrado en %s." % area
+        n = int((_c48_q("SELECT COUNT(*) FROM contactos_corp WHERE area=:a AND tipo=:t", a=area, t=tipo)[0][0]) or 0)
+        etiqueta = " ".join((f.get("etiqueta") or "").split())[:80] or ("Correo %d" % (n + 1) if tipo == "correo" else "Línea %d" % (n + 1))
+        mensaje = " ".join((f.get("mensaje") or "").split())[:240] if tipo == "whatsapp" else ""
+        if tipo == "whatsapp" and not mensaje:
+            mensaje = _CTC_MSG.get(area, "")
+        horario = " ".join((f.get("horario") or "").split())[:120]
+        mx = int((_c48_q("SELECT COALESCE(MAX(orden), -1) FROM contactos_corp WHERE area=:a AND tipo=:t", a=area, t=tipo)[0][0]) or 0)
+        _c48_x("INSERT INTO contactos_corp (area, tipo, etiqueta, valor, mensaje, horario, activo, orden, usos) VALUES (:a, :t, :e, :v, :m, :h, 1, :o, 0)",
+               a=area, t=tipo, e=etiqueta, v=valor, m=mensaje, h=horario, o=mx + 1)
+        _ctc_invalidar()
+        registrar_auditoria("Contactos corporativos", "%s agregó %s de %s: %s" % (quien, tipo, area, valor))
+        return True, "Agregado a %s." % area
+    if a in ("toggle", "eliminar", "subir", "bajar"):
+        i = cid()
+        r = _c48_q("SELECT area, tipo FROM contactos_corp WHERE id=:i", i=i) if i else []
+        if not r:
+            return False, "Registro no válido."
+        area, tipo = r[0]
+        if a == "toggle":
+            _c48_x("UPDATE contactos_corp SET activo = CASE WHEN activo=1 THEN 0 ELSE 1 END WHERE id=:i", i=i)
+        elif a == "eliminar":
+            _c48_x("DELETE FROM contactos_corp WHERE id=:i", i=i)
+            registrar_auditoria("Contactos corporativos", "%s eliminó el registro #%d" % (quien, i))
+        else:
+            ids = [x[0] for x in _c48_q("SELECT id FROM contactos_corp WHERE area=:a AND tipo=:t ORDER BY orden, id", a=area, t=tipo)]
+            p = ids.index(i)
+            q = p - 1 if a == "subir" else p + 1
+            if 0 <= q < len(ids):
+                ids[p], ids[q] = ids[q], ids[p]
+            for n, x in enumerate(ids):
+                _c48_x("UPDATE contactos_corp SET orden=:o WHERE id=:i", o=n, i=x)
+        _ctc_invalidar()
+        return True, "Listo."
+    if a == "reiniciar":
+        area = (f.get("area") or "").strip()
+        _c48_x("UPDATE contactos_corp SET usos=0 WHERE area=:a", a=area)
+        return True, "Contadores de %s reiniciados." % area
+    if a == "importar":
+        try:
+            p = plataforma()
+        except Exception:
+            p = None
+        cand = [("Soporte", "whatsapp", getattr(p, "contacto_whatsapp_soporte", "")), ("Soporte", "telefono", getattr(p, "contacto_publico_tel", "") or getattr(p, "telefono_soporte", "")),
+                ("Soporte", "correo", getattr(p, "contacto_publico_email", "") or getattr(p, "email_soporte", "")), ("Ventas", "whatsapp", getattr(p, "contacto_whatsapp_ventas", ""))]
+        n = 0
+        for area, tipo, bruto in cand:
+            bruto = (bruto or "").strip()
+            if not bruto:
+                continue
+            valor = bruto.lower() if tipo == "correo" else _ctc_num(bruto)
+            if (tipo == "correo" and not _ctc_correo_ok(valor)) or (tipo != "correo" and not (10 <= len(valor) <= 15)):
+                continue
+            if _c48_q("SELECT 1 FROM contactos_corp WHERE area=:a AND tipo=:t AND valor=:v", a=area, t=tipo, v=valor):
+                continue
+            _c48_x("INSERT INTO contactos_corp (area, tipo, etiqueta, valor, mensaje, horario, activo, orden, usos) VALUES (:a, :t, :e, :v, :m, '', 1, 0, 0)",
+                   a=area, t=tipo, e="Principal", v=valor, m=_CTC_MSG.get(area, "") if tipo == "whatsapp" else "")
+            n += 1
+        _ctc_invalidar()
+        return (True, "Se importaron %d dato(s) de la configuración actual." % n) if n else (False, "No había datos nuevos para importar.")
+    return False, "Acción no reconocida."
+
+
+@app.route("/gerencia/contactos", methods=["GET", "POST"])
+def ctc_admin():
+    g = _guard_gerencia()
+    if g is not None:
+        return g
+    _ctc_init()
+    csrf = _acc_csrf()
+    if request.method == "POST":
+        if not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Intenta de nuevo.")
+            return redirect("/gerencia/contactos")
+        try:
+            ok, msg = _ctc_accion(request.form)
+        except Exception as e:
+            db.session.rollback()
+            print("contactos:", e)
+            ok, msg = False, "No se pudo guardar el cambio. Intenta de nuevo."
+        session["ti_msg"] = ("ok" if ok else "err", msg)
+        return redirect("/gerencia/contactos")
+    _ctc_invalidar()
+    filas = _c48_q("SELECT id, area, tipo, etiqueta, valor, horario, activo, usos FROM contactos_corp ORDER BY area, tipo, orden, id")
+    nombres = {k: (n, i) for k, n, i in _CTC_TIPOS}
+    tarjetas = ""
+    for area, ico, slug in _CTC_AREAS:
+        mias = [r for r in filas if r[1] == area]
+        trs = ""
+        for cid_, _a, tipo, etq, val, hor, act, usos in mias:
+            dato = val if tipo == "correo" else _ctc_mostrar(val)
+            c = {"id": cid_}
+            trs += ("<tr><td>%s %s</td><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td><span class='cb-tag %s'>%s</span></td>"
+                    "<td>%s%s%s%s</td></tr>"
+                    % (nombres[tipo][1], _esc(nombres[tipo][0]), _esc(etq), _esc(dato), _esc(hor), (str(int(usos or 0)) if tipo == "whatsapp" else "—"),
+                       "on" if act else "off", "Activo" if act else "Inactivo",
+                       _ctc_boton(csrf, "subir", c, "↑"), _ctc_boton(csrf, "bajar", c, "↓"),
+                       _ctc_boton(csrf, "toggle", c, "Desactivar" if act else "Activar", "r" if act else "g"),
+                       _ctc_boton(csrf, "eliminar", c, "Eliminar", "r", "¿Eliminar este registro?")))
+        if not trs:
+            trs = "<tr><td colspan='7'>Aún no hay líneas ni correos en esta área.</td></tr>"
+        tarjetas += ("<div class='cb-card'><h2>%s %s</h2><div class='cb-scroll'><table><tr><th>Tipo</th><th>Nombre</th><th>Dato</th><th>Horario</th>"
+                     "<th>Chats enviados</th><th>Estado</th><th>Acciones</th></tr>%s</table></div><p style='margin-top:10px'>%s</p></div>"
+                     % (ico, _esc(area), trs, _ctc_boton(csrf, "reiniciar", {"area": area}, "Reiniciar contadores de WhatsApp", "o")))
+    opt_area = "".join("<option value='%s'>%s</option>" % (a, a) for a, _i, _s in _CTC_AREAS)
+    opt_tipo = "".join("<option value='%s'>%s</option>" % (k, n) for k, n, _i in _CTC_TIPOS)
+    agregar = ("<div class='cb-card'><h2>Agregar línea o correo</h2><form method='POST' action='/gerencia/contactos'>%s"
+               "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px'>"
+               "<div><label>Área</label><select name='area'>%s</select></div><div><label>Tipo</label><select name='tipo'>%s</select></div>"
+               "<div><label>Número o correo</label><input type='text' name='valor' required maxlength='160' placeholder='310 561 5621 o soporte@procsis.com'></div>"
+               "<div><label>Nombre (opcional)</label><input type='text' name='etiqueta' maxlength='80' placeholder='Línea 1, Ventas Medellín…'></div>"
+               "<div><label>Horario (opcional)</label><input type='text' name='horario' maxlength='120' placeholder='Lun–Vie 7:00 a.m. – 5:00 p.m.'></div>"
+               "<div><label>Mensaje inicial de WhatsApp (opcional)</label><input type='text' name='mensaje' maxlength='240' placeholder='Hola, necesito soporte…'></div></div>"
+               "<p style='margin-top:12px'><button class='cb-btn g'>Agregar</button></p></form></div>" % (_ctc_hidden(csrf, "agregar", {}), opt_area, opt_tipo))
+    vista = _ctc_pills_html("", "")
+    previa = ("<div class='cb-card'><h2>Así se ve en el panel principal</h2><p class='sub'>Es el bloque de soporte de la página de inicio. "
+              "Cada botón «Escribir por WhatsApp» abre el chat con la línea activa que menos chats ha recibido de esa área.</p>"
+              "<div style='max-width:420px'>%s</div></div>" % vista)
+    cuerpo = ("<h1>📞 Correos y líneas corporativas</h1><p class='sub'>Registra los números de WhatsApp, las líneas telefónicas y los correos de Soporte y Ventas. "
+              "El sistema normaliza los números (+57), los ordena por área y los muestra en el panel principal; el cliente toca WhatsApp y el chat se abre "
+              "directamente. Si hay varias líneas activas en un área, los chats se reparten entre ellas.</p>"
+              "<p>%s</p>%s%s%s" % (_ctc_boton(csrf, "importar", {}, "Importar datos de la configuración actual", "o"), agregar, tarjetas, previa))
+    return _cb_pagina("Correos y líneas corporativas", cuerpo)
 
 
 if __name__ == "__main__":
