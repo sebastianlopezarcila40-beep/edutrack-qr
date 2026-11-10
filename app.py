@@ -4850,6 +4850,9 @@ def _staff_nav_items(path, rol=""):
             items = [x for x in items if x[0] != "/logout"] + _add + [x for x in items if x[0] == "/logout"]
     if _dcx_rol_ok(rol) and not any(h.startswith("/documentos-oficiales") for h, _l in items):
         items = [x for x in items if x[0] != "/logout"] + [("/documentos-oficiales", "📄 Documentos oficiales")] + [x for x in items if x[0] == "/logout"]
+    if rol in _DCX_GERENCIA or _dcx_area_de_rol(rol) in ("Marketing", "Tecnologia", "Comercial", "Soporte", "Juridica"):
+        if not any(h == "/sitio/contenido" for h, _l in items):
+            items = [x for x in items if x[0] != "/logout"] + [("/sitio/contenido", "🧩 Contenido del sitio")] + [x for x in items if x[0] == "/logout"]
     if rol in _ROLES_MAPA and not any(h == "/mapa" for h, _l in items):
         items = [x for x in items if x[0] != "/logout"] + [("/mapa", "🗺️ Mapa de ubicaciones")] + [x for x in items if x[0] == "/logout"]
     if rol in ("Gerente", "Superadmin", "Administrador", "Gerencia"):
@@ -12685,7 +12688,7 @@ def _seed_web_menu_defaults():
             _WEB_MENU_SEED_OK["ok"] = True
             try:
                 # "Sedes y Puntos de Atencion" ahora vive en la barra principal, no dentro de Ayuda.
-                db.session.execute(text("DELETE FROM web_menu_items WHERE url='/puntos-atencion'"))
+                db.session.execute(text("DELETE FROM web_menu_items WHERE url='/puntos-atencion' AND seccion='ayuda'"))
                 db.session.commit()
             except Exception:
                 try:
@@ -14058,8 +14061,9 @@ def _footer_corporativo_html():
         anio = str(ahora().year)
     except Exception:
         anio = "2026"
+    _sw = _sw_pie_partes(correo, tel)
     cols = ""
-    for tit, links in _FOOTER_COLS:
+    for tit, links in (_sw["cols"] if _sw else _FOOTER_COLS):
         items = "".join(
             '<a href="%s"%s>%s</a>' % (_esc(h), ' target="_blank" rel="noopener noreferrer"' if h.startswith("http") else "", _esc(l))
             for l, h in links
@@ -14069,13 +14073,14 @@ def _footer_corporativo_html():
         _FOOTER_CSS
         + '<footer class="cf-foot"><div class="cf-in">'
         + '<div class="cf-first"><div class="cf-brand">PROCSIS</div><p>' + _esc(desc) + "</p>"
-        + '<a href="mailto:' + _esc(correo) + '">Soporte por correo</a>'
-        + '<a href="tel:' + _esc(tel) + '">Línea de atención</a>'
-        + '<a href="/contacto">Formulario de contacto</a></div>'
+        + (_sw["primera"] if _sw else ('<a href="mailto:' + _esc(correo) + '">Soporte por correo</a>'
+            + '<a href="tel:' + _esc(tel) + '">Línea de atención</a>' + '<a href="/contacto">Formulario de contacto</a>'))
+        + '</div>'
         + cols
         + '</div><div class="cf-bot"><span>© ' + anio + " PROCSIS · Soluciones digitales. Todos los derechos reservados.</span>"
-        + '<span><a href="/legal">Términos</a><a href="/cookies">Cookies</a><a href="/politicas/habeas">Habeas data</a>'
-        + '<a href="/puntos-atencion">Sedes y Puntos de Atención</a></span></div></footer>'
+        + (_sw["barra"] if _sw else ('<span><a href="/legal">Términos</a><a href="/cookies">Cookies</a><a href="/politicas/habeas">Habeas data</a>'
+            + '<a href="/puntos-atencion">Sedes y Puntos de Atención</a></span>'))
+        + '</div></footer>'
     )
 
 
@@ -21738,6 +21743,9 @@ def historial_estudiante_novedades(id):
 @app.route("/contacto")
 def contacto():
     """Contacto público con marca Procsis (no del colegio)."""
+    _nuevo = _ctc_pagina_contacto()
+    if _nuevo is not None:
+        return _nuevo
     p = plataforma()
     logo = logo_plataforma()
     empresa = p.empresa or DESARROLLADOR
@@ -100323,8 +100331,9 @@ _DCX_COD = {"Gerencia": "GER", "CRTP": "CRTP", "Soporte": "SOP", "Comercial": "C
             "Tecnologia": "TEC", "Desarrollador": "DEV", "Soluciones": "SOL"}
 _DCX_TITULOS = {"Gerencia": "Gerencia General", "CRTP": "Comisión de Regulación Tecnológica (CRTP)", "Comercial": "Área Comercial",
                 "Soporte": "Soporte Técnico", "Cobranza": "Cobranza", "Contabilidad": "Contabilidad", "Desarrollador": "Desarrollo",
-                "Soluciones": "Soluciones"}
+                "Soluciones": "Soluciones", "Marketing": "Comunicaciones y Mercadeo"}
 _DCX_LOGO = "/static/img/logo-procsis-mark.png"
+_DCX_COMUNICA = _DCX_GERENCIA + ("Marketing",)
 
 
 def _dcx_tipo_txt(t):
@@ -100807,6 +100816,8 @@ def dcx_lista():
     if rol_actual() in _DCX_GERENCIA:
         nuevos.append(("➕ Nueva resolución", "/documentos-oficiales/nuevo/resolucion?area=Gerencia"))
         nuevos.append(("➕ Nuevo comunicado", "/documentos-oficiales/nuevo/comunicado?area=Gerencia"))
+    elif rol_actual() in _DCX_COMUNICA:
+        nuevos.append(("➕ Nuevo comunicado", "/documentos-oficiales/nuevo/comunicado"))
     return _dcx_pagina_lista("📄 Documentos oficiales", "Oficios y resoluciones de PROCSIS con código único y QR de verificación. Se pueden descargar en PDF o imagen.",
                              None, "/documentos-oficiales", nuevos)
 
@@ -100881,12 +100892,15 @@ _DCX_COM_DEF = (
 
 def _dcx_form_com(area, csrf):
     opts = "".join("<option value='%s'%s>%s</option>" % (_esc(a), " selected" if a == area else "", _esc(_dcx_area_titulo(a))) for a in ("Gerencia", "CRTP"))
-    campos = ("<div><label>Área que emite</label><select name='area'>%s</select></div>" % opts
+    es_ger = rol_actual() in _DCX_GERENCIA
+    sel = ("<div><label>Área que emite</label><select name='area'>%s</select></div>" % opts) if es_ger else (
+        "<div><label>Área que emite</label><input type='text' value='%s' disabled></div>" % _esc(_dcx_area_titulo(area)))
+    campos = (sel
               + _dcx_campo("Título del comunicado", "asunto", "COMUNICADO A LA OPINIÓN PÚBLICA")
               + _dcx_campo("Ciudad", "ciudad", "Caracolí, Antioquia")
               + _dcx_campo("Fecha", "fecha", fecha_hoy(), "date")
               + _dcx_area_txt("Texto del comunicado", "cuerpo", _DCX_COM_DEF, 16, "Separa los párrafos con una línea en blanco. Usa **texto** para resaltar en negrita.")
-              + _dcx_campo("Firma (entidad que firma)", "firmante", "GERENCIA GENERAL – PROCSIS"))
+              + _dcx_campo("Firma (entidad que firma)", "firmante", "GERENCIA GENERAL – PROCSIS" if es_ger else "COMUNICACIONES Y MERCADEO – PROCSIS"))
     return ("<h1>Nuevo comunicado</h1><p class='sub'>Comunicado público con el diseño corporativo de PROCSIS. Al emitirlo recibe un código único y un QR "
             "de verificación, y se puede descargar en PDF o imagen. Un comunicado emitido no se edita: si hay un error, se anula y se emite otro.</p>"
             "<form method='POST' action='/documentos-oficiales/nuevo/comunicado'>"
@@ -100971,8 +100985,10 @@ def _dcx_form(tipo, area, csrf):
 def _dcx_crear(tipo, f, files, usuario, rol):
     """Crea el documento. Devuelve (ok, mensaje_o_id)."""
     es_ger = rol in _DCX_GERENCIA
-    if tipo in ("resolucion", "comunicado") and not es_ger:
-        return False, "Las resoluciones y comunicados solo los emite la Gerencia."
+    if tipo == "resolucion" and not es_ger:
+        return False, "Las resoluciones solo las emite la Gerencia."
+    if tipo == "comunicado" and rol not in _DCX_COMUNICA:
+        return False, "Los comunicados solo los emiten la Gerencia y Comunicaciones y Mercadeo."
     area = _dcx_area_de_rol(rol)
     if es_ger:
         a = (f.get("area") or f.get("area_def") or "Gerencia").strip()
@@ -101014,7 +101030,7 @@ def _dcx_crear(tipo, f, files, usuario, rol):
                  "cierre": lim("cierre", 80)}
         pref = "RES"
     elif tipo == "comunicado":
-        emisor = "COMISIÓN DE REGULACIÓN TECNOLÓGICA (CRTP)" if area == "CRTP" else "GERENCIA GENERAL"
+        emisor = "COMISIÓN DE REGULACIÓN TECNOLÓGICA (CRTP)" if area == "CRTP" else ("COMUNICACIONES Y MERCADEO" if area == "Marketing" else "GERENCIA GENERAL")
         if not lim_p("cuerpo", 9000):
             return False, "Escribe el texto del comunicado."
         datos = {"cuerpo": lim_p("cuerpo", 9000)}
@@ -101065,8 +101081,10 @@ def dcx_nuevo(tipo):
     if tipo not in ("oficio", "resolucion", "comunicado"):
         return redirect("/documentos-oficiales")
     rol = rol_actual()
-    if tipo in ("resolucion", "comunicado") and rol not in _DCX_GERENCIA:
-        return acceso_denegado("Las resoluciones y comunicados solo los emite la Gerencia.")
+    if tipo == "resolucion" and rol not in _DCX_GERENCIA:
+        return acceso_denegado("Las resoluciones solo las emite la Gerencia.")
+    if tipo == "comunicado" and rol not in _DCX_COMUNICA:
+        return acceso_denegado("Los comunicados solo los emiten la Gerencia y Comunicaciones y Mercadeo.")
     csrf = _acc_csrf()
     if request.method == "POST":
         if not _ti_csrf_ok():
@@ -101200,9 +101218,11 @@ def dcx_verificar(token):
 # ════════════════════════════════════════════════════════════════════════════
 _CTC_INIT = {"ok": False}
 _CTC_CACHE = {"t": 0.0, "v": []}
-_CTC_AREAS = (("Soporte", "🎧", "soporte"), ("Ventas", "💼", "ventas"))
+_CTC_AREAS = (("Soporte", "🎧", "soporte"), ("Ventas", "💼", "ventas"), ("Cartera", "🧾", "cartera"))
+_CTC_TIT = {"Soporte": "Soporte técnico", "Ventas": "Ventas", "Cartera": "Cartera y facturación"}
 _CTC_TIPOS = (("whatsapp", "WhatsApp", "💬"), ("telefono", "Línea telefónica", "📞"), ("correo", "Correo", "✉️"))
-_CTC_MSG = {"Soporte": "Hola, necesito soporte técnico de EduTrack.", "Ventas": "Hola, quiero información sobre los planes de EduTrack."}
+_CTC_MSG = {"Soporte": "Hola, necesito soporte técnico de EduTrack.", "Ventas": "Hola, quiero información sobre los planes de EduTrack.",
+            "Cartera": "Hola, tengo una consulta de cartera y facturación de EduTrack."}
 
 
 def _ctc_init():
@@ -101283,7 +101303,7 @@ def _ctc_wa_proximo(area):
 
 @app.route("/lineas/<slug>/whatsapp")
 def ctc_whatsapp(slug):
-    area = {"soporte": "Soporte", "ventas": "Ventas"}.get((slug or "").lower())
+    area = {"soporte": "Soporte", "ventas": "Ventas", "cartera": "Cartera"}.get((slug or "").lower())
     url = None
     if area:
         try:
@@ -101321,7 +101341,7 @@ def _ctc_pills_html(corp_tel, corp_email):
     if not filas:
         return viejo
     bloques = []
-    for area, ico, slug in _CTC_AREAS:
+    for area, ico, slug in _CTC_AREAS[:2]:
         mias = [f for f in filas if f["area"] == area]
         if not mias:
             continue
@@ -101340,10 +101360,56 @@ def _ctc_pills_html(corp_tel, corp_email):
                              % (_esc(href), extra, tipo_i, _esc(f["etiqueta"] or tipo_n), _esc(dato), horario))
         boton = ('<a class="ctc-wa" href="/lineas/%s/whatsapp" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>' % slug
                  if any(x["tipo"] == "whatsapp" for x in mias) else "")
-        bloques.append('<div class="ctc-a"><div class="ctc-h">%s %s</div>%s%s</div>' % (ico, _esc(area if area != "Soporte" else "Soporte técnico"), boton, "".join(items)))
+        bloques.append('<div class="ctc-a"><div class="ctc-h">%s %s</div>%s%s</div>' % (ico, _esc(_CTC_TIT.get(area, area)), boton, "".join(items)))
     if not bloques:
         return viejo
     return _CTC_CSS + '<div class="ctc-g">%s</div>' % "".join(bloques)
+
+
+def _ctc_pagina_contacto():
+    """Página pública /contacto con los canales que Gerencia registra por área. None si aún no hay datos (se usa la página anterior)."""
+    from urllib.parse import quote
+    try:
+        filas = _ctc_activos()
+    except Exception:
+        return None
+    if not filas:
+        return None
+    try:
+        p = plataforma()
+        empresa = (getattr(p, "empresa", "") or "PROCSIS")
+        slogan = (getattr(p, "slogan", "") or "Tecnología para una educación moderna y responsable")
+    except Exception:
+        empresa, slogan = "PROCSIS", "Tecnología para una educación moderna y responsable"
+    tarjetas = ""
+    for area, ico, slug in _CTC_AREAS:
+        mias = [f for f in filas if f["area"] == area]
+        if not mias:
+            continue
+        items = ""
+        for tipo_k, tipo_n, tipo_i in _CTC_TIPOS:
+            for f in [x for x in mias if x["tipo"] == tipo_k]:
+                if tipo_k == "whatsapp":
+                    href = "https://wa.me/%s?text=%s" % (f["valor"], quote(f["mensaje"] or _CTC_MSG.get(area, "")))
+                    extra, dato = ' target="_blank" rel="noopener"', _ctc_mostrar(f["valor"])
+                elif tipo_k == "telefono":
+                    href, extra, dato = "tel:+" + f["valor"], "", _ctc_mostrar(f["valor"])
+                else:
+                    href, extra, dato = "mailto:" + f["valor"], "", f["valor"]
+                hor = ("<small>%s</small>" % _esc(f["horario"])) if f["horario"] else ""
+                items += '<a class="ctc-l" href="%s"%s><span>%s</span><div><b>%s</b> · %s%s</div></a>' % (_esc(href), extra, tipo_i, _esc(f["etiqueta"] or tipo_n), _esc(dato), hor)
+        boton = ('<a class="ctc-wa" href="/lineas/%s/whatsapp" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>' % slug
+                 if any(x["tipo"] == "whatsapp" for x in mias) else "")
+        tarjetas += '<div class="ctc-a"><div class="ctc-h">%s %s</div>%s%s</div>' % (ico, _esc(_CTC_TIT.get(area, area)), boton, items)
+    cabecera = ('<section style="background:linear-gradient(100deg,#00E676,#00B8D4 32%%,#0020C2);color:#fff;border-radius:24px;padding:28px;display:flex;gap:20px;'
+                'align-items:center;flex-wrap:wrap;margin-bottom:20px"><img src="/static/img/logo-procsis-mark.png" alt="%s" style="width:88px;height:88px;object-fit:contain;'
+                'background:#fff;border-radius:20px;padding:10px"><div><div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;opacity:.9">Canales oficiales</div>'
+                '<h1 style="margin:6px 0;font-size:28px;color:#fff">%s</h1><p style="margin:0;opacity:.95">%s</p></div></section>' % (_esc(empresa), _esc(empresa), _esc(slogan)))
+    cuerpo = (_CTC_CSS + "<style>.ctc-g2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}</style>"
+              '<div style="max-width:1100px;margin:24px auto;padding:0 16px">' + cabecera + '<div class="ctc-g2">' + tarjetas + "</div>"
+              '<p style="text-align:center;margin-top:18px"><a class="btn" href="/login">Volver al login</a> '
+              '<a class="btn" href="/atencion-directivos" style="background:#334155">Atención al directivo · PQR</a></p></div>')
+    return page("Contacto", cuerpo)
 
 
 # ───────────────────────── Administración en Gerencia
@@ -101426,7 +101492,8 @@ def _ctc_accion(f):
         except Exception:
             p = None
         cand = [("Soporte", "whatsapp", getattr(p, "contacto_whatsapp_soporte", "")), ("Soporte", "telefono", getattr(p, "contacto_publico_tel", "") or getattr(p, "telefono_soporte", "")),
-                ("Soporte", "correo", getattr(p, "contacto_publico_email", "") or getattr(p, "email_soporte", "")), ("Ventas", "whatsapp", getattr(p, "contacto_whatsapp_ventas", ""))]
+                ("Soporte", "correo", getattr(p, "contacto_publico_email", "") or getattr(p, "email_soporte", "")), ("Ventas", "whatsapp", getattr(p, "contacto_whatsapp_ventas", "")), ("Cartera", "telefono", getattr(p, "telefono_cartera", "")),
+                ("Cartera", "correo", getattr(p, "email_cartera", ""))]
         n = 0
         for area, tipo, bruto in cand:
             bruto = (bruto or "").strip()
@@ -101485,7 +101552,7 @@ def ctc_admin():
             trs = "<tr><td colspan='7'>Aún no hay líneas ni correos en esta área.</td></tr>"
         tarjetas += ("<div class='cb-card'><h2>%s %s</h2><div class='cb-scroll'><table><tr><th>Tipo</th><th>Nombre</th><th>Dato</th><th>Horario</th>"
                      "<th>Chats enviados</th><th>Estado</th><th>Acciones</th></tr>%s</table></div><p style='margin-top:10px'>%s</p></div>"
-                     % (ico, _esc(area), trs, _ctc_boton(csrf, "reiniciar", {"area": area}, "Reiniciar contadores de WhatsApp", "o")))
+                     % (ico, _esc(_CTC_TIT.get(area, area)), trs, _ctc_boton(csrf, "reiniciar", {"area": area}, "Reiniciar contadores de WhatsApp", "o")))
     opt_area = "".join("<option value='%s'>%s</option>" % (a, a) for a, _i, _s in _CTC_AREAS)
     opt_tipo = "".join("<option value='%s'>%s</option>" % (k, n) for k, n, _i in _CTC_TIPOS)
     agregar = ("<div class='cb-card'><h2>Agregar línea o correo</h2><form method='POST' action='/gerencia/contactos'>%s"
@@ -101500,11 +101567,356 @@ def ctc_admin():
     previa = ("<div class='cb-card'><h2>Así se ve en el panel principal</h2><p class='sub'>Es el bloque de soporte de la página de inicio. "
               "Cada botón «Escribir por WhatsApp» abre el chat con la línea activa que menos chats ha recibido de esa área.</p>"
               "<div style='max-width:420px'>%s</div></div>" % vista)
-    cuerpo = ("<h1>📞 Correos y líneas corporativas</h1><p class='sub'>Registra los números de WhatsApp, las líneas telefónicas y los correos de Soporte y Ventas. "
+    cuerpo = ("<h1>📞 Correos y líneas corporativas</h1><p class='sub'>Registra los números de WhatsApp, las líneas telefónicas y los correos de Soporte, Ventas y Cartera. "
               "El sistema normaliza los números (+57), los ordena por área y los muestra en el panel principal; el cliente toca WhatsApp y el chat se abre "
               "directamente. Si hay varias líneas activas en un área, los chats se reparten entre ellas.</p>"
               "<p>%s</p>%s%s%s" % (_ctc_boton(csrf, "importar", {}, "Importar datos de la configuración actual", "o"), agregar, tarjetas, previa))
     return _cb_pagina("Correos y líneas corporativas", cuerpo)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  CONTENIDO DEL SITIO POR ÁREA · menú superior y pie de página
+#  Cada enlace tiene un área responsable (Comunicaciones y Mercadeo, TI, Ventas y Legal, Soporte). Cada área edita solo lo suyo;
+#  la Gerencia edita todo y puede reasignar responsables.
+# ════════════════════════════════════════════════════════════════════════════
+_SW_INIT = {"ok": False}
+_SW_CACHE = {"t": 0.0, "v": []}
+# (clave, título, zona, responsables por defecto)
+_SW_SECCIONES = [
+    ("procsis", "Menú · Explorar PROCSIS", "Menú superior", "Marketing"),
+    ("soluciones_ges", "Menú · Soluciones: Gestión Escolar", "Menú superior", "Tecnologia,Marketing"),
+    ("soluciones_seg", "Menú · Soluciones: Seguridad Perimetral", "Menú superior", "Tecnologia,Marketing"),
+    ("planes", "Menú · Planes y tarifas", "Menú superior", "Comercial"),
+    ("ayuda", "Menú · Ayuda y soporte", "Menú superior", "Soporte"),
+    ("footer_procsis", "Pie · PROCSIS (contacto)", "Pie de página", "Marketing"),
+    ("footer_educacion", "Pie · Procsis y la Educación", "Pie de página", "Marketing"),
+    ("footer_infra", "Pie · Infraestructura y Operación", "Pie de página", "Tecnologia"),
+    ("footer_corp", "Pie · Corporativo e Institucional", "Pie de página", "Marketing"),
+    ("footer_legal", "Pie · Procsis Ventas y Legal", "Pie de página", "Juridica,Comercial"),
+    ("footer_barra", "Pie · Barra inferior", "Pie de página", "Juridica,Comercial"),
+]
+_SW_TIT_PIE = [("footer_educacion", "Procsis y la Educación"), ("footer_infra", "Infraestructura y Operación"),
+               ("footer_corp", "Corporativo e Institucional"), ("footer_legal", "Procsis Ventas y Legal")]
+_SW_AREA_TXT = {"Marketing": "Comunicaciones y Mercadeo", "Tecnologia": "TI (Tecnología)", "Comercial": "Ventas y Comercial", "Juridica": "Legal (Jurídica)",
+                "Soporte": "Soporte y Atención al cliente", "Gerencia": "Gerencia"}
+# (sección, texto, url, orden, responsable)
+_SW_PIE_SEMILLA = [
+    ("footer_procsis", "Soporte por correo", "{{CORREO}}", 1, "Marketing"),
+    ("footer_procsis", "Línea de atención", "{{TELEFONO}}", 2, "Marketing"),
+    ("footer_procsis", "Formulario de contacto", "/contacto", 3, "Marketing"),
+    ("footer_educacion", "Procsis y el sector educativo", "/institucional/educacion", 1, "Marketing"),
+    ("footer_educacion", "EduTrack para directivos y rectores", "/institucional/directivos", 2, "Marketing"),
+    ("footer_educacion", "Gestión para la coordinación escolar", "/institucional/coordinacion", 3, "Marketing"),
+    ("footer_educacion", "Plataforma para docentes", "/institucional/docentes", 4, "Marketing"),
+    ("footer_educacion", "Portal de seguimiento para padres", "/institucional/familias", 5, "Marketing"),
+    ("footer_educacion", "Socios y alianzas", "/institucional/alianzas", 6, "Marketing"),
+    ("footer_infra", "Operador de infraestructura", "/institucional/infraestructura", 1, "Tecnologia"),
+    ("footer_infra", "Trust Center", "/institucional/trust-center", 2, "Tecnologia"),
+    ("footer_infra", "Política de privacidad", "/privacidad", 3, "Juridica"),
+    ("footer_infra", "Integridad y conformidad", "/institucional/integridad", 4, "Tecnologia"),
+    ("footer_infra", "Sustentabilidad", "/institucional/sustentabilidad", 5, "Tecnologia"),
+    ("footer_corp", "Equipo Directivo", "/#lideres", 1, "Marketing"),
+    ("footer_corp", "Prensa y Medios", "/institucional/prensa", 2, "Marketing"),
+    ("footer_corp", "Eventos y capacitaciones docentes", "/eventos-virtuales", 3, "Marketing"),
+    ("footer_corp", "Canal oficial de PQRSD", "/pqr", 4, "Soporte"),
+    ("footer_legal", "Condiciones de venta", "/institucional/condiciones-venta", 1, "Juridica,Comercial"),
+    ("footer_legal", "Política de entrega", "/institucional/politica-entrega", 2, "Juridica,Comercial"),
+    ("footer_legal", "Política de devoluciones", "/reembolsos", 3, "Juridica,Comercial"),
+    ("footer_legal", "Preguntas frecuentes", "/institucional/faq", 4, "Juridica,Comercial"),
+    ("footer_legal", "Superintendencia de Industria y Comercio", "https://www.sic.gov.co", 5, "Juridica,Comercial"),
+    ("footer_barra", "Términos", "/legal", 1, "Juridica,Comercial"),
+    ("footer_barra", "Cookies", "/cookies", 2, "Juridica,Comercial"),
+    ("footer_barra", "Habeas data", "/politicas/habeas", 3, "Juridica,Comercial"),
+    ("footer_barra", "Sedes y Puntos de Atención", "/puntos-atencion", 4, "Juridica,Comercial"),
+]
+
+
+def _sw_init():
+    if _SW_INIT["ok"]:
+        return
+    try:
+        _seed_web_menu_defaults()
+    except Exception:
+        pass
+    try:
+        db.session.execute(text("ALTER TABLE web_menu_items ADD COLUMN area VARCHAR(60)"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()   # la columna ya existía
+    try:
+        for clave, _t, _z, resp in _SW_SECCIONES:
+            db.session.execute(text("UPDATE web_menu_items SET area=:a WHERE seccion=:s AND (area IS NULL OR area='')"), {"a": resp, "s": clave})
+        db.session.commit()
+        for sec, et, url, orden, area in _SW_PIE_SEMILLA:
+            db.session.execute(text("INSERT INTO web_menu_items (seccion, etiqueta, url, orden, activo, area) SELECT :s,:e,:u,:o,TRUE,:a "
+                                    "WHERE NOT EXISTS (SELECT 1 FROM web_menu_items WHERE seccion=:s AND etiqueta=:e)"),
+                               {"s": sec, "e": et, "u": url, "o": orden, "a": area})
+            db.session.commit()
+        _SW_INIT["ok"] = True
+    except Exception as e:
+        db.session.rollback()
+        print("sitio init:", e)
+
+
+def _sw_invalidar():
+    _SW_CACHE["t"] = 0.0
+
+
+def _sw_filas_pie():
+    import time
+    if time.time() - _SW_CACHE["t"] > 60:
+        v = []
+        try:
+            _sw_init()
+            for r in _c48_q("SELECT seccion, etiqueta, url FROM web_menu_items WHERE seccion LIKE 'footer_%' AND activo=TRUE ORDER BY seccion, orden, id"):
+                v.append((r[0], r[1] or "", r[2] or "#"))
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        _SW_CACHE["v"] = v
+        _SW_CACHE["t"] = time.time()
+    return _SW_CACHE["v"]
+
+
+def _sw_href(url, correo, tel):
+    u = (url or "#").strip()
+    if u == "{{CORREO}}":
+        return "mailto:" + correo
+    if u == "{{TELEFONO}}":
+        return "tel:" + tel
+    return u
+
+
+def _sw_enlace(et, url, correo, tel):
+    h = _sw_href(url, correo, tel)
+    ext = ' target="_blank" rel="noopener noreferrer"' if h.startswith("http") else ""
+    return '<a href="%s"%s>%s</a>' % (_esc(h), ext, _esc(et))
+
+
+def _sw_pie_partes(correo, tel):
+    """Partes del pie de página desde la base (None si aún no hay datos: se usa el pie de siempre)."""
+    try:
+        filas = _sw_filas_pie()
+    except Exception:
+        return None
+    if not filas:
+        return None
+    por = {}
+    for sec, et, url in filas:
+        por.setdefault(sec, []).append((et, url))
+    # el correo y la línea de atención salen del módulo de contactos si Gerencia ya registró Soporte
+    try:
+        for f in _ctc_activos():
+            if f["area"] == "Soporte" and f["tipo"] == "correo":
+                correo = f["valor"]
+                break
+        for f in _ctc_activos():
+            if f["area"] == "Soporte" and f["tipo"] in ("telefono", "whatsapp"):
+                tel = "+" + f["valor"]
+                break
+    except Exception:
+        pass
+    primera = "".join(_sw_enlace(et, url, correo, tel) for et, url in por.get("footer_procsis", []))
+    cols = []
+    for clave, titulo in _SW_TIT_PIE:
+        if por.get(clave):
+            cols.append((titulo, [(et, _sw_href(url, correo, tel)) for et, url in por[clave]]))
+    barra = "<span>%s</span>" % "".join(_sw_enlace(et, url, correo, tel) for et, url in por.get("footer_barra", []))
+    return {"primera": primera, "cols": cols, "barra": barra}
+
+
+# ───────────────────────── Editor por área
+_SW_URL_OK = re.compile(r"^(/[^\s]*|#[^\s]*|https?://[^\s]+|mailto:[^\s]+|tel:[^\s]+|\{\{(CORREO|TELEFONO)\}\})$")
+
+
+def _sw_area_usuario(rol):
+    return _dcx_area_de_rol(rol)
+
+
+def _sw_puede(area_enlace, rol):
+    if rol in _DCX_GERENCIA:
+        return True
+    return _sw_area_usuario(rol) in [a.strip() for a in (area_enlace or "").split(",") if a.strip()]
+
+
+def _sw_guard():
+    if not requiere_login():
+        return redirect("/login")
+    rol = rol_actual()
+    if not _dcx_rol_ok(rol):
+        return acceso_denegado("Tu rol no tiene acceso al contenido del sitio.")
+    try:
+        from flask import g as _g_sw
+        _g_sw._staff_wrap = True
+    except Exception:
+        pass
+    _sw_init()
+    return None
+
+
+def _sw_boton(csrf, accion, campos, texto, clase="", confirmar=""):
+    conf = (" onsubmit=\"return confirm('%s');\"" % _esc(confirmar).replace("'", "")) if confirmar else ""
+    h = "<input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='%s'>" % (_esc(csrf), _esc(accion))
+    for k, v in campos.items():
+        h += "<input type='hidden' name='%s' value='%s'>" % (_esc(k), _esc(v))
+    return ("<form method='POST' action='/sitio/contenido' style='display:inline'%s>%s<button class='cb-btn s %s'>%s</button></form> "
+            % (conf, h, clase, _esc(texto)))
+
+
+def _sw_accion(f, rol, usuario):
+    a = (f.get("accion") or "").strip()
+    secciones = {s[0]: s for s in _SW_SECCIONES}
+
+    def iid():
+        v = (f.get("id") or "").strip()
+        return int(v) if v.isdigit() else 0
+    if a == "nuevo":
+        sec = (f.get("seccion") or "").strip()
+        if sec not in secciones:
+            return False, "Sección no válida."
+        resp = secciones[sec][3]
+        if not _sw_puede(resp, rol):
+            return False, "Esta sección no es de tu área."
+        et = " ".join((f.get("etiqueta") or "").split())[:120]
+        url = (f.get("url") or "").strip()[:255]
+        if not et:
+            return False, "Escribe el texto del enlace."
+        if not _SW_URL_OK.match(url or "#"):
+            return False, "El enlace debe empezar por /, #, https://, mailto: o tel:."
+        mx = int((_c48_q("SELECT COALESCE(MAX(orden), 0) FROM web_menu_items WHERE seccion=:s", s=sec)[0][0]) or 0)
+        propio = resp if rol in _DCX_GERENCIA else _sw_area_usuario(rol)
+        _c48_x("INSERT INTO web_menu_items (seccion, etiqueta, url, orden, activo, area) VALUES (:s,:e,:u,:o,TRUE,:a)", s=sec, e=et, u=url or "#", o=mx + 1, a=propio)
+        _sw_invalidar()
+        registrar_auditoria("Contenido del sitio", "%s agregó «%s» en %s" % (usuario, et, sec))
+        return True, "Enlace agregado."
+    i = iid()
+    r = _c48_q("SELECT seccion, area FROM web_menu_items WHERE id=:i", i=i) if i else []
+    if not r:
+        return False, "Enlace no válido."
+    sec, area = r[0]
+    area = area or secciones.get(sec, ("", "", "", ""))[3]
+    if not _sw_puede(area, rol):
+        return False, "Ese enlace es de otra área: %s." % ", ".join(_SW_AREA_TXT.get(x.strip(), x.strip()) for x in area.split(","))
+    if a == "editar":
+        et = " ".join((f.get("etiqueta") or "").split())[:120]
+        url = (f.get("url") or "").strip()[:255]
+        if not et:
+            return False, "Escribe el texto del enlace."
+        if not _SW_URL_OK.match(url or "#"):
+            return False, "El enlace debe empezar por /, #, https://, mailto: o tel:."
+        _c48_x("UPDATE web_menu_items SET etiqueta=:e, url=:u WHERE id=:i", e=et, u=url or "#", i=i)
+        msg = "Enlace actualizado."
+    elif a == "toggle":
+        _c48_x("UPDATE web_menu_items SET activo = NOT COALESCE(activo, TRUE) WHERE id=:i", i=i)
+        msg = "Visibilidad actualizada."
+    elif a == "eliminar":
+        _c48_x("DELETE FROM web_menu_items WHERE id=:i", i=i)
+        msg = "Enlace eliminado."
+    elif a in ("subir", "bajar"):
+        ids = [x[0] for x in _c48_q("SELECT id FROM web_menu_items WHERE seccion=:s ORDER BY orden, id", s=sec)]
+        p = ids.index(i)
+        q = p - 1 if a == "subir" else p + 1
+        if 0 <= q < len(ids):
+            ids[p], ids[q] = ids[q], ids[p]
+        for n, x in enumerate(ids):
+            _c48_x("UPDATE web_menu_items SET orden=:o WHERE id=:i", o=n + 1, i=x)
+        msg = "Orden actualizado."
+    elif a == "asignar":
+        if rol not in _DCX_GERENCIA:
+            return False, "Solo la Gerencia reasigna responsables."
+        validas = [x for x in (f.get("responsables") or "").replace(" ", "").split(",") if x in _SW_AREA_TXT or x in AREAS_PROCSIS]
+        if not validas:
+            return False, "Indica al menos un área válida."
+        _c48_x("UPDATE web_menu_items SET area=:a WHERE id=:i", a=",".join(validas), i=i)
+        msg = "Responsables actualizados."
+    else:
+        return False, "Acción no reconocida."
+    _sw_invalidar()
+    registrar_auditoria("Contenido del sitio", "%s: %s (#%d)" % (usuario, a, i))
+    return True, msg
+
+
+@app.route("/sitio/contenido", methods=["GET", "POST"])
+def sw_contenido():
+    g = _sw_guard()
+    if g is not None:
+        return g
+    rol, usuario = rol_actual(), session.get("usuario") or ""
+    csrf = _acc_csrf()
+    if request.method == "POST":
+        if not _ti_csrf_ok():
+            session["ti_msg"] = ("err", "La sesión del formulario venció. Intenta de nuevo.")
+            return redirect("/sitio/contenido")
+        try:
+            ok, msg = _sw_accion(request.form, rol, usuario)
+        except Exception as e:
+            db.session.rollback()
+            print("sitio:", e)
+            ok, msg = False, "No se pudo guardar el cambio. Intenta de nuevo."
+        session["ti_msg"] = ("ok" if ok else "err", msg)
+        return redirect("/sitio/contenido")
+    es_ger = rol in _DCX_GERENCIA
+    mi_area = _sw_area_usuario(rol)
+    filas = _c48_q("SELECT id, seccion, etiqueta, url, activo, area FROM web_menu_items ORDER BY seccion, orden, id")
+    por = {}
+    for r in filas:
+        por.setdefault(r[1], []).append(r)
+    campo = "width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cfd8f3;border-radius:10px;font-size:13px"
+    bloques = ""
+    hay = False
+    for clave, titulo, zona, resp in _SW_SECCIONES:
+        mias = [r for r in por.get(clave, []) if _sw_puede(r[5] or resp, rol)]
+        puede_agregar = _sw_puede(resp, rol)
+        if not es_ger and not mias and not puede_agregar:
+            continue
+        hay = True
+        trs = ""
+        for iid_, _s, et, url, act, area in por.get(clave, []):
+            area = area or resp
+            ed = _sw_puede(area, rol)
+            quien = ", ".join(_SW_AREA_TXT.get(x.strip(), x.strip()) for x in area.split(","))
+            c = {"id": iid_}
+            if ed:
+                celda = ("<form method='POST' action='/sitio/contenido' style='display:flex;gap:6px;flex-wrap:wrap'><input type='hidden' name='csrf' value='%s'>"
+                         "<input type='hidden' name='accion' value='editar'><input type='hidden' name='id' value='%d'>"
+                         "<input type='text' name='etiqueta' value='%s' style='%s;flex:1;min-width:170px' maxlength='120'>"
+                         "<input type='text' name='url' value='%s' style='%s;flex:1;min-width:170px' maxlength='255'><button class='cb-btn s'>Guardar</button></form>"
+                         % (_esc(csrf), iid_, _esc(et), campo, _esc(url), campo))
+                acc = (_sw_boton(csrf, "subir", c, "↑") + _sw_boton(csrf, "bajar", c, "↓")
+                       + _sw_boton(csrf, "toggle", c, "Ocultar" if act else "Mostrar", "r" if act else "g")
+                       + _sw_boton(csrf, "eliminar", c, "Eliminar", "r", "¿Eliminar este enlace?"))
+            else:
+                celda = "<span style='color:#64748b'>%s → %s</span>" % (_esc(et), _esc(url))
+                acc = "<span class='cb-note'>Solo lectura</span>"
+            asign = ""
+            if es_ger:
+                asign = ("<form method='POST' action='/sitio/contenido' style='margin-top:6px'><input type='hidden' name='csrf' value='%s'>"
+                         "<input type='hidden' name='accion' value='asignar'><input type='hidden' name='id' value='%d'>"
+                         "<input type='text' name='responsables' value='%s' style='%s;max-width:230px' title='Áreas separadas por coma'> "
+                         "<button class='cb-btn s o'>Asignar</button></form>" % (_esc(csrf), iid_, _esc(area), campo))
+            trs += ("<tr><td>%s</td><td><span class='cb-tag %s'>%s</span></td><td style='font-size:12px'>%s%s</td><td>%s</td></tr>"
+                    % (celda, "on" if act else "off", "Visible" if act else "Oculto", _esc(quien), asign, acc))
+        if not trs:
+            trs = "<tr><td colspan='4'>Sin enlaces todavía.</td></tr>"
+        nuevo = ""
+        if puede_agregar:
+            nuevo = ("<form method='POST' action='/sitio/contenido' style='display:flex;gap:6px;flex-wrap:wrap;margin-top:10px'>"
+                     "<input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='nuevo'><input type='hidden' name='seccion' value='%s'>"
+                     "<input type='text' name='etiqueta' placeholder='Texto del enlace' required maxlength='120' style='%s;flex:1;min-width:190px'>"
+                     "<input type='text' name='url' placeholder='/ruta, https://… o mailto:' required maxlength='255' style='%s;flex:1;min-width:190px'>"
+                     "<button class='cb-btn g'>➕ Agregar enlace</button></form>" % (_esc(csrf), _esc(clave), campo, campo))
+        bloques += ("<div class='cb-card'><h2>%s</h2><p class='cb-note'>%s · Responsable: %s</p><div class='cb-scroll'><table>"
+                    "<tr><th>Enlace (texto y destino)</th><th>Estado</th><th>Responsable</th><th>Acciones</th></tr>%s</table></div>%s</div>"
+                    % (_esc(titulo), _esc(zona), _esc(", ".join(_SW_AREA_TXT.get(x.strip(), x.strip()) for x in resp.split(","))), trs, nuevo))
+    if not hay:
+        bloques = "<div class='cb-card'><p>Tu área no tiene secciones asignadas en el menú ni en el pie de página.</p></div>"
+    cuerpo = ("<h1>🧩 Contenido del sitio por área</h1><p class='sub'>Los enlaces del menú superior y del pie de página de la web pública. "
+              "Cada área edita solo los suyos: Comunicaciones y Mercadeo (Procsis y la Educación, Corporativo), TI (Infraestructura y Soluciones), "
+              "Ventas y Legal (Planes, condiciones y políticas) y Soporte (Ayuda). Tu área: <b>%s</b>.</p>%s"
+              % (_esc("Gerencia (todas)" if es_ger else _SW_AREA_TXT.get(mi_area, mi_area)), bloques))
+    return _cb_pagina("Contenido del sitio", cuerpo)
 
 
 if __name__ == "__main__":
