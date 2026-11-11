@@ -4849,6 +4849,14 @@ def _staff_nav_items(path, rol=""):
         _add = [(h, l) for h, l in _REPARTO_MENU_EXTRA[_rol_menu] if h not in _ya0]
         if _add:
             items = [x for x in items if x[0] != "/logout"] + _add + [x for x in items if x[0] == "/logout"]
+    # [procsis-rrhh-arreglos]
+    try:
+        _ya_inc = {h for h, _l in items}
+        _inc_add = [(h, l) for h, l in _inc_menu_items(rol, session.get("usuario") or "") if h not in _ya_inc]
+        if _inc_add:
+            items = [x for x in items if x[0] != "/logout"] + _inc_add + [x for x in items if x[0] == "/logout"]
+    except Exception:
+        pass
     if _dcx_rol_ok(rol) and not any(h.startswith("/documentos-oficiales") for h, _l in items):
         items = [x for x in items if x[0] != "/logout"] + [("/documentos-oficiales", "📄 Documentos oficiales")] + [x for x in items if x[0] == "/logout"]
     if rol in _DCX_GERENCIA or _dcx_area_de_rol(rol) in ("Marketing", "Tecnologia", "Comercial", "Soporte", "Juridica"):
@@ -25420,6 +25428,10 @@ def _aislar_paneles_internos():
     path = request.path or ""
     if path.startswith("/static") or path.startswith("/api/webhooks"):
         return None
+    if path.startswith(("/talento/incapacidades", "/incapacidades/")):
+        return None  # [procsis-inc] _inc_guard valida el acceso
+    if path.startswith("/sitio/contenido"):
+        return None  # [procsis-sitio] _sw_guard valida el acceso; cada área edita solo sus enlaces
     if path.startswith(("/tickets-doc", "/notificaciones", "/api/v1")):
         return None  # cada ruta valida su propio acceso
     # Login y panel de desarrollo: no mezclar con login de colegios
@@ -38605,31 +38617,49 @@ def gerencia_datos_empresa():
 
 @app.route("/gerencia/admision-personal", methods=["GET", "POST"])
 def gerencia_admision_personal():
-    """Genera el certificado de admisión de personal (PDF con logo) para el equipo de Procsis
-    (Soporte, Ventas, Gerencia)."""
+    """Certificado de admisión de personal (PDF con logo) para TODO el equipo de Procsis:
+    usuarios internos de todas las áreas + trabajadores con contrato vigente."""
     g = _guard_talento()
     if g:
         return g
-    ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Desarrollador", "Cobranza"]
-    staff = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).order_by(Usuario.usuario.asc()).all()
-    filas = "".join(
-        f"""<tr><td><b>{_esc(u.usuario)}</b>{' · '+_esc(u.nombre_completo) if u.nombre_completo else ''}</td><td>{_esc(u.rol)}</td>
-        <td><form method="POST" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <input type="hidden" name="uid" value="{u.id}">
-          <input name="cargo" placeholder="Cargo (ej. Asesor comercial)" style="width:170px">
-          <input name="fecha_ingreso" type="date" required>
-          <button type="submit" class="small-action">Generar certificado</button>
-        </form></td></tr>"""
-        for u in staff
-    ) or '<tr><td colspan="3">Sin cuentas de staff</td></tr>'
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    ROLES_STAFF = [r for r in ROLES_INTERNOS if r != "Proveedor"]
+    staff = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).order_by(Usuario.rol.asc(), Usuario.usuario.asc()).all()
+    try:
+        contratos = ContratoPersonal.query.filter(
+            or_(ContratoPersonal.estado.is_(None), ~ContratoPersonal.estado.in_(["ARCHIVADO", "TERMINADO", "BORRADOR"]))
+        ).order_by(ContratoPersonal.nombres.asc()).all()
+    except Exception:
+        db.session.rollback()
+        contratos = []
+    nombres_con_usuario = {(u.nombre_completo or "").strip().lower() for u in staff if (u.nombre_completo or "").strip()}
+    contratos = [c for c in contratos if (c.nombres or "").strip().lower() not in nombres_con_usuario]
+
     if request.method == "POST":
         uid = request.form.get("uid", type=int)
-        u = Usuario.query.get(uid) if uid else None
-        cargo = (request.form.get("cargo") or "").strip() or u.rol if u else ""
+        cid = request.form.get("cid", type=int)
         fecha_ingreso = (request.form.get("fecha_ingreso") or "").strip()
-        if not u or u.rol not in ROLES_STAFF:
-            return page("Admisión de personal", shell("<div class='msg err'>Usuario no válido. <a href='/gerencia/admision-personal'>Volver</a></div>"))
-        nombre_mostrar = (u.nombre_completo or u.usuario)
+        cargo = (request.form.get("cargo") or "").strip()
+        u = Usuario.query.get(uid) if uid else None
+        c = ContratoPersonal.query.get(cid) if cid else None
+        if u is not None and u.rol in ROLES_STAFF:
+            nombre_mostrar = u.nombre_completo or u.usuario
+            ident = 'identificado(a) con usuario de acceso "%s"' % u.usuario
+            cargo = cargo or u.rol
+            archivo = u.usuario
+            ref_aud = u.usuario
+        elif c is not None:
+            nombre_mostrar = c.nombres or "—"
+            ident = "identificado(a) con documento %s" % (c.documento or "—")
+            cargo = cargo or c.cargo or "colaborador(a)"
+            fecha_ingreso = fecha_ingreso or (c.fecha_inicio or "")
+            archivo = "doc_" + (re.sub(r"[^0-9A-Za-z]", "", c.documento or "") or str(c.id))
+            ref_aud = "%s (contrato %s)" % (c.nombres, c.id)
+        else:
+            return page("Admisión de personal", shell("<div class='msg err'>Persona no válida. <a href='/gerencia/admision-personal'>Volver</a></div>"))
         p = plataforma()
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas as _canvas
@@ -38654,8 +38684,8 @@ def gerencia_admision_personal():
         y = h - 5.4 * cm
         texto = (
             f"{p.representante_legal or 'La Gerencia'}, en representación de {p.empresa or 'Procsis'}, certifica que "
-            f"{nombre_mostrar}, identificado(a) con usuario de acceso \"{u.usuario}\", fue admitido(a) para "
-            f"desempeñarse como {cargo or u.rol}, a partir del {fecha_ingreso or '—'}, vinculación vigente a la "
+            f"{nombre_mostrar}, {ident}, fue admitido(a) para "
+            f"desempeñarse como {cargo}, a partir del {fecha_ingreso or '—'}, vinculación vigente a la "
             f"fecha de expedición del presente certificado."
         )
         for ln in simpleSplit(texto, "Helvetica", 11, w - 4 * cm):
@@ -38669,15 +38699,47 @@ def gerencia_admision_personal():
         pdf.drawString(2 * cm, y, p.representante_legal or "Gerencia")
         pdf.save()
         buf.seek(0)
-        registrar_auditoria("Certificado de admisión generado", f"{u.usuario} · cargo: {cargo} · ingreso: {fecha_ingreso}")
-        return send_file(buf, as_attachment=True, download_name=f"admision_{u.usuario}.pdf", mimetype="application/pdf")
+        registrar_auditoria("Certificado de admisión generado", f"{ref_aud} · cargo: {cargo} · ingreso: {fecha_ingreso}")
+        return send_file(buf, as_attachment=True, download_name=f"admision_{archivo}.pdf", mimetype="application/pdf")
+
+    filas = "".join(
+        f"""<tr><td><b>{_esc(u.usuario)}</b>{' · '+_esc(u.nombre_completo) if u.nombre_completo else ''}</td><td>{_esc(u.rol)}</td>
+        <td><form method="POST" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input type="hidden" name="uid" value="{u.id}">
+          <input name="cargo" placeholder="Cargo (ej. Asesor comercial)" style="width:170px">
+          <input name="fecha_ingreso" type="date" required>
+          <button type="submit" class="small-action">Generar certificado</button>
+        </form></td></tr>"""
+        for u in staff
+    ) or '<tr><td colspan="3">Sin cuentas de staff</td></tr>'
+    filas_c = "".join(
+        f"""<tr><td><b>{_esc(c.nombres)}</b> · {_esc(c.documento)}</td><td>{_esc(c.area or '—')}</td>
+        <td><form method="POST" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input type="hidden" name="cid" value="{c.id}">
+          <input name="cargo" value="{_esc(c.cargo or '')}" placeholder="Cargo" style="width:170px">
+          <input name="fecha_ingreso" type="date" value="{_esc((c.fecha_inicio or '')[:10])}" required>
+          <button type="submit" class="small-action">Generar certificado</button>
+        </form></td></tr>"""
+        for c in contratos
+    )
+    bloque_contratos = ""
+    if filas_c:
+        bloque_contratos = f"""
+<section class="role-panel" style="margin-top:14px">
+  <h3 style="margin-top:0">Trabajadores contratados (sin usuario de acceso)</h3>
+  <div style="overflow-x:auto"><table>
+    <tr><th>Trabajador</th><th>Área</th><th>Generar</th></tr>
+    {filas_c}
+  </table></div>
+</section>"""
     content = f"""
 <header class="role-hero"><div>
   <h1>📄 Admisión de personal</h1>
-  <p>Genere el certificado de vinculación laboral de un miembro del equipo de Procsis, con el logo de la empresa.</p>
+  <p>Certificado de vinculación laboral de cualquier integrante de Procsis (todas las áreas) o de un trabajador con contrato vigente, con el logo de la empresa.</p>
 </div>
 <a class="btn" href="/gerencia/hq">Volver</a></header>
 <section class="role-panel">
+  <h3 style="margin-top:0">Equipo con usuario de acceso ({len(staff)})</h3>
   <div style="overflow-x:auto">
     <table>
       <tr><th>Usuario</th><th>Rol</th><th>Generar</th></tr>
@@ -38686,6 +38748,7 @@ def gerencia_admision_personal():
   </div>
   <p class="mini-text" style="margin-top:8px">Los datos de NIT y dirección salen de <a href="/gerencia/datos-empresa">Datos de la empresa</a> — complételos primero para que el PDF salga completo.</p>
 </section>
+{bloque_contratos}
 """
     return page("Admisión de personal", shell(content))
 
@@ -44047,7 +44110,8 @@ def soporte_equipo_logix():
 @app.route("/soporte/equipo/carnet/<int:id>")
 def soporte_equipo_carnet(id):
     """Carné corporativo Procsis — diseño ejecutivo legible (anverso + reverso)."""
-    if not requiere_soporte_global():
+    # [procsis-carnes-marketing] Talento Humano también puede ver/imprimir carnés
+    if not (requiere_soporte_global() or (requiere_login() and rol_actual() == "Talento")):
         return redirect("/login")
     p = PersonalLogix.query.get_or_404(id)
     import io as _io
@@ -61765,6 +61829,16 @@ def _area_home(rol_area):
             "<div style='margin-top:8px'><span style='background:#ede9fe;color:#5b21b6;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700'>Abrir</span></div></a>"
             % (u, a["color"], _esc(t), _esc(d)) for u, t, d in _lista_mod)
         tarjetas = _tm
+        if rol_area == "Talento":
+            tarjetas += ("<a href='/talento/incapacidades' class='role-panel' style='border-left:6px solid %s;text-decoration:none;display:block'>"
+                         "<div style='font-weight:800;color:#0f172a'>🩺 Incapacidades</div>"
+                         "<div style='font-size:12px;color:#475569;margin-top:4px'>Registro y consulta de incapacidades del personal.</div>"
+                         "<div style='margin-top:8px'><span style='background:#ede9fe;color:#5b21b6;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700'>Abrir</span></div></a>" % a["color"])
+    if rol_area in ("Marketing", "Tecnologia", "Juridica"):
+        tarjetas += ("<a href='/sitio/contenido' class='role-panel' style='border-left:6px solid %s;text-decoration:none;display:block'>"
+                     "<div style='font-weight:800;color:#0f172a'>🧩 Contenido del sitio</div>"
+                     "<div style='font-size:12px;color:#475569;margin-top:4px'>Textos y enlaces del pie de página y del menú de la web. Cada área edita solo los suyos.</div>"
+                     "<div style='margin-top:8px'><span style='background:#ede9fe;color:#5b21b6;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700'>Abrir</span></div></a>" % a["color"])
     filas = "".join(
         "<tr><td><b>%s</b></td><td>%s</td><td>%s</td></tr>" % (
             _esc(u.usuario), _esc(getattr(u, "nombre_completo", "") or "—"),
@@ -64551,6 +64625,7 @@ def modulo_turnos():
         pass
 
     volver = _home_portal(rol)
+    area_txt = "Talento Humano" if rol == "Talento" else area
 
     # Panel de turnos: tablero de supervisión (solo lectura) + cierre forzado + documentos únicos
     try:
@@ -64576,7 +64651,7 @@ def modulo_turnos():
 {_TURNOS_CSS}
 <div class="tu-wrap">
 <header class="role-hero"><div>
-  <h1>👥 Turnos · {area}</h1>
+  <h1>👥 Turnos · {area_txt}</h1>
   <p>Notas con fecha/hora automática · estados · pasar caso al compañero del siguiente turno</p>
 </div><a class="btn" href="{volver}">Volver</a></header>
 {"<div class='msg ok'>"+_esc(msg)+"</div>" if msg else ""}
@@ -64597,7 +64672,7 @@ def modulo_turnos():
 </section>
 
 <section class="cola-light">
-  <div class="cola-light-head">DETALLE {area.upper()} · COLA DE TURNOS</div>
+  <div class="cola-light-head">DETALLE {area_txt.upper()} · COLA DE TURNOS</div>
   <div style="overflow-x:auto;max-height:520px">
     <table class="tu-tbl">
       <tr>
@@ -64630,7 +64705,7 @@ def modulo_turnos():
 </section>
 </div>
 """
-    return page(f"Turnos {area}", shell(content))
+    return page(f"Turnos {area_txt}", shell(content))
 
 
 
@@ -102464,6 +102539,98 @@ def inc_mi_equipo():
     cuerpo = (_INC_CSS + "<h1>👥 Incapacidades de mi equipo</h1><p class='sub'>Solo ves las fechas, para reorganizar las tareas. Los datos médicos son confidenciales y los maneja Recursos Humanos.</p>"
               "<div class='cb-card'><div class='cb-scroll'><table><tr><th>Colaborador</th><th>Periodo</th><th>Días</th><th>Estado</th></tr>%s</table></div></div>" % filas)
     return _cb_pagina("Incapacidades de mi equipo", cuerpo)
+
+
+# [procsis-splash-navideno]
+# ═════════════════════════ Pantalla de bienvenida navideña (una vez por sesión, ~1,8 s) ═════════════════════════
+_SPLASH_ACTIVO = os.environ.get("SPLASH_NAVIDENO", "1") != "0"
+_SPLASH_HTML = """<div id="pcs-splash" style="display:none" role="status" aria-live="polite">
+<style>
+#pcs-splash{position:fixed;inset:0;z-index:2147483000;background:#fff;align-items:center;justify-content:center;flex-direction:column;overflow:hidden;
+font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;transition:opacity .28s ease;cursor:pointer}
+#pcs-splash.pcs-out{opacity:0;pointer-events:none}
+#pcs-splash .pcs-bg{position:absolute;inset:0;width:100%;height:100%}
+#pcs-splash .pcs-c{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 24px;max-width:420px}
+#pcs-splash .pcs-ic{width:54px;height:54px;margin-bottom:26px}
+#pcs-splash .pcs-t{font-size:18px;font-weight:500;color:#111827;line-height:1.35;margin:0 0 46px;letter-spacing:-.005em}
+#pcs-splash .pcs-bar{position:relative;width:min(300px,72vw);height:10px;border-radius:99px;border:1.5px solid #cbd5e1;background:#fff}
+#pcs-splash .pcs-fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:99px;background:#0b6e7f}
+#pcs-splash .pcs-tree{position:absolute;top:-34px;left:0;width:36px;height:46px;transform:translateX(-50%)}
+#pcs-splash .pcs-p{margin:14px 0 0;font-size:17px;color:#111827;font-variant-numeric:tabular-nums}
+#pcs-splash .pcs-s{margin:22px 0 0;font-size:12px;color:#64748b;display:flex;align-items:center;gap:6px}
+@media(prefers-reduced-motion:reduce){#pcs-splash{transition:none}}
+</style>
+<svg class="pcs-bg" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+ <defs><radialGradient id="pcsg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fdecef"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+ <circle cx="20" cy="40" r="120" fill="url(#pcsg)"/><circle cx="395" cy="70" r="110" fill="url(#pcsg)"/>
+ <circle cx="395" cy="620" r="120" fill="url(#pcsg)"/><circle cx="10" cy="640" r="100" fill="url(#pcsg)"/>
+ <circle cx="58" cy="102" r="20" fill="#f3f4f6"/><circle cx="352" cy="352" r="9" fill="#f3f4f6"/><circle cx="52" cy="560" r="26" fill="#f3f4f6"/>
+ <g stroke="#d6cfc8" stroke-width="3" stroke-linecap="round" fill="none" transform="translate(350 70)">
+  <path d="M0-26V26M-22-13L22 13M-22 13L22-13"/><path d="M-6-22L0-16L6-22M-6 22L0 16L6 22" stroke-width="2"/></g>
+ <g transform="translate(46 190)"><polygon points="0,-13 4,-4 13,-4 6,2 8,12 0,6 -8,12 -6,2 -13,-4 -4,-4" fill="#f0b43c"/></g>
+ <g transform="translate(386 300)"><polygon points="0,-15 5,-5 15,-5 7,2 9,13 0,7 -9,13 -7,2 -15,-5 -5,-5" fill="#f0b43c"/></g>
+ <g transform="translate(42 600)"><rect x="-26" y="-6" width="52" height="40" rx="3" fill="#d62d2d"/><rect x="-5" y="-6" width="10" height="40" fill="#e9b13a"/>
+  <path d="M0-6C-18-30-30-8-8-6ZM0-6C18-30 30-8 8-6Z" fill="#e9b13a"/></g>
+ <g transform="translate(352 600)"><polygon points="0,-62 28,-22 -28,-22" fill="#2f6b2f"/><polygon points="0,-40 38,10 -38,10" fill="#2a5f2a"/><polygon points="0,-10 48,46 -48,46" fill="#245524"/>
+  <rect x="-5" y="46" width="10" height="12" fill="#6b4a2b"/><circle cx="0" cy="-64" r="5" fill="#f0b43c"/></g>
+ <g transform="translate(370 740)"><rect x="-6" y="-44" width="12" height="9" rx="2" fill="#e9b13a"/><circle cx="0" cy="-12" r="30" fill="#b3202a"/><ellipse cx="-9" cy="-22" rx="7" ry="10" fill="#fff" opacity=".25"/></g>
+ <path d="M-20 780 C 120 700 260 770 420 700 L420 820 L-20 820Z" fill="#f6f4f2"/>
+</svg>
+<div class="pcs-c">
+ <svg class="pcs-ic" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 4 8 10v12c0 11 7 18 16 22 9-4 16-11 16-22V10L24 4Z" stroke="#0b6e7f" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m16 24 6 6 11-12" stroke="#d62d2d" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+ <p class="pcs-t">Validando tu navegador y mejorando tu experiencia</p>
+ <div class="pcs-bar"><div class="pcs-fill" id="pcs-fill"></div>
+  <svg class="pcs-tree" id="pcs-tree" viewBox="0 0 36 46" aria-hidden="true"><polygon points="18,2 28,16 8,16" fill="#2f6b2f"/><polygon points="18,10 31,28 5,28" fill="#2a5f2a"/><polygon points="18,20 34,40 2,40" fill="#245524"/>
+   <rect x="15" y="40" width="6" height="6" fill="#6b4a2b"/><circle cx="18" cy="2" r="2.6" fill="#f0b43c"/></svg></div>
+ <p class="pcs-p" id="pcs-pct">0%</p>
+ <p class="pcs-s"><svg width="11" height="13" viewBox="0 0 11 13" fill="#64748b" aria-hidden="true"><path d="M2 5V3.5a3.5 3.5 0 0 1 7 0V5h.5A1.5 1.5 0 0 1 11 6.5v5A1.5 1.5 0 0 1 9.5 13h-8A1.5 1.5 0 0 1 0 11.5v-5A1.5 1.5 0 0 1 1.5 5H2Zm1.5 0h4V3.5a2 2 0 0 0-4 0V5Z"/></svg>Conexión cifrada · Sesión protegida</p>
+</div>
+<script>
+(function(){
+ var el=document.getElementById('pcs-splash');if(!el)return;
+ try{if(sessionStorage.getItem('pcs_splash_v1')){el.parentNode.removeChild(el);return;}sessionStorage.setItem('pcs_splash_v1','1');}catch(e){}
+ var corto=false;try{corto=window.matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){}
+ var dur=corto?700:1800,ini=null,fin=false,root=document.documentElement,ov=root.style.overflow;
+ el.style.display='flex';root.style.overflow='hidden';
+ var fill=document.getElementById('pcs-fill'),tree=document.getElementById('pcs-tree'),pct=document.getElementById('pcs-pct');
+ function cerrar(){if(fin)return;fin=true;el.classList.add('pcs-out');root.style.overflow=ov;setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},320);}
+ function paso(t){if(fin)return;if(ini===null)ini=t;var p=Math.min(1,(t-ini)/dur),e=1-Math.pow(1-p,2),v=Math.round(e*100);
+  fill.style.width=v+'%';tree.style.left=v+'%';pct.textContent=v+'%';if(p<1)requestAnimationFrame(paso);else setTimeout(cerrar,120);}
+ el.addEventListener('click',cerrar);
+ setTimeout(cerrar,dur+900);
+ requestAnimationFrame(paso);
+})();
+</script>
+</div>"""
+_SPLASH_NO_RUTAS = ("/static", "/api", "/webhook", "/carnet", "/descargar", "/export", "/qr", "/foto", "/archivo", "/favicon")
+
+
+@app.after_request
+def _splash_navideno(resp):
+    """Inserta la pantalla de bienvenida al inicio del <body> (solo páginas HTML completas, una vez por sesión del navegador)."""
+    try:
+        if not _SPLASH_ACTIVO or request.method != "GET" or resp.status_code != 200:
+            return resp
+        if resp.direct_passthrough or not resp.is_sequence or (resp.mimetype or "") != "text/html":
+            return resp
+        if request.headers.get("Sec-Fetch-Dest", "document") not in ("document", ""):
+            return resp   # iframes, objetos, etc.
+        if request.headers.get("X-Requested-With") or request.args.get("embed") or request.args.get("sin_splash"):
+            return resp
+        p = request.path or ""
+        if p.startswith(_SPLASH_NO_RUTAS) or "/pdf" in p or p.lower().endswith((".pdf", ".png", ".jpg", ".svg", ".xlsx", ".docx", ".csv")):
+            return resp
+        html = resp.get_data(as_text=True)
+        if 'id="pcs-splash"' in html:
+            return resp
+        m = re.search(r"<body[^>]*>", html, re.I)
+        if not m:
+            return resp
+        resp.set_data(html[:m.end()] + _SPLASH_HTML + html[m.end():])
+    except Exception as _e:
+        print("splash:", _e)
+    return resp
 
 
 if __name__ == "__main__":
