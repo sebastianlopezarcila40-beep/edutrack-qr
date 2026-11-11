@@ -102562,10 +102562,10 @@ def _fest_cfg():
     import time
     if _FEST_CACHE["v"] is not None and time.time() - _FEST_CACHE["t"] < 20:
         return _FEST_CACHE["v"]
-    v = {"activo": True, "nieve": True, "saludo": True, "txt": _FEST_TXT}
+    v = {"activo": True, "nieve": True, "saludo": True, "ext": True, "gorro": True, "txt": _FEST_TXT}
     try:
         _ti_init()
-        for k, c in (("activo", "fest_activo"), ("nieve", "fest_nieve"), ("saludo", "fest_saludo")):
+        for k, c in (("activo", "fest_activo"), ("nieve", "fest_nieve"), ("saludo", "fest_saludo"), ("ext", "fest_ext"), ("gorro", "fest_gorro")):
             r = _ti_cfg(c)
             if r != "":
                 v[k] = (r == "1")
@@ -102640,7 +102640,7 @@ font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-se
  var root=document.documentElement,off=false,reduced=false;
  try{off=localStorage.getItem('pcs_fest')==='off';}catch(e){}
  try{reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){}
- var DUR=reduced?1500:5000,MAXL=5000;
+ var DUR=reduced?1500:5000,MAXL=2500;
  var fill=document.getElementById('pcs-fill'),tree=document.getElementById('pcs-tree'),pct=document.getElementById('pcs-pct'),tit=document.getElementById('pcs-t');
  var shown=false,mode='',raf=0,timer=0,delay=0,t0=0,startMs=0,savedOv='',pendGreet=null;
  function setv(v){fill.style.width=v+'%';tree.style.left=v+'%';pct.textContent=v+'%';}
@@ -102664,7 +102664,7 @@ font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-se
   clearTimeout(timer);timer=setTimeout(hide,m==='splash'?DUR+900:MAXL);
   cancelAnimationFrame(raf);raf=requestAnimationFrame(step);
  }
- function armar(){if(off||shown)return;clearTimeout(delay);delay=setTimeout(function(){show('load');},150);}
+ function armar(){if(off||shown||!usr)return;clearTimeout(delay);delay=setTimeout(function(){show('load');},150);}
  if(!off)root.classList.add('pcs-fest-on');
 
  /* Splash: primera entrada y cada inicio de sesión (una vez por pestaña y usuario) */
@@ -102689,6 +102689,8 @@ font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-se
   var ac=f.getAttribute('action')||location.pathname;if(NODESC.test(ac))return;armar();
  });
  window.addEventListener('pageshow',function(ev){if(ev.persisted){clearTimeout(delay);shown=true;hide();}});
+ window.addEventListener('load',function(){clearTimeout(delay);if(shown&&mode==='load')hide();});
+ document.addEventListener('visibilitychange',function(){if(!document.hidden&&shown&&mode==='load')hide();});
 
  function listo(fn){if(document.readyState!=='loading')fn();else document.addEventListener('DOMContentLoaded',fn);}
  listo(function(){
@@ -102800,6 +102802,8 @@ def fest_apariencia():
             _ti_cfg_set("fest_activo", "1" if f.get("activo") else "0")
             _ti_cfg_set("fest_nieve", "1" if f.get("nieve") else "0")
             _ti_cfg_set("fest_saludo", "1" if f.get("saludo") else "0")
+            _ti_cfg_set("fest_ext", "1" if f.get("ext") else "0")
+            _ti_cfg_set("fest_gorro", "1" if f.get("gorro") else "0")
             _ti_cfg_set("fest_saludo_txt", " ".join((f.get("txt") or "").split())[:200] or _FEST_TXT)
             _FEST_CACHE["t"] = 0.0
             _FEST_CACHE["v"] = None
@@ -102822,7 +102826,7 @@ def fest_apariencia():
     cuerpo = ("<h1>🎄 Apariencia y campañas</h1><p class='sub'>Interruptor del diseño de temporada. Al guardar, se aplica a todas las áreas del sistema "
               "sin volver a subir código. Los colores de alerta (rojo de error, verde de éxito) nunca cambian, y cada persona puede apagar los adornos "
               "con el botón 🎄 de la esquina inferior izquierda.</p>"
-              "<div class='cb-card'><form method='POST' action='/sitio/apariencia'><input type='hidden' name='csrf' value='%s'>%s%s%s"
+              "<div class='cb-card'><form method='POST' action='/sitio/apariencia'><input type='hidden' name='csrf' value='%s'>%s%s%s%s%s"
               "<label style='display:block;margin-top:14px'><b>Texto del saludo de temporada</b></label>"
               "<input type='text' name='txt' maxlength='200' value='%s' style='width:100%%;max-width:560px'>"
               "<p style='color:#64748b;font-size:13px'>Usa <code>{nombre}</code> para el primer nombre de la persona. Sale una vez por inicio de sesión.</p>"
@@ -102833,8 +102837,122 @@ def fest_apariencia():
                  sw("activo", c["activo"], "Modo Navideño", "Enciende o apaga todo el diseño de temporada para todos los usuarios."),
                  sw("nieve", c["nieve"], "Nieve suave de fondo", "Copos muy discretos que no bloquean clics. Se desactiva sola si el equipo pide reducir movimiento."),
                  sw("saludo", c["saludo"], "Saludo de temporada", "Aviso corto, una vez por inicio de sesión."),
+                 sw("ext", c["ext"], "Decoración de la zona pública", "Luces, fondo festivo y adornos en el login y las páginas de afuera."),
+                 sw("gorro", c["gorro"], "Gorro navideño en el logo", "Sombrero de Santa sobre el logo de PROCSIS."),
                  _esc(c["txt"])))
     return _cb_pagina("Apariencia y campañas", cuerpo)
+
+
+# [procsis-navidad-exterior]
+# ═════════════ NAVIDAD · ÁREA PÚBLICA (login y páginas de afuera): luces, fondo festivo, adornos y gorro en el logo ═════════════
+# Se enciende/apaga desde Marketing → «Apariencia y campañas» (interruptores «Decoración de la zona pública» y «Gorro navideño en el logo»).
+_NAVEXT_HTML = r"""<div id="pcsx-lights" aria-hidden="true" data-hat="__HAT__"></div>
+<style>
+html.pcsx{--pcsx-tile:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='40' viewBox='0 0 200 40'><path d='M0 4Q25 20 50 4Q75 20 100 4Q125 20 150 4Q175 20 200 4' fill='none' stroke='%23334155' stroke-width='1.6'/><g><rect x='22' y='10' width='6' height='5' rx='1' fill='%23475569'/><ellipse cx='25' cy='22' rx='5.5' ry='7.5' fill='%2322d3ee'/><rect x='72' y='10' width='6' height='5' rx='1' fill='%23475569'/><ellipse cx='75' cy='22' rx='5.5' ry='7.5' fill='%232563eb'/><rect x='122' y='10' width='6' height='5' rx='1' fill='%23475569'/><ellipse cx='125' cy='22' rx='5.5' ry='7.5' fill='%2322c55e'/><rect x='172' y='10' width='6' height='5' rx='1' fill='%23475569'/><ellipse cx='175' cy='22' rx='5.5' ry='7.5' fill='%23ef4444'/></g></svg>");
+--pcsx-nieve:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'><g fill='%23ffffff' opacity='.95'><circle cx='30' cy='40' r='4'/><circle cx='120' cy='22' r='3'/><circle cx='210' cy='70' r='5'/><circle cx='70' cy='130' r='3'/><circle cx='170' cy='150' r='4'/><circle cx='235' cy='215' r='3'/><circle cx='40' cy='220' r='5'/><circle cx='125' cy='235' r='3'/></g><g stroke='%23bae6fd' stroke-width='2' stroke-linecap='round' fill='none'><path d='M150 60v18M141 69h18M144 63l12 12M156 63l-12 12'/><path d='M60 180v16M52 188h16M54 182l12 12M66 182l-12 12'/><path d='M225 130v14M218 137h14M220 132l10 10M230 132l-10 10'/></g></svg>")}
+#pcsx-lights{display:none}
+html.pcsx #pcsx-lights{display:block;position:relative;height:36px;z-index:60;pointer-events:none;overflow:hidden;background:var(--pcsx-tile) repeat-x 0 0}
+html.pcsx:not(.pcsx-still) #pcsx-lights::after{content:"";position:absolute;inset:0;background:var(--pcsx-tile) repeat-x 0 0;filter:blur(5px) saturate(1.8);animation:pcsx-tw 1.9s ease-in-out infinite alternate}
+@keyframes pcsx-tw{from{opacity:.1}to{opacity:.9}}
+html.pcsx body{background:linear-gradient(180deg,#e3f4ff 0,#f4fbff 40%,#fff 100%)!important}
+html.pcsx .login-page,html.pcsx .lp-content{background:linear-gradient(180deg,#e3f4ff 0,#f4fbff 45%,#fff 100%)!important}
+html.pcsx .lp-topnav{background:rgba(255,255,255,.96);border-bottom:3px solid transparent;border-image:linear-gradient(90deg,#22d3ee,#1d4ed8,#22c55e,#ef4444) 1}
+html.pcsx .sinai-portal{position:relative;background:radial-gradient(720px 440px at 6% 0,rgba(34,211,238,.30),transparent 62%),radial-gradient(660px 420px at 100% 4%,rgba(34,197,94,.20),transparent 60%),radial-gradient(560px 380px at 94% 100%,rgba(239,68,68,.10),transparent 60%),#eaf6ff!important}
+html.pcsx .sinai-portal::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--pcsx-nieve) repeat 0 0}
+html.pcsx .sinai-grid{position:relative;z-index:1}
+html.pcsx .sinai-access{position:relative}
+html.pcsx .sinai-card{position:relative;overflow:hidden;border-color:#bfdbfe!important;box-shadow:0 14px 38px rgba(0,32,194,.14)!important}
+html.pcsx .sinai-card::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:repeating-linear-gradient(135deg,#1d4ed8 0 12px,#fff 12px 18px,#22c55e 18px 30px,#fff 30px 36px,#ef4444 36px 48px,#fff 48px 54px)}
+html.pcsx .sinai-carousel{box-shadow:0 30px 80px rgba(0,32,194,.30),0 0 0 3px rgba(255,255,255,.7)}
+html.pcsx .corp-footer{border-top:4px solid transparent;border-image:linear-gradient(90deg,#22d3ee,#1d4ed8,#22c55e,#ef4444) 1}
+.pcsx-hang{position:absolute;right:16px;top:6px;width:96px;height:auto;pointer-events:none;z-index:3}
+.pcsx-w{position:relative;line-height:0}
+.pcsx-hat{position:absolute;pointer-events:none;overflow:visible;transform:rotate(-16deg);transform-origin:50% 100%;filter:drop-shadow(0 3px 4px rgba(0,0,0,.28));z-index:5}
+@media(max-width:600px){.pcsx-hang{display:none}}
+@media print{#pcsx-lights,.pcsx-hang,.pcsx-hat{display:none!important}}
+</style>
+<script>
+(function(){
+ var L=document.getElementById('pcsx-lights');if(!L)return;
+ var root=document.documentElement,off=false,reduced=false;
+ try{off=localStorage.getItem('pcs_fest')==='off';}catch(e){}
+ try{reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){}
+ if(off){L.style.display='none';return;}
+ root.classList.add('pcsx');if(reduced)root.classList.add('pcsx-still');
+ var conGorro=L.getAttribute('data-hat')==='1';
+ var HANG='<svg class="pcsx-hang" viewBox="0 0 96 58" aria-hidden="true"><defs>'
+  +'<radialGradient id="pxb" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#1e3a8a"/></radialGradient>'
+  +'<radialGradient id="pxg" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#86efac"/><stop offset="1" stop-color="#15803d"/></radialGradient>'
+  +'<radialGradient id="pxr" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fca5a5"/><stop offset="1" stop-color="#b91c1c"/></radialGradient></defs>'
+  +'<g stroke="#94a3b8" stroke-width="1.2"><path d="M16 0V14M48 0V26M80 0V18"/></g>'
+  +'<g fill="#e9b13a"><rect x="13" y="12" width="6" height="4" rx="1"/><rect x="45" y="24" width="6" height="4" rx="1"/><rect x="77" y="16" width="6" height="4" rx="1"/></g>'
+  +'<circle cx="16" cy="26" r="10" fill="url(#pxb)"/><circle cx="48" cy="38" r="12" fill="url(#pxg)"/><circle cx="80" cy="29" r="10" fill="url(#pxr)"/>'
+  +'<g fill="#fff" opacity=".45"><ellipse cx="12.5" cy="22" rx="2.6" ry="4"/><ellipse cx="43.5" cy="33" rx="3" ry="4.6"/><ellipse cx="76.5" cy="25" rx="2.6" ry="4"/></g></svg>';
+ var HAT='<svg class="pcsx-hat" viewBox="0 0 140 116" aria-hidden="true"><defs><linearGradient id="pxh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ef4444"/><stop offset="1" stop-color="#b91c1c"/></linearGradient></defs>'
+  +'<path d="M18 88C20 44 46 14 82 16C100 17 114 28 124 44C112 40 102 46 100 58C98 70 104 80 112 90Z" fill="url(#pxh)"/>'
+  +'<path d="M30 80C34 52 52 30 78 26" stroke="#fff" stroke-opacity=".3" stroke-width="5" fill="none" stroke-linecap="round"/>'
+  +'<rect x="8" y="80" width="112" height="26" rx="13" fill="#fff" stroke="#cfe3f7" stroke-width="2"/>'
+  +'<circle cx="124" cy="44" r="13" fill="#fff" stroke="#cfe3f7" stroke-width="2"/></svg>';
+ function listo(fn){if(document.readyState!=='loading')fn();else document.addEventListener('DOMContentLoaded',fn);}
+ function colocar(w,img,hat){
+  var bw=img.clientWidth,bh=img.clientHeight,nw=img.naturalWidth||bw,nh=img.naturalHeight||bh;if(!bw||!bh)return;
+  var sc=Math.min(bw/nw,bh/nh),cw=nw*sc,ch=nh*sc,ox=img.offsetLeft+(bw-cw)/2,oy=img.offsetTop+(bh-ch)/2,full=(nw/nh)>1.25;
+  var hw=full?cw*.21:cw*.46,hh=hw*116/140;
+  hat.style.width=hw+'px';
+  hat.style.left=(ox+(full?cw*.40:cw*.10))+'px';
+  hat.style.top=(oy+(full?ch*.03:-hh*.55))+'px';
+ }
+ function gorro(img){
+  if(img.getAttribute('data-pcsx'))return;
+  if(!/logo[-_]?procsis/i.test(img.getAttribute('src')||''))return;
+  img.setAttribute('data-pcsx','1');
+  var blk=false;try{blk=getComputedStyle(img).display==='block';}catch(e){}
+  var w=document.createElement('span');w.className='pcsx-w';w.style.display=blk?'block':'inline-block';
+  img.parentNode.insertBefore(w,img);w.appendChild(img);w.insertAdjacentHTML('beforeend',HAT);
+  var hat=w.lastChild,go=function(){colocar(w,img,hat);};
+  if(img.complete)go();img.addEventListener('load',go);window.addEventListener('resize',go);
+  if(window.ResizeObserver){try{new ResizeObserver(go).observe(img);}catch(e){}}
+ }
+ listo(function(){
+  var cd=document.querySelector('.sinai-card');if(cd&&!cd.querySelector('.pcsx-hang'))cd.insertAdjacentHTML('afterbegin',HANG);
+  if(conGorro){var im=document.querySelectorAll('img');for(var i=0;i<im.length;i++)gorro(im[i]);}
+ });
+})();
+</script>
+"""
+
+
+@app.after_request
+def _navidad_exterior(resp):
+    """Decora solo las páginas públicas (las que se ven sin iniciar sesión). Sin loader de módulo."""
+    try:
+        if not _SPLASH_ACTIVO or request.method != "GET" or resp.status_code != 200:
+            return resp
+        if resp.direct_passthrough or not resp.is_sequence or (resp.mimetype or "") != "text/html":
+            return resp
+        if request.headers.get("Sec-Fetch-Dest", "document") not in ("document", ""):
+            return resp
+        if request.headers.get("X-Requested-With") or request.args.get("embed") or request.args.get("sin_splash"):
+            return resp
+        p = request.path or ""
+        if p.startswith(_SPLASH_NO_RUTAS) or "/pdf" in p:
+            return resp
+        if not ruta_publica():
+            return resp
+        cfg = _fest_cfg()
+        if not (cfg.get("activo") and cfg.get("ext", True)):
+            return resp
+        html = resp.get_data(as_text=True)
+        if 'id="pcsx-lights"' in html:
+            return resp
+        m = re.search(r"<body[^>]*>", html, re.I)
+        if not m:
+            return resp
+        bloque = _NAVEXT_HTML.replace("__HAT__", "1" if cfg.get("gorro", True) else "0")
+        resp.set_data(html[:m.end()] + bloque + html[m.end():])
+    except Exception as _e:
+        print("navidad exterior:", _e)
+    return resp
 
 
 if __name__ == "__main__":
