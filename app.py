@@ -4891,6 +4891,7 @@ def _staff_nav_items(path, rol=""):
         full = (request.full_path or path or "").split("#")[0]
     except Exception:
         full = path
+    items = _pf_menu_items(items, rol)  # [procsis-menu-producto]
     for href, lab in items:
         if href == "/logout":
             active = ""
@@ -104570,6 +104571,74 @@ def pf_tt_evento():
             pass
         print("pf tt evento:", repr(_e)[:300])
         return {"ok": False, "error": "no se pudo procesar el evento"}, 500
+
+
+# [procsis-menu-producto]
+# ═════════════ MENÚ LATERAL POR PRODUCTO: Todo PROCSIS · EduTrack · TiendaTrack ═════════════
+# Cada módulo es "corporativo" (se ve siempre) salvo que esté aquí: exclusivo de EduTrack (colegios, estudiantes) o de TiendaTrack.
+_PFM_SOLO_EDUTRACK = frozenset((
+    # Gerencia: colegios, planes de colegios, donaciones a colegios
+    "/gerencia/donaciones", "/gerencia/donaciones/kit", "/gerencia/envios", "/gerencia/convocatoria48", "/gerencia/reconocimientos",
+    "/gerencia/activaciones", "/gerencia/rectores", "/gerencia/colegios-config", "/gerencia/planes", "/gerencia/planes/nuevo",
+    "/gerencia/planes-vendidos", "/gerencia/beneficios", "/planes/buscar", "/gerencia/descuentos", "/gerencia/alianzas-clientes",
+    "/gerencia/autorizar-soporte-rectores", "/gerencia/solicitudes-plan", "/gerencia/contratos-saas", "/gerencia/contrato-plantilla",
+    "/gerencia/retractos", "/gerencia/retractos/config", "/gerencia/retractos/reembolsos", "/gerencia/finanzas/promociones",
+    "/gerencia/pie-login", "/gerencia/cancelaciones", "/gerencia/carnes", "/gerencia/cartera",
+    # Ventas
+    "/ventas/activaciones", "/ventas/verificacion", "/ventas/beneficios", "/ventas/planes-vendidos",
+    # Soporte
+    "/soporte/bloqueo-carne", "/soporte/instituciones", "/soporte/validacion-identidad", "/soporte/convocatoria48-actualizacion",
+    "/soporte/periodos-colegio", "/soporte/prorroga", "/soporte/auditoria-colegios", "/soporte/planes-vendidos", "/soporte/impersonar",
+    "/tenants", "/usuarios",
+    # Soluciones
+    "/soluciones-procsis/clientes",
+))
+_PFM_SOLO_TIENDATRACK_PREFIJOS = ("/gerencia/tiendatrack",)
+
+
+def _pfm_oculto(href, modo):
+    """True si ese enlace no debe aparecer con el producto elegido."""
+    h = (href or "").split("?")[0].rstrip("/") or "/"
+    if modo == "edutrack":
+        return any(h == p or h.startswith(p + "/") for p in _PFM_SOLO_TIENDATRACK_PREFIJOS)
+    if modo == "tiendatrack":
+        return h in _PFM_SOLO_EDUTRACK
+    return False
+
+
+def _pf_menu_items(items, rol=""):
+    """Filtra la lista (href, etiqueta) del menú lateral según el producto del selector. 'Todo PROCSIS' = sin cambios."""
+    try:
+        modo = _pf_modo()
+        if modo not in ("edutrack", "tiendatrack"):
+            return items
+        filtrado = [(h, l) for h, l in items if h == "/logout" or not _pfm_oculto(h, modo)]
+        return filtrado if len(filtrado) > 1 else items
+    except Exception as _e:
+        print("pf menu:", _e)
+        return items
+
+
+if "_nav_agrupar" in globals():
+    _pfm_nav_agrupar_orig = _nav_agrupar
+
+    def _nav_agrupar(filas, grupos):
+        """En TiendaTrack, el grupo TiendaTrack va primero (después de Inicio) y se muestra abierto."""
+        try:
+            modo = _pf_modo()
+        except Exception:
+            modo = None
+        if modo != "tiendatrack":
+            return _pfm_nav_agrupar_orig(filas, grupos)
+        try:
+            inicio = [g for g in grupos if g[0] == "Inicio"]
+            tienda = [g for g in grupos if g[0] == "TiendaTrack"]
+            resto = [g for g in grupos if g[0] not in ("Inicio", "TiendaTrack")]
+            html = _pfm_nav_agrupar_orig(filas, inicio + tienda + resto)
+            return html.replace('<details class="nav-group" data-g="TiendaTrack">', '<details class="nav-group" data-g="TiendaTrack" open>', 1)
+        except Exception as _e:
+            print("pf menu grupos:", _e)
+            return _pfm_nav_agrupar_orig(filas, grupos)
 
 
 if __name__ == "__main__":
