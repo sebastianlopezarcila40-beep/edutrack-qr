@@ -1,0 +1,9 @@
+# --- Acceso del equipo (validar/solicitar usuarios con foto de cara) ---
+# Pegar en app.py justo ANTES de:  if __name__ == "__main__":
+try:
+    from acceso_equipo import registrar_acceso_equipo
+    registrar_acceso_equipo(app, db, Usuario, crear_hash,
+                            registrar_auditoria=registrar_auditoria,
+                            rate_limit=_rate_limit, areas=AREAS_PROCSIS)
+except Exception as _e_ae:
+    print("acceso_equipo no cargó:", repr(_e_ae), flush=True)
