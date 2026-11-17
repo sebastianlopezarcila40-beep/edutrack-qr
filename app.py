@@ -7420,7 +7420,7 @@ def before():
             return redirect(destino)
         if request.path != "/api/sesion-estado":  # el sondeo de la guardia de sesión NO renueva la inactividad
             session["ultimo_movimiento"] = ahora_ts
-        if session.get("password_temporal") and request.path not in ["/cambiar_password", "/logout", "/docente-login"] and not request.path.startswith("/static") and not request.path.startswith("/docente"):
+        if session.get("password_temporal") and not session.get("mfa_pendiente") and not request.path.startswith(("/mfa", "/biometria")) and request.path not in ["/cambiar_password", "/logout", "/docente-login"] and not request.path.startswith("/static") and not request.path.startswith("/docente"):
             return redirect("/cambiar_password")
         # Mantener datos institucionales sincronizados con el tenant de la sesión
         try:
@@ -16675,42 +16675,159 @@ def validar_pin():
 
 
 
+def _enviar_pin_cambio_clave(correo, pin):
+    """PIN para cambiar la contraseña (se envía al correo registrado del usuario)."""
+    if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not SOPORTE_EMAIL or not SOPORTE_PASSWORD):
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = "Código para cambiar su contraseña - Procsis"
+    msg["From"] = SOPORTE_EMAIL
+    msg["To"] = correo
+    msg.set_content(
+        "Su código para cambiar la contraseña es: %s\n"
+        "Vence en 5 minutos. Si usted no lo solicitó, ignore este mensaje y avise a Gerencia.\n%s" % (pin, APP_NAME)
+    )
+    try:
+        _smtp_enviar(msg, SOPORTE_EMAIL, SOPORTE_PASSWORD)
+        return True
+    except Exception as e:
+        print("ERROR PIN cambio de clave:", e)
+        return False
+
+
 @app.route("/cambiar_password", methods=["GET", "POST"])
 def cambiar_password():
+    # [FIX-MFA-CAMBIO-CLAVE] Antes de escribir la nueva clave: PIN enviado al correo registrado.
     if not requiere_login(): return redirect("/login")
-    mensaje = ""
+    if session.get("mfa_pendiente"):
+        return redirect("/mfa")
+    mensaje = info = ""
     rol = rol_actual()
     es_staff = rol in ("Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Cobranza", "Contabilidad", "Proveedor", "Soluciones") + ROLES_AREAS
-    if request.method == "POST":
-        nueva = request.form.get("password", "").strip()
-        confirmar = request.form.get("confirmar", "").strip()
-        nombre_completo = (request.form.get("nombre_completo") or "").strip()[:160]
-        _err_clave = _politica_clave(nueva, session.get("usuario") or "", es_staff)
-        if _err_clave:
-            mensaje = _err_clave
-        elif nueva != confirmar:
-            mensaje = "Las contraseñas no coinciden."
-        elif es_staff and not nombre_completo:
-            mensaje = "Escriba su nombre para mostrar."
+    u = Usuario.query.filter_by(usuario=session["usuario"]).first()
+    if not u:
+        session.clear()
+        return redirect("/login")
+    registrado = (u.correo or "").strip()
+    accion = (request.form.get("accion") or "") if request.method == "POST" else ""
+
+    def _pin_verificado():
+        try:
+            return (ahora().timestamp() - float(session.get("cp_pin_ok") or 0)) < 600
+        except Exception:
+            return False
+
+    ch = None
+    tok = session.get("cp_pin_token")
+    if tok:
+        ch = LoginChallenge.query.filter_by(token=tok, usuario_id=u.id).first()
+
+    if accion == "reiniciar":
+        session.pop("cp_pin_token", None)
+        session.pop("cp_pin_ok", None)
+        ch = None
+    elif accion == "enviar":
+        correo = (request.form.get("correo") or "").strip().lower()
+        envios = int(session.get("cp_envios", 0))
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
+            mensaje = "Escriba un correo válido."
+        elif registrado and correo != registrado.lower():
+            mensaje = "Ese correo no coincide con el registrado para su usuario."
+            registrar_auditoria("PIN cambio de clave: correo distinto al registrado", "%s · %s" % (u.usuario, correo))
+        elif envios >= 5:
+            mensaje = "Demasiados envíos de PIN. Cierre sesión e intente más tarde."
+            registrar_auditoria("PIN cambio de clave: demasiados envíos", u.usuario)
         else:
-            u = Usuario.query.filter_by(usuario=session["usuario"]).first()
-            u.password = crear_hash(nueva); u.password_temporal = False
-            if es_staff:
-                u.nombre_completo = nombre_completo
-            db.session.commit(); session["password_temporal"] = False
-            registrar_auditoria("Cambio de contraseña", "Usuario cambió su contraseña temporal" + (f" · nombre: {nombre_completo}" if es_staff else ""))
-            if es_staff:
-                destino = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Gerente": "/gerencia/hq",
-                           "Administrador": "/gerencia/hq", "Superadmin": "/gerencia/hq", "Cobranza": "/cobranza/panel",
-                           "Soluciones": "/soluciones-procsis", **{k: "/" + v["slug"] for k, v in AREAS_PROCSIS.items()}}.get(rol, "/dashboard")
-                return redirect(destino)
-            return redirect("/dashboard")
-    campo_nombre = (
-        '<input name="nombre_completo" placeholder="Su nombre completo (para mostrar)" required>'
-        if es_staff else ""
-    )
+            ch = _crear_reto_pin(u.id)
+            if _enviar_pin_cambio_clave(correo, ch.pin):
+                session["cp_pin_token"] = ch.token
+                session["cp_correo"] = correo
+                session["cp_envios"] = envios + 1
+                session["cp_intentos"] = 0
+                session.pop("cp_pin_ok", None)
+                registrar_auditoria("PIN cambio de clave enviado", "%s · %s" % (u.usuario, _mask_correo(correo)))
+                info = "Enviamos un PIN de 6 dígitos a %s." % _mask_correo(correo)
+            else:
+                ch = None
+                mensaje = ("No se pudo enviar el correo. Verifique que el correo de envío del sistema "
+                           "(SOPORTE_EMAIL / RESEND_API_KEY) esté configurado y vuelva a intentar.")
+                registrar_auditoria("PIN cambio de clave: fallo de envío", u.usuario)
+    elif accion == "validar" and ch:
+        intentos = int(session.get("cp_intentos", 0)) + 1
+        session["cp_intentos"] = intentos
+        pin = (request.form.get("pin") or "").strip().replace(" ", "")
+        if not _reto_vigente(ch):
+            mensaje = "El PIN venció. Solicite uno nuevo."
+            session.pop("cp_pin_token", None)
+            ch = None
+        elif pin != (ch.pin or ""):
+            mensaje = "PIN incorrecto."
+            registrar_auditoria("PIN cambio de clave incorrecto", "%s · intento %d" % (u.usuario, intentos))
+            if intentos >= 5:
+                registrar_auditoria("PIN cambio de clave bloqueado por intentos", u.usuario)
+                session.pop("cp_pin_token", None)
+                ch = None
+                mensaje = "Demasiados intentos. Solicite un PIN nuevo."
+        else:
+            ch.estado = "aprobado"
+            if not registrado and session.get("cp_correo"):
+                u.correo = session.get("cp_correo")
+            db.session.commit()
+            session["cp_pin_ok"] = ahora().timestamp()
+            session.pop("cp_pin_token", None)
+            ch = None
+            registrar_auditoria("PIN cambio de clave verificado", u.usuario)
+            info = "PIN verificado. Ya puede definir su nueva contraseña."
+    elif accion == "guardar":
+        if not _pin_verificado():
+            mensaje = "Primero verifique el PIN enviado a su correo."
+        else:
+            nueva = request.form.get("password", "").strip()
+            confirmar = request.form.get("confirmar", "").strip()
+            nombre_completo = (request.form.get("nombre_completo") or "").strip()[:160]
+            _err_clave = _politica_clave(nueva, session.get("usuario") or "", es_staff)
+            if _err_clave:
+                mensaje = _err_clave
+            elif nueva != confirmar:
+                mensaje = "Las contraseñas no coinciden."
+            elif es_staff and not nombre_completo:
+                mensaje = "Escriba su nombre para mostrar."
+            else:
+                u.password = crear_hash(nueva); u.password_temporal = False
+                if es_staff:
+                    u.nombre_completo = nombre_completo
+                db.session.commit(); session["password_temporal"] = False
+                for _k in ("cp_pin_token", "cp_pin_ok", "cp_correo", "cp_envios", "cp_intentos"):
+                    session.pop(_k, None)
+                registrar_auditoria("Cambio de contraseña", "Usuario cambió su contraseña (verificada con PIN de correo)" + (f" · nombre: {nombre_completo}" if es_staff else ""))
+                if es_staff:
+                    destino = {"Soporte": "/soporte_admin", "Comercial": "/ventas/panel", "Gerente": "/gerencia/hq",
+                               "Administrador": "/gerencia/hq", "Superadmin": "/gerencia/hq", "Cobranza": "/cobranza/panel",
+                               "Soluciones": "/soluciones-procsis", **{k: "/" + v["slug"] for k, v in AREAS_PROCSIS.items()}}.get(rol, "/dashboard")
+                    return redirect(destino)
+                return redirect("/dashboard")
+
+    estilo_in = "width:100%;box-sizing:border-box;padding:12px;font-size:15px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px"
+    estilo_btn = "width:100%;padding:13px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:800;cursor:pointer"
+    aviso_ok = ("<div style='background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:10px 0;font-size:13px'>" + _esc(info) + "</div>") if info else ""
+    aviso_err = ('<p class="error">' + _esc(mensaje) + '</p>') if mensaje else ""
+
+    if _pin_verificado():
+        campo_nombre = (
+            '<input name="nombre_completo" placeholder="Su nombre completo (para mostrar)" required>'
+            if es_staff else ""
+        )
+        intro = "Correo verificado. Defina una nueva contraseña de su preferencia (mín. 8 caracteres)" + (" y su nombre" if es_staff else "") + "."
+        paso = f"""<form method="POST"><input type="hidden" name="accion" value="guardar">{campo_nombre}<input name="password" type="password" placeholder="Nueva contraseña" required><input name="confirmar" type="password" placeholder="Confirmar contraseña" required><button>Guardar contraseña</button></form>"""
+    elif ch and session.get("cp_pin_token"):
+        intro = "Escriba el PIN de 6 dígitos enviado a " + _esc(_mask_correo(session.get("cp_correo", ""))) + ". Vence en 5 minutos."
+        paso = f"""<form method="POST"><input type="hidden" name="accion" value="validar"><input name="pin" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" required autofocus style="{estilo_in};font-size:20px;letter-spacing:8px;text-align:center"><button style="{estilo_btn}">Validar PIN</button></form><form method="POST" style="text-align:center;margin-top:10px"><input type="hidden" name="accion" value="reiniciar"><button style="background:none;border:0;color:#0020C2;font-size:12px;cursor:pointer;text-decoration:underline">Cambiar correo / reenviar PIN</button></form>"""
+    else:
+        intro = "Por seguridad, antes de cambiar su contraseña le enviaremos un PIN de verificación al correo registrado."
+        paso = f"""<form method="POST"><input type="hidden" name="accion" value="enviar"><input name="correo" type="email" required value="{_esc(registrado)}" placeholder="correo@ejemplo.com" style="{estilo_in}"><button style="{estilo_btn}">Enviar PIN</button></form>"""
+
     return page("Cambiar contraseña", f"""
-<div class="center"><section class="card login-card"><h1>Cambiar contraseña</h1><p>Ingresó con una clave temporal. Defina una nueva contraseña de su preferencia (mín. 8 caracteres){' y su nombre' if es_staff else ''} antes de continuar.</p>{'<p class="error">'+mensaje+'</p>' if mensaje else ''}<form method="POST">{campo_nombre}<input name="password" type="password" placeholder="Nueva contraseña" required><input name="confirmar" type="password" placeholder="Confirmar contraseña" required><button>Guardar contraseña</button></form><a href="/logout">Salir</a></section></div>
+<div class="center"><section class="card login-card"><h1>Cambiar contraseña</h1><p>{intro}</p>{aviso_ok}{aviso_err}{paso}<a href="/logout">Salir</a></section></div>
 """)
 
 
@@ -61489,6 +61606,9 @@ def mfa_pagina():
     if not u or not _usuario_activo_ok(u):
         session.clear()
         return redirect("/login")
+    # [FIX-MFA-CAMBIO-CLAVE] Si ya no se le exige MFA (se lo quitaron) no se queda atascado en /mfa.
+    if not _mfa_requerido(u) and (u.rol or "").strip() != ROL_SOLUCIONES:
+        return _mfa_completar_login(u)
     registrado = (u.correo or "").strip()
     error = info = ""
     accion = (request.form.get("accion") or "") if request.method == "POST" else ""
