@@ -104133,6 +104133,8 @@ def _tt_init():
         "CREATE TABLE IF NOT EXISTS tt_pagos (id %s, cuenta_id INTEGER, plan_id INTEGER, periodo VARCHAR(10) DEFAULT 'mensual', referencia VARCHAR(60) UNIQUE, "
         "monto_centavos BIGINT DEFAULT 0, moneda VARCHAR(3) DEFAULT 'COP', estado VARCHAR(16) DEFAULT 'pendiente', pasarela VARCHAR(16) DEFAULT 'wompi', "
         "id_transaccion VARCHAR(80) DEFAULT '', factura_ref VARCHAR(60) DEFAULT '', creado_en VARCHAR(20) DEFAULT '', actualizado_en VARCHAR(20) DEFAULT '')" % pk,
+        "CREATE TABLE IF NOT EXISTS tt_cuentas_extra (cuenta_id INTEGER PRIMARY KEY, nit VARCHAR(30) DEFAULT '', titular VARCHAR(160) DEFAULT '', "
+        "usuarios_est INTEGER DEFAULT 0, via VARCHAR(12) DEFAULT '', creado_en VARCHAR(20) DEFAULT '')",
     )
     for ddl in ddls:
         try:
@@ -104358,7 +104360,7 @@ a{color:#0020C2}.tt-top{display:flex;align-items:center;gap:12px;padding:14px 22
 .tt-h2{font-size:22px;color:#000F66;margin:30px 0 4px;letter-spacing:-.02em}
 .tt-box{background:#fff;border:1px solid #dbe7ff;border-radius:18px;padding:22px;max-width:520px;margin:20px auto;box-shadow:0 10px 30px rgba(0,32,194,.07)}
 .tt-box label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px;color:#334155}
-.tt-box input[type=text],.tt-box input[type=tel],.tt-box select{width:100%;padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px}
+.tt-box input[type=text],.tt-box input[type=tel],.tt-box input[type=number],.tt-box select{width:100%;padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px}
 .tt-box input:focus,.tt-box select:focus{outline:none;border-color:#0020C2;box-shadow:0 0 0 3px rgba(0,32,194,.12)}
 .tt-chk{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#475569;margin:14px 0;line-height:1.5}.tt-chk input{margin-top:3px;width:18px;height:18px}
 .tt-estado{border-radius:18px;padding:18px 20px;margin:16px 0;font-size:15px;line-height:1.5}
@@ -104500,6 +104502,10 @@ def tt_registro():
             err = "Escribe el nombre de tu negocio."
         elif seg not in [s for s, _n in _TT_SEGMENTOS]:
             err = "Elige el tipo de negocio."
+        elif _tt_nit_norm(request.form.get("nit"))[1]:
+            err = _tt_nit_norm(request.form.get("nit"))[1]
+        elif not 1 <= _tt_int(request.form.get("usuarios"), 0, 0, 1000) <= 50:
+            err = "Indica cuántas personas usarán el sistema (de 1 a 50)."
         elif not request.form.get("acepto"):
             err = "Debes aceptar los términos y el tratamiento de datos para continuar."
         else:
@@ -104516,11 +104522,12 @@ def tt_registro():
             if c:
                 session.pop("tt_pend", None)
                 session["tt_cuenta"] = c["id"]
+                _tt_guardar_extra(c["id"], _tt_nit_norm(request.form.get("nit"))[0], info["nombre"], _tt_int(request.form.get("usuarios"), 1, 0, 1000), "google")
                 try:
                     registrar_auditoria("TiendaTrack registro", "cuenta=%s segmento=%s" % (c["id"], seg))
                 except Exception:
                     pass
-                return redirect("/tt/cuenta")
+                return redirect("/tt/abrir" if (_tt_app_url() and (os.environ.get("TIENDATRACK_API_KEY") or "").strip()) else "/tt/cuenta")
             err = "No pudimos crear tu cuenta. Intenta de nuevo."
     opciones = "".join("<option value='%s'>%s</option>" % (v, _esc(n)) for v, n in _TT_SEGMENTOS)
     dias = _tt_int(_tt_cfg("tt_demo_dias", "15"), 15, 1, 90)
@@ -104530,6 +104537,8 @@ def tt_registro():
               "<form method='POST'><input type='hidden' name='csrf' value='" + _esc(_tt_csrf()) + "'>"
               "<label>Nombre de tu negocio</label><input type='text' name='negocio' maxlength='160' required>"
               "<label>Tipo de negocio</label><select name='segmento'>" + opciones + "</select>"
+              "<label>NIT (con o sin dígito de verificación; si no tienes, tu cédula)</label><input type='text' name='nit' maxlength='20' inputmode='numeric' placeholder='900123456-7' required>"
+              "<label>Usuarios: ¿cuántas personas usarán el sistema?</label><input type='number' name='usuarios' min='1' max='50' value='1' required>"
               "<label>Teléfono o WhatsApp (opcional)</label><input type='tel' name='telefono' maxlength='20'>"
               "<label class='tt-chk'><input type='checkbox' name='acepto' value='1'><span>Acepto los <a href='/legal' target='_blank'>términos</a> y la "
               "<a href='/tratamiento-datos' target='_blank'>política de tratamiento de datos personales</a> de PROCSIS.</span></label>"
@@ -104567,7 +104576,7 @@ def tt_cuenta():
         cuerpo += "<div class='tt-msg'>Los planes aún no están publicados. Escríbenos y te ayudamos.</div>"
     if est in ("demo", "activo"):
         cuerpo += ("<div class='tt-card' style='margin-top:18px'><h3>Tu aplicación</h3>"
-                   "<p>La aplicación TiendaTrack se habilitará aquí cuando esté disponible. Tu cuenta y tu demo ya quedaron registradas.</p></div>")
+                   "<p>Abre tu punto de venta, inventario, clientes y caja.</p>" + _tt_boton_abrir() + "</div>")
     pagos = _c48_q("SELECT referencia, periodo, monto_centavos, estado, creado_en, plan_id FROM tt_pagos WHERE cuenta_id=:c ORDER BY id DESC LIMIT 12", c=c["id"])
     if pagos:
         filas = "".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
@@ -104648,29 +104657,123 @@ def tt_salir():
     return redirect("/tt")
 
 
-@app.route("/api/v1/tiendatrack/cuenta")
-def tt_api_cuenta():
-    """Para la aplicación TiendaTrack: dice si una cuenta puede usar el servicio. Requiere la cabecera X-API-Key."""
-    ok_rl, _e = _rate_limit("tt-api", 120, 60)
-    if not ok_rl:
-        return {"ok": False, "error": "demasiadas solicitudes"}, 429
-    llave = (os.environ.get("TIENDATRACK_API_KEY") or "").strip()
-    dada = (request.headers.get("X-API-Key") or "").strip()
-    if not llave or not _tt_hm.compare_digest(llave, dada):
-        return {"ok": False, "error": "no autorizado"}, 401
-    c = _tt_cuenta_por("email", (request.args.get("email") or "").strip().lower())
-    if not c:
-        return {"ok": False, "error": "cuenta no encontrada"}, 404
+def _tt_nit_norm(v):
+    """NIT colombiano con o sin dígito de verificación. Devuelve (nit_con_dv, error). Si trae DV, se valida."""
+    s = re.sub(r"[^0-9-]", "", str(v or ""))
+    base, _, dv = s.partition("-")
+    if not base.isdigit() or not (5 <= len(base) <= 12):
+        return "", "Escribe un NIT o documento válido (solo números)."
+    pesos = (3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71)
+    r = sum(int(d) * p for d, p in zip(reversed(base), pesos)) % 11
+    calc = str(r if r < 2 else 11 - r)
+    if dv and dv != calc:
+        return "", "El dígito de verificación del NIT no coincide. Revísalo."
+    return base + "-" + calc, ""
+
+
+def _tt_guardar_extra(cuenta_id, nit, titular, usuarios, via):
+    """NIT, titular y número de usuarios de la cuenta (tabla tt_cuentas_extra). Nunca debe tumbar el registro."""
+    try:
+        _c48_x("DELETE FROM tt_cuentas_extra WHERE cuenta_id=:i", i=cuenta_id)
+        _c48_x("INSERT INTO tt_cuentas_extra (cuenta_id, nit, titular, usuarios_est, via, creado_en) VALUES (:i, :n, :t, :u, :v, :c)",
+               i=cuenta_id, n=nit, t=titular, u=int(usuarios or 0), v=via, c=_tt_ahora_s())
+    except Exception as e:
+        print("tt extra:", repr(e)[:200])
+
+
+def _tt_extra(cuenta_id):
+    r = _c48_q("SELECT nit, titular, usuarios_est FROM tt_cuentas_extra WHERE cuenta_id=:i", i=cuenta_id)
+    return {"nit": r[0][0] or "", "titular": r[0][1] or "", "usuarios_est": int(r[0][2] or 0)} if r else {"nit": "", "titular": "", "usuarios_est": 0}
+
+
+def _tt_payload_cuenta(c):
+    """Lo que la app TiendaTrack necesita saber de una cuenta."""
     est = _tt_estado(c)
     plan = _tt_plan(c["plan_id"]) if c["plan_id"] else None
     if not plan:
         activos = _tt_planes(solo_activos=True)
         plan = activos[-1] if activos else None
     fin = c["activo_hasta"] if est == "activo" else c["demo_fin"]
+    extra = _tt_extra(c["id"])
     return {"ok": True, "email": c["email"], "negocio": c["negocio"], "segmento": c["segmento"], "estado": est,
             "acceso": est in ("demo", "activo"), "vence": fin, "dias_restantes": _tt_dias(fin) if est in ("demo", "activo") else 0,
+            "nit": extra["nit"], "titular": extra["titular"] or c["nombre"], "usuarios_est": extra["usuarios_est"],
             "plan": ({"slug": plan["slug"], "nombre": plan["nombre"], "max_sucursales": plan["max_sucursales"], "max_usuarios": plan["max_usuarios"],
-                      "max_productos": plan["max_productos"], "incluye_dian": plan["incluye_dian"]} if plan else None)}, 200
+                      "max_productos": plan["max_productos"], "incluye_dian": plan["incluye_dian"]} if plan else None)}
+
+
+def _tt_api_autorizada():
+    llave = (os.environ.get("TIENDATRACK_API_KEY") or "").strip()
+    dada = (request.headers.get("X-API-Key") or "").strip()
+    return bool(llave) and _tt_hm.compare_digest(llave, dada)
+
+
+@app.route("/api/v1/tiendatrack/cuenta")
+def tt_api_cuenta():
+    """Para la aplicación TiendaTrack: dice si una cuenta puede usar el servicio. Requiere la cabecera X-API-Key."""
+    ok_rl, _e = _rate_limit("tt-api", 120, 60)
+    if not ok_rl:
+        return {"ok": False, "error": "demasiadas solicitudes"}, 429
+    if not _tt_api_autorizada():
+        return {"ok": False, "error": "no autorizado"}, 401
+    c = _tt_cuenta_por("email", (request.args.get("email") or "").strip().lower())
+    if not c:
+        return {"ok": False, "error": "cuenta no encontrada"}, 404
+    return _tt_payload_cuenta(c), 200
+
+
+@app.route("/api/v1/tiendatrack/registro", methods=["POST"])
+def tt_api_registro():
+    """Para la app TiendaTrack: crea la cuenta con su demo cuando el correo ya fue verificado con PIN allá.
+    Requiere X-API-Key. Responde 201 con el mismo cuerpo de /cuenta; 409 si el correo ya tiene cuenta."""
+    ok_rl, _e = _rate_limit("tt-api-registro", 20, 60)
+    if not ok_rl:
+        return {"ok": False, "error": "demasiadas solicitudes"}, 429
+    if not _tt_api_autorizada():
+        return {"ok": False, "error": "no autorizado"}, 401
+    if _tt_cfg("tt_registro_abierto", "0") != "1":
+        return {"ok": False, "error": "registro cerrado"}, 403
+    d = request.get_json(silent=True) or {}
+    email = str(d.get("email") or "").strip().lower()[:160]
+    titular = " ".join(str(d.get("titular") or "").split())[:160]
+    negocio = " ".join(str(d.get("negocio") or "").split())[:160]
+    seg = str(d.get("segmento") or "tienda")
+    tel = re.sub(r"[^0-9+]", "", str(d.get("telefono") or ""))[:20]
+    nit, err_nit = _tt_nit_norm(d.get("nit"))
+    usuarios = _tt_int(d.get("usuarios_est"), 1, 0, 1000)
+    if not re.match(r"^[^@\s]{1,64}@[^@\s]{1,120}\.[^@\s.]{2,}$", email):
+        return {"ok": False, "error": "Correo no válido."}, 400
+    if d.get("email_verificado") is not True:
+        return {"ok": False, "error": "El correo debe estar verificado."}, 400
+    if len(negocio) < 2 or len(titular) < 2:
+        return {"ok": False, "error": "Faltan el nombre del titular o del negocio."}, 400
+    if err_nit:
+        return {"ok": False, "error": err_nit}, 400
+    if not 1 <= usuarios <= 50:
+        return {"ok": False, "error": "Los usuarios deben estar entre 1 y 50."}, 400
+    if seg not in [s for s, _n in _TT_SEGMENTOS]:
+        return {"ok": False, "error": "Tipo de negocio no válido."}, 400
+    if d.get("acepto") is not True:
+        return {"ok": False, "error": "Faltan los términos."}, 400
+    if _tt_cuenta_por("email", email):
+        return {"ok": False, "error": "El correo ya tiene cuenta."}, 409
+    ahora_s = _tt_ahora_s()
+    dias = _tt_int(_tt_cfg("tt_demo_dias", "15"), 15, 1, 90)
+    try:
+        _c48_x("INSERT INTO tt_cuentas (google_sub, email, nombre, foto, negocio, segmento, telefono, plan_id, estado, demo_inicio, demo_fin, "
+               "acepto_terminos, terminos_version, creado_en, ultimo_acceso) VALUES (NULL, :e, :n, '', :ng, :sg, :t, 0, 'demo', :di, :df, :at, :tv, :c, :c)",
+               e=email, n=titular, ng=negocio, sg=seg, t=tel, di=ahora_s, df=_tt_sumar_dias(ahora_s, dias), at=ahora_s, tv=_TT_TERMINOS, c=ahora_s)
+    except Exception as e:
+        print("tt api registro:", repr(e)[:200])
+    c = _tt_cuenta_por("email", email)
+    if not c:
+        return {"ok": False, "error": "No se pudo crear la cuenta."}, 500
+    _tt_guardar_extra(c["id"], nit, titular, usuarios, "correo")
+    try:
+        registrar_auditoria("TiendaTrack registro", "cuenta=%s segmento=%s via=correo" % (c["id"], seg))
+    except Exception:
+        pass
+    return _tt_payload_cuenta(c), 201
 
 
 # ───────────── TiendaTrack · módulo de Gerencia (/gerencia/tiendatrack) ─────────────
@@ -109336,6 +109439,52 @@ def _ptt_registrar():
 
 
 _ptt_registrar()
+
+
+
+# [procsis-tiendatrack-fase2]
+# ═════════════ TIENDATRACK · FASE 2: acceso a la aplicación del negocio (SSO firmado hacia la app aparte) ═════════════
+# La app usa la MISMA llave (TIENDATRACK_API_KEY) para verificar el token y para consultar /api/v1/tiendatrack/cuenta.
+
+def _tt_app_url():
+    return (os.environ.get("TIENDATRACK_APP_URL") or "").strip().rstrip("/")
+
+
+def _tt_boton_abrir():
+    est = ""
+    try:
+        est = _tt_estado(_tt_cuenta_sesion())
+    except Exception:
+        pass
+    if not _tt_app_url() or not (os.environ.get("TIENDATRACK_API_KEY") or "").strip():
+        return "<p class='tt-msg'>La aplicación aún no está conectada. Escríbenos y te avisamos cuando esté lista.</p>"
+    if est not in ("demo", "activo"):
+        return ""
+    return "<p><a class='tt-btn' style='display:inline-block;padding:12px 22px;background:#0020C2;color:#fff;border-radius:10px;text-decoration:none;font-weight:700' href='/tt/abrir'>Abrir TiendaTrack</a></p>"
+
+
+def _tt_token_app(email, segundos=120):
+    cuerpo = _tt_b64.urlsafe_b64encode(json.dumps({"e": email, "x": int(__import__("time").time()) + segundos},
+                                                    separators=(",", ":")).encode()).decode().rstrip("=")
+    firma = _tt_hm.new((os.environ.get("TIENDATRACK_API_KEY") or "").strip().encode(), cuerpo.encode(), _tt_hl.sha256).hexdigest()
+    return cuerpo + "." + firma
+
+
+@app.route("/tt/abrir")
+def tt_abrir_app():
+    c = _tt_cuenta_sesion()
+    if not c:
+        return redirect("/tt")
+    destino = _tt_app_url()
+    if not destino or not (os.environ.get("TIENDATRACK_API_KEY") or "").strip():
+        return _tt_html("Aplicación no disponible", "<div class='tt-box'><h2>La aplicación aún no está conectada</h2><p>Estamos terminando de configurarla. Vuelve en un momento.</p></div>", c, 503)
+    if _tt_estado(c) not in ("demo", "activo"):
+        return redirect("/tt/cuenta")
+    try:
+        registrar_auditoria("TiendaTrack abrir app", "cuenta=%s" % c["id"])
+    except Exception:
+        pass
+    return redirect(destino + "/sso?t=" + _tt_up.quote(_tt_token_app(c["email"]), safe=""))
 
 
 if __name__ == "__main__":
