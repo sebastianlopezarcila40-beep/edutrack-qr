@@ -109487,6 +109487,146 @@ def tt_abrir_app():
     return redirect(destino + "/sso?t=" + _tt_up.quote(_tt_token_app(c["email"]), safe=""))
 
 
+# [procsis-tt-marco] ════════════════════════════════════════════════════════════════════════════
+#  TiendaTrack · menú, pie de página, «Quién es PROCSIS» y planes.
+#  Todo se edita aquí en PROCSIS (Contenido del sitio por área, Gerencia > web corporativa, Planes de TiendaTrack);
+#  la app TiendaTrack solo lo consulta por API. Requiere la cabecera X-API-Key (TIENDATRACK_API_KEY).
+# ════════════════════════════════════════════════════════════════════════════
+def _ttm_norm(t):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(t or "")).encode("ascii", "ignore").decode("ascii").lower()
+    return re.sub(r"[^a-z0-9 ]+", " ", t).strip()
+
+
+def _ttm_contacto():
+    # mismo criterio que el pie de EduTrack: el contacto de Soporte registrado por Gerencia manda
+    correo, tel = "", ""
+    try:
+        cfg = _corp_cfg_from_db()
+        correo = (cfg.get("contacto_publico_email") or "").strip()
+        tel = (cfg.get("contacto_publico_tel") or "").strip()
+    except Exception:
+        pass
+    try:
+        for f in _ctc_activos():
+            if f["area"] == "Soporte" and f["tipo"] == "correo":
+                correo = f["valor"]
+                break
+        for f in _ctc_activos():
+            if f["area"] == "Soporte" and f["tipo"] in ("telefono", "whatsapp"):
+                tel = "+" + f["valor"]
+                break
+    except Exception:
+        pass
+    return correo, tel
+
+
+def _ttm_seccion(clave):
+    try:
+        return [(r[0], r[1]) for r in _c48_q("SELECT etiqueta, url FROM web_menu_items WHERE seccion=:s AND activo=TRUE ORDER BY orden, id", s=clave)]
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return []
+
+
+def _ttm_enlaces(filas, correo, tel):
+    sal, vistos = [], set()
+    for et, url in filas:
+        et = (et or "").strip()
+        h = _sw_href(url, correo, tel)
+        if not et or h in ("mailto:", "tel:", ""):
+            continue
+        k = (et.lower(), h)
+        if k in vistos:
+            continue
+        vistos.add(k)
+        it = {"titulo": et, "url": h}
+        n = _ttm_norm(et)
+        if "que es procsis" in n or "quien es procsis" in n or "quienes somos" in n:
+            it["accion"] = "quienes"      # en TiendaTrack abre la ventana «Quién es PROCSIS»
+        sal.append(it)
+    return sal
+
+
+@app.route("/api/v1/tiendatrack/marco")
+def ttm_api_marco():
+    g = _ptt_api_guard("tt-marco", 120)
+    if g is not None:
+        return g
+    try:
+        _sw_init()
+    except Exception:
+        pass
+    correo, tel = _ttm_contacto()
+    sec = lambda c: _ttm_enlaces(_ttm_seccion(c), correo, tel)
+    menu = []
+    s = sec("procsis")
+    if s:
+        menu.append({"titulo": "Procsis", "etiqueta": "Explorar PROCSIS", "sub": s})
+    grupos = [x for x in ({"etiqueta": "Gestión Escolar", "sub": sec("soluciones_ges")}, {"etiqueta": "Seguridad Perimetral", "sub": sec("soluciones_seg")}) if x["sub"]]
+    if grupos:
+        menu.append({"titulo": "Soluciones", "grupos": grupos})
+    menu.append({"titulo": "Planes", "accion": "planes"})          # en TiendaTrack abre la ventana de planes y demo
+    ay = sec("ayuda")
+    if not any(x["url"].rstrip("/") == "/pqr" for x in ay):
+        ay.append({"titulo": "Radicar una PQR", "url": "/pqr"})    # en TiendaTrack va al formulario conectado a Soluciones
+    menu.append({"titulo": "Ayuda", "etiqueta": "Ayuda y soporte", "sub": ay})
+    menu.append({"titulo": "Sedes y Puntos de Atención", "url": "/puntos-atencion"})
+    menu.append({"titulo": "Support", "url": "/support"})
+    por = {}
+    try:
+        for sc, et, url in _sw_filas_pie():
+            por.setdefault(sc, []).append((et, url))
+    except Exception:
+        pass
+    try:
+        cfg = _corp_cfg_from_db()
+    except Exception:
+        cfg = {}
+    marco = {"menu": menu}
+    if por.get("footer_procsis"):
+        marco["marca"] = {"titulo": (cfg.get("corp_brand_nombre") or "PROCSIS").strip(), "texto": (cfg.get("corp_footer_texto") or "").strip(),
+                          "enlaces": _ttm_enlaces(por["footer_procsis"], correo, tel)}
+    marco["columnas"] = [{"titulo": t, "enlaces": _ttm_enlaces(por[c], correo, tel)} for c, t in _SW_TIT_PIE if por.get(c)]
+    marco["legal"] = _ttm_enlaces(por.get("footer_barra", []), correo, tel)
+    if (cfg.get("corp_brand_sub") or "").strip():
+        marco["tagline"] = "Un producto de PROCSIS · " + cfg["corp_brand_sub"].strip()
+    return {"ok": True, "marco": marco}, 200
+
+
+@app.route("/api/v1/tiendatrack/info")
+def ttm_api_info():
+    g = _ptt_api_guard("tt-info", 120)
+    if g is not None:
+        return g
+    try:
+        cfg = _corp_cfg_from_db()
+    except Exception:
+        cfg = {}
+    correo, tel = _ttm_contacto()
+    base = _base_publica().rstrip("/")
+    puntos = [p.strip(" -•\t") for p in (cfg.get("corp_empresa_puntos") or "").replace("\r", "").split("\n") if p.strip(" -•\t")][:8]
+    quienes = {"marca": (cfg.get("corp_brand_nombre") or "PROCSIS").strip(), "sub": (cfg.get("corp_brand_sub") or "").strip(),
+               "titulo": (cfg.get("corp_nosotros_titulo") or "Quiénes somos").strip(), "texto": (cfg.get("corp_nosotros_texto") or "").strip(),
+               "puntos": puntos, "correo": correo, "telefono": tel, "web": base + "/procsis"}
+    planes = []
+    try:
+        for p in _tt_planes(solo_web=True):
+            planes.append({"slug": p["slug"], "nombre": p["nombre"], "descripcion": p["descripcion"] or "",
+                           "precio_mensual": int(p["precio_mensual"] or 0), "precio_anual": int(p["precio_anual"] or 0),
+                           "max_sucursales": p["max_sucursales"], "max_usuarios": p["max_usuarios"], "max_productos": p["max_productos"],
+                           "incluye_dian": p["incluye_dian"] or "No"})
+    except Exception as e:
+        print("ttm info planes:", repr(e)[:200])
+    demo = {"dias": _tt_int(_tt_cfg("tt_demo_dias", "15"), 15, 1, 90), "registro_abierto": _tt_cfg("tt_registro_abierto", "0") == "1", "url": base + "/tt"}
+    return {"ok": True, "quienes": quienes, "planes": planes, "demo": demo}, 200
+
+
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
