@@ -109614,7 +109614,7 @@ def ttm_api_info():
                "puntos": puntos, "correo": correo, "telefono": tel, "web": base + "/procsis"}
     planes = []
     try:
-        for p in _tt_planes(solo_web=True):
+        for p in _tt_planes(solo_activos=True):
             planes.append({"slug": p["slug"], "nombre": p["nombre"], "descripcion": p["descripcion"] or "",
                            "precio_mensual": int(p["precio_mensual"] or 0), "precio_anual": int(p["precio_anual"] or 0),
                            "max_sucursales": p["max_sucursales"], "max_usuarios": p["max_usuarios"], "max_productos": p["max_productos"],
@@ -109623,6 +109623,32 @@ def ttm_api_info():
         print("ttm info planes:", repr(e)[:200])
     demo = {"dias": _tt_int(_tt_cfg("tt_demo_dias", "15"), 15, 1, 90), "registro_abierto": _tt_cfg("tt_registro_abierto", "0") == "1", "url": base + "/tt"}
     return {"ok": True, "quienes": quienes, "planes": planes, "demo": demo}, 200
+
+
+
+
+# [procsis-tt-puntos] ════════════════════════════════════════════════════════════════════════════
+#  TiendaTrack · sedes y puntos de atención (los mismos que se ven en /puntos-atencion de EduTrack)
+# ════════════════════════════════════════════════════════════════════════════
+@app.route("/api/v1/tiendatrack/puntos")
+def ttm_api_puntos():
+    g = _ptt_api_guard("tt-puntos", 120)
+    if g is not None:
+        return g
+    datos = []
+    try:
+        rows = PuntoAtencion.query.filter_by(activo=True).order_by(PuntoAtencion.orden, PuntoAtencion.id).all()
+        for r in rows:
+            datos.append({"id": r.id, "nombre": r.nombre or "", "categoria": r.categoria or "sedes", "direccion": r.direccion or "",
+                          "ciudad": r.ciudad or "", "codigo_postal": r.codigo_postal or "", "telefono": r.telefono or "", "lat": r.lat, "lng": r.lng,
+                          "dias": r.dias or "1,2,3,4,5", "abre": r.abre or "08:00", "cierra": r.cierra or "17:00"})
+    except Exception as ex:
+        print("ttm puntos:", repr(ex)[:200])
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return {"ok": True, "puntos": datos}, 200
 
 
 
