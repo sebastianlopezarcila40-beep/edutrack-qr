@@ -104415,7 +104415,29 @@ def _tt_plan_card(p, csrf, con_pago=False, seg=""):
 
 @app.route("/tt")
 def tt_inicio():
+    """Entrada pública TiendaTrack.
+    Si TIENDATRACK_APP_URL está configurada → redirige a la app (login o SSO).
+    Si no → muestra la vitrina local de PROCSIS (planes / demo).
+    """
     _tt_init()
+    destino = ""
+    try:
+        destino = (_tt_app_url() or "").rstrip("/")
+    except Exception:
+        destino = (os.environ.get("TIENDATRACK_APP_URL") or "").strip().rstrip("/")
+    if destino:
+        c = None
+        try:
+            c = _tt_cuenta_sesion()
+        except Exception:
+            c = None
+        try:
+            if c and _tt_estado(c) in ("demo", "activo") and (os.environ.get("TIENDATRACK_API_KEY") or "").strip():
+                return redirect("/tt/abrir")
+        except Exception:
+            pass
+        return redirect(destino + "/")
+    # Sin app conectada: vitrina local
     abierto = _tt_cfg("tt_registro_abierto", "0") == "1"
     dias = _tt_int(_tt_cfg("tt_demo_dias", "15"), 15, 1, 90)
     c = _tt_cuenta_sesion()
