@@ -109653,6 +109653,34 @@ def ttm_api_puntos():
 
 
 
+# [procsis-tt-paginas] ════════════════════════════════════════════════════════════════════════════
+#  TiendaTrack · texto de las páginas institucionales y legales (se editan en Gerencia, aquí solo se entregan)
+# ════════════════════════════════════════════════════════════════════════════
+_TTM_LEGALES = {"/privacidad": "privacidad", "/tratamiento-datos": "tratamiento", "/cookies": "cookies",
+                "/reembolsos": "reembolsos", "/legal": "terminos", "/politicas/habeas": "habeas"}
+
+
+@app.route("/api/v1/tiendatrack/pagina")
+def ttm_api_pagina():
+    g = _ptt_api_guard("tt-pagina", 120)
+    if g is not None:
+        return g
+    ruta = (request.args.get("ruta") or "").split("#")[0].split("?")[0].strip().rstrip("/") or "/"
+    cod = _TTM_LEGALES.get(ruta)
+    if not cod and ruta.startswith("/institucional/"):
+        cod = _CORP_SLUGS.get(ruta.split("/", 2)[2].strip().lower())
+    if not cod:
+        return {"ok": False, "error": "página no disponible"}, 404
+    try:
+        titulo, cuerpo = _get_pagina_legal(cod)
+    except Exception as ex:
+        print("ttm pagina:", repr(ex)[:200])
+        return {"ok": False, "error": "no se pudo leer la página"}, 500
+    return {"ok": True, "ruta": ruta, "titulo": titulo, "html": cuerpo}, 200
+
+
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
