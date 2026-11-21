@@ -4621,6 +4621,7 @@ _MODULOS_GERENCIA = [
         ('/tecnologia/proyectos', '🚀 Proyectos y desarrollo de software'),
         ('/tecnologia/solicitudes-rrhh', '📥 Gestión de Solicitudes de TI'),
         ('/tecnologia/permisos', '🔒 Permisos por propiedad de datos'),
+        ('/tecnologia/firmas', '✍️ Firmas para documentos PDF'),
         ('/ti/reportar', '🎫 Reportar un problema a TI'),
         ('/gerencia/ti-acceso-inicial', '🔑 Acceso inicial de TI (una sola vez)'),
     ]),
@@ -62688,6 +62689,7 @@ _REPARTO_NUEVOS.update({
     "/tecnologia/proyectos": ("Tecnologia", "Desarrollador"),
     "/tecnologia/solicitudes-rrhh": ("Tecnologia",),
     "/tecnologia/permisos": ("Tecnologia",),
+    "/tecnologia/firmas": ("Tecnologia",),
     "/gerencia/talento/ingresos": ("Talento",),
     "/ventas/equipo": ("Comercial", "Gerente", "Administrador"),
     "/ti/reportar": ("Soporte", "Comercial", "Cobranza", "Contabilidad", "Desarrollador", "Soluciones", "Gerente", "Administrador") + tuple(AREAS_PROCSIS),
@@ -62695,6 +62697,7 @@ _REPARTO_NUEVOS.update({
 })
 _REPARTO_ETIQUETAS["/contabilidad/solicitar"] = "🧾 Ticket a Contabilidad"
 _REPARTO_ETIQUETAS["/ti/reportar"] = "🎫 Reportar un problema a TI"
+_REPARTO_ETIQUETAS["/tecnologia/firmas"] = "✍️ Firmas para documentos PDF"
 _REPARTO_NUEVOS["/gerencia/api-conexiones"] = ("Calidad", "Desarrollador", "Tecnologia")
 _REPARTO_NUEVOS["/gerencia/protocolo-sic"] = ("Juridica",)
 _reparto_construir()
@@ -109699,6 +109702,575 @@ def ttm_api_pagina():
         print("ttm pagina:", repr(ex)[:200])
         return {"ok": False, "error": "no se pudo leer la página"}, 500
     return {"ok": True, "ruta": ruta, "titulo": titulo, "html": cuerpo}, 200
+
+
+
+
+# [procsis-carta-pdf] ════════════════════════════════════════════════════════════════════════════
+#  Carta oficial de respuesta (PQR y recursos): membrete con logo arriba a la derecha, fondo curvo, destinatario, asunto,
+#  puntos numerados, firma manuscrita con nombre y cargo, y pie con los datos de la empresa.
+#  La firma la carga TI en Tecnología > «Firmas para documentos PDF». Reemplaza el diseño anterior de estos dos PDF.
+# ════════════════════════════════════════════════════════════════════════════
+_MESES_CARTA = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def _carta_fecha(v, ciudad=""):
+    try:
+        if isinstance(v, str):
+            y, m, d = [int(x) for x in v.strip()[:10].split("-")]
+        else:
+            y, m, d = v.year, v.month, v.day
+        f = "%s %d de %d" % (_MESES_CARTA[m], d, y)
+    except Exception:
+        f = str(v or "")
+    return ("%s, %s" % (ciudad, f)) if ciudad else f
+
+
+def _firmas_init():
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS pdf_firmas (id SERIAL PRIMARY KEY, clave VARCHAR(100) UNIQUE, nombre VARCHAR(160) DEFAULT '', "
+            "cargo VARCHAR(200) DEFAULT '', linea2 VARCHAR(200) DEFAULT '', imagen TEXT DEFAULT '', activo BOOLEAN DEFAULT TRUE, "
+            "actualizado_por VARCHAR(80) DEFAULT '', actualizado_en VARCHAR(30) DEFAULT '')"))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _firma_procesar(raw):
+    # Deja la firma lista para el PDF: fondo claro transparente, recortada y de tamaño razonable (PNG).
+    from PIL import Image, ImageOps
+    import io as _io
+    im = Image.open(_io.BytesIO(raw))
+    im = ImageOps.exif_transpose(im).convert("RGBA")
+    if im.width > 1100:
+        im = im.resize((1100, max(1, int(im.height * 1100.0 / im.width))))
+    px = []
+    for r, g, b, a in im.getdata():
+        lum = (r * 299 + g * 587 + b * 114) // 1000
+        if a == 0 or lum >= 238:
+            px.append((0, 0, 0, 0))
+        elif lum > 185:
+            px.append((r, g, b, min(a, int((238 - lum) * 255 / 53))))
+        else:
+            px.append((r, g, b, a))
+    im.putdata(px)
+    bbox = im.getchannel("A").point(lambda v: 255 if v > 10 else 0).getbbox()
+    if not bbox:
+        raise ValueError("La imagen no tiene trazos visibles: sube la firma sobre fondo blanco.")
+    im = im.crop(bbox)
+    if im.width > 560:
+        im = im.resize((560, max(1, int(im.height * 560.0 / im.width))))
+    out = _io.BytesIO()
+    im.save(out, "PNG", optimize=True)
+    return out.getvalue()
+
+
+def _firma_para(usuario, rol=""):
+    # Firma, nombre y cargo para el PDF: la de la persona que gestionó; si no tiene, la firma general; si no hay, sin imagen.
+    import base64 as _b64
+    u = (usuario or "").strip()
+    out = {"nombre": "", "cargo": "", "linea2": "", "imagen": None, "usuario": u}
+    try:
+        _firmas_init()
+        for clave in (("usuario:" + u) if u else "", "defecto"):
+            if not clave:
+                continue
+            r = db.session.execute(text("SELECT nombre, cargo, linea2, imagen FROM pdf_firmas WHERE clave=:c AND activo=TRUE"), {"c": clave}).first()
+            if r:
+                out["nombre"], out["cargo"], out["linea2"] = (r[0] or "").strip(), (r[1] or "").strip(), (r[2] or "").strip()
+                if r[3]:
+                    try:
+                        out["imagen"] = _b64.b64decode(r[3])
+                    except Exception:
+                        out["imagen"] = None
+                break
+    except Exception as ex:
+        print("firma pdf:", repr(ex)[:160])
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    if not out["nombre"] and u:
+        try:
+            us = Usuario.query.filter(Usuario.institucion_id.is_(None), Usuario.usuario == u).first()
+            if us:
+                out["nombre"] = (getattr(us, "nombre_completo", "") or "").strip()
+                if not out["cargo"]:
+                    out["cargo"] = (getattr(us, "rol", "") or rol or "").strip()
+        except Exception:
+            pass
+    if not out["nombre"]:
+        out["nombre"] = u or "Mesa de Soluciones"
+    if not out["cargo"]:
+        out["cargo"] = rol or "Mesa de Soluciones"
+    return out
+
+
+def _carta_logo_bytes():
+    # logo de PROCSIS desde el disco; si no se encuentra, la carta dibuja el nombre como logotipo
+    import os as _os
+    for ruta in ("static/img/logo-procsis.png", "static/img/logo-procsis-mark.png", "static/img/logo-edutrack.png"):
+        for base in (_os.getcwd(), getattr(app, "root_path", "") or ""):
+            p = _os.path.join(base, ruta)
+            if _os.path.isfile(p):
+                try:
+                    with open(p, "rb") as f:
+                        return f.read()
+                except Exception:
+                    pass
+    return None
+
+
+def _carta_pdf(d):
+    # d: fecha_linea, destinatario, id_derecha, correo, asunto [(texto, negrita)], referencia, intro, intro_items, puente, items,
+    #    cierre_negrita, cierres, firma{nombre,cargo,linea2,imagen,usuario}, qr_url, qr_texto, trazas, pie [líneas], titulo, empresa, logo, cifrar
+    from xml.sax.saxutils import escape as _xe
+    from io import BytesIO as _BIO
+    from reportlab.lib import colors as _col
+    from reportlab.lib.pagesizes import letter as _letter
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_JUSTIFY, TA_RIGHT, TA_CENTER
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas as _cv
+    from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Table, TableStyle, KeepTogether, Image as _Img
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+
+    W, H = _letter
+    MX = 62
+    AZUL = _col.HexColor("#0020C2")
+    TXT = _col.HexColor("#1F2937")
+    GRIS = _col.HexColor("#6B7280")
+    LINK = "#2F6B8A"
+
+    def tx(v):
+        return str(v or "").encode("cp1252", "replace").decode("cp1252")
+
+    def esc(v):
+        return _xe(tx(v))
+
+    logo = d.get("logo")
+    logo_ir = None
+    if logo:
+        try:
+            logo_ir = ImageReader(_BIO(logo))
+        except Exception:
+            logo_ir = None
+
+    def dibujar(c, _doc):
+        c.saveState()
+        # fondo: zona gris suave con borde curvo y franja azul en la esquina inferior izquierda
+        c.setFillColor(_col.HexColor("#EFEFF2"))
+        p = c.beginPath()
+        p.moveTo(W, H - 112)
+        p.curveTo(W * 0.78, H - 262, W * 0.36, H - 452, 0, H - 600)
+        p.lineTo(0, 0)
+        p.lineTo(W, 0)
+        p.close()
+        c.drawPath(p, stroke=0, fill=1)
+        c.setFillColor(AZUL)
+        q = c.beginPath()
+        q.moveTo(0, 168)
+        q.curveTo(5, 108, 20, 46, 46, 0)
+        q.lineTo(0, 0)
+        q.close()
+        c.drawPath(q, stroke=0, fill=1)
+        # logo arriba a la derecha
+        if logo_ir is not None:
+            iw, ih = logo_ir.getSize()
+            k = min(150.0 / iw, 48.0 / ih)
+            c.drawImage(logo_ir, W - MX - iw * k, H - 44 - ih * k, iw * k, ih * k, mask="auto")
+        else:
+            c.setFillColor(AZUL)
+            c.setFont("Helvetica-Bold", 27)
+            c.drawRightString(W - MX, H - 66, "procsis")
+            c.setFillColor(_col.HexColor("#00C853"))
+            c.circle(W - MX + 2, H - 62, 3.2, stroke=0, fill=1)
+        # pie con los datos de la empresa
+        lin = [tx(s) for s in (d.get("pie") or []) if s][:5]
+        y = 74
+        for i, s in enumerate(lin):
+            if i < 2:
+                c.setFillColor(AZUL)
+                c.setFont("Helvetica-Bold", 10.5 if i == 0 else 9.5)
+                c.drawString(MX - 4, y, s[:90])
+                y -= 12.5
+            else:
+                c.setFillColor(GRIS)
+                c.setFont("Helvetica", 8.3)
+                c.drawString(MX - 4, y, s[:120])
+                y -= 11
+        c.restoreState()
+
+    class _NumCanvas(_cv.Canvas):
+        def __init__(self, *a, **k):
+            _cv.Canvas.__init__(self, *a, **k)
+            self._est = []
+
+        def showPage(self):
+            self._est.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            n = len(self._est)
+            for st in self._est:
+                self.__dict__.update(st)
+                self.setFillColor(GRIS)
+                self.setFont("Helvetica", 7.5)
+                self.drawRightString(W - MX, 30, "Página %d de %d" % (self._pageNumber, n))
+                _cv.Canvas.showPage(self)
+            _cv.Canvas.save(self)
+
+    sb = ParagraphStyle("cb", fontName="Helvetica", fontSize=10.5, leading=15.2, textColor=TXT, alignment=TA_JUSTIFY, spaceAfter=9)
+    sl = ParagraphStyle("cl", parent=sb, fontSize=10, leading=14, leftIndent=26, bulletIndent=6, spaceAfter=5, bulletFontName="Helvetica", bulletFontSize=10)
+    sm = ParagraphStyle("cm", parent=sl, fontSize=9.6, leading=13.6, spaceAfter=7)
+    sg = ParagraphStyle("cg", fontName="Helvetica-Bold", fontSize=10.5, leading=14, textColor=TXT)
+    sd = ParagraphStyle("cd", fontName="Helvetica", fontSize=10.5, leading=14, textColor=TXT)
+    sr = ParagraphStyle("cr", parent=sd, alignment=TA_RIGHT)
+    sn = ParagraphStyle("cn", fontName="Helvetica", fontSize=7.4, leading=10, textColor=GRIS, alignment=TA_JUSTIFY)
+    sq = ParagraphStyle("cq", fontName="Helvetica", fontSize=6.8, leading=8.6, textColor=GRIS, alignment=TA_CENTER)
+
+    def numerar(lineas, estilo):
+        out = []
+        n = 0
+        for ln in lineas:
+            ln = (ln or "").strip()
+            if not ln:
+                continue
+            if ln.lower().startswith("nota legal"):
+                out.append(Paragraph(esc(ln), sn))
+                continue
+            n += 1
+            out.append(Paragraph(esc(ln), estilo, bulletText="%d." % n))
+        return out
+
+    story = [Paragraph("<b>%s</b>" % esc(d.get("fecha_linea")), sd), Spacer(1, 22), Paragraph("Señor (a)", sd)]
+    cab = Table([[Paragraph("<b>%s</b>" % esc(d.get("destinatario")), sd), Paragraph("<b>%s</b>" % esc(d.get("id_derecha")), sr)]], colWidths=[300, W - 2 * MX - 300])
+    cab.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                             ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+    story.append(cab)
+    if (d.get("correo") or "").strip():
+        story.append(Paragraph('<font color="%s"><u><b>%s</b></u></font>' % (LINK, esc(d.get("correo"))), sd))
+    story.append(Spacer(1, 22))
+    asu = "".join(("<b>%s</b>" % esc(t_) if neg else esc(t_)) for t_, neg in (d.get("asunto") or []))
+    story.append(Paragraph("Asunto: " + asu, ParagraphStyle("ca", parent=sd, spaceAfter=4)))
+    if (d.get("referencia") or "").strip():
+        story.append(Paragraph(esc(d["referencia"]), ParagraphStyle("cf", parent=sn, spaceAfter=10, alignment=0)))
+    else:
+        story.append(Spacer(1, 8))
+    story.append(Paragraph(esc(d.get("intro")), sb))
+    story += numerar(d.get("intro_items") or [], sl)
+    story.append(Spacer(1, 4))
+    if (d.get("puente") or "").strip():
+        story.append(Paragraph(esc(d["puente"]), ParagraphStyle("cp", parent=sb, spaceBefore=4)))
+    story += numerar(d.get("items") or [], sm)
+    if (d.get("cierre_negrita") or "").strip():
+        story.append(Spacer(1, 4))
+        story.append(Paragraph("<b>%s</b>" % esc(d["cierre_negrita"]), sb))
+    for par in (d.get("cierres") or []):
+        story.append(Paragraph(esc(par), sb))
+
+    f = d.get("firma") or {}
+    blq = [Paragraph("Cordialmente,", ParagraphStyle("cc", parent=sb, spaceAfter=2))]
+    img = f.get("imagen")
+    puesta = False
+    if img:
+        try:
+            iw, ih = ImageReader(_BIO(img)).getSize()
+            k = min(165.0 / iw, 56.0 / ih)
+            blq.append(_Img(_BIO(img), iw * k, ih * k, hAlign="LEFT"))
+            puesta = True
+        except Exception as ex:
+            print("firma pdf imagen:", repr(ex)[:120])
+    if not puesta:
+        blq.append(Spacer(1, 40))
+    blq.append(Spacer(1, 3))
+    for ln in (f.get("nombre"), f.get("cargo"), f.get("linea2")):
+        if (ln or "").strip():
+            blq.append(Paragraph(esc(ln), sg))
+    if (f.get("usuario") or "").strip():
+        blq.append(Paragraph("Gestionó: %s" % esc(f["usuario"].upper()), sg))
+    der = []
+    if d.get("qr_url"):
+        try:
+            qr = QrCodeWidget(d["qr_url"])
+            bx = qr.getBounds()
+            lado = 58.0
+            dq = Drawing(lado, lado, transform=[lado / (bx[2] - bx[0]), 0, 0, lado / (bx[3] - bx[1]), 0, 0])
+            dq.add(qr)
+            der = [dq, Spacer(1, 2), Paragraph(esc(d.get("qr_texto") or "Verifique este documento"), sq)]
+        except Exception:
+            der = []
+    tf = Table([[blq, der]], colWidths=[340, W - 2 * MX - 340])
+    tf.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "BOTTOM"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                            ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
+    story += [Spacer(1, 8), KeepTogether([tf])]
+    for t_ in (d.get("trazas") or []):
+        if (t_ or "").strip():
+            story += [Spacer(1, 6), Paragraph(esc(t_), sn)]
+
+    b = _BIO()
+    kw = {}
+    if d.get("cifrar"):
+        try:
+            import secrets as _sec
+            from reportlab.lib.pdfencrypt import StandardEncryption
+            kw["encrypt"] = StandardEncryption("", ownerPassword=_sec.token_hex(16), canPrint=1, canModify=0, canCopy=1, canAnnotate=0)
+        except Exception:
+            kw = {}
+    doc = BaseDocTemplate(b, pagesize=_letter, leftMargin=MX, rightMargin=MX, topMargin=98, bottomMargin=98,
+                          title=tx(d.get("titulo") or "Respuesta"), author=tx(d.get("empresa") or "PROCSIS"), creator=tx(d.get("empresa") or "PROCSIS"), **kw)
+    fr = Frame(MX, 98, W - 2 * MX, H - 98 - 98, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0, id="cuerpo")
+    doc.addPageTemplates([PageTemplate(id="carta", frames=[fr], onPage=dibujar)])
+    doc.build(story, canvasmaker=_NumCanvas)
+    return b.getvalue()
+
+
+def _carta_pie():
+    # líneas del pie con los datos de la empresa (los mismos de «Datos de la empresa»)
+    try:
+        pl = plataforma()
+    except Exception:
+        pl = None
+
+    def pv(a):
+        try:
+            return str(getattr(pl, a, "") or "").strip() if pl else ""
+        except Exception:
+            return ""
+    try:
+        emp = nombre_empresa()
+    except Exception:
+        emp = "PROCSIS"
+    l3 = " · ".join(s for s in (pv("ciudad"), ("Tel. " + pv("telefono_soporte")) if pv("telefono_soporte") else "", pv("email_soporte"), pv("web")) if s)
+    return emp, [s for s in (emp, pv("direccion"), ("NIT " + pv("nit")) if pv("nit") else "", l3) if s], pv("ciudad"), pv("email_soporte"), pv("telefono_soporte"), pv("web")
+
+
+def _carta_lineas(texto):
+    return [x.strip() for x in str(texto or "").replace("\r", "").split("\n") if x.strip()]
+
+
+def _carta_resp_items(texto):
+    # la respuesta se renumera sola: se quitan los números que ya traiga y la despedida (la carta ya la incluye)
+    import re as _re
+    ls = [x for x in _carta_lineas(texto) if not _re.match(r"(?i)^cordialmente,?$", x)]
+    return [_re.sub(r"^\d+[.)]\s*", "", x) for x in ls]
+
+
+def generar_pdf_respuesta_pqr(t):
+    # Carta de respuesta a una PQR (petición, queja, reclamo, sugerencia) con el diseño de carta oficial.
+    from io import BytesIO as _BIO
+    emp, pie, ciudad, em_sop, tel_sop, web = _carta_pie()
+    radicado_no = formatear_radicado(t.radicado or t.nro_cun)
+    cliente = ("%s %s" % ((t.razon_social or "").strip(), (t.apellidos or "").strip())).strip() or "Usuario"
+    tipo = (t.tipo_pqr or "Petición").strip()
+    sub = (t.subtipo or "").strip()
+    objeto = (t.objeto or t.motivo or "").strip()
+    sol = (t.descripcion_cierre or t.respuesta or "").replace("\r", "").strip() or "Su solicitud ha sido gestionada."
+    quien = (getattr(t, "cerrado_por", "") or getattr(t, "asignado_a", "") or "").strip()
+    if not quien:
+        try:
+            quien = session.get("usuario") or ""
+        except Exception:
+            quien = ""
+    try:
+        base = _base_publica().rstrip("/")
+        url_qr = "%s/pqr/consulta?clave=%s" % (base, quote_plus(str(t.radicado or t.ticket or "")))
+    except Exception:
+        url_qr = ""
+    canales = [x for x in (("al correo " + em_sop) if em_sop else "", ("a la línea " + tel_sop) if tel_sop else "", web) if x]
+    cierres = ["Lo anterior, en concordancia con los términos contractuales del servicio y el artículo 19 de la Ley 1437 de 2011 (Código de Procedimiento Administrativo y de lo Contencioso Administrativo).",
+               ("Cualquier duda o aclaración podrá ser atendida en nuestros canales de atención" + ((": " + ", ".join(canales)) if canales else "") + ", o respondiendo directamente a este mismo radicado."),
+               "Le recordamos nuestro compromiso de seguir trabajando para brindarle la mejor experiencia."]
+    d = {
+        "fecha_linea": _carta_fecha(fecha_hoy(), ciudad), "destinatario": cliente[:70], "id_derecha": "Radicado No. %s" % radicado_no,
+        "correo": (t.email or "").strip(),
+        "asunto": [("Respuesta a su ", False), (tipo + ((" / " + sub) if sub else ""), True), (" – Radicado No. %s" % radicado_no, False)],
+        "intro": ("Le agradecemos su contacto, así nos brinda la oportunidad de darle respuesta a sus inquietudes y mejorar su experiencia. En respuesta a su comunicado radicado el día %s"
+                  % _carta_fecha(t.fecha or fecha_hoy())) + ((", en el que nos manifiesta:") if objeto else "."),
+        "intro_items": _carta_lineas(objeto) if objeto else [],
+        "puente": "En atención a lo anterior, nos permitimos informar:",
+        "items": _carta_resp_items(sol), "cierres": cierres,
+        "firma": _firma_para(quien, ""), "qr_url": url_qr, "qr_texto": "Escanee para verificar el estado de su radicado",
+        "trazas": [_proc_elaboro_txt("oficial", codigo=str(radicado_no or ""))],
+        "pie": pie, "titulo": "Respuesta PQR %s" % radicado_no, "empresa": emp, "logo": _carta_logo_bytes(),
+    }
+    return _BIO(_carta_pdf(d))
+
+
+def _rec_pdf(rec, t, etapa, decision, texto, firmante, rol, emitido):
+    # Carta con la resolución del recurso de reposición / apelación (protegida contra edición).
+    emp, pie, ciudad, em_sop, tel_sop, web = _carta_pie()
+    radicado_no = formatear_radicado(t.radicado or "") or "-"
+    cliente = ("%s %s" % (t.razon_social or "", t.apellidos or "")).strip() or "Usuario"
+    es_ap = etapa == "APELACION"
+    tipo_txt = _REC_TIPOS.get(rec.tipo, rec.tipo)
+    if es_ap:
+        asunto = [("Resolución del ", False), ("Recurso de Apelación", True), (" – Radicado No. %s" % radicado_no, False)]
+        nombre_rec = "recurso de apelación"
+    elif rec.tipo == "REPOSICION_SUBSIDIO_APELACION":
+        asunto = [("Respuesta a su ", False), ("Recurso de Reposición y en Subsidio de Apelación", True), (" – Radicado No. %s" % radicado_no, False)]
+        nombre_rec = "recurso de reposición y en subsidio de apelación"
+    else:
+        asunto = [("Respuesta a su ", False), ("Recurso de Reposición", True), (" – Radicado No. %s" % radicado_no, False)]
+        nombre_rec = "recurso de reposición"
+    args = _carta_lineas(getattr(rec, "fundamentos", "")) or ["Solicita la revisión de la decisión emitida."]
+    pret = _carta_lineas(getattr(rec, "pretension", ""))
+    if pret:
+        args += ["Solicita: " + p for p in pret]
+    if es_ap:
+        efecto = "La presente decisión resuelve de manera definitiva el recurso de apelación y pone fin a la actuación."
+    elif decision == "CONFIRMA" and rec.tipo == "REPOSICION_SUBSIDIO_APELACION":
+        efecto = ("Al confirmarse la decisión inicial, y por haberse interpuesto el recurso de apelación en subsidio, el expediente se remite a la Gerencia General / "
+                  "representación legal para la decisión definitiva. Se le notificará por este mismo medio.")
+    elif decision == "CONFIRMA":
+        efecto = "La decisión inicial queda en firme."
+    else:
+        efecto = "Se modifica o revoca la decisión inicial; el recurso de apelación en subsidio, si fue interpuesto, queda sin objeto."
+    canales = [x for x in (("al correo " + em_sop) if em_sop else "", ("a la línea " + tel_sop) if tel_sop else "", web) if x]
+    cierres = ["Cualquier duda o aclaración podrá ser atendida en nuestros canales de atención" + ((": " + ", ".join(canales)) if canales else "") + ".",
+               "Le recordamos nuestro compromiso de seguir trabajando para brindarle la mejor experiencia."]
+    ref = "Radicado del recurso: %s · Ticket: %s · Fecha y hora de emisión: %s (hora de Colombia)" % (rec.radicado_recurso or "-", t.ticket or "-", emitido.strftime("%Y-%m-%d %H:%M:%S"))
+    d = {
+        "fecha_linea": _carta_fecha(emitido, ciudad), "destinatario": cliente[:70], "id_derecha": "Radicado No. %s" % radicado_no, "correo": (t.email or "").strip(),
+        "asunto": asunto, "referencia": ref,
+        "intro": ("Le agradecemos su contacto, así nos brinda la oportunidad de darle respuesta a sus inquietudes y mejorar su experiencia. En respuesta a su comunicado en el que nos "
+                  "manifiesta que no se encuentra de acuerdo con la respuesta emitida bajo el Radicado No. %s, argumentando:" % radicado_no) if not es_ap else
+                 ("Le agradecemos su contacto. En respuesta a su recurso de apelación frente a la decisión emitida bajo el Radicado No. %s, argumentando:" % radicado_no),
+        "intro_items": args,
+        "puente": "En atención a lo anterior, nos permitimos informar:",
+        "items": _carta_resp_items(texto),
+        "cierre_negrita": "Decisión: %s. %s" % (_REC_DECISIONES.get(decision, decision), efecto),
+        "cierres": cierres,
+        "firma": _firma_para(firmante, rol), "qr_url": "", "qr_texto": "",
+        "trazas": [_proc_elaboro_txt("oficial", codigo=str(getattr(rec, "radicado_recurso", "") or "")),
+                   "Documento generado electrónicamente por EduTrack · PROCSIS. El sistema conserva el archivo original y su huella SHA-256, junto con la fecha y hora de emisión y de envío, como soporte de la notificación."],
+        "pie": pie, "titulo": "%s %s" % (tipo_txt, rec.radicado_recurso or ""), "empresa": emp, "logo": _carta_logo_bytes(), "cifrar": True,
+    }
+    return _carta_pdf(d)
+
+
+
+# ─────────── Tecnología · Firmas para documentos PDF (la firma que sale en las cartas de PQR y recursos) ───────────
+@app.route("/tecnologia/firmas")
+def tecnologia_firmas():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    _firmas_init()
+    escribe = _ti_puede_escribir()
+    csrf = _acc_csrf()
+    try:
+        usuarios = Usuario.query.filter(Usuario.institucion_id.is_(None), Usuario.activo == True).order_by(Usuario.usuario.asc()).all()  # noqa: E712
+    except Exception:
+        db.session.rollback()
+        usuarios = []
+    try:
+        regs = db.session.execute(text("SELECT id, clave, nombre, cargo, linea2, imagen, actualizado_por, actualizado_en FROM pdf_firmas ORDER BY clave")).fetchall()
+    except Exception:
+        db.session.rollback()
+        regs = []
+    nombres = {("usuario:" + u.usuario): ("%s · %s" % (u.usuario, (getattr(u, "nombre_completo", "") or "").strip() or getattr(u, "rol", ""))) for u in usuarios}
+    filas = []
+    for r in regs:
+        quien = "Firma general (para quien no tenga una propia)" if r[1] == "defecto" else nombres.get(r[1], r[1].replace("usuario:", "Usuario "))
+        img = ("<img alt='firma' style='max-height:54px;max-width:170px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:3px' src='data:image/png;base64,%s'>" % r[5]) if r[5] else "<i>sin imagen</i>"
+        acc = ("<form method='POST' action='/tecnologia/firmas/accion' onsubmit=\"return confirm('¿Quitar esta firma?');\"><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='borrar'>"
+               "<input type='hidden' name='id' value='%d'><button class='ti-btn s'>Quitar</button></form>" % (csrf, r[0])) if escribe else "—"
+        filas.append("<tr><td>%s</td><td><b>%s</b></td><td>%s<br><span style='color:#64748b'>%s</span><br><span style='color:#64748b'>%s</span></td><td style='font-size:12px;color:#64748b'>%s<br>%s</td><td>%s</td></tr>"
+                     % (img, _esc(quien), _esc(r[2] or "—"), _esc(r[3] or ""), _esc(r[4] or ""), _esc(r[7] or ""), _esc(r[6] or ""), acc))
+    form = ""
+    if escribe:
+        opts = "<option value='defecto'>Firma general (la usan quienes no tengan una propia)</option>" + "".join(
+            "<option value='usuario:%s'>%s</option>" % (_esc(u.usuario), _esc("%s — %s (%s)" % (u.usuario, (getattr(u, "nombre_completo", "") or "").strip() or "sin nombre", getattr(u, "rol", "")))) for u in usuarios)
+        form = ("<form method='POST' action='/tecnologia/firmas/accion' enctype='multipart/form-data'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='guardar'>"
+                "<div class='ti-2'><div><label>¿De quién es la firma?</label><select name='clave'>%s</select></div>"
+                "<div><label>Nombre completo (aparece bajo la firma)</label><input name='nombre' maxlength='160' placeholder='Ej. Alejandro Llano Gutiérrez'></div></div>"
+                "<div class='ti-2'><div><label>Cargo</label><input name='cargo' maxlength='200' placeholder='Ej. Gerente Soporte y Experiencia PQR´s'></div>"
+                "<div><label>Dependencia (opcional)</label><input name='linea2' maxlength='200' placeholder='Ej. Vicepresidencia de Negocios B2C'></div></div>"
+                "<label>Imagen de la firma (PNG o JPG, firmada sobre papel blanco)</label><input type='file' name='firma' accept='image/png,image/jpeg,image/webp'>"
+                "<p class='sub'>El sistema quita el fondo claro y recorta la imagen solo. Si la persona ya tiene firma y solo cambias el nombre o el cargo, no hace falta subir la imagen otra vez.</p>"
+                "<p><button class='ti-btn'>Guardar firma</button></p></form>" % (csrf, opts))
+    cuerpo = ("<h1>✍️ Firmas para documentos PDF</h1>"
+              "<p class='sub'>Las cartas de respuesta de PQR y de recursos de reposición y apelación salen con la firma de quien gestionó el caso, con su nombre y cargo debajo. "
+              "Si esa persona no tiene firma cargada, se usa la firma general; si tampoco hay, la carta sale con el espacio para firmar en blanco.</p>"
+              "<div class='ti-card'><h2>Cargar o actualizar una firma</h2>%s</div>"
+              "<div class='ti-card'><h2>Firmas cargadas</h2><div style='overflow-x:auto'><table><tr><th>Firma</th><th>Aplica a</th><th>Nombre y cargo</th><th>Actualizada</th><th></th></tr>%s</table></div></div>"
+              % (form or "<p class='sub'>Solo TI puede cargar firmas.</p>", "".join(filas) or "<tr><td colspan='5'>Aún no hay firmas cargadas.</td></tr>"))
+    return _ti_pagina("Firmas para documentos PDF", cuerpo)
+
+
+@app.route("/tecnologia/firmas/accion", methods=["POST"])
+def tecnologia_firmas_accion():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    if not _ti_puede_escribir():
+        return acceso_denegado("Solo el área de Tecnología y Soporte de TI carga las firmas.")
+    if not _ti_csrf_ok():
+        session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect("/tecnologia/firmas")
+    _firmas_init()
+    f = request.form
+    quien = session.get("usuario") or "TI"
+    try:
+        a = f.get("accion") or ""
+        if a == "borrar":
+            db.session.execute(text("DELETE FROM pdf_firmas WHERE id=:i"), {"i": int(f.get("id") or 0)})
+            db.session.commit()
+            registrar_auditoria("TI quitó firma", "%s quitó la firma #%s" % (quien, f.get("id")))
+            session["ti_msg"] = ("ok", "Firma eliminada.")
+            return redirect("/tecnologia/firmas")
+        if a == "guardar":
+            clave = (f.get("clave") or "").strip()
+            if clave != "defecto":
+                u = clave.split(":", 1)[1] if clave.startswith("usuario:") else ""
+                if not u or not Usuario.query.filter(Usuario.institucion_id.is_(None), Usuario.usuario == u).first():
+                    session["ti_msg"] = ("err", "Elige a quién pertenece la firma.")
+                    return redirect("/tecnologia/firmas")
+            nombre, cargo, linea2 = (f.get("nombre") or "").strip()[:160], (f.get("cargo") or "").strip()[:200], (f.get("linea2") or "").strip()[:200]
+            archivo = request.files.get("firma")
+            raw = archivo.read(3 * 1024 * 1024 + 1) if archivo and archivo.filename else b""
+            if len(raw) > 3 * 1024 * 1024:
+                session["ti_msg"] = ("err", "La imagen pesa más de 3 MB. Sube una más liviana.")
+                return redirect("/tecnologia/firmas")
+            import base64 as _b64
+            img64 = ""
+            if raw:
+                try:
+                    img64 = _b64.b64encode(_firma_procesar(raw)).decode("ascii")
+                except ValueError as ve:
+                    session["ti_msg"] = ("err", str(ve))
+                    return redirect("/tecnologia/firmas")
+                except Exception:
+                    session["ti_msg"] = ("err", "No se pudo leer la imagen. Usa un PNG o JPG.")
+                    return redirect("/tecnologia/firmas")
+            ahora_txt = ahora().strftime("%Y-%m-%d %H:%M")
+            ya = db.session.execute(text("SELECT id, imagen FROM pdf_firmas WHERE clave=:c"), {"c": clave}).first()
+            if ya:
+                db.session.execute(text("UPDATE pdf_firmas SET nombre=:n, cargo=:c, linea2=:l, imagen=:i, activo=TRUE, actualizado_por=:p, actualizado_en=:e WHERE id=:id"),
+                                   {"n": nombre, "c": cargo, "l": linea2, "i": img64 or (ya[1] or ""), "p": quien[:80], "e": ahora_txt, "id": ya[0]})
+            else:
+                if not img64:
+                    session["ti_msg"] = ("err", "Sube la imagen de la firma.")
+                    return redirect("/tecnologia/firmas")
+                db.session.execute(text("INSERT INTO pdf_firmas (clave, nombre, cargo, linea2, imagen, activo, actualizado_por, actualizado_en) VALUES (:k,:n,:c,:l,:i,TRUE,:p,:e)"),
+                                   {"k": clave, "n": nombre, "c": cargo, "l": linea2, "i": img64, "p": quien[:80], "e": ahora_txt})
+            db.session.commit()
+            registrar_auditoria("TI cargó firma", "%s cargó/actualizó la firma de %s" % (quien, clave))
+            session["ti_msg"] = ("ok", "Firma guardada. Ya sale en las próximas cartas de PQR y recursos.")
+    except Exception as ex:
+        print("firmas accion:", repr(ex)[:200])
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        session["ti_msg"] = ("err", "No se pudo guardar la firma. Intenta de nuevo.")
+    return redirect("/tecnologia/firmas")
 
 
 
