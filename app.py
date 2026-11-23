@@ -4621,6 +4621,7 @@ _MODULOS_GERENCIA = [
         ('/tecnologia/proyectos', '🚀 Proyectos y desarrollo de software'),
         ('/tecnologia/solicitudes-rrhh', '📥 Gestión de Solicitudes de TI'),
         ('/tecnologia/permisos', '🔒 Permisos por propiedad de datos'),
+        ('/tecnologia/recuperacion', '🔐 Recuperación de acceso'),
         ('/tecnologia/firmas', '✍️ Firmas para documentos PDF'),
         ('/ti/reportar', '🎫 Reportar un problema a TI'),
         ('/gerencia/ti-acceso-inicial', '🔑 Acceso inicial de TI (una sola vez)'),
@@ -4995,11 +4996,6 @@ def _wrap_staff_layout(title, body, path):
     nav = _staff_nav_items(path, rol)
     clock_js = (
         "<script>(function(){"
-        "function tick(){var el=document.getElementById('nav-ntp-clock');if(!el)return;"
-        "var d=new Date();var p=function(n){return (n<10?'0':'')+n;};"
-        "var ms=('00'+d.getMilliseconds()).slice(-3);"
-        "el.textContent='⏱️ '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+ms+' NTP';}"
-        "tick();setInterval(tick,100);"
         "var ping=document.getElementById('nav-api-ping');"
         "if(ping){var t0=performance.now();"
         "fetch(location.origin+'/',{method:'HEAD',cache:'no-store'}).then(function(){"
@@ -5024,7 +5020,6 @@ def _wrap_staff_layout(title, body, path):
         + env_badge
         + "</div>"
         '<div class="navbar-actions-right">'
-        '<span id="nav-ntp-clock" class="nav-ntp-clock">⏱️ ' + hora0 + " NTP</span>"
         '<span id="nav-api-ping" class="nav-api-ping">☁️ API: …</span>'
         + bell
         + '<span class="badge-periodo">Periodo: ' + periodo + "</span>"
@@ -29820,11 +29815,11 @@ def media_login_banner(bid):
 @app.route("/recuperar-staff", methods=["GET", "POST"])
 @app.route("/recuperar_staff", methods=["GET", "POST"])
 def recuperar_staff():
-    """Emergencia: restablece clave de usuario interno. Clave: env RECOVERY_KEY o EduTrackRecover2026*"""
-    try:
-        key_env = (os.environ.get("RECOVERY_KEY") or "EduTrackRecover2026*").strip()
-    except Exception:
-        key_env = "EduTrackRecover2026*"
+    """Emergencia (cerrada por defecto): solo existe si RECOVERY_KEY (16 caracteres o más) está definida en el servidor."""
+    key_env = (os.environ.get("RECOVERY_KEY") or "").strip()
+    if len(key_env) < 16:
+        abort(404)
+    ok_rl, _w = _rate_limit_login(max_attempts=5, window_sec=900, portal="recuperar-staff")
     msg = ""
     error = ""
     if request.method == "POST":
@@ -29832,10 +29827,13 @@ def recuperar_staff():
             clave = (request.form.get("clave") or "").strip()
             uname = (request.form.get("usuario") or "").strip().lower()
             nueva = (request.form.get("password") or "").strip()
-            if clave != key_env:
+            if not ok_rl:
+                error = "Demasiados intentos. Espera unos minutos."
+            elif not __import__("hmac").compare_digest(clave.encode("utf-8"), key_env.encode("utf-8")):
+                _rate_limit_fail(portal="recuperar-staff")
                 error = "Clave de recuperacion incorrecta."
-            elif not uname or len(nueva) < 8:
-                error = "Usuario obligatorio y contrasena minimo 8 caracteres."
+            elif not uname or len(nueva) < 12:
+                error = "Usuario obligatorio y contrasena minimo 12 caracteres."
             else:
                 try:
                     db.create_all()
@@ -29915,12 +29913,11 @@ def recuperar_staff():
         "background:#c0c0c0;border:2px solid;border-color:#dfdfdf #808080 #808080 #dfdfdf'>Restablecer</button>"
         "</form>"
         "<p style='font-size:11px;margin-top:14px;line-height:1.45'>"
-        "Clave por defecto: <b>EduTrackRecover2026*</b><br>"
+        "Acceso de emergencia: cada uso queda registrado.<br>"
         "Luego entre a:<br>"
         "<a href='/gerencia-login'>/gerencia-login</a> · "
         "<a href='/soporte-login'>/soporte-login</a> · "
         "<a href='/ventas-login'>/ventas-login</a><br>"
-        "Usuarios base: gerencia / Gerencia2026* · ventas / Ventas2026* · soporte / Soporte2026*"
         "</p>"
         "<p style='font-size:11px'><a href='/login'>Portal de acceso</a></p>"
         "</div></body></html>"
@@ -62689,6 +62686,7 @@ _REPARTO_NUEVOS.update({
     "/tecnologia/proyectos": ("Tecnologia", "Desarrollador"),
     "/tecnologia/solicitudes-rrhh": ("Tecnologia",),
     "/tecnologia/permisos": ("Tecnologia",),
+    "/tecnologia/recuperacion": ("Tecnologia",),
     "/tecnologia/firmas": ("Tecnologia",),
     "/gerencia/talento/ingresos": ("Talento",),
     "/ventas/equipo": ("Comercial", "Gerente", "Administrador"),
@@ -62697,6 +62695,7 @@ _REPARTO_NUEVOS.update({
 })
 _REPARTO_ETIQUETAS["/contabilidad/solicitar"] = "🧾 Ticket a Contabilidad"
 _REPARTO_ETIQUETAS["/ti/reportar"] = "🎫 Reportar un problema a TI"
+_REPARTO_ETIQUETAS["/tecnologia/recuperacion"] = "🔐 Recuperación de acceso"
 _REPARTO_ETIQUETAS["/tecnologia/firmas"] = "✍️ Firmas para documentos PDF"
 _REPARTO_NUEVOS["/gerencia/api-conexiones"] = ("Calidad", "Desarrollador", "Tecnologia")
 _REPARTO_NUEVOS["/gerencia/protocolo-sic"] = ("Juridica",)
@@ -90602,11 +90601,11 @@ def _login_por_id_acceso(ident, password, inst_id=None):
         if os.environ.get("LOGIN_ACEPTAR_USUARIO", "0") == "1":
             leg = login_usuario(ident, password, institucion_id=inst_id)
             return (leg, None) if leg else (None, "Usuario o contraseña incorrectos.")
-        return None, "Usuario incorrecto."
+        return None, "Usuario o contraseña incorrectos."
     if inst_id and u.institucion_id and int(u.institucion_id) != int(inst_id):
-        return None, "Usuario incorrecto."
+        return None, "Usuario o contraseña incorrectos."
     if not verificar_password(u.password, password):
-        return None, "Contraseña incorrecta."
+        return None, "Usuario o contraseña incorrectos."
     if not es_hash_password(u.password):
         u.password = crear_hash(password)
         db.session.commit()
@@ -112325,6 +112324,652 @@ def _carta_editor_inyectar(resp):
             if "carta-neg-js" not in t and ('<textarea name="respuesta"' in t or "<textarea name='resolucion'" in t or '<textarea name="resolucion"' in t
                                                or "<textarea name='fundamentos'" in t):
                 resp.set_data(t.replace("</body>", _CARTA_EDITOR_JS + "</body>", 1) if "</body>" in t else t + _CARTA_EDITOR_JS)
+    except Exception:
+        pass
+    return resp
+
+
+
+
+import secrets
+
+# [procsis-acceso-seguro] ════════════════════════════════════════════════════════════════════════════
+#  Recuperación de acceso con verificación (correo + PIN + teléfono), solicitud de usuario nuevo y refuerzos de seguridad del inicio de sesión.
+#  · Nada se muestra antes de comprobar el PIN: ni cuentas, ni áreas, ni si el correo existe.
+#  · El PIN (6 dígitos) vence a los 10 minutos, se guarda cifrado, tiene 5 intentos y sirve una sola vez.
+#  · Las cuentas internas (equipo PROCSIS) y las de dirección solo se restablecen con un teléfono de verificación ya registrado por TI.
+# ════════════════════════════════════════════════════════════════════════════
+_REC2_TABLAS = {"listo": False}
+_REC2_CLAVES_DEFECTO = ("gerencia2026*", "ventas2026*", "soporte2026*", "edutrackrecover2026*", "procsis2026*", "edutrack2026*", "12345678", "password")
+_REC2_ROLES_SENSIBLES = ("Superadmin", "Administrador", "Gerente", "Gerencia", "Rector", "Coordinador", "Secretario", "Contabilidad", "Soporte", "Desarrollador", "Developer", "Cobranza")
+
+
+def _rec2_init():
+    if _REC2_TABLAS["listo"]:
+        return
+    try:
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS acceso_recuperacion (id SERIAL PRIMARY KEY, token VARCHAR(64) UNIQUE, tipo VARCHAR(12) DEFAULT 'CLAVE', "
+            "correo VARCHAR(160) DEFAULT '', pin_hash VARCHAR(64) DEFAULT '', intentos INTEGER DEFAULT 0, estado VARCHAR(16) DEFAULT 'PIN', "
+            "expira BIGINT DEFAULT 0, ip VARCHAR(64) DEFAULT '', ua VARCHAR(200) DEFAULT '', cuentas TEXT DEFAULT '', tel_hash VARCHAR(64) DEFAULT '', "
+            "datos TEXT DEFAULT '', creado BIGINT DEFAULT 0)"))
+        db.session.execute(text("CREATE TABLE IF NOT EXISTS acceso_contacto (usuario_id INTEGER PRIMARY KEY, tel_hash VARCHAR(64) DEFAULT '', ult4 VARCHAR(4) DEFAULT '', "
+                                "actualizado VARCHAR(30) DEFAULT '', por VARCHAR(80) DEFAULT '')"))
+        db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS acceso_solicitudes (id SERIAL PRIMARY KEY, nombre VARCHAR(160) DEFAULT '', correo VARCHAR(160) DEFAULT '', telefono VARCHAR(40) DEFAULT '', "
+            "tipo VARCHAR(60) DEFAULT '', institucion VARCHAR(200) DEFAULT '', mensaje TEXT DEFAULT '', estado VARCHAR(16) DEFAULT 'PENDIENTE', ip VARCHAR(64) DEFAULT '', "
+            "creado VARCHAR(30) DEFAULT '', atendido_por VARCHAR(80) DEFAULT '', atendido_en VARCHAR(30) DEFAULT '')"))
+        db.session.commit()
+        _REC2_TABLAS["listo"] = True
+    except Exception as ex:
+        print("rec2 init:", repr(ex)[:160])
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _rec2_hmac(*partes):
+    import hmac as _hm
+    import hashlib as _hl
+    clave = str(app.secret_key or os.environ.get("SECRET_KEY") or "procsis").encode("utf-8")
+    return _hm.new(clave, "|".join(str(p) for p in partes).encode("utf-8"), _hl.sha256).hexdigest()
+
+
+def _rec2_tel(v):
+    import re as _re
+    d = _re.sub(r"\D", "", str(v or ""))
+    if d.startswith("57") and len(d) == 12:
+        d = d[2:]
+    return d if 7 <= len(d) <= 10 else ""
+
+
+def _rec2_origen_ok():
+    # las llamadas deben venir de esta misma página (defensa contra formularios de otros sitios)
+    from urllib.parse import urlparse as _up
+    for cab in ("Origin", "Referer"):
+        v = request.headers.get(cab) or ""
+        if v:
+            return _up(v).netloc == request.host
+    return False
+
+
+def _rec2_json(d, code=200):
+    r = jsonify(d)
+    r.status_code = code
+    r.headers["Cache-Control"] = "no-store"
+    return r
+
+
+def _rec2_cuentas(correo):
+    try:
+        return Usuario.query.filter(func.lower(Usuario.correo) == (correo or "").lower()).filter(Usuario.activo == True).all()  # noqa: E712
+    except Exception as ex:
+        print("rec2 cuentas:", repr(ex)[:140])
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return []
+
+
+def _rec2_usuario(uid):
+    try:
+        return Usuario.query.get(int(uid))
+    except Exception:
+        return None
+
+
+def _rec2_sensible(u):
+    return u.institucion_id is None or (u.rol or "").strip() in _REC2_ROLES_SENSIBLES
+
+
+def _rec2_etiqueta(u):
+    # área o colegio de la cuenta, para mostrarla en la lista
+    rol = (u.rol or "").strip()
+    if u.institucion_id is None:
+        try:
+            return "%s · %s" % (AREAS_PROCSIS[rol]["titulo"], "equipo PROCSIS") if rol in AREAS_PROCSIS else "Equipo PROCSIS · %s" % rol
+        except Exception:
+            return "Equipo PROCSIS · %s" % rol
+    try:
+        ins = Institucion.query.get(u.institucion_id)
+        return "%s · %s" % ((ins.nombre if ins else "Colegio"), rol)
+    except Exception:
+        return rol
+
+
+def _rec2_clave_ok(clave, u, correo):
+    import re as _re
+    c = clave or ""
+    if len(c) < 10:
+        return False, "Usa al menos 10 caracteres."
+    clases = sum(bool(_re.search(p, c)) for p in (r"[a-z]", r"[A-Z]", r"\d", r"[^A-Za-z0-9]"))
+    if clases < 3:
+        return False, "Combina mayúsculas, minúsculas, números y símbolos (al menos 3 tipos)."
+    bajo = c.lower()
+    if bajo in _REC2_CLAVES_DEFECTO or bajo.isdigit():
+        return False, "Esa contraseña es demasiado común. Elige otra."
+    for ref in ((u.usuario or ""), (correo or "").split("@")[0]):
+        if len(ref) >= 4 and ref.lower() in bajo:
+            return False, "La contraseña no debe contener tu usuario ni tu correo."
+    try:
+        if verificar_password(u.password, c):
+            return False, "Debe ser distinta a la contraseña actual."
+    except Exception:
+        pass
+    return True, ""
+
+
+def _rec2_enviar(correo, asunto, texto):
+    if not (os.environ.get("RESEND_API_KEY") or "").strip() and (not SOPORTE_EMAIL or not SOPORTE_PASSWORD):
+        return False
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = asunto
+        msg["From"] = SOPORTE_EMAIL
+        msg["To"] = correo
+        msg.set_content(texto)
+        _smtp_enviar(msg, SOPORTE_EMAIL, SOPORTE_PASSWORD)
+        return True
+    except Exception as ex:
+        print("rec2 correo:", repr(ex)[:160])
+        return False
+
+
+def _rec2_correo_configurado():
+    return bool((os.environ.get("RESEND_API_KEY") or "").strip() or (SOPORTE_EMAIL and SOPORTE_PASSWORD))
+
+
+def _rec2_limite(correo, ip):
+    # límites guardados en la base de datos (valen aunque haya varios servidores): 6 PIN por IP cada 10 min y 4 por correo cada hora
+    import time as _t
+    ahora_ts = int(_t.time())
+    try:
+        por_ip = db.session.execute(text("SELECT COUNT(*) FROM acceso_recuperacion WHERE ip=:i AND creado>:d"), {"i": ip, "d": ahora_ts - 600}).scalar() or 0
+        por_co = db.session.execute(text("SELECT COUNT(*) FROM acceso_recuperacion WHERE correo=:c AND creado>:d"), {"c": correo, "d": ahora_ts - 3600}).scalar() or 0
+        return int(por_ip) < 6 and int(por_co) < 4
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return True
+
+
+def _rec2_nuevo_flujo(tipo, correo, estado, pin, datos=""):
+    import time as _t
+    import json as _js
+    token = secrets.token_urlsafe(24)
+    ahora_ts = int(_t.time())
+    db.session.execute(text("INSERT INTO acceso_recuperacion (token, tipo, correo, pin_hash, estado, expira, ip, ua, datos, creado) VALUES (:t,:tp,:c,:p,:e,:x,:i,:u,:d,:n)"),
+                       {"t": _rec2_hmac("tok", token), "tp": tipo, "c": correo, "p": _rec2_hmac("pin", token, pin) if pin else "", "e": estado, "x": ahora_ts + 600,
+                        "i": _client_ip(), "u": (request.headers.get("User-Agent") or "")[:200], "d": datos, "n": ahora_ts})
+    db.session.execute(text("DELETE FROM acceso_recuperacion WHERE creado<:d"), {"d": ahora_ts - 7 * 86400})
+    db.session.commit()
+    return token
+
+
+def _rec2_flujo(token, tipo):
+    try:
+        r = db.session.execute(text("SELECT id, correo, pin_hash, intentos, estado, expira, cuentas, tel_hash, datos FROM acceso_recuperacion WHERE token=:t AND tipo=:tp"),
+                               {"t": _rec2_hmac("tok", token or ""), "tp": tipo}).first()
+        return r
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _rec2_validar_pin(fl, token, pin):
+    # True si el PIN es correcto; cuenta el intento y bloquea a los 5 fallos
+    import hmac as _hm
+    import time as _t
+    if not fl or fl[4] not in ("PIN",) or int(fl[5] or 0) < int(_t.time()) or int(fl[3] or 0) >= 5:
+        return False
+    ok = bool(pin) and bool(fl[2]) and _hm.compare_digest(fl[2], _rec2_hmac("pin", token, str(pin).strip()))
+    if not ok:
+        n = int(fl[3] or 0) + 1
+        db.session.execute(text("UPDATE acceso_recuperacion SET intentos=:n, estado=:e WHERE id=:i"), {"n": n, "e": "BLOQUEADO" if n >= 5 else fl[4], "i": fl[0]})
+        db.session.commit()
+    return ok
+
+
+def _rec2_cuerpo_pin(pin, para):
+    return ("Tu código de verificación de PROCSIS es: %s\n\nVence en 10 minutos y solo sirve una vez. %s\n\n"
+            "Solicitud hecha el %s desde la IP %s.\nSi no fuiste tú, ignora este mensaje: nadie puede entrar a tu cuenta sin este código. Cambia tu contraseña si sospechas algo y avisa a Soporte.\n\n%s"
+            % (pin, para, ahora().strftime("%Y-%m-%d %H:%M"), _client_ip(), APP_NAME))
+
+
+# ───────────── Recuperar contraseña ─────────────
+@app.route("/acceso/recuperar/pin", methods=["POST"])
+def rec2_pin():
+    if not _rec2_origen_ok() or not request.is_json:
+        return _rec2_json({"ok": False, "mensaje": "Solicitud no válida."}, 400)
+    import re as _re
+    correo = str((request.get_json(silent=True) or {}).get("correo") or "").strip().lower()[:160]
+    if not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$", correo):
+        return _rec2_json({"ok": False, "mensaje": "Escribe un correo válido."}, 400)
+    if not _rec2_correo_configurado():
+        return _rec2_json({"ok": False, "mensaje": "El envío de correos no está disponible en este momento. Contacta a Soporte."}, 503)
+    _rec2_init()
+    if not _rec2_limite(correo, _client_ip()):
+        return _rec2_json({"ok": False, "mensaje": "Hiciste varias solicitudes seguidas. Espera unos minutos e inténtalo de nuevo."}, 429)
+    cuentas = _rec2_cuentas(correo)
+    pin = "%06d" % secrets.randbelow(1000000)
+    token = _rec2_nuevo_flujo("CLAVE", correo, "PIN" if cuentas else "SIN_CUENTA", pin if cuentas else "")
+    if cuentas:
+        _rec2_enviar(correo, "Código para recuperar tu acceso - PROCSIS", _rec2_cuerpo_pin(pin, "Úsalo para recuperar el acceso a tu cuenta."))
+        try:
+            registrar_auditoria("Recuperación de acceso: PIN enviado", correo)
+        except Exception:
+            pass
+    return _rec2_json({"ok": True, "token": token, "mensaje": "Si el correo está registrado, te enviamos un PIN de 6 dígitos. Vence en 10 minutos."})
+
+
+@app.route("/acceso/recuperar/verificar", methods=["POST"])
+def rec2_verificar():
+    if not _rec2_origen_ok() or not request.is_json:
+        return _rec2_json({"ok": False, "mensaje": "Solicitud no válida."}, 400)
+    import hmac as _hm
+    import time as _t
+    import json as _js
+    d = request.get_json(silent=True) or {}
+    token, pin, tel = str(d.get("token") or ""), str(d.get("pin") or "").strip(), _rec2_tel(d.get("telefono"))
+    _rec2_init()
+    falla = _rec2_json({"ok": False, "mensaje": "Los datos no coinciden o el PIN venció. Revisa e inténtalo de nuevo, o solicita un PIN nuevo."}, 400)
+    fl = _rec2_flujo(token, "CLAVE")
+    if not fl:
+        return falla
+    if not tel or not pin.isdigit() or len(pin) != 6:
+        return _rec2_json({"ok": False, "mensaje": "Escribe el PIN de 6 dígitos y tu número de celular."}, 400)
+    if not _rec2_validar_pin(fl, token, pin):
+        return falla
+    cuentas = _rec2_cuentas(fl[1])
+    th = _rec2_hmac("tel", tel)
+    lista, guardar, hay_mismatch = [], [], False
+    for u in cuentas:
+        reg = db.session.execute(text("SELECT tel_hash FROM acceso_contacto WHERE usuario_id=:i"), {"i": u.id}).first()
+        sens = _rec2_sensible(u)
+        if reg and reg[0]:
+            ok_tel = _hm.compare_digest(reg[0], th)
+            motivo = "" if ok_tel else "El teléfono no coincide con el registrado en esta cuenta."
+            hay_mismatch = hay_mismatch or not ok_tel
+        elif sens:
+            ok_tel, motivo = False, "Esta cuenta necesita un teléfono de verificación registrado. Pídele a Gerencia o a TI que lo registre."
+        else:
+            ok_tel, motivo = True, ""
+        guardar.append({"id": u.id, "puede": bool(ok_tel)})
+        lista.append({"i": len(lista), "usuario": u.usuario or "", "nombre": (getattr(u, "nombre_completo", "") or "").strip(), "area": _rec2_etiqueta(u), "puede": bool(ok_tel), "motivo": motivo})
+    if not any(g["puede"] for g in guardar):
+        # PIN bueno pero ninguna cuenta se puede restablecer con ese teléfono: cuenta como intento fallido
+        n = int(fl[3] or 0) + 1
+        db.session.execute(text("UPDATE acceso_recuperacion SET intentos=:n, estado=:e WHERE id=:i"), {"n": n, "e": "BLOQUEADO" if n >= 5 else "PIN", "i": fl[0]})
+        db.session.commit()
+        if hay_mismatch:
+            return falla
+    db.session.execute(text("UPDATE acceso_recuperacion SET estado='VERIFICADO', expira=:x, cuentas=:c, tel_hash=:t WHERE id=:i"),
+                       {"x": int(_t.time()) + 900, "c": _js.dumps(guardar), "t": th, "i": fl[0]})
+    db.session.commit()
+    return _rec2_json({"ok": True, "cuentas": lista})
+
+
+@app.route("/acceso/recuperar/restablecer", methods=["POST"])
+def rec2_restablecer():
+    if not _rec2_origen_ok() or not request.is_json:
+        return _rec2_json({"ok": False, "mensaje": "Solicitud no válida."}, 400)
+    import time as _t
+    import json as _js
+    d = request.get_json(silent=True) or {}
+    token = str(d.get("token") or "")
+    clave, clave2 = str(d.get("clave") or ""), str(d.get("clave2") or "")
+    try:
+        idx = int(d.get("indice"))
+    except Exception:
+        idx = -1
+    _rec2_init()
+    fl = _rec2_flujo(token, "CLAVE")
+    if not fl or fl[4] != "VERIFICADO" or int(fl[5] or 0) < int(_t.time()):
+        return _rec2_json({"ok": False, "mensaje": "La verificación venció. Empieza de nuevo."}, 400)
+    try:
+        elegibles = _js.loads(fl[6] or "[]")
+    except Exception:
+        elegibles = []
+    if idx < 0 or idx >= len(elegibles) or not elegibles[idx].get("puede"):
+        return _rec2_json({"ok": False, "mensaje": "Esa cuenta no se puede restablecer desde aquí."}, 400)
+    u = _rec2_usuario(elegibles[idx]["id"])
+    if not u or not (getattr(u, "activo", True)) or (u.correo or "").strip().lower() != (fl[1] or ""):
+        return _rec2_json({"ok": False, "mensaje": "Esa cuenta no está disponible."}, 400)
+    if clave != clave2:
+        return _rec2_json({"ok": False, "mensaje": "Las dos contraseñas no coinciden."}, 400)
+    ok, msg = _rec2_clave_ok(clave, u, fl[1])
+    if not ok:
+        return _rec2_json({"ok": False, "mensaje": msg}, 400)
+    u.password = crear_hash(clave)
+    u.password_temporal = False
+    try:
+        u.session_token = ""
+        revocar_sesiones_usuario(u.id)
+    except Exception:
+        pass
+    db.session.execute(text("UPDATE acceso_recuperacion SET estado='USADO' WHERE id=:i"), {"i": fl[0]})
+    try:
+        if not db.session.execute(text("SELECT 1 FROM acceso_contacto WHERE usuario_id=:i"), {"i": u.id}).first():
+            db.session.execute(text("INSERT INTO acceso_contacto (usuario_id, tel_hash, ult4, actualizado, por) VALUES (:i,:h,:l,:a,'autoservicio')"),
+                               {"i": u.id, "h": fl[7], "l": "", "a": ahora().strftime("%Y-%m-%d %H:%M")})
+        db.session.execute(text("DELETE FROM seg_login_fallos WHERE usuario=:u"), {"u": (u.usuario or "").lower()[:120]})
+    except Exception as ex:
+        print("rec2 contacto:", repr(ex)[:120])
+    db.session.commit()
+    try:
+        registrar_auditoria("Contraseña restablecida (autoservicio)", "%s · %s" % (u.usuario, fl[1]))
+    except Exception:
+        pass
+    _rec2_enviar(fl[1], "Tu contraseña de PROCSIS fue cambiada",
+                 "La contraseña de la cuenta «%s» se cambió el %s desde la IP %s.\n\nSi fuiste tú, no tienes que hacer nada. Si no reconoces este cambio, avisa de inmediato a Soporte: %s"
+                 % (u.usuario, ahora().strftime("%Y-%m-%d %H:%M"), _client_ip(), APP_NAME))
+    return _rec2_json({"ok": True, "usuario": u.usuario or "", "mensaje": "Listo: tu contraseña se actualizó. Ya puedes iniciar sesión."})
+
+
+# ───────────── Solicitar un usuario nuevo (lo crea personal autorizado, no se crea solo) ─────────────
+@app.route("/acceso/solicitud/pin", methods=["POST"])
+def rec2_solicitud_pin():
+    if not _rec2_origen_ok() or not request.is_json:
+        return _rec2_json({"ok": False, "mensaje": "Solicitud no válida."}, 400)
+    import re as _re
+    import json as _js
+    d = request.get_json(silent=True) or {}
+    nombre, correo = str(d.get("nombre") or "").strip()[:160], str(d.get("correo") or "").strip().lower()[:160]
+    tel = _rec2_tel(d.get("telefono"))
+    if len(nombre) < 5 or not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$", correo) or not tel:
+        return _rec2_json({"ok": False, "mensaje": "Escribe tu nombre completo, un correo válido y tu celular."}, 400)
+    if not _rec2_correo_configurado():
+        return _rec2_json({"ok": False, "mensaje": "El envío de correos no está disponible en este momento. Contacta a Soporte."}, 503)
+    _rec2_init()
+    if not _rec2_limite(correo, _client_ip()):
+        return _rec2_json({"ok": False, "mensaje": "Hiciste varias solicitudes seguidas. Espera unos minutos e inténtalo de nuevo."}, 429)
+    datos = _js.dumps({"nombre": nombre, "telefono": tel, "tipo": str(d.get("tipo") or "")[:60], "institucion": str(d.get("institucion") or "").strip()[:200],
+                       "mensaje": str(d.get("mensaje") or "").strip()[:800]})
+    pin = "%06d" % secrets.randbelow(1000000)
+    token = _rec2_nuevo_flujo("SOLICITUD", correo, "PIN", pin, datos)
+    _rec2_enviar(correo, "Código para confirmar tu solicitud de usuario - PROCSIS", _rec2_cuerpo_pin(pin, "Úsalo para confirmar tu solicitud de usuario nuevo."))
+    return _rec2_json({"ok": True, "token": token, "mensaje": "Te enviamos un PIN de 6 dígitos al correo para confirmar la solicitud."})
+
+
+@app.route("/acceso/solicitud/confirmar", methods=["POST"])
+def rec2_solicitud_confirmar():
+    if not _rec2_origen_ok() or not request.is_json:
+        return _rec2_json({"ok": False, "mensaje": "Solicitud no válida."}, 400)
+    import json as _js
+    d = request.get_json(silent=True) or {}
+    token, pin = str(d.get("token") or ""), str(d.get("pin") or "").strip()
+    _rec2_init()
+    fl = _rec2_flujo(token, "SOLICITUD")
+    if not fl or not pin.isdigit() or not _rec2_validar_pin(fl, token, pin):
+        return _rec2_json({"ok": False, "mensaje": "El PIN no coincide o venció. Revisa e inténtalo de nuevo."}, 400)
+    try:
+        dat = _js.loads(fl[8] or "{}")
+    except Exception:
+        dat = {}
+    db.session.execute(text("UPDATE acceso_recuperacion SET estado='USADO' WHERE id=:i"), {"i": fl[0]})
+    db.session.execute(text("INSERT INTO acceso_solicitudes (nombre, correo, telefono, tipo, institucion, mensaje, ip, creado) VALUES (:n,:c,:t,:tp,:i,:m,:ip,:cr)"),
+                       {"n": dat.get("nombre", ""), "c": fl[1], "t": dat.get("telefono", ""), "tp": dat.get("tipo", ""), "i": dat.get("institucion", ""), "m": dat.get("mensaje", ""),
+                        "ip": _client_ip(), "cr": ahora().strftime("%Y-%m-%d %H:%M")})
+    db.session.commit()
+    try:
+        registrar_auditoria("Solicitud de usuario nuevo", "%s · %s · %s" % (dat.get("nombre", ""), fl[1], dat.get("tipo", "")))
+    except Exception:
+        pass
+    if SOPORTE_EMAIL:
+        _rec2_enviar(SOPORTE_EMAIL, "Nueva solicitud de usuario - PROCSIS",
+                     "Llegó una solicitud de usuario nuevo (correo verificado con PIN).\n\nNombre: %s\nCorreo: %s\nCelular: %s\nTipo de cuenta: %s\nColegio o área: %s\nMensaje: %s\n\n"
+                     "Revísala en Tecnología > Recuperación de acceso. El usuario solo debe crearse después de validar la identidad de la persona."
+                     % (dat.get("nombre", ""), fl[1], dat.get("telefono", ""), dat.get("tipo", ""), dat.get("institucion", ""), dat.get("mensaje", "")))
+    return _rec2_json({"ok": True, "mensaje": "Recibimos tu solicitud. Soporte validará tus datos y te contactará por correo o celular."})
+
+
+# ───────────── Tecnología · Recuperación de acceso (solicitudes, teléfonos de verificación, intentos) ─────────────
+@app.route("/tecnologia/recuperacion")
+def tecnologia_recuperacion():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    _rec2_init()
+    escribe, csrf = _ti_puede_escribir(), _acc_csrf()
+    try:
+        sol = db.session.execute(text("SELECT id, nombre, correo, telefono, tipo, institucion, mensaje, estado, creado FROM acceso_solicitudes ORDER BY id DESC LIMIT 40")).fetchall()
+        internos = Usuario.query.filter(Usuario.institucion_id.is_(None)).order_by(Usuario.usuario.asc()).all()
+        regs = {r[0]: r for r in db.session.execute(text("SELECT usuario_id, ult4, actualizado, por FROM acceso_contacto")).fetchall()}
+        ints = db.session.execute(text("SELECT creado, tipo, correo, estado, ip FROM acceso_recuperacion ORDER BY id DESC LIMIT 30")).fetchall()
+    except Exception as ex:
+        print("ti recuperacion:", repr(ex)[:140])
+        db.session.rollback()
+        sol, internos, regs, ints = [], [], {}, []
+    import time as _t
+
+    def mini(f):
+        return "<form method='POST' action='/tecnologia/recuperacion/accion' style='display:inline'><input type='hidden' name='csrf' value='%s'>%s</form>" % (csrf, f)
+    filas_s = ""
+    for r in sol:
+        acc = ""
+        if escribe and r[7] == "PENDIENTE":
+            acc = (mini("<input type='hidden' name='accion' value='solicitud'><input type='hidden' name='id' value='%d'><input type='hidden' name='estado' value='ATENDIDA'><button class='ti-btn s'>Marcar atendida</button>" % r[0])
+                   + mini("<input type='hidden' name='accion' value='solicitud'><input type='hidden' name='id' value='%d'><input type='hidden' name='estado' value='DESCARTADA'><button class='ti-btn s'>Descartar</button>" % r[0]))
+        filas_s += "<tr><td>%s</td><td><b>%s</b><br>%s<br>%s</td><td>%s<br>%s</td><td style='max-width:260px'>%s</td><td>%s</td><td>%s</td></tr>" % (
+            _esc(r[8]), _esc(r[1]), _esc(r[2]), _esc(r[3]), _esc(r[4]), _esc(r[5]), _esc(r[6]), _esc(r[7]), acc)
+    filas_t, sin_tel = "", []
+    for u in internos:
+        rg = regs.get(u.id)
+        if rg:
+            filas_t += "<tr><td>%s</td><td>%s</td><td>••••%s</td><td>%s · %s</td></tr>" % (_esc(u.usuario), _esc(u.rol), _esc(rg[1] or "····"), _esc(rg[2] or ""), _esc(rg[3] or ""))
+        else:
+            sin_tel.append(u.usuario)
+    defecto = []
+    try:
+        for uname, pwd in (("gerencia", "Gerencia2026*"), ("ventas", "Ventas2026*"), ("soporte", "Soporte2026*")):
+            uu = Usuario.query.filter_by(usuario=uname).first()
+            if uu and es_hash_password(uu.password) and check_password_hash(uu.password, pwd):
+                defecto.append(uname)
+    except Exception:
+        db.session.rollback()
+    aviso = ("<div class='ti-card' style='border:2px solid #dc2626'><b style='color:#b91c1c'>⚠️ Estas cuentas todavía usan la contraseña por defecto que está escrita en el código: %s.</b><br>"
+             "Cámbialas ya (Tecnología > Usuarios > Nueva contraseña). El sistema les pedirá cambiarla en el próximo ingreso.</div>" % _esc(", ".join(defecto))) if defecto else ""
+    form_tel = ("<form method='POST' action='/tecnologia/recuperacion/accion'><input type='hidden' name='csrf' value='%s'><input type='hidden' name='accion' value='telefono'>"
+                "<div class='ti-2'><div><label>Usuario interno</label><input name='usuario' list='rec2-usr' required><datalist id='rec2-usr'>%s</datalist></div>"
+                "<div><label>Teléfono de verificación (celular de la persona)</label><input name='telefono' inputmode='tel' required></div></div>"
+                "<p><button class='ti-btn'>Guardar teléfono</button></p></form>" % (csrf, "".join("<option value='%s'>" % _esc(u.usuario) for u in internos))) if escribe else ""
+    filas_i = "".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (_esc(_t.strftime("%Y-%m-%d %H:%M", _t.localtime(r[0] or 0))), _esc(r[1]),
+                      _esc((r[2] or "")[:2] + "•••" + (r[2] or "")[r[2].find("@"):] if r[2] and "@" in r[2] else ""), _esc(r[3]), _esc(r[4])) for r in ints)
+    cuerpo = ("<h1>🔐 Recuperación de acceso</h1>"
+              "<p class='sub'>Cuando alguien falla el inicio de sesión se abre «¿Olvidaste tu contraseña?». Verifica el correo con un PIN y un teléfono antes de mostrar cuentas o permitir cambios. "
+              "Las cuentas del equipo PROCSIS y de dirección solo se restablecen si aquí tienen un teléfono de verificación.</p>" + aviso +
+              "<div class='ti-card'><h2>Teléfonos de verificación (equipo interno)</h2>" + form_tel +
+              ("<p class='sub'>Sin teléfono registrado (no podrán recuperar por sí solos): <b>%s</b></p>" % _esc(", ".join(sin_tel)) if sin_tel else "") +
+              "<div style='overflow-x:auto'><table><tr><th>Usuario</th><th>Rol</th><th>Teléfono</th><th>Registrado</th></tr>" + (filas_t or "<tr><td colspan='4'>Aún no hay teléfonos registrados.</td></tr>") + "</table></div></div>"
+              "<div class='ti-card'><h2>Solicitudes de usuario nuevo</h2><div style='overflow-x:auto'><table><tr><th>Fecha</th><th>Persona</th><th>Cuenta</th><th>Mensaje</th><th>Estado</th><th></th></tr>"
+              + (filas_s or "<tr><td colspan='6'>No hay solicitudes.</td></tr>") + "</table></div></div>"
+              "<div class='ti-card'><h2>Últimos intentos de recuperación</h2><div style='overflow-x:auto'><table><tr><th>Fecha</th><th>Tipo</th><th>Correo</th><th>Estado</th><th>IP</th></tr>"
+              + (filas_i or "<tr><td colspan='5'>Sin movimientos.</td></tr>") + "</table></div></div>")
+    return _ti_pagina("Recuperación de acceso", cuerpo)
+
+
+@app.route("/tecnologia/recuperacion/accion", methods=["POST"])
+def tecnologia_recuperacion_accion():
+    g = _ti_guard()
+    if g is not None:
+        return g
+    if not _ti_puede_escribir():
+        return acceso_denegado("Solo el área de Tecnología y Soporte de TI administra la recuperación de acceso.")
+    if not _ti_csrf_ok():
+        session["ti_msg"] = ("err", "La sesión del formulario venció. Recargue la página e intente de nuevo.")
+        return redirect("/tecnologia/recuperacion")
+    _rec2_init()
+    f, quien = request.form, session.get("usuario") or "TI"
+    try:
+        if f.get("accion") == "telefono":
+            tel = _rec2_tel(f.get("telefono"))
+            u = Usuario.query.filter(Usuario.institucion_id.is_(None), func.lower(Usuario.usuario) == (f.get("usuario") or "").strip().lower()).first()
+            if not u or not tel:
+                session["ti_msg"] = ("err", "Elige un usuario interno y escribe un celular válido.")
+            else:
+                h, l4, ah = _rec2_hmac("tel", tel), tel[-4:], ahora().strftime("%Y-%m-%d %H:%M")
+                if db.session.execute(text("SELECT 1 FROM acceso_contacto WHERE usuario_id=:i"), {"i": u.id}).first():
+                    db.session.execute(text("UPDATE acceso_contacto SET tel_hash=:h, ult4=:l, actualizado=:a, por=:p WHERE usuario_id=:i"), {"h": h, "l": l4, "a": ah, "p": quien[:80], "i": u.id})
+                else:
+                    db.session.execute(text("INSERT INTO acceso_contacto (usuario_id, tel_hash, ult4, actualizado, por) VALUES (:i,:h,:l,:a,:p)"), {"i": u.id, "h": h, "l": l4, "a": ah, "p": quien[:80]})
+                db.session.commit()
+                registrar_auditoria("Teléfono de verificación", "%s registró el teléfono de %s (TI)" % (quien, u.usuario))
+                session["ti_msg"] = ("ok", "Teléfono de verificación guardado para %s." % u.usuario)
+        elif f.get("accion") == "solicitud" and f.get("estado") in ("ATENDIDA", "DESCARTADA"):
+            db.session.execute(text("UPDATE acceso_solicitudes SET estado=:e, atendido_por=:p, atendido_en=:a WHERE id=:i"),
+                               {"e": f.get("estado"), "p": quien[:80], "a": ahora().strftime("%Y-%m-%d %H:%M"), "i": int(f.get("id") or 0)})
+            db.session.commit()
+            session["ti_msg"] = ("ok", "Solicitud actualizada.")
+    except Exception as ex:
+        print("ti recuperacion accion:", repr(ex)[:160])
+        db.session.rollback()
+        session["ti_msg"] = ("err", "No se pudo guardar. Intenta de nuevo.")
+    return redirect("/tecnologia/recuperacion")
+
+
+# ───────────── Refuerzos de seguridad del inicio de sesión ─────────────
+_REC2_REVISION = {"hecha": False}
+
+
+@app.before_request
+def _rec2_revisar_claves_por_defecto():
+    # Una vez por arranque: si una cuenta base todavía tiene la contraseña por defecto del código, se le exige cambiarla al entrar.
+    if _REC2_REVISION["hecha"]:
+        return None
+    _REC2_REVISION["hecha"] = True
+    try:
+        for uname, pwd in (("gerencia", "Gerencia2026*"), ("ventas", "Ventas2026*"), ("soporte", "Soporte2026*")):
+            u = Usuario.query.filter_by(usuario=uname).first()
+            if u and es_hash_password(u.password) and check_password_hash(u.password, pwd) and not getattr(u, "password_temporal", False):
+                u.password_temporal = True
+                db.session.commit()
+                print("SEGURIDAD: la cuenta «%s» sigue con la contraseña por defecto; se le exigirá cambiarla al entrar." % uname)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return None
+
+
+_REC2_JS = r"""<style id="rec2-css">
+#rec2-ov{position:fixed;inset:0;background:rgba(8,18,60,.55);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);z-index:2147483000;display:none;align-items:center;justify-content:center;padding:16px;font-family:inherit}
+#rec2-ov.on{display:flex}
+#rec2-box{background:#fff;color:#0f172a;width:100%;max-width:440px;max-height:92vh;overflow:auto;border-radius:22px;box-shadow:0 30px 90px rgba(10,42,143,.35);padding:26px 24px 22px;position:relative}
+#rec2-box h2{margin:0 0 6px;font-size:21px;color:#011F68;letter-spacing:-.01em}
+#rec2-box p.s{margin:0 0 14px;color:#475569;font-size:14px;line-height:1.5}
+#rec2-box label{display:block;margin:12px 0 5px;font-size:13px;font-weight:700;color:#334155}
+#rec2-box input,#rec2-box select,#rec2-box textarea{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #cbd5e1;border-radius:11px;font:inherit;font-size:15px;background:#f8fafc;color:#0f172a}
+#rec2-box input:focus,#rec2-box select:focus,#rec2-box textarea:focus{outline:2px solid rgba(0,32,194,.35);border-color:#0020C2;background:#fff}
+#rec2-box .b{display:block;width:100%;margin-top:16px;padding:12px 14px;border:0;border-radius:12px;background:#0020C2;color:#fff;font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+#rec2-box .b:disabled{opacity:.55;cursor:default}
+#rec2-box .b.g{background:#eef2ff;color:#0020C2}
+#rec2-box .x{position:absolute;right:12px;top:10px;width:34px;height:34px;border:0;border-radius:50%;background:#eef2ff;color:#011F68;font-size:20px;cursor:pointer;line-height:1}
+#rec2-box .e{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:#fef2f2;color:#b91c1c;font-size:13.5px;display:none}
+#rec2-box .o{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:#ecfdf3;color:#067647;font-size:13.5px}
+#rec2-box a.l{color:#0020C2;font-weight:700;cursor:pointer;text-decoration:none;font-size:14px}
+#rec2-box .c{border:1px solid #dbe3f5;border-radius:14px;padding:12px 14px;margin:10px 0;background:#f8faff}
+#rec2-box .c b{color:#011F68}.c small{display:block;color:#64748b;margin-top:2px;font-size:12.5px}
+#rec2-box .c button{margin-top:10px;padding:8px 14px;border:0;border-radius:10px;background:#0020C2;color:#fff;font-weight:700;cursor:pointer}
+#rec2-box .c .m{margin-top:8px;color:#b45309;font-size:12.5px}
+#rec2-box .f{height:6px;border-radius:99px;background:#e2e8f0;margin-top:8px;overflow:hidden}#rec2-box .f i{display:block;height:100%;width:0;background:#dc2626;transition:width .2s,background .2s}
+#rec2-box .p{display:none}#rec2-box .p.on{display:block}
+.rec2-link{display:block;margin:10px 0 0;color:#0020C2;font-weight:700;font-size:14px;text-decoration:none;cursor:pointer}
+</style>
+<div id="rec2-ov" role="dialog" aria-modal="true" aria-labelledby="rec2-t"><div id="rec2-box">
+<button type="button" class="x" id="rec2-x" aria-label="Cerrar">×</button>
+<div class="p on" id="rec2-p1"><h2 id="rec2-t">¿Olvidaste tu contraseña?</h2><p class="s">Te ayudamos a recuperarla. Primero confirmamos que eres tú: te enviaremos un PIN a tu correo.</p>
+<label for="rec2-correo">Correo electrónico</label><input id="rec2-correo" type="email" autocomplete="email" inputmode="email" placeholder="tucorreo@ejemplo.com">
+<div class="e" id="rec2-e1"></div><button type="button" class="b" id="rec2-b1">Enviar PIN a mi correo</button>
+<p style="margin:16px 0 0;text-align:center"><a class="l" id="rec2-nuevo">¿No tienes usuario? Solicitar un usuario nuevo</a></p></div>
+<div class="p" id="rec2-p2"><h2>Revisa tu correo</h2><p class="s" id="rec2-m2"></p>
+<label for="rec2-pin">PIN de 6 dígitos</label><input id="rec2-pin" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
+<label for="rec2-tel">Celular registrado en tu cuenta</label><input id="rec2-tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="300 123 4567">
+<div class="e" id="rec2-e2"></div><button type="button" class="b" id="rec2-b2">Verificar</button>
+<p style="margin:14px 0 0;text-align:center"><a class="l" id="rec2-re">Reenviar PIN</a> <span id="rec2-cd" style="color:#64748b;font-size:13px"></span></p></div>
+<div class="p" id="rec2-p3"><h2>Tus cuentas</h2><p class="s">Estas son las cuentas vinculadas a tu correo. Elige la que quieres recuperar.</p><div id="rec2-lista"></div></div>
+<div class="p" id="rec2-p4"><h2>Crea tu nueva contraseña</h2><p class="s" id="rec2-m4"></p>
+<label for="rec2-c1">Nueva contraseña</label><input id="rec2-c1" type="password" autocomplete="new-password"><div class="f"><i id="rec2-f"></i></div>
+<p class="s" style="font-size:12.5px;margin:6px 0 0">Mínimo 10 caracteres, con mayúsculas, minúsculas, números o símbolos (al menos 3 tipos). No uses tu usuario ni tu correo.</p>
+<label for="rec2-c2">Repite la contraseña</label><input id="rec2-c2" type="password" autocomplete="new-password">
+<label style="font-weight:500"><input type="checkbox" id="rec2-ver" style="width:auto;margin-right:6px">Mostrar contraseñas</label>
+<div class="e" id="rec2-e4"></div><button type="button" class="b" id="rec2-b4">Guardar contraseña</button></div>
+<div class="p" id="rec2-p5"><h2>¡Listo!</h2><div class="o" id="rec2-m5"></div><button type="button" class="b" id="rec2-b5">Ir a iniciar sesión</button></div>
+<div class="p" id="rec2-p6"><h2>Solicitar un usuario nuevo</h2><p class="s">Cuéntanos quién eres. Verificamos tu correo con un PIN y Soporte validará tus datos antes de crear el usuario.</p>
+<label for="rec2-sn">Nombre completo</label><input id="rec2-sn" autocomplete="name">
+<label for="rec2-sc">Correo electrónico</label><input id="rec2-sc" type="email" autocomplete="email">
+<label for="rec2-st">Celular</label><input id="rec2-st" type="tel" autocomplete="tel">
+<label for="rec2-sp">Tipo de cuenta</label><select id="rec2-sp"><option>Acudiente / familia</option><option>Docente</option><option>Personal administrativo del colegio</option><option>Rector o directivo</option><option>Equipo PROCSIS (área interna)</option><option>Otro</option></select>
+<label for="rec2-si">Colegio o área</label><input id="rec2-si">
+<label for="rec2-sm">Mensaje (opcional)</label><textarea id="rec2-sm" rows="2"></textarea>
+<div class="e" id="rec2-e6"></div><button type="button" class="b" id="rec2-b6">Enviar PIN a mi correo</button>
+<p style="margin:14px 0 0;text-align:center"><a class="l" id="rec2-v1">Volver</a></p></div>
+<div class="p" id="rec2-p7"><h2>Confirma tu solicitud</h2><p class="s" id="rec2-m7"></p>
+<label for="rec2-sx">PIN de 6 dígitos</label><input id="rec2-sx" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+<div class="e" id="rec2-e7"></div><button type="button" class="b" id="rec2-b7">Confirmar solicitud</button></div>
+<div class="p" id="rec2-p8"><h2>Solicitud enviada</h2><div class="o" id="rec2-m8"></div><button type="button" class="b" id="rec2-b8">Cerrar</button></div>
+</div></div>
+<script id="rec2-js">
+(function(){
+  var AUTO=__AUTO__,ov=document.getElementById('rec2-ov'),tok='',tokS='',cd=0,timer=null;
+  function $(i){return document.getElementById(i);}
+  function pane(n){for(var i=1;i<=8;i++){$('rec2-p'+i).className='p'+(i===n?' on':'');}var a=$('rec2-p'+n).querySelector('input');if(a)setTimeout(function(){a.focus();},50);}
+  function err(id,m){var e=$(id);e.textContent=m||'';e.style.display=m?'block':'none';}
+  function post(url,data){return fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){return r.json().catch(function(){return {ok:false,mensaje:'Respuesta no válida.'};});}).catch(function(){return {ok:false,mensaje:'No hay conexión. Inténtalo de nuevo.'};});}
+  function abrir(correo){ov.className='on';pane(1);if(correo)$('rec2-correo').value=correo;document.documentElement.style.overflow='hidden';}
+  function cerrar(){ov.className='';document.documentElement.style.overflow='';}
+  function busy(b,t){b.disabled=!!t;if(t){b.setAttribute('data-t',b.textContent);b.textContent=t;}else if(b.getAttribute('data-t')){b.textContent=b.getAttribute('data-t');}}
+  function cuenta(){clearInterval(timer);cd=60;$('rec2-re').style.display='none';timer=setInterval(function(){cd--;$('rec2-cd').textContent=cd>0?'Podrás reenviar en '+cd+' s':'';if(cd<=0){clearInterval(timer);$('rec2-re').style.display='';}},1000);}
+  function enviarPin(){var b=$('rec2-b1');err('rec2-e1','');var c=$('rec2-correo').value.trim();if(!c){err('rec2-e1','Escribe tu correo.');return;}busy(b,'Enviando…');
+    post('/acceso/recuperar/pin',{correo:c}).then(function(r){busy(b);if(!r.ok){err('rec2-e1',r.mensaje);return;}tok=r.token;$('rec2-m2').textContent=r.mensaje;$('rec2-pin').value='';pane(2);cuenta();});}
+  function verificar(){var b=$('rec2-b2');err('rec2-e2','');busy(b,'Verificando…');
+    post('/acceso/recuperar/verificar',{token:tok,pin:$('rec2-pin').value,telefono:$('rec2-tel').value}).then(function(r){busy(b);if(!r.ok){err('rec2-e2',r.mensaje);return;}lista(r.cuentas);pane(3);});}
+  function lista(cs){var L=$('rec2-lista');L.innerHTML='';cs.forEach(function(c){var d=document.createElement('div');d.className='c';var b=document.createElement('b');b.textContent=c.usuario;d.appendChild(b);
+    var s=document.createElement('small');s.textContent=(c.nombre?c.nombre+' · ':'')+c.area;d.appendChild(s);
+    if(c.puede){var k=document.createElement('button');k.type='button';k.textContent='Restablecer esta cuenta';k.onclick=function(){elegir(c);};d.appendChild(k);}else{var m=document.createElement('div');m.className='m';m.textContent=c.motivo;d.appendChild(m);}L.appendChild(d);});}
+  var cuentaSel=null;
+  function elegir(c){cuentaSel=c;$('rec2-m4').textContent='Cuenta: '+c.usuario+' · '+c.area;$('rec2-c1').value='';$('rec2-c2').value='';err('rec2-e4','');fuerza('');pane(4);}
+  function fuerza(v){var n=0;if(v.length>=10)n++;if(/[a-z]/.test(v)&&/[A-Z]/.test(v))n++;if(/\d/.test(v))n++;if(/[^A-Za-z0-9]/.test(v))n++;if(v.length>=14)n++;var f=$('rec2-f');f.style.width=(n*20)+'%';f.style.background=n<3?'#dc2626':(n<4?'#f59e0b':'#16a34a');}
+  function guardar(){var b=$('rec2-b4');err('rec2-e4','');busy(b,'Guardando…');
+    post('/acceso/recuperar/restablecer',{token:tok,indice:cuentaSel.i,clave:$('rec2-c1').value,clave2:$('rec2-c2').value}).then(function(r){busy(b);if(!r.ok){err('rec2-e4',r.mensaje);return;}$('rec2-m5').textContent=r.mensaje+' Usuario: '+r.usuario;cuentaSel.u=r.usuario;$('rec2-c1').value='';$('rec2-c2').value='';pane(5);});}
+  function irLogin(){cerrar();var u=document.querySelector('input[name="usuario"]');if(u&&cuentaSel&&cuentaSel.u)u.value=cuentaSel.u;var p=document.querySelector('input[name="password"]');if(p){p.value='';p.focus();}}
+  function solPin(){var b=$('rec2-b6');err('rec2-e6','');busy(b,'Enviando…');
+    post('/acceso/solicitud/pin',{nombre:$('rec2-sn').value,correo:$('rec2-sc').value,telefono:$('rec2-st').value,tipo:$('rec2-sp').value,institucion:$('rec2-si').value,mensaje:$('rec2-sm').value}).then(function(r){busy(b);if(!r.ok){err('rec2-e6',r.mensaje);return;}tokS=r.token;$('rec2-m7').textContent=r.mensaje;$('rec2-sx').value='';pane(7);});}
+  function solOk(){var b=$('rec2-b7');err('rec2-e7','');busy(b,'Confirmando…');
+    post('/acceso/solicitud/confirmar',{token:tokS,pin:$('rec2-sx').value}).then(function(r){busy(b);if(!r.ok){err('rec2-e7',r.mensaje);return;}$('rec2-m8').textContent=r.mensaje;pane(8);});}
+  $('rec2-b1').onclick=enviarPin;$('rec2-b2').onclick=verificar;$('rec2-b4').onclick=guardar;$('rec2-b5').onclick=irLogin;$('rec2-b6').onclick=solPin;$('rec2-b7').onclick=solOk;$('rec2-b8').onclick=cerrar;
+  $('rec2-re').onclick=function(){pane(1);enviarPin();};$('rec2-nuevo').onclick=function(){pane(6);};$('rec2-v1').onclick=function(){pane(1);};$('rec2-x').onclick=cerrar;
+  $('rec2-c1').oninput=function(){fuerza(this.value);};
+  $('rec2-ver').onchange=function(){var t=this.checked?'text':'password';$('rec2-c1').type=t;$('rec2-c2').type=t;};
+  ov.addEventListener('mousedown',function(e){if(e.target===ov&&!$('rec2-p3').className.match(/on/)&&!$('rec2-p4').className.match(/on/)){cerrar();}});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&ov.className==='on'){cerrar();}if(e.key==='Enter'&&ov.className==='on'){var a=document.activeElement;if(a&&a.tagName==='INPUT'){var p=a.closest('.p');if(p){var b=p.querySelector('.b');if(b&&!b.disabled)b.click();}}}});
+  var pw=document.querySelector('input[name="password"]');
+  if(pw){var a=document.createElement('a');a.className='rec2-link';a.textContent='¿Olvidaste tu contraseña?';a.href='#';a.onclick=function(e){e.preventDefault();var u=document.querySelector('input[name="usuario"]');abrir('');};var host=pw.closest('form')||pw.parentNode;var bt=host.querySelector('button[type="submit"],input[type="submit"]');if(bt){bt.parentNode.insertBefore(a,bt.nextSibling);}else{host.appendChild(a);}}
+  if(AUTO){setTimeout(function(){abrir('');},250);}
+})();
+</script>"""
+
+
+@app.after_request
+def _rec2_inyectar(resp):
+    # En las pantallas de inicio de sesión: enlace «¿Olvidaste tu contraseña?» y, si el ingreso falló, se abre solo la ventana de recuperación.
+    try:
+        import re as _re
+        p = request.path or ""
+        if (p == "/login" or p.endswith("-login")) and resp.mimetype == "text/html" and resp.status_code in (200, 401, 429) and not resp.direct_passthrough:
+            t = resp.get_data(as_text=True)
+            if 'name="password"' in t and ("name=\"usuario\"" in t or "name='usuario'" in t or 'name="usuario"' in t) and 'id="rec2-js"' not in t:
+                visible = _re.sub(r"<(script|style)\b.*?</\1>", " ", t, flags=_re.S | _re.I)
+                auto = bool(_re.search(r"(usuario|contraseña|credenciales)[^<]{0,60}incorrect|demasiados intentos", visible, _re.I))
+                js = _REC2_JS.replace("__AUTO__", "true" if auto else "false")
+                resp.set_data(t.replace("</body>", js + "</body>", 1) if "</body>" in t else t + js)
     except Exception:
         pass
     return resp
