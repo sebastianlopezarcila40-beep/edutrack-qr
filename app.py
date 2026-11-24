@@ -167,6 +167,164 @@ ROLES_GERENCIA_AREAS = ("Gerente", "Superadmin", "Administrador")
 
 _promo_cron_last = {"day": ""}
 
+# === PWA_PLAY_STORE_V1 ===
+# PWA + Trusted Web Activity (Play Store). Añadido por aplicar_pwa.py. No depende del resto del sistema.
+_PWA_RUTAS = ("/manifest.json", "/manifest.webmanifest", "/sw.js", "/offline",
+              "/.well-known/assetlinks.json", "/pwa-icon-192.png", "/pwa-icon-512.png",
+              "/pwa-icon-maskable-512.png")
+_PWA_ICONOS = {}
+
+_PWA_SW_JS = """/* PROCSIS service worker: NO guarda páginas con datos de usuarios; solo la pantalla sin conexión y logos. */
+const CACHE = 'procsis-pwa-v1';
+self.addEventListener('install', function (e) {
+  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(['/offline']); }).then(function () { return self.skipWaiting(); }));
+});
+self.addEventListener('activate', function (e) {
+  e.waitUntil(caches.keys().then(function (ks) {
+    return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+  }).then(function () { return self.clients.claim(); }));
+});
+self.addEventListener('fetch', function (e) {
+  var r = e.request;
+  if (r.method !== 'GET') return;
+  var u = new URL(r.url);
+  if (u.origin !== location.origin) return;
+  if (r.mode === 'navigate') {
+    e.respondWith(fetch(r).catch(function () { return caches.match('/offline'); }));
+    return;
+  }
+  if (u.pathname.indexOf('/static/img/') === 0 || u.pathname.indexOf('/pwa-icon') === 0) {
+    e.respondWith(caches.open(CACHE).then(function (c) {
+      return c.match(r).then(function (hit) {
+        var red = fetch(r).then(function (resp) { if (resp && resp.ok) c.put(r, resp.clone()); return resp; }).catch(function () { return hit; });
+        return hit || red;
+      });
+    }));
+  }
+});
+"""
+
+_PWA_OFFLINE_HTML = """<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Sin conexión · PROCSIS</title>
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f4f6fb;
+font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2559;text-align:center;padding:24px}
+.c{max-width:360px}h1{font-size:22px;margin:0 0 8px}p{color:#5b6585;line-height:1.5}
+button{background:#0020C2;color:#fff;border:0;border-radius:10px;padding:12px 22px;font-size:16px;margin-top:12px}</style></head>
+<body><div class="c"><h1>Sin conexión</h1><p>No pudimos conectar con PROCSIS. Revisa tu internet e inténtalo de nuevo.</p>
+<button onclick="location.reload()">Reintentar</button></div></body></html>"""
+
+_PWA_HEAD = ('<link rel="manifest" href="/manifest.json">'
+             '<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){'
+             'navigator.serviceWorker.register("/sw.js",{scope:"/"}).catch(function(){});});}</script>')
+
+
+def _pwa_icono(size, maskable=False):
+    clave = (size, maskable)
+    if clave in _PWA_ICONOS:
+        return _PWA_ICONOS[clave]
+    from PIL import Image, ImageDraw
+    base = os.path.dirname(os.path.abspath(__file__))
+    logo = None
+    for rel in ("static/img/favicon.png", "static/img/logo-procsis.png", "static/img/logo-edutrack.png"):
+        p = os.path.join(base, rel)
+        if os.path.isfile(p):
+            try:
+                logo = Image.open(p).convert("RGBA")
+                break
+            except Exception:
+                logo = None
+    if logo is not None:
+        lienzo = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+        lado = int(size * (0.6 if maskable else 0.8))   # maskable: zona segura central
+        logo.thumbnail((lado, lado))
+        lienzo.paste(logo, ((size - logo.width) // 2, (size - logo.height) // 2), logo)
+    else:
+        lienzo = Image.new("RGBA", (size, size), (0, 32, 194, 255))
+        d = ImageDraw.Draw(lienzo)
+        d.rectangle([size * 0.25, size * 0.72, size * 0.75, size * 0.76], fill=(0, 255, 102, 255))
+        try:
+            from PIL import ImageFont
+            f = ImageFont.load_default(size=int(size * 0.42))
+            d.text((size / 2, size * 0.45), "P", fill="white", font=f, anchor="mm")
+        except Exception:
+            pass
+    buf = BytesIO()
+    lienzo.save(buf, "PNG")
+    _PWA_ICONOS[clave] = buf.getvalue()
+    return _PWA_ICONOS[clave]
+
+
+@app.before_request
+def _pwa_servir():
+    """Atiende las rutas PWA antes que cualquier otro filtro (login, licencia, etc.): deben ser públicas."""
+    p = request.path
+    if p not in _PWA_RUTAS:
+        return None
+    if p in ("/manifest.json", "/manifest.webmanifest"):
+        data = {
+            "id": "/",
+            "name": "PROCSIS",
+            "short_name": "PROCSIS",
+            "description": "Plataforma institucional PROCSIS / EduTrack",
+            "lang": "es-CO",
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "orientation": "portrait",
+            "background_color": "#ffffff",
+            "theme_color": "#0020C2",
+            "icons": [
+                {"src": "/pwa-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                {"src": "/pwa-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                {"src": "/pwa-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+            ],
+        }
+        return Response(json.dumps(data, ensure_ascii=False), mimetype="application/manifest+json",
+                        headers={"Cache-Control": "public, max-age=3600"})
+    if p == "/sw.js":
+        return Response(_PWA_SW_JS, mimetype="application/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+    if p == "/offline":
+        return Response(_PWA_OFFLINE_HTML, mimetype="text/html", headers={"Cache-Control": "no-cache"})
+    if p == "/.well-known/assetlinks.json":
+        pkg = (os.environ.get("ANDROID_PACKAGE") or "co.procsis.app").strip()
+        huellas = [x.strip() for x in (os.environ.get("ANDROID_SHA256") or "").split(",") if x.strip()]
+        data = [{
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {"namespace": "android_app", "package_name": pkg, "sha256_cert_fingerprints": huellas},
+        }] if huellas else []
+        return Response(json.dumps(data), mimetype="application/json", headers={"Cache-Control": "public, max-age=300"})
+    try:
+        if p == "/pwa-icon-192.png":
+            png = _pwa_icono(192)
+        elif p == "/pwa-icon-512.png":
+            png = _pwa_icono(512)
+        else:
+            png = _pwa_icono(512, maskable=True)
+        return Response(png, mimetype="image/png", headers={"Cache-Control": "public, max-age=86400"})
+    except Exception:
+        return Response("", status=404)
+
+
+@app.after_request
+def _pwa_inyectar(resp):
+    """Agrega <link rel=manifest> + registro del service worker a toda página HTML (login incluido)."""
+    try:
+        if resp.mimetype != "text/html" or resp.direct_passthrough or resp.status_code not in (200, 401, 403, 429):
+            return resp
+        p = request.path or ""
+        if p.startswith(("/static", "/api", "/media")) or p in _PWA_RUTAS:
+            return resp
+        t = resp.get_data(as_text=True)
+        if 'rel="manifest"' in t or "</head>" not in t:
+            return resp
+        resp.set_data(t.replace("</head>", _PWA_HEAD + "</head>", 1))
+    except Exception:
+        pass
+    return resp
+# === FIN PWA_PLAY_STORE_V1 ===
+
+
 
 @app.before_request
 def _auto_promo_cron_diario():
