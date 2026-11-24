@@ -263,14 +263,14 @@ def _pwa_servir():
     if p in ("/manifest.json", "/manifest.webmanifest"):
         data = {
             "id": "/",
-            "name": "PROCSIS",
-            "short_name": "PROCSIS",
-            "description": "Plataforma institucional PROCSIS / EduTrack",
+            "name": "EduTrack by PROCSIS",
+            "short_name": "EduTrack",
+            "description": "EduTrack es la plataforma de gestión escolar de PROCSIS: notas, asistencia, carné digital, PQR, pagos y comunicación con familias en un solo acceso para rectoría, coordinación, secretaría y docentes.",
             "lang": "es-CO",
             "start_url": "/",
             "scope": "/",
             "display": "standalone",
-            "orientation": "portrait",
+            "orientation": "any",
             "background_color": "#ffffff",
             "theme_color": "#0020C2",
             "icons": [
