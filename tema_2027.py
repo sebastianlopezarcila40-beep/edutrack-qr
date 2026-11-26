@@ -8,7 +8,8 @@ Se instala con UN bloque en app.py (lo agrega aplicar_tema.py):
 
 Qué hace (solo en GET de "/" y "/login"; NO toca el POST ni la lógica de ingreso):
   1. Pinta el portal con los colores del logo: azul marino #002069, azul vivo #0172EC, cian #00F3FE y verde #03D047.
-  2. Agrega el título «Tu colegio, más conectado cada día» con chips de beneficios.
+  2. Agrega el título «Tu colegio, más conectado cada día» con chips de beneficios (columna izquierda, sobre el carrusel,
+     para que el Portal de acceso quede arriba, al lado).
   3. Agrega 4 accesos rápidos (solo los que existen en tu app): Convocatoria de 48 Horas, Consulta de asistencia,
      Autorizar salidas y Pagar factura.
   4. Spinner pequeño dentro del botón «Iniciar sesión» (y bloqueo de doble envío).
@@ -24,49 +25,46 @@ import re
 MARCA = "t27-aplicado"
 
 CSS = """<style id="t27-css">
-.login-page{background:#F4FAFF!important}.lp-content{background:#F4FAFF}
-.sinai-portal{background:radial-gradient(760px 440px at 6% 0%,rgba(0,243,254,.26),transparent 65%),radial-gradient(660px 440px at 96% 8%,rgba(1,114,236,.18),transparent 65%),radial-gradient(720px 460px at 82% 100%,rgba(3,208,71,.20),transparent 65%),linear-gradient(180deg,#F4FAFF,#FFFFFF)!important}
-.sinai-carousel{background:linear-gradient(135deg,#002069 0%,#0172EC 62%,#00C2D6 100%)!important;box-shadow:0 30px 70px rgba(1,114,236,.28)!important;border:1px solid rgba(255,255,255,.75)!important}
-.sinai-slide{background:linear-gradient(135deg,#E8F3FF,#F4FAFF)!important}
-.sinai-slide-bgblur{filter:blur(26px) saturate(1.35) brightness(1)!important;opacity:.55!important}
-.sinai-dot.is-on{background:#03D047!important}
-.sinai-nav{background:rgba(0,32,105,.55)!important}.sinai-nav:hover{background:rgba(1,114,236,.92)!important}
-.sinai-access h1{color:#002069!important;font-size:22px!important;letter-spacing:-.02em}
-.sinai-sub{color:#475569!important}
-.sinai-card{border-radius:28px!important;background:rgba(255,255,255,.84)!important;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid #fff!important;box-shadow:0 30px 70px rgba(1,114,236,.22)!important}
-.sinai-card-label{color:#0172EC!important}
-.sinai-form label{color:#002069!important}
-.sinai-form input,.sinai-form select{border-color:#bfdbfe!important;border-radius:14px!important}
-.sinai-form input:focus,.sinai-form select:focus{border-color:#0172EC!important;box-shadow:0 0 0 4px rgba(3,208,71,.25)!important}
-.sinai-btn{display:flex!important;align-items:center;justify-content:center;gap:10px;background:linear-gradient(110deg,#002069,#0172EC)!important;box-shadow:0 10px 24px rgba(1,114,236,.35)}
-.sinai-btn:hover{background:linear-gradient(110deg,#002069,#0172EC)!important;filter:brightness(1.1)}
-.sinai-btn.t27-load{opacity:.92;cursor:progress}
-.sinai-help a,.sinai-portals a:hover{color:#0172EC}
-.sinai-portals a,.sinai-pill{background:#EAF4FF!important;color:#002069!important}
-.promo-card{border-radius:28px!important;border:1px solid #dbeafe!important;box-shadow:0 10px 30px rgba(1,114,236,.10)!important}
-.promo-card .badge{background:#e0efff!important;color:#0172EC!important}
-.promo-card a.btn-promo,.corp-wa{background:linear-gradient(110deg,#002069,#0172EC)!important}
+.sinai-portal{padding:14px 20px 8px!important}
+.sinai-portal .sinai-grid{max-width:1120px!important;gap:10px 40px!important;align-items:start!important;grid-template-columns:1.25fr .85fr!important;grid-template-areas:"hero access" "car access"!important;grid-template-rows:auto 1fr}
+.sinai-portal .sinai-carousel{grid-area:car;height:360px!important;border-radius:22px!important;box-shadow:0 18px 44px rgba(0,32,105,.18)!important}
+.sinai-portal .sinai-slide-bgblur{filter:blur(26px) saturate(1.3) brightness(1)!important;opacity:.5!important}
+.sinai-portal .sinai-access{grid-area:access;align-self:start;padding-top:6px}
+.sinai-portal .sinai-access h1{font-size:26px!important;letter-spacing:-.02em;margin:0 0 4px!important;color:#002069!important}
+.sinai-portal .sinai-access h1:after{content:"";display:block;width:44px;height:4px;border-radius:4px;margin-top:10px;background:linear-gradient(90deg,#0172EC,#03D047)}
+.sinai-portal .sinai-sub{color:#475569!important;font-size:13.5px!important;margin-bottom:14px!important}
+.sinai-portal .sinai-card{border-radius:18px!important;background:#fff!important;border:1px solid #d6e2f5!important;box-shadow:0 12px 34px rgba(0,32,105,.12)!important}
+.sinai-portal .sinai-card-label{color:#0172EC!important;letter-spacing:.08em}
+.sinai-portal .sinai-form label{color:#002069!important;font-weight:700}
+.sinai-portal .sinai-form input,.sinai-portal .sinai-form select{border-color:#c5d5ee!important;border-radius:10px!important}
+.sinai-portal .sinai-form input:focus,.sinai-portal .sinai-form select:focus{border-color:#0172EC!important;box-shadow:0 0 0 3px rgba(3,208,71,.22)!important;outline:none}
+.sinai-portal .sinai-btn{display:flex!important;align-items:center;justify-content:center;gap:10px;border-radius:10px!important;background:linear-gradient(110deg,#002069,#0172EC)!important;box-shadow:0 8px 20px rgba(1,114,236,.30)!important}
+.sinai-portal .sinai-btn:hover{filter:brightness(1.1)}
+.sinai-portal .sinai-btn.t27-load{opacity:.92;cursor:progress}
+.sinai-portal .sinai-dot.is-on{background:#03D047!important}
+.promo-card{border-radius:22px!important;border:1px solid #dbeafe!important;box-shadow:0 10px 30px rgba(1,114,236,.10)!important}
 .t27-spin{display:inline-block;width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;animation:t27sp .8s linear infinite}
 @keyframes t27sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.t27-spin{animation-duration:2.4s}}
-.t27-hero{max-width:1280px;margin:0 auto;padding:44px 20px 4px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;position:relative;z-index:1}
-.t27-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:#fff;border:1px solid #bfdbfe;font-size:13px;font-weight:700;color:#002069}
+.t27-hero{grid-area:hero;padding:2px 0 6px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.t27-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 13px;border-radius:999px;background:#fff;border:1px solid #bfdbfe;font-size:12.5px;font-weight:700;color:#002069}
 .t27-pill i{width:8px;height:8px;border-radius:50%;background:#03D047}
-.t27-hero h2{margin:18px 0 12px;font-size:clamp(32px,5vw,54px);line-height:1.06;letter-spacing:-.03em;font-weight:800;color:#002069}
+.t27-hero h2{margin:14px 0 10px;font-size:clamp(28px,3.4vw,42px);line-height:1.08;letter-spacing:-.03em;font-weight:800;color:#002069}
 .t27-gt{background:linear-gradient(100deg,#0172EC,#008F6B);-webkit-background-clip:text;background-clip:text;color:transparent}
-.t27-hero p{margin:0 0 18px;font-size:18px;line-height:1.55;color:#334155;max-width:620px}
-.t27-chips{display:flex;gap:10px;flex-wrap:wrap}
-.t27-chips span{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:rgba(255,255,255,.8);border:1px solid #dbeafe;font-size:14px;font-weight:600;color:#002069}
-.t27-greet{display:flex;align-items:center;gap:14px;margin:0 0 14px}
-.t27-greet img{width:54px;height:auto}
-.t27-greet b{display:block;font-size:20px;letter-spacing:-.02em;color:#002069}
-.t27-greet span{font-size:14px;color:#475569}
-.t27-tiles{max-width:1280px;margin:8px auto 28px;padding:0 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
-.t27-tile{display:flex;flex-direction:column;gap:10px;padding:22px;border-radius:24px;background:#fff;border:1px solid #dbeafe;box-shadow:0 10px 30px rgba(1,114,236,.12);text-decoration:none;color:inherit;transition:transform .2s,box-shadow .2s}
+.t27-hero p{margin:0 0 14px;font-size:16px;line-height:1.55;color:#334155;max-width:560px}
+.t27-chips{display:flex;gap:8px;flex-wrap:wrap}
+.t27-chips span{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;background:rgba(255,255,255,.85);border:1px solid #dbeafe;font-size:13px;font-weight:600;color:#002069}
+.t27-greet{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+.t27-greet img{width:44px;height:auto}
+.t27-greet b{display:block;font-size:15px;color:#002069}
+.t27-greet span{font-size:13px;color:#475569}
+.t27-tiles{max-width:1120px;margin:14px auto 28px;padding:0 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.t27-tile{display:flex;flex-direction:column;gap:10px;padding:22px;border-radius:20px;background:#fff;border:1px solid #dbeafe;box-shadow:0 10px 30px rgba(1,114,236,.12);text-decoration:none;color:inherit;transition:transform .2s,box-shadow .2s}
 .t27-tile:hover{transform:translateY(-3px);box-shadow:0 18px 40px rgba(1,114,236,.22)}
-.t27-ico{display:grid;place-items:center;width:48px;height:48px;border-radius:15px;background:linear-gradient(135deg,#0172EC,#00C2D6)}
+.t27-ico{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#0172EC,#00C2D6)}
 .t27-tile b{font-size:16px;color:#002069}.t27-tile span.d{font-size:14px;color:#475569}
 .t27-tile span.g{margin-top:auto;color:#0172EC;font-weight:800;font-size:14px}
+@media(max-width:900px){.sinai-portal .sinai-grid{grid-template-columns:1fr!important;grid-template-areas:"hero" "access" "car"!important}.sinai-portal .sinai-carousel{height:300px!important}}
 </style>"""
 
 JS = """<script id="t27-js">(function(){
@@ -107,8 +105,8 @@ def _tiles(rutas):
 
 
 def _saludo(src):
-    return ('<div class="t27-greet"><img src="%s" alt=""><div><b>¡Qué bueno verte de nuevo!</b>'
-            '<span>Ingresa a EduTrack con tu usuario.</span></div></div>' % src)
+    return ('<div class="t27-greet"><img src="%s" alt=""><div><b>Acceso institucional</b>'
+            '<span>Rectoría, coordinación, secretaría y docentes</span></div></div>' % src)
 
 
 def buscar_logo(raiz):
@@ -127,10 +125,16 @@ def transformar(h, rutas=(), logo=""):
     if MARCA in h or 'class="sinai-portal"' not in h:
         return None
     a_css = h.find('<div class="login-page"')
-    a_hero = h.find('<section class="sinai-portal">')
-    if a_css < 0 or a_hero < 0 or a_hero < a_css:
+    a_sec = h.find('<section class="sinai-portal">')
+    if a_css < 0 or a_sec < 0 or a_sec < a_css:
         return None
-    out = h[:a_css] + "<!--%s-->" % MARCA + CSS + h[a_css:a_hero] + _hero() + h[a_hero:]
+    tag = '<div class="sinai-grid">'
+    a_grid = h.find(tag, a_sec)
+    if 0 <= a_grid < a_sec + 600:
+        corte = a_grid + len(tag)
+        out = h[:a_css] + "<!--%s-->" % MARCA + CSS + h[a_css:corte] + _hero() + h[corte:]
+    else:  # respaldo: si cambia el marcado, el título va arriba (sin rejilla)
+        out = h[:a_css] + "<!--%s-->" % MARCA + CSS + h[a_css:a_sec] + _hero() + h[a_sec:]
     if logo:
         i = out.find('<div class="sinai-card">')
         if i >= 0:
