@@ -113135,6 +113135,14 @@ def _rec2_inyectar(resp):
 
 
 
+# [procsis-acceso-seguro-v2] MFA escalonado + recuperación por correo. Para quitarlo: borra este bloque o usa aplicar_parche.py --revertir
+try:
+    import acceso_seguro as _as2
+    _as2.instalar(globals())
+except Exception as _as2e:
+    print('ACCESO SEGURO v2 no se pudo instalar (la app sigue igual):', repr(_as2e))
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
