@@ -17,7 +17,7 @@ QUÉ HACE
   2. MFA escalonado por nivel de riesgo (guardia central, cubre TODOS los logins):
        T1 Gerencia/Superadmin/Soporte/Desarrollo (PROCSIS) -> en cada inicio de sesión, sin recordar equipo, 30 min de inactividad.
        T2 Rectoría/Coordinación                            -> cada 24 h, 2 h de inactividad.
-       T3 Secretaría y administrativos / cualquier cuenta con MFA activo -> cada 7 días en el mismo equipo; si cambia navegador o red, se cierra la sesión.
+       T3 Secretaría y administrativos / cualquier cuenta con MFA activo -> cada 72 h en el mismo equipo; si cambia la red, pide MFA de nuevo.
        Equipo o red nueva -> MFA inmediato. Segundo factor: app TOTP si la cuenta la tiene; si no, PIN al correo.
   3. Step-up: acciones críticas (SIMAT, respaldos, exportes, actas, notas, cambio de claves) piden MFA otra vez si el último fue hace > 10 min.
   4. Aislamiento por rol/ámbito: la sesión queda marcada "corp" o "col:<id>"; un usuario de colegio no entra a rutas corporativas.
@@ -25,7 +25,7 @@ QUÉ HACE
 INTERRUPTORES (variables de entorno, sin tocar código):
   MFA_POLITICA_MODO = forzar (defecto) | off      -> apaga la guardia MFA completa
   RBAC_MODO         = bloquear (defecto) | auditar | off
-  MFA_T3_CIERRA_RED = 1 (defecto) | 0            -> T3: cerrar sesión si cambia la red
+  MFA_T3_CIERRA_RED = 0 (defecto) | 1            -> T3: 1 = cerrar sesión si cambia la red (0 = solo pide MFA de nuevo)
 """
 import hashlib
 import hmac
@@ -53,7 +53,7 @@ ROLES_STAFF_T3 = {"Comercial", "Ventas", "Supervisor de Ventas", "Supervisor", "
 TIERS = {
     "T1": {"nombre": "Gerencia / Superadmin", "cada": 0, "recordar": False, "inactividad": 30 * 60, "cierra_red": False},
     "T2": {"nombre": "Rectoría y Coordinación", "cada": 24 * 3600, "recordar": True, "inactividad": 2 * 3600, "cierra_red": False},
-    "T3": {"nombre": "Secretaría y administrativos", "cada": 7 * 86400, "recordar": True, "inactividad": 2 * 3600, "cierra_red": True},
+    "T3": {"nombre": "Secretaría y administrativos", "cada": 72 * 3600, "recordar": True, "inactividad": 2 * 3600, "cierra_red": False},
 }
 
 # Rutas críticas que piden MFA reciente (regex, métodos o None = todos). Edita esta lista libremente.
@@ -416,8 +416,19 @@ def _instalar_mfa(G):
             return r
         return redirect("/mfa-politica")
 
+    def es_navegacion():
+        """True solo si el usuario está abriendo una página (no un fetch/sondeo en segundo plano)."""
+        p = (request.path or "").lower()
+        if p.endswith(".json") or p.startswith("/api/") or p.startswith("/notificaciones"):
+            return False
+        modo = request.headers.get("Sec-Fetch-Mode")
+        if modo:
+            return modo == "navigate" and request.headers.get("Sec-Fetch-Dest", "document") in ("document", "iframe", "")
+        return "text/html" in (request.headers.get("Accept") or "")
+
     def es_api():
-        return bool(request.is_json or request.headers.get("X-Requested-With") or "application/json" in (request.headers.get("Accept") or ""))
+        return bool(request.is_json or request.headers.get("X-Requested-With") or "application/json" in (request.headers.get("Accept") or "")
+                    or not es_navegacion())
 
     # ── guardia central ──
     def guardia():
@@ -472,7 +483,7 @@ def _instalar_mfa(G):
             return redirect("/login")
         session["pol_last"] = ahora_ts
         if session.setdefault("pol_ip", ip_p) != ip_p:
-            if pol["cierra_red"] and os.environ.get("MFA_T3_CIERRA_RED", "1") != "0":
+            if pol["cierra_red"] or os.environ.get("MFA_T3_CIERRA_RED", "0") == "1":
                 audit("Sesión cerrada: cambió la red (%s)" % nivel, u.usuario)
                 session.clear()
                 return redirect("/login")
@@ -483,14 +494,14 @@ def _instalar_mfa(G):
             if d:
                 marcar_ok(u, ahora_ts, ok_ts=d.ok_ts)
             else:
-                if request.method == "GET" and not es_api():
+                if request.method == "GET" and es_navegacion():
                     n = _seguro(request.full_path.rstrip("?"))
                     if n:
                         session["pol_next"] = n
                 return responder_mfa(es_api())
         if _es_critica(p, request.method) and ahora_ts - (session.get("stepup_ts") or 0) > STEPUP_TTL:
             session["pol_stepup"] = 1
-            if request.method == "GET" and not es_api():
+            if request.method == "GET" and es_navegacion():
                 n = _seguro(request.full_path.rstrip("?"))
                 if n:
                     session["pol_next"] = n
@@ -651,7 +662,9 @@ tick();setInterval(tick,1000);})();</script>""" % {"resta": resta, "espera": REE
     def destino_final(u):
         n = _seguro(session.pop("pol_next", ""))
         if n:
-            return n
+            base = n.split("?", 1)[0].lower()
+            if not (base.endswith(".json") or base.startswith("/api/") or base.startswith("/notificaciones")):
+                return n
         try:
             return G["_home_portal"](u.rol)
         except Exception:
