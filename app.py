@@ -113151,6 +113151,14 @@ except Exception as _mc1e:
     print('COMERCIAL no se pudo instalar (la app sigue igual):', repr(_mc1e))
 
 
+# [procsis-tema-2027-v1] Diseño 2027 del portal de acceso (colores del logo, accesos rápidos y spinner). Para quitarlo: borra este bloque o usa aplicar_tema.py --revertir
+try:
+    import tema_2027 as _t27
+    _t27.instalar(globals())
+except Exception as _t27e:
+    print('TEMA 2027 no se pudo instalar (la app sigue igual):', repr(_t27e))
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
