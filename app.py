@@ -113143,6 +113143,14 @@ except Exception as _as2e:
     print('ACCESO SEGURO v2 no se pudo instalar (la app sigue igual):', repr(_as2e))
 
 
+# [procsis-modulo-comercial-v1] Gestor Comercial (/comercial) + portada pública (Fases 1 y 2). Para quitarlo: borra este bloque o usa aplicar_comercial.py --revertir
+try:
+    import modulo_comercial as _mc1
+    _mc1.instalar(globals())
+except Exception as _mc1e:
+    print('COMERCIAL no se pudo instalar (la app sigue igual):', repr(_mc1e))
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
