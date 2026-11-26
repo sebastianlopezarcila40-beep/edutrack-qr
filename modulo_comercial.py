@@ -22,6 +22,8 @@ INTERRUPTORES (variables de entorno):
   PAGO_URL           = https://pasarela/..?ref={numero}&valor={valor}   (Fase 3)
 """
 import base64
+import hashlib
+import hmac
 import html
 import json
 import os
@@ -32,12 +34,17 @@ from datetime import date
 
 from flask import request, session, redirect, jsonify, make_response, abort
 
-MARCA = "pc-bloque-v1"
+MARCA = "pc-bloque-v2"
 
 ADMIN = {"Gerente", "Gerencia", "Superadmin", "Administrador", "Desarrollador", "Developer"}
 MKT = {"Marketing", "Marketing y Comunicaciones", "Comunicaciones"}
 VENTAS = {"Comercial", "Ventas", "Supervisor de Ventas", "Supervisor", "Operaciones"}
 FINANZAS = {"Contabilidad", "Finanzas", "Finanzas y Tesorería", "Tesorería", "Cobranza"}
+TI = {"TI", "Tecnología", "Tecnologia", "Soporte", "Soluciones"}
+
+# Menú superior de la portada (lo estructura TI). (texto, id de la sección). Solo aparecen las secciones que tengan contenido.
+MENU = (("Soluciones", "pc-planes"), ("Tienda Tech", "pc-tienda"), ("Beneficios y Cupones", "pc-beneficios"),
+        ("Soporte y PQR", "pc-auto"), ("Pagar Factura", "pc-pagos"))
 
 # Quién administra cada sección. Para que otra área entre, agrega su nombre de rol aquí.
 PERMISOS = {
@@ -48,6 +55,8 @@ PERMISOS = {
     "cupones": ADMIN | MKT | FINANZAS,
     "facturas": ADMIN | FINANZAS,
     "cotizaciones": ADMIN | VENTAS,
+    "blog": ADMIN | MKT,
+    "aura": ADMIN | MKT | TI,
 }
 APRUEBAN_PLANES = ADMIN  # solo Gerencia publica tarifas
 
@@ -69,6 +78,15 @@ SECCIONES = {
                  "campos": [("titulo", "Título", "text", True), ("texto", "Texto", "area", True),
                             ("icono", "Ícono", "sel:nube|soporte|escudo|estrella", False), ("orden", "Orden", "int", False)],
                  "lista": ["titulo", "icono", "orden"], "acciones": ["toggle", "borrar"]},
+    "blog": {"titulo": "Novedades y guías (blog)", "modelo": "Entrada", "orden": "fecha",
+             "campos": [("titulo", "Título", "text", True), ("categoria", "Categoría", "sel:EDUCACION|TECNOLOGIA|BENEFICIOS", True),
+                        ("resumen", "Resumen (se ve en la tarjeta)", "text", True), ("cuerpo", "Contenido completo", "area", False),
+                        ("enlace", "Enlace externo (opcional; si lo dejas vacío se abre la página interna)", "text", False),
+                        ("imagen", "Imagen (opcional)", "img", False), ("fecha", "Fecha de publicación", "date", True)],
+             "lista": ["titulo", "categoria", "fecha"], "acciones": ["toggle", "borrar"]},
+    "aura": {"titulo": "Respuestas de Edu Aura", "modelo": "AuraResp", "orden": "id",
+             "campos": [("palabras", "Palabras clave (separadas por coma)", "text", True), ("respuesta", "Respuesta", "area", True)],
+             "lista": ["palabras", "respuesta"], "acciones": ["toggle", "borrar"]},
     "planes": {"titulo": "Planes de negocio", "modelo": "Plan", "orden": "tipo",
                "campos": [("nombre", "Nombre del plan", "text", True), ("tipo", "Tipo", "sel:ECONOMICO|CORPORATIVO", True),
                           ("estudiantes_max", "Capacidad de estudiantes (0 = sin límite)", "int", False),
@@ -126,6 +144,40 @@ def hoy():
 def visible_hoy(desde, hasta):
     h = hoy()
     return (not desde or desde <= h) and (not hasta or hasta >= h)
+
+
+def sin_acentos(t):
+    t = str(t or "").lower()
+    for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"), ("ü", "u"), ("ñ", "n")):
+        t = t.replace(a, b)
+    return t
+
+
+def toca(q, *claves):
+    """True si la pregunta contiene alguna clave. Palabra sola = prefijo de una palabra (≥4 letras) o palabra exacta (≤3); con espacio = frase."""
+    n = sin_acentos(q)
+    palabras = set(re.findall(r"[a-z0-9]+", n))
+    for c in claves:
+        if " " in c:
+            if c in n:
+                return True
+        elif len(c) <= 3:
+            if c in palabras:
+                return True
+        elif any(w.startswith(c) for w in palabras):
+            return True
+    return False
+
+
+MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+
+
+def fecha_larga(iso):
+    try:
+        y, m, d = (int(x) for x in iso.split("-"))
+        return "%d %s %d" % (d, MESES[m - 1], y)
+    except Exception:
+        return ""
 
 
 def calc_descuento(cupon, valor):
@@ -298,7 +350,28 @@ def _instalar(G):
         estado = C(db.String(12), default="NUEVA")
         creado = C(db.BigInteger, default=0)
 
-    M = {"Banner": Banner, "Tarjeta": Tarjeta, "Plan": Plan, "Equipo": Equipo, "Cupon": Cupon, "Factura": Factura, "Cotizacion": Cotizacion}
+    class Entrada(db.Model):
+        __tablename__ = "com_entrada"
+        __table_args__ = {"extend_existing": True}
+        id = C(db.Integer, primary_key=True)
+        titulo = C(db.String(160), default="")
+        categoria = C(db.String(20), default="EDUCACION")
+        resumen = C(db.String(300), default="")
+        cuerpo = C(db.Text, default="")
+        enlace = C(db.String(300), default="")
+        imagen = C(db.Text, default="")
+        fecha = C(db.String(10), default="")
+        activo = C(db.Boolean, default=True)
+
+    class AuraResp(db.Model):
+        __tablename__ = "com_aura"
+        __table_args__ = {"extend_existing": True}
+        id = C(db.Integer, primary_key=True)
+        palabras = C(db.String(300), default="")
+        respuesta = C(db.Text, default="")
+        activo = C(db.Boolean, default=True)
+
+    M = {"Entrada": Entrada, "AuraResp": AuraResp, "Banner": Banner, "Tarjeta": Tarjeta, "Plan": Plan, "Equipo": Equipo, "Cupon": Cupon, "Factura": Factura, "Cotizacion": Cotizacion}
     _E["M"] = M
 
     def audit(a, d=""):
@@ -333,6 +406,13 @@ def _instalar(G):
                 db.session.add(Plan(nombre="Plan Corporativo", tipo="CORPORATIVO", estudiantes_max=0, sedes_max=0, precio_mensual=0, aprobado=True,
                                     descripcion="Para megacolegios y redes educativas.",
                                     caracteristicas="Multi-sede ilimitada\nMayor almacenamiento\nPortería QR avanzada\nSoporte prioritario"))
+                db.session.commit()
+            if not Entrada.query.first():
+                f0 = hoy()
+                for t, c, x in (("Cómo proteger los datos de tu colegio", "EDUCACION", "Buenas prácticas de Habeas Data y Ley 1581 para rectores y secretarías."),
+                                ("Guía rápida: qué equipo elegir para tu institución", "TECNOLOGIA", "Criterios para escoger computadores, lectores QR y puntos POS."),
+                                ("Combos de equipo + licencia", "BENEFICIOS", "Conoce los beneficios vigentes al comprar tecnología con PROCSIS.")):
+                    db.session.add(Entrada(titulo=t, categoria=c, resumen=x, cuerpo=x, fecha=f0, activo=True))
                 db.session.commit()
             _E["tablas"] = True
         except Exception as ex:
@@ -395,7 +475,7 @@ def _instalar(G):
         nav = "".join('<a href="/comercial?s=%s" class="%s">%s</a>' % (k, "on" if k == sec else "", e(SECCIONES[k]["titulo"])) for k in vis)
         cfg = SECCIONES[sec]
         Mo = M[cfg["modelo"]]
-        filas = Mo.query.order_by(getattr(Mo, cfg["orden"]).desc() if cfg["orden"] in ("id",) else getattr(Mo, cfg["orden"])).limit(300).all()
+        filas = Mo.query.order_by(getattr(Mo, cfg["orden"]).desc() if cfg["orden"] in ("id", "fecha") else getattr(Mo, cfg["orden"])).limit(300).all()
         t = csrf()
         form = ""
         if cfg["campos"]:
@@ -605,9 +685,20 @@ def _instalar(G):
     def rutas_existentes():
         return {r.rule for r in app.url_map.iter_rules()}
 
-    def bloque():
+    def entradas_publicas():
+        tablas()
+        return Entrada.query.filter_by(activo=True).order_by(Entrada.fecha.desc(), Entrada.id.desc()).limit(3).all()
+
+    def barra_html(ids, base=""):
+        links = "".join('<a href="%s#%s">%s</a>' % (base, i, e(n)) for n, i in MENU if i in ids)
+        return ('<header class="pc-bar" id="pc-bar"><a class="pc-lg" href="/"><b>P</b><span>PROCSIS | EduTrack</span></a><nav aria-label="Menú principal">%s</nav>'
+                '<a class="pc-in" href="/login">Ingresar colegio</a></header>' % links)
+
+    def bloque(base=""):
+        """Devuelve {"barra": ..., "cuerpo": ...}. base='/publico/inicio' para páginas internas."""
         ban, tar, pla, equ = datos_publicos()
-        s = []
+        blog = entradas_publicas()
+        s, ids = [], {"pc-pagos", "pc-auto"}
         if ban:
             sl = []
             for i, b in enumerate(ban):
@@ -616,10 +707,20 @@ def _instalar(G):
                 sl.append('<div class="pc-sl%s"%s><h2>%s</h2><p>%s</p>%s</div>' % (" on" if i == 0 else "", fondo, e(b.titulo), e(b.texto), cta))
             pts = "".join('<i class="%s"></i>' % ("on" if i == 0 else "") for i in range(len(ban))) if len(ban) > 1 else ""
             s.append('<div class="pc-car" id="pc-car">%s<div class="pc-dots">%s</div></div>' % ("".join(sl), pts))
+        if blog:
+            cards = []
+            for b in blog:
+                img = '<img loading="lazy" alt="" src="/publico/img/entrada/%d">' % b.id if b.imagen else ""
+                href = b.enlace if b.enlace and re.match(r"^(/|https://)", b.enlace) else "/publico/blog/%d" % b.id
+                cards.append('<article class="pc-c">%s<span class="pc-tag">%s</span><h3>%s</h3><p>%s</p><div class="pc-dt">%s</div><a class="pc-b" href="%s">Míralo aquí</a></article>'
+                             % (img, e(b.categoria), e(b.titulo), e(b.resumen), e(fecha_larga(b.fecha)), e(href)))
+            ids.add("pc-blog")
+            s.append('<h2 class="pc-h" id="pc-blog">¡Descubre novedades y guías PROCSIS!</h2><div class="pc-gr">%s</div>' % "".join(cards))
         if tar:
-            cards = "".join('<div class="pc-c"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#0020C2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">%s</svg><h3>%s</h3><p>%s</p></div>'
+            cards = "".join('<div class="pc-c"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#0020C2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">%s</svg><h3>%s</h3><p>%s</p></div>'
                             % (ICONOS.get(t.icono, ICONOS["estrella"]), e(t.titulo), e(t.texto)) for t in tar)
-            s.append('<h2 class="pc-h">PROCSIS, tu mejor opción</h2><div class="pc-gr">%s</div>' % cards)
+            ids.add("pc-beneficios")
+            s.append('<h2 class="pc-h" id="pc-beneficios">PROCSIS, tu mejor opción</h2><div class="pc-gr">%s</div>' % cards)
         if pla:
             cards = []
             for p in pla:
@@ -629,7 +730,9 @@ def _instalar(G):
                 pr = ("%s<small>/mes</small>" % cop(p.precio_mensual)) if p.precio_mensual else "Cotiza tu plan"
                 cards.append('<div class="pc-c pc-pl%s"><span class="pc-tag">%s</span><h3>%s</h3><p>%s</p><div class="pc-pr">%s</div><ul><li>%s</li><li>%s</li>%s</ul><a class="pc-b" href="#pc-cot" data-plan="%s">Quiero este plan</a></div>'
                              % (" corp" if p.tipo == "CORPORATIVO" else "", "Alta capacidad" if p.tipo == "CORPORATIVO" else "Económico", e(p.nombre), e(p.descripcion), pr, e(cap), e(sed), carac, e(p.nombre)))
-            s.append('<h2 class="pc-h">Planes para cada colegio</h2><div class="pc-gr">%s</div>' % "".join(cards))
+            ids.add("pc-planes")
+            s.append('<h2 class="pc-h" id="pc-planes">Planes para cada colegio</h2><div class="pc-gr">%s</div>' % "".join(cards))
+        opts = ""
         if equ:
             cards = []
             for q in equ:
@@ -638,10 +741,9 @@ def _instalar(G):
                 agot = (q.stock or 0) <= 0
                 cards.append('<div class="pc-c">%s<span class="pc-tag">%s</span><h3>%s</h3><p style="white-space:pre-line">%s</p>%s<div class="pc-pr">%s</div><a class="pc-b%s" href="#pc-cot" data-eq="%d">%s</a></div>'
                              % (img, e(q.categoria), e(q.nombre), e((q.ficha or "")[:300]), ben, cop(q.precio) if q.precio else "Cotizar", " off" if agot else "", q.id, "Cotizar o comprar con cupón" if not agot else "Consultar disponibilidad"))
-            s.append('<h2 class="pc-h">Beneficios y tecnología</h2><div class="pc-gr">%s</div>' % "".join(cards))
+            ids.add("pc-tienda")
+            s.append('<h2 class="pc-h" id="pc-tienda">Beneficios y tecnología</h2><div class="pc-gr">%s</div>' % "".join(cards))
             opts = "".join('<option value="%d">%s</option>' % (q.id, e(q.nombre)) for q in equ)
-        else:
-            opts = ""
         s.append('''<h2 class="pc-h" id="pc-pagos">Pagos, facturas y cupones</h2>
 <div class="pc-box"><p class="pc-s">Consulta tu factura con el NIT, el código de tu colegio o tu documento.</p>
 <div class="pc-row"><input id="pc-ref" placeholder="NIT, código de colegio o documento" maxlength="40" autocomplete="off"><button class="pc-b" id="pc-bus" type="button">Consultar</button></div>
@@ -660,19 +762,33 @@ def _instalar(G):
                     auto.append('<a href="%s">%s</a>' % (c, nombre))
                     break
         auto.append('<a href="/login">Recuperar acceso / MFA</a>')
-        s.append('<h2 class="pc-h">Autogestión segura</h2><div class="pc-au">%s</div><p class="pc-s" style="text-align:center">Tus datos se tratan conforme a la Ley 1581 de 2012 (Habeas Data).</p>' % "".join(auto))
-        return '<!--%s--><style>%s</style><section class="pc-root" id="pc-root">%s</section><script>%s</script>' % (MARCA, CSS_PUB, "".join(s), JS_PUB)
+        s.append('<h2 class="pc-h" id="pc-auto">Autogestión segura</h2><div class="pc-au">%s</div><p class="pc-s" style="text-align:center">Tus datos se tratan conforme a la Ley 1581 de 2012 (Habeas Data).</p>' % "".join(auto))
+        flot = ('<div class="pc-fl pc-l"><button class="pc-fb" id="pc-a1" type="button" aria-label="Accesibilidad" aria-expanded="false" title="Accesibilidad">'
+                '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4.5" r="1.8"/><path d="M5 8.5l7 1.5 7-1.5M12 10v5M9 21l3-6 3 6"/></svg></button>'
+                '<div class="pc-pn" id="pc-ap" hidden role="dialog" aria-label="Opciones de accesibilidad"><h4>Accesibilidad</h4><div class="pc-ar">'
+                '<button type="button" data-a="mas">A+ Texto más grande</button><button type="button" data-a="menos">A− Texto más pequeño</button>'
+                '<button type="button" data-a="hc" aria-pressed="false">Alto contraste</button><button type="button" data-a="lk" aria-pressed="false">Resaltar enlaces</button>'
+                '<button type="button" data-a="rs">Restablecer</button></div></div></div>')
+        if (os.environ.get("COMERCIAL_AURA") or "on").strip().lower() != "off":
+            flot += ('<div class="pc-fl pc-r"><button class="pc-fb" id="pc-i1" type="button" aria-expanded="false"><span>Pregúntame · Edu Aura</span></button>'
+                     '<div class="pc-pn pc-ai" id="pc-ip" hidden role="dialog" aria-label="Edu Aura, asistente de PROCSIS"><div class="pc-ah"><b>Edu Aura</b><small>Tu IA de confianza</small></div>'
+                     '<div class="pc-ms" id="pc-ms" aria-live="polite"></div>'
+                     '<div class="pc-ch"><button type="button">Planes y precios</button><button type="button">¿Qué equipo elegir?</button><button type="button">Cómo radicar una PQR</button><button type="button">Pagar mi factura</button></div>'
+                     '<div class="pc-qr"><input id="pc-q" maxlength="300" placeholder="Escribe tu pregunta" autocomplete="off"><button type="button" id="pc-qs" aria-label="Enviar">Enviar</button></div>'
+                     '<p class="pc-ft">Respondo con información pública de PROCSIS. No tengo acceso a datos de colegios.</p></div></div>')
+        cuerpo = '<!--%s--><style>%s</style><section class="pc-root" id="pc-root">%s</section>%s<script>%s</script>' % (MARCA, CSS_PUB, "".join(s), flot, JS_PUB)
+        return {"barra": barra_html(ids, base), "cuerpo": cuerpo, "ids": ids}
 
-    def com_inicio():
-        return envolver_publico(bloque())
-
-    def envolver_publico(b):
-        r = make_response("<!doctype html><html lang=es><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>PROCSIS | EduTrack</title>"
-                          "<style>body{margin:0;background:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0F172A}"
-                          ".pc-top{padding:16px 20px;background:#0020C2;color:#fff;font-weight:800;letter-spacing:.06em}.pc-top a{color:#fff;text-decoration:none}</style></head><body>"
-                          "<div class=pc-top><a href='/'>PROCSIS | EduTrack</a></div>%s</body></html>" % b)
+    def envolver_publico(contenido, titulo="PROCSIS | EduTrack"):
+        r = make_response("<!doctype html><html lang=es><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>%s</title>"
+                          "<style>body{margin:0;background:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0F172A}</style></head><body>%s</body></html>"
+                          % (e(titulo), contenido))
         r.headers["Cache-Control"] = "no-cache"
         return r
+
+    def com_inicio():
+        b = bloque("/publico/inicio")
+        return envolver_publico(b["barra"] + b["cuerpo"])
 
     def inyectar(resp):
         try:
@@ -684,10 +800,14 @@ def _instalar(G):
             h = resp.get_data(as_text=True)
             if MARCA in h:
                 return resp
+            b = bloque()
+            m = re.search(r"<body[^>]*>", h, re.I)
+            if m and (os.environ.get("COMERCIAL_BARRA") or "on").strip().lower() != "off":
+                h = h[:m.end()] + b["barra"] + h[m.end():]
             i = h.lower().rfind("</body>")
             if i < 0:
                 return resp
-            resp.set_data(h[:i] + bloque() + h[i:])
+            resp.set_data(h[:i] + b["cuerpo"] + h[i:])
         except Exception as ex:
             print("COMERCIAL inyectar:", repr(ex)[:140], flush=True)
         return resp
@@ -816,9 +936,9 @@ def _instalar(G):
 
     def pub_img(tipo, rid):
         tablas()
-        reg = (Banner if tipo == "banner" else Equipo if tipo == "equipo" else None)
+        reg = (Banner if tipo == "banner" else Equipo if tipo == "equipo" else Entrada if tipo == "entrada" else None)
         reg = reg.query.get(rid) if reg else None
-        uri = (getattr(reg, "imagen" if tipo == "banner" else "foto", "") or "") if reg and reg.activo else ""
+        uri = (getattr(reg, "foto" if tipo == "equipo" else "imagen", "") or "") if reg and reg.activo else ""
         m = re.match(r"^data:(image/(?:png|jpeg|webp));base64,(.+)$", uri)
         if not m:
             abort(404)
@@ -835,6 +955,122 @@ def _instalar(G):
                                "descripcion": p.descripcion, "caracteristicas": [x.strip() for x in (p.caracteristicas or "").splitlines() if x.strip()]} for p in pla],
                    "equipos": [{"nombre": q.nombre, "categoria": q.categoria, "precio": q.precio, "disponible": (q.stock or 0) > 0, "beneficio": q.beneficio} for q in equ]})
 
+    # ───── Edu Aura pública: responde SOLO con catálogo, planes y textos públicos (nunca facturas ni datos de colegios) ─────
+    def aura_responder(q):
+        for r in AuraResp.query.filter_by(activo=True).order_by(AuraResp.id).all():  # respuestas que editan Marketing y TI
+            ks = [sin_acentos(k).strip() for k in (r.palabras or "").split(",") if k.strip()]
+            if any(k and k in sin_acentos(q) for k in ks):
+                return (r.respuesta or "")[:900], [{"t": "Cotizar con un asesor", "h": "#pc-cot"}]
+        rutas = rutas_existentes()
+        COT = {"t": "Hablar con un asesor", "h": "#pc-cot"}
+        if toca(q, "hola", "buenas", "buenos dias", "buen dia", "saludos"):
+            return "¡Hola! Soy Edu Aura. Te ayudo con planes, tecnología, pagos, cupones y PQR. ¿Qué necesitas?", []
+        if toca(q, "gracias", "chao", "adios"):
+            return "¡Con gusto! Si necesitas algo más, aquí estaré.", []
+        if toca(q, "pqr", "queja", "reclamo", "peticion", "sugerencia"):
+            pqr = next((c for c in ("/pqr", "/radicar-pqr", "/pqr/nueva") if c in rutas), "")
+            if pqr:
+                return ("Para radicar una PQR usa «Radicar PQR» en la sección Autogestión. Para proteger tu información validamos tu identidad con un PIN a tu correo y algunos datos de la solicitud.",
+                        [{"t": "Radicar PQR", "h": pqr}])
+            return "Puedes dejar tu petición, queja o reclamo en el formulario «Cotizar o comprar» y un asesor te responderá.", [COT]
+        if toca(q, "factura", "pagar", "pago", "pse", "nequi", "comprobante", "mensualidad"):
+            return ("Para pagar: en «Pagos, facturas y cupones» escribe el NIT, el código de tu colegio o tu documento, elige tu factura y pulsa Pagar. Cuando el pago se confirme podrás descargar el comprobante.",
+                    [{"t": "Ir a pagar", "h": "#pc-pagos"}])
+        if toca(q, "cupon", "descuento", "promo", "promocion", "oferta"):
+            return ("Los cupones se aplican al consultar tu factura (campo «¿Tienes un cupón?») o al pedir una cotización. Cada cupón tiene fecha de vencimiento y un límite de usos.",
+                    [{"t": "Aplicar un cupón", "h": "#pc-pagos"}, COT])
+        if toca(q, "computador", "portatil", "equipo", "pc", "lector", "qr", "pos", "combo", "tecnologia", "tienda", "comprar", "elegir"):
+            eqs = Equipo.query.filter_by(activo=True).order_by(Equipo.categoria, Equipo.nombre).all()
+            if not eqs:
+                return "Estamos actualizando el catálogo de tecnología. Déjanos tu solicitud y un asesor te cotiza.", [COT]
+            pal = {w for w in re.findall(r"[a-z0-9]+", sin_acentos(q)) if len(w) >= 4}
+            afines = [x for x in eqs if any(w in sin_acentos(x.nombre + " " + x.categoria) for w in pal)] or eqs
+            lin = ["• %s (%s): %s, %s" % (x.nombre, x.categoria, cop(x.precio) if x.precio else "cotizar", "disponible" if (x.stock or 0) > 0 else "consultar disponibilidad") for x in afines[:4]]
+            return ("Esto es lo que tenemos:\n" + "\n".join(lin) + "\nCuéntame para qué lo necesitas (aula, portería, secretaría) y un asesor te orienta.", [{"t": "Ver catálogo", "h": "#pc-tienda"}, {"t": "Cotizar con cupón", "h": "#pc-cot"}])
+        if toca(q, "plan", "planes", "tarifa", "precio", "costo", "cuanto", "capacidad", "sede", "licencia"):
+            ps = Plan.query.filter_by(activo=True, aprobado=True).order_by(Plan.tipo, Plan.id).all()
+            if not ps:
+                return "Estamos actualizando nuestros planes. Déjanos tu solicitud y te cotizamos.", [COT]
+            lin = ["• %s: %s, %s, %s" % (x.nombre, ("hasta %s estudiantes" % format(x.estudiantes_max, ",").replace(",", ".")) if x.estudiantes_max else "estudiantes sin límite",
+                                          ("%d sede%s" % (x.sedes_max, "" if x.sedes_max == 1 else "s")) if x.sedes_max else "multi-sede ilimitada",
+                                          (cop(x.precio_mensual) + " al mes") if x.precio_mensual else "tarifa a cotizar") for x in ps]
+            return "Nuestros planes:\n" + "\n".join(lin), [{"t": "Ver planes", "h": "#pc-planes"}, COT]
+        if toca(q, "matricula", "requisito", "inscripcion", "cupo", "admision"):
+            return ("Los requisitos de matrícula los define cada colegio. Consúltalos con la secretaría de tu institución o ingresa por «Ingresar colegio». No tengo acceso a datos de colegios.", [{"t": "Ingresar colegio", "h": "/login"}])
+        if toca(q, "contrasena", "clave", "acceso", "ingresar", "bloqueo", "bloquear", "mfa", "pin", "codigo"):
+            return ("Entra a «Ingresar colegio» y usa «¿Olvidaste tu contraseña?». Te enviamos un código de 6 dígitos al correo registrado; vence en 5 minutos y sirve una sola vez.", [{"t": "Ingresar colegio", "h": "/login"}])
+        if toca(q, "soporte", "ayuda", "agendar", "asesor", "contacto", "llamar"):
+            ag = next((c for c in ("/agendar-soporte", "/soporte/agendar", "/agendar_soporte") if c in rutas), "")
+            return ("Puedes agendar soporte desde la sección Autogestión." if ag else "Déjanos tu solicitud y un asesor te contacta."), ([{"t": "Agendar soporte", "h": ag}] if ag else [COT])
+        if toca(q, "datos", "habeas", "privacidad", "ley", "1581", "seguridad"):
+            return "Tratamos los datos personales conforme a la Ley 1581 de 2012 (Habeas Data). No compartimos información de colegios en este asistente.", []
+        return ("No tengo esa respuesta con la información pública. Puedo ayudarte con planes, tecnología, pagos, cupones o PQR, o pasar tu consulta a un asesor.", [COT])
+
+    def pub_aura():
+        tablas()
+        d = cuerpo_json()
+        if d is None:
+            return js({"ok": False, "mensaje": "Solicitud no válida."}, 400)
+        if not limite("a:" + ip(), 20, 600):
+            return js({"ok": False, "mensaje": "Has hecho muchas preguntas seguidas. Espera unos minutos."}, 429)
+        q = str(d.get("pregunta") or "").strip()[:300]
+        if len(q) < 2:
+            return js({"ok": False, "mensaje": "Escribe tu pregunta."}, 400)
+        try:
+            txt, enl = aura_responder(q)
+        except Exception as ex:
+            print("COMERCIAL aura:", repr(ex)[:140], flush=True)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return js({"ok": False, "mensaje": "No pude responder en este momento. Intenta de nuevo."}, 500)
+        return js({"ok": True, "respuesta": txt, "enlaces": enl})
+
+    def pub_blog(rid):
+        tablas()
+        b = Entrada.query.get(rid)
+        if b is None or not b.activo:
+            abort(404)
+        pars = "".join("<p>%s</p>" % e(x.strip()) for x in (b.cuerpo or b.resumen or "").splitlines() if x.strip())
+        base = bloque("/publico/inicio")
+        art = ('<style>%s</style><article class="pc-root" style="max-width:760px"><a href="/publico/inicio#pc-blog" class="pc-s">← Volver a novedades</a>'
+               '<span class="pc-tag">%s</span><h1 style="color:#0020C2;margin:10px 0 4px">%s</h1><div class="pc-dt">%s</div>%s</article>'
+               % (CSS_PUB, e(b.categoria), e(b.titulo), e(fecha_larga(b.fecha)), pars))
+        return envolver_publico(base["barra"] + art, b.titulo)
+
+    # ───── Fase 3: confirmación de pago de la pasarela (firmada) ─────
+    def pub_webhook():
+        tablas()
+        secreto = os.environ.get("PAGO_SECRET", "")
+        if not secreto:
+            return js({"ok": False, "mensaje": "Pasarela sin configurar."}, 503)
+        if not limite("w:" + ip(), 120, 600):
+            return js({"ok": False}, 429)
+        d = request.get_json(silent=True) if request.is_json else None
+        if not isinstance(d, dict):
+            return js({"ok": False}, 400)
+        num, val, est = norm_ref(d.get("numero")), str(d.get("valor") or "").strip(), str(d.get("estado") or "").strip().upper()
+        esperada = hmac.new(secreto.encode("utf-8"), ("%s|%s|%s" % (num, val, est)).encode("utf-8"), hashlib.sha256).hexdigest()
+        if not igual(str(d.get("firma") or "").lower(), esperada):
+            audit("Comercial: confirmación de pago con firma inválida", "%s · %s" % (num, ip()))
+            return js({"ok": False}, 401)
+        f = Factura.query.filter_by(numero=num).first()
+        if f is None:
+            return js({"ok": False}, 404)
+        if est != "APROBADA":
+            return js({"ok": True, "ignorado": True})
+        if f.estado == "PAGADA":
+            return js({"ok": True, "repetido": True})
+        total = max(0, (f.valor or 0) - (f.descuento or 0))
+        if not val.isdigit() or int(val) != total:
+            audit("Comercial: pago con valor distinto al de la factura", "%s · recibido %s · esperado %s" % (num, val, total))
+            return js({"ok": False, "mensaje": "El valor no coincide."}, 400)
+        f.estado, f.pagada_ts = "PAGADA", int(time.time())
+        db.session.commit()
+        audit("Comercial: pago confirmado por pasarela", "%s · %s" % (num, total))
+        return js({"ok": True})
+
     reglas = (
         ("/comercial", "com_admin", com_admin, ["GET"]),
         ("/comercial/guardar/<sec>", "com_guardar", com_guardar, ["POST"]),
@@ -847,6 +1083,9 @@ def _instalar(G):
         ("/publico/pagos/comprobante/<numero>", "com_comprobante", pub_comprobante, ["GET"]),
         ("/publico/cotizar", "com_cotizar", pub_cotizar, ["POST"]),
         ("/publico/img/<tipo>/<int:rid>", "com_img", pub_img, ["GET"]),
+        ("/publico/aura", "com_aura", pub_aura, ["POST"]),
+        ("/publico/blog/<int:rid>", "com_blog", pub_blog, ["GET"]),
+        ("/publico/pagos/webhook", "com_webhook", pub_webhook, ["POST"]),
     )
     for ruta, nombre, fn, ms in reglas:
         app.add_url_rule(ruta, nombre, fn, methods=ms)
@@ -898,6 +1137,39 @@ CSS_PUB = """
 .pc-f .pc-row{margin-top:10px}.pc-er{color:#b91c1c;font-size:14px;margin-top:8px}.pc-okk{color:#067647;font-size:14px;font-weight:700;margin-top:8px}
 .pc-au{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:0 0 12px}
 .pc-au a{padding:11px 20px;border-radius:999px;border:1px solid #0020C2;color:#0020C2;font-weight:800;text-decoration:none;font-size:14px;background:#fff}
+.pc-h{scroll-margin-top:84px}
+.pc-dt{font-size:12.5px;color:#64748b}
+.pc-bar{position:sticky;top:0;z-index:2147482000;display:flex;align-items:center;gap:14px;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 2px 12px rgba(0,32,194,.08);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box}
+.pc-lg{display:flex;align-items:center;gap:8px;text-decoration:none;color:#0020C2;font-weight:800;letter-spacing:.04em;white-space:nowrap}
+.pc-lg b{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#0020C2;color:#fff}
+.pc-bar nav{display:flex;gap:4px;flex:1;overflow-x:auto;scrollbar-width:none}.pc-bar nav::-webkit-scrollbar{display:none}
+.pc-bar nav a{padding:8px 12px;border-radius:999px;text-decoration:none;color:#0F172A;font-weight:600;font-size:14px;white-space:nowrap}
+.pc-bar nav a:hover,.pc-bar nav a:focus{background:#eef2ff;color:#0020C2}
+.pc-in{padding:10px 18px;border-radius:999px;background:#0020C2;color:#fff;text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap}
+@media(max-width:560px){.pc-lg span{display:none}.pc-bar{padding:8px 12px;gap:8px}}
+.pc-fl{position:fixed;bottom:18px;z-index:2147482500;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box}
+.pc-fl *{box-sizing:border-box}.pc-l{left:16px}.pc-r{right:16px}
+.pc-fb{width:56px;height:56px;border-radius:50%;border:0;cursor:pointer;display:grid;place-items:center;background:#0020C2;color:#fff;box-shadow:0 8px 24px rgba(0,32,194,.35)}
+.pc-fb:focus-visible{outline:3px solid #00FF66;outline-offset:2px}
+#pc-i1{width:auto;border-radius:999px;padding:0 20px;background:#00FF66;color:#0020C2;font-weight:800;font-size:14px;box-shadow:0 8px 24px rgba(0,255,102,.45)}
+.pc-pn{position:absolute;bottom:68px;width:min(340px,calc(100vw - 32px));background:#fff;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 20px 50px rgba(10,42,143,.25);overflow:hidden;color:#0F172A}
+.pc-l .pc-pn{left:0}.pc-r .pc-pn{right:0}.pc-pn[hidden]{display:none}
+.pc-pn h4{margin:0;padding:14px 16px;background:#0020C2;color:#fff;font-size:15px}
+.pc-ar{display:flex;flex-direction:column;gap:8px;padding:14px}
+.pc-ar button{border:1px solid #0020C2;background:#fff;color:#0020C2;border-radius:12px;padding:10px 12px;font-weight:700;font-size:14px;cursor:pointer;text-align:left}
+.pc-ar button[aria-pressed="true"]{background:#0020C2;color:#fff}
+.pc-ah{padding:14px 16px;background:linear-gradient(110deg,#0020C2,#00005e);color:#fff;display:flex;flex-direction:column;border-bottom:3px solid #00FF66}.pc-ah small{opacity:.85}
+.pc-ms{max-height:290px;min-height:90px;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.pc-mb{padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.45;white-space:pre-line;max-width:90%}
+.pc-mb.u{align-self:flex-end;background:#0020C2;color:#fff}.pc-mb.a{background:#F8FAFC;border:1px solid #e2e8f0}
+.pc-lnk{display:inline-block;margin-top:6px;color:#0020C2;font-weight:800;text-decoration:underline}
+.pc-ch{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 8px}.pc-ch button{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:6px 10px;font-size:12.5px;cursor:pointer;color:#0F172A}
+.pc-qr{display:flex;gap:8px;padding:0 12px 8px}.pc-qr input{flex:1;padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;font:inherit;font-size:14px;min-width:0;color:#0F172A;background:#fff}
+.pc-qr button{border:0;border-radius:12px;padding:0 14px;background:#0020C2;color:#fff;font-weight:800;cursor:pointer}
+.pc-ft{margin:0;padding:0 14px 12px;font-size:11.5px;color:#64748b}
+html.pc-hc{filter:invert(1) hue-rotate(180deg)}
+html.pc-hc img,html.pc-hc video,html.pc-hc .pc-sl,html.pc-hc .pc-fl{filter:invert(1) hue-rotate(180deg)}
+html.pc-lk a{text-decoration:underline!important;font-weight:800}
 """
 
 JS_PUB = r"""(function(){
@@ -933,4 +1205,26 @@ if(!r.facturas.length){c.appendChild(nodo('div','pc-s',r.mensaje));return;}r.fac
 var bb=$('pc-bus');if(bb)bb.onclick=buscar;var rr=$('pc-ref');if(rr)rr.onkeydown=function(e){if(e.key==='Enter'){buscar();}};
 var be=$('pc-env');if(be)be.onclick=function(){var s=$('pc-e'),o=$('pc-ok'),opt=s.options[s.selectedIndex];o.className='pc-s';o.textContent='';
 post('/publico/cotizar',{nombre:$('pc-n').value,contacto:$('pc-c').value,equipo:s.value,interes:(!s.value&&opt&&opt.getAttribute('data-i'))||'',cupon:$('pc-k').value,mensaje:$('pc-m').value}).then(function(r){o.className=r.ok?'pc-okk':'pc-er';o.textContent=r.mensaje;if(r.ok){$('pc-n').value='';$('pc-c').value='';$('pc-k').value='';$('pc-m').value='';}});};
+var A={z:100,hc:0,lk:0};
+try{var g=JSON.parse(localStorage.getItem('pc_a11y')||'{}');if(typeof g.z==='number'&&g.z>=90&&g.z<=160)A.z=g.z;A.hc=g.hc?1:0;A.lk=g.lk?1:0;}catch(x){}
+function apA(){document.body.style.zoom=A.z===100?'':String(A.z/100);var h=document.documentElement;h.classList.toggle('pc-hc',!!A.hc);h.classList.toggle('pc-lk',!!A.lk);
+ Array.prototype.forEach.call(R.ownerDocument.querySelectorAll('[data-a="hc"],[data-a="lk"]'),function(b){b.setAttribute('aria-pressed',(b.getAttribute('data-a')==='hc'?A.hc:A.lk)?'true':'false');});
+ try{localStorage.setItem('pc_a11y',JSON.stringify(A));}catch(x){}}
+apA();
+var ab=$('pc-a1'),ap=$('pc-ap');
+if(ab&&ap){ab.onclick=function(){var o=ap.hidden;ap.hidden=!o;ab.setAttribute('aria-expanded',o?'true':'false');};
+ ap.addEventListener('click',function(ev){var a=ev.target.getAttribute&&ev.target.getAttribute('data-a');if(!a)return;
+  if(a==='mas')A.z=Math.min(160,A.z+15);else if(a==='menos')A.z=Math.max(90,A.z-15);else if(a==='hc')A.hc=A.hc?0:1;else if(a==='lk')A.lk=A.lk?0:1;else if(a==='rs'){A.z=100;A.hc=0;A.lk=0;}apA();});}
+var ib=$('pc-i1'),ip=$('pc-ip');
+if(ib&&ip){var ms=$('pc-ms'),qi=$('pc-q'),ini=false;
+ function msg(t,c){var d=nodo('div','pc-mb '+c,t);ms.appendChild(d);ms.scrollTop=ms.scrollHeight;return d;}
+ ib.onclick=function(){var o=ip.hidden;ip.hidden=!o;ib.setAttribute('aria-expanded',o?'true':'false');
+  if(o){if(!ini){ini=true;msg('¡Hola! Soy Edu Aura. Respondo con la información pública de PROCSIS: planes, tecnología, pagos, cupones y PQR. ¿En qué te ayudo?','a');}qi.focus();}};
+ function enviar(t){t=(t||'').trim();if(t.length<2)return;qi.value='';msg(t,'u');var w=msg('…','a');
+  post('/publico/aura',{pregunta:t}).then(function(r){w.textContent=r.ok?r.respuesta:(r.mensaje||'No pude responder ahora.');
+   if(r.ok&&r.enlaces){r.enlaces.forEach(function(l){if(/^(#|\/(?!\/))/.test(l.h)){var a=nodo('a','pc-lnk',l.t);a.href=l.h;w.appendChild(document.createElement('br'));w.appendChild(a);}});}
+   ms.scrollTop=ms.scrollHeight;});}
+ $('pc-qs').onclick=function(){enviar(qi.value);};qi.onkeydown=function(ev){if(ev.key==='Enter'){enviar(qi.value);}};
+ Array.prototype.forEach.call(ip.querySelectorAll('.pc-ch button'),function(b){b.onclick=function(){enviar(b.textContent);};});}
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape'){if(ap&&!ap.hidden){ap.hidden=true;}if(ip&&!ip.hidden){ip.hidden=true;}}});
 })();"""
