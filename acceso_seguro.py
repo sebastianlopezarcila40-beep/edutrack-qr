@@ -722,6 +722,23 @@ tick();setInterval(tick,1000);})();</script>""" % {"resta": resta, "espera": REE
 
     app.add_url_rule("/mfa-politica", "as2_mfa_politica", mfa_politica, methods=["GET", "POST"])
 
+    # [as2-sin-bucle] El aislamiento de paneles de la app devuelve a su panel a toda ruta que no sea del rol (áreas, Contabilidad,
+    # Proveedor, Desarrollo). Sin esta excepción, /mfa-politica rebota a /marketing, /marketing vuelve a pedir MFA y se forma un bucle.
+    try:
+        _lista = app.before_request_funcs.get(None, [])
+        for _i, _f in enumerate(list(_lista)):
+            if getattr(_f, "__name__", "") == "_aislar_paneles_internos" and not getattr(_f, "_as2_ok", False):
+                def _envuelta(_orig=_f):
+                    if (request.path or "").startswith("/mfa-politica"):
+                        return None
+                    return _orig()
+                _envuelta.__name__ = _f.__name__
+                _envuelta._as2_ok = True
+                _lista[_i] = _envuelta
+                print("ACCESO SEGURO v2: /mfa-politica permitido para todos los roles internos (sin bucle).", flush=True)
+    except Exception as _ex:
+        print("ACCESO SEGURO v2: no se pudo ajustar el aislamiento de paneles:", repr(_ex)[:140], flush=True)
+
     # Si el MFA existente (PIN de /mfa) acaba de verificar al usuario, cuenta como MFA de la política (sin pedirlo dos veces).
     orig = G.get("_mfa_completar_login")
     if orig:
