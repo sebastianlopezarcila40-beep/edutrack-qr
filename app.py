@@ -113159,6 +113159,14 @@ except Exception as _t27e:
     print('TEMA 2027 no se pudo instalar (la app sigue igual):', repr(_t27e))
 
 
+# [procsis-cargadores-v1] 20 animaciones de carga (/cargadores). Para quitarlo: borra este bloque o usa aplicar_respaldo_y_cargadores.py --revertir
+try:
+    import cargadores_20 as _cg1
+    _cg1.instalar(globals())
+except Exception as _cg1e:
+    print('CARGADORES no se pudo instalar (la app sigue igual):', repr(_cg1e))
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
