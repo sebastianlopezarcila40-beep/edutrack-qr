@@ -26563,6 +26563,8 @@ def _aislar_paneles_internos():
         return None  # [procsis-tiendatrack-fase1] zona pública y selector de producto validan su propio acceso
     if path.startswith("/sitio/apariencia"):
         return None  # [procsis-apariencia] _fest_guard valida el acceso
+    if path.startswith(("/estado-modulos", "/cargadores", "/comercial", "/publico/")):  # [procsis-rutas-nuevas]
+        return None  # modulos nuevos: cada ruta valida su propio acceso
     if path.startswith(("/tickets-doc", "/notificaciones", "/api/v1")):
         return None  # cada ruta valida su propio acceso
     if path == "/documentos" or path.startswith(("/documentos/", "/documentos-oficiales", "/docs/area")):
