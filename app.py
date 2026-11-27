@@ -113263,6 +113263,14 @@ except Exception as _cg1e:
     print('CARGADORES no se pudo instalar (la app sigue igual):', repr(_cg1e))
 
 
+# [procsis-estado-modulos-v1] Página /estado-modulos (qué módulos cargaron). Para quitarla: borra este bloque o usa aplicar_todo.py --revertir
+try:
+    import estado_modulos as _em1
+    _em1.instalar(globals())
+except Exception as _em1e:
+    print('ESTADO MODULOS no se pudo instalar (la app sigue igual):', repr(_em1e))
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
