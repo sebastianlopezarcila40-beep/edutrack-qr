@@ -396,7 +396,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),  # tope de la cookie; la inactividad real: _limite_inactividad() (15 min, o 8-12 h en dispositivo autorizado)
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=max(1, min(int(os.environ.get("SESION_MAX_HORAS", "72") or 72), 168))),  # [procsis-codigos-72h] tope de la cookie; la inactividad real: _limite_inactividad() (15 min, o hasta 72 h en dispositivo autorizado)
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB (fotos biometría comprimidas)
     # Capacidad: colegios grandes (1.500–5.000 estudiantes)
     EDUTRACK_MAX_ESTUDIANTES=int(os.environ.get("EDUTRACK_MAX_ESTUDIANTES", "5000")),
@@ -42232,6 +42232,7 @@ def soporte_verificar_pin(token):
                 except Exception:
                     pass
                 registrar_auditoria("Login soporte", f"{u.rol} {u.usuario} desde /soporte-login (PIN)")
+                session["_pin72_set"] = 1  # [procsis-codigos-72h] marca este navegador como de confianza
                 try:
                     area_t = "Soporte" if (u.rol or "") == "Soporte" else ("Ventas" if (u.rol or "") == "Comercial" else "Soporte")
                     if (u.rol or "").strip() in ("Soporte", "Comercial", "Cobranza") and not turno_abierto_actual(usuario_id=u.id, area=area_t):
@@ -42644,6 +42645,48 @@ def biometria_app():
 
 
 
+# [procsis-codigos-72h] Navegador de confianza de Soporte: tras validar el PIN no se vuelve a pedir durante PIN_CONFIABLE_HORAS (72).
+_PIN72_COOKIE = "procsis_pin72"
+
+
+def _pin72_horas():
+    try:
+        return max(0.0, min(float(os.environ.get("PIN_CONFIABLE_HORAS", "72") or 72), 720.0))
+    except Exception:
+        return 72.0
+
+
+def _pin72_ok(user):
+    try:
+        h = _pin72_horas()
+        if h <= 0:
+            return False
+        tok = request.cookies.get(_PIN72_COOKIE) or ""
+        if not tok:
+            return False
+        from itsdangerous import URLSafeTimedSerializer
+        dato = URLSafeTimedSerializer(app.secret_key, salt="procsis-pin72").loads(tok, max_age=int(h * 3600))
+        return int(dato.get("u")) == int(user.id)
+    except Exception:
+        return False
+
+
+@app.after_request
+def _pin72_cookie(resp):
+    try:
+        if session.pop("_pin72_set", None):
+            uid = session.get("uid")
+            h = _pin72_horas()
+            if uid and h > 0:
+                from itsdangerous import URLSafeTimedSerializer
+                tok = URLSafeTimedSerializer(app.secret_key, salt="procsis-pin72").dumps({"u": int(uid)})
+                resp.set_cookie(_PIN72_COOKIE, tok, max_age=int(h * 3600), httponly=True, samesite="Lax",
+                                secure=bool(app.config.get("SESSION_COOKIE_SECURE")), path="/")
+    except Exception:
+        pass
+    return resp
+
+
 @app.route("/soporte-login", methods=["GET", "POST"])
 def soporte_login():
     """Acceso directo de Soporte desde el login público (sin elegir colegio ni ver datos confidenciales de estudiantes)."""
@@ -42669,6 +42712,7 @@ def soporte_login():
             else:
                 # Segundo factor de Soporte: SOLO PIN por correo (sin selfie/biometría)
                 usar_pin = os.environ.get("PIN_LOGIN_SOPORTE", "1") != "0"
+                usar_pin = usar_pin and not _pin72_ok(user)  # [procsis-codigos-72h] no pedir PIN dentro de las 72 h
                 if usar_pin and (user.correo or "").strip():
                     _rate_limit_ok(portal="soporte")
                     ch = _crear_reto_pin(user.id)
@@ -90775,7 +90819,7 @@ def _limite_inactividad():
     """15 min por defecto; 8-12 h si el ingreso fue desde un dispositivo autorizado."""
     try:
         v = int(session.get("limite_inact") or 0)
-        if 900 <= v <= 12 * 3600:
+        if 900 <= v <= 72 * 3600:
             return v
     except Exception:
         pass
@@ -90784,10 +90828,10 @@ def _limite_inactividad():
 
 def _disp_horas():
     try:
-        h = float(os.environ.get("SESION_DISPOSITIVO_HORAS", "10"))
+        h = float(os.environ.get("SESION_DISPOSITIVO_HORAS", "72"))
     except Exception:
-        h = 10.0
-    return max(1.0, min(h, 12.0))
+        h = 72.0
+    return max(1.0, min(h, 72.0))
 
 
 def _disp_etiqueta():
@@ -90801,13 +90845,35 @@ def _disp_cookie_nombre(uid):
     return "procsis_disp_%d" % int(uid)
 
 
+def _disp_vigente72(fila):
+    """[procsis-codigos-72h] Un dispositivo autorizado por PIN vale DISPOSITIVO_VALIDEZ_HORAS (72 por defecto); luego vuelve a pedir PIN."""
+    if not fila:
+        return None
+    try:
+        h = float(os.environ.get("DISPOSITIVO_VALIDEZ_HORAS", "72") or 72)
+    except Exception:
+        h = 72.0
+    if h <= 0:
+        return fila
+    try:
+        creado = str(getattr(fila, "creado_en", "") or "")[:19]
+        if not creado:
+            return fila
+        limite = (ahora() - timedelta(hours=h)).strftime("%Y-%m-%d %H:%M:%S")
+        if creado < limite:
+            return None
+    except Exception:
+        pass
+    return fila
+
+
 def _disp_buscar(user):
     token = request.cookies.get(_disp_cookie_nombre(user.id)) or ""
     if len(token) < 20:
         return None
-    return DispositivoAutorizado.query.filter_by(
+    return _disp_vigente72(DispositivoAutorizado.query.filter_by(
         usuario_id=user.id, token_hash=_acc_hashlib.sha256(token.encode("utf-8")).hexdigest(), revocado=False
-    ).first()
+    ).first())
 
 
 def _disp_pagina_error(msg):
