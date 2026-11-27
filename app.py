@@ -4767,7 +4767,7 @@ _MODULOS_GERENCIA = [
         ('/gerencia/notas', 'Notas internas'),
         ('/gerencia/cancelaciones', 'Cancelaciones'),
         ('/gerencia/pqr-info', 'Información PQR'),
-        ('/gerencia/support', 'Soporte interno'),
+        ('/gerencia/support', '📝 Support · autorizar artículos'),
         ('/gerencia/metas', 'Metas comerciales'),
     ]),
     ('Tecnología y TI', [
