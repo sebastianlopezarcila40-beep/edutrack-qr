@@ -30,27 +30,82 @@ _R_FOOTER_LP = re.compile(r'<footer class="lp-footer">.*?Desarrollado por.*?</fo
 
 _ESTILO_LINK = "color:inherit;text-decoration:underline;font-weight:600"
 
+# Pie azul corporativo (_footer_corporativo_html): su © viejo se reemplaza por la frase nueva (un solo ©)
+_R_CF_COPY = re.compile(r'<span>© \d{4} PROCSIS · Soluciones digitales\. Todos los derechos reservados\.</span>')
 
-def construir_pie(producto, empresa, anio=None):
-    """HTML interno del pie (sin contenedor)."""
+# "Segunda ventana" de la landing: notas legales + pie azul pasan a su propia pantalla, siempre al final
+_VENTANA2 = """<style>
+#pcx-ventana2{min-height:100vh;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end;background:#f5f5f7}
+#pcx-ventana2 .login-apple-foot{width:100%;box-sizing:border-box}
+#pcx-ventana2 .cf-foot{margin-top:24px}
+</style>
+<script>
+(function(){
+  function armar(){
+    var b=document.body,n=b.querySelector(".login-apple-foot"),f=b.querySelector("footer.cf-foot");
+    if(!f) return;
+    var w=document.getElementById("pcx-ventana2");
+    if(!w){ w=document.createElement("section"); w.id="pcx-ventana2"; w.setAttribute("aria-label","Información legal y de la empresa"); }
+    if(n && n.parentNode!==w) w.appendChild(n);
+    if(f.parentNode!==w) w.appendChild(f);
+    if(b.lastElementChild!==w) b.appendChild(w);
+  }
+  armar();
+  document.addEventListener("DOMContentLoaded",armar);
+  window.addEventListener("load",function(){ armar(); setTimeout(armar,800); });
+  try{ new MutationObserver(function(){
+    var l=document.body.lastElementChild;
+    if(l && l.id!=="pcx-ventana2" && !/^(SCRIPT|STYLE|LINK|NOSCRIPT)$/.test(l.tagName)) armar();
+  }).observe(document.body,{childList:true}); }catch(e){}
+})();
+</script>"""
+
+
+def frase_copy(producto, empresa, anio=None):
     anio = anio or datetime.now().year
-    p, e = _html.escape(producto), _html.escape(empresa)
+    return "© %s %s %s. %s %s. Todos los derechos reservados." % (
+        _html.escape(producto), _html.escape(PAIS), anio, _html.escape(SERVICIO), _html.escape(empresa))
+
+
+def enlaces_legales():
     return (
-        '<span class="pie-legal" style="display:block;line-height:1.7;font-size:12.5px">'
-        "© %s %s %s. %s %s. Todos los derechos reservados.<br>"
         '<a href="%s" style="%s">Términos y condiciones</a> | '
         '<a href="%s" style="%s">Política de protección de datos personales</a> | '
         '<a href="%s" style="%s">Mapa del sitio</a>'
-        "</span>" % (p, _html.escape(PAIS), anio, _html.escape(SERVICIO), e,
-                     URL_TERMINOS, _ESTILO_LINK, URL_DATOS, _ESTILO_LINK, URL_MAPA, _ESTILO_LINK)
+        % (URL_TERMINOS, _ESTILO_LINK, URL_DATOS, _ESTILO_LINK, URL_MAPA, _ESTILO_LINK)
     )
 
 
+def construir_pie(producto, empresa, anio=None):
+    """HTML interno del pie completo (frase © + enlaces), sin contenedor."""
+    return ('<span class="pie-legal" style="display:block;line-height:1.7;font-size:12.5px">%s<br>%s</span>'
+            % (frase_copy(producto, empresa, anio), enlaces_legales()))
+
+
 def reemplazar_pies(html, producto, empresa):
-    """Sustituye los pies antiguos 'Desarrollado por…' dentro de un HTML. Devuelve el HTML nuevo."""
-    if "Desarrollado por" not in html:
+    """Unifica el pie legal en un HTML. Devuelve el HTML nuevo (o el mismo si no hay pie que tocar)."""
+    tiene_cf = 'class="cf-foot"' in html
+    if "Desarrollado por" not in html and not tiene_cf:
         return html
     interno = construir_pie(producto, empresa)
+    if tiene_cf:
+        # Un solo ©: la frase nueva reemplaza al © del pie azul y los enlaces van justo debajo, dentro del mismo pie.
+        html = _R_CF_COPY.sub(lambda m: "<span>%s</span>" % frase_copy(producto, empresa), html)
+        if 'class="cf-legal"' not in html:
+            i = html.find('<footer class="cf-foot">')
+            j = html.find("</footer>", i) if i >= 0 else -1
+            if j >= 0:
+                fila = ('<div class="cf-legal" style="max-width:1180px;margin:14px auto 0;text-align:center;'
+                        'font-size:11.5px;font-weight:400;color:rgba(255,255,255,.84)">%s</div>' % enlaces_legales())
+                html = html[:j] + fila + html[j:]
+        # la banda oscura "Desarrollado por…" de la landing sobraba: duplicaba el ©
+        html = _R_FOOTER_LP.sub("", html)
+        html = _R_FOOTER_DIV.sub("", html)
+        # solo la landing/login: notas legales + pie azul en una segunda pantalla, al final de la página
+        if 'class="login-page"' in html and "pcx-ventana2" not in html:
+            k = html.rfind("</body>")
+            html = (html[:k] + _VENTANA2 + html[k:]) if k >= 0 else (html + _VENTANA2)
+        return html
     html = _R_FOOTER_DIV.sub(lambda m: '<div class="footer">%s</div>' % interno, html)
     html = _R_FOOTER_LP.sub(lambda m: '<footer class="lp-footer">%s</footer>' % interno, html)
     return html
@@ -131,7 +186,7 @@ def instalar(g):
                     or resp.headers.get("Content-Encoding") or request.path.startswith("/static")):
                 return resp
             txt = resp.get_data(as_text=True)
-            if "Desarrollado por" not in txt:
+            if "Desarrollado por" not in txt and 'class="cf-foot"' not in txt:
                 return resp
             prod, emp = nombres()
             nuevo = reemplazar_pies(txt, prod, emp)
