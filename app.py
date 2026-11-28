@@ -113273,6 +113273,22 @@ except Exception as _em1e:
     print('ESTADO MODULOS no se pudo instalar (la app sigue igual):', repr(_em1e))
 
 
+# [procsis-pqr-seguro-v1] Adjuntos + verificación por PIN en PQR. Para quitarlo: borra este bloque o usa aplicar_pqr_pie.py --revertir
+try:
+    import pqr_adjuntos_pin as _pqs1
+    _pqs1.instalar(globals())
+except Exception as _pqs1e:
+    print('PQR SEGURO no se pudo instalar (la app sigue igual):', repr(_pqs1e))
+
+
+# [procsis-pie-legal-v1] Pie de página legal + /terminos y /mapa-del-sitio. Para quitarlo: borra este bloque o usa aplicar_pqr_pie.py --revertir
+try:
+    import pie_pagina as _pie1
+    _pie1.instalar(globals())
+except Exception as _pie1e:
+    print('PIE LEGAL no se pudo instalar (la app sigue igual):', repr(_pie1e))
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
