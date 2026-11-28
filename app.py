@@ -69,7 +69,7 @@ if os.environ.get("VERCEL"):
         try:
             return _v_makedirs(name, mode, exist_ok)
         except OSError as _e:
-            if _e.errno in (_verrno.EROFS, _verrno.EACCES, _verrno.EPERM):
+            if _e.errno in (_verrno.EROFS, _verrno.EACCES, _verrno.EPERM, _verrno.ENOENT) and _v_map(name) != name:
                 return _v_makedirs(_v_map(name), mode, exist_ok)
             raise
 
@@ -7051,12 +7051,12 @@ def _schema_marcar():
 
 
 def _crear_gerente_inicial(forzar=False):
-    """Crea el Gerente inicial (Sebastian / sebas123, clave temporal) si no existe ningún Gerente/Superadmin.
+    """Crea el Gerente inicial (usuario Sebastian, clave temporal) si no existe ningún Gerente/Superadmin.
     forzar=True (solo desde /estado-base con token) lo crea o le restablece la clave."""
     try:
         sebas = Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first()
         hay_gerente = Usuario.query.filter(Usuario.rol.in_(["Gerente", "Superadmin"])).first() is not None
-        clave = os.environ.get("GERENTE_INICIAL_CLAVE") or "sebas123"
+        clave = os.environ.get("GERENTE_INICIAL_CLAVE") or __import__("secrets").token_urlsafe(12)
         if sebas is None and (forzar or not hay_gerente):
             sebas = Usuario(usuario="Sebastian", password=crear_hash(clave), rol="Gerente", institucion_id=None,
                             nombre_completo="Sebastian", password_temporal=True)
@@ -7064,7 +7064,7 @@ def _crear_gerente_inicial(forzar=False):
                 sebas.activo = True
             db.session.add(sebas)
             db.session.commit()
-            _alog("Creado Gerente inicial: Sebastian")
+            _alog("Creado Gerente inicial: Sebastian" + ("" if os.environ.get("GERENTE_INICIAL_CLAVE") else " · clave temporal: " + clave))
         elif sebas is not None and forzar:
             sebas.password = crear_hash(clave)
             sebas.password_temporal = True
@@ -7079,73 +7079,8 @@ def _crear_gerente_inicial(forzar=False):
         _rollback_seguro()
 
 
-@app.route("/estado-base")
-def estado_base():
-    """Diagnóstico/arreglo de la base (solo con SETUP_TOKEN). /estado-base?k=TOKEN avanza la creación de tablas y
-    muestra el estado; agregue &sebastian=1 para crear o restablecer a Sebastian (clave sebas123)."""
-    import hmac as _hm, json as _json
-    tok = os.environ.get("SETUP_TOKEN", "")
-    if not tok or not _hm.compare_digest(request.args.get("k", ""), tok):
-        return "No encontrado", 404
-    info = {"motor": db.engine.dialect.name}
-    try:
-        from urllib.parse import urlparse as _up
-        info["servidor_bd"] = (_up(DATABASE_URL).hostname or "")[:60]
-    except Exception:
-        pass
-    try:
-        info["tablas_pendientes_tras_este_intento"] = _crear_tablas_por_lotes(presupuesto=8.0)
-        if request.args.get("sebastian") == "1":
-            _crear_gerente_inicial(forzar=True)
-        info["usuarios_total"] = Usuario.query.count()
-        info["gerentes"] = [u.usuario for u in Usuario.query.filter(Usuario.rol.in_(["Gerente", "Superadmin"])).all()]
-        info["sebastian_existe"] = Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first() is not None
-        info["marcador_arranque_rapido"] = _schema_ya_listo()
-    except Exception as e:
-        info["error"] = repr(e)[:300]
-        _rollback_seguro()
-    info["registro"] = list(_ARRANQUE_LOG)
-    return Response(_json.dumps(info, ensure_ascii=False, indent=2), mimetype="application/json")
 
 
-@app.route("/crear-gerencia-procsis")
-def crear_gerencia_procsis():
-    """Crea (o restablece) la cuenta de Gerencia: usuario sebastian.gerencia, clave sebas1234, rol Gerente.
-    PROTEGIDA: solo funciona con ?k=<SETUP_TOKEN>. Sin esa variable de entorno la ruta no existe (404).
-    - Si ya existe 'sebastian.gerencia' no hace nada (agregue &reset=1 para restablecerle la clave).
-    - Si existe la cuenta inicial 'Sebastian', la renombra a sebastian.gerencia para no dejar dos cuentas."""
-    import hmac as _hm
-    tok = os.environ.get("SETUP_TOKEN", "")
-    if not tok or not _hm.compare_digest(request.args.get("k", ""), tok):
-        return "No encontrado", 404
-    nombre_usuario = "sebastian.gerencia"
-    clave = os.environ.get("GERENTE_INICIAL_CLAVE") or "sebas1234"
-    try:
-        _crear_tablas_por_lotes(presupuesto=5.0)   # por si la base aún está vacía
-        u = Usuario.query.filter(func.lower(Usuario.usuario) == nombre_usuario).first()
-        if u is not None and request.args.get("reset") != "1":
-            return "El usuario %s ya existe. Agregue &reset=1 para restablecer su clave." % nombre_usuario
-        if u is None:
-            u = Usuario.query.filter(func.lower(Usuario.usuario) == "sebastian").first()   # cuenta inicial automática
-            if u is not None:
-                u.usuario = nombre_usuario
-            else:
-                u = Usuario(usuario=nombre_usuario, rol="Gerente", institucion_id=None)
-                db.session.add(u)
-        u.password = crear_hash(clave)
-        u.rol = "Gerente"
-        u.institucion_id = None
-        u.nombre_completo = "Sebastián López"
-        u.password_temporal = True          # el sistema pide cambiar la clave al primer ingreso
-        if hasattr(u, "activo"):
-            u.activo = True
-        db.session.commit()
-        _alog("Cuenta de Gerencia lista: %s" % nombre_usuario)
-        return "Cuenta de Gerencia lista. Usuario: %s. Entre por /login y cambie la clave." % nombre_usuario
-    except Exception as e:
-        _rollback_seguro()
-        _alog("crear-gerencia-procsis: %r" % (e,))
-        return "No se pudo crear: %s" % repr(e)[:200], 500
 
 
 def inicializar_bd():
@@ -7445,7 +7380,7 @@ def inicializar_bd():
     total_users = Usuario.query.count()
     if total_users == 0:
         base = [
-            ("soporte", "1234", "Soporte", "soporte@procsis.com", "", ""),
+            ("soporte", __import__("secrets").token_urlsafe(24), "Soporte", "soporte@procsis.com", "", ""),
         ]
         if os.environ.get("SEED_DEMO_USERS", "0") == "1":
             base += [
@@ -7504,10 +7439,10 @@ def inicializar_bd():
                 if (u.rol or "") != rol and uname in ("gerencia", "ventas"):
                     u.rol = rol
                     db.session.commit()
-        _ensure_user("gerencia", "Gerencia2026*", "Gerente")
-        _ensure_user("ventas", "Ventas2026*", "Comercial")
+        _ensure_user("gerencia", __import__("secrets").token_urlsafe(24), "Gerente")
+        _ensure_user("ventas", __import__("secrets").token_urlsafe(24), "Comercial")
         if not Usuario.query.filter_by(usuario="soporte").first():
-            _ensure_user("soporte", "Soporte2026*", "Soporte")
+            _ensure_user("soporte", __import__("secrets").token_urlsafe(24), "Soporte")
         # Rol Cobranza: NO se crea solo. Gerencia lo crea en /gerencia/usuarios.
     except Exception as _se:
         print("seed internos:", _se)
@@ -28902,76 +28837,6 @@ def _ventas_comprar_legacy_placeholder():
 
 
 
-@app.route("/reiniciar-personal-9f3k2m8x7q/<token>")
-def bootstrap_emergencia(token):
-    """Reinicio de emergencia de las cuentas internas (Soporte/Ventas/Gerencia) cuando nadie
-    puede entrar. La URL completa (con el token fijo de abajo) ya funciona sin configurar nada
-    en Railway. Visitarla borra las cuentas de staff actuales y crea 3 nuevas con clave
-    temporal, mostrándola UNA sola vez en pantalla."""
-    secreto = "Procsis-Reset-2026-QzR8"  # fijo, no depende de variables de entorno
-    if token != secreto:
-        return acceso_denegado("Token inválido.")
-    p_lock = plataforma()
-    if getattr(p_lock, "bootstrap_usado", False):
-        return page("Reinicio ya usado", """
-<div style="max-width:600px;margin:60px auto;font-family:Segoe UI;padding:24px;background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
-<h1 style="color:#b91c1c">Esta puerta ya se usó una vez</h1>
-<p>Por seguridad, este reinicio de emergencia solo se puede usar <b>una vez</b>. Ya fue usado antes, así que
-visitar esta URL de nuevo no vuelve a borrar ni crear cuentas — así evitamos que sus credenciales se
-reinicien sin que usted lo pida.</p>
-<p>Si de verdad necesita repetirlo (perdió el acceso otra vez), pídaselo a Claude para que lo reactive
-puntualmente.</p>
-</div>""")
-    try:
-        ROLES_STAFF = ["Soporte", "Comercial", "Gerente", "Administrador", "Superadmin", "Desarrollador", "Cobranza"]
-        ids_viejos = [u.id for u in Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).all()]
-        if ids_viejos:
-            # Borrar primero lo que depende de esos usuarios (llaves foráneas), si no Postgres
-            # rechaza el borrado de "usuarios" con ForeignKeyViolation.
-            LoginChallenge.query.filter(LoginChallenge.usuario_id.in_(ids_viejos)).delete(synchronize_session=False)
-            AccesoExtraordinario.query.filter(AccesoExtraordinario.usuario_id.in_(ids_viejos)).delete(synchronize_session=False)
-            SesionEmpleado.query.filter(SesionEmpleado.usuario_id.in_(ids_viejos)).delete(synchronize_session=False)
-            AsignacionDocente.query.filter(AsignacionDocente.usuario_id.in_(ids_viejos)).delete(synchronize_session=False)
-            DirectorGrupo.query.filter(DirectorGrupo.usuario_id.in_(ids_viejos)).update({DirectorGrupo.usuario_id: None}, synchronize_session=False)
-        borrados = Usuario.query.filter(Usuario.rol.in_(ROLES_STAFF)).delete(synchronize_session=False)
-        db.session.commit()
-        import secrets as _secrets
-        nuevas = [
-            ("soporte", "Soporte"),
-            ("ventas", "Comercial"),
-            ("gerencia", "Gerente"),
-        ]
-        creadas = []
-        for usuario, rol in nuevas:
-            clave = _secrets.token_urlsafe(9)
-            u = Usuario(usuario=usuario, rol=rol, password=crear_hash(clave), password_temporal=True)
-            db.session.add(u)
-            creadas.append((usuario, rol, clave))
-        db.session.commit()
-    except Exception as ex:
-        db.session.rollback()
-        import traceback
-        tb = traceback.format_exc()
-        return f"<pre style='white-space:pre-wrap;font-family:monospace;padding:20px;color:#b91c1c'>ERROR REAL:\n{tb}</pre>", 500
-    registrar_auditoria("BOOTSTRAP DE EMERGENCIA", f"{borrados} cuenta(s) de staff eliminadas, {len(creadas)} nueva(s) creadas")
-    p_lock.bootstrap_usado = True
-    db.session.commit()
-    filas = "".join(
-        f"<tr><td><b>{u}</b></td><td>{r}</td><td><code style='font-size:15px'>{c}</code></td>"
-        f"<td><a href='/{'soporte' if r=='Soporte' else ('ventas' if r=='Comercial' else 'gerencia')}-login'>Ir a iniciar sesión</a></td></tr>"
-        for u, r, c in creadas
-    )
-    return page("Cuentas reiniciadas", f"""
-<div style="max-width:720px;margin:40px auto;font-family:Segoe UI;padding:24px;background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
-<h1 style="color:#059669">✓ Cuentas de staff reiniciadas</h1>
-<p><b>Anote estas contraseñas ahora — no se volverán a mostrar.</b> Al entrar, el sistema le va a pedir cambiar la clave y poner su nombre.</p>
-<table style="width:100%;border-collapse:collapse;margin:16px 0">
-<tr style="background:#0020C2;color:#fff"><th style="padding:8px">Usuario</th><th style="padding:8px">Rol</th><th style="padding:8px">Clave temporal</th><th style="padding:8px">Acceso</th></tr>
-{filas}
-</table>
-<p style="font-size:13px;color:#b91c1c"><b>Importante:</b> esta URL sigue funcionando con el mismo token mientras no cambie el código. Cuando ya no la necesite, pídame que la desactive o le cambie el token en el código.</p>
-</div>
-""")
 
 
 def _destino_por_rol_staff(rol):
@@ -36077,7 +35942,7 @@ def demo_invitar_registro(token):
             )
             db.session.add(demo)
             user = "rector_" + codigo.lower().replace("-", "")[:16]
-            clave = "Demo2026*"
+            clave = __import__("secrets").token_urlsafe(9)
             if not Usuario.query.filter(func.lower(Usuario.usuario) == user.lower()).first():
                 db.session.add(Usuario(
                     usuario=user, password=clave, rol="Rectoría",
@@ -36684,11 +36549,12 @@ def ventas_demos():
             )
             db.session.add(demo)
             # Usuario rector demo
+            clave_demo = secrets.token_urlsafe(9)
             user = "demo_" + codigo.lower().replace("-", "")
             if not Usuario.query.filter(func.lower(Usuario.usuario) == user.lower()).first():
                 u = Usuario(
                     usuario=user,
-                    password="Demo2026*",
+                    password=clave_demo,
                     rol="Rectoría",
                     institucion_id=inst.id,
                     password_temporal=True,
@@ -36697,7 +36563,7 @@ def ventas_demos():
             db.session.commit()
             msg = (
                 f"Demo creada: {nombre}. Código inst. {codigo}. "
-                f"Usuario: {user} / Demo2026* · Caduca: {fin.isoformat()} ({dias} días)."
+                f"Usuario: {user} / {clave_demo} · Caduca: {fin.isoformat()} ({dias} días)."
             )
             registrar_auditoria("Demo creada", f"{nombre} hasta {fin}")
     # Caducar demos vencidas
@@ -63985,12 +63851,13 @@ def api_procsis_crear_inst():
                 cfg.logo_url = rel
         except Exception as _logo_err:
             pass
+    clave_admin = __import__("secrets").token_urlsafe(9)
     # admin por defecto del colegio
     admin_user = f"admin_{codigo.lower()}"
     if not Usuario.query.filter_by(usuario=admin_user).first():
         u = Usuario(
             usuario=admin_user,
-            password=crear_hash("Colegio2026*"),
+            password=crear_hash(clave_admin),
             rol="Administrador",
             institucion_id=inst.id,
             password_temporal=True,
@@ -64002,7 +63869,7 @@ def api_procsis_crear_inst():
         "id": inst.id,
         "codigo": inst.codigo,
         "admin_usuario": admin_user,
-        "admin_password_temporal": "Colegio2026*",
+        "admin_password_temporal": (clave_admin if "u" in locals() else "(sin cambios)"),
         "accion": "creada",
     }), 201
 
@@ -113287,6 +113154,30 @@ try:
     _pie1.instalar(globals())
 except Exception as _pie1e:
     print('PIE LEGAL no se pudo instalar (la app sigue igual):', repr(_pie1e))
+
+
+# ===== La administración de PROCSIS se atiende en PROCSIS Central =====
+# Se activa con ADMIN_EN_CENTRAL=1 y CENTRAL_URL=https://... (sin la variable, todo sigue igual).
+_RUTAS_ADMIN = ("gerencia", "gerencia-login", "gerencia-hq", "soporte", "soporte-login", "soporte_admin",
+                "soluciones-procsis", "ventas-login", "cobranza", "cobranza-login", "contabilidad",
+                "contabilidad-login", "tecnologia", "inteligencia", "dev-console", "dev-console-login",
+                "proveedor-login")
+
+
+def _edutrack_admin_en_central():
+    if os.environ.get("ADMIN_EN_CENTRAL") != "1":
+        return None
+    ruta = (request.path or "").lower()
+    if "pqr" in ruta or ruta == "/soporte/contacto-publico":
+        return None
+    if ruta.strip("/").split("/")[0] in _RUTAS_ADMIN:
+        central = (os.environ.get("CENTRAL_URL") or "").rstrip("/")
+        if central and request.method == "GET":
+            return redirect(central + "/login")
+        return "Esta sección se atiende en PROCSIS Central.", 404
+
+
+app.before_request_funcs.setdefault(None, []).insert(0, _edutrack_admin_en_central)
 
 
 if __name__ == "__main__":
